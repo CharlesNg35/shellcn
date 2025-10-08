@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.7
-
 ARG GO_VERSION=1.24
 ARG RUST_VERSION=1.75
 ARG NODE_VERSION=20
@@ -12,7 +10,7 @@ FROM node:${NODE_VERSION}-bookworm-slim AS frontend-builder
 WORKDIR /src
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN npm install pnpm@latest -g
 
 # Copy frontend package files
 COPY web/package.json web/pnpm-lock.yaml ./web/

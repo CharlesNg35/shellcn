@@ -57,8 +57,6 @@ build-web:
 		cd $(WEB_DIR) && pnpm install --frozen-lockfile; \
 	fi
 	@cd $(WEB_DIR) && pnpm build
-	@echo "Creating symlink for embedded files..."
-	@ln -sf ../../web/dist internal/web/dist
 	@echo "✓ Frontend built at $(WEB_DIST)"
 
 test: test-web
