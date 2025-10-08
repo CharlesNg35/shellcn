@@ -21,8 +21,8 @@
   - [x] Implement database initialization
   - [x] Create migration system
   - [x] Setup SQLite driver
-  - [ ] Setup PostgreSQL driver
-  - [ ] Setup MySQL driver
+  - [x] Setup PostgreSQL driver
+  - [x] Setup MySQL driver
   - [x] Write model tests
 
 ### Phase 2: Authentication (Week 2)
@@ -199,8 +199,8 @@
 
 ## Database Module — Not Started
 
-    ### MySQL — Not Started
-    ### PostgreSQL — Not Started
+    ### MySQL — Driver support implemented (Phase 1)
+    ### PostgreSQL — Driver support implemented (Phase 1)
     ### Redis — Not Started
     ### MongoDB — Not Started
 

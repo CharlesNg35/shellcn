@@ -10,9 +10,15 @@ import (
 
 // Config contains database connection options.
 type Config struct {
-	Driver string
-	Path   string // SQLite database path when Driver == sqlite
-	DSN    string // Optional DSN override
+	Driver   string
+	Path     string            // SQLite database path when Driver == sqlite
+	DSN      string            // Optional DSN override
+	Host     string            // For network databases
+	Port     int               // For network databases
+	Name     string            // Database name
+	User     string            // Database user
+	Password string            // Database password
+	Options  map[string]string // Driver-specific options
 }
 
 // Open initialises a gorm.DB using the provided configuration.
@@ -25,6 +31,10 @@ func Open(cfg Config) (*gorm.DB, error) {
 	switch driver {
 	case "sqlite":
 		return openSQLite(cfg)
+	case "postgres", "postgresql":
+		return openPostgres(cfg)
+	case "mysql":
+		return openMySQL(cfg)
 	default:
 		return nil, fmt.Errorf("unsupported database driver %q", cfg.Driver)
 	}
