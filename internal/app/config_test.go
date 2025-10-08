@@ -63,6 +63,15 @@ func TestLoadConfigFromFile(t *testing.T) {
 	require.Equal(t, 64, cfg.Auth.Session.RefreshLength)
 	require.Equal(t, 7, cfg.Auth.Local.LockoutThreshold)
 	require.Equal(t, 20*time.Minute, cfg.Auth.Local.LockoutDuration)
+
+	require.True(t, cfg.Email.SMTP.Enabled)
+	require.Equal(t, "smtp.example.com", cfg.Email.SMTP.Host)
+	require.Equal(t, 2525, cfg.Email.SMTP.Port)
+	require.Equal(t, "smtp-user", cfg.Email.SMTP.Username)
+	require.Equal(t, "smtp-pass", cfg.Email.SMTP.Password)
+	require.Equal(t, "no-reply@example.com", cfg.Email.SMTP.From)
+	require.True(t, cfg.Email.SMTP.UseTLS)
+	require.Equal(t, 15*time.Second, cfg.Email.SMTP.Timeout)
 }
 
 func TestAuthConfigAdapters(t *testing.T) {
@@ -117,4 +126,29 @@ func TestAuthConfigAdaptersFallback(t *testing.T) {
 	localCfg := cfg.LocalProviderConfig()
 	require.Equal(t, defaultLockoutThreshold, localCfg.LockoutThreshold)
 	require.Equal(t, defaultLockoutDuration, localCfg.LockoutDuration)
+}
+
+func TestEmailConfigAdapter(t *testing.T) {
+	cfg := EmailConfig{
+		SMTP: SMTPConfig{
+			Enabled:  true,
+			Host:     "smtp.example.com",
+			Port:     2525,
+			Username: "user",
+			Password: "pass",
+			From:     "no-reply@example.com",
+			UseTLS:   true,
+			Timeout:  10 * time.Second,
+		},
+	}
+
+	settings := cfg.SMTPSettings()
+	require.True(t, settings.Enabled)
+	require.Equal(t, "smtp.example.com", settings.Host)
+	require.Equal(t, 2525, settings.Port)
+	require.Equal(t, "user", settings.Username)
+	require.Equal(t, "pass", settings.Password)
+	require.Equal(t, "no-reply@example.com", settings.From)
+	require.True(t, settings.UseTLS)
+	require.Equal(t, 10*time.Second, settings.Timeout)
 }

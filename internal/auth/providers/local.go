@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -19,6 +20,10 @@ var (
 	ErrAccountLocked = errors.New("auth: account locked")
 	// ErrAccountDisabled signals that the user has been deactivated.
 	ErrAccountDisabled = errors.New("auth: account disabled")
+	// ErrRegistrationDisabled indicates that self-registration is currently disabled.
+	ErrRegistrationDisabled = errors.New("auth: registration disabled")
+	// ErrVerificationUnavailable indicates email verification is required but not configured.
+	ErrVerificationUnavailable = errors.New("auth: email verification unavailable")
 )
 
 // LocalConfig defines tunable behaviour for the local provider.
@@ -45,12 +50,18 @@ type RegisterInput struct {
 	LastName  string
 }
 
+// EmailVerifier abstracts email verification token generation.
+type EmailVerifier interface {
+	CreateToken(ctx context.Context, userID, email string) (string, string, error)
+}
+
 // LocalProvider implements username/password authentication with account lockout controls.
 type LocalProvider struct {
 	db        *gorm.DB
 	clock     func() time.Time
 	threshold int
 	duration  time.Duration
+	verifier  EmailVerifier
 }
 
 // NewLocalProvider builds a provider with sane defaults.
@@ -80,6 +91,11 @@ func NewLocalProvider(db *gorm.DB, cfg LocalConfig) (*LocalProvider, error) {
 		threshold: threshold,
 		duration:  duration,
 	}, nil
+}
+
+// SetEmailVerifier wires the service used to issue email verification tokens for new users.
+func (p *LocalProvider) SetEmailVerifier(verifier EmailVerifier) {
+	p.verifier = verifier
 }
 
 // Authenticate verifies the supplied credentials and returns the associated user when successful.
@@ -172,22 +188,67 @@ func (p *LocalProvider) Register(input RegisterInput) (*models.User, error) {
 		return nil, errors.New("local provider: username, email and password are required")
 	}
 
-	hashed, err := crypto.HashPassword(input.Password)
+	ctx := context.Background()
+
+	var (
+		user                    *models.User
+		requiresVerification    bool
+		verificationTargetEmail string
+	)
+
+	err := p.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		settings, err := p.loadLocalSettings(tx)
+		if err != nil {
+			return err
+		}
+
+		if !settings.AllowRegistration {
+			return ErrRegistrationDisabled
+		}
+
+		requiresVerification = settings.RequireEmailVerification
+		if requiresVerification && p.verifier == nil {
+			return ErrVerificationUnavailable
+		}
+
+		hashed, err := crypto.HashPassword(input.Password)
+		if err != nil {
+			return fmt.Errorf("local provider: hash password: %w", err)
+		}
+
+		user = &models.User{
+			Username:  strings.TrimSpace(input.Username),
+			Email:     strings.ToLower(strings.TrimSpace(input.Email)),
+			Password:  hashed,
+			FirstName: strings.TrimSpace(input.FirstName),
+			LastName:  strings.TrimSpace(input.LastName),
+			IsActive:  !requiresVerification,
+		}
+
+		if err := tx.Create(user).Error; err != nil {
+			return fmt.Errorf("local provider: create user: %w", err)
+		}
+
+		if requiresVerification {
+			user.IsActive = false
+			if err := tx.Model(user).Update("is_active", false).Error; err != nil {
+				return fmt.Errorf("local provider: mark user inactive: %w", err)
+			}
+			verificationTargetEmail = user.Email
+		}
+
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("local provider: hash password: %w", err)
+		return nil, err
 	}
 
-	user := &models.User{
-		Username:  strings.TrimSpace(input.Username),
-		Email:     strings.ToLower(strings.TrimSpace(input.Email)),
-		Password:  hashed,
-		FirstName: strings.TrimSpace(input.FirstName),
-		LastName:  strings.TrimSpace(input.LastName),
-		IsActive:  true,
-	}
-
-	if err := p.db.Create(user).Error; err != nil {
-		return nil, fmt.Errorf("local provider: create user: %w", err)
+	if requiresVerification {
+		user.IsActive = false
+		if _, _, err := p.verifier.CreateToken(ctx, user.ID, verificationTargetEmail); err != nil {
+			_ = p.db.Delete(&models.User{}, "id = ?", user.ID).Error
+			return nil, fmt.Errorf("local provider: create verification token: %w", err)
+		}
 	}
 
 	return user, nil
@@ -221,4 +282,15 @@ func (p *LocalProvider) ChangePassword(userID, currentPassword, newPassword stri
 	}
 
 	return nil
+}
+
+func (p *LocalProvider) loadLocalSettings(db *gorm.DB) (*models.AuthProvider, error) {
+	var provider models.AuthProvider
+	if err := db.Where("type = ?", "local").First(&provider).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("local provider: configuration not found")
+		}
+		return nil, fmt.Errorf("local provider: load settings: %w", err)
+	}
+	return &provider, nil
 }

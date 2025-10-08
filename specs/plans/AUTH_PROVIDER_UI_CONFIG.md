@@ -19,6 +19,7 @@ All authentication providers (OIDC, OAuth2, SAML, LDAP) are configured through t
 - **Description:** Username and password authentication
 - **Settings:**
   - Allow Registration: Enable/disable user self-registration
+  - Require Email Confirmation: When enabled, newly registered users must confirm their email via verification link before activation
 - **Notes:** Cannot be disabled (always available as fallback)
 
 ### 2. **Email Invitation** (Optional)
@@ -315,4 +316,3 @@ OIDC_CLIENT_SECRET=yyy
 - Only admins with `permission.manage` can configure providers
 - Provider configuration changes are immediately effective (no restart needed)
 - The login page dynamically shows enabled providers
-

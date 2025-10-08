@@ -22,6 +22,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.MFASecret{},
 		&models.PasswordResetToken{},
 		&models.AuthProvider{},
+		&models.UserInvite{},
+		&models.EmailVerification{},
 	)
 }
 
@@ -56,13 +58,14 @@ func SeedData(db *gorm.DB) error {
 	}
 
 	localProvider := models.AuthProvider{
-		BaseModel:         models.BaseModel{ID: "local"},
-		Type:              "local",
-		Name:              "Local Authentication",
-		Enabled:           true,
-		AllowRegistration: false,
-		Description:       "Username and password authentication",
-		Icon:              "key",
+		BaseModel:                models.BaseModel{ID: "local"},
+		Type:                     "local",
+		Name:                     "Local Authentication",
+		Enabled:                  true,
+		AllowRegistration:        false,
+		RequireEmailVerification: true,
+		Description:              "Username and password authentication",
+		Icon:                     "key",
 	}
 	if err := db.Where(models.AuthProvider{Type: localProvider.Type}).Attrs(localProvider).FirstOrCreate(&models.AuthProvider{}).Error; err != nil {
 		return err

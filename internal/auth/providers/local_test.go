@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -133,6 +134,7 @@ func TestAuthenticateDisabledAccount(t *testing.T) {
 
 func TestRegisterHashesPassword(t *testing.T) {
 	db := setupDB(t)
+	configureLocalProvider(t, db, true, false)
 	provider := newLocalProvider(t, db, LocalConfig{})
 
 	user, err := provider.Register(RegisterInput{
@@ -146,8 +148,51 @@ func TestRegisterHashesPassword(t *testing.T) {
 	require.True(t, crypto.VerifyPassword(user.Password, "secret"))
 }
 
+func TestRegisterRespectsDisabledFlag(t *testing.T) {
+	db := setupDB(t)
+	configureLocalProvider(t, db, false, false)
+	provider := newLocalProvider(t, db, LocalConfig{})
+
+	_, err := provider.Register(RegisterInput{
+		Username: "gary",
+		Email:    "gary@example.com",
+		Password: "secret",
+	})
+	require.ErrorIs(t, err, ErrRegistrationDisabled)
+}
+
+func TestRegisterTriggersEmailVerification(t *testing.T) {
+	db := setupDB(t)
+	configureLocalProvider(t, db, true, true)
+
+	provider := newLocalProvider(t, db, LocalConfig{})
+	stub := &stubVerifier{}
+	provider.SetEmailVerifier(stub)
+
+	var cfg models.AuthProvider
+	require.NoError(t, db.First(&cfg, "type = ?", "local").Error)
+	require.True(t, cfg.RequireEmailVerification)
+	require.True(t, cfg.AllowRegistration)
+
+	user, err := provider.Register(RegisterInput{
+		Username: "helen",
+		Email:    "helen@example.com",
+		Password: "secret",
+	})
+	require.NoError(t, err)
+	require.False(t, user.IsActive)
+
+	var stored models.User
+	require.NoError(t, db.Take(&stored, "id = ?", user.ID).Error)
+	require.False(t, stored.IsActive)
+	require.True(t, stub.called)
+	require.Equal(t, user.ID, stub.userID)
+	require.Equal(t, "helen@example.com", stub.email)
+}
+
 func TestChangePassword(t *testing.T) {
 	db := setupDB(t)
+	configureLocalProvider(t, db, true, false)
 	provider := newLocalProvider(t, db, LocalConfig{})
 
 	user, err := provider.Register(RegisterInput{
@@ -182,13 +227,37 @@ func newLocalProvider(t *testing.T, db *gorm.DB, cfg LocalConfig) *LocalProvider
 	return provider
 }
 
+func configureLocalProvider(t *testing.T, db *gorm.DB, allowRegistration, requireVerification bool) {
+	t.Helper()
+	updates := map[string]any{
+		"allow_registration":         allowRegistration,
+		"require_email_verification": requireVerification,
+	}
+	require.NoError(t, db.Model(&models.AuthProvider{}).
+		Where("type = ?", "local").
+		Updates(updates).Error)
+}
+
+type stubVerifier struct {
+	called bool
+	userID string
+	email  string
+}
+
+func (s *stubVerifier) CreateToken(ctx context.Context, userID, email string) (string, string, error) {
+	s.called = true
+	s.userID = userID
+	s.email = email
+	return "token", "link", nil
+}
+
 func setupDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
 	db, err := database.Open(database.Config{Driver: "sqlite"})
 	require.NoError(t, err)
 
-	require.NoError(t, database.AutoMigrate(db))
+	require.NoError(t, database.AutoMigrateAndSeed(db))
 
 	sqlDB, err := db.DB()
 	require.NoError(t, err)

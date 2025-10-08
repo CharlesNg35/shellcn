@@ -946,6 +946,17 @@ func GenerateToken(length int) (string, error) {
 }
 ```
 
+### 5. Mail Package (`pkg/mail/mailer.go`)
+
+The mail package provides a thin SMTP abstraction for outbound notifications:
+
+- `Mailer` interface with a single `Send` method accepting a context-aware message payload
+- `SMTPSettings` struct mirroring runtime configuration (host, port, credentials, TLS, timeout)
+- `NewSMTPMailer` constructor that validates configuration and builds a TLS-capable SMTP client
+- RFC 822 message formatter that deduplicates recipients and normalises headers
+
+This package underpins invite and email verification workflows while allowing alternative mail transports to be supplied in tests.
+
 ---
 
 ## Authentication System
@@ -2059,16 +2070,19 @@ func (s *AuthProviderService) ConfigureLDAP(config models.LDAPConfig, enabled bo
 }
 
 // Update local provider settings
-func (s *AuthProviderService) UpdateLocalSettings(allowRegistration bool) error {
+func (s *AuthProviderService) UpdateLocalSettings(allowRegistration, requireEmailVerification bool) error {
+    updates := map[string]any{
+        "allow_registration":        allowRegistration,
+        "require_email_verification": requireEmailVerification,
+    }
+
     if err := s.db.Model(&models.AuthProvider{}).
         Where("type = ?", "local").
-        Update("allow_registration", allowRegistration).Error; err != nil {
+        Updates(updates).Error; err != nil {
         return err
     }
 
-    s.auditService.Log("auth_provider.update", "local", "success", map[string]interface{}{
-        "allow_registration": allowRegistration,
-    })
+    s.auditService.Log("auth_provider.update", "local", "success", updates)
 
     return nil
 }
@@ -2166,6 +2180,17 @@ func (s *AuthProviderService) TestConnection(providerType string) error {
         return errors.New("connection test not supported for this provider")
     }
 }
+
+### Email-Oriented Services
+
+- **Invite Service (`internal/services/invite_service.go`)**
+  - Issues invite links with SHA-256 token hashing and expiry enforcement
+  - Persists invites in `user_invites` table and records acceptance timestamps
+  - Sends invitation emails through the SMTP mailer abstraction when configured
+- **Email Verification Service (`internal/services/email_verification_service.go`)**
+  - Generates verification tokens for local self-registration when required
+  - Stores hashed tokens in `email_verifications` table with configurable lifetimes
+  - Dispatches verification messages via the shared mailer infrastructure
 ```
 
 ---
@@ -3549,6 +3574,16 @@ DB_PASSWORD=secret
 JWT_SECRET=your-secret-key-change-this
 JWT_ACCESS_EXPIRY=15m
 JWT_REFRESH_EXPIRY=168h
+
+# Email
+EMAIL_SMTP_ENABLED=false
+EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USERNAME=mailer
+EMAIL_SMTP_PASSWORD=super-secret
+EMAIL_SMTP_FROM=no-reply@example.com
+EMAIL_SMTP_USE_TLS=true
+EMAIL_SMTP_TIMEOUT=10s
 
 # Vault Encryption
 VAULT_ENCRYPTION_KEY=your-32-byte-encryption-key

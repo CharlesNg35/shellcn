@@ -19,6 +19,7 @@ type Config struct {
 	Features   FeatureConfig    `mapstructure:"features"`
 	Modules    ModuleConfig     `mapstructure:"modules"`
 	Auth       AuthConfig       `mapstructure:"auth"`
+	Email      EmailConfig      `mapstructure:"email"`
 }
 
 // ServerConfig configures the HTTP server.
@@ -159,6 +160,23 @@ type AuthConfig struct {
 	Local   LocalAuthSettings `mapstructure:"local"`
 }
 
+// EmailConfig captures outbound email settings.
+type EmailConfig struct {
+	SMTP SMTPConfig `mapstructure:"smtp"`
+}
+
+// SMTPConfig defines SMTP dialer settings for sending email.
+type SMTPConfig struct {
+	Enabled  bool          `mapstructure:"enabled"`
+	Host     string        `mapstructure:"host"`
+	Port     int           `mapstructure:"port"`
+	Username string        `mapstructure:"username"`
+	Password string        `mapstructure:"password"`
+	From     string        `mapstructure:"from"`
+	UseTLS   bool          `mapstructure:"use_tls"`
+	Timeout  time.Duration `mapstructure:"timeout"`
+}
+
 // JWTSettings configures JWT access tokens.
 type JWTSettings struct {
 	Secret string        `mapstructure:"secret"`
@@ -266,6 +284,12 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.session.refresh_token_length", 48)
 	v.SetDefault("auth.local.lockout_threshold", 5)
 	v.SetDefault("auth.local.lockout_duration", "15m")
+
+	v.SetDefault("email.smtp.enabled", false)
+	v.SetDefault("email.smtp.host", "")
+	v.SetDefault("email.smtp.port", 587)
+	v.SetDefault("email.smtp.use_tls", true)
+	v.SetDefault("email.smtp.timeout", "10s")
 }
 
 func decodeHook() viper.DecoderConfigOption {

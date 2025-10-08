@@ -82,3 +82,14 @@ auth:
   local:
     lockout_threshold: 7
     lockout_duration: 20m
+
+email:
+  smtp:
+    enabled: true
+    host: smtp.example.com
+    port: 2525
+    username: smtp-user
+    password: smtp-pass
+    from: no-reply@example.com
+    use_tls: true
+    timeout: 15s
