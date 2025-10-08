@@ -105,10 +105,17 @@ export function Setup() {
 
   return (
     <div className="space-y-6">
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-semibold">Initial Administrator Setup</h2>
+      <div className="space-y-2">
+        <h2 className="text-2xl font-bold text-foreground">Initial Setup</h2>
         <p className="text-sm text-muted-foreground">
-          Create the first administrator account to bootstrap the platform.
+          Create the first administrator account to get started
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <p className="text-sm text-foreground">
+          <strong>Note:</strong> This account will have full administrative privileges. Choose a
+          strong password and keep the credentials secure.
         </p>
       </div>
 
@@ -166,10 +173,14 @@ export function Setup() {
           error={errors.confirmPassword?.message}
         />
 
-        {formError && <p className="text-sm text-destructive">{formError}</p>}
+        {formError && (
+          <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            {formError}
+          </div>
+        )}
 
         <Button type="submit" className="w-full" loading={submitting}>
-          Create Administrator
+          Create Administrator Account
         </Button>
       </form>
     </div>

@@ -97,18 +97,16 @@ export function Login() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2 text-center">
-        <h2 className="text-2xl font-semibold">Sign in to your account</h2>
-        <p className="text-sm text-muted-foreground">
-          Access ShellCN with your enterprise credentials.
-        </p>
+      <div className="space-y-2">
+        <h2 className="text-2xl font-bold text-foreground">Sign in</h2>
+        <p className="text-sm text-muted-foreground">Enter your credentials to access ShellCN</p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Input
           {...register('identifier')}
           label="Username or Email"
-          placeholder="e.g. admin or admin@example.com"
+          placeholder="admin or admin@example.com"
           autoComplete="username"
           error={errors.identifier?.message}
         />
@@ -122,19 +120,27 @@ export function Login() {
           error={errors.password?.message}
         />
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        <div className="flex items-center justify-between text-sm">
+          <Link to="/password-reset" className="text-primary hover:underline">
+            Forgot password?
+          </Link>
+        </div>
+
+        {error && (
+          <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
+          </div>
+        )}
 
         <Button type="submit" className="w-full" loading={isLoading}>
           Sign In
         </Button>
       </form>
 
-      <div className="flex flex-col gap-2 text-center text-sm text-muted-foreground">
-        <Link to="/password-reset" className="text-primary hover:underline">
-          Forgot password?
-        </Link>
-        <Link to="/setup" className="hover:underline">
-          First time here? Complete initial setup
+      <div className="text-center text-sm text-muted-foreground">
+        First time here?{' '}
+        <Link to="/setup" className="text-primary hover:underline">
+          Complete initial setup
         </Link>
       </div>
     </div>
