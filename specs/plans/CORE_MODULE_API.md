@@ -1,6 +1,6 @@
 # Core Module API Documentation
 
-**Base URL:** `https://{host}:{port}` (default `http://localhost:8080`)
+**Base URL:** `https://{host}:{port}` (default `http://localhost:8000`)
 **Version:** v1 (stabilised once backend reaches GA)
 **Content Type:** `application/json` unless otherwise specified
 

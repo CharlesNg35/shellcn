@@ -76,7 +76,7 @@ make build
 
 ### First-Time Setup
 
-1. Navigate to `http://localhost:8080/setup`
+1. Navigate to `http://localhost:8000/setup`
 2. Create the first admin user
 3. Login with your credentials
 4. Start adding connections!
@@ -89,7 +89,7 @@ ShellCN reads configuration from a YAML file (default: `config/config.yaml`) and
 
 ```yaml
 server:
-  port: 8080
+  port: 8000
 
 database:
   driver: sqlite # sqlite | postgres | mysql

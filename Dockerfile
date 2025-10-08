@@ -129,7 +129,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Environment variables
 ENV SHELLCN_DATABASE_PATH=/var/lib/shellcn/data.sqlite \
-  SHELLCN_SERVER_PORT=8080
+  SHELLCN_SERVER_PORT=8000
 
 WORKDIR /var/lib/shellcn
 VOLUME ["/var/lib/shellcn"]
@@ -138,7 +138,7 @@ VOLUME ["/var/lib/shellcn"]
 COPY --from=go-builder /out/shellcn /usr/local/bin/shellcn
 
 USER shellcn
-EXPOSE 8080
+EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD ["/usr/local/bin/shellcn", "health"] || exit 1

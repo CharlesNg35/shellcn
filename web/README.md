@@ -111,7 +111,7 @@ describe('MyComponent', () => {
 
 The frontend proxies API requests to the backend server:
 
-- Development: `http://localhost:8080`
+- Development: `http://localhost:8000`
 - All `/api/*` requests are proxied automatically
 
 ## License

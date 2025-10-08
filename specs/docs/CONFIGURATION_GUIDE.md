@@ -236,7 +236,7 @@ services:
   shellcn:
     image: ghcr.io/acme/shellcn-core:core-v1.0.0
     ports:
-      - "8080:8080"
+      - "8000:8000"
     environment:
       SHELLCN_AUTH_JWT_SECRET: ${JWT_SECRET}
       SHELLCN_VAULT_ENCRYPTION_KEY: ${VAULT_ENCRYPTION_KEY}

@@ -1768,7 +1768,7 @@ func (h *SetupHandler) CreateFirstUser(c *gin.Context) {
 
 **First Access Flow:**
 
-1. User opens browser → `http://localhost:8080`
+1. User opens browser → `http://localhost:8000`
 2. System detects no users exist
 3. Redirects to `/setup` page
 4. User fills out form:
@@ -1981,7 +1981,7 @@ ShellCN provides an optional cache layer. When Redis is configured the platform 
 ```yaml
 # config.yaml
 server:
-  port: 8080
+  port: 8000
 
 database:
   driver: sqlite  # sqlite, postgres, mysql
@@ -2113,16 +2113,16 @@ modules:
 # ShellCN Platform v1.0.0
 # ✓ Created data directory: ./data
 # ✓ Initialized SQLite database: ./data/database.sqlite
-# ✓ Server started on http://localhost:8080
+# ✓ Server started on http://localhost:8000
 #
-# → Open http://localhost:8080 to create your first admin user
+# → Open http://localhost:8000 to create your first admin user
 #
-# ✓ Metrics: http://localhost:8080/metrics
-# ✓ Health: http://localhost:8080/health
+# ✓ Metrics: http://localhost:8000/metrics
+# ✓ Health: http://localhost:8000/health
 ```
 
 **First Access (Browser):**
-1. Navigate to `http://localhost:8080`
+1. Navigate to `http://localhost:8000`
 2. Auto-redirected to `/setup` (no users exist)
 3. Fill out first admin user form:
    - Username: `your-username`

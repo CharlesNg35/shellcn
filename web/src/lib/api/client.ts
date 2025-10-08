@@ -124,7 +124,7 @@ async function refreshAccessToken(refreshToken: string): Promise<AuthTokens | nu
     }
 
     return tokens
-  } catch (error) {
+  } catch {
     clearTokens()
     return null
   }

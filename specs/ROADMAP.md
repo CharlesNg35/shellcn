@@ -18,19 +18,19 @@
 
 ### Phase 2: Authentication & Setup Flow (Week 2)
 
-- [ ] Implement auth store (Zustand) with token management
-- [ ] Create API client (Axios) with interceptors for auth
-- [ ] Build Login page with form validation (react-hook-form + Zod)
-- [ ] Implement Setup wizard for first-time initialization
-- [ ] Create AuthLayout component
-- [ ] Build SSO provider buttons (OIDC, SAML, LDAP)
-- [ ] Implement MFA verification flow
-- [ ] Create Password reset flow
-- [ ] Build useAuth hook for authentication state
-- [ ] Implement token refresh logic
-- [ ] Add logout functionality
-- [ ] Create ProtectedRoute component
-- [ ] Write tests for authentication flows
+- [x] Implement auth store (Zustand) with token management
+- [x] Create API client (Axios) with interceptors for auth
+- [x] Build Login page with form validation (react-hook-form + Zod)
+- [x] Implement Setup wizard for first-time initialization
+- [x] Create AuthLayout component
+- [x] Build SSO provider buttons (OIDC, SAML, LDAP)
+- [x] Implement MFA verification flow
+- [x] Create Password reset flow
+- [x] Build useAuth hook for authentication state
+- [x] Implement token refresh logic
+- [x] Add logout functionality
+- [x] Create ProtectedRoute component
+- [x] Write tests for authentication flows
 
 ### Phase 3: Dashboard & Layout (Week 3)
 

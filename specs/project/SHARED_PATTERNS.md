@@ -488,7 +488,7 @@ func LoadConfig() (*Config, error) {
     viper.AutomaticEnv()
 
     // Defaults
-    viper.SetDefault("server.port", 8080)
+    viper.SetDefault("server.port", 8000)
     viper.SetDefault("database.driver", "sqlite")
 
     if err := viper.ReadInConfig(); err != nil {
@@ -576,7 +576,7 @@ web/src/
 import axios from 'axios';
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -1313,7 +1313,7 @@ export function useSSHWebSocket(connectionId: string, onData: (data: ArrayBuffer
   useEffect(() => {
     const token = localStorage.getItem('access_token');
     ws.current = new WebSocket(
-      `ws://localhost:8080/ws/ssh/${connectionId}?token=${token}`
+      `ws://localhost:8000/ws/ssh/${connectionId}?token=${token}`
     );
 
     ws.current.binaryType = 'arraybuffer';

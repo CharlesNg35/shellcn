@@ -3529,7 +3529,7 @@ require (
 
 ```bash
 # Server
-SERVER_PORT=8080
+SERVER_PORT=8000
 SERVER_HOST=0.0.0.0
 
 # Database

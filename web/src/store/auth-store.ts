@@ -102,7 +102,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
           initialized: true,
           error: null,
         })
-      } catch (error) {
+      } catch {
         clearTokens()
         set({
           tokens: null,
