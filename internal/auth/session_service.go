@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/pkg/crypto"
+	"github.com/charlesng35/shellcn/pkg/metrics"
 )
 
 // DefaultRefreshTokenTTL is the fallback refresh token lifetime.
@@ -116,6 +118,8 @@ func (s *SessionService) CreateSession(userID string, meta SessionMetadata) (Tok
 		return TokenPair{}, nil, fmt.Errorf("session service: create session: %w", err)
 	}
 
+	metrics.ActiveSessions.Inc()
+
 	accessToken, err := s.jwt.GenerateAccessToken(AccessTokenInput{
 		UserID:    userID,
 		SessionID: session.ID,
@@ -212,7 +216,40 @@ func (s *SessionService) RevokeSession(sessionID string) error {
 		return ErrSessionNotFound
 	}
 
+	metrics.ActiveSessions.Sub(float64(result.RowsAffected))
+
 	return nil
+}
+
+// CleanupExpired removes expired sessions and updates active session metrics accordingly.
+func (s *SessionService) CleanupExpired(ctx context.Context) (int64, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	now := s.now()
+
+	var activeExpired int64
+	if err := s.db.WithContext(ctx).
+		Model(&models.Session{}).
+		Where("expires_at < ? AND revoked_at IS NULL", now).
+		Count(&activeExpired).Error; err != nil {
+		return 0, fmt.Errorf("session service: count expired sessions: %w", err)
+	}
+
+	result := s.db.WithContext(ctx).
+		Where("expires_at < ?", now).
+		Or("revoked_at IS NOT NULL").
+		Delete(&models.Session{})
+	if result.Error != nil {
+		return 0, fmt.Errorf("session service: cleanup expired sessions: %w", result.Error)
+	}
+
+	if activeExpired > 0 {
+		metrics.ActiveSessions.Sub(float64(activeExpired))
+	}
+
+	return result.RowsAffected, nil
 }
 
 // RevokeUserSessions revokes every active session belonging to a user.
@@ -222,7 +259,15 @@ func (s *SessionService) RevokeUserSessions(userID string) error {
 	}
 
 	now := s.now()
-	return s.db.Model(&models.Session{}).
+	result := s.db.Model(&models.Session{}).
 		Where("user_id = ? AND revoked_at IS NULL", userID).
-		Update("revoked_at", now).Error
+		Update("revoked_at", now)
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected > 0 {
+		metrics.ActiveSessions.Sub(float64(result.RowsAffected))
+	}
+	return nil
 }

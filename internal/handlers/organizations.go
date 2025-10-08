@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -27,6 +28,18 @@ func NewOrganizationHandler(db *gorm.DB) (*OrganizationHandler, error) {
 	return &OrganizationHandler{svc: svc}, nil
 }
 
+type createOrganizationRequest struct {
+	Name        string         `json:"name" validate:"required,min=3,max=128"`
+	Description string         `json:"description" validate:"omitempty,max=512"`
+	Settings    map[string]any `json:"settings"`
+}
+
+type updateOrganizationRequest struct {
+	Name        *string         `json:"name" validate:"omitempty,min=3,max=128"`
+	Description *string         `json:"description" validate:"omitempty,max=512"`
+	Settings    *map[string]any `json:"settings"`
+}
+
 // GET /api/orgs
 func (h *OrganizationHandler) List(c *gin.Context) {
 	orgs, err := h.svc.List(c.Request.Context())
@@ -49,15 +62,24 @@ func (h *OrganizationHandler) Get(c *gin.Context) {
 
 // POST /api/orgs
 func (h *OrganizationHandler) Create(c *gin.Context) {
-	var body struct {
-		Name, Description string
-		Settings          map[string]any
-	}
-	if err := c.ShouldBindJSON(&body); err != nil || body.Name == "" {
-		response.Error(c, errors.ErrBadRequest)
+	var body createOrganizationRequest
+	if !bindAndValidate(c, &body) {
 		return
 	}
-	org, err := h.svc.Create(c.Request.Context(), services.CreateOrganizationInput{Name: body.Name, Description: body.Description, Settings: body.Settings})
+
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		response.Error(c, errors.NewBadRequest("name is required"))
+		return
+	}
+
+	input := services.CreateOrganizationInput{
+		Name:        name,
+		Description: strings.TrimSpace(body.Description),
+		Settings:    body.Settings,
+	}
+
+	org, err := h.svc.Create(c.Request.Context(), input)
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -67,16 +89,38 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 
 // PATCH /api/orgs/:id
 func (h *OrganizationHandler) Update(c *gin.Context) {
-	var body struct {
-		Name        *string
-		Description *string
-		Settings    map[string]any
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		response.Error(c, errors.ErrBadRequest)
+	var body updateOrganizationRequest
+	if !bindAndValidate(c, &body) {
 		return
 	}
-	org, err := h.svc.Update(c.Request.Context(), c.Param("id"), services.UpdateOrganizationInput{Name: body.Name, Description: body.Description, Settings: body.Settings})
+
+	if body.Name == nil && body.Description == nil && body.Settings == nil {
+		response.Error(c, errors.NewBadRequest("no fields provided for update"))
+		return
+	}
+
+	var namePtr *string
+	if body.Name != nil {
+		trimmed := strings.TrimSpace(*body.Name)
+		if trimmed == "" {
+			response.Error(c, errors.NewBadRequest("name must not be empty"))
+			return
+		}
+		namePtr = &trimmed
+	}
+
+	var descPtr *string
+	if body.Description != nil {
+		trimmed := strings.TrimSpace(*body.Description)
+		descPtr = &trimmed
+	}
+
+	var settings map[string]any
+	if body.Settings != nil {
+		settings = *body.Settings
+	}
+
+	org, err := h.svc.Update(c.Request.Context(), c.Param("id"), services.UpdateOrganizationInput{Name: namePtr, Description: descPtr, Settings: settings})
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return

@@ -17,6 +17,7 @@ func TestLoadConfigFromFile(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 9090, cfg.Server.Port)
+	require.Equal(t, "info", cfg.Server.LogLevel)
 	require.Equal(t, "postgres", cfg.Database.Driver)
 	require.True(t, cfg.Database.Postgres.Enabled)
 	require.Equal(t, "db.example.com", cfg.Database.Postgres.Host)

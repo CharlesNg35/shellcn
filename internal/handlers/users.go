@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -14,6 +15,13 @@ import (
 
 type UserHandler struct {
 	service *services.UserService
+}
+
+type createUserRequest struct {
+	Username string `json:"username" validate:"required,min=3,max=64"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8"`
+	IsRoot   bool   `json:"is_root"`
 }
 
 func NewUserHandler(db *gorm.DB) (*UserHandler, error) {
@@ -55,18 +63,28 @@ func (h *UserHandler) Get(c *gin.Context) {
 
 // POST /api/users
 func (h *UserHandler) Create(c *gin.Context) {
-	var body struct {
-		Username string `json:"username"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
-		IsRoot   bool   `json:"is_root"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil || body.Username == "" || body.Email == "" || body.Password == "" {
-		response.Error(c, errors.ErrBadRequest)
+	var body createUserRequest
+	if !bindAndValidate(c, &body) {
 		return
 	}
 
-	user, err := h.service.Create(c.Request.Context(), services.CreateUserInput{Username: body.Username, Email: body.Email, Password: body.Password, IsRoot: body.IsRoot})
+	input := services.CreateUserInput{
+		Username: strings.TrimSpace(body.Username),
+		Email:    strings.ToLower(strings.TrimSpace(body.Email)),
+		Password: body.Password,
+		IsRoot:   body.IsRoot,
+	}
+
+	if input.Username == "" {
+		response.Error(c, errors.NewBadRequest("username is required"))
+		return
+	}
+	if input.Email == "" {
+		response.Error(c, errors.NewBadRequest("email is required"))
+		return
+	}
+
+	user, err := h.service.Create(c.Request.Context(), input)
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return

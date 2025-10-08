@@ -24,7 +24,8 @@ type Config struct {
 
 // ServerConfig configures the HTTP server.
 type ServerConfig struct {
-	Port int `mapstructure:"port"`
+	Port     int    `mapstructure:"port"`
+	LogLevel string `mapstructure:"log_level"`
 }
 
 // DatabaseConfig describes connection options for the supported databases.
@@ -230,6 +231,7 @@ func LoadConfig(paths ...string) (*Config, error) {
 
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 8080)
+	v.SetDefault("server.log_level", "info")
 
 	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.path", "./data/shellcn.sqlite")

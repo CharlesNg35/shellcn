@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -13,6 +14,21 @@ import (
 
 type TeamHandler struct {
 	svc *services.TeamService
+}
+
+type createTeamRequest struct {
+	OrganizationID string `json:"organization_id" validate:"required,uuid4"`
+	Name           string `json:"name" validate:"required,min=2,max=128"`
+	Description    string `json:"description" validate:"omitempty,max=512"`
+}
+
+type updateTeamRequest struct {
+	Name        *string `json:"name" validate:"omitempty,min=2,max=128"`
+	Description *string `json:"description" validate:"omitempty,max=512"`
+}
+
+type teamMemberRequest struct {
+	UserID string `json:"user_id" validate:"required,uuid4"`
 }
 
 func NewTeamHandler(db *gorm.DB) (*TeamHandler, error) {
@@ -49,16 +65,29 @@ func (h *TeamHandler) Get(c *gin.Context) {
 
 // POST /api/teams
 func (h *TeamHandler) Create(c *gin.Context) {
-	var body struct {
-		OrganizationID string `json:"organization_id"`
-		Name           string `json:"name"`
-		Description    string `json:"description"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil || body.OrganizationID == "" || body.Name == "" {
-		response.Error(c, errors.ErrBadRequest)
+	var body createTeamRequest
+	if !bindAndValidate(c, &body) {
 		return
 	}
-	team, err := h.svc.Create(c.Request.Context(), services.CreateTeamInput{OrganizationID: body.OrganizationID, Name: body.Name, Description: body.Description})
+
+	orgID := strings.TrimSpace(body.OrganizationID)
+	name := strings.TrimSpace(body.Name)
+	if orgID == "" {
+		response.Error(c, errors.NewBadRequest("organization id is required"))
+		return
+	}
+	if name == "" {
+		response.Error(c, errors.NewBadRequest("name is required"))
+		return
+	}
+
+	input := services.CreateTeamInput{
+		OrganizationID: orgID,
+		Name:           name,
+		Description:    strings.TrimSpace(body.Description),
+	}
+
+	team, err := h.svc.Create(c.Request.Context(), input)
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -68,15 +97,33 @@ func (h *TeamHandler) Create(c *gin.Context) {
 
 // PATCH /api/teams/:id
 func (h *TeamHandler) Update(c *gin.Context) {
-	var body struct {
-		Name        *string `json:"name"`
-		Description *string `json:"description"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		response.Error(c, errors.ErrBadRequest)
+	var body updateTeamRequest
+	if !bindAndValidate(c, &body) {
 		return
 	}
-	team, err := h.svc.Update(c.Request.Context(), c.Param("id"), services.UpdateTeamInput{Name: body.Name, Description: body.Description})
+
+	if body.Name == nil && body.Description == nil {
+		response.Error(c, errors.NewBadRequest("no fields provided for update"))
+		return
+	}
+
+	var namePtr *string
+	if body.Name != nil {
+		trimmed := strings.TrimSpace(*body.Name)
+		if trimmed == "" {
+			response.Error(c, errors.NewBadRequest("name must not be empty"))
+			return
+		}
+		namePtr = &trimmed
+	}
+
+	var descPtr *string
+	if body.Description != nil {
+		trimmed := strings.TrimSpace(*body.Description)
+		descPtr = &trimmed
+	}
+
+	team, err := h.svc.Update(c.Request.Context(), c.Param("id"), services.UpdateTeamInput{Name: namePtr, Description: descPtr})
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -86,14 +133,16 @@ func (h *TeamHandler) Update(c *gin.Context) {
 
 // POST /api/teams/:id/members
 func (h *TeamHandler) AddMember(c *gin.Context) {
-	var body struct {
-		UserID string `json:"user_id"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil || body.UserID == "" {
-		response.Error(c, errors.ErrBadRequest)
+	var body teamMemberRequest
+	if !bindAndValidate(c, &body) {
 		return
 	}
-	if err := h.svc.AddMember(c.Request.Context(), c.Param("id"), body.UserID); err != nil {
+	userID := strings.TrimSpace(body.UserID)
+	if userID == "" {
+		response.Error(c, errors.NewBadRequest("user id is required"))
+		return
+	}
+	if err := h.svc.AddMember(c.Request.Context(), c.Param("id"), userID); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}

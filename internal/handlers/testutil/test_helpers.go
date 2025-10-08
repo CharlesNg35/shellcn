@@ -15,6 +15,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/api"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
 	sharedtestutil "github.com/charlesng35/shellcn/internal/testutil"
 	"github.com/charlesng35/shellcn/pkg/crypto"
@@ -23,10 +24,12 @@ import (
 
 // Env encapsulates a fully-wired API instance backed by an in-memory database for handler tests.
 type Env struct {
-	T      *testing.T
-	DB     *gorm.DB
-	Router *gin.Engine
-	JWT    *iauth.JWTService
+	T          *testing.T
+	DB         *gorm.DB
+	Router     *gin.Engine
+	JWT        *iauth.JWTService
+	csrfToken  string
+	csrfCookie *http.Cookie
 }
 
 // NewEnv provisions a fresh handler test environment with migrations and seed data applied.
@@ -151,6 +154,11 @@ func DecodeInto[T any](t *testing.T, raw json.RawMessage, dest *T) {
 // Request executes an HTTP request against the test router, applying JSON encoding and auth headers automatically.
 func (e *Env) Request(method, path string, body any, token string) *httptest.ResponseRecorder {
 	e.T.Helper()
+	return e.request(method, path, body, token, false)
+}
+
+func (e *Env) request(method, path string, body any, token string, skipCSRF bool) *httptest.ResponseRecorder {
+	e.T.Helper()
 
 	var buf *bytes.Buffer
 	if body != nil {
@@ -171,7 +179,66 @@ func (e *Env) Request(method, path string, body any, token string) *httptest.Res
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
+	if !skipCSRF && requiresCSRFAttestation(method) {
+		e.ensureCSRFToken()
+		if e.csrfCookie != nil {
+			req.AddCookie(e.csrfCookie)
+		}
+		if e.csrfToken != "" {
+			req.Header.Set(middleware.CSRFHeaderName, e.csrfToken)
+		}
+	}
+
 	w := httptest.NewRecorder()
 	e.Router.ServeHTTP(w, req)
+
+	e.captureCSRF(w.Result())
 	return w
+}
+
+func (e *Env) ensureCSRFToken() {
+	if e.csrfToken != "" && e.csrfCookie != nil {
+		return
+	}
+	resp := e.request(http.MethodGet, "/health", nil, "", true)
+	require.Equal(e.T, http.StatusOK, resp.Code, resp.Body.String())
+}
+
+func (e *Env) captureCSRF(resp *http.Response) {
+	if resp == nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if token := resp.Header.Get(middleware.CSRFHeaderName); token != "" {
+		e.csrfToken = token
+	}
+	for _, c := range resp.Cookies() {
+		if c.Name == middleware.CSRFCookieName {
+			// Clone to avoid unintended mutations between tests
+			e.csrfCookie = &http.Cookie{
+				Name:       c.Name,
+				Value:      c.Value,
+				Path:       c.Path,
+				Domain:     c.Domain,
+				Expires:    c.Expires,
+				Raw:        c.Raw,
+				MaxAge:     c.MaxAge,
+				Secure:     c.Secure,
+				HttpOnly:   c.HttpOnly,
+				SameSite:   c.SameSite,
+				RawExpires: c.RawExpires,
+			}
+			break
+		}
+	}
+}
+
+func requiresCSRFAttestation(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
 }

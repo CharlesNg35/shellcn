@@ -76,6 +76,12 @@ var (
 		Message:    "Internal server error",
 		StatusCode: http.StatusInternalServerError,
 	}
+
+	ErrCSRFInvalid = &AppError{
+		Code:       "CSRF_TOKEN_INVALID",
+		Message:    "Invalid CSRF token",
+		StatusCode: http.StatusForbidden,
+	}
 )
 
 // New builds a new application error with the provided metadata.

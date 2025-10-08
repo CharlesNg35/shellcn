@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -97,6 +98,47 @@ func TestRevokeSessionPreventsRefresh(t *testing.T) {
 	require.NoError(t, db.Take(&stored, "id = ?", session.ID).Error)
 	require.NotNil(t, stored.RevokedAt)
 	require.True(t, stored.RevokedAt.After(clock.Now().Add(-time.Nanosecond)))
+}
+
+func TestSessionServiceCleanupExpired(t *testing.T) {
+	db, svc, clock := setupSessionService(t)
+	user := createTestUser(t, db, "user-cleanup")
+
+	_, expiredSession, err := svc.CreateSession(user.ID, SessionMetadata{})
+	require.NoError(t, err)
+
+	_, activeSession, err := svc.CreateSession(user.ID, SessionMetadata{})
+	require.NoError(t, err)
+
+	_, revokedSession, err := svc.CreateSession(user.ID, SessionMetadata{})
+	require.NoError(t, err)
+
+	require.NoError(t, db.Model(&models.Session{}).
+		Where("id = ?", expiredSession.ID).
+		Update("expires_at", clock.Now().Add(-time.Hour)).Error)
+
+	require.NoError(t, svc.RevokeSession(revokedSession.ID))
+
+	removed, err := svc.CleanupExpired(context.Background())
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, removed, int64(2))
+
+	var count int64
+	require.NoError(t, db.Model(&models.Session{}).Count(&count).Error)
+	require.Equal(t, int64(1), count)
+
+	var remaining models.Session
+	require.NoError(t, db.Take(&remaining, "id = ?", activeSession.ID).Error)
+
+	assertNotFound := func(id string) {
+		t.Helper()
+		var s models.Session
+		err := db.First(&s, "id = ?", id).Error
+		require.ErrorIs(t, err, gorm.ErrRecordNotFound)
+	}
+
+	assertNotFound(expiredSession.ID)
+	assertNotFound(revokedSession.ID)
 }
 
 func setupSessionService(t *testing.T) (*gorm.DB, *SessionService, *testClock) {

@@ -12,6 +12,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/pkg/errors"
+	"github.com/charlesng35/shellcn/pkg/metrics"
 	"github.com/charlesng35/shellcn/pkg/response"
 )
 
@@ -27,8 +28,8 @@ func NewAuthHandler(db *gorm.DB, jwt *iauth.JWTService, sessions *iauth.SessionS
 }
 
 type loginRequest struct {
-	Identifier string `json:"identifier"`
-	Password   string `json:"password"`
+	Identifier string `json:"identifier" validate:"required"`
+	Password   string `json:"password" validate:"required"`
 }
 
 type tokenResponse struct {
@@ -39,13 +40,18 @@ type tokenResponse struct {
 // POST /api/auth/login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req loginRequest
-	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Identifier) == "" || req.Password == "" {
-		response.Error(c, errors.ErrBadRequest)
+	if !bindAndValidate(c, &req) {
+		return
+	}
+	req.Identifier = strings.TrimSpace(req.Identifier)
+	if req.Identifier == "" {
+		response.Error(c, errors.NewBadRequest("identifier is required"))
 		return
 	}
 
 	lp, err := providers.NewLocalProvider(h.db, providers.LocalConfig{})
 	if err != nil {
+		metrics.AuthAttempts.WithLabelValues("failure").Inc()
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
@@ -58,6 +64,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 	if err != nil {
 		// Normalise auth errors to 401
+		metrics.AuthAttempts.WithLabelValues("failure").Inc()
 		response.Error(c, errors.ErrUnauthorized)
 		return
 	}
@@ -67,9 +74,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		UserAgent: c.Request.UserAgent(),
 	})
 	if err != nil {
+		metrics.AuthAttempts.WithLabelValues("failure").Inc()
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
+
+	metrics.AuthAttempts.WithLabelValues("success").Inc()
 
 	// Include basic user info and permissions in the response
 	checker, _ := permissions.NewChecker(h.db)
@@ -93,14 +103,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 type refreshRequest struct {
-	RefreshToken string `json:"refresh_token"`
+	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
 // POST /api/auth/refresh
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	var req refreshRequest
-	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.RefreshToken) == "" {
-		response.Error(c, errors.ErrBadRequest)
+	if !bindAndValidate(c, &req) {
+		return
+	}
+	req.RefreshToken = strings.TrimSpace(req.RefreshToken)
+	if req.RefreshToken == "" {
+		response.Error(c, errors.NewBadRequest("refresh token is required"))
 		return
 	}
 

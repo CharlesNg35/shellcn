@@ -39,3 +39,19 @@ func TestAuthHandler_LoginRefreshLogout(t *testing.T) {
 	unauth := env.Request(http.MethodGet, "/api/auth/me", nil, "")
 	require.Equal(t, http.StatusUnauthorized, unauth.Code)
 }
+
+func TestAuthHandler_LoginValidation(t *testing.T) {
+	env := testutil.NewEnv(t)
+
+	payload := map[string]any{
+		"identifier": " ",
+		"password":   "",
+	}
+
+	resp := env.Request(http.MethodPost, "/api/auth/login", payload, "")
+	require.Equal(t, http.StatusBadRequest, resp.Code)
+	decoded := testutil.DecodeResponse(t, resp)
+	require.False(t, decoded.Success)
+	require.NotNil(t, decoded.Error)
+	require.Equal(t, "BAD_REQUEST", decoded.Error.Code)
+}

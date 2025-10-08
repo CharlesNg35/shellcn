@@ -100,6 +100,26 @@ func TestUserHandler_ListGetCreate(t *testing.T) {
 	require.Equal(t, createdUser["email"], fetched["email"])
 }
 
+func TestUserHandler_CreateValidation(t *testing.T) {
+	env := testutil.NewEnv(t)
+	root := env.CreateRootUser("ValidPassw0rd!")
+	login := env.Login(root.Username, "ValidPassw0rd!")
+	token := login.Tokens.AccessToken
+
+	invalidPayload := map[string]any{
+		"username": " ",
+		"email":    "invalid-email",
+		"password": "short",
+	}
+
+	resp := env.Request(http.MethodPost, "/api/users", invalidPayload, token)
+	require.Equal(t, http.StatusBadRequest, resp.Code)
+	decoded := testutil.DecodeResponse(t, resp)
+	require.False(t, decoded.Success)
+	require.NotNil(t, decoded.Error)
+	require.Equal(t, "BAD_REQUEST", decoded.Error.Code)
+}
+
 func TestOrganizationHandler_CRUD(t *testing.T) {
 	env := testutil.NewEnv(t)
 	root := env.CreateRootUser("OrgPassw0rd!")

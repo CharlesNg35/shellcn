@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/gorm"
 
 	iauth "github.com/charlesng35/shellcn/internal/auth"
@@ -18,14 +19,17 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService) (*gin.Engine, error) {
 	r := gin.New()
 
 	// Global middleware
-	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
+	r.Use(middleware.Logger())
+	r.Use(middleware.Metrics())
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
+	r.Use(middleware.CSRF())
 	// Basic rate limiting: 100 requests/minute per IP+path
 	r.Use(middleware.RateLimit(100, time.Minute))
 
 	// Health endpoint (public)
-	r.GET("/health", handlers.Health())
+	r.GET("/health", handlers.Health(db))
 
 	// Construct dependent services
 	sessionSvc, err := iauth.NewSessionService(db, jwt, iauth.SessionConfig{})
@@ -151,6 +155,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService) (*gin.Engine, error) {
 	}
 	r.GET("/api/setup/status", setupHandler.Status)
 	r.POST("/api/setup/initialize", setupHandler.Initialize)
+
+	// Metrics endpoint
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
 	// NotFound fallback
 	r.NoRoute(middleware.NotFoundHandler)
