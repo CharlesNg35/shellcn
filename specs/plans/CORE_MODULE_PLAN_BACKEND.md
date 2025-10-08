@@ -3497,7 +3497,7 @@ go tool cover -html=coverage.out
     - Add a CI coverage gate (`go test ./... -coverprofile=coverage.out` + `go tool cover -func=coverage.out`) targeting ≥80% overall and ≥70% per package.  
     - Backfill missing unit tests for core services (`internal/services/*`), permission checker edge cases (`internal/permissions/checker.go`), and routing helpers (`internal/api/routes_setup.go`) using the existing `testutil` fixtures.  
     - Include regression cases for first-user bootstrap, session revocation, permission dependency denial, and audit logging so critical flows stay protected.  
-    - Progress: expanded coverage for SMTP validation errors, provider registry metadata handling, runtime defaults, and logger helpers to raise baseline coverage.
+    - Progress: expanded coverage for SMTP validation + dial/auth flows, provider registry & OIDC/SAML/LDAP factories, runtime defaults, and logger helpers (overall coverage ~55%).
 
   - [ ] Run integration tests  
     - Use `testutil.NewServer` to stand up an in-memory stack (SQLite + mocked Redis) and run end-to-end tests against `internal/api/handlers/*`.  

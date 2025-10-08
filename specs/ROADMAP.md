@@ -139,7 +139,7 @@
 ### Phase 7: Testing & Documentation (Week 7)
 
 - [ ] **Testing**
-  - [ ] Achieve 80%+ test coverage — enforce ≥80% overall (≥70%/pkg), expand unit tests for services, permissions, routing, and first-user/session/audit edge cases. (Progress: new coverage for SMTP validation, provider registry contracts, runtime defaults, logger helpers.)
+  - [ ] Achieve 80%+ test coverage — enforce ≥80% overall (≥70%/pkg), expand unit tests for services, permissions, routing, and first-user/session/audit edge cases. (Progress: dial/auth SMTP shims, provider registry + OIDC/SAML/LDAP factory tests, runtime defaults, logger helpers; total backend coverage at ~55%.)
   - [ ] Run integration tests — exercise auth, org/team, permission, audit, and setup flows against in-memory stack with seeded fixtures.
   - [ ] Run contract tests — lock JSON response envelopes, JWT claims, and permission dependency rules with golden tests.
   - [ ] Performance testing — benchmark hot endpoints with `hey`/`vegeta`, capture pprof traces, document tuning levers for DB/cache/rate limits.

@@ -41,19 +41,10 @@ type SMTPSettings struct {
 	Timeout  time.Duration
 }
 
-// NewSMTPMailer builds a Mailer that delivers messages using SMTP.
-func NewSMTPMailer(cfg SMTPSettings) (Mailer, error) {
-	if err := validateSMTPConfig(cfg); err != nil {
-		return nil, err
-	}
-	if cfg.Timeout <= 0 {
-		cfg.Timeout = 10 * time.Second
-	}
-	return &smtpMailer{cfg: cfg}, nil
-}
-
 type smtpMailer struct {
-	cfg SMTPSettings
+	cfg    SMTPSettings
+	dialFn smtpDialFunc
+	authFn smtpAuthFunc
 }
 
 func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
@@ -84,14 +75,14 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 		}
 	}
 
-	conn, client, err := m.dial(ctx)
+	conn, client, err := m.dialFn(ctx, m.cfg)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 	defer client.Close()
 
-	if err := m.authenticate(client); err != nil {
+	if err := m.authFn(client, m.cfg); err != nil {
 		return err
 	}
 
@@ -118,55 +109,6 @@ func (m *smtpMailer) Send(ctx context.Context, msg Message) error {
 	}
 
 	return client.Quit()
-}
-
-func (m *smtpMailer) dial(ctx context.Context) (net.Conn, *smtp.Client, error) {
-	address := fmt.Sprintf("%s:%d", m.cfg.Host, m.cfg.Port)
-	dialer := &net.Dialer{Timeout: m.cfg.Timeout}
-
-	var (
-		conn net.Conn
-		err  error
-	)
-
-	if m.cfg.UseTLS {
-		conn, err = tls.DialWithDialer(dialer, "tcp", address, &tls.Config{ServerName: m.cfg.Host})
-	} else {
-		conn, err = dialer.DialContext(ctx, "tcp", address)
-	}
-	if err != nil {
-		return nil, nil, fmt.Errorf("smtp: dial %s: %w", address, err)
-	}
-
-	client, err := smtp.NewClient(conn, m.cfg.Host)
-	if err != nil {
-		_ = conn.Close()
-		return nil, nil, fmt.Errorf("smtp: new client: %w", err)
-	}
-
-	if !m.cfg.UseTLS {
-		if ok, _ := client.Extension("STARTTLS"); ok {
-			if err := client.StartTLS(&tls.Config{ServerName: m.cfg.Host}); err != nil {
-				_ = client.Close()
-				_ = conn.Close()
-				return nil, nil, fmt.Errorf("smtp: start tls: %w", err)
-			}
-		}
-	}
-
-	return conn, client, nil
-}
-
-func (m *smtpMailer) authenticate(client *smtp.Client) error {
-	if strings.TrimSpace(m.cfg.Username) == "" {
-		return nil
-	}
-
-	auth := smtp.PlainAuth("", m.cfg.Username, m.cfg.Password, m.cfg.Host)
-	if err := client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp: auth: %w", err)
-	}
-	return nil
 }
 
 func validateSMTPConfig(cfg SMTPSettings) error {
@@ -197,6 +139,88 @@ func uniqueAddresses(addresses []string) []string {
 		result = append(result, addr)
 	}
 	return result
+}
+
+type smtpClient interface {
+	Mail(string) error
+	Rcpt(string) error
+	Data() (io.WriteCloser, error)
+	Quit() error
+	Close() error
+	StartTLS(*tls.Config) error
+	Auth(smtp.Auth) error
+	Extension(string) (bool, string)
+}
+
+type smtpDialFunc func(ctx context.Context, cfg SMTPSettings) (net.Conn, smtpClient, error)
+type smtpAuthFunc func(client smtpClient, cfg SMTPSettings) error
+
+func NewSMTPMailer(cfg SMTPSettings) (Mailer, error) {
+	if err := validateSMTPConfig(cfg); err != nil {
+		return nil, err
+	}
+	if cfg.Timeout <= 0 {
+		cfg.Timeout = 10 * time.Second
+	}
+	return &smtpMailer{
+		cfg:    cfg,
+		dialFn: defaultDialFunc,
+		authFn: defaultAuthFunc,
+	}, nil
+}
+
+func defaultDialFunc(ctx context.Context, cfg SMTPSettings) (net.Conn, smtpClient, error) {
+	address := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	dialer := &net.Dialer{Timeout: cfg.Timeout}
+
+	var (
+		conn net.Conn
+		err  error
+	)
+
+	if cfg.UseTLS {
+		conn, err = tls.DialWithDialer(dialer, "tcp", address, &tls.Config{ServerName: cfg.Host})
+	} else if ctx != nil {
+		conn, err = dialer.DialContext(ctx, "tcp", address)
+	} else {
+		conn, err = dialer.Dial("tcp", address)
+	}
+	if err != nil {
+		return nil, nil, fmt.Errorf("smtp: dial %s: %w", address, err)
+	}
+
+	client, err := smtp.NewClient(conn, cfg.Host)
+	if err != nil {
+		_ = conn.Close()
+		return nil, nil, fmt.Errorf("smtp: new client: %w", err)
+	}
+
+	if !cfg.UseTLS {
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			if err := client.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
+				_ = client.Close()
+				_ = conn.Close()
+				return nil, nil, fmt.Errorf("smtp: start tls: %w", err)
+			}
+		}
+	}
+
+	return conn, &realSMTPClient{Client: client}, nil
+}
+
+func defaultAuthFunc(client smtpClient, cfg SMTPSettings) error {
+	if strings.TrimSpace(cfg.Username) == "" {
+		return nil
+	}
+	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp: auth: %w", err)
+	}
+	return nil
+}
+
+type realSMTPClient struct {
+	*smtp.Client
 }
 
 func formatMessage(from string, to []string, subject, body string) string {
