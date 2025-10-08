@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/charlesng35/shellcn/internal/database"
 	"github.com/charlesng35/shellcn/internal/models"
+	testutil "github.com/charlesng35/shellcn/internal/testutil"
 	"github.com/charlesng35/shellcn/pkg/crypto"
 )
 
@@ -102,16 +102,7 @@ func TestRevokeSessionPreventsRefresh(t *testing.T) {
 func setupSessionService(t *testing.T) (*gorm.DB, *SessionService, *testClock) {
 	t.Helper()
 
-	db, err := database.Open(database.Config{Driver: "sqlite"})
-	require.NoError(t, err)
-
-	require.NoError(t, database.AutoMigrate(db))
-
-	sqlDB, err := db.DB()
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = sqlDB.Close()
-	})
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 
 	clock := &testClock{current: time.Date(2024, 1, 3, 9, 0, 0, 0, time.UTC)}
 

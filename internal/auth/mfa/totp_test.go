@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/charlesng35/shellcn/internal/database"
 	"github.com/charlesng35/shellcn/internal/models"
+	testutil "github.com/charlesng35/shellcn/internal/testutil"
 	"github.com/charlesng35/shellcn/pkg/crypto"
 )
 
 func TestGenerateSecretStoresEncryptedData(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 
 	user := createTestUser(t, db, "alice")
 	key, backup, service := createServiceAndGenerate(t, db, user)
@@ -44,7 +44,7 @@ func TestGenerateSecretStoresEncryptedData(t *testing.T) {
 }
 
 func TestVerifyCodeAndUpdateLastUsed(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 	user := createTestUser(t, db, "bob")
 	key, _, service := createServiceAndGenerate(t, db, user)
 
@@ -65,7 +65,7 @@ func TestVerifyCodeAndUpdateLastUsed(t *testing.T) {
 }
 
 func TestUseBackupCodeConsumesCode(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 	user := createTestUser(t, db, "carol")
 	_, backup, service := createServiceAndGenerate(t, db, user)
 
@@ -83,7 +83,7 @@ func TestUseBackupCodeConsumesCode(t *testing.T) {
 }
 
 func TestGenerateQRCode(t *testing.T) {
-	db := openTestDB(t)
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 	user := createTestUser(t, db, "dave")
 	key, _, service := createServiceAndGenerate(t, db, user)
 
@@ -106,22 +106,6 @@ func createServiceAndGenerate(t *testing.T, db *gorm.DB, user *models.User) (*ot
 	require.NoError(t, err)
 
 	return totpKey, backupCodes, service
-}
-
-func openTestDB(t *testing.T) *gorm.DB {
-	t.Helper()
-
-	db, err := database.Open(database.Config{Driver: "sqlite"})
-	require.NoError(t, err)
-	require.NoError(t, database.AutoMigrate(db))
-
-	sqlDB, err := db.DB()
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = sqlDB.Close()
-	})
-
-	return db
 }
 
 func createTestUser(t *testing.T, db *gorm.DB, username string) *models.User {

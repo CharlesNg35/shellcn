@@ -8,20 +8,14 @@ import (
 	"github.com/gin-gonic/gin"
 
 	iauth "github.com/charlesng35/shellcn/internal/auth"
-	"github.com/charlesng35/shellcn/internal/database"
+	testutil "github.com/charlesng35/shellcn/internal/testutil"
 )
 
 func TestRouter_PublicAndProtectedRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	// Open in-memory DB and run migrations/seed
-	db, err := database.Open(database.Config{Driver: "sqlite"})
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := database.AutoMigrateAndSeed(db); err != nil {
-		t.Fatalf("migrate/seed: %v", err)
-	}
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 
 	jwtSvc, err := iauth.NewJWTService(iauth.JWTConfig{Secret: "test-secret", Issuer: "test", AccessTokenTTL: 900000000000})
 	if err != nil {

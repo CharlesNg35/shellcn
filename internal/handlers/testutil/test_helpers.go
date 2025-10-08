@@ -15,8 +15,8 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/api"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
-	"github.com/charlesng35/shellcn/internal/database"
 	"github.com/charlesng35/shellcn/internal/models"
+	sharedtestutil "github.com/charlesng35/shellcn/internal/testutil"
 	"github.com/charlesng35/shellcn/pkg/crypto"
 	"github.com/charlesng35/shellcn/pkg/response"
 )
@@ -35,9 +35,7 @@ func NewEnv(t *testing.T) *Env {
 
 	gin.SetMode(gin.TestMode)
 
-	db, err := database.Open(database.Config{Driver: "sqlite"})
-	require.NoError(t, err)
-	require.NoError(t, database.AutoMigrateAndSeed(db))
+	db := sharedtestutil.MustOpenTestDB(t, sharedtestutil.WithSeedData())
 
 	jwtSvc, err := iauth.NewJWTService(iauth.JWTConfig{
 		Secret:         "test-secret",
@@ -48,10 +46,6 @@ func NewEnv(t *testing.T) *Env {
 
 	router, err := api.NewRouter(db, jwtSvc)
 	require.NoError(t, err)
-
-	sqlDB, err := db.DB()
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = sqlDB.Close() })
 
 	return &Env{
 		T:      t,

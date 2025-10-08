@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
-	"github.com/charlesng35/shellcn/internal/database"
 	"github.com/charlesng35/shellcn/internal/models"
+	testutil "github.com/charlesng35/shellcn/internal/testutil"
 	"github.com/charlesng35/shellcn/pkg/crypto"
 )
 
@@ -254,16 +254,5 @@ func (s *stubVerifier) CreateToken(ctx context.Context, userID, email string) (s
 func setupDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	db, err := database.Open(database.Config{Driver: "sqlite"})
-	require.NoError(t, err)
-
-	require.NoError(t, database.AutoMigrateAndSeed(db))
-
-	sqlDB, err := db.DB()
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = sqlDB.Close()
-	})
-
-	return db
+	return testutil.MustOpenTestDB(t, testutil.WithSeedData())
 }
