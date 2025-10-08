@@ -2,8 +2,8 @@
   <!-- Background with gradient -->
   <defs>
     <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:oklch(0.5676 0.2021 283.0838);stop-opacity:1" />
-      <stop offset="100%" style="stop-color:oklch(0.5261 0.1705 314.6534);stop-opacity:1" />
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
     </linearGradient>
   </defs>
   <rect width="200" height="200" rx="40" fill="url(#bg-gradient)"/>
@@ -19,7 +19,7 @@
 
     <!-- Terminal prompt chevron integrated -->
     <path d="M -35 -35 L -25 -25 L -35 -15"
-          stroke="oklch(0.6475 0.0642 117.4260)"
+          stroke="#86efac"
           stroke-width="6"
           stroke-linecap="round"
           stroke-linejoin="round"

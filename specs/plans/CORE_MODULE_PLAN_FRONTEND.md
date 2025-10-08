@@ -78,7 +78,7 @@ The Core Module frontend provides the user interface for authentication, user ma
 ### Core Technologies
 
 - **React 19:** Latest React features (Compiler, Actions, use hook)
-- **TypeScript 5.7+:** Type safety with latest features
+- **TypeScript 5.9+:** Type safety with latest features
 - **Vite 7:** Next-generation build tool and dev server with improved performance
 - **React Router 7:** SPA routing with loaders/actions (TanStack Router alternative)
 - **Tailwind CSS v4:** Utility-first styling with new engine and improved performance
@@ -87,6 +87,7 @@ The Core Module frontend provides the user interface for authentication, user ma
 - Always use the latest stable versions specified in `project_spec.md`
 - Vite 7 brings significant performance improvements over Vite 5/6
 - Tailwind CSS 4 has a new engine (Oxide) with better performance and new features
+- **Tailwind CSS v4 uses CSS-based configuration via `@theme` directive in CSS files, NOT `tailwind.config.ts`**
 - React 19 includes the new Compiler (no more manual memoization needed)
 
 ### State Management
@@ -115,7 +116,6 @@ The Core Module frontend provides the user interface for authentication, user ma
 - **Vitest:** Unit testing
 - **React Testing Library:** Component testing
 - **Cypress:** E2E testing
-- **Storybook:** Component documentation
 
 ---
 
@@ -258,10 +258,11 @@ web/
 │
 ├── index.html
 ├── vite.config.ts
-├── tailwind.config.ts
 ├── tsconfig.json
 └── package.json
 ```
+
+**Note:** Tailwind CSS v4 does not use `tailwind.config.ts`. Configuration is done via `@theme` directive in CSS files (see `src/index.css`).
 
 ---
 
@@ -3042,27 +3043,38 @@ export default defineConfig({
 })
 ```
 
-### tailwind.config.ts
+### Tailwind CSS v4 Configuration (src/index.css)
 
-```typescript
-import type { Config } from 'tailwindcss'
+**Note:** Tailwind CSS v4 uses CSS-based configuration via `@theme` directive instead of `tailwind.config.ts`.
 
-export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
-  theme: {
-    extend: {
-      colors: {
-        primary: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          // ... other shades
-          900: '#1e3a8a',
-        },
-      },
-    },
-  },
-  plugins: [],
-} satisfies Config
+```css
+@import 'tailwindcss';
+
+@layer base {
+  :root {
+    /* Light mode theme variables using OKLCH color space */
+    --background: oklch(0.9821 0 0);
+    --foreground: oklch(0.3211 0 0);
+    --primary: oklch(0.5676 0.2021 283.0838);
+    --primary-foreground: oklch(1.0000 0 0);
+    /* ... other theme variables */
+  }
+
+  .dark {
+    /* Dark mode theme variables */
+    --background: oklch(0.2303 0.0125 264.2926);
+    --foreground: oklch(0.9219 0 0);
+    /* ... other theme variables */
+  }
+}
+
+@theme inline {
+  /* Map CSS variables to Tailwind colors */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  /* ... other color mappings */
+}
 ```
 
 ---
@@ -3070,16 +3082,16 @@ export default {
 ## Implementation Checklist
 
 ### Phase 1: Project Setup & Foundation (Week 1)
-- [ ] Initialize Vite 7 project with React 19 and TypeScript 5.7+
-- [ ] Configure Tailwind CSS v4 with custom theme
-- [ ] Set up ESLint, Prettier, and TypeScript strict mode
-- [ ] Configure path aliases (@/ for src/)
-- [ ] Install and configure core dependencies (React Router 7, TanStack Query, Zustand)
-- [ ] Set up project structure (pages/, components/, hooks/, lib/, store/, types/)
-- [ ] Create base UI components (Button, Input, Card, Modal, etc.) using Radix UI
-- [ ] Implement class-variance-authority (CVA) for component variants
-- [ ] Set up Storybook for component documentation
-- [ ] Configure Vitest for unit testing
+- [x] Initialize Vite 7 project with React 19 and TypeScript 5.9+
+- [x] Configure Tailwind CSS v4 with custom theme using `@theme` directive in CSS (OKLCH color space)
+- [x] Set up ESLint, Prettier, and TypeScript strict mode
+- [x] Configure path aliases (@/ for src/)
+- [x] Install and configure core dependencies (React Router 7, TanStack Query, Zustand)
+- [x] Set up project structure (pages/, components/, hooks/, lib/, store/, types/)
+- [x] Create base UI components (Button, Input, Card, Modal, Badge) using Radix UI
+- [x] Implement class-variance-authority (CVA) for component variants
+- [x] Configure Vitest for unit testing
+- [x] Implement light/dark theme support with CSS custom properties
 
 ### Phase 2: Authentication & Setup Flow (Week 2)
 - [ ] Implement auth store (Zustand) with token management
