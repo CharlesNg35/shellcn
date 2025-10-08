@@ -3344,28 +3344,28 @@ go tool cover -html=coverage.out
 
 ### Phase 2: Authentication (Week 2)
 
-- [ ] **JWT Service**
-  - [ ] Implement token generation
-  - [ ] Implement token validation
-  - [ ] Write JWT tests
+- [x] **JWT Service**
+  - [x] Implement token generation
+  - [x] Implement token validation
+  - [x] Write JWT tests
 
-- [ ] **Local Auth Provider**
-  - [ ] Implement login
-  - [ ] Implement password hashing
-  - [ ] Implement account lockout
-  - [ ] Write auth provider tests
+- [x] **Local Auth Provider**
+  - [x] Implement login
+  - [x] Implement password hashing
+  - [x] Implement account lockout
+  - [x] Write auth provider tests
 
-- [ ] **Session Management**
-  - [ ] Implement session service
-  - [ ] Implement refresh token flow
-  - [ ] Implement session revocation
-  - [ ] Write session tests
+- [x] **Session Management**
+  - [x] Implement session service
+  - [x] Implement refresh token flow
+  - [x] Implement session revocation
+  - [x] Write session tests
 
-- [ ] **MFA (Optional)**
-  - [ ] Implement TOTP service
-  - [ ] Implement QR code generation
-  - [ ] Implement backup codes
-  - [ ] Write MFA tests
+- [x] **MFA (Optional)**
+  - [x] Implement TOTP service
+  - [x] Implement QR code generation
+  - [x] Implement backup codes
+  - [x] Write MFA tests
 
 ### Phase 3: Authorization (Week 3)
 
