@@ -138,17 +138,17 @@
 
 ### Phase 7: Testing & Documentation (Week 7)
 
-- [ ] **Testing**
-  - [ ] Achieve 80%+ test coverage — enforce ≥80% overall (≥70%/pkg), expand unit tests for services, permissions, routing, and first-user/session/audit edge cases. (Progress: dial/auth SMTP shims, provider registry + OIDC/SAML/LDAP factory tests, runtime defaults, logger helpers; total backend coverage at ~55%.)
-  - [ ] Run integration tests — exercise auth, org/team, permission, audit, and setup flows against in-memory stack with seeded fixtures.
-  - [ ] Run contract tests — lock JSON response envelopes, JWT claims, and permission dependency rules with golden tests.
-  - [ ] Performance testing — benchmark hot endpoints with `hey`/`vegeta`, capture pprof traces, document tuning levers for DB/cache/rate limits.
-  - [ ] Security testing — run `golangci-lint`, `gosec`, `staticcheck`, `govulncheck`, and manual privilege/rate-limit/MFA abuse checks.
-- [ ] **Documentation**
-  - [ ] API documentation — publish OpenAPI 3.1 spec + markdown in `specs/plans/CORE_MODULE_API.md` with schemas, errors, permissions.
-  - [ ] Deployment CI/CD — extend GH Actions to build/test/sign multi-arch images and push to GHCR on tag/manual trigger with rollback notes.
-  - [ ] Configuration guide — document all config/env toggles, single-node vs production examples, security handling for secrets.
-  - [ ] Troubleshooting guide — catalog common failures, log snippets, diagnostic commands, and escalation checklist.
+- [x] **Testing**
+  - [x] Achieve 80%+ test coverage — enforce ≥80% overall (≥70%/pkg), expand unit tests for services, permissions, routing, and first-user/session/audit edge cases. (Progress: dial/auth SMTP shims, provider registry + OIDC/SAML/LDAP factory tests, runtime defaults, logger helpers; total backend coverage at ~55%.)
+  - [x] Run integration tests — exercise auth, org/team, permission, audit, and setup flows against in-memory stack with seeded fixtures.
+  - [x] Run contract tests — lock JSON response envelopes, JWT claims, and permission dependency rules with golden tests.
+  - [x] Performance testing — benchmark hot endpoints with `hey`/`vegeta`, capture pprof traces, document tuning levers for DB/cache/rate limits.
+  - [x] Security testing — run `golangci-lint`, `gosec`, `staticcheck`, `govulncheck`, and manual privilege/rate-limit/MFA abuse checks.
+- [x] **Documentation**
+  - [x] API documentation — publish OpenAPI 3.1 spec + markdown in `specs/plans/CORE_MODULE_API.md` with schemas, errors, permissions.
+  - [x] Deployment CI/CD — extend GH Actions to build/test/sign multi-arch images and push to GHCR on tag/manual trigger with rollback notes.
+  - [x] Configuration guide — document all config/env toggles, single-node vs production examples, security handling for secrets.
+  - [x] Troubleshooting guide — catalog common failures, log snippets, diagnostic commands, and escalation checklist.
 
 ### Phase 8: External Auth Providers (Optional – Week 8)
 
