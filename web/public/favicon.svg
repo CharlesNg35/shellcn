@@ -1,22 +1,28 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background -->
-  <rect width="32" height="32" rx="6" fill="#3b82f6"/>
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="favicon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="6" fill="url(#favicon-gradient)"/>
 
-  <!-- Terminal Window -->
-  <rect x="6" y="8" width="20" height="16" rx="2" fill="#1e293b"/>
+  <!-- Stylized "S" with terminal prompt -->
+  <g transform="translate(16, 16)">
+    <!-- Main "S" shape -->
+    <path d="M 3 -6 Q 6 -6 6 -3 Q 6 0 3 0 L -3 0 Q -6 0 -6 3 Q -6 6 -3 6 L 3 6"
+          stroke="#ffffff"
+          stroke-width="2"
+          stroke-linecap="round"
+          fill="none"/>
 
-  <!-- Window Header -->
-  <rect x="6" y="8" width="20" height="3" rx="2" fill="#334155"/>
-  <rect x="6" y="10.5" width="20" height="0.5" fill="#334155"/>
-
-  <!-- Window Buttons -->
-  <circle cx="8.5" cy="9.5" r="0.7" fill="#ef4444"/>
-  <circle cx="11" cy="9.5" r="0.7" fill="#f59e0b"/>
-  <circle cx="13.5" cy="9.5" r="0.7" fill="#10b981"/>
-
-  <!-- Command Prompt Symbol -->
-  <path d="M 9 15 L 11 16.5 L 9 18" stroke="#10b981" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-
-  <!-- Cursor Line -->
-  <rect x="13" y="15.5" width="8" height="1" rx="0.5" fill="#60a5fa"/>
+    <!-- Terminal prompt chevron -->
+    <path d="M -5 -5 L -3.5 -3.5 L -5 -2"
+          stroke="#86efac"
+          stroke-width="1"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"/>
+  </g>
 </svg>
