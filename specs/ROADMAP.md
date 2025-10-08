@@ -165,39 +165,37 @@
 
 ---
 
-## Monitoring Module (Metrics, Health) — Not Started
+## 3. Monitoring Module (Metrics, Health) — Not Started
 
 ---
 
-## SSH Module — Not Started
+## 4. SSH Module — Not Started
+
+### SFTP Module — Not Started
 
 ---
 
-## Telnet Module — Not Started
+## 5. Telnet Module — Not Started
 
 ---
 
-## SFTP Module — Not Started
+## 6. RDP Module — Not Started
 
 ---
 
-## RDP Module — Not Started
+## 7. VNC Module — Not Started
 
 ---
 
-## VNC Module — Not Started
+## 8. Docker Module — Not Started
 
 ---
 
-## Docker Module — Not Started
+## 9. Kubernetes Module — Not Started
 
 ---
 
-## Kubernetes Module — Not Started
-
----
-
-## Database Module — Not Started
+## 10. Database Module — Not Started
 
     ### MySQL — Driver support implemented (Phase 1)
     ### PostgreSQL — Driver support implemented (Phase 1)
@@ -206,10 +204,8 @@
 
 ---
 
-## Proxmox Module — Not Started
+## 11. Proxmox Module — Not Started
 
 ---
 
----
-
-## File Share Module — Not Started
+## 12. File Share Module — Not Started

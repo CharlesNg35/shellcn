@@ -130,7 +130,7 @@ func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy str
 			Subject: "You're invited to ShellCN",
 			Body:    s.inviteBody(link, email),
 		}
-		if mailErr := s.mailer.Send(ctx, message); mailErr != nil {
+		if mailErr := s.mailer.Send(ctx, message); mailErr != nil && !errors.Is(mailErr, mail.ErrSMTPDisabled) {
 			return "", "", fmt.Errorf("invite service: send email: %w", mailErr)
 		}
 	}

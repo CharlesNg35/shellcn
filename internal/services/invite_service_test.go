@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/pkg/mail"
 )
 
 func TestInviteServiceGenerateAndRedeem(t *testing.T) {
@@ -60,6 +61,17 @@ func TestInviteServiceExpiry(t *testing.T) {
 	require.ErrorIs(t, err, ErrInviteExpired)
 }
 
+func TestInviteServiceSMTPDisabled(t *testing.T) {
+	db := openInviteTestDB(t)
+	svc, err := NewInviteService(db, &disabledMailer{})
+	require.NoError(t, err)
+
+	token, link, err := svc.GenerateInvite(context.Background(), "disabled@example.com", "admin")
+	require.NoError(t, err)
+	require.NotEmpty(t, token)
+	require.NotEmpty(t, link)
+}
+
 func openInviteTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
@@ -73,4 +85,10 @@ func openInviteTestDB(t *testing.T) *gorm.DB {
 	})
 
 	return db
+}
+
+type disabledMailer struct{}
+
+func (disabledMailer) Send(ctx context.Context, msg mail.Message) error {
+	return mail.ErrSMTPDisabled
 }

@@ -139,7 +139,7 @@ func (s *EmailVerificationService) CreateToken(ctx context.Context, userID, emai
 			Subject: "Confirm your ShellCN account",
 			Body:    s.verificationBody(link),
 		}
-		if mailErr := s.mailer.Send(ctx, message); mailErr != nil {
+		if mailErr := s.mailer.Send(ctx, message); mailErr != nil && !errors.Is(mailErr, mail.ErrSMTPDisabled) {
 			return "", "", fmt.Errorf("email verification service: send email: %w", mailErr)
 		}
 	}
