@@ -58,12 +58,20 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	generated, err := app.ApplyRuntimeDefaults(cfg)
+	if err != nil {
+		return err
+	}
+
 	if err := app.ConfigureLogging(cfg.Server.LogLevel); err != nil {
 		return fmt.Errorf("configure logging: %w", err)
 	}
 	defer logger.Sync() // best effort
 
 	log := logger.WithModule("bootstrap")
+	for key := range generated {
+		log.Info("generated runtime secret", zap.String("key", key))
+	}
 
 	if err := ensureSecretsPresent(cfg); err != nil {
 		return err
