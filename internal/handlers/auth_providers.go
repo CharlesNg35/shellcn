@@ -54,12 +54,13 @@ func (h *AuthProviderHandler) UpdateLocalSettings(c *gin.Context) {
 	var body struct {
 		AllowRegistration        bool `json:"allow_registration"`
 		RequireEmailVerification bool `json:"require_email_verification"`
+		AllowPasswordReset       bool `json:"allow_password_reset"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		response.Error(c, errors.ErrBadRequest)
 		return
 	}
-	if err := h.svc.UpdateLocalSettings(c.Request.Context(), body.AllowRegistration, body.RequireEmailVerification); err != nil {
+	if err := h.svc.UpdateLocalSettings(c.Request.Context(), body.AllowRegistration, body.RequireEmailVerification, body.AllowPasswordReset); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}

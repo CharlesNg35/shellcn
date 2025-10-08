@@ -44,6 +44,7 @@ type PublicProvider struct {
 	Enabled                  bool   `json:"enabled"`
 	AllowRegistration        bool   `json:"allow_registration"`
 	RequireEmailVerification bool   `json:"require_email_verification"`
+	AllowPasswordReset       bool   `json:"allow_password_reset"`
 	Flow                     string `json:"flow"`
 }
 
@@ -153,6 +154,7 @@ func (s *AuthProviderService) GetEnabledPublic(ctx context.Context) ([]PublicPro
 			Enabled:                  provider.Enabled,
 			AllowRegistration:        provider.AllowRegistration,
 			RequireEmailVerification: provider.RequireEmailVerification,
+			AllowPasswordReset:       provider.AllowPasswordReset,
 			Flow:                     flow,
 		})
 	}
@@ -292,12 +294,13 @@ func (s *AuthProviderService) ConfigureLDAP(ctx context.Context, cfg models.LDAP
 }
 
 // UpdateLocalSettings toggles options on the local provider.
-func (s *AuthProviderService) UpdateLocalSettings(ctx context.Context, allowRegistration, requireEmailVerification bool) error {
+func (s *AuthProviderService) UpdateLocalSettings(ctx context.Context, allowRegistration, requireEmailVerification, allowPasswordReset bool) error {
 	ctx = ensureContext(ctx)
 
 	updates := map[string]any{
 		"allow_registration":         allowRegistration,
 		"require_email_verification": requireEmailVerification,
+		"allow_password_reset":       allowPasswordReset,
 	}
 
 	if err := s.db.WithContext(ctx).

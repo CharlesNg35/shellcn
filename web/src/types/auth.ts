@@ -108,6 +108,9 @@ export interface AuthProviderMetadata {
   icon?: string
   enabled: boolean
   login_url?: string
+  allow_registration?: boolean
+  require_email_verification?: boolean
+  allow_password_reset?: boolean
 }
 
 export interface PasswordResetRequestPayload {

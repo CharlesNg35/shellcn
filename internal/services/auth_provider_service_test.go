@@ -29,6 +29,7 @@ func TestAuthProviderServiceConfigureAndTestConnection(t *testing.T) {
 		Name:                     "Local",
 		Enabled:                  true,
 		RequireEmailVerification: true,
+		AllowPasswordReset:       true,
 	}).Error)
 	require.NoError(t, db.Create(&models.AuthProvider{
 		Type: "invite",
@@ -110,13 +111,14 @@ func TestAuthProviderServiceMutations(t *testing.T) {
 		Name: "Invite",
 	}).Error)
 
-	err = svc.UpdateLocalSettings(ctx, false, false)
+	err = svc.UpdateLocalSettings(ctx, false, false, false)
 	require.NoError(t, err)
 
 	local, err := svc.GetByType(ctx, "local")
 	require.NoError(t, err)
 	require.False(t, local.AllowRegistration)
 	require.False(t, local.RequireEmailVerification)
+	require.False(t, local.AllowPasswordReset)
 
 	err = svc.UpdateInviteSettings(ctx, true, true)
 	require.NoError(t, err)
@@ -145,6 +147,7 @@ func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {
 		Enabled:                  true,
 		AllowRegistration:        true,
 		RequireEmailVerification: true,
+		AllowPasswordReset:       true,
 		Description:              "Local",
 		Icon:                     "key",
 	}).Error)
@@ -192,6 +195,7 @@ func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {
 		case "local":
 			localFound = true
 			require.True(t, p.AllowRegistration)
+			require.True(t, p.AllowPasswordReset)
 			require.Equal(t, "password", p.Flow)
 		case "oidc":
 			oidcFound = true

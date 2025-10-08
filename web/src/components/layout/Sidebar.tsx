@@ -14,6 +14,7 @@ import {
 import { useState } from 'react'
 import { cn } from '@/lib/utils/cn'
 import logo from '@/assets/logo.svg'
+import { APP_NAME } from '@/lib/constants'
 
 interface NavItem {
   to: string
@@ -94,13 +95,13 @@ export function Sidebar() {
       <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
         {!collapsed && (
           <div className="flex items-center gap-3">
-            <img src={logo} alt="ShellCN" className="h-8 w-8" />
-            <span className="text-lg font-semibold">ShellCN</span>
+            <img src={logo} alt={APP_NAME} className="h-8 w-8" />
+            <span className="text-lg font-semibold">{APP_NAME}</span>
           </div>
         )}
         {collapsed && (
           <div className="flex w-full justify-center">
-            <img src={logo} alt="ShellCN" className="h-8 w-8" />
+            <img src={logo} alt={APP_NAME} className="h-8 w-8" />
           </div>
         )}
         <button

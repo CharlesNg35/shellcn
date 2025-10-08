@@ -65,6 +65,7 @@ func SeedData(db *gorm.DB) error {
 		Enabled:                  true,
 		AllowRegistration:        false,
 		RequireEmailVerification: true,
+		AllowPasswordReset:       true,
 		Description:              "Username and password authentication",
 		Icon:                     "key",
 	}

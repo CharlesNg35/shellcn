@@ -59,6 +59,7 @@ func TestSSOHandlerFlow(t *testing.T) {
 		Enabled:                  true,
 		AllowRegistration:        true,
 		RequireEmailVerification: true,
+		AllowPasswordReset:       true,
 		Description:              "Local",
 		Icon:                     "key",
 	}).Error)

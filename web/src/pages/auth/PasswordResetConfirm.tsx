@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,11 +12,45 @@ type PasswordResetConfirmFormData = z.infer<typeof passwordResetConfirmSchema>
 
 export function PasswordResetConfirm() {
   const navigate = useNavigate()
-  const { confirmPasswordReset } = useAuth({ autoInitialize: false })
+  const { confirmPasswordReset, providers, loadProviders } = useAuth({ autoInitialize: false })
   const [params] = useSearchParams()
   const prefilledToken = useMemo(() => params.get('token') ?? '', [params])
   const [error, setError] = useState<string | null>(null)
   const [completed, setCompleted] = useState(false)
+  const [providersReady, setProvidersReady] = useState(providers.length > 0)
+
+  useEffect(() => {
+    let active = true
+    if (providers.length === 0 && !providersReady) {
+      loadProviders()
+        .catch(() => undefined)
+        .finally(() => {
+          if (active) {
+            setProvidersReady(true)
+          }
+        })
+      return () => {
+        active = false
+      }
+    }
+
+    if (providers.length > 0 && !providersReady) {
+      setProvidersReady(true)
+    }
+
+    return () => {
+      active = false
+    }
+  }, [providers.length, providersReady, loadProviders])
+
+  const canResetPassword = useMemo(() => {
+    const localProvider = providers.find((provider) => provider.type === 'local')
+    if (!localProvider) {
+      return false
+    }
+    const flag = localProvider.allow_password_reset
+    return flag === undefined ? true : Boolean(flag)
+  }, [providers])
 
   const {
     register,
@@ -47,6 +81,36 @@ export function PasswordResetConfirm() {
         setError('Unable to reset password. Please try again or request a new link.')
       }
     }
+  }
+
+  if (!providersReady) {
+    return (
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
+        <p className="text-sm text-muted-foreground">Loading reset flow...</p>
+      </div>
+    )
+  }
+
+  if (!canResetPassword) {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2 text-center">
+          <h2 className="text-2xl font-semibold">Password reset unavailable</h2>
+          <p className="text-sm text-muted-foreground">
+            Password reset is disabled for local accounts. If you require access, please contact
+            your administrator for assistance.
+          </p>
+        </div>
+        <div className="text-center text-sm text-muted-foreground">
+          Return to{' '}
+          <Link to="/login" className="text-primary hover:underline">
+            login
+          </Link>
+          .
+        </div>
+      </div>
+    )
   }
 
   if (completed) {

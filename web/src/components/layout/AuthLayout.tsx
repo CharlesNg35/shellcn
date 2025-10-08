@@ -3,7 +3,9 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import logo from '@/assets/logo.svg'
 import { useAuth } from '@/hooks/useAuth'
 import { SSOButtons } from '@/components/auth/SSOButtons'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Terminal, Shield, Activity, Lock } from 'lucide-react'
+import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
 export function AuthLayout() {
   const { providers, loadProviders } = useAuth()
@@ -25,10 +27,10 @@ export function AuthLayout() {
           {/* Logo and title */}
           <div className="space-y-6">
             <Link to="/" className="flex items-center gap-3">
-              <img src={logo} alt="ShellCN" className="h-12 w-12" />
+              <img src={logo} alt={APP_NAME} className="h-12 w-12" />
               <div>
-                <h1 className="text-2xl font-bold text-foreground">ShellCN</h1>
-                <p className="text-sm text-muted-foreground">Enterprise Remote Access</p>
+                <h1 className="text-2xl font-bold text-foreground">{APP_NAME}</h1>
+                <p className="text-sm text-muted-foreground">{APP_DESCRIPTION}</p>
               </div>
             </Link>
 
@@ -86,12 +88,17 @@ export function AuthLayout() {
       {/* Right side - Auth form */}
       <main className="flex flex-1 flex-col justify-center px-6 py-12 sm:px-12 lg:px-16">
         <div className="mx-auto w-full max-w-md">
+          {/* Theme toggle - top right */}
+          <div className="mb-6 flex justify-end">
+            <ThemeToggle />
+          </div>
+
           {/* Mobile logo */}
           <div className="mb-10 flex items-center gap-3 lg:hidden">
-            <img src={logo} alt="ShellCN" className="h-10 w-10" />
+            <img src={logo} alt={APP_NAME} className="h-10 w-10" />
             <div>
-              <h1 className="text-xl font-bold text-foreground">ShellCN</h1>
-              <p className="text-sm text-muted-foreground">Enterprise Remote Access</p>
+              <h1 className="text-xl font-bold text-foreground">{APP_NAME}</h1>
+              <p className="text-sm text-muted-foreground">{APP_DESCRIPTION}</p>
             </div>
           </div>
 

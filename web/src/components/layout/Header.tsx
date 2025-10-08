@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils/cn'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
 
 export function Header() {
   const { user, logout } = useAuth()
@@ -54,7 +55,10 @@ export function Header() {
       </div>
 
       {/* Right side - Notifications and user menu */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        {/* Theme toggle */}
+        <ThemeToggle />
+
         {/* Notifications */}
         <button
           className="relative rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"

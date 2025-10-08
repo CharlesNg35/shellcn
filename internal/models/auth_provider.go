@@ -10,6 +10,7 @@ type AuthProvider struct {
 
 	AllowRegistration        bool `gorm:"default:false" json:"allow_registration"`
 	RequireEmailVerification bool `gorm:"default:true" json:"require_email_verification"`
+	AllowPasswordReset       bool `gorm:"default:true" json:"allow_password_reset"`
 
 	Description string `json:"description"`
 	Icon        string `json:"icon"`

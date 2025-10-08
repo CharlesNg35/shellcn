@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -12,7 +12,16 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export function Login() {
   const navigate = useNavigate()
-  const { login, isLoading, error, clearError, isMfaRequired, fetchSetupStatus, status } = useAuth()
+  const {
+    login,
+    isLoading,
+    error,
+    clearError,
+    isMfaRequired,
+    fetchSetupStatus,
+    status,
+    providers,
+  } = useAuth()
   const {
     register,
     handleSubmit,
@@ -28,6 +37,15 @@ export function Login() {
   })
 
   const [checkingSetup, setCheckingSetup] = useState(true)
+
+  const canResetPassword = useMemo(() => {
+    const localProvider = providers.find((provider) => provider.type === 'local')
+    if (!localProvider) {
+      return false
+    }
+    const flag = localProvider.allow_password_reset
+    return flag === undefined ? true : Boolean(flag)
+  }, [providers])
 
   useEffect(() => {
     setFocus('identifier')
@@ -120,11 +138,13 @@ export function Login() {
           error={errors.password?.message}
         />
 
-        <div className="flex items-center justify-between text-sm">
-          <Link to="/password-reset" className="text-primary hover:underline">
-            Forgot password?
-          </Link>
-        </div>
+        {canResetPassword ? (
+          <div className="flex items-center justify-between text-sm">
+            <Link to="/password-reset" className="text-primary hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+        ) : null}
 
         {error && (
           <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
