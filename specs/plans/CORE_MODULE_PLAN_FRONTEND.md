@@ -135,7 +135,8 @@ web/
 │   │       ├── Permissions.tsx
 │   │       ├── Security.tsx
 │   │       ├── Sessions.tsx
-│   │       └── AuditLogs.tsx
+│   │       ├── AuditLogs.tsx
+│   │       └── AuthProviders.tsx
 │   │
 │   ├── components/                     # Reusable components
 │   │   ├── ui/                         # Base UI components
@@ -176,6 +177,15 @@ web/
 │   │   │   ├── AuditFilters.tsx
 │   │   │   └── AuditExport.tsx
 │   │   │
+│   │   ├── auth-providers/             # Auth provider components
+│   │   │   ├── ProviderCard.tsx
+│   │   │   ├── OIDCConfigForm.tsx
+│   │   │   ├── OAuth2ConfigForm.tsx
+│   │   │   ├── SAMLConfigForm.tsx
+│   │   │   ├── LDAPConfigForm.tsx
+│   │   │   ├── LocalSettingsForm.tsx
+│   │   │   └── InviteSettingsForm.tsx
+│   │   │
 │   │   └── layout/                     # Layout components
 │   │       ├── AuthLayout.tsx
 │   │       ├── DashboardLayout.tsx
@@ -191,7 +201,8 @@ web/
 │   │   ├── useOrganizations.ts
 │   │   ├── useTeams.ts
 │   │   ├── useSessions.ts
-│   │   └── useAuditLogs.ts
+│   │   ├── useAuditLogs.ts
+│   │   └── useAuthProviders.ts
 │   │
 │   ├── lib/                            # Utilities and libraries
 │   │   ├── api/                        # API client
@@ -202,7 +213,8 @@ web/
 │   │   │   ├── teams.ts
 │   │   │   ├── permissions.ts
 │   │   │   ├── sessions.ts
-│   │   │   └── audit.ts
+│   │   │   ├── audit.ts
+│   │   │   └── authProviders.ts
 │   │   │
 │   │   ├── utils/                      # Utility functions
 │   │   │   ├── cn.ts                   # Class name merger
@@ -397,6 +409,12 @@ export function Sidebar() {
       icon: Shield,
       label: 'Permissions',
       permission: 'permission.view'
+    },
+    {
+      to: '/settings/auth-providers',
+      icon: Shield,
+      label: 'Auth Providers',
+      permission: 'permission.manage'
     },
     {
       to: '/settings/audit',
@@ -1135,6 +1153,526 @@ export function PermissionMatrix({ roleId }: PermissionMatrixProps) {
 
 ---
 
+## Auth Provider Management UI
+
+**IMPORTANT:** Authentication providers are configured via UI by admins, not config files.
+
+### Auth Providers Page
+
+**Location:** `src/pages/settings/AuthProviders.tsx`
+
+```tsx
+import { useState } from 'react'
+import { useAuthProviders } from '@/hooks/useAuthProviders'
+import { ProviderCard } from '@/components/auth-providers/ProviderCard'
+import { OIDCConfigForm } from '@/components/auth-providers/OIDCConfigForm'
+import { OAuth2ConfigForm } from '@/components/auth-providers/OAuth2ConfigForm'
+import { SAMLConfigForm } from '@/components/auth-providers/SAMLConfigForm'
+import { LDAPConfigForm } from '@/components/auth-providers/LDAPConfigForm'
+import { LocalSettingsForm } from '@/components/auth-providers/LocalSettingsForm'
+import { InviteSettingsForm } from '@/components/auth-providers/InviteSettingsForm'
+import { Modal } from '@/components/ui/Modal'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
+import { PermissionGuard } from '@/components/permissions/PermissionGuard'
+
+export function AuthProviders() {
+  const { data: providers, isLoading } = useAuthProviders()
+  const [configureModal, setConfigureModal] = useState<string | null>(null)
+
+  const providerTypes = [
+    { type: 'local', name: 'Local Authentication', icon: 'key', description: 'Username and password' },
+    { type: 'invite', name: 'Email Invitation', icon: 'mail', description: 'Invite users via email' },
+    { type: 'oidc', name: 'OpenID Connect', icon: 'shield-check', description: 'OIDC SSO' },
+    { type: 'oauth2', name: 'OAuth 2.0', icon: 'key', description: 'Generic OAuth2' },
+    { type: 'saml', name: 'SAML 2.0', icon: 'shield', description: 'SAML SSO' },
+    { type: 'ldap', name: 'LDAP / AD', icon: 'building', description: 'LDAP or Active Directory' },
+  ]
+
+  return (
+    <PermissionGuard permission="permission.manage">
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Authentication Providers</h1>
+          <p className="text-gray-600 mt-2">
+            Configure authentication methods for your users
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {providerTypes.map((providerType) => {
+            const provider = providers?.find((p) => p.type === providerType.type)
+
+            return (
+              <ProviderCard
+                key={providerType.type}
+                type={providerType.type}
+                name={providerType.name}
+                icon={providerType.icon}
+                description={providerType.description}
+                enabled={provider?.enabled || false}
+                configured={!!provider}
+                onConfigure={() => setConfigureModal(providerType.type)}
+              />
+            )
+          })}
+        </div>
+
+        {/* Configuration Modals */}
+        <Modal
+          open={configureModal === 'local'}
+          onClose={() => setConfigureModal(null)}
+          title="Local Authentication Settings"
+        >
+          <LocalSettingsForm onSuccess={() => setConfigureModal(null)} />
+        </Modal>
+
+        <Modal
+          open={configureModal === 'invite'}
+          onClose={() => setConfigureModal(null)}
+          title="Email Invitation Settings"
+        >
+          <InviteSettingsForm onSuccess={() => setConfigureModal(null)} />
+        </Modal>
+
+        <Modal
+          open={configureModal === 'oidc'}
+          onClose={() => setConfigureModal(null)}
+          title="Configure OpenID Connect"
+          size="large"
+        >
+          <OIDCConfigForm onSuccess={() => setConfigureModal(null)} />
+        </Modal>
+
+        <Modal
+          open={configureModal === 'oauth2'}
+          onClose={() => setConfigureModal(null)}
+          title="Configure OAuth 2.0"
+          size="large"
+        >
+          <OAuth2ConfigForm onSuccess={() => setConfigureModal(null)} />
+        </Modal>
+
+        <Modal
+          open={configureModal === 'saml'}
+          onClose={() => setConfigureModal(null)}
+          title="Configure SAML 2.0"
+          size="large"
+        >
+          <SAMLConfigForm onSuccess={() => setConfigureModal(null)} />
+        </Modal>
+
+        <Modal
+          open={configureModal === 'ldap'}
+          onClose={() => setConfigureModal(null)}
+          title="Configure LDAP / Active Directory"
+          size="large"
+        >
+          <LDAPConfigForm onSuccess={() => setConfigureModal(null)} />
+        </Modal>
+      </div>
+    </PermissionGuard>
+  )
+}
+```
+
+### Provider Card Component
+
+**Location:** `src/components/auth-providers/ProviderCard.tsx`
+
+```tsx
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authProvidersApi } from '@/lib/api/authProviders'
+import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+import { Card } from '@/components/ui/Card'
+import { Switch } from '@/components/ui/Switch'
+import { Settings, CheckCircle, XCircle } from 'lucide-react'
+import { toast } from '@/components/ui/use-toast'
+
+interface ProviderCardProps {
+  type: string
+  name: string
+  icon: string
+  description: string
+  enabled: boolean
+  configured: boolean
+  onConfigure: () => void
+}
+
+export function ProviderCard({
+  type,
+  name,
+  icon,
+  description,
+  enabled,
+  configured,
+  onConfigure,
+}: ProviderCardProps) {
+  const queryClient = useQueryClient()
+
+  const toggleMutation = useMutation({
+    mutationFn: (enable: boolean) =>
+      enable
+        ? authProvidersApi.enable(type)
+        : authProvidersApi.disable(type),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth-providers'] })
+      toast({ title: `Provider ${enabled ? 'disabled' : 'enabled'}` })
+    },
+  })
+
+  const handleToggle = (checked: boolean) => {
+    // Local auth cannot be disabled
+    if (type === 'local' && !checked) {
+      toast({
+        title: 'Cannot disable local authentication',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    // Must be configured before enabling
+    if (checked && !configured && type !== 'local' && type !== 'invite') {
+      toast({
+        title: 'Please configure the provider first',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    toggleMutation.mutate(checked)
+  }
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+            {/* Icon */}
+          </div>
+          <div>
+            <h3 className="font-semibold">{name}</h3>
+            <p className="text-sm text-gray-600">{description}</p>
+          </div>
+        </div>
+
+        <Switch
+          checked={enabled}
+          onCheckedChange={handleToggle}
+          disabled={type === 'local' || toggleMutation.isPending}
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {configured ? (
+            <>
+              <CheckCircle className="w-4 h-4 text-green-500" />
+              <span className="text-sm text-green-600">Configured</span>
+            </>
+          ) : (
+            <>
+              <XCircle className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-gray-500">Not configured</span>
+            </>
+          )}
+        </div>
+
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onConfigure}
+        >
+          <Settings className="w-4 h-4 mr-2" />
+          Configure
+        </Button>
+      </div>
+
+      {enabled && (
+        <Badge variant="success" className="mt-4">
+          Active
+        </Badge>
+      )}
+    </Card>
+  )
+}
+```
+
+### OIDC Configuration Form
+
+**Location:** `src/components/auth-providers/OIDCConfigForm.tsx`
+
+```tsx
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authProvidersApi } from '@/lib/api/authProviders'
+import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
+import { toast } from '@/components/ui/use-toast'
+
+const oidcSchema = z.object({
+  issuer: z.string().url('Must be a valid URL'),
+  client_id: z.string().min(1, 'Client ID is required'),
+  client_secret: z.string().min(1, 'Client secret is required'),
+  redirect_url: z.string().url('Must be a valid URL'),
+  scopes: z.string().optional(),
+  enabled: z.boolean().default(false),
+})
+
+type OIDCFormData = z.infer<typeof oidcSchema>
+
+interface OIDCConfigFormProps {
+  onSuccess: () => void
+}
+
+export function OIDCConfigForm({ onSuccess }: OIDCConfigFormProps) {
+  const queryClient = useQueryClient()
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<OIDCFormData>({
+    resolver: zodResolver(oidcSchema),
+    defaultValues: {
+      redirect_url: `${window.location.origin}/api/auth/oidc/callback`,
+      scopes: 'openid profile email',
+    },
+  })
+
+  const mutation = useMutation({
+    mutationFn: authProvidersApi.configureOIDC,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['auth-providers'] })
+      toast({ title: 'OIDC provider configured successfully' })
+      onSuccess()
+    },
+  })
+
+  const onSubmit = async (data: OIDCFormData) => {
+    await mutation.mutateAsync({
+      issuer: data.issuer,
+      client_id: data.client_id,
+      client_secret: data.client_secret,
+      redirect_url: data.redirect_url,
+      scopes: data.scopes?.split(' ') || [],
+      enabled: data.enabled,
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <Input
+        {...register('issuer')}
+        label="Issuer URL"
+        placeholder="https://accounts.google.com"
+        error={errors.issuer?.message}
+        helpText="The OIDC provider's issuer URL"
+      />
+
+      <Input
+        {...register('client_id')}
+        label="Client ID"
+        placeholder="your-client-id"
+        error={errors.client_id?.message}
+      />
+
+      <Input
+        {...register('client_secret')}
+        type="password"
+        label="Client Secret"
+        placeholder="your-client-secret"
+        error={errors.client_secret?.message}
+      />
+
+      <Input
+        {...register('redirect_url')}
+        label="Redirect URL"
+        error={errors.redirect_url?.message}
+        helpText="Copy this URL to your OIDC provider's configuration"
+      />
+
+      <Input
+        {...register('scopes')}
+        label="Scopes"
+        placeholder="openid profile email"
+        error={errors.scopes?.message}
+        helpText="Space-separated list of scopes"
+      />
+
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          {...register('enabled')}
+          id="enabled"
+          className="rounded"
+        />
+        <label htmlFor="enabled" className="text-sm">
+          Enable this provider immediately
+        </label>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          Cancel
+        </Button>
+        <Button type="submit" loading={mutation.isPending}>
+          Save Configuration
+        </Button>
+      </div>
+    </form>
+  )
+}
+```
+
+### Auth Providers API
+
+**Location:** `src/lib/api/authProviders.ts`
+
+```tsx
+import { apiClient } from './client'
+
+export const authProvidersApi = {
+  // Get enabled providers (for login page)
+  getEnabled: async () => {
+    const response = await apiClient.get('/auth/providers')
+    return response.data.data
+  },
+
+  // Get all providers (admin)
+  getAll: async () => {
+    const response = await apiClient.get('/auth/providers/all')
+    return response.data.data
+  },
+
+  // Configure OIDC
+  configureOIDC: async (config: {
+    issuer: string
+    client_id: string
+    client_secret: string
+    redirect_url: string
+    scopes: string[]
+    enabled: boolean
+  }) => {
+    const response = await apiClient.post('/auth/providers/oidc', config)
+    return response.data
+  },
+
+  // Configure OAuth2
+  configureOAuth2: async (config: {
+    auth_url: string
+    token_url: string
+    user_info_url: string
+    client_id: string
+    client_secret: string
+    redirect_url: string
+    scopes: string[]
+    enabled: boolean
+  }) => {
+    const response = await apiClient.post('/auth/providers/oauth2', config)
+    return response.data
+  },
+
+  // Configure SAML
+  configureSAML: async (config: {
+    metadata_url: string
+    entity_id: string
+    sso_url: string
+    certificate: string
+    private_key: string
+    attribute_mapping: Record<string, string>
+    enabled: boolean
+  }) => {
+    const response = await apiClient.post('/auth/providers/saml', config)
+    return response.data
+  },
+
+  // Configure LDAP
+  configureLDAP: async (config: {
+    host: string
+    port: number
+    base_dn: string
+    bind_dn: string
+    bind_password: string
+    user_filter: string
+    use_tls: boolean
+    skip_verify: boolean
+    attribute_mapping: Record<string, string>
+    enabled: boolean
+  }) => {
+    const response = await apiClient.post('/auth/providers/ldap', config)
+    return response.data
+  },
+
+  // Update local settings
+  updateLocal: async (allow_registration: boolean) => {
+    const response = await apiClient.put('/auth/providers/local', {
+      allow_registration,
+    })
+    return response.data
+  },
+
+  // Update invite settings
+  updateInvite: async (enabled: boolean, require_email_verification: boolean) => {
+    const response = await apiClient.put('/auth/providers/invite', {
+      enabled,
+      require_email_verification,
+    })
+    return response.data
+  },
+
+  // Enable provider
+  enable: async (type: string) => {
+    const response = await apiClient.put(`/auth/providers/${type}/enable`)
+    return response.data
+  },
+
+  // Disable provider
+  disable: async (type: string) => {
+    const response = await apiClient.put(`/auth/providers/${type}/disable`)
+    return response.data
+  },
+
+  // Test connection
+  testConnection: async (type: string) => {
+    const response = await apiClient.post(`/auth/providers/${type}/test`)
+    return response.data
+  },
+
+  // Delete provider
+  delete: async (type: string) => {
+    const response = await apiClient.delete(`/auth/providers/${type}`)
+    return response.data
+  },
+}
+```
+
+### useAuthProviders Hook
+
+**Location:** `src/hooks/useAuthProviders.ts`
+
+```tsx
+import { useQuery } from '@tanstack/react-query'
+import { authProvidersApi } from '@/lib/api/authProviders'
+import { usePermissions } from './usePermissions'
+
+export function useAuthProviders() {
+  const { hasPermission } = usePermissions()
+
+  // Admins get all providers, regular users get only enabled ones
+  const isAdmin = hasPermission('permission.manage')
+
+  return useQuery({
+    queryKey: ['auth-providers', isAdmin ? 'all' : 'enabled'],
+    queryFn: isAdmin ? authProvidersApi.getAll : authProvidersApi.getEnabled,
+  })
+}
+```
+
+---
+
 ## Custom Hooks
 
 ### useAuth Hook
@@ -1686,6 +2224,7 @@ import { Permissions } from '@/pages/settings/Permissions'
 import { Security } from '@/pages/settings/Security'
 import { Sessions } from '@/pages/settings/Sessions'
 import { AuditLogs } from '@/pages/settings/AuditLogs'
+import { AuthProviders } from '@/pages/settings/AuthProviders'
 import { authApi } from '@/lib/api/auth'
 import { useAuthStore } from '@/store/authStore'
 
@@ -1775,6 +2314,10 @@ export const router = createBrowserRouter([
           {
             path: 'audit',
             element: <AuditLogs />,
+          },
+          {
+            path: 'auth-providers',
+            element: <AuthProviders />,
           },
         ],
       },
@@ -2221,11 +2764,13 @@ export const Disabled: Story = {
 - [ ] **API Modules**
   - [ ] Sessions API
   - [ ] Audit API
+  - [ ] Auth Providers API
 
 - [ ] **Pages**
   - [ ] Sessions page
   - [ ] Audit logs page
   - [ ] Security settings page
+  - [ ] Auth providers page
 
 - [ ] **Components**
   - [ ] SessionTable
@@ -2233,10 +2778,18 @@ export const Disabled: Story = {
   - [ ] AuditLogTable
   - [ ] AuditFilters
   - [ ] AuditExport
+  - [ ] ProviderCard
+  - [ ] OIDCConfigForm
+  - [ ] OAuth2ConfigForm
+  - [ ] SAMLConfigForm
+  - [ ] LDAPConfigForm
+  - [ ] LocalSettingsForm
+  - [ ] InviteSettingsForm
 
 - [ ] **Hooks**
   - [ ] useSessions hook
   - [ ] useAuditLogs hook
+  - [ ] useAuthProviders hook
 
 ### Phase 7: Dashboard & Analytics (Week 7)
 

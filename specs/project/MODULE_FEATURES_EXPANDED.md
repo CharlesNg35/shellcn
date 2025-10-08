@@ -1,6 +1,152 @@
 # Module Features - Comprehensive Expansion
 
-This document contains the complete, expanded feature sets for Docker, Kubernetes, and Database modules.
+This document contains the complete, expanded feature sets for Core, Docker, Kubernetes, and Database modules.
+
+---
+
+## Core Module - Authentication & User Management
+
+### 1.1 First-Time Setup
+- No default credentials (security best practice)
+- Setup wizard on first access
+- Create first admin user with root/superuser privileges
+- Password strength validation
+- Auto-login after setup
+
+### 1.2 Authentication Providers (UI-Configured)
+
+**IMPORTANT:** All authentication providers are configured via UI by administrators, NOT through configuration files or environment variables.
+
+**Local Authentication (Always Enabled):**
+- Username and password authentication
+- Password hashing with bcrypt
+- Settings:
+  - Allow Registration: Enable/disable user self-registration
+  - Cannot be disabled (always available as fallback)
+
+**Email Invitation (Optional):**
+- Invite users via email
+- Settings:
+  - Enable/disable invitation system
+  - Require email verification
+- Email notification or shareable link
+- System provider (cannot be deleted)
+
+**OpenID Connect (OIDC) (Optional):**
+- Single Sign-On via OpenID Connect
+- UI Configuration:
+  - Issuer URL
+  - Client ID
+  - Client Secret (encrypted)
+  - Redirect URL
+  - Scopes (e.g., `openid profile email`)
+- Supported providers: Google, Azure AD, Okta, Keycloak, etc.
+- Connection testing
+
+**OAuth 2.0 (Optional):**
+- Generic OAuth 2.0 authentication
+- UI Configuration:
+  - Authorization URL
+  - Token URL
+  - User Info URL
+  - Client ID
+  - Client Secret (encrypted)
+  - Redirect URL
+  - Scopes
+- Supported providers: GitHub, GitLab, custom OAuth2 providers
+
+**SAML 2.0 (Optional):**
+- SAML 2.0 Single Sign-On
+- UI Configuration:
+  - Metadata URL
+  - Entity ID
+  - SSO URL
+  - Certificate
+  - Private Key (encrypted)
+  - Attribute Mapping (SAML attributes → user fields)
+- Supported providers: Azure AD, Okta, OneLogin
+
+**LDAP / Active Directory (Optional):**
+- LDAP or Active Directory authentication
+- UI Configuration:
+  - Host
+  - Port
+  - Base DN
+  - Bind DN
+  - Bind Password (encrypted)
+  - User Filter
+  - Use TLS
+  - Skip Certificate Verification
+  - Attribute Mapping (LDAP attributes → user fields)
+- Connection testing
+- Supported: Active Directory, OpenLDAP, FreeIPA
+
+**Auth Provider Management Features:**
+- List all available providers
+- Configure provider settings via UI forms
+- Enable/disable providers with toggle
+- Test provider connections (LDAP, OIDC)
+- Delete provider configurations (except local and invite)
+- View provider status (enabled/disabled, configured/not configured)
+- Audit logging for all configuration changes
+- Permission-based access (`permission.manage` required)
+
+### 1.3 Multi-Factor Authentication (MFA)
+- TOTP (Time-based One-Time Password)
+- QR code generation for authenticator apps
+- Backup codes
+- Optional per user
+- Enforce MFA for specific roles
+
+### 1.4 User Management
+- Create, edit, delete users
+- Activate/deactivate users
+- Reset passwords
+- Assign roles and permissions
+- View user sessions
+- User profile management
+
+### 1.5 Organization & Team Management
+- Multi-tenancy support
+- Create organizations
+- Create teams within organizations
+- Assign users to teams
+- Team-based permissions
+- Organization-level settings
+
+### 1.6 Permission System
+- Fine-grained permission system
+- Permission dependencies
+- Root/superuser bypass
+- Permission registry (global)
+- Module-based permissions
+- Dynamic permission checking
+- Permission matrix UI
+
+### 1.7 Session Management
+- JWT-based authentication
+- Access and refresh tokens
+- Multi-device support
+- Session listing and revocation
+- Session timeout configuration
+- Remember me functionality
+
+### 1.8 Audit Logging
+- Comprehensive audit trail
+- Log all user actions
+- Filter and search logs
+- Export audit logs
+- Retention policies
+- Compliance reporting
+
+### 1.9 Security Features
+- Password hashing (bcrypt)
+- Credential encryption (AES-256-GCM)
+- Vault for sensitive data
+- CSRF protection
+- XSS prevention
+- Rate limiting
+- IP whitelisting (optional)
 
 ---
 

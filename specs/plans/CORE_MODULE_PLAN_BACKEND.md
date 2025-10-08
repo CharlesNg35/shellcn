@@ -514,6 +514,83 @@ type PasswordResetToken struct {
 }
 ```
 
+#### 10. AuthProvider Model (`auth_provider.go`)
+
+**IMPORTANT:** Authentication providers are configured via UI by admins, not config files.
+
+```go
+package models
+
+type AuthProvider struct {
+    ID          string    `gorm:"primaryKey;type:uuid" json:"id"`
+    Type        string    `gorm:"not null;uniqueIndex" json:"type"` // local, oidc, oauth2, saml, ldap, invite
+    Name        string    `gorm:"not null" json:"name"` // Display name
+    Enabled     bool      `gorm:"default:false" json:"enabled"`
+
+    // Configuration (JSON blob, encrypted)
+    Config      string    `gorm:"type:json" json:"config"` // Provider-specific config
+
+    // Local provider settings
+    AllowRegistration bool  `gorm:"default:false" json:"allow_registration"` // For local auth
+
+    // Invite settings
+    RequireEmailVerification bool `gorm:"default:true" json:"require_email_verification"` // For invite
+
+    // Metadata
+    Description string    `json:"description"`
+    Icon        string    `json:"icon"` // Icon URL or name
+
+    CreatedAt   time.Time `json:"created_at"`
+    UpdatedAt   time.Time `json:"updated_at"`
+    CreatedBy   string    `gorm:"type:uuid" json:"created_by"` // Admin who configured it
+}
+
+// Provider-specific config structures (stored as JSON in Config field)
+
+// OIDCConfig for OpenID Connect
+type OIDCConfig struct {
+    Issuer       string `json:"issuer"`
+    ClientID     string `json:"client_id"`
+    ClientSecret string `json:"client_secret"` // Encrypted
+    RedirectURL  string `json:"redirect_url"`
+    Scopes       []string `json:"scopes"`
+}
+
+// OAuth2Config for generic OAuth2
+type OAuth2Config struct {
+    AuthURL      string `json:"auth_url"`
+    TokenURL     string `json:"token_url"`
+    UserInfoURL  string `json:"user_info_url"`
+    ClientID     string `json:"client_id"`
+    ClientSecret string `json:"client_secret"` // Encrypted
+    RedirectURL  string `json:"redirect_url"`
+    Scopes       []string `json:"scopes"`
+}
+
+// SAMLConfig for SAML 2.0
+type SAMLConfig struct {
+    MetadataURL     string `json:"metadata_url"`
+    EntityID        string `json:"entity_id"`
+    SSOURL          string `json:"sso_url"`
+    Certificate     string `json:"certificate"`
+    PrivateKey      string `json:"private_key"` // Encrypted
+    AttributeMapping map[string]string `json:"attribute_mapping"` // SAML attr -> user field
+}
+
+// LDAPConfig for LDAP/Active Directory
+type LDAPConfig struct {
+    Host            string `json:"host"`
+    Port            int    `json:"port"`
+    BaseDN          string `json:"base_dn"`
+    BindDN          string `json:"bind_dn"`
+    BindPassword    string `json:"bind_password"` // Encrypted
+    UserFilter      string `json:"user_filter"`
+    UseTLS          bool   `json:"use_tls"`
+    SkipVerify      bool   `json:"skip_verify"`
+    AttributeMapping map[string]string `json:"attribute_mapping"` // LDAP attr -> user field
+}
+```
+
 ### Database Migrations
 
 **Location:** `internal/database/migrations.go`
@@ -537,10 +614,11 @@ func AutoMigrate(db *gorm.DB) error {
         &models.AuditLog{},
         &models.MFASecret{},
         &models.PasswordResetToken{},
+        &models.AuthProvider{},
     )
 }
 
-// SeedData creates initial system roles and permissions
+// SeedData creates initial system roles, permissions, and auth providers
 func SeedData(db *gorm.DB) error {
     // Create system roles
     roles := []models.Role{
@@ -563,6 +641,29 @@ func SeedData(db *gorm.DB) error {
             return err
         }
     }
+
+    // Create default auth providers
+    // Local auth is always enabled by default
+    localProvider := models.AuthProvider{
+        Type:              "local",
+        Name:              "Local Authentication",
+        Enabled:           true,
+        AllowRegistration: false, // Disabled by default, admin can enable
+        Description:       "Username and password authentication",
+        Icon:              "key",
+    }
+    db.FirstOrCreate(&localProvider, "type = ?", "local")
+
+    // Create disabled invite provider (admin can enable)
+    inviteProvider := models.AuthProvider{
+        Type:                     "invite",
+        Name:                     "Email Invitation",
+        Enabled:                  false,
+        RequireEmailVerification: true,
+        Description:              "Invite users via email",
+        Icon:                     "mail",
+    }
+    db.FirstOrCreate(&inviteProvider, "type = ?", "invite")
 
     return nil
 }
@@ -1743,6 +1844,332 @@ func (s *TeamService) AddMember(teamID, userID string) error {
 
 ---
 
+## Auth Provider Management
+
+### Auth Provider Service
+
+**Location:** `internal/services/auth_provider_service.go`
+
+**IMPORTANT:** All authentication providers are configured via UI by admins.
+
+```go
+package services
+
+import (
+    "encoding/json"
+    "errors"
+    "gorm.io/gorm"
+    "shellcn/internal/models"
+    "shellcn/pkg/crypto"
+)
+
+type AuthProviderService struct {
+    db            *gorm.DB
+    auditService  *AuditService
+    encryptionKey []byte
+}
+
+func NewAuthProviderService(db *gorm.DB, auditService *AuditService, encryptionKey []byte) *AuthProviderService {
+    return &AuthProviderService{
+        db:            db,
+        auditService:  auditService,
+        encryptionKey: encryptionKey,
+    }
+}
+
+// List all auth providers
+func (s *AuthProviderService) List() ([]models.AuthProvider, error) {
+    var providers []models.AuthProvider
+    if err := s.db.Find(&providers).Error; err != nil {
+        return nil, err
+    }
+
+    // Don't return sensitive config data in list
+    for i := range providers {
+        providers[i].Config = "" // Redact config
+    }
+
+    return providers, nil
+}
+
+// Get provider by type
+func (s *AuthProviderService) GetByType(providerType string) (*models.AuthProvider, error) {
+    var provider models.AuthProvider
+    if err := s.db.Where("type = ?", providerType).First(&provider).Error; err != nil {
+        return nil, err
+    }
+    return &provider, nil
+}
+
+// Get enabled providers (for login page)
+func (s *AuthProviderService) GetEnabled() ([]models.AuthProvider, error) {
+    var providers []models.AuthProvider
+    if err := s.db.Where("enabled = ?", true).Find(&providers).Error; err != nil {
+        return nil, err
+    }
+
+    // Don't return sensitive config
+    for i := range providers {
+        providers[i].Config = ""
+    }
+
+    return providers, nil
+}
+
+// Create or update OIDC provider
+func (s *AuthProviderService) ConfigureOIDC(config models.OIDCConfig, enabled bool, createdBy string) error {
+    // Encrypt client secret
+    encryptedSecret, err := crypto.Encrypt([]byte(config.ClientSecret), s.encryptionKey)
+    if err != nil {
+        return err
+    }
+    config.ClientSecret = encryptedSecret
+
+    // Marshal config to JSON
+    configJSON, err := json.Marshal(config)
+    if err != nil {
+        return err
+    }
+
+    provider := models.AuthProvider{
+        Type:        "oidc",
+        Name:        "OpenID Connect",
+        Enabled:     enabled,
+        Config:      string(configJSON),
+        Description: "Single Sign-On via OpenID Connect",
+        Icon:        "shield-check",
+        CreatedBy:   createdBy,
+    }
+
+    // Upsert
+    if err := s.db.Where("type = ?", "oidc").Assign(provider).FirstOrCreate(&provider).Error; err != nil {
+        return err
+    }
+
+    s.auditService.Log("auth_provider.configure", "oidc", "success", map[string]interface{}{
+        "enabled": enabled,
+    })
+
+    return nil
+}
+
+// Configure OAuth2 provider
+func (s *AuthProviderService) ConfigureOAuth2(config models.OAuth2Config, enabled bool, createdBy string) error {
+    // Encrypt client secret
+    encryptedSecret, err := crypto.Encrypt([]byte(config.ClientSecret), s.encryptionKey)
+    if err != nil {
+        return err
+    }
+    config.ClientSecret = encryptedSecret
+
+    configJSON, err := json.Marshal(config)
+    if err != nil {
+        return err
+    }
+
+    provider := models.AuthProvider{
+        Type:        "oauth2",
+        Name:        "OAuth 2.0",
+        Enabled:     enabled,
+        Config:      string(configJSON),
+        Description: "Generic OAuth 2.0 authentication",
+        Icon:        "key",
+        CreatedBy:   createdBy,
+    }
+
+    if err := s.db.Where("type = ?", "oauth2").Assign(provider).FirstOrCreate(&provider).Error; err != nil {
+        return err
+    }
+
+    s.auditService.Log("auth_provider.configure", "oauth2", "success", map[string]interface{}{
+        "enabled": enabled,
+    })
+
+    return nil
+}
+
+// Configure SAML provider
+func (s *AuthProviderService) ConfigureSAML(config models.SAMLConfig, enabled bool, createdBy string) error {
+    // Encrypt private key
+    encryptedKey, err := crypto.Encrypt([]byte(config.PrivateKey), s.encryptionKey)
+    if err != nil {
+        return err
+    }
+    config.PrivateKey = encryptedKey
+
+    configJSON, err := json.Marshal(config)
+    if err != nil {
+        return err
+    }
+
+    provider := models.AuthProvider{
+        Type:        "saml",
+        Name:        "SAML 2.0",
+        Enabled:     enabled,
+        Config:      string(configJSON),
+        Description: "SAML 2.0 Single Sign-On",
+        Icon:        "shield",
+        CreatedBy:   createdBy,
+    }
+
+    if err := s.db.Where("type = ?", "saml").Assign(provider).FirstOrCreate(&provider).Error; err != nil {
+        return err
+    }
+
+    s.auditService.Log("auth_provider.configure", "saml", "success", map[string]interface{}{
+        "enabled": enabled,
+    })
+
+    return nil
+}
+
+// Configure LDAP provider
+func (s *AuthProviderService) ConfigureLDAP(config models.LDAPConfig, enabled bool, createdBy string) error {
+    // Encrypt bind password
+    encryptedPassword, err := crypto.Encrypt([]byte(config.BindPassword), s.encryptionKey)
+    if err != nil {
+        return err
+    }
+    config.BindPassword = encryptedPassword
+
+    configJSON, err := json.Marshal(config)
+    if err != nil {
+        return err
+    }
+
+    provider := models.AuthProvider{
+        Type:        "ldap",
+        Name:        "LDAP / Active Directory",
+        Enabled:     enabled,
+        Config:      string(configJSON),
+        Description: "LDAP or Active Directory authentication",
+        Icon:        "building",
+        CreatedBy:   createdBy,
+    }
+
+    if err := s.db.Where("type = ?", "ldap").Assign(provider).FirstOrCreate(&provider).Error; err != nil {
+        return err
+    }
+
+    s.auditService.Log("auth_provider.configure", "ldap", "success", map[string]interface{}{
+        "enabled": enabled,
+    })
+
+    return nil
+}
+
+// Update local provider settings
+func (s *AuthProviderService) UpdateLocalSettings(allowRegistration bool) error {
+    if err := s.db.Model(&models.AuthProvider{}).
+        Where("type = ?", "local").
+        Update("allow_registration", allowRegistration).Error; err != nil {
+        return err
+    }
+
+    s.auditService.Log("auth_provider.update", "local", "success", map[string]interface{}{
+        "allow_registration": allowRegistration,
+    })
+
+    return nil
+}
+
+// Update invite provider settings
+func (s *AuthProviderService) UpdateInviteSettings(enabled, requireEmailVerification bool) error {
+    updates := map[string]interface{}{
+        "enabled":                      enabled,
+        "require_email_verification":   requireEmailVerification,
+    }
+
+    if err := s.db.Model(&models.AuthProvider{}).
+        Where("type = ?", "invite").
+        Updates(updates).Error; err != nil {
+        return err
+    }
+
+    s.auditService.Log("auth_provider.update", "invite", "success", updates)
+
+    return nil
+}
+
+// Enable/disable provider
+func (s *AuthProviderService) SetEnabled(providerType string, enabled bool) error {
+    // Cannot disable local auth
+    if providerType == "local" {
+        return errors.New("cannot disable local authentication")
+    }
+
+    if err := s.db.Model(&models.AuthProvider{}).
+        Where("type = ?", providerType).
+        Update("enabled", enabled).Error; err != nil {
+        return err
+    }
+
+    action := "auth_provider.enable"
+    if !enabled {
+        action = "auth_provider.disable"
+    }
+
+    s.auditService.Log(action, providerType, "success", nil)
+
+    return nil
+}
+
+// Delete provider configuration
+func (s *AuthProviderService) Delete(providerType string) error {
+    // Cannot delete local or invite providers
+    if providerType == "local" || providerType == "invite" {
+        return errors.New("cannot delete system auth providers")
+    }
+
+    if err := s.db.Where("type = ?", providerType).Delete(&models.AuthProvider{}).Error; err != nil {
+        return err
+    }
+
+    s.auditService.Log("auth_provider.delete", providerType, "success", nil)
+
+    return nil
+}
+
+// Test provider connection (for LDAP)
+func (s *AuthProviderService) TestConnection(providerType string) error {
+    provider, err := s.GetByType(providerType)
+    if err != nil {
+        return err
+    }
+
+    switch providerType {
+    case "ldap":
+        var config models.LDAPConfig
+        if err := json.Unmarshal([]byte(provider.Config), &config); err != nil {
+            return err
+        }
+
+        // Decrypt bind password
+        decryptedPassword, err := crypto.Decrypt(config.BindPassword, s.encryptionKey)
+        if err != nil {
+            return err
+        }
+        config.BindPassword = string(decryptedPassword)
+
+        // Test LDAP connection
+        return testLDAPConnection(config)
+
+    case "oidc":
+        // Test OIDC discovery endpoint
+        var config models.OIDCConfig
+        if err := json.Unmarshal([]byte(provider.Config), &config); err != nil {
+            return err
+        }
+        return testOIDCConnection(config)
+
+    default:
+        return errors.New("connection test not supported for this provider")
+    }
+}
+```
+
+---
+
 ## Session Management
 
 ### Session Service
@@ -2125,6 +2552,9 @@ func SetupRouter(
         public.POST("/auth/password-reset/request", authHandler.RequestPasswordReset)
         public.POST("/auth/password-reset/confirm", authHandler.ConfirmPasswordReset)
 
+        // Auth providers (public - for login page to show enabled providers)
+        public.GET("/auth/providers", authProviderHandler.GetEnabled)
+
         // Health
         public.GET("/health", handlers.Health)
     }
@@ -2191,6 +2621,24 @@ func SetupRouter(
         {
             audit.GET("", permMiddleware.Require("audit.view"), auditHandler.List)
             audit.GET("/export", permMiddleware.Require("audit.export"), auditHandler.Export)
+        }
+
+        // Auth provider management (admin only)
+        providers := protected.Group("/auth/providers")
+        providers.Use(permMiddleware.Require("permission.manage"))
+        {
+            providers.GET("/all", authProviderHandler.ListAll)
+            providers.GET("/:type", authProviderHandler.Get)
+            providers.POST("/oidc", authProviderHandler.ConfigureOIDC)
+            providers.POST("/oauth2", authProviderHandler.ConfigureOAuth2)
+            providers.POST("/saml", authProviderHandler.ConfigureSAML)
+            providers.POST("/ldap", authProviderHandler.ConfigureLDAP)
+            providers.PUT("/local", authProviderHandler.UpdateLocal)
+            providers.PUT("/invite", authProviderHandler.UpdateInvite)
+            providers.PUT("/:type/enable", authProviderHandler.Enable)
+            providers.PUT("/:type/disable", authProviderHandler.Disable)
+            providers.POST("/:type/test", authProviderHandler.TestConnection)
+            providers.DELETE("/:type", authProviderHandler.Delete)
         }
     }
 
@@ -2272,6 +2720,23 @@ func SetupRouter(
 |--------|------|------------|-------------|
 | GET | `/api/audit` | `audit.view` | List audit logs |
 | GET | `/api/audit/export` | `audit.export` | Export audit logs |
+
+**Auth Providers (UI Configuration):**
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| GET | `/api/auth/providers` | - | List enabled providers (public, for login page) |
+| GET | `/api/auth/providers/all` | `permission.manage` | List all providers (admin) |
+| GET | `/api/auth/providers/:type` | `permission.manage` | Get provider config |
+| POST | `/api/auth/providers/oidc` | `permission.manage` | Configure OIDC provider |
+| POST | `/api/auth/providers/oauth2` | `permission.manage` | Configure OAuth2 provider |
+| POST | `/api/auth/providers/saml` | `permission.manage` | Configure SAML provider |
+| POST | `/api/auth/providers/ldap` | `permission.manage` | Configure LDAP provider |
+| PUT | `/api/auth/providers/local` | `permission.manage` | Update local settings |
+| PUT | `/api/auth/providers/invite` | `permission.manage` | Update invite settings |
+| PUT | `/api/auth/providers/:type/enable` | `permission.manage` | Enable provider |
+| PUT | `/api/auth/providers/:type/disable` | `permission.manage` | Disable provider |
+| POST | `/api/auth/providers/:type/test` | `permission.manage` | Test provider connection |
+| DELETE | `/api/auth/providers/:type` | `permission.manage` | Delete provider config |
 
 ---
 
@@ -2939,6 +3404,16 @@ go tool cover -html=coverage.out
   - [ ] Implement log export
   - [ ] Write audit service tests
 
+- [ ] **Auth Provider Service**
+  - [ ] Implement provider CRUD
+  - [ ] Implement OIDC configuration
+  - [ ] Implement OAuth2 configuration
+  - [ ] Implement SAML configuration
+  - [ ] Implement LDAP configuration
+  - [ ] Implement local/invite settings
+  - [ ] Implement connection testing
+  - [ ] Write auth provider service tests
+
 ### Phase 5: API Layer (Week 5)
 
 - [ ] **Middleware**
@@ -2958,6 +3433,7 @@ go tool cover -html=coverage.out
   - [ ] Implement permission handlers
   - [ ] Implement session handlers
   - [ ] Implement audit handlers
+  - [ ] Implement auth provider handlers
   - [ ] Write handler integration tests
 
 - [ ] **Router**
@@ -3082,15 +3558,9 @@ LOG_LEVEL=info # debug, info, warn, error
 
 # Features
 ENABLE_MFA=true
-ENABLE_OIDC=false
-ENABLE_SAML=false
-ENABLE_LDAP=false
 
-# OIDC (if enabled)
-OIDC_ISSUER=https://accounts.google.com
-OIDC_CLIENT_ID=your-client-id
-OIDC_CLIENT_SECRET=your-client-secret
-OIDC_REDIRECT_URL=http://localhost:8080/api/auth/oidc/callback
+# NOTE: Authentication providers (OIDC, SAML, LDAP, OAuth2) are configured via UI
+# by administrators, not through environment variables. See Auth Provider Management.
 ```
 
 ---
