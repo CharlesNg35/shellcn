@@ -1,26 +1,49 @@
-.PHONY: help build test lint fmt run dev clean tidy generate
+.PHONY: help build build-go build-rust test lint fmt run dev clean tidy generate
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
 PKG ?= ./...
+RUST_MANIFESTS := $(wildcard rust-modules/*/Cargo.toml)
 
 help:
 	@echo "ShellCN Backend"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make build     Build the backend binary to $(BIN_DIR)/$(APP_NAME)"
-	@echo "  make test      Run Go unit tests"
-	@echo "  make lint      Run go vet on the codebase"
-	@echo "  make fmt       Format Go sources with gofmt"
-	@echo "  make tidy      Sync module dependencies"
-	@echo "  make run       Start the development server"
-	@echo "  make clean     Remove build artifacts"
+	@echo "  make build         Build the backend (Rust FFI + Go binary)"
+	@echo "  make build-go      Build the Go backend binary"
+	@echo "  make build-rust    Build Rust FFI modules (if present)"
+	@echo "  make test          Run Go unit tests"
+	@echo "  make lint          Run go vet on the codebase"
+	@echo "  make fmt           Format Go sources with gofmt"
+	@echo "  make tidy          Sync module dependencies"
+	@echo "  make run           Start the development server"
+	@echo "  make clean         Remove build artifacts"
 
-build:
-	@echo "Building backend..."
+build: build-rust build-go
+
+build-go:
+	@echo "Building Go backend..."
 	@mkdir -p $(BIN_DIR)
 	@CGO_ENABLED=1 go build -o $(BIN_DIR)/$(APP_NAME) ./cmd/server
-	@echo "✓ Binary created at $(BIN_DIR)/$(APP_NAME)"
+	@echo "✓ Go binary created at $(BIN_DIR)/$(APP_NAME)"
+
+build-rust:
+ifneq ($(strip $(RUST_MANIFESTS)),)
+	@echo "Building Rust FFI modules..."
+	@set -e; \
+	for manifest in $(RUST_MANIFESTS); do \
+		dir=$$(dirname $$manifest); \
+		echo "  • $$dir"; \
+		if [ -f "$$dir/Cargo.lock" ]; then \
+			( cd "$$dir" && cargo build --locked --release ); \
+		else \
+			( cd "$$dir" && cargo build --release ); \
+		fi \
+	done
+	@echo "✓ Rust FFI modules built"
+else
+	@echo "No Rust modules detected; skipping Rust build."
+endif
 
 test:
 	@echo "Running tests..."
