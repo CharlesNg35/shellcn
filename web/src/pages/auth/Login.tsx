@@ -7,7 +7,7 @@ import { loginSchema } from '@/schemas/auth'
 import { useAuth } from '@/hooks/useAuth'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import { APP_NAME } from '@/lib/constants'
+import {  } from '@/lib/constants'
 
 type LoginFormData = z.infer<typeof loginSchema>
 
@@ -37,7 +37,7 @@ export function Login() {
     },
   })
 
-  const [checkingSetup, setCheckingSetup] = useState(true)
+  const [setupState, setSetupState] = useState<'checking' | 'pending' | 'complete'>('checking')
 
   const canResetPassword = useMemo(() => {
     const localProvider = providers.find((provider) => provider.type === 'local')
@@ -59,15 +59,17 @@ export function Login() {
         if (!subscribed) {
           return
         }
-        if (setup.status === 'pending') {
+        if (!setup || setup.status === 'pending' || setup.initialized === false) {
+          setSetupState('pending')
           navigate('/setup', { replace: true })
         } else {
-          setCheckingSetup(false)
+          setSetupState('complete')
+
         }
       })
       .catch(() => {
         if (subscribed) {
-          setCheckingSetup(false)
+          setSetupState('complete')
         }
       })
 
@@ -105,7 +107,7 @@ export function Login() {
     }
   }
 
-  if (checkingSetup) {
+  if (setupState === 'checking') {
     return (
       <div className="flex flex-col items-center gap-3 text-center">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
@@ -158,12 +160,14 @@ export function Login() {
         </Button>
       </form>
 
-      <div className="text-center text-sm text-muted-foreground">
-        First time here?{' '}
-        <Link to="/setup" className="text-primary hover:underline">
-          Complete initial setup
-        </Link>
-      </div>
+      {setupState === 'pending' && (
+        <div className="text-center text-sm text-muted-foreground">
+          First time here?{' '}
+          <Link to="/setup" className="text-primary hover:underline">
+            Complete initial setup
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

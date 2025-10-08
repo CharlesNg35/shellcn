@@ -20,9 +20,9 @@ func TestSetupHandler_StatusAndInitialize(t *testing.T) {
 
 	statusPayload := testutil.DecodeResponse(t, statusResp)
 	require.True(t, statusPayload.Success)
-	var status map[string]bool
+	var status map[string]any
 	testutil.DecodeInto(t, statusPayload.Data, &status)
-	require.False(t, status["initialized"])
+	require.Equal(t, "pending", status["status"])
 
 	body := map[string]any{
 		"username":   "initial-root",
@@ -44,7 +44,7 @@ func TestSetupHandler_StatusAndInitialize(t *testing.T) {
 	statusPayload = testutil.DecodeResponse(t, statusResp)
 	require.True(t, statusPayload.Success)
 	testutil.DecodeInto(t, statusPayload.Data, &status)
-	require.True(t, status["initialized"])
+	require.Equal(t, "complete", status["status"])
 
 	// Re-initialisation should fail with conflict.
 	again := env.Request(http.MethodPost, "/api/setup/initialize", body, "")

@@ -10,6 +10,8 @@ import { PasswordResetConfirm } from '@/pages/auth/PasswordResetConfirm'
 import { MfaVerification } from '@/pages/auth/MfaVerification'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Dashboard } from '@/pages/dashboard/Dashboard'
+import { Connections } from '@/pages/connections/Connections'
+import { Identities } from '@/pages/settings/Identities'
 import { Users } from '@/pages/settings/Users'
 import { Organizations } from '@/pages/settings/Organizations'
 import { Teams } from '@/pages/settings/Teams'
@@ -35,6 +37,8 @@ function AppRoutes() {
           <Route element={<DashboardLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/connections" element={<Connections />} />
+            <Route path="/settings/identities" element={<Identities />} />
             <Route path="/settings/users" element={<Users />} />
             <Route path="/settings/organizations" element={<Organizations />} />
             <Route path="/settings/teams" element={<Teams />} />

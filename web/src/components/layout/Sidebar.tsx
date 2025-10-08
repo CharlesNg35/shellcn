@@ -1,6 +1,12 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
+  Server,
+  Monitor,
+  Database,
+  Container,
+  Cloud,
+  HardDrive,
   Users,
   Building2,
   Shield,
@@ -28,12 +34,60 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    label: 'Overview',
-    items: [{ to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' }],
+    label: 'Main',
+    items: [
+      { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+      { to: '/connections', icon: Server, label: 'All Connections' },
+    ],
   },
   {
-    label: 'Management',
+    label: 'Connections',
     items: [
+      {
+        to: '/ssh',
+        icon: Server,
+        label: 'SSH / Telnet',
+      },
+      {
+        to: '/rdp',
+        icon: Monitor,
+        label: 'RDP',
+      },
+      {
+        to: '/vnc',
+        icon: Monitor,
+        label: 'VNC',
+      },
+      {
+        to: '/docker',
+        icon: Container,
+        label: 'Docker',
+      },
+      {
+        to: '/kubernetes',
+        icon: Cloud,
+        label: 'Kubernetes',
+      },
+      {
+        to: '/databases',
+        icon: Database,
+        label: 'Databases',
+      },
+      {
+        to: '/proxmox',
+        icon: HardDrive,
+        label: 'Proxmox',
+      },
+    ],
+  },
+  {
+    label: 'Settings',
+    items: [
+      {
+        to: '/settings/identities',
+        icon: Key,
+        label: 'Identities',
+      },
       {
         to: '/settings/users',
         icon: Users,
@@ -58,11 +112,6 @@ const navGroups: NavGroup[] = [
         label: 'Permissions',
         permission: 'permission.view',
       },
-    ],
-  },
-  {
-    label: 'Security',
-    items: [
       {
         to: '/settings/auth-providers',
         icon: Key,

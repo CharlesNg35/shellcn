@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/services"
+	appErr "github.com/charlesng35/shellcn/pkg/errors"
 	"github.com/charlesng35/shellcn/pkg/response"
 )
 
@@ -17,6 +19,9 @@ type SetupHandler struct {
 }
 
 func NewSetupHandler(db *gorm.DB) (*SetupHandler, error) {
+	if db == nil {
+		return nil, appErr.New("SETUP_HANDLER_DB_REQUIRED", "setup handler: db is required", http.StatusInternalServerError)
+	}
 	audit, err := services.NewAuditService(db)
 	if err != nil {
 		return nil, err
@@ -30,12 +35,26 @@ func NewSetupHandler(db *gorm.DB) (*SetupHandler, error) {
 
 // GET /api/setup/status
 func (h *SetupHandler) Status(c *gin.Context) {
-	var count int64
-	if err := h.db.Model(&models.User{}).Count(&count).Error; err != nil {
-		response.Success(c, http.StatusOK, gin.H{"initialized": false})
+	var first models.User
+	if err := h.db.Order("created_at ASC").Limit(1).Take(&first).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.Success(c, http.StatusOK, gin.H{
+				"status":      "pending",
+				"initialized": false,
+				"message":     "Initial setup required",
+			})
+			return
+		}
+		response.Error(c, appErr.ErrInternalServer)
 		return
 	}
-	response.Success(c, http.StatusOK, gin.H{"initialized": count > 0})
+
+	response.Success(c, http.StatusOK, gin.H{
+		"status":        "complete",
+		"initialized":   true,
+		"message":       "System is configured",
+		"first_user_id": first.ID,
+	})
 }
 
 // POST /api/setup/initialize
