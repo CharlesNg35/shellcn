@@ -37,6 +37,14 @@ func TestAutoMigrateAndSeedData(t *testing.T) {
 	if providerCount < 2 {
 		t.Fatalf("expected at least 2 auth providers, got %d", providerCount)
 	}
+
+	var permissionCount int64
+	if err := db.Model(&models.Permission{}).Count(&permissionCount).Error; err != nil {
+		t.Fatalf("count permissions: %v", err)
+	}
+	if permissionCount == 0 {
+		t.Fatalf("expected at least 1 permission to be seeded")
+	}
 }
 
 func openTestDB(t *testing.T) *gorm.DB {

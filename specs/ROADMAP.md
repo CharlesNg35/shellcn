@@ -49,16 +49,16 @@
 
 ### Phase 3: Authorization (Week 3)
 
-- [ ] **Permission System**
-  - [ ] Implement permission registry
-  - [ ] Register core permissions
-  - [ ] Implement permission checker
-  - [ ] Implement dependency resolver
-  - [ ] Write permission tests
-- [ ] **Permission Service**
-  - [ ] Implement role management
-  - [ ] Implement permission assignment
-  - [ ] Write permission service tests
+- [x] **Permission System**
+  - [x] Implement permission registry
+  - [x] Register core permissions
+  - [x] Implement permission checker
+  - [x] Implement dependency resolver
+  - [x] Write permission tests
+- [x] **Permission Service**
+  - [x] Implement role management
+  - [x] Implement permission assignment
+  - [x] Write permission service tests
 
 ### Phase 4: Core Services (Week 4)
 

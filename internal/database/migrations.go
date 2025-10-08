@@ -1,9 +1,12 @@
 package database
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/permissions"
 )
 
 // AutoMigrate creates or updates the database schema for all models.
@@ -24,6 +27,13 @@ func AutoMigrate(db *gorm.DB) error {
 
 // SeedData populates default roles and authentication providers.
 func SeedData(db *gorm.DB) error {
+	if err := permissions.ValidateDependencies(); err != nil {
+		return err
+	}
+	if err := permissions.Sync(context.Background(), db); err != nil {
+		return err
+	}
+
 	roles := []models.Role{
 		{
 			BaseModel:   models.BaseModel{ID: "admin"},
