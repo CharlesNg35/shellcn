@@ -23,7 +23,7 @@ func TestRouter_PublicAndProtectedRoutes(t *testing.T) {
 		t.Fatalf("jwt service: %v", err)
 	}
 
-	router, err := NewRouter(db, jwtSvc)
+	router, err := NewRouter(db, jwtSvc, nil)
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestRouter_MetricsEndpoint(t *testing.T) {
 		t.Fatalf("jwt service: %v", err)
 	}
 
-	router, err := NewRouter(db, jwtSvc)
+	router, err := NewRouter(db, jwtSvc, nil)
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}

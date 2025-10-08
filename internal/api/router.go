@@ -7,15 +7,17 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/gorm"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/handlers"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/permissions"
+	"github.com/charlesng35/shellcn/internal/security"
 )
 
 // NewRouter builds the Gin engine, wires middleware and registers core routes.
 // Additional module routers can mount under /api in later phases.
-func NewRouter(db *gorm.DB, jwt *iauth.JWTService) (*gin.Engine, error) {
+func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config) (*gin.Engine, error) {
 	r := gin.New()
 
 	// Global middleware
@@ -129,6 +131,16 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService) (*gin.Engine, error) {
 	auditHandler, err := handlers.NewAuditHandler(db)
 	if err != nil {
 		return nil, err
+	}
+
+	securitySvc := security.NewAuditService(db, jwt, cfg)
+	securityHandler, err := handlers.NewSecurityHandler(securitySvc)
+	if err != nil {
+		return nil, err
+	}
+	sec := api.Group("/security")
+	{
+		sec.GET("/audit", middleware.RequirePermission(checker, "security.audit"), securityHandler.Audit)
 	}
 	api.GET("/audit", middleware.RequirePermission(checker, "audit.view"), auditHandler.List)
 	api.GET("/audit/export", middleware.RequirePermission(checker, "audit.export"), auditHandler.Export)

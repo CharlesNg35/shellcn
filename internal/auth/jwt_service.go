@@ -133,6 +133,11 @@ func (s *JWTService) ValidateAccessToken(tokenString string) (*Claims, error) {
 	return &claims, nil
 }
 
+// SecretLength returns the number of bytes in the configured signing secret.
+func (s *JWTService) SecretLength() int {
+	return len(s.secret)
+}
+
 // cloneMetadata guards against accidental external mutation of stored metadata.
 func cloneMetadata(meta map[string]any) map[string]any {
 	if len(meta) == 0 {

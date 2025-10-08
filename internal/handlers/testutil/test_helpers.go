@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/api"
+	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
@@ -40,14 +41,32 @@ func NewEnv(t *testing.T) *Env {
 
 	db := sharedtestutil.MustOpenTestDB(t, sharedtestutil.WithSeedData())
 
+	jwtSecret := "test-suite-super-secret-key-32-bytes!!"
 	jwtSvc, err := iauth.NewJWTService(iauth.JWTConfig{
-		Secret:         "test-secret",
+		Secret:         jwtSecret,
 		Issuer:         "test-suite",
 		AccessTokenTTL: time.Hour,
 	})
 	require.NoError(t, err)
 
-	router, err := api.NewRouter(db, jwtSvc)
+	cfg := &app.Config{
+		Vault: app.VaultConfig{
+			EncryptionKey: "0123456789abcdef0123456789abcdef",
+		},
+		Auth: app.AuthConfig{
+			JWT: app.JWTSettings{
+				Secret: jwtSecret,
+				Issuer: "test-suite",
+				TTL:    time.Hour,
+			},
+			Session: app.SessionSettings{
+				RefreshTTL:    24 * time.Hour,
+				RefreshLength: 48,
+			},
+		},
+	}
+
+	router, err := api.NewRouter(db, jwtSvc, cfg)
 	require.NoError(t, err)
 
 	return &Env{

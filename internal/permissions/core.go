@@ -105,6 +105,12 @@ func init() {
 			DependsOn:   []string{"audit.view"},
 			Description: "Export audit logs",
 		},
+		{
+			ID:          "security.audit",
+			Module:      "core",
+			DependsOn:   []string{"audit.view"},
+			Description: "Run security audits",
+		},
 	}
 
 	for _, perm := range perms {

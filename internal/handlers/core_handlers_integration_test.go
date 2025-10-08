@@ -401,3 +401,19 @@ func TestAuthProviderHandler_Flow(t *testing.T) {
 	testLDAP := env.Request(http.MethodPost, "/api/auth/providers/ldap/test", nil, token)
 	require.Equal(t, http.StatusOK, testLDAP.Code, testLDAP.Body.String())
 }
+
+func TestSecurityHandler_Audit(t *testing.T) {
+	env := testutil.NewEnv(t)
+	root := env.CreateRootUser("SecurePassw0rd!")
+	login := env.Login(root.Username, "SecurePassw0rd!")
+
+	resp := env.Request(http.MethodGet, "/api/security/audit", nil, login.Tokens.AccessToken)
+	require.Equal(t, http.StatusOK, resp.Code)
+
+	payload := testutil.DecodeResponse(t, resp)
+	require.True(t, payload.Success)
+
+	var data map[string]any
+	testutil.DecodeInto(t, payload.Data, &data)
+	require.Contains(t, data, "summary")
+}
