@@ -31,6 +31,7 @@ type StatePayload struct {
 	PKCE       string    `json:"k"`
 	IssuedAt   time.Time `json:"iat"`
 	AutoCreate bool      `json:"ac"`
+	RequestID  string    `json:"req"`
 }
 
 // NewStateCodec constructs a StateCodec using the provided symmetric encryption key and lifetime.

@@ -15,6 +15,7 @@ type Metadata struct {
 	Order         int
 	SupportsTest  bool
 	SupportsLogin bool
+	Flow          string
 }
 
 // BeginAuthRequest captures contextual information required to begin an external auth flow.
@@ -35,6 +36,7 @@ type BeginAuthResponse struct {
 	RedirectURL string
 	State       string
 	Headers     map[string]string
+	RequestID   string
 }
 
 // CallbackRequest captures the raw HTTP details posted by an external provider.
@@ -42,6 +44,7 @@ type CallbackRequest struct {
 	State          string
 	PKCEVerifier   string
 	ExpectedNonce  string
+	AuthnRequestID string
 	RawHTTPRequest *http.Request
 }
 
@@ -65,4 +68,10 @@ type Provider interface {
 	Begin(ctx context.Context, req BeginAuthRequest) (*BeginAuthResponse, error)
 	Callback(ctx context.Context, req CallbackRequest) (*Identity, error)
 	Test(ctx context.Context) error
+}
+
+// MetadataProvider exposes a method to serialise provider-specific metadata documents.
+type MetadataProvider interface {
+	Provider
+	ServiceProviderMetadata() ([]byte, error)
 }

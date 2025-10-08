@@ -41,6 +41,7 @@ func NewOIDCDescriptor(opts OIDCOptions) Descriptor {
 			SupportsTest:  true,
 			SupportsLogin: true,
 			Order:         10,
+			Flow:          "redirect",
 		},
 		Factory: func(cfg ProviderConfig) (Provider, error) {
 			return newOIDCProvider(cfg, opts)
@@ -136,6 +137,7 @@ func newOIDCProvider(cfg ProviderConfig, opts OIDCOptions) (Provider, error) {
 			SupportsTest:  true,
 			SupportsLogin: true,
 			Order:         10,
+			Flow:          "redirect",
 		},
 		oauthConfig: oauthConfig,
 		verifier:    verifier,

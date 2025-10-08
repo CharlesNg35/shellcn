@@ -49,8 +49,6 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	// Health endpoint (public)
 	r.GET("/health", handlers.Health(db))
 
-	authHandler := handlers.NewAuthHandler(db, jwt, sessions)
-
 	encryptionKey := []byte(cfg.Vault.EncryptionKey)
 	if length := len(encryptionKey); length != 16 && length != 24 && length != 32 {
 		return nil, fmt.Errorf("invalid vault encryption key length: expected 16, 24, or 32 bytes, got %d", length)
@@ -70,6 +68,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err := providerRegistry.Register(providers.NewOIDCDescriptor(providers.OIDCOptions{})); err != nil {
 		return nil, err
 	}
+	if err := providerRegistry.Register(providers.NewSAMLDescriptor(providers.SAMLOptions{})); err != nil {
+		return nil, err
+	}
 
 	stateCodec, err := iauth.NewStateCodec(encryptionKey, 10*time.Minute, nil)
 	if err != nil {
@@ -83,6 +84,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 
 	ssoHandler := handlers.NewSSOHandler(providerRegistry, authProviderSvc, ssoManager, stateCodec)
 	authProviderHandler := handlers.NewAuthProviderHandler(authProviderSvc)
+	authHandler := handlers.NewAuthHandler(db, jwt, sessions, authProviderSvc, ssoManager)
 
 	// Public auth routes
 	auth := r.Group("/api/auth")
@@ -92,6 +94,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		auth.GET("/providers", authProviderHandler.ListPublic)
 		auth.GET("/providers/:type/login", ssoHandler.Begin)
 		auth.GET("/providers/:type/callback", ssoHandler.Callback)
+		auth.GET("/providers/:type/metadata", ssoHandler.Metadata)
 	}
 
 	// Protected routes

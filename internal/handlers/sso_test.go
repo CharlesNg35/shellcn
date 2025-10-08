@@ -69,7 +69,7 @@ func TestSSOHandlerFlow(t *testing.T) {
 		ClientSecret: "client-secret",
 		RedirectURL:  "https://shellcn.example.com/api/auth/providers/oidc/callback",
 		Scopes:       []string{"openid", "email"},
-	}, true, "admin")
+	}, true, true, "admin")
 	require.NoError(t, err)
 
 	jwtSvc, err := iauth.NewJWTService(iauth.JWTConfig{

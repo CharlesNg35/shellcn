@@ -39,6 +39,7 @@ type SAMLConfig struct {
 	MetadataURL      string            `json:"metadata_url"`
 	EntityID         string            `json:"entity_id"`
 	SSOURL           string            `json:"sso_url"`
+	ACSURL           string            `json:"acs_url"`
 	Certificate      string            `json:"certificate"`
 	PrivateKey       string            `json:"private_key"`
 	AttributeMapping map[string]string `json:"attribute_mapping"`

@@ -17,6 +17,7 @@ func TestStateCodecRoundTrip(t *testing.T) {
 		ErrorURL:  "/login?error=sso",
 		Nonce:     "nonce",
 		PKCE:      "verifier",
+		RequestID: "request-123",
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
@@ -27,6 +28,7 @@ func TestStateCodecRoundTrip(t *testing.T) {
 	require.Equal(t, "/dashboard", payload.ReturnURL)
 	require.Equal(t, "nonce", payload.Nonce)
 	require.Equal(t, "verifier", payload.PKCE)
+	require.Equal(t, "request-123", payload.RequestID)
 }
 
 func TestStateCodecExpired(t *testing.T) {

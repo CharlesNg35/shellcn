@@ -44,6 +44,7 @@ type PublicProvider struct {
 	Enabled                  bool   `json:"enabled"`
 	AllowRegistration        bool   `json:"allow_registration"`
 	RequireEmailVerification bool   `json:"require_email_verification"`
+	Flow                     string `json:"flow"`
 }
 
 // NewAuthProviderService constructs an AuthProviderService instance.
@@ -139,6 +140,11 @@ func (s *AuthProviderService) GetEnabledPublic(ctx context.Context) ([]PublicPro
 
 	result := make([]PublicProvider, 0, len(providers))
 	for _, provider := range providers {
+		flow := "redirect"
+		switch provider.Type {
+		case "local", "ldap":
+			flow = "password"
+		}
 		result = append(result, PublicProvider{
 			Type:                     provider.Type,
 			Name:                     provider.Name,
@@ -147,13 +153,14 @@ func (s *AuthProviderService) GetEnabledPublic(ctx context.Context) ([]PublicPro
 			Enabled:                  provider.Enabled,
 			AllowRegistration:        provider.AllowRegistration,
 			RequireEmailVerification: provider.RequireEmailVerification,
+			Flow:                     flow,
 		})
 	}
 	return result, nil
 }
 
 // ConfigureOIDC upserts an OpenID Connect provider configuration.
-func (s *AuthProviderService) ConfigureOIDC(ctx context.Context, cfg models.OIDCConfig, enabled bool, createdBy string) error {
+func (s *AuthProviderService) ConfigureOIDC(ctx context.Context, cfg models.OIDCConfig, enabled bool, allowRegistration bool, createdBy string) error {
 	ctx = ensureContext(ctx)
 
 	cpy := cfg
@@ -169,13 +176,14 @@ func (s *AuthProviderService) ConfigureOIDC(ctx context.Context, cfg models.OIDC
 	}
 
 	provider := models.AuthProvider{
-		Type:        "oidc",
-		Name:        "OpenID Connect",
-		Enabled:     enabled,
-		Config:      string(payload),
-		Description: "Single Sign-On via OpenID Connect",
-		Icon:        "shield-check",
-		CreatedBy:   strings.TrimSpace(createdBy),
+		Type:              "oidc",
+		Name:              "OpenID Connect",
+		Enabled:           enabled,
+		Config:            string(payload),
+		AllowRegistration: allowRegistration,
+		Description:       "Single Sign-On via OpenID Connect",
+		Icon:              "shield-check",
+		CreatedBy:         strings.TrimSpace(createdBy),
 	}
 
 	if err := s.db.WithContext(ctx).
@@ -196,7 +204,7 @@ func (s *AuthProviderService) ConfigureOIDC(ctx context.Context, cfg models.OIDC
 }
 
 // ConfigureOAuth2 upserts a generic OAuth2 provider configuration.
-func (s *AuthProviderService) ConfigureOAuth2(ctx context.Context, cfg models.OAuth2Config, enabled bool, createdBy string) error {
+func (s *AuthProviderService) ConfigureOAuth2(ctx context.Context, cfg models.OAuth2Config, enabled bool, allowRegistration bool, createdBy string) error {
 	ctx = ensureContext(ctx)
 
 	cpy := cfg
@@ -212,13 +220,14 @@ func (s *AuthProviderService) ConfigureOAuth2(ctx context.Context, cfg models.OA
 	}
 
 	provider := models.AuthProvider{
-		Type:        "oauth2",
-		Name:        "OAuth 2.0",
-		Enabled:     enabled,
-		Config:      string(payload),
-		Description: "Generic OAuth 2.0 authentication",
-		Icon:        "key",
-		CreatedBy:   strings.TrimSpace(createdBy),
+		Type:              "oauth2",
+		Name:              "OAuth 2.0",
+		Enabled:           enabled,
+		Config:            string(payload),
+		AllowRegistration: allowRegistration,
+		Description:       "Generic OAuth 2.0 authentication",
+		Icon:              "key",
+		CreatedBy:         strings.TrimSpace(createdBy),
 	}
 
 	if err := s.db.WithContext(ctx).
@@ -239,7 +248,7 @@ func (s *AuthProviderService) ConfigureOAuth2(ctx context.Context, cfg models.OA
 }
 
 // ConfigureSAML upserts a SAML provider configuration.
-func (s *AuthProviderService) ConfigureSAML(ctx context.Context, cfg models.SAMLConfig, enabled bool, createdBy string) error {
+func (s *AuthProviderService) ConfigureSAML(ctx context.Context, cfg models.SAMLConfig, enabled bool, allowRegistration bool, createdBy string) error {
 	ctx = ensureContext(ctx)
 
 	cpy := cfg
@@ -255,13 +264,14 @@ func (s *AuthProviderService) ConfigureSAML(ctx context.Context, cfg models.SAML
 	}
 
 	provider := models.AuthProvider{
-		Type:        "saml",
-		Name:        "SAML 2.0",
-		Enabled:     enabled,
-		Config:      string(payload),
-		Description: "SAML 2.0 Single Sign-On",
-		Icon:        "shield",
-		CreatedBy:   strings.TrimSpace(createdBy),
+		Type:              "saml",
+		Name:              "SAML 2.0",
+		Enabled:           enabled,
+		Config:            string(payload),
+		AllowRegistration: allowRegistration,
+		Description:       "SAML 2.0 Single Sign-On",
+		Icon:              "shield",
+		CreatedBy:         strings.TrimSpace(createdBy),
 	}
 
 	if err := s.db.WithContext(ctx).
@@ -282,7 +292,7 @@ func (s *AuthProviderService) ConfigureSAML(ctx context.Context, cfg models.SAML
 }
 
 // ConfigureLDAP upserts an LDAP provider configuration.
-func (s *AuthProviderService) ConfigureLDAP(ctx context.Context, cfg models.LDAPConfig, enabled bool, createdBy string) error {
+func (s *AuthProviderService) ConfigureLDAP(ctx context.Context, cfg models.LDAPConfig, enabled bool, allowRegistration bool, createdBy string) error {
 	ctx = ensureContext(ctx)
 
 	cpy := cfg
@@ -298,13 +308,14 @@ func (s *AuthProviderService) ConfigureLDAP(ctx context.Context, cfg models.LDAP
 	}
 
 	provider := models.AuthProvider{
-		Type:        "ldap",
-		Name:        "LDAP / Active Directory",
-		Enabled:     enabled,
-		Config:      string(payload),
-		Description: "LDAP or Active Directory authentication",
-		Icon:        "building",
-		CreatedBy:   strings.TrimSpace(createdBy),
+		Type:              "ldap",
+		Name:              "LDAP / Active Directory",
+		Enabled:           enabled,
+		Config:            string(payload),
+		AllowRegistration: allowRegistration,
+		Description:       "LDAP or Active Directory authentication",
+		Icon:              "building",
+		CreatedBy:         strings.TrimSpace(createdBy),
 	}
 
 	if err := s.db.WithContext(ctx).
@@ -529,6 +540,58 @@ func (s *AuthProviderService) LoadOIDCConfig(ctx context.Context) (*models.AuthP
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{"openid", "profile", "email"}
 	}
+
+	return provider, &cfg, nil
+}
+
+// LoadSAMLConfig returns the decrypted SAML configuration if configured.
+func (s *AuthProviderService) LoadSAMLConfig(ctx context.Context) (*models.AuthProvider, *models.SAMLConfig, error) {
+	ctx = ensureContext(ctx)
+
+	provider, err := s.GetByType(ctx, "saml")
+	if err != nil {
+		return nil, nil, err
+	}
+	if strings.TrimSpace(provider.Config) == "" {
+		return nil, nil, errors.New("auth provider service: saml provider not configured")
+	}
+
+	var cfg models.SAMLConfig
+	if err := json.Unmarshal([]byte(provider.Config), &cfg); err != nil {
+		return nil, nil, fmt.Errorf("auth provider service: decode saml config: %w", err)
+	}
+
+	privateKey, err := crypto.Decrypt(cfg.PrivateKey, s.encryptionKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("auth provider service: decrypt saml private key: %w", err)
+	}
+	cfg.PrivateKey = string(privateKey)
+
+	return provider, &cfg, nil
+}
+
+// LoadLDAPConfig returns the decrypted LDAP configuration if configured.
+func (s *AuthProviderService) LoadLDAPConfig(ctx context.Context) (*models.AuthProvider, *models.LDAPConfig, error) {
+	ctx = ensureContext(ctx)
+
+	provider, err := s.GetByType(ctx, "ldap")
+	if err != nil {
+		return nil, nil, err
+	}
+	if strings.TrimSpace(provider.Config) == "" {
+		return nil, nil, errors.New("auth provider service: ldap provider not configured")
+	}
+
+	var cfg models.LDAPConfig
+	if err := json.Unmarshal([]byte(provider.Config), &cfg); err != nil {
+		return nil, nil, fmt.Errorf("auth provider service: decode ldap config: %w", err)
+	}
+
+	password, err := crypto.Decrypt(cfg.BindPassword, s.encryptionKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("auth provider service: decrypt ldap bind password: %w", err)
+	}
+	cfg.BindPassword = string(password)
 
 	return provider, &cfg, nil
 }

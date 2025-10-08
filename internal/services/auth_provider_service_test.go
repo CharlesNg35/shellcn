@@ -47,7 +47,7 @@ func TestAuthProviderServiceConfigureAndTestConnection(t *testing.T) {
 		ClientSecret: "super-secret",
 		RedirectURL:  "https://app.example.com/callback",
 		Scopes:       []string{"openid", "profile"},
-	}, true, "admin")
+	}, true, true, "admin")
 	require.NoError(t, err)
 
 	provider, err := svc.GetByType(ctx, "oidc")
@@ -74,7 +74,7 @@ func TestAuthProviderServiceConfigureAndTestConnection(t *testing.T) {
 		BindDN:       "cn=admin,dc=example,dc=com",
 		BindPassword: "bind-secret",
 		UserFilter:   "(uid={username})",
-	}, true, "admin")
+	}, true, false, "admin")
 	require.NoError(t, err)
 
 	err = svc.TestConnection(ctx, "ldap")
@@ -117,7 +117,7 @@ func TestAuthProviderServiceMutations(t *testing.T) {
 		ClientID:     "oauth-client",
 		ClientSecret: "oauth-secret",
 		RedirectURL:  "https://app.example.com/oauth",
-	}, true, "admin")
+	}, true, false, "admin")
 	require.NoError(t, err)
 
 	err = svc.SetEnabled(ctx, "oauth2", false)
@@ -178,26 +178,60 @@ func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {
 		ClientSecret: "super-secret",
 		RedirectURL:  "https://shellcn.example.com/api/auth/providers/oidc/callback",
 		Scopes:       []string{"openid", "profile"},
-	}, true, "admin-user")
+	}, true, true, "admin-user")
+	require.NoError(t, err)
+
+	err = svc.ConfigureSAML(ctx, models.SAMLConfig{
+		MetadataURL: "",
+		EntityID:    "https://sp.example.com/metadata",
+		SSOURL:      "https://idp.example.com/sso",
+		ACSURL:      "https://shellcn.example.com/api/auth/providers/saml/callback",
+		Certificate: "-----BEGIN CERTIFICATE-----\nMIIBijCCAS+gAwIBAgIRAI8l\n-----END CERTIFICATE-----",
+		PrivateKey:  "dummy",
+		AttributeMapping: map[string]string{
+			"email": "mail",
+		},
+	}, true, true, "admin-user")
+	require.NoError(t, err)
+
+	err = svc.ConfigureLDAP(ctx, models.LDAPConfig{
+		Host:         "ldap.example.com",
+		Port:         636,
+		BaseDN:       "dc=example,dc=com",
+		BindDN:       "cn=admin,dc=example,dc=com",
+		BindPassword: "secret",
+		UserFilter:   "(uid={username})",
+		UseTLS:       true,
+	}, true, true, "admin-user")
 	require.NoError(t, err)
 
 	publicProviders, err := svc.GetEnabledPublic(ctx)
 	require.NoError(t, err)
-	require.Len(t, publicProviders, 2)
+	require.Len(t, publicProviders, 4)
 
-	var localFound, oidcFound bool
+	var localFound, oidcFound, samlFound, ldapFound bool
 	for _, p := range publicProviders {
 		switch p.Type {
 		case "local":
 			localFound = true
 			require.True(t, p.AllowRegistration)
+			require.Equal(t, "password", p.Flow)
 		case "oidc":
 			oidcFound = true
 			require.True(t, p.Enabled)
+			require.Equal(t, "redirect", p.Flow)
+		case "saml":
+			samlFound = true
+			require.Equal(t, "redirect", p.Flow)
+		case "ldap":
+			ldapFound = true
+			require.Equal(t, "password", p.Flow)
 		}
 	}
 	require.True(t, localFound)
 	require.True(t, oidcFound)
+	require.True(t, samlFound)
+	require.True(t, ldapFound)
 
 	providerModel, cfg, err := svc.LoadOIDCConfig(ctx)
 	require.NoError(t, err)
@@ -205,6 +239,17 @@ func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {
 	require.Equal(t, "client-id", cfg.ClientID)
 	require.Equal(t, "super-secret", cfg.ClientSecret)
 	require.Contains(t, cfg.Scopes, "openid")
+
+	samlProvider, samlCfg, err := svc.LoadSAMLConfig(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "saml", samlProvider.Type)
+	require.Equal(t, "dummy", samlCfg.PrivateKey)
+	require.Equal(t, "https://shellcn.example.com/api/auth/providers/saml/callback", samlCfg.ACSURL)
+
+	ldapProvider, ldapCfg, err := svc.LoadLDAPConfig(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "ldap", ldapProvider.Type)
+	require.Equal(t, "secret", ldapCfg.BindPassword)
 }
 
 func openAuthProviderServiceTestDB(t *testing.T) *gorm.DB {

@@ -103,57 +103,61 @@ func (h *AuthProviderHandler) Configure(c *gin.Context) {
 	case "oidc":
 		var cfg models.OIDCConfig
 		var body struct {
-			Enabled bool              `json:"enabled"`
-			Config  models.OIDCConfig `json:"config"`
+			Enabled           bool              `json:"enabled"`
+			AllowRegistration bool              `json:"allow_registration"`
+			Config            models.OIDCConfig `json:"config"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			response.Error(c, errors.ErrBadRequest)
 			return
 		}
 		cfg = body.Config
-		if err := h.svc.ConfigureOIDC(c.Request.Context(), cfg, body.Enabled, actor); err != nil {
+		if err := h.svc.ConfigureOIDC(c.Request.Context(), cfg, body.Enabled, body.AllowRegistration, actor); err != nil {
 			response.Error(c, errors.ErrInternalServer)
 			return
 		}
 		response.Success(c, http.StatusOK, gin.H{"updated": true})
 	case "oauth2":
 		var body struct {
-			Enabled bool                `json:"enabled"`
-			Config  models.OAuth2Config `json:"config"`
+			Enabled           bool                `json:"enabled"`
+			AllowRegistration bool                `json:"allow_registration"`
+			Config            models.OAuth2Config `json:"config"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			response.Error(c, errors.ErrBadRequest)
 			return
 		}
-		if err := h.svc.ConfigureOAuth2(c.Request.Context(), body.Config, body.Enabled, actor); err != nil {
+		if err := h.svc.ConfigureOAuth2(c.Request.Context(), body.Config, body.Enabled, body.AllowRegistration, actor); err != nil {
 			response.Error(c, errors.ErrInternalServer)
 			return
 		}
 		response.Success(c, http.StatusOK, gin.H{"updated": true})
 	case "saml":
 		var body struct {
-			Enabled bool              `json:"enabled"`
-			Config  models.SAMLConfig `json:"config"`
+			Enabled           bool              `json:"enabled"`
+			AllowRegistration bool              `json:"allow_registration"`
+			Config            models.SAMLConfig `json:"config"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			response.Error(c, errors.ErrBadRequest)
 			return
 		}
-		if err := h.svc.ConfigureSAML(c.Request.Context(), body.Config, body.Enabled, actor); err != nil {
+		if err := h.svc.ConfigureSAML(c.Request.Context(), body.Config, body.Enabled, body.AllowRegistration, actor); err != nil {
 			response.Error(c, errors.ErrInternalServer)
 			return
 		}
 		response.Success(c, http.StatusOK, gin.H{"updated": true})
 	case "ldap":
 		var body struct {
-			Enabled bool              `json:"enabled"`
-			Config  models.LDAPConfig `json:"config"`
+			Enabled           bool              `json:"enabled"`
+			AllowRegistration bool              `json:"allow_registration"`
+			Config            models.LDAPConfig `json:"config"`
 		}
 		if err := c.ShouldBindJSON(&body); err != nil {
 			response.Error(c, errors.ErrBadRequest)
 			return
 		}
-		if err := h.svc.ConfigureLDAP(c.Request.Context(), body.Config, body.Enabled, actor); err != nil {
+		if err := h.svc.ConfigureLDAP(c.Request.Context(), body.Config, body.Enabled, body.AllowRegistration, actor); err != nil {
 			response.Error(c, errors.ErrInternalServer)
 			return
 		}
