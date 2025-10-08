@@ -49,7 +49,11 @@ func (h *TeamHandler) Get(c *gin.Context) {
 
 // POST /api/teams
 func (h *TeamHandler) Create(c *gin.Context) {
-	var body struct{ OrganizationID, Name, Description string }
+	var body struct {
+		OrganizationID string `json:"organization_id"`
+		Name           string `json:"name"`
+		Description    string `json:"description"`
+	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.OrganizationID == "" || body.Name == "" {
 		response.Error(c, errors.ErrBadRequest)
 		return
@@ -65,8 +69,8 @@ func (h *TeamHandler) Create(c *gin.Context) {
 // PATCH /api/teams/:id
 func (h *TeamHandler) Update(c *gin.Context) {
 	var body struct {
-		Name        *string
-		Description *string
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		response.Error(c, errors.ErrBadRequest)
@@ -82,7 +86,9 @@ func (h *TeamHandler) Update(c *gin.Context) {
 
 // POST /api/teams/:id/members
 func (h *TeamHandler) AddMember(c *gin.Context) {
-	var body struct{ UserID string }
+	var body struct {
+		UserID string `json:"user_id"`
+	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.UserID == "" {
 		response.Error(c, errors.ErrBadRequest)
 		return

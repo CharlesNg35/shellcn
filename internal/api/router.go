@@ -65,7 +65,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService) (*gin.Engine, error) {
 	users := api.Group("/users")
 	{
 		users.GET("", middleware.RequirePermission(checker, "user.view"), userHandler.List)
-		users.GET(":id", middleware.RequirePermission(checker, "user.view"), userHandler.Get)
+		users.GET("/:id", middleware.RequirePermission(checker, "user.view"), userHandler.Get)
 		users.POST("", middleware.RequirePermission(checker, "user.create"), userHandler.Create)
 		// Additional handlers (update/delete) will be added in subsequent iterations
 	}
@@ -78,10 +78,10 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService) (*gin.Engine, error) {
 	orgs := api.Group("/orgs")
 	{
 		orgs.GET("", middleware.RequirePermission(checker, "org.view"), orgHandler.List)
-		orgs.GET(":id", middleware.RequirePermission(checker, "org.view"), orgHandler.Get)
+		orgs.GET("/:id", middleware.RequirePermission(checker, "org.view"), orgHandler.Get)
 		orgs.POST("", middleware.RequirePermission(checker, "org.create"), orgHandler.Create)
-		orgs.PATCH(":id", middleware.RequirePermission(checker, "org.manage"), orgHandler.Update)
-		orgs.DELETE(":id", middleware.RequirePermission(checker, "org.manage"), orgHandler.Delete)
+		orgs.PATCH("/:id", middleware.RequirePermission(checker, "org.manage"), orgHandler.Update)
+		orgs.DELETE("/:id", middleware.RequirePermission(checker, "org.manage"), orgHandler.Delete)
 	}
 
 	// Teams
@@ -91,12 +91,12 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService) (*gin.Engine, error) {
 	}
 	teams := api.Group("/teams")
 	{
-		teams.GET(":id", middleware.RequirePermission(checker, "org.view"), teamHandler.Get)
-		teams.PATCH(":id", middleware.RequirePermission(checker, "org.manage"), teamHandler.Update)
+		teams.GET("/:id", middleware.RequirePermission(checker, "org.view"), teamHandler.Get)
+		teams.PATCH("/:id", middleware.RequirePermission(checker, "org.manage"), teamHandler.Update)
 		teams.POST("", middleware.RequirePermission(checker, "org.manage"), teamHandler.Create)
-		teams.POST(":id/members", middleware.RequirePermission(checker, "org.manage"), teamHandler.AddMember)
-		teams.DELETE(":id/members/:userID", middleware.RequirePermission(checker, "org.manage"), teamHandler.RemoveMember)
-		teams.GET(":id/members", middleware.RequirePermission(checker, "org.view"), teamHandler.ListMembers)
+		teams.POST("/:id/members", middleware.RequirePermission(checker, "org.manage"), teamHandler.AddMember)
+		teams.DELETE("/:id/members/:userID", middleware.RequirePermission(checker, "org.manage"), teamHandler.RemoveMember)
+		teams.GET("/:id/members", middleware.RequirePermission(checker, "org.view"), teamHandler.ListMembers)
 	}
 	api.GET("/organizations/:orgID/teams", middleware.RequirePermission(checker, "org.view"), teamHandler.ListByOrg)
 
@@ -139,9 +139,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService) (*gin.Engine, error) {
 		ap.GET("", middleware.RequirePermission(checker, "permission.view"), apHandler.List)
 		ap.GET("/enabled", middleware.RequirePermission(checker, "permission.view"), apHandler.GetEnabled)
 		ap.POST("/local/settings", middleware.RequirePermission(checker, "permission.manage"), apHandler.UpdateLocalSettings)
-		ap.POST(":type/enable", middleware.RequirePermission(checker, "permission.manage"), apHandler.SetEnabled)
-		ap.POST(":type/test", middleware.RequirePermission(checker, "permission.manage"), apHandler.TestConnection)
-		ap.POST(":type/configure", middleware.RequirePermission(checker, "permission.manage"), apHandler.Configure)
+		ap.POST("/:type/enable", middleware.RequirePermission(checker, "permission.manage"), apHandler.SetEnabled)
+		ap.POST("/:type/test", middleware.RequirePermission(checker, "permission.manage"), apHandler.TestConnection)
+		ap.POST("/:type/configure", middleware.RequirePermission(checker, "permission.manage"), apHandler.Configure)
 	}
 
 	// Setup (public)

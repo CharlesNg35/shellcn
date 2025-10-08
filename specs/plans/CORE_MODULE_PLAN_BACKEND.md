@@ -35,6 +35,7 @@ The Core Module provides the foundational authentication, authorization, user ma
 ### Key Features
 
 - **Authentication:**
+
   - Local authentication (username/password)
   - External providers (OIDC, SAML, LDAP) - Optional
   - Multi-Factor Authentication (TOTP) - Optional
@@ -42,12 +43,14 @@ The Core Module provides the foundational authentication, authorization, user ma
   - Password reset flow
 
 - **Authorization:**
+
   - Role-Based Access Control (RBAC)
   - Permission registry with dependency resolution
   - Root/superuser bypass
   - Module-specific permission registration
 
 - **User Management:**
+
   - User CRUD operations
   - Profile management
   - Password management
@@ -55,18 +58,21 @@ The Core Module provides the foundational authentication, authorization, user ma
   - Root user safeguards
 
 - **Organization & Team Management:**
+
   - Multi-tenancy support
   - Organization hierarchy
   - Team-based access control
   - Member management
 
 - **Session Management:**
+
   - Active session tracking
   - Session revocation
   - Multi-device support
   - Session sharing (for protocol sessions)
 
 - **Audit Logging:**
+
   - Comprehensive event logging
   - User action tracking
   - Authentication attempts
@@ -2526,6 +2532,7 @@ func (h *SetupHandler) CreateFirstUser(c *gin.Context) {
 ```
 
 **Frontend Integration:**
+
 - Check `/api/setup/check` on app load
 - If `setup_needed: true`, redirect to `/setup` page
 - Setup page calls `/api/setup/complete` with first user details
@@ -2678,15 +2685,15 @@ func SetupRouter(
 
 #### Public Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/setup/check` | Check if setup is needed |
-| POST | `/api/setup/complete` | Complete first-time setup |
-| POST | `/api/auth/login` | Login with credentials |
-| POST | `/api/auth/refresh` | Refresh access token |
-| POST | `/api/auth/password-reset/request` | Request password reset |
-| POST | `/api/auth/password-reset/confirm` | Confirm password reset |
-| GET | `/api/health` | Health check |
+| Method | Path                               | Description               |
+| ------ | ---------------------------------- | ------------------------- |
+| GET    | `/api/setup/check`                 | Check if setup is needed  |
+| POST   | `/api/setup/complete`              | Complete first-time setup |
+| POST   | `/api/auth/login`                  | Login with credentials    |
+| POST   | `/api/auth/refresh`                | Refresh access token      |
+| POST   | `/api/auth/password-reset/request` | Request password reset    |
+| POST   | `/api/auth/password-reset/confirm` | Confirm password reset    |
+| GET    | `/api/health`                      | Health check              |
 
 #### Protected Endpoints
 
@@ -2890,6 +2897,7 @@ func (m *PermissionMiddleware) Require(permissionID string) gin.HandlerFunc {
 ### Other Middleware
 
 **CORS Middleware** (`internal/api/middleware/cors.go`):
+
 ```go
 func CORS() gin.HandlerFunc {
     return func(c *gin.Context) {
@@ -2908,6 +2916,7 @@ func CORS() gin.HandlerFunc {
 ```
 
 **Logger Middleware** (`internal/api/middleware/logger.go`):
+
 ```go
 func Logger() gin.HandlerFunc {
     return func(c *gin.Context) {
@@ -2930,6 +2939,7 @@ func Logger() gin.HandlerFunc {
 ```
 
 **Rate Limiting Middleware** (`internal/api/middleware/ratelimit.go`):
+
 ```go
 func RateLimit() gin.HandlerFunc {
     // Use golang.org/x/time/rate
@@ -2954,6 +2964,7 @@ func RateLimit() gin.HandlerFunc {
 
 1. **Hashing Algorithm:** bcrypt with cost factor 10+
 2. **Password Requirements:**
+
    - Minimum 8 characters
    - At least one uppercase letter
    - At least one lowercase letter
@@ -2971,6 +2982,7 @@ func RateLimit() gin.HandlerFunc {
 ### Session Security
 
 1. **JWT Tokens:**
+
    - Access token: 15 minutes expiry
    - Refresh token: 7 days expiry
    - Stored in httpOnly cookies (frontend)
@@ -2985,6 +2997,7 @@ func RateLimit() gin.HandlerFunc {
 ### MFA Security
 
 1. **TOTP Implementation:**
+
    - Use standard TOTP algorithm (RFC 6238)
    - 30-second time step
    - 6-digit codes
@@ -2999,6 +3012,7 @@ func RateLimit() gin.HandlerFunc {
 ### Encryption
 
 1. **Vault Credentials:**
+
    - AES-256-GCM encryption
    - Master key from environment variable
    - Key derivation using Argon2id
@@ -3321,6 +3335,7 @@ func SetupTestServer(t *testing.T) (*gin.Engine, *gorm.DB) {
 ### Contract Tests
 
 Test critical contracts:
+
 - JWT token structure
 - API response format
 - Permission dependency rules
@@ -3347,12 +3362,14 @@ go tool cover -html=coverage.out
 ### Phase 1: Foundation (Week 1)
 
 - [x] **Project Setup**
+
   - [x] Initialize Go module
   - [x] Setup directory structure
   - [x] Configure Makefile
   - [x] Setup CI/CD pipeline
 
 - [x] **Shared Packages**
+
   - [x] Implement `pkg/logger`
   - [x] Implement `pkg/errors`
   - [x] Implement `pkg/response`
@@ -3370,17 +3387,20 @@ go tool cover -html=coverage.out
 ### Phase 2: Authentication (Week 2)
 
 - [x] **JWT Service**
+
   - [x] Implement token generation
   - [x] Implement token validation
   - [x] Write JWT tests
 
 - [x] **Local Auth Provider**
+
   - [x] Implement login
   - [x] Implement password hashing
   - [x] Implement account lockout
   - [x] Write auth provider tests
 
 - [x] **Session Management**
+
   - [x] Implement session service
   - [x] Implement refresh token flow
   - [x] Implement session revocation
@@ -3395,6 +3415,7 @@ go tool cover -html=coverage.out
 ### Phase 3: Authorization (Week 3)
 
 - [x] **Permission System**
+
   - [x] Implement permission registry
   - [x] Register core permissions
   - [x] Implement permission checker
@@ -3408,74 +3429,82 @@ go tool cover -html=coverage.out
 
 ### Phase 4: Core Services (Week 4)
 
-- [ ] **User Service**
-  - [ ] Implement CRUD operations
-  - [ ] Implement activation/deactivation
-  - [ ] Implement password management
-  - [ ] Write user service tests
+- [x] **User Service**
 
-- [ ] **Organization Service**
-  - [ ] Implement CRUD operations
-  - [ ] Write organization service tests
+  - [x] Implement CRUD operations
+  - [x] Implement activation/deactivation
+  - [x] Implement password management
+  - [x] Write user service tests
 
-- [ ] **Team Service**
-  - [ ] Implement team management
-  - [ ] Implement member management
-  - [ ] Write team service tests
+- [x] **Organization Service**
 
-- [ ] **Audit Service**
-  - [ ] Implement audit logging
-  - [ ] Implement log filtering
-  - [ ] Implement log export
-  - [ ] Write audit service tests
+  - [x] Implement CRUD operations
+  - [x] Write organization service tests
 
-- [ ] **Auth Provider Service**
-  - [ ] Implement provider CRUD
-  - [ ] Implement OIDC configuration
-  - [ ] Implement OAuth2 configuration
-  - [ ] Implement SAML configuration
-  - [ ] Implement LDAP configuration
-  - [ ] Implement local/invite settings
-  - [ ] Implement connection testing
-  - [ ] Write auth provider service tests
+- [x] **Team Service**
+
+  - [x] Implement team management
+  - [x] Implement member management
+  - [x] Write team service tests
+
+- [x] **Audit Service**
+
+  - [x] Implement audit logging
+  - [x] Implement log filtering
+  - [x] Implement log export
+  - [x] Write audit service tests
+
+- [x] **Auth Provider Service**
+  - [x] Implement provider CRUD
+  - [x] Implement OIDC configuration
+  - [x] Implement OAuth2 configuration
+  - [x] Implement SAML configuration
+  - [x] Implement LDAP configuration
+  - [x] Implement local/invite settings
+  - [x] Implement connection testing
+  - [x] Write auth provider service tests
 
 ### Phase 5: API Layer (Week 5)
 
-- [ ] **Middleware**
-  - [ ] Implement auth middleware
-  - [ ] Implement permission middleware
-  - [ ] Implement CORS middleware
-  - [ ] Implement logger middleware
-  - [ ] Implement rate limiting
-  - [ ] Write middleware tests
+- [x] **Middleware**
 
-- [ ] **Handlers**
-  - [ ] Implement auth handlers
-  - [ ] Implement setup handler
-  - [ ] Implement user handlers
-  - [ ] Implement organization handlers
-  - [ ] Implement team handlers
-  - [ ] Implement permission handlers
-  - [ ] Implement session handlers
-  - [ ] Implement audit handlers
-  - [ ] Implement auth provider handlers
-  - [ ] Write handler integration tests
+  - [x] Implement auth middleware
+  - [x] Implement permission middleware
+  - [x] Implement CORS middleware
+  - [x] Implement logger middleware
+  - [x] Implement rate limiting
+  - [x] Write middleware tests
 
-- [ ] **Router**
-  - [ ] Configure all routes
-  - [ ] Setup route groups
-  - [ ] Apply middleware
-  - [ ] Write router tests
+- [x] **Handlers**
+
+  - [x] Implement auth handlers
+  - [x] Implement setup handler
+  - [x] Implement user handlers
+  - [x] Implement organization handlers
+  - [x] Implement team handlers
+  - [x] Implement permission handlers
+  - [x] Implement session handlers
+  - [x] Implement audit handlers
+  - [x] Implement auth provider handlers
+  - [x] Write handler integration tests
+
+- [x] **Router**
+  - [x] Configure all routes
+  - [x] Setup route groups
+  - [x] Apply middleware
+  - [x] Write router tests
 
 ### Phase 6: Security & Monitoring (Week 6)
 
 - [ ] **Security**
+
   - [ ] Implement security headers
   - [ ] Implement CSRF protection
   - [ ] Implement input validation
   - [ ] Security audit
 
 - [ ] **Monitoring**
+
   - [ ] Implement Prometheus metrics
   - [ ] Implement health check
   - [ ] Setup structured logging
@@ -3489,6 +3518,7 @@ go tool cover -html=coverage.out
 ### Phase 7: Testing & Documentation (Week 7)
 
 - [ ] **Testing**
+
   - [ ] Achieve 80%+ test coverage
   - [ ] Run integration tests
   - [ ] Run contract tests
@@ -3505,10 +3535,12 @@ go tool cover -html=coverage.out
 ### Phase 8: External Auth Providers (Optional - Week 8)
 
 - [ ] **OIDC Provider**
+
   - [ ] Implement OIDC authentication
   - [ ] Write OIDC tests
 
 - [ ] **SAML Provider**
+
   - [ ] Implement SAML authentication
   - [ ] Write SAML tests
 
@@ -3618,6 +3650,7 @@ The implementation is designed to be extended by other modules while maintaining
 ---
 
 **Next Steps:**
+
 1. Review this plan with the team
 2. Set up development environment
 3. Begin Phase 1 implementation
