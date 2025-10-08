@@ -1,4 +1,4 @@
-.PHONY: help build build-go build-rust build-web test test-web test-cover lint fmt run dev clean tidy generate
+.PHONY: help build build-go build-rust build-web test test-web test-cover lint fmt run dev dev-web dev-server clean tidy generate
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
@@ -21,7 +21,10 @@ help:
 	@echo "  make lint          Run go vet on the codebase"
 	@echo "  make fmt           Format Go sources with gofmt"
 	@echo "  make tidy          Sync module dependencies"
-	@echo "  make run           Start the development server"
+	@echo "  make run           Start the Go backend"
+	@echo "  make dev           Start backend and frontend concurrently"
+	@echo "  make dev-server    Start the Go backend"
+	@echo "  make dev-web       Start the frontend dev server"
 	@echo "  make clean         Remove build artifacts"
 
 build: build-web build-rust build-go
@@ -83,11 +86,19 @@ tidy:
 	@echo "Tidying module dependencies..."
 	@go mod tidy
 
-run:
-	@echo "Starting development server..."
+run: dev-server
+
+dev:
+	@echo "Starting ShellCN full-stack dev environment..."
+	@node scripts/dev.mjs
+
+dev-server:
+	@echo "Starting Go backend..."
 	@go run ./cmd/server
 
-dev: run
+dev-web:
+	@echo "Starting frontend dev server..."
+	@cd $(WEB_DIR) && pnpm dev
 
 clean:
 	@echo "Cleaning build artifacts..."
