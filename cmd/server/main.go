@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -217,13 +219,48 @@ func ensureSecretsPresent(cfg *app.Config) error {
 		return errors.New("auth.jwt.secret must be configured")
 	}
 
+	jwtBytes, err := keyByteLength(cfg.Auth.JWT.Secret)
+	if err != nil {
+		return fmt.Errorf("auth.jwt.secret: %w", err)
+	}
+	if jwtBytes < 32 {
+		return fmt.Errorf("auth.jwt.secret must decode to at least 32 bytes (current: %d)", jwtBytes)
+	}
+
 	cfg.Vault.EncryptionKey = strings.TrimSpace(cfg.Vault.EncryptionKey)
-	keyLen := len(cfg.Vault.EncryptionKey)
-	if keyLen != 16 && keyLen != 24 && keyLen != 32 {
-		return fmt.Errorf("vault.encryption_key must be 16, 24, or 32 characters (current: %d)", keyLen)
+	length, err := keyByteLength(cfg.Vault.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("vault.encryption_key: %w", err)
+	}
+	if length != 16 && length != 24 && length != 32 {
+		return fmt.Errorf("vault.encryption_key must decode to 16, 24, or 32 bytes (current: %d)", length)
 	}
 
 	return nil
+}
+
+func keyByteLength(value string) (int, error) {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return 0, nil
+	}
+
+	// Try hex first (runtime defaults use hex for vault key)
+	if len(v)%2 == 0 {
+		if decoded, err := hex.DecodeString(v); err == nil {
+			return len(decoded), nil
+		}
+	}
+
+	// Support both standard and raw base64 encodings
+	if decoded, err := base64.StdEncoding.DecodeString(v); err == nil {
+		return len(decoded), nil
+	}
+	if decoded, err := base64.RawStdEncoding.DecodeString(v); err == nil {
+		return len(decoded), nil
+	}
+
+	return len(v), nil
 }
 
 func initialiseDatabase(cfg *app.Config) (*gorm.DB, error) {
