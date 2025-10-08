@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Server     ServerConfig     `mapstructure:"server"`
 	Database   DatabaseConfig   `mapstructure:"database"`
+	Cache      CacheConfig      `mapstructure:"cache"`
 	Vault      VaultConfig      `mapstructure:"vault"`
 	Monitoring MonitoringConfig `mapstructure:"monitoring"`
 	Features   FeatureConfig    `mapstructure:"features"`
@@ -35,6 +36,22 @@ type DatabaseConfig struct {
 	DSN      string       `mapstructure:"dsn"`
 	Postgres DBAuthConfig `mapstructure:"postgres"`
 	MySQL    DBAuthConfig `mapstructure:"mysql"`
+}
+
+// CacheConfig describes cache backends.
+type CacheConfig struct {
+	Redis RedisCacheConfig `mapstructure:"redis"`
+}
+
+// RedisCacheConfig holds Redis connection options.
+type RedisCacheConfig struct {
+	Enabled  bool          `mapstructure:"enabled"`
+	Address  string        `mapstructure:"address"`
+	Username string        `mapstructure:"username"`
+	Password string        `mapstructure:"password"`
+	DB       int           `mapstructure:"db"`
+	TLS      bool          `mapstructure:"tls"`
+	Timeout  time.Duration `mapstructure:"timeout"`
 }
 
 // DBAuthConfig represents host based database parameters.
@@ -235,6 +252,14 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.path", "./data/shellcn.sqlite")
+
+	v.SetDefault("cache.redis.enabled", false)
+	v.SetDefault("cache.redis.address", "127.0.0.1:6379")
+	v.SetDefault("cache.redis.username", "")
+	v.SetDefault("cache.redis.password", "")
+	v.SetDefault("cache.redis.db", 0)
+	v.SetDefault("cache.redis.tls", false)
+	v.SetDefault("cache.redis.timeout", "5s")
 
 	v.SetDefault("vault.algorithm", "aes-256-gcm")
 	v.SetDefault("vault.key_rotation_days", 90)

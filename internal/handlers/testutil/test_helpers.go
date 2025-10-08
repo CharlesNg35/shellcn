@@ -69,7 +69,7 @@ func NewEnv(t *testing.T) *Env {
 	sessionSvc, err := iauth.NewSessionService(db, jwtSvc, cfg.Auth.SessionServiceConfig())
 	require.NoError(t, err)
 
-	router, err := api.NewRouter(db, jwtSvc, cfg, sessionSvc)
+	router, err := api.NewRouter(db, jwtSvc, cfg, sessionSvc, middleware.NewMemoryRateStore())
 	require.NoError(t, err)
 
 	return &Env{

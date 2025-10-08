@@ -41,6 +41,7 @@
   - [x] Implement session service
   - [x] Implement refresh token flow
   - [x] Implement session revocation
+  - [x] Add cache abstraction with Redis primary and SQL fallback for session tokens
   - [x] Write session tests
 - [x] **MFA (Optional)**
   - [x] Implement TOTP service
@@ -97,7 +98,7 @@
   - [x] Implement permission middleware
   - [x] Implement CORS middleware
   - [x] Implement logger middleware
-  - [x] Implement rate limiting
+  - [x] Implement rate limiting with Redis/SQL cache fallback
   - [x] Write middleware tests
 - [x] **Handlers**
   - [x] Implement auth handlers

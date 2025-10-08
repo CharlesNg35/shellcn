@@ -20,7 +20,9 @@ import (
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/app/maintenance"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/cache"
 	"github.com/charlesng35/shellcn/internal/database"
+	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/pkg/logger"
 )
@@ -73,12 +75,39 @@ func run(ctx context.Context, args []string) error {
 	}
 	defer closeDatabase(db, log)
 
+	dbStore := cache.NewDatabaseStore(db)
+
+	var redisClient cache.Store
+	if cfg.Cache.Redis.Enabled {
+		client, redisErr := cache.NewRedisClient(cfg.Cache.RedisClientConfig())
+		if redisErr != nil {
+			log.Warn("redis unavailable; falling back to database-backed operations", zap.Error(redisErr))
+		} else {
+			redisClient = client
+			log.Info("redis connected", zap.String("addr", cfg.Cache.Redis.Address))
+		}
+	}
+
+	defer func() {
+		if rc, ok := redisClient.(*cache.RedisClient); ok && rc != nil {
+			_ = rc.Close()
+		}
+	}()
+
 	jwtService, err := iauth.NewJWTService(cfg.Auth.JWTServiceConfig())
 	if err != nil {
 		return fmt.Errorf("initialise jwt service: %w", err)
 	}
 
-	sessionSvc, err := iauth.NewSessionService(db, jwtService, cfg.Auth.SessionServiceConfig())
+	sessionCfg := cfg.Auth.SessionServiceConfig()
+	switch {
+	case redisClient != nil:
+		sessionCfg.Cache = iauth.NewRedisSessionCache(redisClient)
+	case dbStore != nil:
+		sessionCfg.Cache = iauth.NewDatabaseSessionCache(dbStore)
+	}
+
+	sessionSvc, err := iauth.NewSessionService(db, jwtService, sessionCfg)
 	if err != nil {
 		return fmt.Errorf("initialise session service: %w", err)
 	}
@@ -99,7 +128,15 @@ func run(ctx context.Context, args []string) error {
 		}
 	}()
 
-	router, err := api.NewRouter(db, jwtService, cfg, sessionSvc)
+	var rateStore middleware.RateStore
+	switch {
+	case redisClient != nil:
+		rateStore = middleware.NewRedisRateStore(redisClient)
+	case dbStore != nil:
+		rateStore = middleware.NewDatabaseRateStore(dbStore)
+	}
+
+	router, err := api.NewRouter(db, jwtService, cfg, sessionSvc, rateStore)
 	if err != nil {
 		return fmt.Errorf("build api router: %w", err)
 	}

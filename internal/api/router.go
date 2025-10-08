@@ -18,7 +18,7 @@ import (
 
 // NewRouter builds the Gin engine, wires middleware and registers core routes.
 // Additional module routers can mount under /api in later phases.
-func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *iauth.SessionService) (*gin.Engine, error) {
+func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *iauth.SessionService, rateStore middleware.RateStore) (*gin.Engine, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database handle must be provided")
 	}
@@ -42,7 +42,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	r.Use(middleware.CORS())
 	r.Use(middleware.CSRF())
 	// Basic rate limiting: 100 requests/minute per IP+path
-	r.Use(middleware.RateLimit(100, time.Minute))
+	r.Use(middleware.RateLimit(rateStore, 100, time.Minute))
 
 	// Health endpoint (public)
 	r.GET("/health", handlers.Health(db))

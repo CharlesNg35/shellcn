@@ -13,7 +13,7 @@ func TestRateLimitMiddleware(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	r := gin.New()
-	r.Use(RateLimit(2, 100*time.Millisecond))
+	r.Use(RateLimit(NewMemoryRateStore(), 2, 100*time.Millisecond))
 	r.GET("/ping", func(c *gin.Context) { c.String(200, "pong") })
 
 	// First two requests should pass

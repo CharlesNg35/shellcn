@@ -597,6 +597,24 @@ type LDAPConfig struct {
 }
 ```
 
+#### 11. CacheEntry Model (`cache_entry.go`)
+
+```go
+package models
+
+import "time"
+
+type CacheEntry struct {
+    Key       string    `gorm:"primaryKey;size:256"`
+    Value     []byte    `gorm:"type:blob"`
+    ExpiresAt time.Time `gorm:"index"`
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+```
+
+This table stores cached artefacts (rate counters, session snapshots, etc.) when the platform falls back to the SQL database instead of Redis. Expired rows are lazily pruned by background workers and rate-limit operations.
+
 ### Database Migrations
 
 **Location:** `internal/database/migrations.go`
@@ -621,6 +639,9 @@ func AutoMigrate(db *gorm.DB) error {
         &models.MFASecret{},
         &models.PasswordResetToken{},
         &models.AuthProvider{},
+        &models.UserInvite{},
+        &models.EmailVerification{},
+        &models.CacheEntry{},
     )
 }
 
@@ -3404,6 +3425,7 @@ go tool cover -html=coverage.out
   - [x] Implement session service
   - [x] Implement refresh token flow
   - [x] Implement session revocation
+  - [x] Introduce cache abstraction with Redis preference and SQL fallback
   - [x] Write session tests
 
 - [x] **MFA (Optional)**
@@ -3472,7 +3494,7 @@ go tool cover -html=coverage.out
   - [x] Implement permission middleware
   - [x] Implement CORS middleware
   - [x] Implement logger middleware
-  - [x] Implement rate limiting
+  - [x] Implement rate limiting backed by shared cache with SQL fallback
   - [x] Write middleware tests
 
 - [x] **Handlers**

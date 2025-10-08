@@ -10,6 +10,15 @@ database:
     database: shellcn_prod
     username: shellcn
     password: secret
+cache:
+  redis:
+    enabled: true
+    address: redis.example.com:6379
+    username: shellcn
+    password: redis-secret
+    db: 2
+    tls: true
+    timeout: 4s
 
 vault:
   encryption_key: super-secret-key

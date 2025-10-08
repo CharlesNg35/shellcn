@@ -1976,6 +1976,8 @@ func (app *App) InitializeModules() {
 
 ## 8. Configuration
 
+ShellCN provides an optional cache layer. When Redis is configured the platform uses it for session caching, rate limiting, and other high-frequency lookups. When Redis is not supplied (or becomes unavailable) the system transparently falls back to the primary SQL database by storing cached artefacts in the `cache_entries` table. This guarantees the application runs in development and single-node deployments without any additional services.
+
 ```yaml
 # config.yaml
 server:
@@ -1999,6 +2001,16 @@ database:
     database: shellcn
     username: root
     password: ${DB_PASSWORD}
+
+cache:
+  redis:
+    enabled: false
+    address: 127.0.0.1:6379
+    username: ""
+    password: ""
+    db: 0
+    tls: false
+    timeout: 5s
 
 vault:
   encryption_key: ${VAULT_ENCRYPTION_KEY}

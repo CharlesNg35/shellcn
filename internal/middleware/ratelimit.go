@@ -1,39 +1,23 @@
 package middleware
 
 import (
-	"sync"
+	"context"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 // RateLimit returns a middleware that limits requests per (clientIP,path) within a fixed window.
-// This is an in-memory limiter suitable for single-instance deployments and tests.
-func RateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
-	type counter struct {
-		count     int
-		windowEnd time.Time
+// It uses the provided store for distributed coordination and falls back to an in-memory store when unavailable.
+func RateLimit(store RateStore, maxRequests int, window time.Duration) gin.HandlerFunc {
+	fallback := NewMemoryRateStore()
+	if store == nil {
+		store = fallback
 	}
-
-	var (
-		mu   sync.Mutex
-		data = make(map[string]*counter)
-	)
-
-	tick := time.NewTicker(window)
-	// Periodically cleanup old counters to avoid unbounded growth
-	go func() {
-		for range tick.C {
-			now := time.Now()
-			mu.Lock()
-			for k, v := range data {
-				if now.After(v.windowEnd) {
-					delete(data, k)
-				}
-			}
-			mu.Unlock()
-		}
-	}()
+	var secondary RateStore
+	if store != fallback {
+		secondary = fallback
+	}
 
 	return func(c *gin.Context) {
 		if maxRequests <= 0 || window <= 0 {
@@ -42,24 +26,31 @@ func RateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
 		}
 
 		key := c.ClientIP() + "|" + c.FullPath()
-		now := time.Now()
-
-		mu.Lock()
-		ct, ok := data[key]
-		if !ok || now.After(ct.windowEnd) {
-			ct = &counter{count: 0, windowEnd: now.Add(window)}
-			data[key] = ct
+		ctx := c.Request.Context()
+		if ctx == nil {
+			ctx = context.Background()
 		}
-		ct.count++
-		remaining := maxRequests - ct.count
-		resetIn := time.Until(ct.windowEnd)
-		mu.Unlock()
+
+		count, ttl, err := store.Increment(ctx, key, window)
+		if err != nil && secondary != nil {
+			count, ttl, _ = secondary.Increment(ctx, key, window)
+		}
+
+		if ttl <= 0 {
+			ttl = window
+		}
+
+		remaining := maxRequests - count
+		resetIn := int(ttl.Round(time.Second) / time.Second)
+		if resetIn < 0 {
+			resetIn = 0
+		}
 
 		c.Header("X-RateLimit-Limit", itoa(maxRequests))
 		c.Header("X-RateLimit-Remaining", itoa(max(0, remaining)))
-		c.Header("X-RateLimit-Reset", itoa(int(resetIn.Seconds())))
+		c.Header("X-RateLimit-Reset", itoa(resetIn))
 
-		if ct.count > maxRequests {
+		if count > maxRequests {
 			// 429 Too Many Requests
 			c.AbortWithStatus(429)
 			return

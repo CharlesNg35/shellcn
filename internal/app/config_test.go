@@ -23,6 +23,14 @@ func TestLoadConfigFromFile(t *testing.T) {
 	require.Equal(t, "db.example.com", cfg.Database.Postgres.Host)
 	require.Equal(t, 60, cfg.Vault.KeyRotationDays)
 
+	require.True(t, cfg.Cache.Redis.Enabled)
+	require.Equal(t, "redis.example.com:6379", cfg.Cache.Redis.Address)
+	require.Equal(t, "shellcn", cfg.Cache.Redis.Username)
+	require.Equal(t, "redis-secret", cfg.Cache.Redis.Password)
+	require.Equal(t, 2, cfg.Cache.Redis.DB)
+	require.True(t, cfg.Cache.Redis.TLS)
+	require.Equal(t, 4*time.Second, cfg.Cache.Redis.Timeout)
+
 	require.True(t, cfg.Features.SessionSharing.Enabled)
 	require.Equal(t, 8, cfg.Features.SessionSharing.MaxSharedUsers)
 	require.False(t, cfg.Features.ClipboardSync.Enabled)

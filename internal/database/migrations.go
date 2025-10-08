@@ -24,6 +24,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.AuthProvider{},
 		&models.UserInvite{},
 		&models.EmailVerification{},
+		&models.CacheEntry{},
 	)
 }
 
