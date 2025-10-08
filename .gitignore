@@ -1,0 +1,66 @@
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+shellcn
+
+# Build artifacts
+dist/
+build/
+*.o
+*.a
+
+# Go
+*.test
+*.out
+go.work
+vendor/
+
+# Frontend
+web/node_modules/
+web/dist/
+web/.vite/
+*.local
+
+# Environment & Config
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Database
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Rust
+rust-modules/**/target/
+rust-modules/**/*.h
+rust-modules/**/Cargo.lock
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS
+Thumbs.db
+.DS_Store
