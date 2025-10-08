@@ -115,6 +115,8 @@
   - [x] Setup route groups
   - [x] Apply middleware
   - [x] Write router tests
+- [ ] **Router Maintenance**
+  - [ ] Refactor route registration into modular helpers to keep `router.go` concise
 - Added comprehensive middleware and handler integration tests to validate Phase 5 endpoints end-to-end.
 
 ### Phase 6: Security & Monitoring (Week 6)

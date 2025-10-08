@@ -110,7 +110,7 @@ func TestAuthProviderServiceMutations(t *testing.T) {
 		Name: "Invite",
 	}).Error)
 
-err = svc.UpdateLocalSettings(ctx, false, false)
+	err = svc.UpdateLocalSettings(ctx, false, false)
 	require.NoError(t, err)
 
 	local, err := svc.GetByType(ctx, "local")
