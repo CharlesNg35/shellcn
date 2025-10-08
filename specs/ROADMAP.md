@@ -62,32 +62,32 @@
 
 ### Phase 4: Core Services (Week 4)
 
-- [ ] **User Service**
-  - [ ] Implement CRUD operations
-  - [ ] Implement activation/deactivation
-  - [ ] Implement password management
-  - [ ] Write user service tests
-- [ ] **Organization Service**
-  - [ ] Implement CRUD operations
-  - [ ] Write organization service tests
-- [ ] **Team Service**
-  - [ ] Implement team management
-  - [ ] Implement member management
-  - [ ] Write team service tests
-- [ ] **Audit Service**
-  - [ ] Implement audit logging
-  - [ ] Implement log filtering
-  - [ ] Implement log export
-  - [ ] Write audit service tests
-- [ ] **Auth Provider Service**
-  - [ ] Implement provider CRUD
-  - [ ] Implement OIDC configuration
-  - [ ] Implement OAuth2 configuration
-  - [ ] Implement SAML configuration
-  - [ ] Implement LDAP configuration
-  - [ ] Implement local/invite settings
-  - [ ] Implement connection testing
-  - [ ] Write auth provider service tests
+- [x] **User Service**
+  - [x] Implement CRUD operations
+  - [x] Implement activation/deactivation
+  - [x] Implement password management
+  - [x] Write user service tests
+- [x] **Organization Service**
+  - [x] Implement CRUD operations
+  - [x] Write organization service tests
+- [x] **Team Service**
+  - [x] Implement team management
+  - [x] Implement member management
+  - [x] Write team service tests
+- [x] **Audit Service**
+  - [x] Implement audit logging
+  - [x] Implement log filtering
+  - [x] Implement log export
+  - [x] Write audit service tests
+- [x] **Auth Provider Service**
+  - [x] Implement provider CRUD
+  - [x] Implement OIDC configuration
+  - [x] Implement OAuth2 configuration
+  - [x] Implement SAML configuration
+  - [x] Implement LDAP configuration
+  - [x] Implement local/invite settings
+  - [x] Implement connection testing
+  - [x] Write auth provider service tests
 
 ### Phase 5: API Layer (Week 5)
 
