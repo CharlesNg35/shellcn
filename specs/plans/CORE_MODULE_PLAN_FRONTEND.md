@@ -77,11 +77,17 @@ The Core Module frontend provides the user interface for authentication, user ma
 
 ### Core Technologies
 
-- **React 19:** Latest React features
-- **TypeScript:** Type safety
-- **Vite 7:** Build tool and dev server
-- **React Router 7:** SPA routing with loaders/actions
-- **Tailwind CSS v4:** Utility-first styling
+- **React 19:** Latest React features (Compiler, Actions, use hook)
+- **TypeScript 5.7+:** Type safety with latest features
+- **Vite 7:** Next-generation build tool and dev server with improved performance
+- **React Router 7:** SPA routing with loaders/actions (TanStack Router alternative)
+- **Tailwind CSS v4:** Utility-first styling with new engine and improved performance
+
+**IMPORTANT: Technology Versions**
+- Always use the latest stable versions specified in `project_spec.md`
+- Vite 7 brings significant performance improvements over Vite 5/6
+- Tailwind CSS 4 has a new engine (Oxide) with better performance and new features
+- React 19 includes the new Compiler (no more manual memoization needed)
 
 ### State Management
 
@@ -3061,27 +3067,187 @@ export default {
 
 ---
 
+## Implementation Checklist
+
+### Phase 1: Project Setup & Foundation (Week 1)
+- [ ] Initialize Vite 7 project with React 19 and TypeScript 5.7+
+- [ ] Configure Tailwind CSS v4 with custom theme
+- [ ] Set up ESLint, Prettier, and TypeScript strict mode
+- [ ] Configure path aliases (@/ for src/)
+- [ ] Install and configure core dependencies (React Router 7, TanStack Query, Zustand)
+- [ ] Set up project structure (pages/, components/, hooks/, lib/, store/, types/)
+- [ ] Create base UI components (Button, Input, Card, Modal, etc.) using Radix UI
+- [ ] Implement class-variance-authority (CVA) for component variants
+- [ ] Set up Storybook for component documentation
+- [ ] Configure Vitest for unit testing
+
+### Phase 2: Authentication & Setup Flow (Week 2)
+- [ ] Implement auth store (Zustand) with token management
+- [ ] Create API client (Axios) with interceptors for auth
+- [ ] Build Login page with form validation (react-hook-form + Zod)
+- [ ] Implement Setup wizard for first-time initialization
+- [ ] Create AuthLayout component
+- [ ] Build SSO provider buttons (OIDC, SAML, LDAP)
+- [ ] Implement MFA verification flow
+- [ ] Create Password reset flow
+- [ ] Build useAuth hook for authentication state
+- [ ] Implement token refresh logic
+- [ ] Add logout functionality
+- [ ] Create ProtectedRoute component
+- [ ] Write tests for authentication flows
+
+### Phase 3: Dashboard & Layout (Week 3)
+- [ ] Create DashboardLayout with Sidebar and Header
+- [ ] Implement responsive navigation
+- [ ] Build Sidebar with permission-based menu items
+- [ ] Create Header with user profile dropdown
+- [ ] Implement Dashboard page with overview widgets
+- [ ] Build useCurrentUser hook
+- [ ] Create usePermissions hook
+- [ ] Implement PermissionGuard component
+- [ ] Add breadcrumb navigation
+- [ ] Create notification center UI
+- [ ] Implement WebSocket connection for real-time notifications
+- [ ] Write tests for layout components
+
+### Phase 4: User Management (Week 4)
+- [ ] Create Users list page with pagination
+- [ ] Build UserTable component with TanStack Table
+- [ ] Implement UserFilters component
+- [ ] Create UserForm for create/edit
+- [ ] Build UserDetailModal
+- [ ] Implement user activation/deactivation
+- [ ] Create password management UI
+- [ ] Build useUsers hook with TanStack Query
+- [ ] Add user search functionality
+- [ ] Implement bulk operations
+- [ ] Write tests for user management
+
+### Phase 5: Organization & Team Management (Week 5)
+- [ ] Create Organizations list page
+- [ ] Build OrganizationForm component
+- [ ] Implement Teams list page
+- [ ] Create TeamForm component
+- [ ] Build team member management UI
+- [ ] Implement member assignment/removal
+- [ ] Create useOrganizations hook
+- [ ] Build useTeams hook
+- [ ] Add hierarchical organization view
+- [ ] Write tests for org/team management
+
+### Phase 6: Permission Management (Week 6)
+- [ ] Create Permissions page
+- [ ] Build PermissionMatrix component
+- [ ] Implement RoleManager component
+- [ ] Create role creation/editing forms
+- [ ] Build permission dependency visualization
+- [ ] Implement permission assignment UI
+- [ ] Create usePermissions hook for registry
+- [ ] Add role-based filtering
+- [ ] Build permission search
+- [ ] Write tests for permission management
+
+### Phase 7: Auth Provider Administration (Week 7)
+- [ ] Create AuthProviders page
+- [ ] Build ProviderCard component
+- [ ] Implement OIDCConfigForm
+- [ ] Create SAMLConfigForm
+- [ ] Build LDAPConfigForm
+- [ ] Implement LocalSettingsForm
+- [ ] Create InviteSettingsForm
+- [ ] Build provider enable/disable toggle
+- [ ] Implement provider test connection
+- [ ] Create useAuthProviders hook
+- [ ] Add provider configuration validation
+- [ ] Write tests for provider management
+
+### Phase 8: Session Management (Week 8)
+- [ ] Create Sessions page
+- [ ] Build SessionTable component
+- [ ] Implement SessionCard for mobile view
+- [ ] Add session revocation functionality
+- [ ] Create "Revoke All" feature
+- [ ] Build device/browser detection display
+- [ ] Implement session filtering
+- [ ] Create useSessions hook
+- [ ] Add session activity timeline
+- [ ] Write tests for session management
+
+### Phase 9: Audit Log Viewer (Week 9)
+- [ ] Create AuditLogs page
+- [ ] Build AuditLogTable component
+- [ ] Implement AuditFilters component
+- [ ] Create AuditExport functionality (CSV)
+- [ ] Build audit log detail modal
+- [ ] Implement date range picker
+- [ ] Create useAuditLogs hook
+- [ ] Add audit log search
+- [ ] Build security audit view
+- [ ] Write tests for audit viewer
+
+### Phase 10: Settings & Preferences (Week 10)
+- [ ] Create Settings page with tabs
+- [ ] Build user profile settings
+- [ ] Implement password change form
+- [ ] Create MFA setup flow with QR code
+- [ ] Build appearance settings (theme, language)
+- [ ] Implement notification preferences
+- [ ] Create session preferences
+- [ ] Build settings store (Zustand)
+- [ ] Add settings persistence
+- [ ] Write tests for settings
+
+### Phase 11: Testing & Quality Assurance (Week 11)
+- [ ] Achieve ≥80% unit test coverage
+- [ ] Write integration tests for critical flows
+- [ ] Set up Cypress for E2E testing
+- [ ] Create E2E tests for authentication flow
+- [ ] Test user management workflows
+- [ ] Test permission assignment flows
+- [ ] Verify accessibility (WCAG 2.1 AA)
+- [ ] Test keyboard navigation
+- [ ] Verify responsive design (mobile, tablet, desktop)
+- [ ] Performance testing (Lighthouse score ≥90)
+
+### Phase 12: Documentation & Polish (Week 12)
+- [ ] Complete Storybook documentation for all components
+- [ ] Write README with setup instructions
+- [ ] Document API integration patterns
+- [ ] Create component usage examples
+- [ ] Add inline code documentation
+- [ ] Build developer onboarding guide
+- [ ] Create user guide for admin features
+- [ ] Optimize bundle size
+- [ ] Implement code splitting
+- [ ] Final UI/UX polish
+
+---
+
 ## Summary
 
 This implementation plan provides a complete roadmap for building the Core Module frontend. The module follows best practices from `FRONTEND_GUIDELINES.md` and provides:
 
-1. **Modern Tech Stack:** React 19, Vite 7, TypeScript, Tailwind CSS v4
+1. **Modern Tech Stack:** React 19, Vite 7, TypeScript 5.7+, Tailwind CSS v4
 2. **Robust State Management:** TanStack Query for server state, Zustand for client state
 3. **Type Safety:** Full TypeScript coverage with Zod validation
 4. **Permission-Aware UI:** PermissionGuard component, permission-based rendering
-5. **Secure Authentication:** Token management, refresh flow, MFA support
+5. **Secure Authentication:** Token management, refresh flow, MFA support, SSO integration
 6. **Comprehensive Testing:** Unit, integration, E2E tests with ≥80% coverage
 7. **Accessibility:** WCAG 2.1 AA compliance, keyboard navigation
 8. **User Preferences:** All settings configurable, no hardcoded values
 9. **Developer Experience:** Storybook, hot reload, TypeScript, ESLint
+10. **Auth Provider Management:** UI-based configuration for OIDC, SAML, LDAP, Local, and Invite auth
 
 The implementation is designed to be extended by other modules while maintaining consistency and code quality.
+
+**Estimated Timeline:** 12 weeks (3 months) for complete implementation with testing and documentation.
 
 ---
 
 **Next Steps:**
 1. Review this plan with the team
-2. Set up development environment
+2. Set up development environment (Node.js 20+, pnpm/npm)
 3. Begin Phase 1 implementation
 4. Coordinate with backend team for API contract alignment
 5. Establish design system guidelines with UI/UX team
+6. Set up CI/CD pipeline for automated testing

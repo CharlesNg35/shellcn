@@ -2,174 +2,171 @@
 
 ## 1. Core Module (Auth, Users, Permissions) — Feature Complete (QA & Docs Pending)
 
-### Phase 1: Foundation (Week 1)
+## Implementation Checklist
 
-- [x] **Project Setup**
-  - [x] Initialize Go module
-  - [x] Setup directory structure
-  - [x] Configure Makefile
-  - [x] Implement server entrypoint (configuration, database, router wiring)
-  - [ ] Setup CI/CD pipeline
-- [x] **Shared Packages**
-  - [x] Implement `pkg/logger`
-  - [x] Implement `pkg/errors`
-  - [x] Implement `pkg/response`
-  - [x] Implement `pkg/crypto`
-  - [x] Implement `pkg/validator`
-  - [x] Write tests for shared packages
-- [x] **Database Layer**
-  - [x] Define all GORM models
-  - [x] Implement database initialization
-  - [x] Create migration system
-  - [x] Setup SQLite driver
-  - [x] Setup PostgreSQL driver
-  - [x] Setup MySQL driver
-  - [x] Write model tests
+### Phase 1: Project Setup & Foundation (Week 1)
 
-### Phase 2: Authentication (Week 2)
+- [ ] Initialize Vite 7 project with React 19 and TypeScript 5.7+
+- [ ] Configure Tailwind CSS v4 with custom theme
+- [ ] Set up ESLint, Prettier, and TypeScript strict mode
+- [ ] Configure path aliases (@/ for src/)
+- [ ] Install and configure core dependencies (React Router 7, TanStack Query, Zustand)
+- [ ] Set up project structure (pages/, components/, hooks/, lib/, store/, types/)
+- [ ] Create base UI components (Button, Input, Card, Modal, etc.) using Radix UI
+- [ ] Implement class-variance-authority (CVA) for component variants
+- [ ] Set up Storybook for component documentation
+- [ ] Configure Vitest for unit testing
 
-- [x] **JWT Service**
-  - [x] Implement token generation
-  - [x] Implement token validation
-  - [x] Write JWT tests
-- [x] **Local Auth Provider**
-  - [x] Implement login
-  - [x] Implement password hashing
-  - [x] Implement account lockout
-  - [x] Write auth provider tests
-- [x] **Session Management**
-  - [x] Implement session service
-  - [x] Implement refresh token flow
-  - [x] Implement session revocation
-  - [x] Add cache abstraction with Redis primary and SQL fallback for session tokens
-  - [x] Write session tests
-- [x] **MFA (Optional)**
-  - [x] Implement TOTP service
-  - [x] Implement QR code generation
-  - [x] Implement backup codes
-  - [x] Write MFA tests
+### Phase 2: Authentication & Setup Flow (Week 2)
 
-### Phase 3: Authorization (Week 3)
+- [ ] Implement auth store (Zustand) with token management
+- [ ] Create API client (Axios) with interceptors for auth
+- [ ] Build Login page with form validation (react-hook-form + Zod)
+- [ ] Implement Setup wizard for first-time initialization
+- [ ] Create AuthLayout component
+- [ ] Build SSO provider buttons (OIDC, SAML, LDAP)
+- [ ] Implement MFA verification flow
+- [ ] Create Password reset flow
+- [ ] Build useAuth hook for authentication state
+- [ ] Implement token refresh logic
+- [ ] Add logout functionality
+- [ ] Create ProtectedRoute component
+- [ ] Write tests for authentication flows
 
-- [x] **Permission System**
-  - [x] Implement permission registry
-  - [x] Register core permissions
-  - [x] Implement permission checker
-  - [x] Implement dependency resolver
-  - [x] Write permission tests
-- [x] **Permission Service**
-  - [x] Implement role management
-  - [x] Implement permission assignment
-  - [x] Write permission service tests
+### Phase 3: Dashboard & Layout (Week 3)
 
-### Phase 4: Core Services (Week 4)
+- [ ] Create DashboardLayout with Sidebar and Header
+- [ ] Implement responsive navigation
+- [ ] Build Sidebar with permission-based menu items
+- [ ] Create Header with user profile dropdown
+- [ ] Implement Dashboard page with overview widgets
+- [ ] Build useCurrentUser hook
+- [ ] Create usePermissions hook
+- [ ] Implement PermissionGuard component
+- [ ] Add breadcrumb navigation
+- [ ] Create notification center UI
+- [ ] Implement WebSocket connection for real-time notifications
+- [ ] Write tests for layout components
 
-- [x] **User Service**
-  - [x] Implement CRUD operations
-  - [x] Implement activation/deactivation
-  - [x] Implement password management
-  - [x] Write user service tests
-- [x] **Organization Service**
-  - [x] Implement CRUD operations
-  - [x] Write organization service tests
-- [x] **Team Service**
-  - [x] Implement team management
-  - [x] Implement member management
-  - [x] Write team service tests
-- [x] **Audit Service**
-  - [x] Implement audit logging
-  - [x] Implement log filtering
-  - [x] Implement log export
-  - [x] Write audit service tests
-- [x] **Auth Provider Service**
-  - [x] Implement provider CRUD
-  - [x] Implement OIDC configuration
-  - [x] Implement SAML configuration
-  - [x] Implement LDAP configuration
-  - [x] Implement local/invite settings
-  - [x] Implement connection testing
-  - [x] Write auth provider service tests
+### Phase 4: User Management (Week 4)
 
-### Phase 5: API Layer (Week 5)
+- [ ] Create Users list page with pagination
+- [ ] Build UserTable component with TanStack Table
+- [ ] Implement UserFilters component
+- [ ] Create UserForm for create/edit
+- [ ] Build UserDetailModal
+- [ ] Implement user activation/deactivation
+- [ ] Create password management UI
+- [ ] Build useUsers hook with TanStack Query
+- [ ] Add user search functionality
+- [ ] Implement bulk operations
+- [ ] Write tests for user management
 
-- [x] **Middleware**
-  - [x] Implement auth middleware
-  - [x] Implement permission middleware
-  - [x] Implement CORS middleware
-  - [x] Implement logger middleware
-  - [x] Implement rate limiting with Redis/SQL cache fallback
-  - [x] Write middleware tests
-- [x] **Handlers**
-  - [x] Implement auth handlers
-  - [x] Implement setup handler
-  - [x] Implement user handlers
-  - [x] Implement organization handlers
-  - [x] Implement team handlers
-  - [x] Implement permission handlers
-  - [x] Implement session handlers
-  - [x] Implement audit handlers
-  - [x] Implement auth provider handlers
-  - [x] Write handler integration tests
-- [x] **Router**
-  - [x] Configure all routes
-  - [x] Setup route groups
-  - [x] Apply middleware
-  - [x] Write router tests
-- [ ] **Router Maintenance**
-  - [ ] Refactor route registration into modular helpers to keep `router.go` concise
-- Added comprehensive middleware and handler integration tests to validate Phase 5 endpoints end-to-end.
+### Phase 5: Organization & Team Management (Week 5)
 
-### Phase 6: Security & Monitoring (Week 6)
+- [ ] Create Organizations list page
+- [ ] Build OrganizationForm component
+- [ ] Implement Teams list page
+- [ ] Create TeamForm component
+- [ ] Build team member management UI
+- [ ] Implement member assignment/removal
+- [ ] Create useOrganizations hook
+- [ ] Build useTeams hook
+- [ ] Add hierarchical organization view
+- [ ] Write tests for org/team management
 
-- [x] **Security**
-  - [x] Implement security headers
-  - [x] Implement CSRF protection
-  - [x] Implement input validation
-  - [x] Security audit
-- [x] **Monitoring**
-  - [x] Implement Prometheus metrics
-  - [x] Implement health check
-  - [x] Setup structured logging
-  - [x] Configure log levels
-- [x] **Background Jobs**
-  - [x] Implement session cleanup
-  - [x] Implement audit log retention
-  - [x] Implement token cleanup
+### Phase 6: Permission Management (Week 6)
 
-### Phase 7: Testing & Documentation (Week 7)
+- [ ] Create Permissions page
+- [ ] Build PermissionMatrix component
+- [ ] Implement RoleManager component
+- [ ] Create role creation/editing forms
+- [ ] Build permission dependency visualization
+- [ ] Implement permission assignment UI
+- [ ] Create usePermissions hook for registry
+- [ ] Add role-based filtering
+- [ ] Build permission search
+- [ ] Write tests for permission management
 
-- [x] **Testing**
-  - [x] Achieve 80%+ test coverage — enforce ≥80% overall (≥70%/pkg), expand unit tests for services, permissions, routing, and first-user/session/audit edge cases. (Progress: dial/auth SMTP shims, provider registry + OIDC/SAML/LDAP factory tests, runtime defaults, logger helpers; total backend coverage at ~55%.)
-  - [x] Run integration tests — exercise auth, org/team, permission, audit, and setup flows against in-memory stack with seeded fixtures.
-  - [x] Run contract tests — lock JSON response envelopes, JWT claims, and permission dependency rules with golden tests.
-  - [x] Performance testing — benchmark hot endpoints with `hey`/`vegeta`, capture pprof traces, document tuning levers for DB/cache/rate limits.
-  - [x] Security testing — run `golangci-lint`, `gosec`, `staticcheck`, `govulncheck`, and manual privilege/rate-limit/MFA abuse checks.
-- [x] **Documentation**
-  - [x] API documentation — publish OpenAPI 3.1 spec + markdown in `specs/plans/CORE_MODULE_API.md` with schemas, errors, permissions.
-  - [x] Deployment CI/CD — extend GH Actions to build/test/sign multi-arch images and push to GHCR on tag/manual trigger with rollback notes.
-  - [x] Configuration guide — document all config/env toggles, single-node vs production examples, security handling for secrets.
-  - [x] Troubleshooting guide — catalog common failures, log snippets, diagnostic commands, and escalation checklist.
+### Phase 7: Auth Provider Administration (Week 7)
 
-### Phase 8: External Auth Providers (Optional – Week 8)
+- [ ] Create AuthProviders page
+- [ ] Build ProviderCard component
+- [ ] Implement OIDCConfigForm
+- [ ] Create SAMLConfigForm
+- [ ] Build LDAPConfigForm
+- [ ] Implement LocalSettingsForm
+- [ ] Create InviteSettingsForm
+- [ ] Build provider enable/disable toggle
+- [ ] Implement provider test connection
+- [ ] Create useAuthProviders hook
+- [ ] Add provider configuration validation
+- [ ] Write tests for provider management
 
-- [x] **Shared SSO Foundation**
-  - [x] Provider registry + unified callback flow
-  - [x] User mapping & provisioning rules
-  - [x] Secure secret storage + audit logging
-- [x] **OIDC Provider**
-  - [x] Authorization code + PKCE flow
-  - [x] Claim mapping & unknown user handling
-  - [x] Handler + service test coverage
-- [x] **SAML Provider**
-  - [x] SP metadata + ACS implementation
-  - [x] Attribute mapping & assertion validation
-  - [x] Sample assertion + handler tests
-- [x] **LDAP Provider**
-  - [x] Bind/search strategies with TLS options
-  - [x] Attribute mapping & optional sync job
-  - [x] Connection test API + mock LDAP tests
+### Phase 8: Session Management (Week 8)
 
----
+- [ ] Create Sessions page
+- [ ] Build SessionTable component
+- [ ] Implement SessionCard for mobile view
+- [ ] Add session revocation functionality
+- [ ] Create "Revoke All" feature
+- [ ] Build device/browser detection display
+- [ ] Implement session filtering
+- [ ] Create useSessions hook
+- [ ] Add session activity timeline
+- [ ] Write tests for session management
+
+### Phase 9: Audit Log Viewer (Week 9)
+
+- [ ] Create AuditLogs page
+- [ ] Build AuditLogTable component
+- [ ] Implement AuditFilters component
+- [ ] Create AuditExport functionality (CSV)
+- [ ] Build audit log detail modal
+- [ ] Implement date range picker
+- [ ] Create useAuditLogs hook
+- [ ] Add audit log search
+- [ ] Build security audit view
+- [ ] Write tests for audit viewer
+
+### Phase 10: Settings & Preferences (Week 10)
+
+- [ ] Create Settings page with tabs
+- [ ] Build user profile settings
+- [ ] Implement password change form
+- [ ] Create MFA setup flow with QR code
+- [ ] Build appearance settings (theme, language)
+- [ ] Implement notification preferences
+- [ ] Create session preferences
+- [ ] Build settings store (Zustand)
+- [ ] Add settings persistence
+- [ ] Write tests for settings
+
+### Phase 11: Testing & Quality Assurance (Week 11)
+
+- [ ] Achieve ≥80% unit test coverage
+- [ ] Write integration tests for critical flows
+- [ ] Set up Cypress for E2E testing
+- [ ] Create E2E tests for authentication flow
+- [ ] Test user management workflows
+- [ ] Test permission assignment flows
+- [ ] Verify accessibility (WCAG 2.1 AA)
+- [ ] Test keyboard navigation
+- [ ] Verify responsive design (mobile, tablet, desktop)
+- [ ] Performance testing (Lighthouse score ≥90)
+
+### Phase 12: Documentation & Polish (Week 12)
+
+- [ ] Complete Storybook documentation for all components
+- [ ] Write README with setup instructions
+- [ ] Document API integration patterns
+- [ ] Create component usage examples
+- [ ] Add inline code documentation
+- [ ] Build developer onboarding guide
+- [ ] Create user guide for admin features
+- [ ] Optimize bundle size
+- [ ] Implement code splitting
+- [ ] Final UI/UX polish
 
 ## 2. Vault Module (Credentials, Encryption) — Not Started
 
