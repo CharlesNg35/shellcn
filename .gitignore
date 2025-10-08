@@ -19,6 +19,8 @@ build/
 go.work
 vendor/
 .cache
+.gocache
+.gomodcache
 
 # Frontend
 web/node_modules/

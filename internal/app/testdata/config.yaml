@@ -1,0 +1,84 @@
+server:
+  port: 9090
+
+database:
+  driver: postgres
+  postgres:
+    enabled: true
+    host: db.example.com
+    port: 5432
+    database: shellcn_prod
+    username: shellcn
+    password: secret
+
+vault:
+  encryption_key: super-secret-key
+  algorithm: aes-256-gcm
+  key_rotation_days: 60
+
+monitoring:
+  prometheus:
+    enabled: true
+    endpoint: /custom-metrics
+  health_check:
+    enabled: true
+
+features:
+  session_sharing:
+    enabled: true
+    max_shared_users: 8
+  clipboard_sync:
+    enabled: false
+    max_size_kb: 2048
+  notifications:
+    enabled: true
+
+modules:
+  ssh:
+    enabled: true
+    default_port: 2222
+    ssh_v1_enabled: true
+    ssh_v2_enabled: true
+    auto_reconnect: false
+    max_reconnect_attempts: 5
+    keepalive_interval: 120
+  telnet:
+    enabled: false
+    default_port: 2323
+    auto_reconnect: false
+    max_reconnect_attempts: 1
+  sftp:
+    enabled: true
+    default_port: 10022
+  rdp:
+    enabled: true
+    default_port: 3390
+  vnc:
+    enabled: true
+    default_port: 5901
+  docker:
+    enabled: true
+  kubernetes:
+    enabled: true
+  database:
+    enabled: true
+    mysql: true
+    postgres: false
+    redis: true
+    mongodb: true
+  proxmox:
+    enabled: false
+  file_share:
+    enabled: true
+
+auth:
+  jwt:
+    secret: jwt-secret
+    issuer: shellcn.test
+    access_token_ttl: 30m
+  session:
+    refresh_token_ttl: 1440h
+    refresh_token_length: 64
+  local:
+    lockout_threshold: 7
+    lockout_duration: 20m
