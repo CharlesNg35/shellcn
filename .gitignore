@@ -18,6 +18,7 @@ build/
 *.out
 go.work
 vendor/
+.cache
 
 # Frontend
 web/node_modules/
