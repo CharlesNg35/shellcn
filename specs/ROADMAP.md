@@ -152,22 +152,22 @@
 
 ### Phase 8: External Auth Providers (Optional – Week 8)
 
-- [ ] **Shared SSO Foundation**
-  - [ ] Provider registry + unified callback flow
-  - [ ] User mapping & provisioning rules
-  - [ ] Secure secret storage + audit logging
-- [ ] **OIDC Provider**
-  - [ ] Authorization code + PKCE flow
-  - [ ] Claim mapping & unknown user handling
-  - [ ] Handler + service test coverage
-- [ ] **SAML Provider**
-  - [ ] SP metadata + ACS implementation
-  - [ ] Attribute mapping & assertion validation
-  - [ ] Sample assertion + handler tests
-- [ ] **LDAP Provider**
-  - [ ] Bind/search strategies with TLS options
-  - [ ] Attribute mapping & optional sync job
-  - [ ] Connection test API + mock LDAP tests
+- [x] **Shared SSO Foundation**
+  - [x] Provider registry + unified callback flow
+  - [x] User mapping & provisioning rules
+  - [x] Secure secret storage + audit logging
+- [x] **OIDC Provider**
+  - [x] Authorization code + PKCE flow
+  - [x] Claim mapping & unknown user handling
+  - [x] Handler + service test coverage
+- [x] **SAML Provider**
+  - [x] SP metadata + ACS implementation
+  - [x] Attribute mapping & assertion validation
+  - [x] Sample assertion + handler tests
+- [x] **LDAP Provider**
+  - [x] Bind/search strategies with TLS options
+  - [x] Attribute mapping & optional sync job
+  - [x] Connection test API + mock LDAP tests
 
 ---
 
