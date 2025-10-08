@@ -2062,7 +2062,7 @@ modules:
 - ⚠️ **IMPORTANT**: Check for latest library versions before building!
   - Rust crates: https://crates.io
   - Go packages: https://pkg.go.dev
-  - npm packages: https://npmjs.com
+  - pnpm packages: https://npmjs.com
 
 1. **Build Rust FFI modules** → Static libraries (.a files)
    ```bash
@@ -2076,8 +2076,8 @@ modules:
 2. **Build frontend** (Vite 7 + React 19 + Tailwind 4) → Static assets
    ```bash
    cd web
-   npm install
-   npm run build  # Output: dist/
+   pnpm install
+   pnpm run build  # Output: dist/
    ```
 
 3. **Embed frontend in Go binary**
