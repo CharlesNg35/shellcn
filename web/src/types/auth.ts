@@ -92,8 +92,8 @@ export interface SetupInitializePayload {
   username: string
   email: string
   password: string
-  first_name: string
-  last_name: string
+  first_name?: string
+  last_name?: string
 }
 
 export interface SetupInitializeResponse {
@@ -111,7 +111,8 @@ export interface AuthProviderMetadata {
 }
 
 export interface PasswordResetRequestPayload {
-  identifier: string
+  identifier?: string
+  email?: string
 }
 
 export interface PasswordResetConfirmPayload {

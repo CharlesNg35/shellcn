@@ -1,8 +1,4 @@
-import type {
-  AuthTokens,
-  LoginResponsePayload,
-  RefreshResponsePayload,
-} from '@/types/auth'
+import type { AuthTokens, LoginResponsePayload, RefreshResponsePayload } from '@/types/auth'
 
 type TokenSource = LoginResponsePayload | RefreshResponsePayload
 

@@ -50,7 +50,11 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 
 	registerHealthRoutes(r, db)
 
-	encryptionKey := []byte(cfg.Vault.EncryptionKey)
+	// Decode the vault encryption key from hex/base64 to raw bytes
+	encryptionKey, err := app.DecodeKey(cfg.Vault.EncryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("decode vault encryption key: %w", err)
+	}
 	if length := len(encryptionKey); length != 16 && length != 24 && length != 32 {
 		return nil, fmt.Errorf("invalid vault encryption key length: expected 16, 24, or 32 bytes, got %d", length)
 	}

@@ -1,8 +1,4 @@
-import axios, {
-  AxiosError,
-  type AxiosInstance,
-  type InternalAxiosRequestConfig,
-} from 'axios'
+import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import type { AuthTokens, RefreshResponsePayload } from '@/types/auth'
 import type { ApiResponse } from '@/types/api'
 import { clearTokens, getTokens, setTokens } from './token-storage'
@@ -66,7 +62,10 @@ apiClient.interceptors.response.use(
 
     const requestUrl = requestConfig.url ?? ''
 
-    if (requestUrl.startsWith(AUTH_REFRESH_ENDPOINT) || requestUrl.startsWith(AUTH_LOGIN_ENDPOINT)) {
+    if (
+      requestUrl.startsWith(AUTH_REFRESH_ENDPOINT) ||
+      requestUrl.startsWith(AUTH_LOGIN_ENDPOINT)
+    ) {
       return Promise.reject(error)
     }
 
@@ -93,7 +92,7 @@ apiClient.interceptors.response.use(
       clearTokens()
       return Promise.reject(refreshError)
     }
-  },
+  }
 )
 
 async function enqueueTokenRefresh(refreshToken: string): Promise<AuthTokens | null> {
@@ -112,7 +111,7 @@ async function refreshAccessToken(refreshToken: string): Promise<AuthTokens | nu
       AUTH_REFRESH_ENDPOINT,
       {
         refresh_token: refreshToken,
-      },
+      }
     )
 
     const data = unwrapResponse(response)

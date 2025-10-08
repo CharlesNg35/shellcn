@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -219,7 +217,7 @@ func ensureSecretsPresent(cfg *app.Config) error {
 		return errors.New("auth.jwt.secret must be configured")
 	}
 
-	jwtBytes, err := keyByteLength(cfg.Auth.JWT.Secret)
+	jwtBytes, err := app.KeyByteLength(cfg.Auth.JWT.Secret)
 	if err != nil {
 		return fmt.Errorf("auth.jwt.secret: %w", err)
 	}
@@ -228,7 +226,7 @@ func ensureSecretsPresent(cfg *app.Config) error {
 	}
 
 	cfg.Vault.EncryptionKey = strings.TrimSpace(cfg.Vault.EncryptionKey)
-	length, err := keyByteLength(cfg.Vault.EncryptionKey)
+	length, err := app.KeyByteLength(cfg.Vault.EncryptionKey)
 	if err != nil {
 		return fmt.Errorf("vault.encryption_key: %w", err)
 	}
@@ -237,30 +235,6 @@ func ensureSecretsPresent(cfg *app.Config) error {
 	}
 
 	return nil
-}
-
-func keyByteLength(value string) (int, error) {
-	v := strings.TrimSpace(value)
-	if v == "" {
-		return 0, nil
-	}
-
-	// Try hex first (runtime defaults use hex for vault key)
-	if len(v)%2 == 0 {
-		if decoded, err := hex.DecodeString(v); err == nil {
-			return len(decoded), nil
-		}
-	}
-
-	// Support both standard and raw base64 encodings
-	if decoded, err := base64.StdEncoding.DecodeString(v); err == nil {
-		return len(decoded), nil
-	}
-	if decoded, err := base64.RawStdEncoding.DecodeString(v); err == nil {
-		return len(decoded), nil
-	}
-
-	return len(v), nil
 }
 
 func initialiseDatabase(cfg *app.Config) (*gorm.DB, error) {

@@ -1,5 +1,6 @@
 import type { AxiosResponse } from 'axios'
-import { ApiErrorPayload, ApiResponse, isApiSuccess } from '@/types/api'
+import type { ApiErrorPayload, ApiResponse } from '@/types/api'
+import { isApiSuccess } from '@/types/api'
 
 export class ApiError extends Error {
   readonly code: string

@@ -46,16 +46,21 @@ const SETUP_INITIALIZE_ENDPOINT = '/setup/initialize'
 
 export async function login(credentials: LoginCredentials): Promise<LoginResult> {
   try {
-    const response = await apiClient.post<ApiResponse<LoginApiPayload>>(AUTH_LOGIN_ENDPOINT, credentials)
+    const response = await apiClient.post<ApiResponse<LoginApiPayload>>(
+      AUTH_LOGIN_ENDPOINT,
+      credentials
+    )
     const data = unwrapResponse(response)
 
     if (data.mfa_required || data.challenge) {
       return {
         mfaRequired: true,
-        challenge: normalizeChallenge(data.challenge ?? {
-          challenge_id: data.challenge_id,
-          method: 'totp',
-        }),
+        challenge: normalizeChallenge(
+          data.challenge ?? {
+            challenge_id: data.challenge_id,
+            method: 'totp',
+          }
+        ),
       }
     }
 
@@ -80,7 +85,7 @@ export async function login(credentials: LoginCredentials): Promise<LoginResult>
 export async function verifyMfa(payload: VerifyMfaPayload): Promise<AuthTokens | null> {
   const response = await apiClient.post<ApiResponse<LoginResponsePayload>>(
     AUTH_MFA_VERIFY_ENDPOINT,
-    payload,
+    payload
   )
   const data = unwrapResponse(response)
 
@@ -105,21 +110,21 @@ export async function fetchProviders(): Promise<AuthProviderMetadata[]> {
 }
 
 export async function requestPasswordReset(
-  payload: PasswordResetRequestPayload,
+  payload: PasswordResetRequestPayload
 ): Promise<PasswordResetResponse> {
   const response = await apiClient.post<ApiResponse<PasswordResetResponse>>(
     AUTH_PASSWORD_RESET_REQUEST_ENDPOINT,
-    payload,
+    payload
   )
   return unwrapResponse(response)
 }
 
 export async function confirmPasswordReset(
-  payload: PasswordResetConfirmPayload,
+  payload: PasswordResetConfirmPayload
 ): Promise<PasswordResetResponse> {
   const response = await apiClient.post<ApiResponse<PasswordResetResponse>>(
     AUTH_PASSWORD_RESET_CONFIRM_ENDPOINT,
-    payload,
+    payload
   )
   return unwrapResponse(response)
 }
@@ -130,11 +135,11 @@ export async function fetchSetupStatus(): Promise<SetupStatusPayload> {
 }
 
 export async function initializeSetup(
-  payload: SetupInitializePayload,
+  payload: SetupInitializePayload
 ): Promise<SetupInitializeResponse> {
   const response = await apiClient.post<ApiResponse<SetupInitializeResponse>>(
     SETUP_INITIALIZE_ENDPOINT,
-    payload,
+    payload
   )
   return unwrapResponse(response)
 }

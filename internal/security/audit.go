@@ -199,13 +199,24 @@ func (s *AuditService) checkVaultKey() Check {
 		}
 	}
 
-	length := len(key)
-	if length < 32 {
+	// Decode the key to get actual byte length (supports hex/base64)
+	decodedLength, err := app.KeyByteLength(key)
+	if err != nil {
 		return Check{
 			ID:          "vault_encryption_key",
 			Status:      StatusFail,
-			Message:     fmt.Sprintf("Vault encryption key is too short (%d characters).", length),
-			Remediation: "Use an encryption key of at least 32 characters for AES-256-GCM.",
+			Message:     fmt.Sprintf("Vault encryption key decode error: %v", err),
+			Remediation: "Ensure the key is valid hex or base64 encoded.",
+		}
+	}
+
+	// AES requires 16, 24, or 32 bytes for AES-128, AES-192, or AES-256
+	if decodedLength != 16 && decodedLength != 24 && decodedLength != 32 {
+		return Check{
+			ID:          "vault_encryption_key",
+			Status:      StatusFail,
+			Message:     fmt.Sprintf("Vault encryption key has invalid length (%d bytes decoded).", decodedLength),
+			Remediation: "Use an encryption key that decodes to 16, 24, or 32 bytes for AES-GCM.",
 		}
 	}
 
@@ -213,7 +224,7 @@ func (s *AuditService) checkVaultKey() Check {
 		ID:      "vault_encryption_key",
 		Status:  StatusPass,
 		Message: "Vault encryption key configured.",
-		Details: map[string]any{"length": length},
+		Details: map[string]any{"decoded_bytes": decodedLength, "encoded_length": len(key)},
 	}
 }
 
