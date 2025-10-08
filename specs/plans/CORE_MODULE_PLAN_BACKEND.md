@@ -3493,18 +3493,52 @@ go tool cover -html=coverage.out
 
 - [ ] **Testing**
 
-  - [ ] Achieve 80%+ test coverage
-  - [ ] Run integration tests
-  - [ ] Run contract tests
-  - [ ] Performance testing
-  - [ ] Security testing
+  - [ ] Achieve 80%+ test coverage  
+    - Add a CI coverage gate (`go test ./... -coverprofile=coverage.out` + `go tool cover -func=coverage.out`) targeting ≥80% overall and ≥70% per package.  
+    - Backfill missing unit tests for core services (`internal/services/*`), permission checker edge cases (`internal/permissions/checker.go`), and routing helpers (`internal/api/routes_setup.go`) using the existing `testutil` fixtures.  
+    - Include regression cases for first-user bootstrap, session revocation, permission dependency denial, and audit logging so critical flows stay protected.  
+    - Progress: expanded coverage for SMTP validation errors, provider registry metadata handling, runtime defaults, and logger helpers to raise baseline coverage.
+
+  - [ ] Run integration tests  
+    - Use `testutil.NewServer` to stand up an in-memory stack (SQLite + mocked Redis) and run end-to-end tests against `internal/api/handlers/*`.  
+    - Cover authentication (login, refresh, logout), org/team CRUD, permission assignment, setup wizard, and audit export flows.  
+    - Seed fixtures via repository layer helpers and assert HTTP responses, database mutations, emitted audit events, and background job queues.
+
+  - [ ] Run contract tests  
+    - Validate JSON envelope contract (`success`, `error`, `data`) and pagination schema for every authenticated endpoint using golden responses.  
+    - Verify JWT claims (subject, permissions, expiry) and permission dependency rules using table-driven tests.  
+    - Add contract checks for external provider enablement API to guarantee consistent configuration payloads for the frontend.
+
+  - [ ] Performance testing  
+    - Stress the hottest endpoints (`POST /api/auth/login`, `GET /api/users`, `GET /api/permissions/graph`) with `hey` or `vegeta` at target RPS baselines (P50 <100ms, P95 <300ms).  
+    - Capture CPU/memory profiles with `go test -bench` + `pprof` while running load to identify bottlenecks in session and permission checks.  
+    - Document tuning knobs (database pool, Redis TTLs, rate limiter burst) and feed results into the deployment guide.
+
+  - [ ] Security testing  
+    - Execute `golangci-lint`, `gosec ./...`, and `staticcheck ./...` in CI; triage and fix any findings.  
+    - Run dependency vulnerability scans via `govulncheck ./...` and ensure Makefile target exists.  
+    - Perform manual penetration checklist: JWT tampering, privilege escalation, rate-limit bypass, MFA recovery abuse, and misconfigured external providers.
 
 - [ ] **Documentation**
-  - [ ] API documentation (Swagger)
-  - [ ] README updates
-  - [ ] Deployment guide
-  - [ ] Configuration guide
-  - [ ] Troubleshooting guide
+  - [ ] API documentation (specs/plans/CORE_MODULE_API.md)  
+    - Produce an OpenAPI 3.1 spec for all core endpoints covering auth, users, permissions, sessions, audit, organizations, teams, and providers.  
+    - Include request/response schemas, error codes, permission requirements, and example payloads aligned with contract tests.  
+    - Generate both human-readable markdown and JSON/YAML artefacts; link publishing steps (Redocly/Stoplight) from the README.
+
+  - [ ] Deployment CI/CD (GHCR image on tag/manual dispatch)  
+    - Extend GitHub Actions workflow to build multi-arch images, run the full test suite (unit + integration), and push to `ghcr.io/shellcn/core`.  
+    - Store GHCR credentials in repository secrets, sign images with cosign, and attach SBOM (syft) before release.  
+    - Provide rollback guidance and tag naming conventions (e.g., `core-vMAJOR.MINOR.PATCH`).
+
+  - [ ] Configuration guide  
+    - Document every `config.yaml` and ENV option from `internal/app/config.go`, including Redis fallback behavior, feature toggles, and module enablement.  
+    - Add examples for single-node (SQLite) and production (Postgres + Redis + TLS) setups with sample `docker-compose` snippets.  
+    - Highlight sensitive values (JWT secret, vault key) and include rotation/backup recommendations.
+
+  - [ ] Troubleshooting guide  
+    - Catalogue common failure scenarios: failed first-user setup, database connectivity, Redis fallback degradation, authentication provider misconfiguration, rate limit lockouts.  
+    - Provide log snippets, diagnostic commands (`make debug`, `kubectl logs`, `go tool pprof`), and resolution steps.  
+    - Append support escalation checklist (evidence to gather, metrics dashboards, audit log exports).
 
 ### Phase 8: External Auth Providers (Optional - Week 8)
 

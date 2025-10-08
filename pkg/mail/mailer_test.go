@@ -83,3 +83,74 @@ func TestSMTPMailerDefaultTimeout(t *testing.T) {
 		t.Fatalf("expected timeout to be 10s, got %v", sm.cfg.Timeout)
 	}
 }
+
+func TestSMTPMailerSendRequiresRecipients(t *testing.T) {
+	mailer, err := NewSMTPMailer(SMTPSettings{
+		Enabled: true,
+		Host:    "smtp.example.com",
+		Port:    587,
+		From:    "no-reply@example.com",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating mailer: %v", err)
+	}
+
+	err = mailer.Send(context.Background(), Message{
+		To:      []string{"   ", "\t"},
+		Subject: "No recipients",
+		Body:    "Body",
+	})
+	if err == nil || !strings.Contains(err.Error(), "at least one recipient") {
+		t.Fatalf("expected missing recipient error, got %v", err)
+	}
+}
+
+func TestSMTPMailerSendValidatesFromAddress(t *testing.T) {
+	mailer, err := NewSMTPMailer(SMTPSettings{
+		Enabled: true,
+		Host:    "smtp.example.com",
+		Port:    587,
+		From:    "",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating mailer: %v", err)
+	}
+
+	err = mailer.Send(context.Background(), Message{
+		From: "invalid-from",
+		To:   []string{"user@example.com"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid from address") {
+		t.Fatalf("expected invalid from error, got %v", err)
+	}
+}
+
+func TestSMTPMailerSendValidatesRecipientAddresses(t *testing.T) {
+	mailer, err := NewSMTPMailer(SMTPSettings{
+		Enabled: true,
+		Host:    "smtp.example.com",
+		Port:    587,
+		From:    "no-reply@example.com",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating mailer: %v", err)
+	}
+
+	err = mailer.Send(context.Background(), Message{
+		To: []string{"user@example.com", "bad-address"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid recipient address") {
+		t.Fatalf("expected invalid recipient error, got %v", err)
+	}
+}
+
+func TestUniqueAddresses(t *testing.T) {
+	addresses := []string{"alice@example.com", "bob@example.com", " alice@example.com ", "", "bob@example.com"}
+	result := uniqueAddresses(addresses)
+	if len(result) != 2 {
+		t.Fatalf("expected 2 unique addresses, got %d: %v", len(result), result)
+	}
+	if result[0] != "alice@example.com" || result[1] != "bob@example.com" {
+		t.Fatalf("unexpected result order/content: %v", result)
+	}
+}

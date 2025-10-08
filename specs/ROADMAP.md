@@ -139,16 +139,16 @@
 ### Phase 7: Testing & Documentation (Week 7)
 
 - [ ] **Testing**
-  - [ ] Achieve 80%+ test coverage
-  - [ ] Run integration tests
-  - [ ] Run contract tests
-  - [ ] Performance testing
-  - [ ] Security testing
+  - [ ] Achieve 80%+ test coverage — enforce ≥80% overall (≥70%/pkg), expand unit tests for services, permissions, routing, and first-user/session/audit edge cases. (Progress: new coverage for SMTP validation, provider registry contracts, runtime defaults, logger helpers.)
+  - [ ] Run integration tests — exercise auth, org/team, permission, audit, and setup flows against in-memory stack with seeded fixtures.
+  - [ ] Run contract tests — lock JSON response envelopes, JWT claims, and permission dependency rules with golden tests.
+  - [ ] Performance testing — benchmark hot endpoints with `hey`/`vegeta`, capture pprof traces, document tuning levers for DB/cache/rate limits.
+  - [ ] Security testing — run `golangci-lint`, `gosec`, `staticcheck`, `govulncheck`, and manual privilege/rate-limit/MFA abuse checks.
 - [ ] **Documentation**
-  - [ ] API documentation (API Docs, inside specs/plans/CORE_MODULE_API.md)
-  - [ ] Deployment CI/CD (On Tag creation, or manual dispatch) - this will create a docker image and push to GHCR
-  - [ ] Configuration guide
-  - [ ] Troubleshooting guide
+  - [ ] API documentation — publish OpenAPI 3.1 spec + markdown in `specs/plans/CORE_MODULE_API.md` with schemas, errors, permissions.
+  - [ ] Deployment CI/CD — extend GH Actions to build/test/sign multi-arch images and push to GHCR on tag/manual trigger with rollback notes.
+  - [ ] Configuration guide — document all config/env toggles, single-node vs production examples, security handling for secrets.
+  - [ ] Troubleshooting guide — catalog common failures, log snippets, diagnostic commands, and escalation checklist.
 
 ### Phase 8: External Auth Providers (Optional – Week 8)
 
