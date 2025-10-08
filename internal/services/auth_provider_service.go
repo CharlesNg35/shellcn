@@ -35,6 +35,17 @@ type AuthProviderService struct {
 	oidcTester    OIDCConnectionTester
 }
 
+// PublicProvider represents metadata exposed to unauthenticated clients.
+type PublicProvider struct {
+	Type                     string `json:"type"`
+	Name                     string `json:"name"`
+	Description              string `json:"description"`
+	Icon                     string `json:"icon"`
+	Enabled                  bool   `json:"enabled"`
+	AllowRegistration        bool   `json:"allow_registration"`
+	RequireEmailVerification bool   `json:"require_email_verification"`
+}
+
 // NewAuthProviderService constructs an AuthProviderService instance.
 func NewAuthProviderService(db *gorm.DB, auditService *AuditService, encryptionKey []byte) (*AuthProviderService, error) {
 	if db == nil {
@@ -112,6 +123,33 @@ func (s *AuthProviderService) GetEnabled(ctx context.Context) ([]models.AuthProv
 	}
 
 	return providers, nil
+}
+
+// GetEnabledPublic returns metadata for enabled providers, including mandatory local provider.
+func (s *AuthProviderService) GetEnabledPublic(ctx context.Context) ([]PublicProvider, error) {
+	ctx = ensureContext(ctx)
+
+	var providers []models.AuthProvider
+	if err := s.db.WithContext(ctx).
+		Where("enabled = ? OR type = ?", true, "local").
+		Order("type ASC").
+		Find(&providers).Error; err != nil {
+		return nil, fmt.Errorf("auth provider service: get public providers: %w", err)
+	}
+
+	result := make([]PublicProvider, 0, len(providers))
+	for _, provider := range providers {
+		result = append(result, PublicProvider{
+			Type:                     provider.Type,
+			Name:                     provider.Name,
+			Description:              provider.Description,
+			Icon:                     provider.Icon,
+			Enabled:                  provider.Enabled,
+			AllowRegistration:        provider.AllowRegistration,
+			RequireEmailVerification: provider.RequireEmailVerification,
+		})
+	}
+	return result, nil
 }
 
 // ConfigureOIDC upserts an OpenID Connect provider configuration.
@@ -463,4 +501,34 @@ func defaultOIDCTester(cfg models.OIDCConfig) error {
 		return errors.New("oidc tester: redirect url is required")
 	}
 	return nil
+}
+
+// LoadOIDCConfig returns the decrypted OIDC configuration if the provider is configured.
+func (s *AuthProviderService) LoadOIDCConfig(ctx context.Context) (*models.AuthProvider, *models.OIDCConfig, error) {
+	ctx = ensureContext(ctx)
+
+	provider, err := s.GetByType(ctx, "oidc")
+	if err != nil {
+		return nil, nil, err
+	}
+	if strings.TrimSpace(provider.Config) == "" {
+		return nil, nil, errors.New("auth provider service: oidc provider not configured")
+	}
+
+	var cfg models.OIDCConfig
+	if err := json.Unmarshal([]byte(provider.Config), &cfg); err != nil {
+		return nil, nil, fmt.Errorf("auth provider service: decode oidc config: %w", err)
+	}
+
+	secret, err := crypto.Decrypt(cfg.ClientSecret, s.encryptionKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("auth provider service: decrypt oidc secret: %w", err)
+	}
+	cfg.ClientSecret = string(secret)
+
+	if len(cfg.Scopes) == 0 {
+		cfg.Scopes = []string{"openid", "profile", "email"}
+	}
+
+	return provider, &cfg, nil
 }

@@ -3556,19 +3556,39 @@ go tool cover -html=coverage.out
 
 ### Phase 8: External Auth Providers (Optional - Week 8)
 
+- [ ] **Shared SSO Foundation**
+
+  - [ ] Finalize `internal/auth/providers` interfaces so external providers plug into existing session issuance pipeline (`SessionService.CreateForSubject`)
+  - [ ] Extend provider registry to expose provider metadata (type, display name, button label, enabled status, test capability)
+  - [ ] Implement unified SSO callback handler flow that maps external identities to local users (by email) with optional auto-provision toggle
+  - [ ] Persist provider enablement flags, secrets, and mapping rules via `AuthProviderService` using encrypted storage helpers
+  - [ ] Add audit events for provider enable/disable, configuration updates, connection tests, and login attempts
+
 - [ ] **OIDC Provider**
 
-  - [ ] Implement OIDC authentication
-  - [ ] Write OIDC tests
+  - [ ] Implement full OIDC authorization code flow with PKCE, nonce handling, and state validation (uses `coreos/go-oidc` + `golang.org/x/oauth2`)
+  - [ ] Support discovery (`/.well-known/openid-configuration`), metadata caching, and automatic JWKS refresh/rotation with background cache invalidation
+  - [ ] Map standard claims (`sub`, `email`, `given_name`, `family_name`, `preferred_username`) to local user fields with configurable claim keys
+  - [ ] Handle user provisioning rules (auto-create with default role, require invite, or deny unknown accounts)
+  - [ ] Expose `/api/auth/providers/oidc/login` + callback endpoint and route wiring, including error redirect contract for frontend
+  - [ ] Write tests: unit coverage for token validation and claim mapping, service integration test faking OIDC provider, and handler tests using httptest
 
 - [ ] **SAML Provider**
 
-  - [ ] Implement SAML authentication
-  - [ ] Write SAML tests
+  - [ ] Implement SAML Service Provider configuration (entity ID, ACS URL, metadata generation) using `crewjam/saml`
+  - [ ] Support metadata ingestion (IdP metadata URL/upload) with certificate parsing, signature verification, and clock skew handling
+  - [ ] Map attributes (NameID, email, first/last name, groups) via configurable attribute statements and enforce required attributes
+  - [ ] Add ACS endpoint that exchanges SAML assertions for local sessions, including replay detection, audience validation, and optional forceAuthn
+  - [ ] Provide IdP-initiated login support and SP metadata download endpoint for administrators
+  - [ ] Write tests: assertion validation unit tests, metadata parsing tests, handler integration test with signed sample assertions
 
 - [ ] **LDAP Provider**
-  - [ ] Implement LDAP authentication
-  - [ ] Write LDAP tests
+  - [ ] Implement LDAP bind/authenticate flow with support for StartTLS, skip-verify toggle, and connection pooling/back-off
+  - [ ] Support both simple bind (user DN template) and search+bind (search filter) strategies configurable via UI
+  - [ ] Map LDAP attributes (uid, mail, givenName, sn, memberOf) into local user profile and optional role assignment rules
+  - [ ] Implement scheduled sync job (optional) to pre-create or disable users based on LDAP search filters
+  - [ ] Add `/api/auth/providers/ldap/test` command handler to validate connectivity, bind credentials, and sample attribute mapping
+  - [ ] Write tests: mock LDAP server interaction tests (using `go-ldap` in-memory server), service tests for attribute mapping, and handler tests for test endpoint
 
 ---
 

@@ -152,6 +152,61 @@ func TestAuthProviderServiceMutations(t *testing.T) {
 	require.ErrorIs(t, svc.Delete(ctx, "invite"), ErrAuthProviderImmutable)
 }
 
+func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {
+	db := openAuthProviderServiceTestDB(t)
+	auditSvc, err := NewAuditService(db)
+	require.NoError(t, err)
+
+	svc, err := NewAuthProviderService(db, auditSvc, testEncryptionKey)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	require.NoError(t, db.Create(&models.AuthProvider{
+		Type:                     "local",
+		Name:                     "Local Authentication",
+		Enabled:                  true,
+		AllowRegistration:        true,
+		RequireEmailVerification: true,
+		Description:              "Local",
+		Icon:                     "key",
+	}).Error)
+
+	err = svc.ConfigureOIDC(ctx, models.OIDCConfig{
+		Issuer:       "https://idp.example.com",
+		ClientID:     "client-id",
+		ClientSecret: "super-secret",
+		RedirectURL:  "https://shellcn.example.com/api/auth/providers/oidc/callback",
+		Scopes:       []string{"openid", "profile"},
+	}, true, "admin-user")
+	require.NoError(t, err)
+
+	publicProviders, err := svc.GetEnabledPublic(ctx)
+	require.NoError(t, err)
+	require.Len(t, publicProviders, 2)
+
+	var localFound, oidcFound bool
+	for _, p := range publicProviders {
+		switch p.Type {
+		case "local":
+			localFound = true
+			require.True(t, p.AllowRegistration)
+		case "oidc":
+			oidcFound = true
+			require.True(t, p.Enabled)
+		}
+	}
+	require.True(t, localFound)
+	require.True(t, oidcFound)
+
+	providerModel, cfg, err := svc.LoadOIDCConfig(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "oidc", providerModel.Type)
+	require.Equal(t, "client-id", cfg.ClientID)
+	require.Equal(t, "super-secret", cfg.ClientSecret)
+	require.Contains(t, cfg.Scopes, "openid")
+}
+
 func openAuthProviderServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 

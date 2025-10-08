@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/services"
@@ -16,20 +15,12 @@ type AuthProviderHandler struct {
 	svc *services.AuthProviderService
 }
 
-func NewAuthProviderHandler(db *gorm.DB, encryptionKey []byte) (*AuthProviderHandler, error) {
-	audit, err := services.NewAuditService(db)
-	if err != nil {
-		return nil, err
-	}
-	svc, err := services.NewAuthProviderService(db, audit, encryptionKey)
-	if err != nil {
-		return nil, err
-	}
-	return &AuthProviderHandler{svc: svc}, nil
+func NewAuthProviderHandler(svc *services.AuthProviderService) *AuthProviderHandler {
+	return &AuthProviderHandler{svc: svc}
 }
 
-// GET /api/auth/providers
-func (h *AuthProviderHandler) List(c *gin.Context) {
+// GET /api/auth/providers/all
+func (h *AuthProviderHandler) ListAll(c *gin.Context) {
 	providers, err := h.svc.List(c.Request.Context())
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
@@ -41,6 +32,16 @@ func (h *AuthProviderHandler) List(c *gin.Context) {
 // GET /api/auth/providers/enabled
 func (h *AuthProviderHandler) GetEnabled(c *gin.Context) {
 	providers, err := h.svc.GetEnabled(c.Request.Context())
+	if err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+	response.Success(c, http.StatusOK, providers)
+}
+
+// GET /api/auth/providers (public)
+func (h *AuthProviderHandler) ListPublic(c *gin.Context) {
+	providers, err := h.svc.GetEnabledPublic(c.Request.Context())
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return

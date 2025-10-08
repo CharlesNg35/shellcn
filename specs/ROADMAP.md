@@ -144,22 +144,29 @@
   - [ ] Performance testing
   - [ ] Security testing
 - [ ] **Documentation**
-  - [ ] API documentation (Swagger)
-  - [ ] Deployment guide
+  - [ ] API documentation (API Docs, inside specs/plans/CORE_MODULE_API.md)
+  - [ ] Deployment CI/CD (On Tag creation, or manual dispatch) - this will create a docker image and push to GHCR
   - [ ] Configuration guide
   - [ ] Troubleshooting guide
 
 ### Phase 8: External Auth Providers (Optional – Week 8)
 
+- [ ] **Shared SSO Foundation**
+  - [ ] Provider registry + unified callback flow
+  - [ ] User mapping & provisioning rules
+  - [ ] Secure secret storage + audit logging
 - [ ] **OIDC Provider**
-  - [ ] Implement OIDC authentication
-  - [ ] Write OIDC tests
+  - [ ] Authorization code + PKCE flow
+  - [ ] Claim mapping & unknown user handling
+  - [ ] Handler + service test coverage
 - [ ] **SAML Provider**
-  - [ ] Implement SAML authentication
-  - [ ] Write SAML tests
+  - [ ] SP metadata + ACS implementation
+  - [ ] Attribute mapping & assertion validation
+  - [ ] Sample assertion + handler tests
 - [ ] **LDAP Provider**
-  - [ ] Implement LDAP authentication
-  - [ ] Write LDAP tests
+  - [ ] Bind/search strategies with TLS options
+  - [ ] Attribute mapping & optional sync job
+  - [ ] Connection test API + mock LDAP tests
 
 ---
 

@@ -10,10 +10,12 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/auth/providers"
 	"github.com/charlesng35/shellcn/internal/handlers"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/security"
+	"github.com/charlesng35/shellcn/internal/services"
 )
 
 // NewRouter builds the Gin engine, wires middleware and registers core routes.
@@ -49,11 +51,47 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 
 	authHandler := handlers.NewAuthHandler(db, jwt, sessions)
 
+	encryptionKey := []byte(cfg.Vault.EncryptionKey)
+	if length := len(encryptionKey); length != 16 && length != 24 && length != 32 {
+		return nil, fmt.Errorf("invalid vault encryption key length: expected 16, 24, or 32 bytes, got %d", length)
+	}
+
+	auditSvc, err := services.NewAuditService(db)
+	if err != nil {
+		return nil, err
+	}
+
+	authProviderSvc, err := services.NewAuthProviderService(db, auditSvc, encryptionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	providerRegistry := providers.NewRegistry()
+	if err := providerRegistry.Register(providers.NewOIDCDescriptor(providers.OIDCOptions{})); err != nil {
+		return nil, err
+	}
+
+	stateCodec, err := iauth.NewStateCodec(encryptionKey, 10*time.Minute, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	ssoManager, err := iauth.NewSSOManager(db, sessions, iauth.SSOConfig{})
+	if err != nil {
+		return nil, err
+	}
+
+	ssoHandler := handlers.NewSSOHandler(providerRegistry, authProviderSvc, ssoManager, stateCodec)
+	authProviderHandler := handlers.NewAuthProviderHandler(authProviderSvc)
+
 	// Public auth routes
 	auth := r.Group("/api/auth")
 	{
 		auth.POST("/login", authHandler.Login)
 		auth.POST("/refresh", authHandler.Refresh)
+		auth.GET("/providers", authProviderHandler.ListPublic)
+		auth.GET("/providers/:type/login", ssoHandler.Begin)
+		auth.GET("/providers/:type/callback", ssoHandler.Callback)
 	}
 
 	// Protected routes
@@ -153,19 +191,10 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	api.GET("/audit", middleware.RequirePermission(checker, "audit.view"), auditHandler.List)
 	api.GET("/audit/export", middleware.RequirePermission(checker, "audit.export"), auditHandler.Export)
 
-	// Auth providers (note: encryption key should be provided from config in server wiring)
-	encryptionKey := []byte(cfg.Vault.EncryptionKey)
-	if length := len(encryptionKey); length != 16 && length != 24 && length != 32 {
-		return nil, fmt.Errorf("invalid vault encryption key length: expected 16, 24, or 32 bytes, got %d", length)
-	}
-
-	apHandler, err := handlers.NewAuthProviderHandler(db, encryptionKey)
-	if err != nil {
-		return nil, err
-	}
+	apHandler := authProviderHandler
 	ap := api.Group("/auth/providers")
 	{
-		ap.GET("", middleware.RequirePermission(checker, "permission.view"), apHandler.List)
+		ap.GET("/all", middleware.RequirePermission(checker, "permission.view"), apHandler.ListAll)
 		ap.GET("/enabled", middleware.RequirePermission(checker, "permission.view"), apHandler.GetEnabled)
 		ap.POST("/local/settings", middleware.RequirePermission(checker, "permission.manage"), apHandler.UpdateLocalSettings)
 		ap.POST("/:type/enable", middleware.RequirePermission(checker, "permission.manage"), apHandler.SetEnabled)

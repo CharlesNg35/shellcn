@@ -39,6 +39,15 @@ type TokenPair struct {
 	RefreshToken string
 }
 
+// AuthSubject represents the authenticated principal for whom a session is being issued.
+type AuthSubject struct {
+	UserID     string
+	Provider   string
+	ExternalID string
+	Email      string
+	Claims     map[string]any
+}
+
 var (
 	// ErrSessionNotFound indicates that no session matches the provided token or identifier.
 	ErrSessionNotFound = errors.New("session: not found")
@@ -151,6 +160,38 @@ func (s *SessionService) CreateSession(userID string, meta SessionMetadata) (Tok
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, session, nil
+}
+
+// CreateForSubject issues a session for the supplied authenticated subject while enriching metadata with SSO attributes.
+func (s *SessionService) CreateForSubject(subject AuthSubject, meta SessionMetadata) (TokenPair, *models.Session, error) {
+	if strings.TrimSpace(subject.UserID) == "" {
+		return TokenPair{}, nil, errors.New("session service: subject user id is required")
+	}
+
+	merged := make(map[string]any)
+	for k, v := range meta.Claims {
+		if k != "" {
+			merged[k] = v
+		}
+	}
+	for k, v := range subject.Claims {
+		if k != "" {
+			merged[k] = v
+		}
+	}
+
+	if provider := strings.TrimSpace(subject.Provider); provider != "" {
+		merged["sso_provider"] = provider
+	}
+	if externalID := strings.TrimSpace(subject.ExternalID); externalID != "" {
+		merged["sso_subject"] = externalID
+	}
+	if email := strings.TrimSpace(subject.Email); email != "" {
+		merged["sso_email"] = strings.ToLower(email)
+	}
+
+	meta.Claims = merged
+	return s.CreateSession(subject.UserID, meta)
 }
 
 // RefreshSession rotates the refresh token and issues a new access token.

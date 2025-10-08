@@ -14,7 +14,7 @@ import (
 )
 
 func TestCreateSessionGeneratesTokens(t *testing.T) {
-	db, svc, clock := setupSessionService(t)
+	db, svc, _, clock := setupSessionService(t)
 
 	user := createTestUser(t, db, "user-create")
 
@@ -42,7 +42,7 @@ func TestCreateSessionGeneratesTokens(t *testing.T) {
 }
 
 func TestRefreshSessionRotatesToken(t *testing.T) {
-	db, svc, clock := setupSessionService(t)
+	db, svc, _, clock := setupSessionService(t)
 	user := createTestUser(t, db, "user-refresh")
 
 	tokens, session, err := svc.CreateSession(user.ID, SessionMetadata{})
@@ -64,7 +64,7 @@ func TestRefreshSessionRotatesToken(t *testing.T) {
 }
 
 func TestRefreshSessionExpired(t *testing.T) {
-	db, svc, clock := setupSessionService(t)
+	db, svc, _, clock := setupSessionService(t)
 	user := createTestUser(t, db, "user-expired")
 
 	tokens, session, err := svc.CreateSession(user.ID, SessionMetadata{})
@@ -79,7 +79,7 @@ func TestRefreshSessionExpired(t *testing.T) {
 }
 
 func TestRevokeSessionPreventsRefresh(t *testing.T) {
-	db, svc, clock := setupSessionService(t)
+	db, svc, _, clock := setupSessionService(t)
 
 	user := createTestUser(t, db, "user-revoke")
 
@@ -101,7 +101,8 @@ func TestRevokeSessionPreventsRefresh(t *testing.T) {
 }
 
 func TestSessionServiceCleanupExpired(t *testing.T) {
-	db, svc, clock := setupSessionService(t)
+	db, svc, _, clock := setupSessionService(t)
+
 	user := createTestUser(t, db, "user-cleanup")
 
 	_, expiredSession, err := svc.CreateSession(user.ID, SessionMetadata{})
@@ -141,7 +142,49 @@ func TestSessionServiceCleanupExpired(t *testing.T) {
 	assertNotFound(revokedSession.ID)
 }
 
-func setupSessionService(t *testing.T) (*gorm.DB, *SessionService, *testClock) {
+func TestCreateForSubjectMergesClaims(t *testing.T) {
+	db, svc, jwtService, _ := setupSessionService(t)
+
+	user := createTestUser(t, db, "subject-user")
+
+	subject := AuthSubject{
+		UserID:     user.ID,
+		Provider:   "oidc",
+		ExternalID: "user-123",
+		Email:      "Subject-User@Example.com",
+		Claims: map[string]any{
+			"groups": []string{"admins"},
+		},
+	}
+
+	pair, session, err := svc.CreateForSubject(subject, SessionMetadata{
+		IPAddress: " 192.168.1.10 ",
+		UserAgent: "browser",
+		Claims: map[string]any{
+			"foo": "bar",
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, session)
+
+	claims, err := jwtService.ValidateAccessToken(pair.AccessToken)
+	require.NoError(t, err)
+
+	require.Equal(t, user.ID, claims.UserID)
+	require.Equal(t, session.ID, claims.SessionID)
+
+	require.Equal(t, "bar", claims.Metadata["foo"])
+
+	groups, ok := claims.Metadata["groups"].([]any)
+	require.True(t, ok)
+	require.Len(t, groups, 1)
+	require.Equal(t, "admins", groups[0])
+	require.Equal(t, "oidc", claims.Metadata["sso_provider"])
+	require.Equal(t, "user-123", claims.Metadata["sso_subject"])
+	require.Equal(t, "subject-user@example.com", claims.Metadata["sso_email"])
+}
+
+func setupSessionService(t *testing.T) (*gorm.DB, *SessionService, *JWTService, *testClock) {
 	t.Helper()
 
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
@@ -162,7 +205,7 @@ func setupSessionService(t *testing.T) (*gorm.DB, *SessionService, *testClock) {
 	})
 	require.NoError(t, err)
 
-	return db, sessionService, clock
+	return db, sessionService, jwtService, clock
 }
 
 func createTestUser(t *testing.T, db *gorm.DB, username string) *models.User {
