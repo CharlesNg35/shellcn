@@ -36,30 +36,30 @@ export function Dashboard() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Welcome header */}
       <div>
-        <h1 className="text-3xl font-bold text-foreground">
-          Welcome back{user?.first_name ? `, ${user.first_name}` : ''}!
+        <h1 className="text-2xl font-bold tracking-tight">
+          Welcome back{user?.first_name ? `, ${user.first_name}` : ''}
         </h1>
-        <p className="mt-2 text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Here's an overview of your infrastructure access platform
         </p>
       </div>
 
       {/* Stats grid */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <div key={stat.name} className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">{stat.name}</p>
-                <p className="mt-2 text-3xl font-bold text-foreground">{stat.value}</p>
+                <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
               </div>
               <div
-                className={`flex h-12 w-12 items-center justify-center rounded-lg ${stat.bgColor}`}
+                className={`flex h-10 w-10 items-center justify-center rounded-md ${stat.bgColor}`}
               >
-                <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                <stat.icon className={`h-5 w-5 ${stat.color}`} />
               </div>
             </div>
           </div>
@@ -67,25 +67,28 @@ export function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-foreground">Quick Actions</h2>
+          <h3 className="font-semibold">Quick Actions</h3>
           <p className="mt-1 text-sm text-muted-foreground">Common tasks and shortcuts</p>
           <div className="mt-4 space-y-2">
-            <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
-              • Add new connection
-            </div>
-            <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
-              • Invite team members
-            </div>
-            <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
-              • Configure authentication
-            </div>
+            <button className="flex w-full items-center gap-2 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+              <span className="text-muted-foreground">•</span>
+              Add new connection
+            </button>
+            <button className="flex w-full items-center gap-2 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+              <span className="text-muted-foreground">•</span>
+              Invite team members
+            </button>
+            <button className="flex w-full items-center gap-2 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground">
+              <span className="text-muted-foreground">•</span>
+              Configure authentication
+            </button>
           </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-foreground">Recent Activity</h2>
+          <h3 className="font-semibold">Recent Activity</h3>
           <p className="mt-1 text-sm text-muted-foreground">Latest events and actions</p>
           <div className="mt-4 flex items-center justify-center py-8 text-sm text-muted-foreground">
             No recent activity
@@ -95,7 +98,7 @@ export function Dashboard() {
 
       {/* Getting started */}
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-6">
-        <h2 className="text-lg font-semibold text-foreground">Getting Started</h2>
+        <h3 className="font-semibold">Getting Started</h3>
         <p className="mt-2 text-sm text-muted-foreground">
           This is a placeholder dashboard. Full functionality including connection management,
           terminal access, and monitoring will be available in Phase 3.

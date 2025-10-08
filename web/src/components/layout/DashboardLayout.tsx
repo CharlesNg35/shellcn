@@ -8,11 +8,13 @@ export function DashboardLayout() {
       <Sidebar />
 
       {/* Main content area - offset by sidebar width */}
-      <div className="flex flex-1 flex-col pl-64 transition-all duration-300">
+      <div className="flex flex-1 flex-col lg:pl-64">
         <Header />
 
-        <main className="flex-1 p-6">
-          <Outlet />
+        <main className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>

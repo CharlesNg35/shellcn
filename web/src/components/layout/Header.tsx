@@ -48,25 +48,25 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-6 shadow-sm">
-      {/* Left side - Breadcrumbs or page title */}
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:px-6">
+      {/* Left side - Empty for now, can add breadcrumbs later */}
       <div className="flex items-center gap-4">
-        <h2 className="text-lg font-semibold text-foreground">Dashboard</h2>
+        {/* Mobile menu button - placeholder for future */}
       </div>
 
-      {/* Right side - Notifications and user menu */}
-      <div className="flex items-center gap-3">
+      {/* Right side - Actions */}
+      <div className="flex items-center gap-2">
         {/* Theme toggle */}
         <ThemeToggle />
 
         {/* Notifications */}
         <button
-          className="relative rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="relative rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           aria-label="Notifications"
         >
-          <Bell className="h-5 w-5" />
+          <Bell className="h-4 w-4" />
           {/* Notification badge */}
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive" />
+          <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-destructive" />
         </button>
 
         {/* User menu */}

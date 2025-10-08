@@ -8,10 +8,8 @@ import {
   FileText,
   Activity,
   Key,
-  ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
-import { useState } from 'react'
 import { cn } from '@/lib/utils/cn'
 import logo from '@/assets/logo.svg'
 import { APP_NAME } from '@/lib/constants'
@@ -23,142 +21,132 @@ interface NavItem {
   permission?: string
 }
 
-const navItems: NavItem[] = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+interface NavGroup {
+  label: string
+  items: NavItem[]
+}
+
+const navGroups: NavGroup[] = [
   {
-    to: '/settings/users',
-    icon: Users,
-    label: 'Users',
-    permission: 'user.view',
+    label: 'Overview',
+    items: [{ to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' }],
   },
   {
-    to: '/settings/organizations',
-    icon: Building2,
-    label: 'Organizations',
-    permission: 'org.view',
+    label: 'Management',
+    items: [
+      {
+        to: '/settings/users',
+        icon: Users,
+        label: 'Users',
+        permission: 'user.view',
+      },
+      {
+        to: '/settings/organizations',
+        icon: Building2,
+        label: 'Organizations',
+        permission: 'org.view',
+      },
+      {
+        to: '/settings/teams',
+        icon: Users,
+        label: 'Teams',
+        permission: 'org.view',
+      },
+      {
+        to: '/settings/permissions',
+        icon: Shield,
+        label: 'Permissions',
+        permission: 'permission.view',
+      },
+    ],
   },
   {
-    to: '/settings/teams',
-    icon: Users,
-    label: 'Teams',
-    permission: 'org.view',
-  },
-  {
-    to: '/settings/permissions',
-    icon: Shield,
-    label: 'Permissions',
-    permission: 'permission.view',
-  },
-  {
-    to: '/settings/auth-providers',
-    icon: Key,
-    label: 'Auth Providers',
-    permission: 'permission.manage',
-  },
-  {
-    to: '/settings/sessions',
-    icon: Activity,
-    label: 'Sessions',
-  },
-  {
-    to: '/settings/audit',
-    icon: FileText,
-    label: 'Audit Logs',
-    permission: 'audit.view',
-  },
-  {
-    to: '/settings/security',
-    icon: Settings,
     label: 'Security',
+    items: [
+      {
+        to: '/settings/auth-providers',
+        icon: Key,
+        label: 'Auth Providers',
+        permission: 'permission.manage',
+      },
+      {
+        to: '/settings/sessions',
+        icon: Activity,
+        label: 'Sessions',
+      },
+      {
+        to: '/settings/audit',
+        icon: FileText,
+        label: 'Audit Logs',
+        permission: 'audit.view',
+      },
+      {
+        to: '/settings/security',
+        icon: Settings,
+        label: 'Security',
+      },
+    ],
   },
 ]
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false)
-
-  // TODO: Implement permission checking with usePermissions hook
-  // const { hasPermission } = usePermissions()
-
   const hasPermission = () => {
-    // Placeholder - always return true for now
     return true
   }
 
   return (
-    <aside
-      className={cn(
-        'fixed left-0 top-0 z-40 h-screen border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300',
-        collapsed ? 'w-16' : 'w-64'
-      )}
-    >
-      {/* Logo and collapse button */}
-      <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-        {!collapsed && (
-          <div className="flex items-center gap-3">
-            <img src={logo} alt={APP_NAME} className="h-8 w-8" />
-            <span className="text-lg font-semibold">{APP_NAME}</span>
-          </div>
-        )}
-        {collapsed && (
-          <div className="flex w-full justify-center">
-            <img src={logo} alt={APP_NAME} className="h-8 w-8" />
-          </div>
-        )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className={cn(
-            'rounded-md p-1.5 text-sidebar-foreground/60 hover:bg-sidebar-accent/10 hover:text-sidebar-foreground',
-            collapsed && 'hidden'
-          )}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
-        </button>
+    <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r border-border bg-background lg:flex">
+      <div className="flex h-14 items-center border-b border-border px-6">
+        <div className="flex items-center gap-2">
+          <img src={logo} alt={APP_NAME} className="h-6 w-6" />
+          <span className="text-sm font-semibold">{APP_NAME}</span>
+        </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3 scrollbar-thin">
-        {navItems.map((item) => {
-          // Hide items if user doesn't have permission
-          if (item.permission && !hasPermission(item.permission)) {
-            return null
-          }
-
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  'hover:bg-sidebar-accent/10 hover:text-sidebar-accent',
-                  isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground/80',
-                  collapsed && 'justify-center'
-                )
+      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-4 scrollbar-thin">
+        {navGroups.map((group) => (
+          <div key={group.label} className="space-y-1">
+            <h4 className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {group.label}
+            </h4>
+            {group.items.map((item) => {
+              if (item.permission && !hasPermission()) {
+                return null
               }
-              title={collapsed ? item.label : undefined}
-            >
-              <item.icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
-            </NavLink>
-          )
-        })}
-      </nav>
 
-      {/* Collapse button when sidebar is collapsed */}
-      {collapsed && (
-        <div className="border-t border-sidebar-border p-3">
-          <button
-            onClick={() => setCollapsed(false)}
-            className="flex w-full items-center justify-center rounded-lg p-2.5 text-sidebar-foreground/60 hover:bg-sidebar-accent/10 hover:text-sidebar-foreground"
-            aria-label="Expand sidebar"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-      )}
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    cn(
+                      'group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-all',
+                      isActive
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <item.icon
+                        className={cn(
+                          'h-4 w-4 shrink-0 transition-transform group-hover:scale-110',
+                          isActive && 'scale-110'
+                        )}
+                      />
+                      <span>{item.label}</span>
+                      {isActive && (
+                        <ChevronRight className="ml-auto h-4 w-4 opacity-50" />
+                      )}
+                    </>
+                  )}
+                </NavLink>
+              )
+            })}
+          </div>
+        ))}
+      </nav>
     </aside>
   )
 }

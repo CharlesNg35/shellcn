@@ -7,6 +7,7 @@ import { loginSchema } from '@/schemas/auth'
 import { useAuth } from '@/hooks/useAuth'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { APP_NAME } from '@/lib/constants'
 
 type LoginFormData = z.infer<typeof loginSchema>
 
