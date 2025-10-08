@@ -11,6 +11,7 @@
 - **xterm.js** for terminal emulation
 
 ### Key Libraries
+- **React Router 7** for SPA routing
 - **TanStack Query** (React Query) for server state
 - **Zustand** for client state management
 - **react-hook-form** for form handling
