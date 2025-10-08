@@ -15,6 +15,7 @@ env:
   GOTOOLCHAIN: auto
   GO_VERSION: "1.22"
   RUST_VERSION: "1.75.0"
+  CGO_ENABLED: "1"
 
 jobs:
   test:
@@ -23,6 +24,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential pkg-config clang
 
       - name: Set up Go
         uses: actions/setup-go@v5
