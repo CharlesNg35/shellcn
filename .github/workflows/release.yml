@@ -19,6 +19,7 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/shellcn
   GO_VERSION: "1.24"
   RUST_VERSION: "1.75"
+  NODE_VERSION: "20"
 
 jobs:
   release:
@@ -87,7 +88,29 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential
 
-      - name: Run unit tests
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: web
+        run: pnpm build
+
+      - name: Run frontend tests
+        working-directory: web
+        run: pnpm test run
+
+      - name: Run backend tests
         run: go test ./...
 
       # - name: Set up QEMU

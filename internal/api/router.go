@@ -2,6 +2,8 @@ package api
 
 import (
 	"fmt"
+	"io/fs"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -15,6 +17,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/services"
+	"github.com/charlesng35/shellcn/web"
 )
 
 // NewRouter builds the Gin engine, wires middleware and registers core routes.
@@ -145,8 +148,51 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	// Metrics endpoint
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 
-	// NotFound fallback
-	r.NoRoute(middleware.NotFoundHandler)
+	// Serve frontend static files
+	staticFiles, err := web.FS()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load static files: %w", err)
+	}
+	r.Use(serveStaticFiles(staticFiles))
+
+	// NotFound fallback (SPA - serve index.html for client-side routing)
+	r.NoRoute(func(c *gin.Context) {
+		// If the request is for an API endpoint, return 404
+		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
+			middleware.NotFoundHandler(c)
+			return
+		}
+		// Otherwise, serve index.html for SPA routing
+		c.FileFromFS("/", http.FS(staticFiles))
+	})
 
 	return r, nil
+}
+
+// serveStaticFiles returns a middleware that serves static files from the embedded filesystem.
+func serveStaticFiles(staticFS fs.FS) gin.HandlerFunc {
+	fileServer := http.FileServer(http.FS(staticFS))
+	return func(c *gin.Context) {
+		// Skip if it's an API route
+		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
+			c.Next()
+			return
+		}
+
+		// Try to serve the static file
+		path := c.Request.URL.Path
+		if path == "/" {
+			path = "/index.html"
+		}
+
+		// Check if file exists
+		if _, err := fs.Stat(staticFS, path[1:]); err == nil {
+			fileServer.ServeHTTP(c.Writer, c.Request)
+			c.Abort()
+			return
+		}
+
+		// File doesn't exist, continue to next handler (will hit NoRoute for SPA)
+		c.Next()
+	}
 }

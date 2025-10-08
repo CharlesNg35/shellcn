@@ -8,7 +8,6 @@ bin/
 shellcn
 
 # Build artifacts
-dist/
 build/
 *.o
 *.a
@@ -24,7 +23,6 @@ vendor/
 
 # Frontend
 web/node_modules/
-web/dist/
 web/.vite/
 *.local
 

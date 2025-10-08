@@ -15,6 +15,7 @@ env:
   GOTOOLCHAIN: auto
   GO_VERSION: "1.22"
   RUST_VERSION: "1.75.0"
+  NODE_VERSION: "20"
   CGO_ENABLED: "1"
 
 jobs:
@@ -51,6 +52,42 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Cache pnpm dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            web/node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('web/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint frontend
+        working-directory: web
+        run: pnpm lint
+
+      - name: Test frontend
+        working-directory: web
+        run: pnpm test run
+
+      - name: Build frontend
+        working-directory: web
+        run: pnpm build
 
       - name: Detect Rust modules
         id: rust_modules

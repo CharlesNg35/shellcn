@@ -2,9 +2,33 @@
 
 ARG GO_VERSION=1.24
 ARG RUST_VERSION=1.75
+ARG NODE_VERSION=20
 
 # ============================================================================
-# Stage 1: Rust FFI Builder (Optional - only when FFI modules exist)
+# Stage 1: Frontend Builder
+# ============================================================================
+FROM node:${NODE_VERSION}-bookworm-slim AS frontend-builder
+
+WORKDIR /src
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy frontend package files
+COPY web/package.json web/pnpm-lock.yaml ./web/
+
+# Install dependencies
+WORKDIR /src/web
+RUN pnpm install --frozen-lockfile
+
+# Copy frontend source
+COPY web/ ./
+
+# Build frontend
+RUN pnpm build
+
+# ============================================================================
+# Stage 2: Rust FFI Builder (Optional - only when FFI modules exist)
 # ============================================================================
 FROM rust:${RUST_VERSION}-bookworm AS rust-builder
 
@@ -35,7 +59,7 @@ RUN set -e; \
   done
 
 # ============================================================================
-# Stage 2: Go Builder
+# Stage 3: Go Builder
 # ============================================================================
 FROM golang:${GO_VERSION}-bookworm AS go-builder
 
@@ -50,6 +74,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   build-essential \
   ca-certificates \
   && rm -rf /var/lib/apt/lists/*
+
+# Copy frontend build artifacts
+COPY --from=frontend-builder /src/web/dist/ ./web/dist/
 
 # Copy Rust FFI artifacts if they were built
 # This includes both the static libraries (.a files) and generated C headers

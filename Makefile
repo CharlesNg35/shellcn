@@ -1,18 +1,22 @@
-.PHONY: help build build-go build-rust test test-cover lint fmt run dev clean tidy generate
+.PHONY: help build build-go build-rust build-web test test-web test-cover lint fmt run dev clean tidy generate
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
 PKG ?= ./...
 RUST_MANIFESTS := $(wildcard rust-modules/*/Cargo.toml)
+WEB_DIR := web
+WEB_DIST := $(WEB_DIR)/dist
 
 help:
-	@echo "ShellCN Backend"
+	@echo "ShellCN Platform"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make build         Build the backend (Rust FFI + Go binary)"
+	@echo "  make build         Build the entire project (Frontend + Rust FFI + Go binary)"
 	@echo "  make build-go      Build the Go backend binary"
 	@echo "  make build-rust    Build Rust FFI modules (if present)"
-	@echo "  make test          Run Go unit tests"
+	@echo "  make build-web     Build the frontend"
+	@echo "  make test          Run all tests (Frontend + Go)"
+	@echo "  make test-web      Run frontend tests"
 	@echo "  make test-cover    Run Go unit tests with coverage"
 	@echo "  make lint          Run go vet on the codebase"
 	@echo "  make fmt           Format Go sources with gofmt"
@@ -20,7 +24,7 @@ help:
 	@echo "  make run           Start the development server"
 	@echo "  make clean         Remove build artifacts"
 
-build: build-rust build-go
+build: build-web build-rust build-go
 
 build-go:
 	@echo "Building Go backend..."
@@ -46,9 +50,24 @@ else
 	@echo "No Rust modules detected; skipping Rust build."
 endif
 
-test:
-	@echo "Running tests..."
+build-web:
+	@echo "Building frontend..."
+	@if [ ! -d "$(WEB_DIR)/node_modules" ]; then \
+		echo "Installing frontend dependencies..."; \
+		cd $(WEB_DIR) && pnpm install --frozen-lockfile; \
+	fi
+	@cd $(WEB_DIR) && pnpm build
+	@echo "Creating symlink for embedded files..."
+	@ln -sf ../../web/dist internal/web/dist
+	@echo "✓ Frontend built at $(WEB_DIST)"
+
+test: test-web
+	@echo "Running Go tests..."
 	@go test ./...
+
+test-web:
+	@echo "Running frontend tests..."
+	@cd $(WEB_DIR) && pnpm test run
 
 test-cover:
 	@echo "Running tests with coverage..."
@@ -76,6 +95,8 @@ clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf $(BIN_DIR)
 	@rm -f coverage.out
+	@rm -rf $(WEB_DIST)
+	@echo "✓ Build artifacts cleaned"
 
 generate:
 	@echo "Running go generate..."
