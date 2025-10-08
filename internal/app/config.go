@@ -25,8 +25,14 @@ type Config struct {
 
 // ServerConfig configures the HTTP server.
 type ServerConfig struct {
-	Port     int    `mapstructure:"port"`
-	LogLevel string `mapstructure:"log_level"`
+	Port     int        `mapstructure:"port"`
+	LogLevel string     `mapstructure:"log_level"`
+	CSRF     CSRFConfig `mapstructure:"csrf"`
+}
+
+// CSRFConfig controls CSRF protection middleware.
+type CSRFConfig struct {
+	Enabled bool `mapstructure:"enabled"`
 }
 
 // DatabaseConfig describes connection options for the supported databases.
@@ -249,6 +255,7 @@ func LoadConfig(paths ...string) (*Config, error) {
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 8000)
 	v.SetDefault("server.log_level", "info")
+	v.SetDefault("server.csrf.enabled", false)
 
 	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.path", "./data/shellcn.sqlite")

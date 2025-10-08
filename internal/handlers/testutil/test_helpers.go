@@ -104,24 +104,34 @@ func (e *Env) CreateRootUser(password string) *models.User {
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
 }
 
 // UserPayload captures the subset of user fields returned from auth endpoints.
 type UserPayload struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	IsRoot    bool   `json:"is_root"`
-	IsActive  bool   `json:"is_active"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	ID          string        `json:"id"`
+	Username    string        `json:"username"`
+	Email       string        `json:"email"`
+	IsRoot      bool          `json:"is_root"`
+	IsActive    bool          `json:"is_active"`
+	FirstName   string        `json:"first_name"`
+	LastName    string        `json:"last_name"`
+	Permissions []string      `json:"permissions"`
+	Roles       []RolePayload `json:"roles"`
+}
+
+type RolePayload struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // LoginResult bundles the JSON response from POST /api/auth/login.
 type LoginResult struct {
-	Tokens      TokenPair   `json:"tokens"`
-	User        UserPayload `json:"user"`
-	Permissions []string    `json:"permissions"`
+	AccessToken  string      `json:"access_token"`
+	RefreshToken string      `json:"refresh_token"`
+	ExpiresIn    int         `json:"expires_in"`
+	User         UserPayload `json:"user"`
 }
 
 // Login authenticates using the local provider and returns the issued token pair.
@@ -141,8 +151,9 @@ func (e *Env) Login(username, password string) LoginResult {
 
 	var result LoginResult
 	DecodeInto(e.T, resp.Data, &result)
-	require.NotEmpty(e.T, result.Tokens.AccessToken)
-	require.NotEmpty(e.T, result.Tokens.RefreshToken)
+	require.NotEmpty(e.T, result.AccessToken)
+	require.NotEmpty(e.T, result.RefreshToken)
+	require.Greater(e.T, result.ExpiresIn, 0)
 	require.Equal(e.T, username, result.User.Username)
 
 	return result

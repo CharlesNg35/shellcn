@@ -79,7 +79,7 @@ export function Sidebar() {
   // TODO: Implement permission checking with usePermissions hook
   // const { hasPermission } = usePermissions()
 
-  const hasPermission = (_permission: string) => {
+  const hasPermission = () => {
     // Placeholder - always return true for now
     return true
   }

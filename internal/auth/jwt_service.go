@@ -138,6 +138,11 @@ func (s *JWTService) SecretLength() int {
 	return len(s.secret)
 }
 
+// AccessTokenTTL returns the configured lifetime of issued access tokens.
+func (s *JWTService) AccessTokenTTL() time.Duration {
+	return s.ttl
+}
+
 // cloneMetadata guards against accidental external mutation of stored metadata.
 func cloneMetadata(meta map[string]any) map[string]any {
 	if len(meta) == 0 {

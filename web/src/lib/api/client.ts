@@ -2,6 +2,7 @@ import axios, { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig 
 import type { AuthTokens, RefreshResponsePayload } from '@/types/auth'
 import type { ApiResponse } from '@/types/api'
 import { clearTokens, getTokens, setTokens } from './token-storage'
+import { attachCSRFToken } from './csrf'
 import { unwrapResponse } from './http'
 import { toAuthTokens } from './transformers'
 
@@ -35,6 +36,8 @@ apiClient.interceptors.request.use((config) => {
     config.headers = config.headers ?? {}
     config.headers.Authorization = `Bearer ${tokens.accessToken}`
   }
+
+  attachCSRFToken(config)
 
   return config
 })

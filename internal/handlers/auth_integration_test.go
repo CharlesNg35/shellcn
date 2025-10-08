@@ -14,7 +14,7 @@ func TestAuthHandler_LoginRefreshLogout(t *testing.T) {
 	root := env.CreateRootUser("AuthPassw0rd!")
 
 	login := env.Login(root.Username, "AuthPassw0rd!")
-	token := login.Tokens.AccessToken
+	token := login.AccessToken
 
 	me := env.Request(http.MethodGet, "/api/auth/me", nil, token)
 	require.Equal(t, http.StatusOK, me.Code)
@@ -25,13 +25,14 @@ func TestAuthHandler_LoginRefreshLogout(t *testing.T) {
 	require.Equal(t, login.User.ID, meData["id"])
 	require.Equal(t, login.User.Email, meData["email"])
 
-	refreshPayload := map[string]string{"refresh_token": login.Tokens.RefreshToken}
+	refreshPayload := map[string]string{"refresh_token": login.RefreshToken}
 	refresh := env.Request(http.MethodPost, "/api/auth/refresh", refreshPayload, "")
 	require.Equal(t, http.StatusOK, refresh.Code, refresh.Body.String())
 	var refreshed testutil.TokenPair
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, refresh).Data, &refreshed)
 	require.NotEqual(t, "", refreshed.AccessToken)
 	require.NotEqual(t, "", refreshed.RefreshToken)
+	require.Greater(t, refreshed.ExpiresIn, 0)
 
 	logout := env.Request(http.MethodPost, "/api/auth/logout", nil, token)
 	require.Equal(t, http.StatusOK, logout.Code)

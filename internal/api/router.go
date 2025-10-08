@@ -44,7 +44,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	r.Use(middleware.Metrics())
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
-	r.Use(middleware.CSRF())
+	if cfg.Server.CSRF.Enabled {
+		r.Use(middleware.CSRF())
+	}
 	// Basic rate limiting: 100 requests/minute per IP+path
 	r.Use(middleware.RateLimit(rateStore, 100, time.Minute))
 

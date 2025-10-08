@@ -64,7 +64,7 @@ func TestUserHandler_ListGetCreate(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, unauth.Code)
 
 	login := env.Login(root.Username, "StrongPassw0rd!")
-	token := login.Tokens.AccessToken
+	token := login.AccessToken
 
 	list := env.Request(http.MethodGet, "/api/users", nil, token)
 	require.Equal(t, http.StatusOK, list.Code)
@@ -104,7 +104,7 @@ func TestUserHandler_CreateValidation(t *testing.T) {
 	env := testutil.NewEnv(t)
 	root := env.CreateRootUser("ValidPassw0rd!")
 	login := env.Login(root.Username, "ValidPassw0rd!")
-	token := login.Tokens.AccessToken
+	token := login.AccessToken
 
 	invalidPayload := map[string]any{
 		"username": " ",
@@ -124,7 +124,7 @@ func TestOrganizationHandler_CRUD(t *testing.T) {
 	env := testutil.NewEnv(t)
 	root := env.CreateRootUser("OrgPassw0rd!")
 	login := env.Login(root.Username, "OrgPassw0rd!")
-	token := login.Tokens.AccessToken
+	token := login.AccessToken
 
 	createPayload := map[string]any{
 		"name":        "Test Org",
@@ -174,7 +174,7 @@ func TestTeamHandler_Flow(t *testing.T) {
 	env := testutil.NewEnv(t)
 	root := env.CreateRootUser("TeamPassw0rd!")
 	login := env.Login(root.Username, "TeamPassw0rd!")
-	token := login.Tokens.AccessToken
+	token := login.AccessToken
 
 	orgPayload := map[string]any{
 		"name":        "Team Org",
@@ -242,7 +242,7 @@ func TestSessionHandler_ListAndRevoke(t *testing.T) {
 	env := testutil.NewEnv(t)
 	root := env.CreateRootUser("SessionPassw0rd!")
 	login := env.Login(root.Username, "SessionPassw0rd!")
-	token := login.Tokens.AccessToken
+	token := login.AccessToken
 
 	list := env.Request(http.MethodGet, "/api/sessions/me", nil, token)
 	require.Equal(t, http.StatusOK, list.Code)
@@ -262,7 +262,7 @@ func TestPermissionHandler_RoleLifecycle(t *testing.T) {
 	env := testutil.NewEnv(t)
 	root := env.CreateRootUser("PermPassw0rd!")
 	login := env.Login(root.Username, "PermPassw0rd!")
-	token := login.Tokens.AccessToken
+	token := login.AccessToken
 
 	registry := env.Request(http.MethodGet, "/api/permissions/registry", nil, token)
 	require.Equal(t, http.StatusOK, registry.Code)
@@ -305,7 +305,7 @@ func TestAuditHandler_ListAndExport(t *testing.T) {
 	env := testutil.NewEnv(t)
 	root := env.CreateRootUser("AuditPassw0rd!")
 	login := env.Login(root.Username, "AuditPassw0rd!")
-	token := login.Tokens.AccessToken
+	token := login.AccessToken
 
 	// Trigger some audit events by creating a user.
 	createPayload := map[string]any{
@@ -339,7 +339,7 @@ func TestAuthProviderHandler_Flow(t *testing.T) {
 	env := testutil.NewEnv(t)
 	root := env.CreateRootUser("ProvidersPassw0rd!")
 	login := env.Login(root.Username, "ProvidersPassw0rd!")
-	token := login.Tokens.AccessToken
+	token := login.AccessToken
 
 	list := env.Request(http.MethodGet, "/api/auth/providers", nil, token)
 	require.Equal(t, http.StatusOK, list.Code)
@@ -407,7 +407,7 @@ func TestSecurityHandler_Audit(t *testing.T) {
 	root := env.CreateRootUser("SecurePassw0rd!")
 	login := env.Login(root.Username, "SecurePassw0rd!")
 
-	resp := env.Request(http.MethodGet, "/api/security/audit", nil, login.Tokens.AccessToken)
+	resp := env.Request(http.MethodGet, "/api/security/audit", nil, login.AccessToken)
 	require.Equal(t, http.StatusOK, resp.Code)
 
 	payload := testutil.DecodeResponse(t, resp)

@@ -39,6 +39,7 @@ type loginRequest struct {
 type tokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
+	ExpiresIn    int    `json:"expires_in"`
 }
 
 // POST /api/auth/login
@@ -89,7 +90,12 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, http.StatusOK, tokenResponse{AccessToken: pair.AccessToken, RefreshToken: pair.RefreshToken})
+	expiresIn := int(h.jwt.AccessTokenTTL().Seconds())
+	if expiresIn <= 0 {
+		expiresIn = int(iauth.DefaultAccessTokenTTL.Seconds())
+	}
+
+	response.Success(c, http.StatusOK, tokenResponse{AccessToken: pair.AccessToken, RefreshToken: pair.RefreshToken, ExpiresIn: expiresIn})
 }
 
 // POST /api/auth/logout
@@ -227,21 +233,44 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 }
 
 func (h *AuthHandler) respondWithTokens(c *gin.Context, user *models.User, pair iauth.TokenPair) {
+	// Reload user to include associations required by the response payload.
+	var hydrated models.User
+	if err := h.db.Preload("Roles").Take(&hydrated, "id = ?", user.ID).Error; err == nil {
+		user = &hydrated
+	}
+
 	checker, _ := permissions.NewChecker(h.db)
 	perms, _ := checker.GetUserPermissions(c.Request.Context(), user.ID)
 
+	roles := make([]gin.H, 0, len(user.Roles))
+	for _, role := range user.Roles {
+		roles = append(roles, gin.H{
+			"id":          role.ID,
+			"name":        role.Name,
+			"description": role.Description,
+		})
+	}
+
+	expiresIn := int(h.jwt.AccessTokenTTL().Seconds())
+	if expiresIn <= 0 {
+		expiresIn = int(iauth.DefaultAccessTokenTTL.Seconds())
+	}
+
 	payload := gin.H{
-		"tokens": tokenResponse{AccessToken: pair.AccessToken, RefreshToken: pair.RefreshToken},
+		"access_token":  pair.AccessToken,
+		"refresh_token": pair.RefreshToken,
+		"expires_in":    expiresIn,
 		"user": gin.H{
-			"id":         user.ID,
-			"username":   user.Username,
-			"email":      user.Email,
-			"is_root":    user.IsRoot,
-			"is_active":  user.IsActive,
-			"first_name": user.FirstName,
-			"last_name":  user.LastName,
+			"id":          user.ID,
+			"username":    user.Username,
+			"email":       user.Email,
+			"is_root":     user.IsRoot,
+			"is_active":   user.IsActive,
+			"first_name":  user.FirstName,
+			"last_name":   user.LastName,
+			"roles":       roles,
+			"permissions": perms,
 		},
-		"permissions": perms,
 	}
 
 	response.Success(c, http.StatusOK, payload)
