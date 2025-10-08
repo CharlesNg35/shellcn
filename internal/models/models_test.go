@@ -2,92 +2,72 @@ package models
 
 import "testing"
 
-func TestUserBeforeCreateGeneratesID(t *testing.T) {
-	var user User
-	if err := user.BeforeCreate(nil); err != nil {
+func TestBaseModelBeforeCreateGeneratesID(t *testing.T) {
+	var base BaseModel
+	if err := base.BeforeCreate(nil); err != nil {
 		t.Fatalf("before create: %v", err)
 	}
-	if user.ID == "" {
-		t.Fatal("expected user ID to be generated")
+	if base.ID == "" {
+		t.Fatal("expected base model ID to be generated")
 	}
 }
 
-func TestOrganizationBeforeCreateGeneratesID(t *testing.T) {
-	var org Organization
-	if err := org.BeforeCreate(nil); err != nil {
-		t.Fatalf("before create: %v", err)
+func TestEmbeddedModelsUseBaseBeforeCreate(t *testing.T) {
+	cases := []struct {
+		name  string
+		model func() *BaseModel
+	}{
+		{"user", func() *BaseModel {
+			u := &User{}
+			return &u.BaseModel
+		}},
+		{"organization", func() *BaseModel {
+			o := &Organization{}
+			return &o.BaseModel
+		}},
+		{"team", func() *BaseModel {
+			m := &Team{}
+			return &m.BaseModel
+		}},
+		{"role", func() *BaseModel {
+			r := &Role{}
+			return &r.BaseModel
+		}},
+		{"permission", func() *BaseModel {
+			p := &Permission{}
+			return &p.BaseModel
+		}},
+		{"session", func() *BaseModel {
+			s := &Session{}
+			return &s.BaseModel
+		}},
+		{"audit_log", func() *BaseModel {
+			a := &AuditLog{}
+			return &a.BaseModel
+		}},
+		{"mfa_secret", func() *BaseModel {
+			m := &MFASecret{}
+			return &m.BaseModel
+		}},
+		{"password_reset_token", func() *BaseModel {
+			p := &PasswordResetToken{}
+			return &p.BaseModel
+		}},
+		{"auth_provider", func() *BaseModel {
+			a := &AuthProvider{}
+			return &a.BaseModel
+		}},
 	}
-	if org.ID == "" {
-		t.Fatal("expected organization ID to be generated")
-	}
-}
 
-func TestTeamBeforeCreateGeneratesID(t *testing.T) {
-	var team Team
-	if err := team.BeforeCreate(nil); err != nil {
-		t.Fatalf("before create: %v", err)
-	}
-	if team.ID == "" {
-		t.Fatal("expected team ID to be generated")
-	}
-}
-
-func TestRoleBeforeCreateGeneratesIDWhenEmpty(t *testing.T) {
-	var role Role
-	if err := role.BeforeCreate(nil); err != nil {
-		t.Fatalf("before create: %v", err)
-	}
-	if role.ID == "" {
-		t.Fatal("expected role ID to be generated")
-	}
-}
-
-func TestSessionBeforeCreateGeneratesID(t *testing.T) {
-	var session Session
-	if err := session.BeforeCreate(nil); err != nil {
-		t.Fatalf("before create: %v", err)
-	}
-	if session.ID == "" {
-		t.Fatal("expected session ID to be generated")
-	}
-}
-
-func TestAuditLogBeforeCreateGeneratesID(t *testing.T) {
-	var entry AuditLog
-	if err := entry.BeforeCreate(nil); err != nil {
-		t.Fatalf("before create: %v", err)
-	}
-	if entry.ID == "" {
-		t.Fatal("expected audit log ID to be generated")
-	}
-}
-
-func TestMFASecretBeforeCreateGeneratesID(t *testing.T) {
-	var secret MFASecret
-	if err := secret.BeforeCreate(nil); err != nil {
-		t.Fatalf("before create: %v", err)
-	}
-	if secret.ID == "" {
-		t.Fatal("expected MFA secret ID to be generated")
-	}
-}
-
-func TestPasswordResetTokenBeforeCreateGeneratesID(t *testing.T) {
-	var token PasswordResetToken
-	if err := token.BeforeCreate(nil); err != nil {
-		t.Fatalf("before create: %v", err)
-	}
-	if token.ID == "" {
-		t.Fatal("expected password reset token ID to be generated")
-	}
-}
-
-func TestAuthProviderBeforeCreateGeneratesID(t *testing.T) {
-	var provider AuthProvider
-	if err := provider.BeforeCreate(nil); err != nil {
-		t.Fatalf("before create: %v", err)
-	}
-	if provider.ID == "" {
-		t.Fatal("expected auth provider ID to be generated")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			model := tc.model()
+			if err := model.BeforeCreate(nil); err != nil {
+				t.Fatalf("before create: %v", err)
+			}
+			if model.ID == "" {
+				t.Fatal("expected ID to be generated")
+			}
+		})
 	}
 }

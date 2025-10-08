@@ -1,15 +1,11 @@
 package models
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-)
+import "time"
 
 // User describes platform users with relationships to organisations, teams, and roles.
 type User struct {
-	ID       string `gorm:"primaryKey;type:uuid" json:"id"`
+	BaseModel
+
 	Username string `gorm:"uniqueIndex;not null" json:"username"`
 	Email    string `gorm:"uniqueIndex;not null" json:"email"`
 	Password string `gorm:"not null" json:"-"`
@@ -35,16 +31,4 @@ type User struct {
 
 	FailedAttempts int        `gorm:"default:0" json:"-"`
 	LockedUntil    *time.Time `json:"-"`
-
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-}
-
-// BeforeCreate ensures a UUID is present before persisting.
-func (u *User) BeforeCreate(tx *gorm.DB) error {
-	if u.ID == "" {
-		u.ID = uuid.NewString()
-	}
-	return nil
 }

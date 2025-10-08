@@ -26,13 +26,13 @@ func AutoMigrate(db *gorm.DB) error {
 func SeedData(db *gorm.DB) error {
 	roles := []models.Role{
 		{
-			ID:          "admin",
+			BaseModel:   models.BaseModel{ID: "admin"},
 			Name:        "Administrator",
 			Description: "Full system access",
 			IsSystem:    true,
 		},
 		{
-			ID:          "user",
+			BaseModel:   models.BaseModel{ID: "user"},
 			Name:        "User",
 			Description: "Standard user access",
 			IsSystem:    true,
@@ -40,12 +40,13 @@ func SeedData(db *gorm.DB) error {
 	}
 
 	for _, role := range roles {
-		if err := db.Where(models.Role{ID: role.ID}).Attrs(role).FirstOrCreate(&models.Role{}).Error; err != nil {
+		if err := db.Where(models.Role{BaseModel: models.BaseModel{ID: role.ID}}).Attrs(role).FirstOrCreate(&models.Role{}).Error; err != nil {
 			return err
 		}
 	}
 
 	localProvider := models.AuthProvider{
+		BaseModel:         models.BaseModel{ID: "local"},
 		Type:              "local",
 		Name:              "Local Authentication",
 		Enabled:           true,
@@ -58,6 +59,7 @@ func SeedData(db *gorm.DB) error {
 	}
 
 	inviteProvider := models.AuthProvider{
+		BaseModel:                models.BaseModel{ID: "invite"},
 		Type:                     "invite",
 		Name:                     "Email Invitation",
 		Enabled:                  false,

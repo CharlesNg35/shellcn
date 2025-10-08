@@ -1,14 +1,8 @@
 package models
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-	"gorm.io/gorm"
-)
-
 type AuthProvider struct {
-	ID      string `gorm:"primaryKey;type:uuid" json:"id"`
+	BaseModel
+
 	Type    string `gorm:"not null;uniqueIndex" json:"type"`
 	Name    string `gorm:"not null" json:"name"`
 	Enabled bool   `gorm:"default:false" json:"enabled"`
@@ -20,16 +14,7 @@ type AuthProvider struct {
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
 
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	CreatedBy string    `gorm:"type:uuid" json:"created_by"`
-}
-
-func (a *AuthProvider) BeforeCreate(tx *gorm.DB) error {
-	if a.ID == "" {
-		a.ID = uuid.NewString()
-	}
-	return nil
+	CreatedBy string `gorm:"type:uuid" json:"created_by"`
 }
 
 type OIDCConfig struct {
