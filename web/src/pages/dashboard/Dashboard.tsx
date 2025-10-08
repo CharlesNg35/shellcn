@@ -154,7 +154,7 @@ export function Dashboard() {
             </div>
           ) : (
             <div className="space-y-3">
-              {recentActivity.map((activity, index) => (
+              {recentActivity.map((_activity, index) => (
                 <div
                   key={index}
                   className="flex items-center gap-3 rounded-md border border-border p-3"

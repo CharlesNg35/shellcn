@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter'
 import { useAuth } from '@/hooks/useAuth'
-import {  } from '@/lib/constants'
+import {} from '@/lib/constants'
 
 type SetupFormData = z.infer<typeof setupSchema>
 

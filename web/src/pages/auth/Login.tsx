@@ -7,7 +7,7 @@ import { loginSchema } from '@/schemas/auth'
 import { useAuth } from '@/hooks/useAuth'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
-import {  } from '@/lib/constants'
+import {} from '@/lib/constants'
 
 type LoginFormData = z.infer<typeof loginSchema>
 
@@ -59,12 +59,11 @@ export function Login() {
         if (!subscribed) {
           return
         }
-        if (!setup || setup.status === 'pending' || setup.initialized === false) {
+        if (!setup || setup.status === 'pending') {
           setSetupState('pending')
           navigate('/setup', { replace: true })
         } else {
           setSetupState('complete')
-
         }
       })
       .catch(() => {

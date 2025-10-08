@@ -185,9 +185,7 @@ export function Sidebar() {
                         )}
                       />
                       <span>{item.label}</span>
-                      {isActive && (
-                        <ChevronRight className="ml-auto h-4 w-4 opacity-50" />
-                      )}
+                      {isActive && <ChevronRight className="ml-auto h-4 w-4 opacity-50" />}
                     </>
                   )}
                 </NavLink>
