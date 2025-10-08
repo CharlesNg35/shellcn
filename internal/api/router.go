@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,7 +18,20 @@ import (
 
 // NewRouter builds the Gin engine, wires middleware and registers core routes.
 // Additional module routers can mount under /api in later phases.
-func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config) (*gin.Engine, error) {
+func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *iauth.SessionService) (*gin.Engine, error) {
+	if db == nil {
+		return nil, fmt.Errorf("database handle must be provided")
+	}
+	if jwt == nil {
+		return nil, fmt.Errorf("jwt service must be provided")
+	}
+	if sessions == nil {
+		return nil, fmt.Errorf("session service must be provided")
+	}
+	if cfg == nil {
+		return nil, fmt.Errorf("config must be provided")
+	}
+
 	r := gin.New()
 
 	// Global middleware
@@ -33,13 +47,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config) (*gin.Engine
 	// Health endpoint (public)
 	r.GET("/health", handlers.Health(db))
 
-	// Construct dependent services
-	sessionSvc, err := iauth.NewSessionService(db, jwt, iauth.SessionConfig{})
-	if err != nil {
-		return nil, err
-	}
-
-	authHandler := handlers.NewAuthHandler(db, jwt, sessionSvc)
+	authHandler := handlers.NewAuthHandler(db, jwt, sessions)
 
 	// Public auth routes
 	auth := r.Group("/api/auth")
@@ -122,7 +130,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config) (*gin.Engine
 	}
 
 	// Sessions
-	sessionHandler := handlers.NewSessionHandler(db, sessionSvc)
+	sessionHandler := handlers.NewSessionHandler(db, sessions)
 	api.GET("/sessions/me", sessionHandler.ListMySessions)
 	api.POST("/sessions/revoke/:id", sessionHandler.Revoke)
 	api.POST("/sessions/revoke_all", sessionHandler.RevokeAll)
@@ -146,7 +154,12 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config) (*gin.Engine
 	api.GET("/audit/export", middleware.RequirePermission(checker, "audit.export"), auditHandler.Export)
 
 	// Auth providers (note: encryption key should be provided from config in server wiring)
-	apHandler, err := handlers.NewAuthProviderHandler(db, []byte("0123456789abcdef0123456789abcdef"))
+	encryptionKey := []byte(cfg.Vault.EncryptionKey)
+	if length := len(encryptionKey); length != 16 && length != 24 && length != 32 {
+		return nil, fmt.Errorf("invalid vault encryption key length: expected 16, 24, or 32 bytes, got %d", length)
+	}
+
+	apHandler, err := handlers.NewAuthProviderHandler(db, encryptionKey)
 	if err != nil {
 		return nil, err
 	}

@@ -5,9 +5,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	testutil "github.com/charlesng35/shellcn/internal/testutil"
 )
@@ -23,7 +25,29 @@ func TestRouter_PublicAndProtectedRoutes(t *testing.T) {
 		t.Fatalf("jwt service: %v", err)
 	}
 
-	router, err := NewRouter(db, jwtSvc, nil)
+	cfg := &app.Config{
+		Vault: app.VaultConfig{
+			EncryptionKey: "0123456789abcdef0123456789abcdef",
+		},
+		Auth: app.AuthConfig{
+			JWT: app.JWTSettings{
+				Secret: "test-secret",
+				Issuer: "test",
+				TTL:    time.Hour,
+			},
+			Session: app.SessionSettings{
+				RefreshTTL:    24 * time.Hour,
+				RefreshLength: 48,
+			},
+		},
+	}
+
+	sessionSvc, err := iauth.NewSessionService(db, jwtSvc, cfg.Auth.SessionServiceConfig())
+	if err != nil {
+		t.Fatalf("session service: %v", err)
+	}
+
+	router, err := NewRouter(db, jwtSvc, cfg, sessionSvc)
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}
@@ -61,7 +85,29 @@ func TestRouter_MetricsEndpoint(t *testing.T) {
 		t.Fatalf("jwt service: %v", err)
 	}
 
-	router, err := NewRouter(db, jwtSvc, nil)
+	cfg := &app.Config{
+		Vault: app.VaultConfig{
+			EncryptionKey: "0123456789abcdef0123456789abcdef",
+		},
+		Auth: app.AuthConfig{
+			JWT: app.JWTSettings{
+				Secret: "metrics-secret",
+				Issuer: "test",
+				TTL:    time.Hour,
+			},
+			Session: app.SessionSettings{
+				RefreshTTL:    24 * time.Hour,
+				RefreshLength: 48,
+			},
+		},
+	}
+
+	sessionSvc, err := iauth.NewSessionService(db, jwtSvc, cfg.Auth.SessionServiceConfig())
+	if err != nil {
+		t.Fatalf("session service: %v", err)
+	}
+
+	router, err := NewRouter(db, jwtSvc, cfg, sessionSvc)
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}

@@ -1,6 +1,6 @@
 # Project Roadmap
 
-## 1. Core Module (Auth, Users, Permissions) — In Progress
+## 1. Core Module (Auth, Users, Permissions) — Feature Complete (QA & Docs Pending)
 
 ### Phase 1: Foundation (Week 1)
 
@@ -8,6 +8,7 @@
   - [x] Initialize Go module
   - [x] Setup directory structure
   - [x] Configure Makefile
+  - [x] Implement server entrypoint (configuration, database, router wiring)
   - [ ] Setup CI/CD pipeline
 - [x] **Shared Packages**
   - [x] Implement `pkg/logger`
