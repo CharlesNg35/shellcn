@@ -180,7 +180,6 @@ web/
 │   │   ├── auth-providers/             # Auth provider components
 │   │   │   ├── ProviderCard.tsx
 │   │   │   ├── OIDCConfigForm.tsx
-│   │   │   ├── OAuth2ConfigForm.tsx
 │   │   │   ├── SAMLConfigForm.tsx
 │   │   │   ├── LDAPConfigForm.tsx
 │   │   │   ├── LocalSettingsForm.tsx
@@ -1166,7 +1165,6 @@ import { useState } from 'react'
 import { useAuthProviders } from '@/hooks/useAuthProviders'
 import { ProviderCard } from '@/components/auth-providers/ProviderCard'
 import { OIDCConfigForm } from '@/components/auth-providers/OIDCConfigForm'
-import { OAuth2ConfigForm } from '@/components/auth-providers/OAuth2ConfigForm'
 import { SAMLConfigForm } from '@/components/auth-providers/SAMLConfigForm'
 import { LDAPConfigForm } from '@/components/auth-providers/LDAPConfigForm'
 import { LocalSettingsForm } from '@/components/auth-providers/LocalSettingsForm'
@@ -1183,7 +1181,6 @@ export function AuthProviders() {
     { type: 'local', name: 'Local Authentication', icon: 'key', description: 'Username and password' },
     { type: 'invite', name: 'Email Invitation', icon: 'mail', description: 'Invite users via email' },
     { type: 'oidc', name: 'OpenID Connect', icon: 'shield-check', description: 'OIDC SSO' },
-    { type: 'oauth2', name: 'OAuth 2.0', icon: 'key', description: 'Generic OAuth2' },
     { type: 'saml', name: 'SAML 2.0', icon: 'shield', description: 'SAML SSO' },
     { type: 'ldap', name: 'LDAP / AD', icon: 'building', description: 'LDAP or Active Directory' },
   ]
@@ -1241,15 +1238,6 @@ export function AuthProviders() {
           size="large"
         >
           <OIDCConfigForm onSuccess={() => setConfigureModal(null)} />
-        </Modal>
-
-        <Modal
-          open={configureModal === 'oauth2'}
-          onClose={() => setConfigureModal(null)}
-          title="Configure OAuth 2.0"
-          size="large"
-        >
-          <OAuth2ConfigForm onSuccess={() => setConfigureModal(null)} />
         </Modal>
 
         <Modal
@@ -1557,21 +1545,6 @@ export const authProvidersApi = {
     enabled: boolean
   }) => {
     const response = await apiClient.post('/auth/providers/oidc', config)
-    return response.data
-  },
-
-  // Configure OAuth2
-  configureOAuth2: async (config: {
-    auth_url: string
-    token_url: string
-    user_info_url: string
-    client_id: string
-    client_secret: string
-    redirect_url: string
-    scopes: string[]
-    enabled: boolean
-  }) => {
-    const response = await apiClient.post('/auth/providers/oauth2', config)
     return response.data
   },
 
@@ -2780,7 +2753,6 @@ export const Disabled: Story = {
   - [ ] AuditExport
   - [ ] ProviderCard
   - [ ] OIDCConfigForm
-  - [ ] OAuth2ConfigForm
   - [ ] SAMLConfigForm
   - [ ] LDAPConfigForm
   - [ ] LocalSettingsForm

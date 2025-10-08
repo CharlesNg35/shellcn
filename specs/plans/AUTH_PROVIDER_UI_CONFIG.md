@@ -8,7 +8,7 @@
 
 ## Overview
 
-All authentication providers (OIDC, OAuth2, SAML, LDAP) are configured through the admin UI, **NOT** through configuration files or environment variables. This provides a better user experience and allows administrators to manage authentication methods without requiring server restarts or file system access.
+All authentication providers (OIDC, SAML, LDAP) are configured through the admin UI, **NOT** through configuration files or environment variables. This provides a better user experience and allows administrators to manage authentication methods without requiring server restarts or file system access.
 
 ---
 
@@ -41,20 +41,7 @@ All authentication providers (OIDC, OAuth2, SAML, LDAP) are configured through t
   - Scopes (e.g., `openid profile email`)
 - **Examples:** Google, Azure AD, Okta, Keycloak
 
-### 4. **OAuth 2.0** (Optional)
-- **Type:** `oauth2`
-- **Description:** Generic OAuth 2.0 authentication
-- **Configuration:**
-  - Authorization URL
-  - Token URL
-  - User Info URL
-  - Client ID
-  - Client Secret (encrypted)
-  - Redirect URL
-  - Scopes
-- **Examples:** GitHub, GitLab, custom OAuth2 providers
-
-### 5. **SAML 2.0** (Optional)
+### 4. **SAML 2.0** (Optional)
 - **Type:** `saml`
 - **Description:** SAML 2.0 Single Sign-On
 - **Configuration:**
@@ -66,7 +53,7 @@ All authentication providers (OIDC, OAuth2, SAML, LDAP) are configured through t
   - Attribute Mapping (SAML attributes → user fields)
 - **Examples:** Azure AD, Okta, OneLogin
 
-### 6. **LDAP / Active Directory** (Optional)
+### 5. **LDAP / Active Directory** (Optional)
 - **Type:** `ldap`
 - **Description:** LDAP or Active Directory authentication
 - **Configuration:**
@@ -122,7 +109,6 @@ type AuthProvider struct {
 - `GET /api/auth/providers/all` - List all providers
 - `GET /api/auth/providers/:type` - Get provider config
 - `POST /api/auth/providers/oidc` - Configure OIDC
-- `POST /api/auth/providers/oauth2` - Configure OAuth2
 - `POST /api/auth/providers/saml` - Configure SAML
 - `POST /api/auth/providers/ldap` - Configure LDAP
 - `PUT /api/auth/providers/local` - Update local settings
@@ -140,7 +126,6 @@ Key methods:
 - `List()` - List all providers (redact sensitive config)
 - `GetEnabled()` - Get enabled providers (for login page)
 - `ConfigureOIDC()` - Configure OIDC provider
-- `ConfigureOAuth2()` - Configure OAuth2 provider
 - `ConfigureSAML()` - Configure SAML provider
 - `ConfigureLDAP()` - Configure LDAP provider
 - `UpdateLocalSettings()` - Update local auth settings
@@ -178,9 +163,8 @@ Each provider type has its own configuration form:
 1. **LocalSettingsForm** - Allow registration toggle
 2. **InviteSettingsForm** - Enable/disable, email verification
 3. **OIDCConfigForm** - OIDC configuration
-4. **OAuth2ConfigForm** - OAuth2 configuration
-5. **SAMLConfigForm** - SAML configuration
-6. **LDAPConfigForm** - LDAP configuration
+4. **SAMLConfigForm** - SAML configuration
+5. **LDAPConfigForm** - LDAP configuration
 
 ### Components
 
@@ -199,7 +183,6 @@ Methods:
 - `getEnabled()` - For login page
 - `getAll()` - For admin page
 - `configureOIDC()` - Configure OIDC
-- `configureOAuth2()` - Configure OAuth2
 - `configureSAML()` - Configure SAML
 - `configureLDAP()` - Configure LDAP
 - `updateLocal()` - Update local settings
@@ -232,7 +215,7 @@ Methods:
 1. Navigate to login page
 2. See all enabled authentication providers:
    - Local login form (always visible)
-   - SSO buttons for enabled providers (OIDC, OAuth2, SAML)
+   - SSO buttons for enabled providers (OIDC, SAML)
 3. Click on desired provider
 4. Redirected to provider's login page
 5. After successful authentication, redirected back to ShellCN

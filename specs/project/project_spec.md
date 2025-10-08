@@ -33,7 +33,7 @@ A comprehensive web-based **remote client platform** for managing enterprise inf
 **Enterprise Features:**
 - Fine-grained permission system with dependencies
 - Multi-tenancy with organizations and teams
-- **Enterprise authentication (OIDC, SAML, LDAP, OAuth2, Local)** - All providers configured via UI by admins
+- **Enterprise authentication (OIDC, SAML, LDAP, Local)** - All providers configured via UI by admins
 - **Secret management (Credential Vault)** - Store SSH keys, passwords, database credentials
 - **Connection profiles with reusable identities**
 - Session recording and audit logging

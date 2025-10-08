@@ -117,21 +117,6 @@ func (h *AuthProviderHandler) Configure(c *gin.Context) {
 			return
 		}
 		response.Success(c, http.StatusOK, gin.H{"updated": true})
-	case "oauth2":
-		var body struct {
-			Enabled           bool                `json:"enabled"`
-			AllowRegistration bool                `json:"allow_registration"`
-			Config            models.OAuth2Config `json:"config"`
-		}
-		if err := c.ShouldBindJSON(&body); err != nil {
-			response.Error(c, errors.ErrBadRequest)
-			return
-		}
-		if err := h.svc.ConfigureOAuth2(c.Request.Context(), body.Config, body.Enabled, body.AllowRegistration, actor); err != nil {
-			response.Error(c, errors.ErrInternalServer)
-			return
-		}
-		response.Success(c, http.StatusOK, gin.H{"updated": true})
 	case "saml":
 		var body struct {
 			Enabled           bool              `json:"enabled"`

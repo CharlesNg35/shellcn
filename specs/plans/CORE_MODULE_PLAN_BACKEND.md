@@ -25,6 +25,7 @@
 15. [Monitoring & Observability](#monitoring--observability)
 16. [Testing Strategy](#testing-strategy)
 17. [Implementation Checklist](#implementation-checklist)
+18. [Authentication Flow](AUTHENTICATION_FLOW.md)
 
 ---
 
@@ -556,17 +557,6 @@ type AuthProvider struct {
 // OIDCConfig for OpenID Connect
 type OIDCConfig struct {
     Issuer       string `json:"issuer"`
-    ClientID     string `json:"client_id"`
-    ClientSecret string `json:"client_secret"` // Encrypted
-    RedirectURL  string `json:"redirect_url"`
-    Scopes       []string `json:"scopes"`
-}
-
-// OAuth2Config for generic OAuth2
-type OAuth2Config struct {
-    AuthURL      string `json:"auth_url"`
-    TokenURL     string `json:"token_url"`
-    UserInfoURL  string `json:"user_info_url"`
     ClientID     string `json:"client_id"`
     ClientSecret string `json:"client_secret"` // Encrypted
     RedirectURL  string `json:"redirect_url"`
@@ -1991,41 +1981,6 @@ func (s *AuthProviderService) ConfigureOIDC(config models.OIDCConfig, enabled bo
     return nil
 }
 
-// Configure OAuth2 provider
-func (s *AuthProviderService) ConfigureOAuth2(config models.OAuth2Config, enabled bool, createdBy string) error {
-    // Encrypt client secret
-    encryptedSecret, err := crypto.Encrypt([]byte(config.ClientSecret), s.encryptionKey)
-    if err != nil {
-        return err
-    }
-    config.ClientSecret = encryptedSecret
-
-    configJSON, err := json.Marshal(config)
-    if err != nil {
-        return err
-    }
-
-    provider := models.AuthProvider{
-        Type:        "oauth2",
-        Name:        "OAuth 2.0",
-        Enabled:     enabled,
-        Config:      string(configJSON),
-        Description: "Generic OAuth 2.0 authentication",
-        Icon:        "key",
-        CreatedBy:   createdBy,
-    }
-
-    if err := s.db.Where("type = ?", "oauth2").Assign(provider).FirstOrCreate(&provider).Error; err != nil {
-        return err
-    }
-
-    s.auditService.Log("auth_provider.configure", "oauth2", "success", map[string]interface{}{
-        "enabled": enabled,
-    })
-
-    return nil
-}
-
 // Configure SAML provider
 func (s *AuthProviderService) ConfigureSAML(config models.SAMLConfig, enabled bool, createdBy string) error {
     // Encrypt private key
@@ -2683,7 +2638,6 @@ func SetupRouter(
             providers.GET("/all", authProviderHandler.ListAll)
             providers.GET("/:type", authProviderHandler.Get)
             providers.POST("/oidc", authProviderHandler.ConfigureOIDC)
-            providers.POST("/oauth2", authProviderHandler.ConfigureOAuth2)
             providers.POST("/saml", authProviderHandler.ConfigureSAML)
             providers.POST("/ldap", authProviderHandler.ConfigureLDAP)
             providers.PUT("/local", authProviderHandler.UpdateLocal)
@@ -2781,7 +2735,6 @@ func SetupRouter(
 | GET | `/api/auth/providers/all` | `permission.manage` | List all providers (admin) |
 | GET | `/api/auth/providers/:type` | `permission.manage` | Get provider config |
 | POST | `/api/auth/providers/oidc` | `permission.manage` | Configure OIDC provider |
-| POST | `/api/auth/providers/oauth2` | `permission.manage` | Configure OAuth2 provider |
 | POST | `/api/auth/providers/saml` | `permission.manage` | Configure SAML provider |
 | POST | `/api/auth/providers/ldap` | `permission.manage` | Configure LDAP provider |
 | PUT | `/api/auth/providers/local` | `permission.manage` | Update local settings |
@@ -3479,7 +3432,6 @@ go tool cover -html=coverage.out
 - [x] **Auth Provider Service**
   - [x] Implement provider CRUD
   - [x] Implement OIDC configuration
-  - [x] Implement OAuth2 configuration
   - [x] Implement SAML configuration
   - [x] Implement LDAP configuration
   - [x] Implement local/invite settings
@@ -3668,7 +3620,7 @@ LOG_LEVEL=info # debug, info, warn, error
 # Features
 ENABLE_MFA=true
 
-# NOTE: Authentication providers (OIDC, SAML, LDAP, OAuth2) are configured via UI
+# NOTE: Authentication providers (OIDC, SAML, LDAP) are configured via UI
 # by administrators, not through environment variables. See Auth Provider Management.
 ```
 

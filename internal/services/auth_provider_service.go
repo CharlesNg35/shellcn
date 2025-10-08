@@ -203,50 +203,6 @@ func (s *AuthProviderService) ConfigureOIDC(ctx context.Context, cfg models.OIDC
 	return nil
 }
 
-// ConfigureOAuth2 upserts a generic OAuth2 provider configuration.
-func (s *AuthProviderService) ConfigureOAuth2(ctx context.Context, cfg models.OAuth2Config, enabled bool, allowRegistration bool, createdBy string) error {
-	ctx = ensureContext(ctx)
-
-	cpy := cfg
-	secret, err := crypto.Encrypt([]byte(cpy.ClientSecret), s.encryptionKey)
-	if err != nil {
-		return fmt.Errorf("auth provider service: encrypt oauth2 secret: %w", err)
-	}
-	cpy.ClientSecret = secret
-
-	payload, err := json.Marshal(cpy)
-	if err != nil {
-		return fmt.Errorf("auth provider service: marshal oauth2 config: %w", err)
-	}
-
-	provider := models.AuthProvider{
-		Type:              "oauth2",
-		Name:              "OAuth 2.0",
-		Enabled:           enabled,
-		Config:            string(payload),
-		AllowRegistration: allowRegistration,
-		Description:       "Generic OAuth 2.0 authentication",
-		Icon:              "key",
-		CreatedBy:         strings.TrimSpace(createdBy),
-	}
-
-	if err := s.db.WithContext(ctx).
-		Where("type = ?", provider.Type).
-		Assign(provider).
-		FirstOrCreate(&provider).Error; err != nil {
-		return fmt.Errorf("auth provider service: upsert oauth2 provider: %w", err)
-	}
-
-	recordAudit(s.auditService, ctx, AuditEntry{
-		Action:   "auth_provider.configure",
-		Resource: provider.Type,
-		Result:   "success",
-		Metadata: map[string]any{"enabled": enabled},
-	})
-
-	return nil
-}
-
 // ConfigureSAML upserts a SAML provider configuration.
 func (s *AuthProviderService) ConfigureSAML(ctx context.Context, cfg models.SAMLConfig, enabled bool, allowRegistration bool, createdBy string) error {
 	ctx = ensureContext(ctx)

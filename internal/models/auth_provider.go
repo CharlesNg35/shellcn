@@ -25,16 +25,6 @@ type OIDCConfig struct {
 	Scopes       []string `json:"scopes"`
 }
 
-type OAuth2Config struct {
-	AuthURL      string   `json:"auth_url"`
-	TokenURL     string   `json:"token_url"`
-	UserInfoURL  string   `json:"user_info_url"`
-	ClientID     string   `json:"client_id"`
-	ClientSecret string   `json:"client_secret"`
-	RedirectURL  string   `json:"redirect_url"`
-	Scopes       []string `json:"scopes"`
-}
-
 type SAMLConfig struct {
 	MetadataURL      string            `json:"metadata_url"`
 	EntityID         string            `json:"entity_id"`

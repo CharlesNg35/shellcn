@@ -110,30 +110,7 @@ func TestAuthProviderServiceMutations(t *testing.T) {
 		Name: "Invite",
 	}).Error)
 
-	err = svc.ConfigureOAuth2(ctx, models.OAuth2Config{
-		AuthURL:      "https://auth.example.com",
-		TokenURL:     "https://token.example.com",
-		UserInfoURL:  "https://userinfo.example.com",
-		ClientID:     "oauth-client",
-		ClientSecret: "oauth-secret",
-		RedirectURL:  "https://app.example.com/oauth",
-	}, true, false, "admin")
-	require.NoError(t, err)
-
-	err = svc.SetEnabled(ctx, "oauth2", false)
-	require.NoError(t, err)
-
-	provider, err := svc.GetByType(ctx, "oauth2")
-	require.NoError(t, err)
-	require.False(t, provider.Enabled)
-
-	err = svc.Delete(ctx, "oauth2")
-	require.NoError(t, err)
-
-	_, err = svc.GetByType(ctx, "oauth2")
-	require.ErrorIs(t, err, ErrAuthProviderNotFound)
-
-	err = svc.UpdateLocalSettings(ctx, false, false)
+err = svc.UpdateLocalSettings(ctx, false, false)
 	require.NoError(t, err)
 
 	local, err := svc.GetByType(ctx, "local")

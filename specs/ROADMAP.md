@@ -84,7 +84,6 @@
 - [x] **Auth Provider Service**
   - [x] Implement provider CRUD
   - [x] Implement OIDC configuration
-  - [x] Implement OAuth2 configuration
   - [x] Implement SAML configuration
   - [x] Implement LDAP configuration
   - [x] Implement local/invite settings

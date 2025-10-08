@@ -43,18 +43,6 @@ This document contains the complete, expanded feature sets for Core, Docker, Kub
 - Supported providers: Google, Azure AD, Okta, Keycloak, etc.
 - Connection testing
 
-**OAuth 2.0 (Optional):**
-- Generic OAuth 2.0 authentication
-- UI Configuration:
-  - Authorization URL
-  - Token URL
-  - User Info URL
-  - Client ID
-  - Client Secret (encrypted)
-  - Redirect URL
-  - Scopes
-- Supported providers: GitHub, GitLab, custom OAuth2 providers
-
 **SAML 2.0 (Optional):**
 - SAML 2.0 Single Sign-On
 - UI Configuration:
