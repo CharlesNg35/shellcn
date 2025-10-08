@@ -1,4 +1,4 @@
-.PHONY: help build build-go build-rust test lint fmt run dev clean tidy generate
+.PHONY: help build build-go build-rust test test-cover lint fmt run dev clean tidy generate
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
@@ -13,6 +13,7 @@ help:
 	@echo "  make build-go      Build the Go backend binary"
 	@echo "  make build-rust    Build Rust FFI modules (if present)"
 	@echo "  make test          Run Go unit tests"
+	@echo "  make test-cover    Run Go unit tests with coverage"
 	@echo "  make lint          Run go vet on the codebase"
 	@echo "  make fmt           Format Go sources with gofmt"
 	@echo "  make tidy          Sync module dependencies"
@@ -47,6 +48,10 @@ endif
 
 test:
 	@echo "Running tests..."
+	@go test ./...
+
+test-cover:
+	@echo "Running tests with coverage..."
 	@go test -cover ./...
 
 lint:

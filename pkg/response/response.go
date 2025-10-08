@@ -3,7 +3,7 @@ package response
 import (
 	"net/http"
 
-	appErrors "github.com/charlesng/shellcn/pkg/errors"
+	appErrors "github.com/charlesng35/shellcn/pkg/errors"
 	"github.com/gin-gonic/gin"
 )
 

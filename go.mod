@@ -1,4 +1,4 @@
-module github.com/charlesng/shellcn
+module github.com/charlesng35/shellcn
 
 go 1.24.0
 

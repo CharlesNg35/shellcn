@@ -3,7 +3,7 @@ package database
 import (
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/models"
 	"gorm.io/gorm"
 )
 
