@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	testutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/models"
-	testutil "github.com/charlesng35/shellcn/internal/testutil"
 	"github.com/charlesng35/shellcn/pkg/crypto"
 )
 

@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/charlesng35/shellcn/internal/auth/providers"
+	testutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/models"
-	testutil "github.com/charlesng35/shellcn/internal/testutil"
 )
 
 func TestSSOResolveExistingUser(t *testing.T) {

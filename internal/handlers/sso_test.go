@@ -13,9 +13,9 @@ import (
 
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/auth/providers"
+	testutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/services"
-	testutil "github.com/charlesng35/shellcn/internal/testutil"
 	"github.com/charlesng35/shellcn/pkg/crypto"
 )
 

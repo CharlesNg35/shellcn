@@ -11,8 +11,8 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
+	testutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/middleware"
-	testutil "github.com/charlesng35/shellcn/internal/testutil"
 )
 
 func TestRouter_PublicAndProtectedRoutes(t *testing.T) {

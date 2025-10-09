@@ -16,9 +16,9 @@ import (
 	"github.com/charlesng35/shellcn/internal/api"
 	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
+	sharedtestutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
-	sharedtestutil "github.com/charlesng35/shellcn/internal/testutil"
 	"github.com/charlesng35/shellcn/pkg/crypto"
 	"github.com/charlesng35/shellcn/pkg/response"
 )

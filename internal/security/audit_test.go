@@ -9,8 +9,8 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
+	testutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/models"
-	testutil "github.com/charlesng35/shellcn/internal/testutil"
 )
 
 func TestAuditServiceRun(t *testing.T) {
