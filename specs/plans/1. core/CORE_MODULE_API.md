@@ -848,11 +848,11 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ### 8.1 Protocol Catalog
 
-| Method | Path                       | Description                                                                | Permission        | Handler                       |
-| ------ | -------------------------- | -------------------------------------------------------------------------- | ----------------- | ----------------------------- |
-| GET    | `/api/protocols`           | Return the full driver catalog (driver + config enablement metadata).      | `connection.view` | `ProtocolHandler.ListAll`     |
-| GET    | `/api/protocols/available` | Return only protocols available to the calling user.                       | `connection.view` | `ProtocolHandler.ListForUser` |
-| POST   | `/api/protocols/:id/test`  | Trigger a driver self-test/diagnostic (writes audit trail).                | `connection.manage` | `ProtocolHandler.TestDriver` |
+| Method | Path                       | Description                                                           | Permission          | Handler                       |
+| ------ | -------------------------- | --------------------------------------------------------------------- | ------------------- | ----------------------------- |
+| GET    | `/api/protocols`           | Return the full driver catalog (driver + config enablement metadata). | `connection.view`   | `ProtocolHandler.ListAll`     |
+| GET    | `/api/protocols/available` | Return only protocols available to the calling user.                  | `connection.view`   | `ProtocolHandler.ListForUser` |
+| POST   | `/api/protocols/:id/test`  | Trigger a driver self-test/diagnostic (writes audit trail).           | `connection.manage` | `ProtocolHandler.TestDriver`  |
 
 **ProtocolInfo Example**
 
@@ -890,15 +890,15 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ### 8.2 Connections API
 
-| Method | Path                                   | Description                                                     | Permission                                | Handler                       |
-| ------ | -------------------------------------- | --------------------------------------------------------------- | ----------------------------------------- | ----------------------------- |
-| GET    | `/api/connections`                     | List connections visible to the caller (supports filters).      | `connection.view`                         | `ConnectionHandler.List`      |
-| GET    | `/api/connections/:id`                 | Retrieve a specific connection with targets + visibility data. | `connection.view`                         | `ConnectionHandler.Get`       |
-| POST   | `/api/connections`                     | Create a connection (settings, visibility, targets).           | `connection.manage`                       | `ConnectionHandler.Create`    |
-| PATCH  | `/api/connections/:id`                 | Update connection metadata/settings/targets.                   | `connection.manage`                       | `ConnectionHandler.Update`    |
-| DELETE | `/api/connections/:id`                 | Delete a connection.                                           | `connection.manage`                       | `ConnectionHandler.Delete`    |
-| POST   | `/api/connections/:id/share`           | Replace visibility ACLs (org/team/user scopes).                | `connection.share`                        | `ConnectionHandler.UpdateVisibility` |
-| POST   | `/api/connections/:id/preview`         | Run a dry-run or configuration validation.                     | `connection.launch` + `{driver}.connect`  | `ConnectionHandler.LaunchPreview`    |
+| Method | Path                           | Description                                                    | Permission                               | Handler                              |
+| ------ | ------------------------------ | -------------------------------------------------------------- | ---------------------------------------- | ------------------------------------ |
+| GET    | `/api/connections`             | List connections visible to the caller (supports filters).     | `connection.view`                        | `ConnectionHandler.List`             |
+| GET    | `/api/connections/:id`         | Retrieve a specific connection with targets + visibility data. | `connection.view`                        | `ConnectionHandler.Get`              |
+| POST   | `/api/connections`             | Create a connection (settings, visibility, targets).           | `connection.manage`                      | `ConnectionHandler.Create`           |
+| PATCH  | `/api/connections/:id`         | Update connection metadata/settings/targets.                   | `connection.manage`                      | `ConnectionHandler.Update`           |
+| DELETE | `/api/connections/:id`         | Delete a connection.                                           | `connection.manage`                      | `ConnectionHandler.Delete`           |
+| POST   | `/api/connections/:id/share`   | Replace visibility ACLs (org/team/user scopes).                | `connection.share`                       | `ConnectionHandler.UpdateVisibility` |
+| POST   | `/api/connections/:id/preview` | Run a dry-run or configuration validation.                     | `connection.launch` + `{driver}.connect` | `ConnectionHandler.LaunchPreview`    |
 
 **Supported query parameters for `GET /api/connections`:**
 

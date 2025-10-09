@@ -34,11 +34,11 @@
 
 ### Phase 3: Connections & API Integration (Week 2)
 
-- [ ] Create API endpoints for connections, returning available or enabled connections.
-- [ ] A connection is considered enabled if its driver has been implemented.
-- [ ] The UI should display only enabled connections.
-- [ ] The UI should display only connections available to the user, based on their permissions.
-- [ ] Permissions should be fetched based on the user's role; if the user is an admin, all connections should be fetched.
+- [x] Create API endpoints for connections, returning available or enabled connections.
+- [x] A connection is considered enabled if its driver has been implemented.
+- [x] The UI should display only enabled connections.
+- [x] The UI should display only connections available to the user, based on their permissions.
+- [x] Permissions should be fetched based on the user's role; if the user is an admin, all connections should be fetched.
 
 ### Phase 3: Dashboard & Layout (Week 3)
 
