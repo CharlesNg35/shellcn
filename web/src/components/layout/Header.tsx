@@ -1,11 +1,17 @@
-import { Bell, ChevronDown, LogOut, Settings, User } from 'lucide-react'
+import { ChevronDown, LogOut, Menu, Settings, User } from 'lucide-react'
 import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils/cn'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
+import { Breadcrumbs } from './Breadcrumbs'
+import { NotificationBell } from '@/components/notifications/NotificationBell'
 
-export function Header() {
+interface HeaderProps {
+  onToggleSidebar?: () => void
+}
+
+export function Header({ onToggleSidebar }: HeaderProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -48,39 +54,31 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:px-6">
-      {/* Left side - Empty for now, can add breadcrumbs later */}
-      <div className="flex items-center gap-4">
-        {/* Mobile menu button - placeholder for future */}
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:px-6">
+      <div className="flex flex-1 items-center gap-3 overflow-hidden">
+        <button
+          type="button"
+          className="inline-flex items-center rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+          onClick={onToggleSidebar}
+          aria-label="Open navigation"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+        <Breadcrumbs className="hidden flex-1 truncate md:flex" />
       </div>
 
-      {/* Right side - Actions */}
       <div className="flex items-center gap-2">
-        {/* Theme toggle */}
+        <NotificationBell />
         <ThemeToggle />
-
-        {/* Notifications */}
-        <button
-          className="relative rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-          aria-label="Notifications"
-        >
-          <Bell className="h-4 w-4" />
-          {/* Notification badge */}
-          <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-destructive" />
-        </button>
-
-        {/* User menu */}
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-muted"
           >
-            {/* Avatar */}
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {getUserInitials()}
             </div>
 
-            {/* User info */}
             <div className="hidden text-left sm:block">
               <div className="text-sm font-medium text-foreground">{getUserDisplayName()}</div>
               <div className="text-xs text-muted-foreground">{user?.email}</div>
@@ -94,7 +92,6 @@ export function Header() {
             />
           </button>
 
-          {/* Dropdown menu */}
           {userMenuOpen && (
             <div className="absolute right-0 mt-2 w-56 rounded-lg border border-border bg-popover shadow-lg">
               <div className="border-b border-border px-4 py-3">

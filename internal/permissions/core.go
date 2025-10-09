@@ -134,6 +134,17 @@ func init() {
 			DependsOn:   []string{"audit.view"},
 			Description: "Run security audits",
 		},
+		{
+			ID:          "notification.view",
+			Module:      "core",
+			Description: "View in-app notifications",
+		},
+		{
+			ID:          "notification.manage",
+			Module:      "core",
+			DependsOn:   []string{"notification.view"},
+			Description: "Manage in-app notifications and broadcasts",
+		},
 	}
 
 	for _, perm := range perms {

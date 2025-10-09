@@ -29,6 +29,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.Connection{},
 		&models.ConnectionTarget{},
 		&models.ConnectionVisibility{},
+		&models.Notification{},
 	)
 }
 
@@ -87,6 +88,13 @@ func SeedData(db *gorm.DB) error {
 		Icon:                     "mail",
 	}
 	if err := db.Where(models.AuthProvider{Type: inviteProvider.Type}).Attrs(inviteProvider).FirstOrCreate(&models.AuthProvider{}).Error; err != nil {
+		return err
+	}
+
+	if err := assignRolePermissions(db, "admin", []string{"notification.view", "notification.manage"}); err != nil {
+		return err
+	}
+	if err := assignRolePermissions(db, "user", []string{"notification.view"}); err != nil {
 		return err
 	}
 

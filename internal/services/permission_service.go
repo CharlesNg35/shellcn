@@ -217,6 +217,20 @@ func expandWithDependencies(permissionIDs []string) (map[string]struct{}, error)
 	return final, nil
 }
 
+// ListUserPermissions resolves permissions granted to the supplied user.
+func (s *PermissionService) ListUserPermissions(ctx context.Context, userID string) ([]string, error) {
+	ctx = ensureContext(ctx)
+	checker, err := permissions.NewChecker(s.db)
+	if err != nil {
+		return nil, err
+	}
+	perms, err := checker.GetUserPermissions(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return perms, nil
+}
+
 func ensureContext(ctx context.Context) context.Context {
 	if ctx != nil {
 		return ctx

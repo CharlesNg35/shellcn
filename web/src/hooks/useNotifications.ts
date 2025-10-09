@@ -1,0 +1,160 @@
+import { useCallback, useMemo } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { notificationsApi } from '@/lib/api/notifications'
+import { buildWebSocketUrl } from '@/lib/utils/websocket'
+import type { NotificationEventPayload, NotificationPayload } from '@/types/notifications'
+import { useAuth } from './useAuth'
+import { useWebSocket } from './useWebSocket'
+
+export const NOTIFICATION_QUERY_KEY = ['notifications', 'list'] as const
+
+function mergeNotification(
+  existing: NotificationPayload[],
+  notification: NotificationPayload
+): NotificationPayload[] {
+  const next = existing.slice()
+  const index = next.findIndex((item) => item.id === notification.id)
+
+  if (index >= 0) {
+    next[index] = notification
+  } else {
+    next.unshift(notification)
+  }
+
+  return next
+}
+
+function removeNotification(existing: NotificationPayload[], notificationId: string) {
+  return existing.filter((item) => item.id !== notificationId)
+}
+
+export function useNotifications() {
+  const { isAuthenticated } = useAuth({ autoInitialize: true })
+  const queryClient = useQueryClient()
+
+  const notificationsQuery = useQuery({
+    queryKey: NOTIFICATION_QUERY_KEY,
+    queryFn: () => notificationsApi.list({ limit: 25 }),
+    enabled: isAuthenticated,
+    staleTime: 30 * 1000,
+    refetchInterval: isAuthenticated ? 60 * 1000 : false,
+  })
+
+  const notifications = notificationsQuery.data ?? []
+
+  const handleSocketMessage = useCallback(
+    (payload: NotificationEventPayload | NotificationPayload | null) => {
+      if (!payload) {
+        return
+      }
+
+      queryClient.setQueryData<NotificationPayload[]>(NOTIFICATION_QUERY_KEY, (current = []) => {
+        if ('event' in (payload as NotificationEventPayload)) {
+          const eventPayload = payload as NotificationEventPayload
+          const eventType = eventPayload.event
+          const notificationData = eventPayload.data ?? eventPayload.notification ?? undefined
+
+          if (!eventType) {
+            return current
+          }
+
+          switch (eventType) {
+            case 'notification.created':
+            case 'notification.updated':
+              if (notificationData) {
+                return mergeNotification(current, notificationData)
+              }
+              return current
+            case 'notification.read':
+              if (eventPayload.notification_id) {
+                return current.map((item) =>
+                  item.id === eventPayload.notification_id ? { ...item, is_read: true } : item
+                )
+              }
+              if (notificationData) {
+                return mergeNotification(current, { ...notificationData, is_read: true })
+              }
+              return current
+            case 'notification.deleted':
+              if (eventPayload.notification_id) {
+                return removeNotification(current, eventPayload.notification_id)
+              }
+              if (notificationData?.id) {
+                return removeNotification(current, notificationData.id)
+              }
+              return current
+            default:
+              return current
+          }
+        }
+
+        return mergeNotification(current, payload as NotificationPayload)
+      })
+    },
+    [queryClient]
+  )
+
+  const websocketUrl = useMemo(
+    () => (isAuthenticated ? buildWebSocketUrl('/ws/notifications') : ''),
+    [isAuthenticated]
+  )
+
+  const { isConnected } = useWebSocket(websocketUrl, {
+    enabled: isAuthenticated && Boolean(websocketUrl),
+    autoReconnect: true,
+    onMessage: handleSocketMessage,
+  })
+
+  const markReadMutation = useMutation({
+    mutationFn: (notificationId: string) => notificationsApi.markAsRead(notificationId),
+    onSuccess: (_data, notificationId) => {
+      queryClient.setQueryData<NotificationPayload[]>(NOTIFICATION_QUERY_KEY, (current = []) =>
+        current.map((item) => (item.id === notificationId ? { ...item, is_read: true } : item))
+      )
+    },
+  })
+
+  const markUnreadMutation = useMutation({
+    mutationFn: (notificationId: string) => notificationsApi.markAsUnread(notificationId),
+    onSuccess: (_data, notificationId) => {
+      queryClient.setQueryData<NotificationPayload[]>(NOTIFICATION_QUERY_KEY, (current = []) =>
+        current.map((item) => (item.id === notificationId ? { ...item, is_read: false } : item))
+      )
+    },
+  })
+
+  const removeMutation = useMutation({
+    mutationFn: (notificationId: string) => notificationsApi.remove(notificationId),
+    onSuccess: (_data, notificationId) => {
+      queryClient.setQueryData<NotificationPayload[]>(NOTIFICATION_QUERY_KEY, (current = []) =>
+        removeNotification(current, notificationId)
+      )
+    },
+  })
+
+  const markAllMutation = useMutation({
+    mutationFn: () => notificationsApi.markAllAsRead(),
+    onSuccess: () => {
+      queryClient.setQueryData<NotificationPayload[]>(NOTIFICATION_QUERY_KEY, (current = []) =>
+        current.map((item) => ({ ...item, is_read: true }))
+      )
+    },
+  })
+
+  const unreadCount = useMemo(
+    () => notifications.filter((notification) => !notification.is_read).length,
+    [notifications]
+  )
+
+  return {
+    notifications,
+    unreadCount,
+    isLoading: notificationsQuery.isLoading,
+    isConnected,
+    refetch: notificationsQuery.refetch,
+    markAsRead: markReadMutation.mutateAsync,
+    markAsUnread: markUnreadMutation.mutateAsync,
+    removeNotification: removeMutation.mutateAsync,
+    markAllAsRead: markAllMutation.mutateAsync,
+  }
+}

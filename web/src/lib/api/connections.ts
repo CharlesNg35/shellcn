@@ -1,7 +1,8 @@
-import type { ApiResponse } from '@/types/api'
+import type { ApiMeta, ApiResponse } from '@/types/api'
 import type { ConnectionRecord, ConnectionTarget, ConnectionVisibility } from '@/types/connections'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
+import { isApiSuccess } from '@/types/api'
 
 const CONNECTIONS_ENDPOINT = '/connections'
 
@@ -98,8 +99,41 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
   }
 }
 
-export async function fetchConnections(): Promise<ConnectionRecord[]> {
-  const response = await apiClient.get<ApiResponse<ConnectionResponse[]>>(CONNECTIONS_ENDPOINT)
+export interface FetchConnectionsParams {
+  protocol_id?: string
+  search?: string
+  include?: string
+  page?: number
+  per_page?: number
+}
+
+export interface ConnectionListResult {
+  data: ConnectionRecord[]
+  meta?: ApiMeta
+}
+
+export async function fetchConnections(
+  params?: FetchConnectionsParams
+): Promise<ConnectionListResult> {
+  const response = await apiClient.get<ApiResponse<ConnectionResponse[]>>(CONNECTIONS_ENDPOINT, {
+    params,
+  })
+  const payload = response.data
   const data = unwrapResponse(response)
-  return data.map(transformConnection)
+  const meta = isApiSuccess(payload) ? payload.meta : undefined
+  return {
+    data: data.map(transformConnection),
+    meta,
+  }
+}
+
+export async function fetchConnectionById(id: string, include?: string): Promise<ConnectionRecord> {
+  const response = await apiClient.get<ApiResponse<ConnectionResponse>>(
+    `${CONNECTIONS_ENDPOINT}/${id}`,
+    {
+      params: include ? { include } : undefined,
+    }
+  )
+  const data = unwrapResponse(response)
+  return transformConnection(data)
 }

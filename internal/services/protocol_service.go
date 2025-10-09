@@ -14,11 +14,6 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 )
 
-// PermissionEvaluator matches permissions.Checker subset used by the protocol service.
-type PermissionEvaluator interface {
-	Check(ctx context.Context, userID, permissionID string) (bool, error)
-}
-
 // ProtocolInfo represents a protocol record returned to API consumers.
 type ProtocolInfo struct {
 	ID            string               `json:"id"`
@@ -39,11 +34,11 @@ type ProtocolInfo struct {
 // ProtocolService exposes read operations for connection protocols.
 type ProtocolService struct {
 	db      *gorm.DB
-	checker PermissionEvaluator
+	checker PermissionChecker
 }
 
 // NewProtocolService constructs a ProtocolService.
-func NewProtocolService(db *gorm.DB, checker PermissionEvaluator) (*ProtocolService, error) {
+func NewProtocolService(db *gorm.DB, checker PermissionChecker) (*ProtocolService, error) {
 	if db == nil {
 		return nil, errors.New("protocol service: db is required")
 	}

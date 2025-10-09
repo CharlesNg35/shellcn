@@ -15,6 +15,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/auth/providers"
 	"github.com/charlesng35/shellcn/internal/handlers"
 	"github.com/charlesng35/shellcn/internal/middleware"
+	"github.com/charlesng35/shellcn/internal/notifications"
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/web"
@@ -135,6 +136,19 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	registerPermissionRoutes(api, permHandler, checker)
 
+	notificationHub := notifications.NewHub()
+	notificationHandler, err := handlers.NewNotificationHandler(db, notificationHub, jwt)
+	if err != nil {
+		return nil, err
+	}
+	registerNotificationRoutes(api, notificationHandler, checker)
+
+	connectionHandler, err := handlers.NewConnectionHandler(db, checker)
+	if err != nil {
+		return nil, err
+	}
+	registerConnectionRoutes(api, connectionHandler, checker)
+
 	protocolSvc, err := services.NewProtocolService(db, checker)
 	if err != nil {
 		return nil, err
@@ -150,6 +164,8 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err := registerAuditRoutes(api, db, jwt, cfg, checker); err != nil {
 		return nil, err
 	}
+
+	r.GET("/ws/notifications", notificationHandler.Stream)
 
 	// Setup (public)
 	setupHandler, err := handlers.NewSetupHandler(db)

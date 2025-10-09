@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
+	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/pkg/errors"
@@ -28,6 +29,22 @@ func NewPermissionHandler(db *gorm.DB) (*PermissionHandler, error) {
 func (h *PermissionHandler) Registry(c *gin.Context) {
 	defs := permissions.GetAll()
 	response.Success(c, http.StatusOK, defs)
+}
+
+// GET /api/permissions/my
+func (h *PermissionHandler) MyPermissions(c *gin.Context) {
+	userID := c.GetString(middleware.CtxUserIDKey)
+	if userID == "" {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+
+	perms, err := h.svc.ListUserPermissions(c.Request.Context(), userID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, perms)
 }
 
 // GET /api/permissions/roles

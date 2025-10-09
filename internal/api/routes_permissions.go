@@ -12,6 +12,7 @@ func registerPermissionRoutes(api *gin.RouterGroup, handler *handlers.Permission
 	perms := api.Group("/permissions")
 	{
 		perms.GET("/registry", middleware.RequirePermission(checker, "permission.view"), handler.Registry)
+		perms.GET("/my", handler.MyPermissions)
 		perms.GET("/roles", middleware.RequirePermission(checker, "permission.view"), handler.ListRoles)
 		perms.POST("/roles", middleware.RequirePermission(checker, "permission.manage"), handler.CreateRole)
 		perms.PATCH("/roles/:id", middleware.RequirePermission(checker, "permission.manage"), handler.UpdateRole)
