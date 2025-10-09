@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/services"
@@ -18,13 +17,9 @@ type ConnectionHandler struct {
 	svc *services.ConnectionService
 }
 
-// NewConnectionHandler constructs a handler using the provided dependencies.
-func NewConnectionHandler(db *gorm.DB, checker services.PermissionChecker) (*ConnectionHandler, error) {
-	svc, err := services.NewConnectionService(db, checker)
-	if err != nil {
-		return nil, err
-	}
-	return &ConnectionHandler{svc: svc}, nil
+// NewConnectionHandler constructs a handler using the provided service.
+func NewConnectionHandler(svc *services.ConnectionService) *ConnectionHandler {
+	return &ConnectionHandler{svc: svc}
 }
 
 // List returns visible connections for the authenticated user.
@@ -42,6 +37,7 @@ func (h *ConnectionHandler) List(c *gin.Context) {
 	result, err := h.svc.ListVisible(c.Request.Context(), services.ListConnectionsOptions{
 		UserID:            userID,
 		ProtocolID:        c.Query("protocol_id"),
+		FolderID:          c.Query("folder_id"),
 		Search:            c.Query("search"),
 		IncludeTargets:    includeTargets,
 		IncludeVisibility: includeVisibility,

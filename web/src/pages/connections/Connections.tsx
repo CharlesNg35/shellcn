@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import {
   Cloud,
@@ -21,8 +21,10 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAvailableProtocols } from '@/hooks/useProtocols'
 import { useConnections } from '@/hooks/useConnections'
+import { useConnectionFolders } from '@/hooks/useConnectionFolders'
 import type { Protocol } from '@/types/protocols'
 import type { ConnectionRecord, ConnectionTarget } from '@/types/connections'
+import { FolderTree } from '@/components/connections/FolderTree'
 import { cn } from '@/lib/utils/cn'
 
 const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
@@ -46,19 +48,27 @@ interface ProtocolTab {
 }
 
 export function Connections() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [selectedTab, setSelectedTab] = useState<string>('all')
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(searchParams.get('search') ?? '')
+  const activeFolder = searchParams.get('folder')
+  const unassignedView = searchParams.get('view') === 'unassigned'
 
   const {
     data: protocols = [],
     isLoading: protocolsLoading,
     isError: protocolsError,
   } = useAvailableProtocols()
+  const { data: folderTree = [], isLoading: foldersLoading } = useConnectionFolders()
+
   const {
     data: connectionsResult,
     isLoading: connectionsLoading,
     isError: connectionsError,
-  } = useConnections()
+  } = useConnections({
+    folder_id: activeFolder ?? (unassignedView ? 'unassigned' : undefined),
+    search: search || undefined,
+  })
   const connections = connectionsResult?.data ?? []
 
   const protocolLookup = useMemo(() => {
@@ -156,7 +166,17 @@ export function Connections() {
           <Input
             placeholder="Search by name, host, or tag"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              const value = event.target.value
+              setSearch(value)
+              const params = new URLSearchParams(searchParams)
+              if (value) {
+                params.set('search', value)
+              } else {
+                params.delete('search')
+              }
+              setSearchParams(params, { replace: true })
+            }}
             className="pl-9"
           />
         </div>
@@ -166,30 +186,61 @@ export function Connections() {
         </Button>
       </div>
 
-      <ProtocolTabs
-        tabs={tabs}
-        isLoading={protocolsLoading}
-        activeTab={selectedTab}
-        onTabChange={setSelectedTab}
-      />
-
-      {isLoading ? (
-        <LoadingState />
-      ) : hasError ? (
-        <ErrorState />
-      ) : filteredConnections.length === 0 ? (
-        <EmptyState hasProtocols={protocols.length > 0} search={normalizedSearch} />
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredConnections.map((connection) => (
-            <ConnectionCard
-              key={connection.id}
-              connection={connection}
-              protocol={protocolLookup[connection.protocol_id]}
+      <div className="flex flex-col gap-4 lg:flex-row">
+        <div className="space-y-3 lg:w-64">
+          <div className="rounded-lg border border-border/70 bg-card p-3">
+            <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <span>Folders</span>
+              {foldersLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            </div>
+            <FolderTree
+              nodes={folderTree}
+              activeFolderId={activeFolder ?? (unassignedView ? 'unassigned' : null)}
+              onSelect={(folderId) => {
+                const params = new URLSearchParams(searchParams)
+                if (folderId && folderId !== 'unassigned') {
+                  params.set('folder', folderId)
+                  params.delete('view')
+                } else if (folderId === null) {
+                  params.delete('folder')
+                  params.delete('view')
+                } else {
+                  params.delete('folder')
+                  params.set('view', 'unassigned')
+                }
+                setSearchParams(params, { replace: true })
+              }}
             />
-          ))}
+          </div>
         </div>
-      )}
+
+        <div className="flex-1 space-y-4">
+          <ProtocolTabs
+            tabs={tabs}
+            isLoading={protocolsLoading}
+            activeTab={selectedTab}
+            onTabChange={setSelectedTab}
+          />
+
+          {isLoading ? (
+            <LoadingState />
+          ) : hasError ? (
+            <ErrorState />
+          ) : filteredConnections.length === 0 ? (
+            <EmptyState hasProtocols={protocols.length > 0} search={normalizedSearch} />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredConnections.map((connection) => (
+                <ConnectionCard
+                  key={connection.id}
+                  connection={connection}
+                  protocol={protocolLookup[connection.protocol_id]}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

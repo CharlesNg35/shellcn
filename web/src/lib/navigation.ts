@@ -41,6 +41,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         label: 'Connections',
         path: '/connections',
         icon: ArrowRightLeft,
+        permission: 'connection.view',
         children: [
           { label: 'New Connection', path: '/connections/new' },
           { label: 'Connection Details', path: '/connections/:id' },
@@ -58,6 +59,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
       { label: 'Docker', path: '/docker', icon: Container },
       { label: 'Kubernetes', path: '/kubernetes', icon: Cloud },
       { label: 'Databases', path: '/databases', icon: Database },
+      { label: 'File Share', path: '/file-share', icon: HardDrive },
       { label: 'Proxmox', path: '/proxmox', icon: HardDrive },
     ],
   },

@@ -10,7 +10,7 @@ interface ConnectionTargetResponse {
   id: string
   host: string
   port?: number
-  labels?: Record<string, string>
+  labels?: Record<string, unknown>
   ordering?: number
 }
 
@@ -22,6 +22,19 @@ interface ConnectionVisibilityResponse {
   permission_scope: string
 }
 
+interface ConnectionFolderResponse {
+  id: string
+  name: string
+  slug?: string
+  description?: string
+  icon?: string
+  color?: string
+  parent_id?: string | null
+  organization_id?: string | null
+  team_id?: string | null
+  metadata?: Record<string, unknown> | string | null
+}
+
 interface ConnectionResponse {
   id: string
   name: string
@@ -30,12 +43,14 @@ interface ConnectionResponse {
   organization_id?: string | null
   team_id?: string | null
   owner_user_id?: string | null
+  folder_id?: string | null
   metadata?: Record<string, unknown> | string | null
   settings?: Record<string, unknown> | string | null
   secret_id?: string | null
   last_used_at?: string | null
   targets?: ConnectionTargetResponse[]
   visibility?: ConnectionVisibilityResponse[]
+  folder?: ConnectionFolderResponse | null
 }
 
 function coerceObject<T extends Record<string, unknown>>(
@@ -63,7 +78,16 @@ function transformTargets(targets?: ConnectionTargetResponse[]): ConnectionTarge
     id: target.id,
     host: target.host,
     port: target.port,
-    labels: target.labels,
+    labels: target.labels
+      ? Object.entries(target.labels).reduce<Record<string, string>>((acc, [key, value]) => {
+          if (typeof value === 'string') {
+            acc[key] = value
+          } else if (value != null) {
+            acc[key] = JSON.stringify(value)
+          }
+          return acc
+        }, {})
+      : undefined,
     ordering: target.ordering,
   }))
 }
@@ -90,12 +114,27 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
     organization_id: raw.organization_id ?? null,
     team_id: raw.team_id ?? null,
     owner_user_id: raw.owner_user_id ?? null,
+    folder_id: raw.folder_id ?? null,
     metadata: coerceObject(raw.metadata),
     settings: coerceObject(raw.settings),
     secret_id: raw.secret_id ?? null,
     last_used_at: raw.last_used_at ?? null,
     targets: transformTargets(raw.targets),
     visibility: transformVisibility(raw.visibility),
+    folder: raw.folder
+      ? {
+          id: raw.folder.id,
+          name: raw.folder.name,
+          slug: raw.folder.slug,
+          description: raw.folder.description,
+          icon: raw.folder.icon,
+          color: raw.folder.color,
+          parent_id: raw.folder.parent_id ?? null,
+          organization_id: raw.folder.organization_id ?? null,
+          team_id: raw.folder.team_id ?? null,
+          metadata: coerceObject(raw.folder.metadata),
+        }
+      : undefined,
   }
 }
 

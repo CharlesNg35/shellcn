@@ -14,6 +14,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/services"
 )
 
 func TestConnectionHandlerList(t *testing.T) {
@@ -40,12 +41,14 @@ func TestConnectionHandlerList(t *testing.T) {
 		},
 	}).Error)
 
-	handler, err := NewConnectionHandler(db, &fakePermissionChecker{
+	svc, err := services.NewConnectionService(db, &fakePermissionChecker{
 		grants: map[string]bool{
 			"connection.view": true,
 		},
 	})
 	require.NoError(t, err)
+
+	handler := NewConnectionHandler(svc)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

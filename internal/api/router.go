@@ -136,6 +136,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	registerPermissionRoutes(api, permHandler, checker)
 
+	// Notifications
 	notificationHub := notifications.NewHub()
 	notificationHandler, err := handlers.NewNotificationHandler(db, notificationHub, jwt)
 	if err != nil {
@@ -143,12 +144,24 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	registerNotificationRoutes(api, notificationHandler, checker)
 
-	connectionHandler, err := handlers.NewConnectionHandler(db, checker)
+	r.GET("/ws/notifications", notificationHandler.Stream)
+
+	// Connections and folders
+	connectionSvc, err := services.NewConnectionService(db, checker)
 	if err != nil {
 		return nil, err
 	}
+	connectionHandler := handlers.NewConnectionHandler(connectionSvc)
 	registerConnectionRoutes(api, connectionHandler, checker)
 
+	folderSvc, err := services.NewConnectionFolderService(db, checker, connectionSvc)
+	if err != nil {
+		return nil, err
+	}
+	connectionFolderHandler := handlers.NewConnectionFolderHandler(folderSvc)
+	registerConnectionFolderRoutes(api, connectionFolderHandler, checker)
+
+	// Protocols
 	protocolSvc, err := services.NewProtocolService(db, checker)
 	if err != nil {
 		return nil, err
@@ -164,8 +177,6 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err := registerAuditRoutes(api, db, jwt, cfg, checker); err != nil {
 		return nil, err
 	}
-
-	r.GET("/ws/notifications", notificationHandler.Stream)
 
 	// Setup (public)
 	setupHandler, err := handlers.NewSetupHandler(db)

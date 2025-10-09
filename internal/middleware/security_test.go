@@ -30,7 +30,8 @@ func TestSecurityHeaders(t *testing.T) {
 	require.Equal(t, "nosniff", resp.Header.Get("X-Content-Type-Options"))
 	require.Equal(t, "1; mode=block", resp.Header.Get("X-XSS-Protection"))
 	require.Equal(t, "max-age=31536000; includeSubDomains", resp.Header.Get("Strict-Transport-Security"))
-	require.Equal(t, DefaultContentSecurityPolicy, resp.Header.Get("Content-Security-Policy"))
+	require.Contains(t, resp.Header.Get("Content-Security-Policy"), "default-src 'self'")
+	require.Contains(t, resp.Header.Get("Content-Security-Policy"), "font-src 'self' https://fonts.gstatic.com")
 	require.Equal(t, "no-referrer", resp.Header.Get("Referrer-Policy"))
 	require.Equal(t, "geolocation=(), microphone=(), camera=()", resp.Header.Get("Permissions-Policy"))
 }

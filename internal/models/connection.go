@@ -16,6 +16,7 @@ type Connection struct {
 	OrganizationID *string        `gorm:"type:uuid;index;uniqueIndex:idx_connections_org_name" json:"organization_id"`
 	TeamID         *string        `gorm:"type:uuid;index" json:"team_id"`
 	OwnerUserID    string         `gorm:"type:uuid;index" json:"owner_user_id"`
+	FolderID       *string        `gorm:"type:uuid;index" json:"folder_id"`
 	Metadata       datatypes.JSON `json:"metadata"`
 	Settings       datatypes.JSON `json:"settings"`
 	SecretID       *string        `gorm:"type:uuid" json:"secret_id"`
@@ -23,4 +24,5 @@ type Connection struct {
 
 	Targets    []ConnectionTarget     `gorm:"foreignKey:ConnectionID" json:"targets,omitempty"`
 	Visibility []ConnectionVisibility `gorm:"foreignKey:ConnectionID" json:"visibility,omitempty"`
+	Folder     *ConnectionFolder      `gorm:"foreignKey:FolderID" json:"folder,omitempty"`
 }

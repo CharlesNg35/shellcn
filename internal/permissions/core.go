@@ -66,6 +66,17 @@ func init() {
 			Description: "Manage connection sharing and visibility",
 		},
 		{
+			ID:          "connection.folder.view",
+			Module:      "core",
+			Description: "View connection folders",
+		},
+		{
+			ID:          "connection.folder.manage",
+			Module:      "core",
+			DependsOn:   []string{"connection.folder.view", "connection.manage"},
+			Description: "Manage connection folders",
+		},
+		{
 			ID:          "vault.view",
 			Module:      "core",
 			Description: "View credential vault entries",

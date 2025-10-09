@@ -3,8 +3,8 @@ package middleware
 import "github.com/gin-gonic/gin"
 
 const (
-	// DefaultContentSecurityPolicy restricts resources to same origin.
-	DefaultContentSecurityPolicy = "default-src 'self'"
+	// DefaultContentSecurityPolicy restricts resources to same origin, with exceptions for fonts and styles.
+	DefaultContentSecurityPolicy = "default-src 'self'; font-src 'self' https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self' ws: wss:"
 )
 
 // SecurityHeaders applies common HTTP response headers that harden the API against

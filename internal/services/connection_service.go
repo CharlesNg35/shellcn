@@ -24,21 +24,23 @@ type ConnectionDTO struct {
 	OrganizationID *string                   `json:"organization_id"`
 	TeamID         *string                   `json:"team_id"`
 	OwnerUserID    string                    `json:"owner_user_id"`
+	FolderID       *string                   `json:"folder_id"`
 	Metadata       map[string]any            `json:"metadata,omitempty"`
 	Settings       map[string]any            `json:"settings,omitempty"`
 	SecretID       *string                   `json:"secret_id"`
 	LastUsedAt     *time.Time                `json:"last_used_at,omitempty"`
 	Targets        []ConnectionTargetDTO     `json:"targets,omitempty"`
 	Visibility     []ConnectionVisibilityDTO `json:"visibility,omitempty"`
+	Folder         *ConnectionFolderDTO      `json:"folder,omitempty"`
 }
 
 // ConnectionTargetDTO returns target metadata for API consumers.
 type ConnectionTargetDTO struct {
-	ID     string         `json:"id"`
-	Host   string         `json:"host"`
-	Port   int            `json:"port"`
-	Labels map[string]any `json:"labels,omitempty"`
-	Order  int            `json:"ordering"`
+	ID     string            `json:"id"`
+	Host   string            `json:"host"`
+	Port   int               `json:"port"`
+	Labels map[string]string `json:"labels,omitempty"`
+	Order  int               `json:"ordering"`
 }
 
 // ConnectionVisibilityDTO models ACL style visibility records.
@@ -50,10 +52,25 @@ type ConnectionVisibilityDTO struct {
 	PermissionScope string  `json:"permission_scope"`
 }
 
+// ConnectionFolderDTO summarizes folder metadata.
+type ConnectionFolderDTO struct {
+	ID             string         `json:"id"`
+	Name           string         `json:"name"`
+	Slug           string         `json:"slug"`
+	Description    string         `json:"description"`
+	Icon           string         `json:"icon"`
+	Color          string         `json:"color"`
+	ParentID       *string        `json:"parent_id"`
+	OrganizationID *string        `json:"organization_id"`
+	TeamID         *string        `json:"team_id"`
+	Metadata       map[string]any `json:"metadata,omitempty"`
+}
+
 // ListConnectionsOptions defines filters for connection lookups.
 type ListConnectionsOptions struct {
 	UserID            string
 	ProtocolID        string
+	FolderID          string
 	Search            string
 	IncludeTargets    bool
 	IncludeVisibility bool
@@ -179,8 +196,58 @@ func (s *ConnectionService) GetVisible(ctx context.Context, userID, connectionID
 	return &dto, nil
 }
 
+// CountByFolder returns visible connection counts keyed by folder ID (nil => "unassigned").
+func (s *ConnectionService) CountByFolder(ctx context.Context, opts ListConnectionsOptions) (map[string]int64, error) {
+	ctx = ensureContext(ctx)
+	userCtx, err := s.userContext(ctx, opts.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	canView, err := s.canViewConnections(ctx, opts.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if !canView {
+		return map[string]int64{}, nil
+	}
+
+	manageAll, err := s.canManageConnections(ctx, opts.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := s.applyFilters(
+		s.db.WithContext(ctx).Model(&models.Connection{}),
+		opts,
+		userCtx,
+		manageAll,
+	)
+
+	type row struct {
+		FolderID *string
+		Count    int64
+	}
+
+	var rows []row
+	if err := query.Select("folder_id, COUNT(*) as count").Group("folder_id").Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("connection service: count by folder: %w", err)
+	}
+
+	result := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		key := "unassigned"
+		if r.FolderID != nil && *r.FolderID != "" {
+			key = *r.FolderID
+		}
+		result[key] = r.Count
+	}
+	return result, nil
+}
+
 func (s *ConnectionService) preloadScopes(ctx context.Context, opts ListConnectionsOptions) *gorm.DB {
 	db := s.db.WithContext(ctx).Model(&models.Connection{})
+	db = db.Preload("Folder")
 	if opts.IncludeTargets {
 		db = db.Preload("Targets")
 	}
@@ -193,6 +260,14 @@ func (s *ConnectionService) preloadScopes(ctx context.Context, opts ListConnecti
 func (s *ConnectionService) applyFilters(db *gorm.DB, opts ListConnectionsOptions, userCtx userContext, allowAll bool) *gorm.DB {
 	if protocol := strings.TrimSpace(opts.ProtocolID); protocol != "" {
 		db = db.Where("connections.protocol_id = ?", protocol)
+	}
+
+	if folderID := strings.TrimSpace(opts.FolderID); folderID != "" {
+		if folderID == "unassigned" {
+			db = db.Where("connections.folder_id IS NULL")
+		} else {
+			db = db.Where("connections.folder_id = ?", folderID)
+		}
 	}
 
 	if search := strings.TrimSpace(opts.Search); search != "" {
@@ -305,6 +380,7 @@ func mapConnection(row models.Connection, includeTargets, includeVisibility bool
 		OrganizationID: row.OrganizationID,
 		TeamID:         row.TeamID,
 		OwnerUserID:    row.OwnerUserID,
+		FolderID:       row.FolderID,
 		Metadata:       decodeJSONMap(row.Metadata),
 		Settings:       decodeJSONMap(row.Settings),
 	}
@@ -322,6 +398,20 @@ func mapConnection(row models.Connection, includeTargets, includeVisibility bool
 	if includeVisibility {
 		dto.Visibility = mapVisibility(row.Visibility)
 	}
+	if row.Folder != nil {
+		dto.Folder = &ConnectionFolderDTO{
+			ID:             row.Folder.ID,
+			Name:           row.Folder.Name,
+			Slug:           row.Folder.Slug,
+			Description:    row.Folder.Description,
+			Icon:           row.Folder.Icon,
+			Color:          row.Folder.Color,
+			ParentID:       row.Folder.ParentID,
+			OrganizationID: row.Folder.OrganizationID,
+			TeamID:         row.Folder.TeamID,
+			Metadata:       decodeJSONMap(row.Folder.Metadata),
+		}
+	}
 
 	return dto
 }
@@ -335,7 +425,7 @@ func mapTargets(rows []models.ConnectionTarget) []ConnectionTargetDTO {
 			Port:  target.Port,
 			Order: target.Ordering,
 		}
-		dto.Labels = decodeJSONMap(target.Labels)
+		dto.Labels = decodeJSONMapString(target.Labels)
 		targets = append(targets, dto)
 	}
 	return targets
@@ -362,6 +452,29 @@ func decodeJSONMap(value datatypes.JSON) map[string]any {
 	var result map[string]any
 	if err := json.Unmarshal(value, &result); err != nil {
 		return nil
+	}
+	return result
+}
+
+func decodeJSONMapString(value datatypes.JSON) map[string]string {
+	if len(value) == 0 {
+		return nil
+	}
+	result := make(map[string]string)
+	var raw map[string]any
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return nil
+	}
+	for key, val := range raw {
+		switch typed := val.(type) {
+		case string:
+			result[key] = typed
+		default:
+			b, err := json.Marshal(typed)
+			if err == nil {
+				result[key] = string(b)
+			}
+		}
 	}
 	return result
 }
