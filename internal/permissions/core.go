@@ -43,6 +43,29 @@ func init() {
 			Description: "Manage organizations",
 		},
 		{
+			ID:          "connection.view",
+			Module:      "core",
+			Description: "View connection protocols and resources",
+		},
+		{
+			ID:          "connection.launch",
+			Module:      "core",
+			DependsOn:   []string{"connection.view"},
+			Description: "Launch connections",
+		},
+		{
+			ID:          "connection.manage",
+			Module:      "core",
+			DependsOn:   []string{"connection.view"},
+			Description: "Create and update connections",
+		},
+		{
+			ID:          "connection.share",
+			Module:      "core",
+			DependsOn:   []string{"connection.manage"},
+			Description: "Manage connection sharing and visibility",
+		},
+		{
 			ID:          "vault.view",
 			Module:      "core",
 			Description: "View credential vault entries",

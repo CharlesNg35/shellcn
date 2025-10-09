@@ -1,96 +1,55 @@
-# Connection Protocols Management - Implementation Plan
+# Connection Protocols & Drivers - Implementation Plan (Phase 3 Core)
 
 ## Overview
 
-This plan implements Phase 3 of the Core Module ([ROADMAP.md:37-41](../../ROADMAP.md)) - dynamic protocol management with config-based and driver-based enablement + permission filtering.
+This plan delivers Phase 3 of the Core module ([ROADMAP.md:37-41](../../ROADMAP.md)). It turns the protocol registry into a complete **Connection Platform** with:
 
-## Protocol Availability Rules
+- Canonical **Connection** entities scoped to organizations and teams.
+- A scalable **driver system** that supports native Go clients, Rust FFI modules, and future proxy adapters.
+- Deterministic **availability rules** that combine driver readiness, tenant configuration, row-level visibility, and modular permissions.
+- Service + API layers to power the `Connections` UI (creation, filtering, launch preview, sharing).
+- Auditability and fine-grained permissions aligned with `specs/project/project_spec.md` (remote access, credential vault, multi-tenancy).
 
-A protocol is **AVAILABLE** to a user when ALL conditions are met:
+### Goals
 
-```
-1. ✅ Registered in registry (internal/protocols/core.go)
-           ↓
-2. ✅ Enabled in config.yaml (modules.*.enabled = true)
-           ↓
-3. ✅ Driver marked ready (Protocol.Enabled = true)
-           ↓
-4. ✅ User has permissions (connection.view + {protocol}.connect)
-           ↓
-      Protocol AVAILABLE
-```
+1. Model connections as reusable assets that can be owned globally or per organization/team.
+2. Provide a driver registry/descriptor system with capabilities metadata and health reporting.
+3. Keep protocol availability derived from three levers: driver readiness, configuration toggles, and permission grants.
+4. Expose REST endpoints and frontend hooks that surface only the protocols/connections a user can access.
+5. Ensure every change (driver readiness, protocol sync, connection edits) emits audit records and respects organizations/teams.
 
-### Key Insight
+---
 
-**Config controls admin enable/disable, Driver controls implementation readiness**
+## Domain Model
 
-- **Config** (`config.yaml`): Admin can turn modules on/off without code changes
-- **Driver** (Registry): Developer marks implementation as ready
-- **Both must be true** for protocol to be available
-- **Permissions**: Filter what each user can see
+### Tables & Relationships
 
-## Architecture
+| Table                    | Purpose                                                                   |
+|--------------------------|---------------------------------------------------------------------------|
+| `connection_protocols`   | Snapshot of driver metadata + config enable state (registry mirror).      |
+| `connections`            | Base connection definition (name, protocol, org/team ownership, settings).|
+| `connection_targets`     | One-to-many endpoints (primary + fallback hosts, labels).                 |
+| `connection_visibilities`| Row-level ACL for organizations, teams, and direct-user grants.           |
+| `connection_labels`      | (Optional) Tagging table for filters/search (future).                     |
 
-### Config System (Already Exists!)
+### GORM Models
 
-From [internal/app/config.go:122-133](../../internal/app/config.go):
-
+**`internal/models/connection_protocol.go`**
 ```go
-type ModuleConfig struct {
-    SSH        SSHModuleConfig      `mapstructure:"ssh"`
-    Telnet     TelnetModuleConfig   `mapstructure:"telnet"`
-    SFTP       SFTPModuleConfig     `mapstructure:"sftp"`
-    RDP        DesktopModuleConfig  `mapstructure:"rdp"`
-    VNC        DesktopModuleConfig  `mapstructure:"vnc"`
-    Docker     SimpleModuleConfig   `mapstructure:"docker"`
-    Kubernetes SimpleModuleConfig   `mapstructure:"kubernetes"`
-    Database   DatabaseModuleConfig `mapstructure:"database"`
-    Proxmox    SimpleModuleConfig   `mapstructure:"proxmox"`
-    FileShare  SimpleModuleConfig   `mapstructure:"file_share"`
-}
-```
-
-Defaults in [config.go:284-314](../../internal/app/config.go):
-- SSH: enabled=true, port=22
-- Telnet: enabled=true, port=23
-- RDP: enabled=true, port=3389
-- Docker: enabled=true
-- Kubernetes: enabled=false
-- etc.
-
-### New Components Needed
-
-1. **Protocol Registry** - Tracks driver implementation status
-2. **Protocol Model** - Stores config+driver status in DB
-3. **Protocol Service** - Combines config+driver+permissions
-4. **API Endpoints** - Exposes available protocols
-5. **Frontend** - Dynamic UI based on API
-
-## Implementation
-
-### 1. Database Model
-
-**File:** `internal/models/connection_protocol.go`
-
-```go
-package models
-
 type ConnectionProtocol struct {
     BaseModel
-
-    Name        string `gorm:"not null;uniqueIndex" json:"name"`
-    ProtocolID  string `gorm:"not null;uniqueIndex" json:"protocol_id"`
-    Module      string `gorm:"not null;index" json:"module"`
-    Icon        string `json:"icon"`
-    Description string `json:"description"`
-    Category    string `gorm:"index" json:"category"`
-    DefaultPort int    `json:"default_port"`
-    SortOrder   int    `gorm:"default:0" json:"sort_order"`
-    Features    string `gorm:"type:json" json:"features"`
-
-    // Two-tier enablement
-    DriverEnabled bool `gorm:"default:false" json:"driver_enabled"`  // From registry
-    ConfigEnabled bool `gorm:"default:false" json:"config_enabled"`  // From config.yaml
+    Name           string `gorm:"not null;uniqueIndex" json:"name"`
+    ProtocolID     string `gorm:"not null;uniqueIndex" json:"protocol_id"`
+    Module         string `gorm:"not null;index" json:"module"`
+    Icon           string `json:"icon"`
+    Description    string `json:"description"`
+    Category       string `gorm:"index" json:"category"`
+    DefaultPort    int    `json:"default_port"`
+    SortOrder      int    `gorm:"default:0" json:"sort_order"`
+    Capabilities   string `gorm:"type:json" json:"capabilities"`
+    Features       string `gorm:"type:json" json:"features"`
+    DriverEnabled  bool   `gorm:"default:false" json:"driver_enabled"`
+    ConfigEnabled  bool   `gorm:"default:false" json:"config_enabled"`
 }
 
 func (c *ConnectionProtocol) IsAvailable() bool {
@@ -98,420 +57,381 @@ func (c *ConnectionProtocol) IsAvailable() bool {
 }
 ```
 
-### 2. Protocol Registry
-
-**File:** `internal/protocols/registry.go`
-
+**`internal/models/connection.go`**
 ```go
-package protocols
+type Connection struct {
+    BaseModel
+    Name           string  `gorm:"not null;uniqueIndex:conn_org_name" json:"name"`
+    Description    string  `json:"description"`
+    ProtocolID     string  `gorm:"not null;index" json:"protocol_id"`
+    OrganizationID *string `gorm:"type:uuid;index;uniqueIndex:conn_org_name" json:"organization_id"`
+    TeamID         *string `gorm:"type:uuid;index" json:"team_id"`
+    OwnerUserID    string  `gorm:"type:uuid;index" json:"owner_user_id"`
+    Metadata       string  `gorm:"type:json" json:"metadata"`
+    Settings       string  `gorm:"type:json" json:"settings"`
+    SecretID       *string `gorm:"type:uuid" json:"secret_id"`
+    LastUsedAt     *time.Time `json:"last_used_at"`
 
-type Category string
-
-const (
-    CategoryTerminal  Category = "terminal"
-    CategoryDesktop   Category = "desktop"
-    CategoryContainer Category = "container"
-    CategoryDatabase  Category = "database"
-    CategoryVM        Category = "vm"
-)
-
-type Protocol struct {
-    ID          string
-    Name        string
-    Module      string
-    Icon        string
-    Description string
-    Category    Category
-    DefaultPort int
-    Features    []string
-    SortOrder   int
-    Enabled     bool  // Driver implementation ready?
+    Protocol    *ConnectionProtocol   `gorm:"foreignKey:ProtocolID" json:"protocol,omitempty"`
+    Targets     []ConnectionTarget    `gorm:"foreignKey:ConnectionID" json:"targets,omitempty"`
+    Visibility  []ConnectionVisibility `gorm:"foreignKey:ConnectionID" json:"visibility,omitempty"`
 }
-
-var globalRegistry = &registry{protocols: make(map[string]*Protocol)}
-
-func Register(proto *Protocol) error { /* ... */ }
-func Get(id string) (*Protocol, error) { /* ... */ }
-func GetAll() []*Protocol { /* ... */ }
 ```
 
-**File:** `internal/protocols/core.go`
-
+**`internal/models/connection_target.go`**
 ```go
-package protocols
-
-func init() {
-    Register(&Protocol{
-        ID: "ssh", Name: "SSH / Telnet", Module: "ssh",
-        Icon: "Server", Category: CategoryTerminal, DefaultPort: 22,
-        Enabled: false,  // Set true when SSH driver implemented
-        Features: []string{"terminal", "sftp"}, SortOrder: 1,
-    })
-
-    Register(&Protocol{
-        ID: "rdp", Name: "RDP", Module: "rdp",
-        Icon: "Monitor", Category: CategoryDesktop, DefaultPort: 3389,
-        Enabled: false,  // Set true when RDP driver implemented
-        Features: []string{"desktop"}, SortOrder: 2,
-    })
-
-    // ... all protocols ...
+type ConnectionTarget struct {
+    BaseModel
+    ConnectionID string `gorm:"type:uuid;index" json:"connection_id"`
+    Host         string `gorm:"not null" json:"host"`
+    Port         int    `json:"port"`
+    Labels       string `gorm:"type:json" json:"labels"`
+    Ordering     int    `gorm:"default:0" json:"ordering"`
 }
 ```
 
-### 3. Protocol Sync (Registry + Config → Database)
-
-**File:** `internal/protocols/sync.go`
-
+**`internal/models/connection_visibility.go`**
 ```go
-package protocols
-
-import "github.com/charlesng35/shellcn/internal/app"
-
-func Sync(ctx context.Context, db *gorm.DB, cfg *app.Config) error {
-    for _, proto := range GetAll() {
-        configEnabled := isEnabledInConfig(proto.ID, cfg)
-
-        db.Clauses(clause.OnConflict{
-            Columns: []clause.Column{{Name: "id"}},
-            DoUpdates: clause.AssignmentColumns([]string{
-                "driver_enabled", "config_enabled", /* ... */
-            }),
-        }).Create(&models.ConnectionProtocol{
-            BaseModel: models.BaseModel{ID: proto.ID},
-            DriverEnabled: proto.Enabled,
-            ConfigEnabled: configEnabled,
-            // ... other fields ...
-        })
-    }
-    return nil
-}
-
-func isEnabledInConfig(protocolID string, cfg *app.Config) bool {
-    switch protocolID {
-    case "ssh": return cfg.Modules.SSH.Enabled
-    case "rdp": return cfg.Modules.RDP.Enabled
-    case "docker": return cfg.Modules.Docker.Enabled
-    case "mysql": return cfg.Modules.Database.Enabled && cfg.Modules.Database.MySQL
-    // ... all protocols ...
-    default: return false
-    }
+type ConnectionVisibility struct {
+    BaseModel
+    ConnectionID    string  `gorm:"type:uuid;index" json:"connection_id"`
+    OrganizationID  *string `gorm:"type:uuid;index" json:"organization_id"`
+    TeamID          *string `gorm:"type:uuid;index" json:"team_id"`
+    UserID          *string `gorm:"type:uuid;index" json:"user_id"`
+    PermissionScope string  `gorm:"type:varchar(32)" json:"permission_scope"` // view|use|manage
 }
 ```
 
-### 4. Protocol Permissions
-
-**File:** `internal/protocols/permissions.go`
-
-```go
-package protocols
-
-func RegisterPermissions() error {
-    // Base permissions
-    permissions.Register(&permissions.Permission{
-        ID: "connection.view", Module: "core",
-        Description: "View available protocols",
-    })
-    permissions.Register(&permissions.Permission{
-        ID: "connection.create", Module: "core",
-        DependsOn: []string{"connection.view"},
-        Description: "Create connections",
-    })
-
-    // Protocol-specific permissions
-    for _, proto := range GetAll() {
-        permissions.Register(&permissions.Permission{
-            ID: fmt.Sprintf("%s.connect", proto.ID),
-            Module: proto.Module,
-            DependsOn: []string{"connection.view"},
-            Description: fmt.Sprintf("Use %s protocol", proto.Name),
-        })
-    }
-    return nil
-}
-```
-
-### 5. Protocol Service
-
-**File:** `internal/services/protocol_service.go`
-
-```go
-package services
-
-type ProtocolService struct {
-    db      *gorm.DB
-    checker *permissions.Checker
-}
-
-type ProtocolInfo struct {
-    ID string `json:"id"`
-    Name string `json:"name"`
-    // ... all fields ...
-    DriverEnabled bool `json:"driver_enabled"`
-    ConfigEnabled bool `json:"config_enabled"`
-    Available bool `json:"available"`
-}
-
-func (s *ProtocolService) GetAvailableProtocols(ctx context.Context) ([]*ProtocolInfo, error) {
-    var dbProtos []models.ConnectionProtocol
-    s.db.Find(&dbProtos)
-
-    infos := []*ProtocolInfo{}
-    for _, db := range dbProtos {
-        if !db.IsAvailable() { continue }  // Skip if driver OR config disabled
-
-        proto, _ := protocols.Get(db.ProtocolID)
-        infos = append(infos, &ProtocolInfo{
-            ID: proto.ID,
-            DriverEnabled: db.DriverEnabled,
-            ConfigEnabled: db.ConfigEnabled,
-            Available: true,
-            // ... copy all fields ...
-        })
-    }
-    return infos, nil
-}
-
-func (s *ProtocolService) GetUserProtocols(ctx context.Context, userID string) ([]*ProtocolInfo, error) {
-    var user models.User
-    s.db.Preload("Roles.Permissions").First(&user, "id = ?", userID)
-
-    if user.IsRoot {
-        return s.GetAvailableProtocols(ctx)  // Root gets all
-    }
-
-    allProtos, _ := s.GetAvailableProtocols(ctx)
-    userProtos := []*ProtocolInfo{}
-
-    for _, proto := range allProtos {
-        hasView, _ := s.checker.Check(ctx, userID, "connection.view")
-        if !hasView { continue }
-
-        hasProto, _ := s.checker.Check(ctx, userID, proto.ID+".connect")
-        if hasProto {
-            userProtos = append(userProtos, proto)
-        }
-    }
-
-    return userProtos, nil
-}
-```
-
-### 6. API Handler + Routes
-
-**File:** `internal/handlers/protocols.go`
-
-```go
-func (h *ProtocolHandler) GetUserProtocols(c *gin.Context) {
-    userID, _ := c.Get("userID")
-    protos, err := h.service.GetUserProtocols(c.Request.Context(), userID.(string))
-    if err != nil {
-        response.Error(c, errors.ErrInternalServer)
-        return
-    }
-    response.Success(c, http.StatusOK, gin.H{"protocols": protos, "count": len(protos)})
-}
-```
-
-**File:** `internal/api/routes_protocols.go`
-
-```go
-func registerProtocolRoutes(api *gin.RouterGroup, db *gorm.DB, checker *permissions.Checker) error {
-    handler, _ := handlers.NewProtocolHandler(db, checker)
-
-    api.GET("/protocols",
-        middleware.RequirePermission(checker, "connection.view"),
-        handler.GetAvailableProtocols)
-    api.GET("/protocols/available",
-        middleware.RequirePermission(checker, "connection.view"),
-        handler.GetUserProtocols)
-    return nil
-}
-```
-
-### 7. Database Migration Updates
-
-**Update [internal/database/migrations.go:14](../../internal/database/migrations.go)**
-
-```go
-func AutoMigrate(db *gorm.DB) error {
-    return db.AutoMigrate(
-        // ... existing models ...
-        &models.ConnectionProtocol{},  // ADD THIS
-    )
-}
-```
-
-**Update [internal/database/migrations.go:31](../../internal/database/migrations.go)**
-
-```go
-func SeedData(db *gorm.DB, cfg *app.Config) error {  // ADD cfg param
-    // Register protocol permissions
-    protocols.RegisterPermissions()
-
-    // Sync permissions
-    permissions.Sync(context.Background(), db)
-
-    // Sync protocols with config
-    protocols.Sync(context.Background(), db, cfg)  // ADD THIS
-
-    // ... existing role seeding ...
-}
-```
-
-**Update [internal/database/db.go:44](../../internal/database/db.go)**
-
-```go
-func AutoMigrateAndSeed(db *gorm.DB, cfg *app.Config) error {  // ADD cfg param
-    AutoMigrate(db)
-    SeedData(db, cfg)  // Pass cfg
-    return nil
-}
-```
-
-**Update [cmd/server/main.go:247](../../cmd/server/main.go)**
-
-```go
-if err := database.AutoMigrateAndSeed(db, cfg); err != nil {  // Pass cfg
-    return nil, fmt.Errorf("auto-migrate database: %w", err)
-}
-```
-
-**Update [internal/api/router.go:136](../../internal/api/router.go)**
-
-```go
-// After permission routes:
-if err := registerProtocolRoutes(api, db, checker); err != nil {
-    return nil, err
-}
-```
-
-### 8. Frontend
-
-**File:** `web/src/types/protocols.ts`
-
-```typescript
-export interface Protocol {
-  id: string
-  name: string
-  icon: string
-  category: string
-  driver_enabled: boolean
-  config_enabled: boolean
-  available: boolean
-}
-```
-
-**File:** `web/src/lib/api/protocols.ts`
-
-```typescript
-export const protocolsApi = {
-  getUserProtocols: async (): Promise<Protocol[]> => {
-    const response = await apiClient.get('/protocols/available')
-    return unwrapResponse(response).protocols
-  },
-}
-```
-
-**File:** `web/src/hooks/useProtocols.ts`
-
-```typescript
-export function useUserProtocols() {
-  return useQuery({
-    queryKey: ['protocols', 'user'],
-    queryFn: protocolsApi.getUserProtocols,
-    staleTime: 5 * 60 * 1000,
-  })
-}
-```
-
-**Update [web/src/pages/connections/Connections.tsx](../../web/src/pages/connections/Connections.tsx)**
-
-```typescript
-const { data: protocols } = useUserProtocols()
-
-const connectionTypes = useMemo(() => {
-  return [{id: 'all', label: 'All', icon: 'Server'},
-          ...protocols.map(p => ({id: p.id, label: p.name, icon: p.icon}))]
-}, [protocols])
-```
-
-## Implementation Checklist
-
-### Backend
-- [ ] Create `internal/models/connection_protocol.go`
-- [ ] Create `internal/protocols/registry.go`
-- [ ] Create `internal/protocols/core.go` with all protocols
-- [ ] Create `internal/protocols/sync.go` with config integration
-- [ ] Create `internal/protocols/permissions.go`
-- [ ] Create `internal/services/protocol_service.go`
-- [ ] Create `internal/handlers/protocols.go`
-- [ ] Create `internal/api/routes_protocols.go`
-- [ ] Update `internal/database/migrations.go` (AutoMigrate + SeedData signature)
-- [ ] Update `internal/database/db.go` (AutoMigrateAndSeed signature)
-- [ ] Update `cmd/server/main.go` (pass config)
-- [ ] Update `internal/api/router.go` (register routes)
-
-### Frontend
-- [ ] Create `web/src/types/protocols.ts`
-- [ ] Create `web/src/lib/api/protocols.ts`
-- [ ] Create `web/src/hooks/useProtocols.ts`
-- [ ] Update `web/src/pages/connections/Connections.tsx`
-
-### Testing
-- [ ] Protocol registry tests
-- [ ] Protocol service tests (root vs regular user)
-- [ ] Config integration tests
-- [ ] API endpoint tests
-- [ ] Frontend hook tests
-
-## Config Example
-
-```yaml
-# config.yaml
-modules:
-  ssh:
-    enabled: true    # Config: ON
-    # Driver in registry: Enabled = false → SSH NOT available
-
-  rdp:
-    enabled: false   # Config: OFF
-    # Even if driver ready, RDP NOT available
-
-  docker:
-    enabled: true    # Config: ON
-    # Driver in registry: Enabled = true → Docker AVAILABLE!
-```
-
-## API Endpoints
-
-| Endpoint | Auth | Permission | Returns |
-|----------|------|------------|---------|
-| `GET /api/protocols` | Required | `connection.view` | All available protocols (driver+config enabled) |
-| `GET /api/protocols/available` | Required | `connection.view` | User-permitted protocols only |
-| `GET /api/protocols/category/:cat` | Required | `connection.view` | Filtered by category |
-| `GET /api/protocols/stats` | Required | `connection.view` | Usage statistics |
-
-## Success Criteria
-
-- ✅ Protocol available = DriverEnabled AND ConfigEnabled AND UserHasPermission
-- ✅ Admins can disable protocols via config without code changes
-- ✅ Developers mark drivers ready via registry `Enabled` flag
-- ✅ Root users see all available protocols
-- ✅ Regular users see only permitted protocols
-- ✅ UI dynamically renders tabs based on API response
-- ✅ Follows existing codebase patterns (permission system, service layer, etc.)
-
-## Future Enhancements
-
-1. Hot config reload (no restart needed)
-2. Protocol health monitoring
-3. Admin UI for toggling protocols
-4. Connection CRUD operations
-5. Protocol templates
+Key points:
+- Org-level template connections are possible by setting `OrganizationID=nil`.
+- Team-level scoping allows curated sets for squads.
+- Visibility table enables sharing with explicit users (similar to vault shares).
 
 ---
 
-**Version:** 2.0 (Config-Integrated)
+## Driver & Protocol Architecture
+
+### Driver Categories
+
+- **Native** (`internal/drivers/native`): SSH, Telnet, Docker, Kubernetes, databases.
+- **FFI** (`internal/drivers/ffi`): RDP, VNC, Serial (Rust static libs via CGO).
+- **Proxy** (`internal/drivers/proxy`): HTTP bridges to enterprise gateways (future).
+
+### Driver Interface
+
+**`internal/drivers/driver.go`**
+```go
+type Driver interface {
+    Descriptor() Descriptor
+    Capabilities() Capabilities
+    ValidateConfig(ctx context.Context, cfg map[string]any) error
+    TestConnection(ctx context.Context, cfg map[string]any, secret *vault.Credential) error
+    Launch(ctx context.Context, request SessionRequest) (SessionHandle, error)
+}
+```
+
+```go
+type Descriptor struct {
+    ID           string
+    Module       string
+    Title        string
+    Category     string
+    Version      string
+    Icon         string
+    SortOrder    int
+    ImpliesPerms []string
+}
+
+type Capabilities struct {
+    Terminal         bool
+    Desktop          bool
+    FileTransfer     bool
+    Clipboard        bool
+    SessionRecording bool
+    Metrics          bool
+    Reconnect        bool
+    Extras           map[string]bool
+}
+```
+
+Drivers may optionally implement:
+```go
+type HealthChecker interface {
+    HealthCheck(ctx context.Context) error
+}
+
+type SchemaProvider interface {
+    ConfigSchema() map[string]SchemaField
+}
+```
+
+### Driver Registry
+
+**`internal/drivers/registry.go`**
+```go
+type Registry interface {
+    Register(driver Driver) error
+    Must(id string) Driver
+    Get(id string) (Driver, bool)
+    List() []Driver
+    Describe() []Descriptor
+}
+```
+
+- `internal/drivers/bootstrap.go` instantiates a singleton registry and registers all drivers during `cmd/server/main.go` startup. If a required driver fails registration (missing static lib), the process exits with a descriptive error.
+- Health checks run at startup and every hour (`driverwatch.Daemon`). Status updates feed into `connection_protocols.driver_enabled`.
+
+### Protocol Registry (Metadata Layer)
+
+`internal/protocols` consumes driver descriptors and exposes immutable metadata to the rest of the backend.
+
+```go
+func Register(proto *Protocol) error
+func Get(id string) (*Protocol, error)
+func GetAll() []*Protocol
+func DescribeCapabilities(id string) (drivers.Capabilities, error)
+```
+
+Each protocol entry references a driver ID; registry panics in tests if a driver is missing to catch regressions early.
+
+---
+
+## Availability Pipeline
+
+Protocol availability cascades through four gates:
+
+```
+Driver Registered & HealthCheck OK
+        AND
+Config modules.<protocol>.enabled == true
+        AND
+permission.Check(user, "connection.view") && permission.Check(user, "{protocol}.connect")
+        AND
+VisibilityService.Allowed(user, connectionID or protocol scope)
+```
+
+- Driver readiness toggles `connection_protocols.driver_enabled`.
+- Configuration toggles `connection_protocols.config_enabled` (per tenant; default seeded from config file).
+- Permissions drawn from the modular system (see next section).
+- Visibility: per-connection access lists and organization/team scoping.
+
+Root users bypass all gates except visibility (they can still manage shares) per `project_spec`.
+
+---
+
+## Permissions
+
+### Registry Setup
+
+**`internal/protocols/permissions.go`**
+```go
+// Base connection permissions
+connection.view
+connection.launch        (depends on connection.view)
+connection.manage        (depends on connection.view)
+connection.share         (depends on connection.manage)
+connection.audit         (depends on audit.view)
+
+// Per-driver permissions (auto-registered for each protocol id)
+{protocol}.connect       (depends on connection.launch)
+{protocol}.manage        (depends on connection.manage, implies {protocol}.connect)
+```
+
+Dependencies flow through `permissions.Register`, just like core permissions.
+
+### Roles
+
+Seed two roles (updated `internal/database/seed.go`):
+- `connection.viewer` → `connection.view`, selected `{protocol}.connect` for commonly enabled drivers.
+- `connection.admin` → all connection + protocol manage permissions.
+
+Team-specific roles can be created later by admins using `/api/permissions/roles`.
+
+---
+
+## Services
+
+### ProtocolService (`internal/services/protocol_service.go`)
+
+Responsibilities:
+- Read `connection_protocols` table and merge with driver metadata (capabilities, schema).
+- Provide `GetAvailableProtocols(ctx)` (all) and `GetUserProtocols(ctx, userID)` (permission-filtered).
+- Offer `TestDriver(ctx, protocolID)` for admins (delegates to driver `TestConnection` with synthetic payload).
+- Cache descriptors in-memory for 5 minutes to reduce DB load.
+
+### ConnectionService (`internal/services/connection_service.go`)
+
+Key APIs:
+```go
+type CreateConnectionInput struct {
+    Name           string
+    Description    string
+    ProtocolID     string
+    OrganizationID *string
+    TeamID         *string
+    Metadata       map[string]any
+    Settings       map[string]any
+    SecretRef      *vault.SecretRef
+    Targets        []ConnectionTargetInput
+    Visibility     []ConnectionVisibilityInput
+}
+```
+
+Behaviors:
+- Validate driver exists and is available (DriverEnabled + ConfigEnabled) before create.
+- Call driver `ValidateConfig` using provided settings.
+- Serialize `Settings` and `Metadata` as JSON; encrypt secret payloads via Credential Vault service when inline.
+- Manage `ConnectionVisibility` rows (org/team/user scopes). Enforce at least one scope when connection is org-owned.
+- Record audit entries: `connection.create`, `connection.update`, `connection.delete`, `connection.share`, `connection.launch.preview`.
+- Provide `ListForUser(ctx, userID, filter)` combining organization membership, team membership, and explicit share rows.
+
+### Visibility & Permission Enforcement
+
+`ConnectionService` checks permissions before mutating:
+- Create/Update/Delete require `connection.manage` + `permissions.Check(user, protocolID+".manage")` for driver-specific settings.
+- Share updates require `connection.share`.
+- Launch preview/test requires `connection.launch` + `{protocol}.connect`.
+
+---
+
+## API Layer
+
+### Protocol Routes (`internal/api/routes_protocols.go`)
+
+```
+GET  /api/protocols                   -> list all protocols (needs connection.view)
+GET  /api/protocols/available         -> user-filtered list (connection.view)
+GET  /api/protocols/:id               -> descriptor incl. capabilities (connection.view)
+GET  /api/protocols/:id/permissions   -> permission map for UI (connection.view)
+POST /api/protocols/:id/test          -> driver test (connection.manage)
+```
+
+### Connection Routes (`internal/api/routes_connections.go`)
+
+```
+GET    /api/connections                      (connection.view)
+GET    /api/connections/:id                  (connection.view)
+POST   /api/connections                      (connection.manage)
+PATCH  /api/connections/:id                  (connection.manage)
+DELETE /api/connections/:id                  (connection.manage)
+POST   /api/connections/:id/share            (connection.share)
+POST   /api/connections/:id/preview          (connection.launch)
+```
+
+All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview and driver tests, middleware also checks `{protocol}.connect` via `ProtocolPermissionGuard` helper.
+
+### Handler Responsibilities
+
+- `ProtocolHandler` orchestrates ProtocolService methods and handles permission errors gracefully.
+- `ConnectionHandler` binds/validates payloads (`internal/handlers/validation.go`), calls ConnectionService, and serializes visibility records.
+- `middleware.OrganizationScope` ensures the org in the path matches the authenticated user when present (reused from other modules).
+
+---
+
+## Sync & Bootstrap Flow
+
+1. `cmd/server/main.go`
+   - Load config.
+   - Initialize DB.
+   - Call `drivers.Bootstrap()`.
+   - `connection_protocols.Sync(ctx, db, cfg)` stores descriptors and driver availability.
+   - `permissions.Sync(ctx, db)` persists global permission registry.
+   - `database.SeedData(db, cfg)` seeds roles + default connections (optional sample).
+
+2. Background job `ProtocolWatchdog`
+   - Every hour: run driver `HealthCheck`, update DB, emit audit events on changes.
+   - Emit websocket event `protocol.updated` for live UI refresh.
+
+3. Launch router + register `/api/protocols` and `/api/connections` groups.
+
+---
+
+## Frontend Plan
+
+### Types & API wrappers
+
+- `web/src/types/protocols.ts` – matches `ProtocolInfo` (id, title, icon, availability, capabilities).
+- `web/src/types/connections.ts` – connection payload with targets + visibility summary.
+- `web/src/lib/api/protocols.ts` – fetch list/detail/test endpoints.
+- `web/src/lib/api/connections.ts` – CRUD for connections + share + preview.
+
+### Hooks
+
+- `useUserProtocols(queryOptions?)` – caches for 5 minutes.
+- `useConnections(filters)` – includes search, protocol filter, org filter.
+- `useConnectionMutations()` – create/update/delete/share wrappers with optimistic cache updates.
+- `useDriverCapabilities(protocolID)` – fetches descriptor lazily.
+
+### UI Updates (`web/src/pages/connections/Connections.tsx`)
+
+- Tabs generated from `useUserProtocols` (category icons, capability chips).
+- Connection cards show organization/team badges, availability chips, and driver icons.
+- "Launch" button disabled when driver not available for user (lack permission or config disabled).
+- Share modal lists organizations/teams (leveraging `/api/orgs` and `/api/teams`).
+
+---
+
+## Database & Migration Updates
+
+1. Extend `internal/database/migrations.go`:
+   ```go
+   db.AutoMigrate(
+       &models.ConnectionProtocol{},
+       &models.Connection{},
+       &models.ConnectionTarget{},
+       &models.ConnectionVisibility{},
+   )
+   ```
+2. Update seeding to call `protocols.RegisterPermissions()`, `permissions.Sync`, and `protocols.Sync(ctx, db, cfg)`.
+3. Rename `AutoMigrateAndSeed` to accept `*app.Config` and pass from `cmd/server/main.go`.
+4. Add indexes for frequently queried columns (organization_id, protocol_id, permission_scope).
+
+---
+
+## Testing Strategy
+
+- **drivers/registry_test.go** – registration, duplicates, descriptor snapshot.
+- **protocols/sync_test.go** – driver + config interplay, config toggles, capability JSON output.
+- **services/protocol_service_test.go** – root vs. regular user, availability gating.
+- **services/connection_service_test.go** – validation, visibility filtering, permission enforcement, audit entries.
+- **handlers/protocols_test.go** – API responses, permission middleware integration.
+- **handlers/connections_test.go** – CRUD flows and share endpoint.
+- **frontend** – React testing library for `Connections` page (filtering, actions) and hooks.
+
+Mock utilities: add `testutil.NewDriverRegistry()` to isolate driver behaviors.
+
+---
+
+## Deployment & Observability
+
+- Emit metrics `protocol_availability_total{protocol, state}` and `connection_launch_total{protocol, result}` via Prometheus collectors.
+- Audit events `protocol.health.update`, `connection.create`, etc., already handled via services.
+- Provide CLI command `shellcn protocols sync` for on-demand resync in deployments.
+
+---
+
+## Success Criteria
+
+- ✅ Driver registry successfully initializes native + FFI drivers, surfacing capability metadata.
+- ✅ Config toggles and driver health status produce consistent availability flags in API responses.
+- ✅ Connection CRUD respects organization/team visibility and modular permissions.
+- ✅ Protocol and connection endpoints integrate with middleware.Auth + RequirePermission.
+- ✅ Audit log entries create traceability for all connection/driver operations.
+- ✅ Frontend auto-updates connection tabs and cards based on API results.
+- ✅ Root users see/manage everything; scoped admins only see what they should.
+
+---
+
+## Future Enhancements
+
+1. Hot config reload (watcher) that re-syncs driver availability without restarting server.
+2. Protocol health dashboard UI with retry + disable toggles.
+3. Driver marketplace (uploadable bundles with signature validation).
+4. Session orchestration (shared sessions, recordings, metrics streaming).
+5. Connection templates + automation (bulk assign to teams, schedule rotation).
+
+---
+
+**Version:** 3.0 (Driver-Centric Core)
 **Date:** 2025-10-09
 **Status:** Ready for Implementation

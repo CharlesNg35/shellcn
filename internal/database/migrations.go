@@ -25,6 +25,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.UserInvite{},
 		&models.EmailVerification{},
 		&models.CacheEntry{},
+		&models.ConnectionProtocol{},
+		&models.Connection{},
+		&models.ConnectionTarget{},
+		&models.ConnectionVisibility{},
 	)
 }
 

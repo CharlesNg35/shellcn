@@ -135,6 +135,13 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	registerPermissionRoutes(api, permHandler, checker)
 
+	protocolSvc, err := services.NewProtocolService(db, checker)
+	if err != nil {
+		return nil, err
+	}
+	protocolHandler := handlers.NewProtocolHandler(protocolSvc)
+	registerProtocolRoutes(api, protocolHandler, checker)
+
 	// Sessions
 	sessionHandler := handlers.NewSessionHandler(db, sessions)
 	registerSessionRoutes(api, sessionHandler)
