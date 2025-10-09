@@ -21,13 +21,12 @@ interface UserFormProps {
 type CreateFormValues = z.infer<typeof userCreateSchema>
 type UpdateFormValues = z.infer<typeof userUpdateSchema>
 
-type FormValues = CreateFormValues | UpdateFormValues
+// Use a broader type that encompasses both schemas
+type FormValues = CreateFormValues & Partial<UpdateFormValues>
 
 export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserFormProps) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const { create, update } = useUserMutations()
-
-  const schema = mode === 'create' ? userCreateSchema : userUpdateSchema
 
   const defaultValues = useMemo(() => {
     if (mode === 'create') {
@@ -61,7 +60,8 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
     formState: { errors, isSubmitting },
     reset,
   } = useForm<FormValues>({
-    resolver: zodResolver(schema as any) as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(mode === 'create' ? userCreateSchema : userUpdateSchema) as any,
     defaultValues,
   })
 

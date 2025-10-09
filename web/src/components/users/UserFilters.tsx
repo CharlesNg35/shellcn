@@ -21,6 +21,7 @@ const STATUS_FILTERS: Array<{ label: string; value: UserFilterState['status'] }>
   { label: 'Inactive', value: 'inactive' },
 ]
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function normalizeFilters(filters: UserFilterState): UserListParams {
   const normalized: UserListParams = {}
   if (filters.search) {

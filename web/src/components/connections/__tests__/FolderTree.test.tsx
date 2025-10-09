@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import { FolderTree } from '@/components/connections/FolderTree'
 import type { ConnectionFolderNode } from '@/types/connections'
 
@@ -7,7 +8,11 @@ vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
     ...actual,
-    Link: ({ to, children, ...rest }: any) => (
+    Link: ({
+      to,
+      children,
+      ...rest
+    }: { to: unknown; children?: ReactNode } & Record<string, unknown>) => (
       <a href={typeof to === 'string' ? to : '#'} {...rest}>
         {children}
       </a>

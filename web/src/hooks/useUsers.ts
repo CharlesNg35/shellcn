@@ -1,5 +1,11 @@
 import { useCallback, useMemo } from 'react'
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+  type UseQueryOptions,
+} from '@tanstack/react-query'
 import type { ApiError } from '@/lib/api/http'
 import {
   activateUser,
@@ -34,9 +40,15 @@ export function getUserDetailQueryKey(userId?: string) {
   return [...USER_DETAIL_QUERY_KEY, userId ?? ''] as const
 }
 
-type UsersQueryOptions = any
+type UsersQueryOptions = Omit<
+  UseQueryOptions<UserListResult, ApiError, UserListResult, readonly unknown[]>,
+  'queryKey' | 'queryFn'
+>
 
-type UserDetailQueryOptions = any
+type UserDetailQueryOptions = Omit<
+  UseQueryOptions<UserRecord, ApiError, UserRecord, readonly unknown[]>,
+  'queryKey' | 'queryFn'
+>
 
 export function useUsers(
   params?: UserListParams,
@@ -44,13 +56,13 @@ export function useUsers(
 ): UseQueryResult<UserListResult, ApiError> {
   const queryKey = useMemo(() => getUsersQueryKey(params), [params])
 
-  return useQuery({
+  return useQuery<UserListResult, ApiError, UserListResult, readonly unknown[]>({
     queryKey,
     queryFn: () => fetchUsers(params),
-    placeholderData: (prev) => prev as any,
+    placeholderData: (prev) => prev ?? undefined,
     staleTime: 60_000,
-    ...(options as any),
-  }) as unknown as UseQueryResult<UserListResult, ApiError>
+    ...(options ?? {}),
+  })
 }
 
 export function useUser(
@@ -59,13 +71,13 @@ export function useUser(
 ): UseQueryResult<UserRecord, ApiError> {
   const queryKey = useMemo(() => getUserDetailQueryKey(userId), [userId])
 
-  return useQuery({
+  return useQuery<UserRecord, ApiError, UserRecord, readonly unknown[]>({
     queryKey,
     queryFn: () => fetchUserById(userId as string),
     enabled: Boolean(userId),
     staleTime: 60_000,
-    ...(options as any),
-  }) as unknown as UseQueryResult<UserRecord, ApiError>
+    ...(options ?? {}),
+  })
 }
 
 export function useUserMutations() {
