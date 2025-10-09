@@ -900,11 +900,16 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 | DELETE | `/api/connections/:id`         | Delete a connection.                                           | `connection.manage`                      | `ConnectionHandler.Delete`           |
 | POST   | `/api/connections/:id/share`   | Replace visibility ACLs (org/team/user scopes).                | `connection.share`                       | `ConnectionHandler.UpdateVisibility` |
 | POST   | `/api/connections/:id/preview` | Run a dry-run or configuration validation.                     | `connection.launch` + `{driver}.connect` | `ConnectionHandler.LaunchPreview`    |
+| GET    | `/api/connection-folders/tree` | Folder hierarchy plus connection counts.                       | `connection.folder.view`                 | `ConnectionFolderHandler.ListTree`   |
+| POST   | `/api/connection-folders`      | Create a new connection folder.                                | `connection.folder.manage`               | `ConnectionFolderHandler.Create`     |
+| PATCH  | `/api/connection-folders/:id`  | Update folder metadata (name, parent, color, etc.).            | `connection.folder.manage`               | `ConnectionFolderHandler.Update`     |
+| DELETE | `/api/connection-folders/:id`  | Delete a folder (children reassigned, connections unassigned). | `connection.folder.manage`               | `ConnectionFolderHandler.Delete`     |
 
 **Supported query parameters for `GET /api/connections`:**
 
 - `protocol_id`: filter by driver.
 - `organization_id`, `team_id`: scope to tenant subset.
+- `folder_id`: filter by folder (`unassigned` for folderless).
 - `search`: case-insensitive substring match across name, host, tags, metadata.
 - `include=targets,visibility`: opt-in expansions (default `targets`).
 - `page`, `per_page`: pagination controls (standard envelope).
