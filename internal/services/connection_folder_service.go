@@ -129,6 +129,10 @@ func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string) (
 		roots = append(roots, node)
 	}
 
+	for _, root := range roots {
+		aggregateFolderCounts(root)
+	}
+
 	result := make([]ConnectionFolderNode, 0, len(roots)+1)
 
 	if unassigned, ok := counts["unassigned"]; ok && unassigned > 0 {
@@ -332,4 +336,17 @@ func slugify(value string) string {
 
 func jsonMarshal(value any) ([]byte, error) {
 	return json.Marshal(value)
+}
+
+func aggregateFolderCounts(node *ConnectionFolderNode) int64 {
+	if node == nil {
+		return 0
+	}
+
+	total := node.ConnectionCount
+	for i := range node.Children {
+		total += aggregateFolderCounts(&node.Children[i])
+	}
+	node.ConnectionCount = total
+	return total
 }

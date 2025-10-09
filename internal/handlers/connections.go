@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -34,7 +35,8 @@ func (h *ConnectionHandler) List(c *gin.Context) {
 	page := parseIntQuery(c, "page", 1)
 	perPage := parseIntQuery(c, "per_page", 25)
 
-	result, err := h.svc.ListVisible(c.Request.Context(), services.ListConnectionsOptions{
+	ctx := requestContext(c)
+	result, err := h.svc.ListVisible(ctx, services.ListConnectionsOptions{
 		UserID:            userID,
 		ProtocolID:        c.Query("protocol_id"),
 		FolderID:          c.Query("folder_id"),
@@ -68,7 +70,8 @@ func (h *ConnectionHandler) Get(c *gin.Context) {
 
 	includeTargets, includeVisibility := parseIncludes(c.Query("include"))
 
-	connection, err := h.svc.GetVisible(c.Request.Context(), userID, c.Param("id"), includeTargets, includeVisibility)
+	ctx := requestContext(c)
+	connection, err := h.svc.GetVisible(ctx, userID, c.Param("id"), includeTargets, includeVisibility)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -106,4 +109,11 @@ func computeTotalPages(total, perPage int64) int {
 		return 1
 	}
 	return int(pages)
+}
+
+func requestContext(c *gin.Context) context.Context {
+	if c != nil && c.Request != nil {
+		return c.Request.Context()
+	}
+	return context.Background()
 }

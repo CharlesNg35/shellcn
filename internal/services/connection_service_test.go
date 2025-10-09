@@ -16,6 +16,12 @@ func TestConnectionServiceListVisible(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 
 	orgID := "org-123"
+	org := models.Organization{
+		BaseModel: models.BaseModel{ID: orgID},
+		Name:      "Acme",
+	}
+	require.NoError(t, db.Create(&org).Error)
+
 	user := models.User{
 		BaseModel:      models.BaseModel{ID: "user-123"},
 		Username:       "viewer",
