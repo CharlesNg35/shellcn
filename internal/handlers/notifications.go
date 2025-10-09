@@ -46,7 +46,7 @@ func (h *NotificationHandler) List(c *gin.Context) {
 	limit := parseIntQuery(c, "limit", 25)
 	offset := parseIntQuery(c, "offset", 0)
 
-	items, err := h.service.ListForUser(c.Request.Context(), services.ListNotificationsInput{
+	items, err := h.service.ListForUser(requestContext(c), services.ListNotificationsInput{
 		UserID: userID,
 		Limit:  limit,
 		Offset: offset,
@@ -80,9 +80,9 @@ func (h *NotificationHandler) updateReadState(c *gin.Context, read bool) {
 	var dto *services.NotificationDTO
 	var err error
 	if read {
-		dto, err = h.service.MarkRead(c.Request.Context(), userID, id)
+		dto, err = h.service.MarkRead(requestContext(c), userID, id)
 	} else {
-		dto, err = h.service.MarkUnread(c.Request.Context(), userID, id)
+		dto, err = h.service.MarkUnread(requestContext(c), userID, id)
 	}
 
 	if err != nil {
@@ -102,7 +102,7 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 	}
 
 	id := strings.TrimSpace(c.Param("id"))
-	if err := h.service.Delete(c.Request.Context(), userID, id); err != nil {
+	if err := h.service.Delete(requestContext(c), userID, id); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -118,7 +118,7 @@ func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.MarkAllRead(c.Request.Context(), userID); err != nil {
+	if err := h.service.MarkAllRead(requestContext(c), userID); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -172,7 +172,7 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	dto, err := h.service.Create(c.Request.Context(), services.CreateNotificationInput{
+	dto, err := h.service.Create(requestContext(c), services.CreateNotificationInput{
 		UserID:    payload.UserID,
 		Type:      payload.Type,
 		Title:     payload.Title,

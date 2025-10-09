@@ -42,7 +42,7 @@ type updateOrganizationRequest struct {
 
 // GET /api/orgs
 func (h *OrganizationHandler) List(c *gin.Context) {
-	orgs, err := h.svc.List(c.Request.Context())
+	orgs, err := h.svc.List(requestContext(c))
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -52,7 +52,7 @@ func (h *OrganizationHandler) List(c *gin.Context) {
 
 // GET /api/orgs/:id
 func (h *OrganizationHandler) Get(c *gin.Context) {
-	org, err := h.svc.GetByID(c.Request.Context(), c.Param("id"))
+	org, err := h.svc.GetByID(requestContext(c), c.Param("id"))
 	if err != nil {
 		response.Error(c, errors.ErrNotFound)
 		return
@@ -79,7 +79,7 @@ func (h *OrganizationHandler) Create(c *gin.Context) {
 		Settings:    body.Settings,
 	}
 
-	org, err := h.svc.Create(c.Request.Context(), input)
+	org, err := h.svc.Create(requestContext(c), input)
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -120,7 +120,7 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 		settings = *body.Settings
 	}
 
-	org, err := h.svc.Update(c.Request.Context(), c.Param("id"), services.UpdateOrganizationInput{Name: namePtr, Description: descPtr, Settings: settings})
+	org, err := h.svc.Update(requestContext(c), c.Param("id"), services.UpdateOrganizationInput{Name: namePtr, Description: descPtr, Settings: settings})
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -130,7 +130,7 @@ func (h *OrganizationHandler) Update(c *gin.Context) {
 
 // DELETE /api/orgs/:id
 func (h *OrganizationHandler) Delete(c *gin.Context) {
-	if err := h.svc.Delete(c.Request.Context(), c.Param("id")); err != nil {
+	if err := h.svc.Delete(requestContext(c), c.Param("id")); err != nil {
 		response.Error(c, errors.ErrNotFound)
 		return
 	}

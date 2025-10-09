@@ -47,7 +47,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 		}
 	}
 
-	logs, total, err := h.svc.List(c.Request.Context(), services.AuditListOptions{Page: page, PageSize: per, Filters: filters})
+	logs, total, err := h.svc.List(requestContext(c), services.AuditListOptions{Page: page, PageSize: per, Filters: filters})
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -64,7 +64,7 @@ func (h *AuditHandler) Export(c *gin.Context) {
 	filters.Result = c.Query("result")
 	filters.Resource = c.Query("resource")
 
-	logs, err := h.svc.Export(c.Request.Context(), filters)
+	logs, err := h.svc.Export(requestContext(c), filters)
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return

@@ -135,7 +135,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	}
 
 	checker, _ := permissions.NewChecker(h.db)
-	perms, _ := checker.GetUserPermissions(c.Request.Context(), user.ID)
+	perms, _ := checker.GetUserPermissions(requestContext(c), user.ID)
 
 	payload := gin.H{
 		"id":          user.ID,
@@ -191,7 +191,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 		return
 	}
 
-	providerModel, cfg, err := h.providers.LoadLDAPConfig(c.Request.Context())
+	providerModel, cfg, err := h.providers.LoadLDAPConfig(requestContext(c))
 	if err != nil || !providerModel.Enabled {
 		metrics.AuthAttempts.WithLabelValues("failure").Inc()
 		response.Error(c, errors.ErrUnauthorized)
@@ -205,7 +205,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 		return
 	}
 
-	identity, err := authenticator.Authenticate(c.Request.Context(), providers.LDAPAuthenticateInput{
+	identity, err := authenticator.Authenticate(requestContext(c), providers.LDAPAuthenticateInput{
 		Identifier: req.Identifier,
 		Password:   req.Password,
 	})
@@ -215,7 +215,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 		return
 	}
 
-	tokens, user, _, err := h.sso.Resolve(c.Request.Context(), *identity, iauth.ResolveOptions{
+	tokens, user, _, err := h.sso.Resolve(requestContext(c), *identity, iauth.ResolveOptions{
 		AutoProvision: providerModel.AllowRegistration,
 		SessionMeta: iauth.SessionMetadata{
 			IPAddress: c.ClientIP(),
@@ -240,7 +240,7 @@ func (h *AuthHandler) respondWithTokens(c *gin.Context, user *models.User, pair 
 	}
 
 	checker, _ := permissions.NewChecker(h.db)
-	perms, _ := checker.GetUserPermissions(c.Request.Context(), user.ID)
+	perms, _ := checker.GetUserPermissions(requestContext(c), user.ID)
 
 	roles := make([]gin.H, 0, len(user.Roles))
 	for _, role := range user.Roles {

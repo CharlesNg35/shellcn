@@ -29,7 +29,7 @@ func (h *ConnectionFolderHandler) ListTree(c *gin.Context) {
 		return
 	}
 
-	tree, err := h.svc.ListTree(c.Request.Context(), userID)
+	tree, err := h.svc.ListTree(requestContext(c), userID)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -51,7 +51,7 @@ func (h *ConnectionFolderHandler) Create(c *gin.Context) {
 		return
 	}
 
-	dto, err := h.svc.Create(c.Request.Context(), userID, payload.toInput())
+	dto, err := h.svc.Create(requestContext(c), userID, payload.toInput())
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -73,7 +73,7 @@ func (h *ConnectionFolderHandler) Update(c *gin.Context) {
 		return
 	}
 
-	dto, err := h.svc.Update(c.Request.Context(), userID, c.Param("id"), payload.toInput())
+	dto, err := h.svc.Update(requestContext(c), userID, c.Param("id"), payload.toInput())
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -90,7 +90,7 @@ func (h *ConnectionFolderHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.Delete(c.Request.Context(), userID, c.Param("id")); err != nil {
+	if err := h.svc.Delete(requestContext(c), userID, c.Param("id")); err != nil {
 		response.Error(c, err)
 		return
 	}

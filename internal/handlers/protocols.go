@@ -23,7 +23,7 @@ func NewProtocolHandler(service *services.ProtocolService) *ProtocolHandler {
 
 // GET /api/protocols
 func (h *ProtocolHandler) ListAll(c *gin.Context) {
-	protocols, err := h.service.ListAll(c.Request.Context())
+	protocols, err := h.service.ListAll(requestContext(c))
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -39,7 +39,7 @@ func (h *ProtocolHandler) ListForUser(c *gin.Context) {
 		return
 	}
 
-	protocols, err := h.service.ListForUser(c.Request.Context(), userID)
+	protocols, err := h.service.ListForUser(requestContext(c), userID)
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return

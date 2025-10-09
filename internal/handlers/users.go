@@ -41,7 +41,7 @@ func (h *UserHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	per, _ := strconv.Atoi(c.DefaultQuery("per_page", "20"))
 
-	users, total, err := h.service.List(c.Request.Context(), services.ListUsersOptions{Page: page, PageSize: per})
+	users, total, err := h.service.List(requestContext(c), services.ListUsersOptions{Page: page, PageSize: per})
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -53,7 +53,7 @@ func (h *UserHandler) List(c *gin.Context) {
 // GET /api/users/:id
 func (h *UserHandler) Get(c *gin.Context) {
 	id := c.Param("id")
-	user, err := h.service.GetByID(c.Request.Context(), id)
+	user, err := h.service.GetByID(requestContext(c), id)
 	if err != nil {
 		response.Error(c, errors.ErrNotFound)
 		return
@@ -84,7 +84,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 		return
 	}
 
-	user, err := h.service.Create(c.Request.Context(), input)
+	user, err := h.service.Create(requestContext(c), input)
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return

@@ -37,7 +37,7 @@ func (h *SSOHandler) Begin(c *gin.Context) {
 		return
 	}
 
-	provider, autoProvision, err := h.instantiateProvider(c.Request.Context(), providerType)
+	provider, autoProvision, err := h.instantiateProvider(requestContext(c), providerType)
 	if err != nil {
 		handleSSOError(c, err)
 		return
@@ -70,7 +70,7 @@ func (h *SSOHandler) Begin(c *gin.Context) {
 		return
 	}
 
-	resp, err := provider.Begin(c.Request.Context(), providers.BeginAuthRequest{
+	resp, err := provider.Begin(requestContext(c), providers.BeginAuthRequest{
 		State:          state,
 		Nonce:          nonceToken,
 		PKCEChallenge:  pkce.Challenge,
@@ -111,13 +111,13 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	provider, _, err := h.instantiateProvider(c.Request.Context(), payload.Provider)
+	provider, _, err := h.instantiateProvider(requestContext(c), payload.Provider)
 	if err != nil {
 		redirectWithError(c, payload.ErrorURL, err)
 		return
 	}
 
-	identity, err := provider.Callback(c.Request.Context(), providers.CallbackRequest{
+	identity, err := provider.Callback(requestContext(c), providers.CallbackRequest{
 		State:          stateToken,
 		PKCEVerifier:   payload.PKCE,
 		ExpectedNonce:  payload.Nonce,
@@ -129,7 +129,7 @@ func (h *SSOHandler) Callback(c *gin.Context) {
 		return
 	}
 
-	tokens, user, _, err := h.manager.Resolve(c.Request.Context(), *identity, iauth.ResolveOptions{
+	tokens, user, _, err := h.manager.Resolve(requestContext(c), *identity, iauth.ResolveOptions{
 		AutoProvision: payload.AutoCreate,
 		SessionMeta: iauth.SessionMetadata{
 			IPAddress: c.ClientIP(),
@@ -153,7 +153,7 @@ func (h *SSOHandler) Metadata(c *gin.Context) {
 		return
 	}
 
-	provider, _, err := h.instantiateProvider(c.Request.Context(), providerType)
+	provider, _, err := h.instantiateProvider(requestContext(c), providerType)
 	if err != nil {
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return

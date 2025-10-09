@@ -31,7 +31,7 @@ func Health(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := sqlDB.PingContext(c.Request.Context()); err != nil {
+		if err := sqlDB.PingContext(requestContext(c)); err != nil {
 			respondHealthUnavailable(c, "down")
 			return
 		}

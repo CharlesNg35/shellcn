@@ -39,7 +39,7 @@ func (h *PermissionHandler) MyPermissions(c *gin.Context) {
 		return
 	}
 
-	perms, err := h.svc.ListUserPermissions(c.Request.Context(), userID)
+	perms, err := h.svc.ListUserPermissions(requestContext(c), userID)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -49,7 +49,7 @@ func (h *PermissionHandler) MyPermissions(c *gin.Context) {
 
 // GET /api/permissions/roles
 func (h *PermissionHandler) ListRoles(c *gin.Context) {
-	roles, err := h.svc.ListRoles(c.Request.Context())
+	roles, err := h.svc.ListRoles(requestContext(c))
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -67,7 +67,7 @@ func (h *PermissionHandler) CreateRole(c *gin.Context) {
 		response.Error(c, errors.ErrBadRequest)
 		return
 	}
-	role, err := h.svc.CreateRole(c.Request.Context(), services.CreateRoleInput{Name: body.Name, Description: body.Description, IsSystem: body.IsSystem})
+	role, err := h.svc.CreateRole(requestContext(c), services.CreateRoleInput{Name: body.Name, Description: body.Description, IsSystem: body.IsSystem})
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -82,7 +82,7 @@ func (h *PermissionHandler) UpdateRole(c *gin.Context) {
 		response.Error(c, errors.ErrBadRequest)
 		return
 	}
-	role, err := h.svc.UpdateRole(c.Request.Context(), c.Param("id"), services.UpdateRoleInput{Name: body.Name, Description: body.Description})
+	role, err := h.svc.UpdateRole(requestContext(c), c.Param("id"), services.UpdateRoleInput{Name: body.Name, Description: body.Description})
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -92,7 +92,7 @@ func (h *PermissionHandler) UpdateRole(c *gin.Context) {
 
 // DELETE /api/permissions/roles/:id
 func (h *PermissionHandler) DeleteRole(c *gin.Context) {
-	if err := h.svc.DeleteRole(c.Request.Context(), c.Param("id")); err != nil {
+	if err := h.svc.DeleteRole(requestContext(c), c.Param("id")); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
@@ -106,7 +106,7 @@ func (h *PermissionHandler) SetRolePermissions(c *gin.Context) {
 		response.Error(c, errors.ErrBadRequest)
 		return
 	}
-	if err := h.svc.SetRolePermissions(c.Request.Context(), c.Param("id"), body.Permissions); err != nil {
+	if err := h.svc.SetRolePermissions(requestContext(c), c.Param("id"), body.Permissions); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}

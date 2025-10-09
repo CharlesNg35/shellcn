@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"strings"
 
@@ -109,11 +108,4 @@ func computeTotalPages(total, perPage int64) int {
 		return 1
 	}
 	return int(pages)
-}
-
-func requestContext(c *gin.Context) context.Context {
-	if c != nil && c.Request != nil {
-		return c.Request.Context()
-	}
-	return context.Background()
 }

@@ -45,7 +45,7 @@ func NewTeamHandler(db *gorm.DB) (*TeamHandler, error) {
 
 // GET /api/orgs/:orgID/teams
 func (h *TeamHandler) ListByOrg(c *gin.Context) {
-	teams, err := h.svc.ListByOrganization(c.Request.Context(), c.Param("orgID"))
+	teams, err := h.svc.ListByOrganization(requestContext(c), c.Param("orgID"))
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -55,7 +55,7 @@ func (h *TeamHandler) ListByOrg(c *gin.Context) {
 
 // GET /api/teams/:id
 func (h *TeamHandler) Get(c *gin.Context) {
-	team, err := h.svc.GetByID(c.Request.Context(), c.Param("id"))
+	team, err := h.svc.GetByID(requestContext(c), c.Param("id"))
 	if err != nil {
 		response.Error(c, errors.ErrNotFound)
 		return
@@ -87,7 +87,7 @@ func (h *TeamHandler) Create(c *gin.Context) {
 		Description:    strings.TrimSpace(body.Description),
 	}
 
-	team, err := h.svc.Create(c.Request.Context(), input)
+	team, err := h.svc.Create(requestContext(c), input)
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -123,7 +123,7 @@ func (h *TeamHandler) Update(c *gin.Context) {
 		descPtr = &trimmed
 	}
 
-	team, err := h.svc.Update(c.Request.Context(), c.Param("id"), services.UpdateTeamInput{Name: namePtr, Description: descPtr})
+	team, err := h.svc.Update(requestContext(c), c.Param("id"), services.UpdateTeamInput{Name: namePtr, Description: descPtr})
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -142,7 +142,7 @@ func (h *TeamHandler) AddMember(c *gin.Context) {
 		response.Error(c, errors.NewBadRequest("user id is required"))
 		return
 	}
-	if err := h.svc.AddMember(c.Request.Context(), c.Param("id"), userID); err != nil {
+	if err := h.svc.AddMember(requestContext(c), c.Param("id"), userID); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
@@ -151,7 +151,7 @@ func (h *TeamHandler) AddMember(c *gin.Context) {
 
 // DELETE /api/teams/:id/members/:userID
 func (h *TeamHandler) RemoveMember(c *gin.Context) {
-	if err := h.svc.RemoveMember(c.Request.Context(), c.Param("id"), c.Param("userID")); err != nil {
+	if err := h.svc.RemoveMember(requestContext(c), c.Param("id"), c.Param("userID")); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
@@ -160,7 +160,7 @@ func (h *TeamHandler) RemoveMember(c *gin.Context) {
 
 // GET /api/teams/:id/members
 func (h *TeamHandler) ListMembers(c *gin.Context) {
-	users, err := h.svc.ListMembers(c.Request.Context(), c.Param("id"))
+	users, err := h.svc.ListMembers(requestContext(c), c.Param("id"))
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return

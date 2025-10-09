@@ -21,7 +21,7 @@ func NewAuthProviderHandler(svc *services.AuthProviderService) *AuthProviderHand
 
 // GET /api/auth/providers/all
 func (h *AuthProviderHandler) ListAll(c *gin.Context) {
-	providers, err := h.svc.List(c.Request.Context())
+	providers, err := h.svc.List(requestContext(c))
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -31,7 +31,7 @@ func (h *AuthProviderHandler) ListAll(c *gin.Context) {
 
 // GET /api/auth/providers/enabled
 func (h *AuthProviderHandler) GetEnabled(c *gin.Context) {
-	providers, err := h.svc.GetEnabled(c.Request.Context())
+	providers, err := h.svc.GetEnabled(requestContext(c))
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -41,7 +41,7 @@ func (h *AuthProviderHandler) GetEnabled(c *gin.Context) {
 
 // GET /api/auth/providers (public)
 func (h *AuthProviderHandler) ListPublic(c *gin.Context) {
-	providers, err := h.svc.GetEnabledPublic(c.Request.Context())
+	providers, err := h.svc.GetEnabledPublic(requestContext(c))
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -60,7 +60,7 @@ func (h *AuthProviderHandler) UpdateLocalSettings(c *gin.Context) {
 		response.Error(c, errors.ErrBadRequest)
 		return
 	}
-	if err := h.svc.UpdateLocalSettings(c.Request.Context(), body.AllowRegistration, body.RequireEmailVerification, body.AllowPasswordReset); err != nil {
+	if err := h.svc.UpdateLocalSettings(requestContext(c), body.AllowRegistration, body.RequireEmailVerification, body.AllowPasswordReset); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
@@ -76,7 +76,7 @@ func (h *AuthProviderHandler) SetEnabled(c *gin.Context) {
 		response.Error(c, errors.ErrBadRequest)
 		return
 	}
-	if err := h.svc.SetEnabled(c.Request.Context(), c.Param("type"), body.Enabled); err != nil {
+	if err := h.svc.SetEnabled(requestContext(c), c.Param("type"), body.Enabled); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
@@ -85,7 +85,7 @@ func (h *AuthProviderHandler) SetEnabled(c *gin.Context) {
 
 // POST /api/auth/providers/:type/test
 func (h *AuthProviderHandler) TestConnection(c *gin.Context) {
-	if err := h.svc.TestConnection(c.Request.Context(), c.Param("type")); err != nil {
+	if err := h.svc.TestConnection(requestContext(c), c.Param("type")); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
@@ -113,7 +113,7 @@ func (h *AuthProviderHandler) Configure(c *gin.Context) {
 			return
 		}
 		cfg = body.Config
-		if err := h.svc.ConfigureOIDC(c.Request.Context(), cfg, body.Enabled, body.AllowRegistration, actor); err != nil {
+		if err := h.svc.ConfigureOIDC(requestContext(c), cfg, body.Enabled, body.AllowRegistration, actor); err != nil {
 			response.Error(c, errors.ErrInternalServer)
 			return
 		}
@@ -128,7 +128,7 @@ func (h *AuthProviderHandler) Configure(c *gin.Context) {
 			response.Error(c, errors.ErrBadRequest)
 			return
 		}
-		if err := h.svc.ConfigureSAML(c.Request.Context(), body.Config, body.Enabled, body.AllowRegistration, actor); err != nil {
+		if err := h.svc.ConfigureSAML(requestContext(c), body.Config, body.Enabled, body.AllowRegistration, actor); err != nil {
 			response.Error(c, errors.ErrInternalServer)
 			return
 		}
@@ -143,7 +143,7 @@ func (h *AuthProviderHandler) Configure(c *gin.Context) {
 			response.Error(c, errors.ErrBadRequest)
 			return
 		}
-		if err := h.svc.ConfigureLDAP(c.Request.Context(), body.Config, body.Enabled, body.AllowRegistration, actor); err != nil {
+		if err := h.svc.ConfigureLDAP(requestContext(c), body.Config, body.Enabled, body.AllowRegistration, actor); err != nil {
 			response.Error(c, errors.ErrInternalServer)
 			return
 		}

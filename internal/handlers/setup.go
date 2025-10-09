@@ -78,7 +78,7 @@ func (h *SetupHandler) Initialize(c *gin.Context) {
 		return
 	}
 
-	user, err := h.users.Create(c.Request.Context(), services.CreateUserInput{
+	user, err := h.users.Create(requestContext(c), services.CreateUserInput{
 		Username:  body.Username,
 		Email:     body.Email,
 		Password:  body.Password,

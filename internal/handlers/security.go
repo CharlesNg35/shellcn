@@ -25,6 +25,6 @@ func NewSecurityHandler(audit *security.AuditService) (*SecurityHandler, error) 
 
 // GET /api/security/audit
 func (h *SecurityHandler) Audit(c *gin.Context) {
-	result := h.audit.Run(c.Request.Context())
+	result := h.audit.Run(requestContext(c))
 	response.Success(c, http.StatusOK, result)
 }
