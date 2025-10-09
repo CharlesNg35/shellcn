@@ -13,7 +13,7 @@ export function getConnectionsQueryKey(params?: FetchConnectionsParams) {
   return [...CONNECTIONS_QUERY_BASE_KEY, params ?? {}] as const
 }
 
-type QueryOptions = UseQueryOptions<ConnectionListResult, ApiError>
+type QueryOptions = Omit<UseQueryOptions<ConnectionListResult, ApiError>, 'queryKey' | 'queryFn'>
 
 export function useConnections(params?: FetchConnectionsParams, options?: QueryOptions) {
   const queryKey = useMemo(() => getConnectionsQueryKey(params), [params])

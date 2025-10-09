@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -41,7 +40,7 @@ func TestConnectionHandlerList(t *testing.T) {
 		},
 	}).Error)
 
-	svc, err := services.NewConnectionService(db, &fakePermissionChecker{
+	svc, err := services.NewConnectionService(db, &mockPermissionChecker{
 		grants: map[string]bool{
 			"connection.view": true,
 		},
@@ -60,16 +59,4 @@ func TestConnectionHandlerList(t *testing.T) {
 	var payload map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &payload))
 	require.Equal(t, true, payload["success"])
-}
-
-type fakePermissionChecker struct {
-	grants map[string]bool
-	err    error
-}
-
-func (f *fakePermissionChecker) Check(_ context.Context, _ string, permissionID string) (bool, error) {
-	if f.err != nil {
-		return false, f.err
-	}
-	return f.grants[permissionID], nil
 }

@@ -12,18 +12,6 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 )
 
-type fakePermissionChecker struct {
-	grants map[string]bool
-	err    error
-}
-
-func (f *fakePermissionChecker) Check(_ context.Context, _ string, permissionID string) (bool, error) {
-	if f.err != nil {
-		return false, f.err
-	}
-	return f.grants[permissionID], nil
-}
-
 func TestConnectionServiceListVisible(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 
@@ -52,7 +40,7 @@ func TestConnectionServiceListVisible(t *testing.T) {
 		Targets: []models.ConnectionTarget{
 			{
 				Host: "10.0.0.5",
-				Port: *ptrInt(22),
+				Port: 22,
 			},
 		},
 	}
@@ -85,14 +73,12 @@ func TestConnectionServiceListVisible(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&third).Error)
 
-	checker := &fakePermissionChecker{
+	svc, err := NewConnectionService(db, &mockPermissionChecker{
 		grants: map[string]bool{
 			"connection.view":   true,
 			"connection.manage": false,
 		},
-	}
-
-	svc, err := NewConnectionService(db, checker)
+	})
 	require.NoError(t, err)
 
 	result, err := svc.ListVisible(context.Background(), ListConnectionsOptions{
@@ -103,10 +89,9 @@ func TestConnectionServiceListVisible(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Connections, 3)
 
-	names := []string{
-		result.Connections[0].Name,
-		result.Connections[1].Name,
-		result.Connections[2].Name,
+	names := make([]string, 0, len(result.Connections))
+	for _, conn := range result.Connections {
+		names = append(names, conn.Name)
 	}
 	require.Contains(t, names, "Primary SSH")
 	require.Contains(t, names, "Kubernetes control plane")
@@ -133,7 +118,7 @@ func TestConnectionServiceGetVisibleRespectsPermissions(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&private).Error)
 
-	svc, err := NewConnectionService(db, &fakePermissionChecker{
+	svc, err := NewConnectionService(db, &mockPermissionChecker{
 		grants: map[string]bool{"connection.view": true},
 	})
 	require.NoError(t, err)
@@ -145,8 +130,56 @@ func TestConnectionServiceGetVisibleRespectsPermissions(t *testing.T) {
 	require.Equal(t, "critical", dto.Metadata["tag"])
 }
 
-func ptrInt(v int) *int {
-	return &v
+func TestConnectionServiceCountByFolder(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+
+	user := models.User{
+		BaseModel: models.BaseModel{ID: "user-folders"},
+		Username:  "folders",
+		Email:     "folders@example.com",
+		Password:  "secret",
+	}
+	require.NoError(t, db.Create(&user).Error)
+
+	folder := models.ConnectionFolder{
+		BaseModel:   models.BaseModel{ID: "folder-1"},
+		Name:        "Production",
+		OwnerUserID: user.ID,
+	}
+	require.NoError(t, db.Create(&folder).Error)
+
+	require.NoError(t, db.Create(&models.Connection{
+		Name:        "Prod SSH",
+		ProtocolID:  "ssh",
+		OwnerUserID: user.ID,
+		FolderID:    &folder.ID,
+	}).Error)
+
+	require.NoError(t, db.Create(&models.Connection{
+		Name:        "Prod DB",
+		ProtocolID:  "postgres",
+		OwnerUserID: user.ID,
+		FolderID:    &folder.ID,
+	}).Error)
+
+	require.NoError(t, db.Create(&models.Connection{
+		Name:        "Unassigned",
+		ProtocolID:  "ssh",
+		OwnerUserID: user.ID,
+	}).Error)
+
+	svc, err := NewConnectionService(db, &mockPermissionChecker{
+		grants: map[string]bool{
+			"connection.view": true,
+		},
+	})
+	require.NoError(t, err)
+
+	counts, err := svc.CountByFolder(context.Background(), ListConnectionsOptions{UserID: user.ID})
+	require.NoError(t, err)
+
+	require.Equal(t, int64(2), counts["folder-1"])
+	require.Equal(t, int64(1), counts["unassigned"])
 }
 
 func mustJSON(t *testing.T, value any) []byte {

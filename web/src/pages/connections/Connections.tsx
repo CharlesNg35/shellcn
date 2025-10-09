@@ -69,7 +69,7 @@ export function Connections() {
     folder_id: activeFolder ?? (unassignedView ? 'unassigned' : undefined),
     search: search || undefined,
   })
-  const connections = connectionsResult?.data ?? []
+  const connections = useMemo(() => connectionsResult?.data ?? [], [connectionsResult?.data])
 
   const protocolLookup = useMemo(() => {
     return protocols.reduce<Record<string, Protocol>>((acc, protocol) => {

@@ -56,7 +56,6 @@ export function FolderTree({
         <FolderTreeNode
           key={node.folder.id}
           node={node}
-          isActive={node.folder.id === activeFolderId}
           isOpen={openNodes[node.folder.id] ?? true}
           onToggle={toggleNode}
           onSelect={handleSelect}
@@ -71,7 +70,6 @@ export function FolderTree({
 
 interface FolderTreeNodeProps {
   node: ConnectionFolderNode
-  isActive: boolean
   isOpen: boolean
   onToggle: (id: string) => void
   onSelect: (folderId: string | null) => void
@@ -82,7 +80,6 @@ interface FolderTreeNodeProps {
 
 function FolderTreeNode({
   node,
-  isActive,
   isOpen,
   onToggle,
   onSelect,
@@ -140,7 +137,6 @@ function FolderTreeNode({
               key={child.folder.id}
               node={child}
               isOpen={true}
-              isActive={child.folder.id === activeFolderId}
               onToggle={onToggle}
               onSelect={onSelect}
               basePath={basePath}

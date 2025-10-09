@@ -40,7 +40,7 @@ export function useNotifications() {
     refetchInterval: isAuthenticated ? 60 * 1000 : false,
   })
 
-  const notifications = notificationsQuery.data ?? []
+  const notifications = useMemo(() => notificationsQuery.data ?? [], [notificationsQuery.data])
 
   const handleSocketMessage = useCallback(
     (payload: NotificationEventPayload | NotificationPayload | null) => {

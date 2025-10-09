@@ -5,7 +5,12 @@ import { ApiError } from '@/lib/api/http'
 
 export const CONNECTION_FOLDERS_QUERY_KEY = ['connections', 'folders', 'tree'] as const
 
-export function useConnectionFolders(options?: UseQueryOptions<ConnectionFolderNode[], ApiError>) {
+type FolderQueryOptions = Omit<
+  UseQueryOptions<ConnectionFolderNode[], ApiError>,
+  'queryKey' | 'queryFn'
+>
+
+export function useConnectionFolders(options?: FolderQueryOptions) {
   return useQuery<ConnectionFolderNode[], ApiError>({
     queryKey: CONNECTION_FOLDERS_QUERY_KEY,
     queryFn: fetchConnectionFolderTree,

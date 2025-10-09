@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, BarChart3, Clock, FolderTree, Layers, Plus, Zap } from 'lucide-react'
+import { ArrowRight, Clock, FolderTree, Layers, Plus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
@@ -9,7 +9,6 @@ import { useConnections } from '@/hooks/useConnections'
 import { useConnectionFolders } from '@/hooks/useConnectionFolders'
 import { useAvailableProtocols } from '@/hooks/useProtocols'
 import type { ConnectionRecord } from '@/types/connections'
-import { cn } from '@/lib/utils/cn'
 
 export function Dashboard() {
   const { user } = useAuth()
@@ -20,11 +19,11 @@ export function Dashboard() {
   const { data: folderTree = [] } = useConnectionFolders()
   const { data: protocols = [] } = useAvailableProtocols()
 
-  const connections = connectionsResult?.data ?? []
+  const connections = useMemo(() => connectionsResult?.data ?? [], [connectionsResult?.data])
 
   const totalConnections = connections.length
   const protocolCounts = useMemo(() => aggregateByProtocol(connections), [connections])
-  const recentConnections = connections.slice(0, 6)
+  const recentConnections = useMemo(() => connections.slice(0, 6), [connections])
 
   const topProtocols = useMemo(() => {
     return Array.from(protocolCounts.entries())

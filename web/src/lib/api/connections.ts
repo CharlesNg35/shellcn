@@ -140,6 +140,7 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
 
 export interface FetchConnectionsParams {
   protocol_id?: string
+  folder_id?: string
   search?: string
   include?: string
   page?: number

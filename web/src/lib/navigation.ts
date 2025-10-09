@@ -1,16 +1,17 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
-  ArrowRightLeft,
   Building2,
   Cloud,
   Container,
   Database,
   FileText,
+  FolderKanban,
   HardDrive,
   Key,
   LayoutDashboard,
   Monitor,
+  Network,
   Server,
   Settings,
   Shield,
@@ -40,18 +41,18 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
       {
         label: 'Connections',
         path: '/connections',
-        icon: ArrowRightLeft,
+        icon: FolderKanban,
         permission: 'connection.view',
         children: [
+          { label: 'All Connections', path: '/connections' },
+          { label: 'Folders', path: '/connections/folders', permission: 'connection.folder.view' },
           { label: 'New Connection', path: '/connections/new' },
-          { label: 'Connection Details', path: '/connections/:id' },
-          { label: 'Edit Connection', path: '/connections/:id/edit' },
         ],
       },
     ],
   },
   {
-    label: 'Connections',
+    label: 'Protocol Catalog',
     items: [
       { label: 'SSH / Telnet', path: '/ssh', icon: Server },
       { label: 'RDP', path: '/rdp', icon: Monitor },
@@ -61,6 +62,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
       { label: 'Databases', path: '/databases', icon: Database },
       { label: 'File Share', path: '/file-share', icon: HardDrive },
       { label: 'Proxmox', path: '/proxmox', icon: HardDrive },
+      { label: 'Network Devices', path: '/network', icon: Network },
     ],
   },
   {

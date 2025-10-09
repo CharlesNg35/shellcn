@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import {
   BadgePlus,
   ChevronDown,
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import logo from '@/assets/logo.svg'
 import { APP_NAME } from '@/lib/constants'
-import { NAVIGATION_GROUPS, type NavigationGroup, type NavigationItem } from '@/lib/navigation'
+import { NAVIGATION_GROUPS, type NavigationItem } from '@/lib/navigation'
 import { cn } from '@/lib/utils/cn'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
@@ -25,6 +25,9 @@ interface SidebarProps {
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const location = useLocation()
   const { hasPermission } = usePermissions()
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const activeFolderId =
+    searchParams.get('folder') ?? (searchParams.get('view') === 'unassigned' ? 'unassigned' : null)
   const { data: folderTree, isLoading: foldersLoading } = useConnectionFolders({
     enabled: hasPermission('connection.folder.view'),
   })
@@ -71,13 +74,13 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           <div className="space-y-2">
             <div className="flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <span>Connection Folders</span>
-              <NavLink
-                to="/connections/folders"
-                className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground"
+              <Link
+                to="/connections/new"
+                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
               >
-                <BadgePlus className="h-4 w-4" />
-                <span className="sr-only">Manage folders</span>
-              </NavLink>
+                <BadgePlus className="h-3 w-3" />
+                New
+              </Link>
             </div>
             {foldersLoading ? (
               <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -87,7 +90,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
             ) : (
               <FolderTree
                 nodes={folderTree}
-                activeFolderId={new URLSearchParams(location.search).get('folder')}
+                activeFolderId={activeFolderId}
                 basePath="/connections"
               />
             )}

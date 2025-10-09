@@ -11,49 +11,82 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 )
 
-func TestConnectionFolderServiceListTree(t *testing.T) {
+func TestConnectionFolderServiceLifecycle(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 
 	user := models.User{
-		BaseModel: models.BaseModel{ID: "root-user"},
-		Username:  "root",
-		Email:     "root@example.com",
+		BaseModel: models.BaseModel{ID: "user-folders"},
+		Username:  "folders",
+		Email:     "folders@example.com",
 		Password:  "secret",
-		IsRoot:    true,
 	}
 	require.NoError(t, db.Create(&user).Error)
 
-	folder := models.ConnectionFolder{
-		Name:        "Production",
-		Slug:        "production",
-		OwnerUserID: user.ID,
-	}
-	require.NoError(t, db.Create(&folder).Error)
+	connectionSvc, err := NewConnectionService(db, &mockPermissionChecker{
+		grants: map[string]bool{
+			"connection.view": true,
+		},
+	})
+	require.NoError(t, err)
 
-	connection := models.Connection{
-		Name:        "Prod SSH",
+	folderSvc, err := NewConnectionFolderService(db, &mockPermissionChecker{
+		grants: map[string]bool{
+			"connection.folder.view":   true,
+			"connection.folder.manage": true,
+			"connection.view":          true,
+		},
+	}, connectionSvc)
+	require.NoError(t, err)
+
+	root, err := folderSvc.Create(context.Background(), user.ID, ConnectionFolderInput{
+		Name:     "Production",
+		Metadata: map[string]any{"env": "prod"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "production", root.Slug)
+
+	child, err := folderSvc.Create(context.Background(), user.ID, ConnectionFolderInput{
+		Name:     "Web Tier",
+		ParentID: &root.ID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, root.ID, *child.ParentID)
+
+	updated, err := folderSvc.Update(context.Background(), user.ID, child.ID, ConnectionFolderInput{
+		Description: "Handles HTTP ingress",
+		Color:       "#ff00aa",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Handles HTTP ingress", updated.Description)
+	require.Equal(t, "#ff00aa", updated.Color)
+
+	// Seed connections for tree counts.
+	require.NoError(t, db.Create(&models.Connection{
+		Name:        "Ingress SSH",
 		ProtocolID:  "ssh",
 		OwnerUserID: user.ID,
-		FolderID:    &folder.ID,
+		FolderID:    &child.ID,
 		Metadata:    datatypes.JSON("{}"),
-	}
-	require.NoError(t, db.Create(&connection).Error)
-
-	svc, err := NewConnectionService(db, &fakePermissionChecker{grants: map[string]bool{
-		"connection.view":          true,
-		"connection.folder.manage": true,
-	}})
-	require.NoError(t, err)
-
-	folderSvc, err := NewConnectionFolderService(db, &fakePermissionChecker{grants: map[string]bool{
-		"connection.folder.manage": true,
-		"connection.folder.view":   true,
-		"connection.view":          true,
-	}}, svc)
-	require.NoError(t, err)
+	}).Error)
+	require.NoError(t, db.Create(&models.Connection{
+		Name:        "Unassigned Conn",
+		ProtocolID:  "postgres",
+		OwnerUserID: user.ID,
+	}).Error)
 
 	tree, err := folderSvc.ListTree(context.Background(), user.ID)
 	require.NoError(t, err)
 	require.NotEmpty(t, tree)
-	require.Equal(t, int64(1), tree[0].ConnectionCount)
+
+	total := int64(0)
+	for _, node := range tree {
+		total += node.ConnectionCount
+	}
+	require.Equal(t, int64(2), total)
+
+	require.NoError(t, folderSvc.Delete(context.Background(), user.ID, child.ID))
+
+	remainingTree, err := folderSvc.ListTree(context.Background(), user.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, remainingTree)
 }
