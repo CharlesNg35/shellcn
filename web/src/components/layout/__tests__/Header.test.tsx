@@ -2,9 +2,16 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import * as useAuthModule from '@/hooks/useAuth'
+import * as useNotificationsModule from '@/hooks/useNotifications'
 import { Header } from '../Header'
 
-vi.mock('@/hooks/useAuth')
+vi.mock('@/hooks/useAuth', () => ({
+  useAuth: vi.fn(),
+}))
+
+vi.mock('@/hooks/useNotifications', () => ({
+  useNotifications: vi.fn(),
+}))
 
 describe('Header', () => {
   it('renders user menu and allows logout', async () => {
@@ -24,6 +31,18 @@ describe('Header', () => {
       logout,
     } as unknown as ReturnType<typeof useAuthModule.useAuth>)
 
+    vi.spyOn(useNotificationsModule, 'useNotifications').mockReturnValue({
+      notifications: [],
+      unreadCount: 0,
+      isConnected: false,
+      isLoading: false,
+      refetch: vi.fn(),
+      markAsRead: vi.fn(),
+      markAsUnread: vi.fn(),
+      removeNotification: vi.fn(),
+      markAllAsRead: vi.fn(),
+    } as unknown as ReturnType<typeof useNotificationsModule.useNotifications>)
+
     render(
       <MemoryRouter>
         <Header />
@@ -34,8 +53,9 @@ describe('Header', () => {
     const nameEl = await screen.findByText('Alice Smith')
     fireEvent.click(nameEl)
 
-    // Opened menu should show Profile and Settings links and Sign out button
-    expect(await screen.findByText(/Profile/i)).toBeInTheDocument()
+    // Wait for menu to open and verify items are visible
+    const profileLink = await screen.findByText(/Profile/i)
+    expect(profileLink).toBeInTheDocument()
     expect(screen.getByText(/Settings/i)).toBeInTheDocument()
 
     const signOutButton = screen.getByRole('button', { name: /Sign out/i })
