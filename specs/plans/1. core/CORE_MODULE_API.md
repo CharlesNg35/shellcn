@@ -844,7 +844,128 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ---
 
-## 8. Health & Observability
+## 8. Protocol Catalog & Connections
+
+### 8.1 Protocol Catalog
+
+| Method | Path                       | Description                                                                | Permission        | Handler                       |
+| ------ | -------------------------- | -------------------------------------------------------------------------- | ----------------- | ----------------------------- |
+| GET    | `/api/protocols`           | Return the full driver catalog (driver + config enablement metadata).      | `connection.view` | `ProtocolHandler.ListAll`     |
+| GET    | `/api/protocols/available` | Return only protocols available to the calling user.                       | `connection.view` | `ProtocolHandler.ListForUser` |
+| POST   | `/api/protocols/:id/test`  | Trigger a driver self-test/diagnostic (writes audit trail).                | `connection.manage` | `ProtocolHandler.TestDriver` |
+
+**ProtocolInfo Example**
+
+```json
+{
+  "id": "docker",
+  "name": "Docker",
+  "module": "docker",
+  "description": "Manage Docker hosts and containers",
+  "category": "container",
+  "icon": "Container",
+  "default_port": 2376,
+  "sort_order": 20,
+  "features": ["terminal", "metrics"],
+  "capabilities": {
+    "terminal": true,
+    "desktop": false,
+    "file_transfer": false,
+    "clipboard": false,
+    "session_recording": false,
+    "metrics": true,
+    "reconnect": true,
+    "extras": {
+      "logs": true,
+      "exec": true
+    }
+  },
+  "driver_enabled": true,
+  "config_enabled": true,
+  "available": true
+}
+```
+
+> **Permission profiles:** Every protocol driver registers `{driver}.connect`, `{driver}.manage`, and optional feature/admin scopes (e.g., `kubernetes.exec`, `docker.logs`, `database.query.read`). These depend on the core `connection.*` permissions defined in `internal/permissions/core.go`. See `specs/project/PROTOCOL_DRIVER_STANDARDS.md` for the driver contract.
+
+### 8.2 Connections API
+
+| Method | Path                                   | Description                                                     | Permission                                | Handler                       |
+| ------ | -------------------------------------- | --------------------------------------------------------------- | ----------------------------------------- | ----------------------------- |
+| GET    | `/api/connections`                     | List connections visible to the caller (supports filters).      | `connection.view`                         | `ConnectionHandler.List`      |
+| GET    | `/api/connections/:id`                 | Retrieve a specific connection with targets + visibility data. | `connection.view`                         | `ConnectionHandler.Get`       |
+| POST   | `/api/connections`                     | Create a connection (settings, visibility, targets).           | `connection.manage`                       | `ConnectionHandler.Create`    |
+| PATCH  | `/api/connections/:id`                 | Update connection metadata/settings/targets.                   | `connection.manage`                       | `ConnectionHandler.Update`    |
+| DELETE | `/api/connections/:id`                 | Delete a connection.                                           | `connection.manage`                       | `ConnectionHandler.Delete`    |
+| POST   | `/api/connections/:id/share`           | Replace visibility ACLs (org/team/user scopes).                | `connection.share`                        | `ConnectionHandler.UpdateVisibility` |
+| POST   | `/api/connections/:id/preview`         | Run a dry-run or configuration validation.                     | `connection.launch` + `{driver}.connect`  | `ConnectionHandler.LaunchPreview`    |
+
+**Supported query parameters for `GET /api/connections`:**
+
+- `protocol_id`: filter by driver.
+- `organization_id`, `team_id`: scope to tenant subset.
+- `search`: case-insensitive substring match across name, host, tags, metadata.
+- `include=targets,visibility`: opt-in expansions (default `targets`).
+- `page`, `per_page`: pagination controls (standard envelope).
+
+**Connection payload**
+
+```json
+{
+  "id": "conn_01J4TF5YBHW",
+  "name": "Production Cluster",
+  "description": "Primary Kubernetes control plane",
+  "protocol_id": "kubernetes",
+  "organization_id": "org_acme",
+  "team_id": "team_platform",
+  "owner_user_id": "usr_root",
+  "metadata": {
+    "tags": ["prod", "critical"],
+    "favorite": true
+  },
+  "settings": {
+    "context": "prod-main",
+    "namespace": "platform",
+    "api_server": "https://k8s.acme.io:6443"
+  },
+  "secret_id": "vault_secret_admin",
+  "last_used_at": "2025-10-09T14:22:00Z",
+  "targets": [
+    {
+      "id": "target_primary",
+      "host": "k8s.acme.io",
+      "port": 6443,
+      "labels": {
+        "role": "control-plane",
+        "region": "us-east-1"
+      },
+      "ordering": 0
+    }
+  ],
+  "visibility": [
+    {
+      "connection_id": "conn_01J4TF5YBHW",
+      "organization_id": "org_acme",
+      "team_id": null,
+      "user_id": null,
+      "permission_scope": "view"
+    },
+    {
+      "connection_id": "conn_01J4TF5YBHW",
+      "organization_id": null,
+      "team_id": "team_platform",
+      "user_id": null,
+      "permission_scope": "use"
+    }
+  ]
+}
+```
+
+> **Identity integration:** Drivers declare credential requirements (SSH key, kubeconfig, database DSN). The Identity service satisfies these bindings via `secret_id` or settings. The preview endpoint allows overriding identities for diagnostics.
+
+---
+
+## 9. Health & Observability
 
 | Method | Path       | Description                                                      | Permission                            | Handler            |
 | ------ | ---------- | ---------------------------------------------------------------- | ------------------------------------- | ------------------ |
@@ -912,7 +1033,7 @@ Metrics include request latency histograms (`shellcn_api_latency_seconds`), requ
 
 ---
 
-## 9. Error Catalogue (excerpt)
+## 10. Error Catalogue (excerpt)
 
 | Code                       | HTTP | Meaning                            | Notes                                       |
 | -------------------------- | ---- | ---------------------------------- | ------------------------------------------- |
@@ -926,13 +1047,13 @@ Metrics include request latency histograms (`shellcn_api_latency_seconds`), requ
 
 ---
 
-## 10. Webhooks & Future Work
+## 11. Webhooks & Future Work
 
 Webhooks are not part of Phase 1. When implemented they will emit signed JSON payloads for audit events and session lifecycle changes. Subscribe to roadmap updates for schema details.
 
 ---
 
-## 11. API Summary by Module
+## 12. API Summary by Module
 
 ### Core Authentication (Public)
 
@@ -1014,7 +1135,7 @@ Webhooks are not part of Phase 1. When implemented they will emit signed JSON pa
 
 ---
 
-## 12. Change Log
+## 13. Change Log
 
 - **2025-10-08** — Comprehensive update with actual implementation details, complete request/response samples, handler references, and implementation checklist based on `internal/api/router.go` and route files.
 - **2024-10-08** — Initial draft covering core authentication, identity, permissions, and provider administration APIs for Phase 7 deliverables.

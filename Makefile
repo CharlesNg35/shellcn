@@ -78,7 +78,11 @@ lint:
 	@echo "Running go vet..."
 	@go vet $(PKG)
 
-fmt:
+fmt-web:
+	@echo "Running frontend tests..."
+	@cd $(WEB_DIR) && pnpm format
+
+fmt: fmt-web
 	@echo "Formatting code..."
 	@find . -name '*.go' -not -path './vendor/*' -not -path './.git/*' -print0 | xargs -0 gofmt -w
 
