@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -41,8 +42,8 @@ func Sync(ctx context.Context, db *gorm.DB) error {
 			BaseModel:   models.BaseModel{ID: perm.ID},
 			Module:      perm.Module,
 			Description: perm.Description,
-			DependsOn:   string(dependsJSON),
-			Implies:     string(impliesJSON),
+			DependsOn:   datatypes.JSON(dependsJSON),
+			Implies:     datatypes.JSON(impliesJSON),
 		}
 
 		if err := tx.Clauses(clause.OnConflict{

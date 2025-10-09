@@ -12,6 +12,7 @@ import (
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/skip2/go-qrcode"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
@@ -153,7 +154,7 @@ func (s *TOTPService) GenerateSecret(userID, username string) (*otp.Key, []strin
 		secret = models.MFASecret{
 			UserID:      userID,
 			Secret:      encryptedSecret,
-			BackupCodes: string(codesJSON),
+			BackupCodes: datatypes.JSON(codesJSON),
 		}
 
 		if err := s.db.Create(&secret).Error; err != nil {
@@ -161,7 +162,7 @@ func (s *TOTPService) GenerateSecret(userID, username string) (*otp.Key, []strin
 		}
 	} else {
 		secret.Secret = encryptedSecret
-		secret.BackupCodes = string(codesJSON)
+		secret.BackupCodes = datatypes.JSON(codesJSON)
 		secret.LastUsedAt = nil
 
 		if err := s.db.Save(&secret).Error; err != nil {
@@ -215,7 +216,7 @@ func (s *TOTPService) UseBackupCode(userID, code string) (bool, error) {
 	}
 
 	var hashedCodes []string
-	if err := json.Unmarshal([]byte(secret.BackupCodes), &hashedCodes); err != nil {
+	if err := json.Unmarshal(secret.BackupCodes, &hashedCodes); err != nil {
 		return false, fmt.Errorf("totp: unmarshal backup codes: %w", err)
 	}
 
@@ -237,7 +238,7 @@ func (s *TOTPService) UseBackupCode(userID, code string) (bool, error) {
 		return false, fmt.Errorf("totp: marshal backup codes: %w", err)
 	}
 
-	if err := s.db.Model(secret).Update("backup_codes", string(encoded)).Error; err != nil {
+	if err := s.db.Model(secret).Update("backup_codes", datatypes.JSON(encoded)).Error; err != nil {
 		return false, fmt.Errorf("totp: update backup codes: %w", err)
 	}
 
@@ -252,7 +253,7 @@ func (s *TOTPService) RemainingBackupCodes(userID string) (int, error) {
 	}
 
 	var hashedCodes []string
-	if err := json.Unmarshal([]byte(secret.BackupCodes), &hashedCodes); err != nil {
+	if err := json.Unmarshal(secret.BackupCodes, &hashedCodes); err != nil {
 		return 0, fmt.Errorf("totp: unmarshal backup codes: %w", err)
 	}
 

@@ -55,7 +55,7 @@ func TestAuthProviderServiceConfigureAndTestConnection(t *testing.T) {
 	require.NoError(t, err)
 
 	var storedCfg models.OIDCConfig
-	require.NoError(t, json.Unmarshal([]byte(provider.Config), &storedCfg))
+	require.NoError(t, json.Unmarshal(provider.Config, &storedCfg))
 	require.NotEqual(t, "super-secret", storedCfg.ClientSecret)
 
 	err = svc.TestConnection(ctx, "oidc")
@@ -86,7 +86,7 @@ func TestAuthProviderServiceConfigureAndTestConnection(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, list)
 	for _, p := range list {
-		require.Empty(t, p.Config)
+		require.Len(t, p.Config, 0)
 	}
 }
 

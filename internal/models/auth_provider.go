@@ -1,12 +1,14 @@
 package models
 
+import "gorm.io/datatypes"
+
 type AuthProvider struct {
 	BaseModel
 
-	Type    string `gorm:"not null;uniqueIndex" json:"type"`
-	Name    string `gorm:"not null" json:"name"`
-	Enabled bool   `gorm:"default:false" json:"enabled"`
-	Config  string `gorm:"type:json" json:"config"`
+	Type    string         `gorm:"not null;uniqueIndex" json:"type"`
+	Name    string         `gorm:"not null" json:"name"`
+	Enabled bool           `gorm:"default:false" json:"enabled"`
+	Config  datatypes.JSON `json:"config"`
 
 	AllowRegistration        bool `gorm:"default:false" json:"allow_registration"`
 	RequireEmailVerification bool `gorm:"default:true" json:"require_email_verification"`
@@ -17,6 +19,8 @@ type AuthProvider struct {
 
 	CreatedBy string `gorm:"type:uuid" json:"created_by"`
 }
+
+// remaining types same
 
 type OIDCConfig struct {
 	Issuer       string   `json:"issuer"`

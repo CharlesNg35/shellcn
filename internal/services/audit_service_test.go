@@ -49,7 +49,7 @@ func TestAuditServiceLogListAndExport(t *testing.T) {
 	require.Equal(t, user.ID, logs[0].User.ID)
 
 	var metadata map[string]any
-	require.NoError(t, json.Unmarshal([]byte(logs[0].Metadata), &metadata))
+	require.NoError(t, json.Unmarshal(logs[0].Metadata, &metadata))
 	require.Equal(t, user.Email, metadata["email"])
 
 	exported, err := svc.Export(ctx, AuditFilters{Result: "success"})
@@ -66,9 +66,8 @@ func TestAuditServiceCleanupOlderThan(t *testing.T) {
 		BaseModel: models.BaseModel{
 			CreatedAt: time.Now().AddDate(0, 0, -10),
 		},
-		Action:   "old.action",
-		Result:   "success",
-		Metadata: "{}",
+		Action: "old.action",
+		Result: "success",
 	}
 	require.NoError(t, db.Create(&oldLog).Error)
 

@@ -75,7 +75,7 @@ func TestProtocolCatalogSyncPersistsRecords(t *testing.T) {
 	require.False(t, rdpRecord.ConfigEnabled)
 
 	var sshFeatures []string
-	require.NoError(t, json.Unmarshal([]byte(sshRecord.Features), &sshFeatures))
+	require.NoError(t, json.Unmarshal(sshRecord.Features, &sshFeatures))
 	require.Contains(t, sshFeatures, "terminal")
 	require.Contains(t, sshFeatures, "file_transfer")
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gorm.io/datatypes"
 
 	"github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/drivers"
@@ -141,8 +142,8 @@ func marshalProtocolRecord(t *testing.T, record models.ConnectionProtocol, caps 
 	capsJSON, err := json.Marshal(caps)
 	require.NoError(t, err)
 
-	record.Features = string(featuresJSON)
-	record.Capabilities = string(capsJSON)
+	record.Features = datatypes.JSON(featuresJSON)
+	record.Capabilities = datatypes.JSON(capsJSON)
 	return record
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
@@ -66,13 +67,13 @@ func (s *AuditService) Log(ctx context.Context, entry AuditEntry) error {
 		return errors.New("audit service: result is required")
 	}
 
-	payload := ""
+	var payload datatypes.JSON
 	if entry.Metadata != nil {
 		encoded, err := json.Marshal(entry.Metadata)
 		if err != nil {
 			return fmt.Errorf("audit service: marshal metadata: %w", err)
 		}
-		payload = string(encoded)
+		payload = datatypes.JSON(encoded)
 	}
 
 	log := models.AuditLog{

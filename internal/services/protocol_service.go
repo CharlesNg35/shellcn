@@ -134,15 +134,15 @@ func filterAvailable(protocols []ProtocolInfo) []ProtocolInfo {
 
 func mapProtocolRow(row models.ConnectionProtocol) (ProtocolInfo, error) {
 	var features []string
-	if strings.TrimSpace(row.Features) != "" {
-		if err := json.Unmarshal([]byte(row.Features), &features); err != nil {
+	if len(row.Features) > 0 {
+		if err := json.Unmarshal(row.Features, &features); err != nil {
 			return ProtocolInfo{}, fmt.Errorf("protocol service: decode features: %w", err)
 		}
 	}
 
 	var caps drivers.Capabilities
-	if strings.TrimSpace(row.Capabilities) != "" {
-		if err := json.Unmarshal([]byte(row.Capabilities), &caps); err != nil {
+	if len(row.Capabilities) > 0 {
+		if err := json.Unmarshal(row.Capabilities, &caps); err != nil {
 			return ProtocolInfo{}, fmt.Errorf("protocol service: decode capabilities: %w", err)
 		}
 	}

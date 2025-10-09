@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/database/testutil"
@@ -76,8 +77,8 @@ func insertProtocolRecord(t *testing.T, db *gorm.DB, record models.ConnectionPro
 	capsJSON, err := json.Marshal(caps)
 	require.NoError(t, err)
 
-	record.Features = string(featuresJSON)
-	record.Capabilities = string(capsJSON)
+	record.Features = datatypes.JSON(featuresJSON)
+	record.Capabilities = datatypes.JSON(capsJSON)
 	record.DriverID = record.ProtocolID
 
 	require.NoError(t, db.Create(&record).Error)

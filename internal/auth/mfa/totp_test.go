@@ -36,7 +36,7 @@ func TestGenerateSecretStoresEncryptedData(t *testing.T) {
 	require.Equal(t, key.Secret(), string(decrypted))
 
 	var hashed []string
-	require.NoError(t, json.Unmarshal([]byte(stored.BackupCodes), &hashed))
+	require.NoError(t, json.Unmarshal(stored.BackupCodes, &hashed))
 	require.Len(t, hashed, defaultBackupCodeCount)
 	for i := range hashed {
 		require.True(t, crypto.VerifyPassword(hashed[i], backup[i]))

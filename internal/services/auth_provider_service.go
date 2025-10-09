@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
@@ -90,7 +91,7 @@ func (s *AuthProviderService) List(ctx context.Context) ([]models.AuthProvider, 
 	}
 
 	for i := range providers {
-		providers[i].Config = ""
+		providers[i].Config = nil
 	}
 
 	return providers, nil
@@ -121,7 +122,7 @@ func (s *AuthProviderService) GetEnabled(ctx context.Context) ([]models.AuthProv
 	}
 
 	for i := range providers {
-		providers[i].Config = ""
+		providers[i].Config = nil
 	}
 
 	return providers, nil
@@ -181,7 +182,7 @@ func (s *AuthProviderService) ConfigureOIDC(ctx context.Context, cfg models.OIDC
 		Type:              "oidc",
 		Name:              "OpenID Connect",
 		Enabled:           enabled,
-		Config:            string(payload),
+		Config:            datatypes.JSON(payload),
 		AllowRegistration: allowRegistration,
 		Description:       "Single Sign-On via OpenID Connect",
 		Icon:              "shield-check",
@@ -225,7 +226,7 @@ func (s *AuthProviderService) ConfigureSAML(ctx context.Context, cfg models.SAML
 		Type:              "saml",
 		Name:              "SAML 2.0",
 		Enabled:           enabled,
-		Config:            string(payload),
+		Config:            datatypes.JSON(payload),
 		AllowRegistration: allowRegistration,
 		Description:       "SAML 2.0 Single Sign-On",
 		Icon:              "shield",
@@ -269,7 +270,7 @@ func (s *AuthProviderService) ConfigureLDAP(ctx context.Context, cfg models.LDAP
 		Type:              "ldap",
 		Name:              "LDAP / Active Directory",
 		Enabled:           enabled,
-		Config:            string(payload),
+		Config:            datatypes.JSON(payload),
 		AllowRegistration: allowRegistration,
 		Description:       "LDAP or Active Directory authentication",
 		Icon:              "building",
@@ -419,7 +420,7 @@ func (s *AuthProviderService) TestConnection(ctx context.Context, providerType s
 	switch providerType {
 	case "ldap":
 		var cfg models.LDAPConfig
-		if err := json.Unmarshal([]byte(provider.Config), &cfg); err != nil {
+		if err := json.Unmarshal(provider.Config, &cfg); err != nil {
 			return fmt.Errorf("auth provider service: decode ldap config: %w", err)
 		}
 		password, err := crypto.Decrypt(cfg.BindPassword, s.encryptionKey)
@@ -430,7 +431,7 @@ func (s *AuthProviderService) TestConnection(ctx context.Context, providerType s
 		return s.ldapTester(cfg)
 	case "oidc":
 		var cfg models.OIDCConfig
-		if err := json.Unmarshal([]byte(provider.Config), &cfg); err != nil {
+		if err := json.Unmarshal(provider.Config, &cfg); err != nil {
 			return fmt.Errorf("auth provider service: decode oidc config: %w", err)
 		}
 		secret, err := crypto.Decrypt(cfg.ClientSecret, s.encryptionKey)
@@ -481,12 +482,12 @@ func (s *AuthProviderService) LoadOIDCConfig(ctx context.Context) (*models.AuthP
 	if err != nil {
 		return nil, nil, err
 	}
-	if strings.TrimSpace(provider.Config) == "" {
+	if len(provider.Config) == 0 {
 		return nil, nil, errors.New("auth provider service: oidc provider not configured")
 	}
 
 	var cfg models.OIDCConfig
-	if err := json.Unmarshal([]byte(provider.Config), &cfg); err != nil {
+	if err := json.Unmarshal(provider.Config, &cfg); err != nil {
 		return nil, nil, fmt.Errorf("auth provider service: decode oidc config: %w", err)
 	}
 
@@ -511,12 +512,12 @@ func (s *AuthProviderService) LoadSAMLConfig(ctx context.Context) (*models.AuthP
 	if err != nil {
 		return nil, nil, err
 	}
-	if strings.TrimSpace(provider.Config) == "" {
+	if len(provider.Config) == 0 {
 		return nil, nil, errors.New("auth provider service: saml provider not configured")
 	}
 
 	var cfg models.SAMLConfig
-	if err := json.Unmarshal([]byte(provider.Config), &cfg); err != nil {
+	if err := json.Unmarshal(provider.Config, &cfg); err != nil {
 		return nil, nil, fmt.Errorf("auth provider service: decode saml config: %w", err)
 	}
 
@@ -537,12 +538,12 @@ func (s *AuthProviderService) LoadLDAPConfig(ctx context.Context) (*models.AuthP
 	if err != nil {
 		return nil, nil, err
 	}
-	if strings.TrimSpace(provider.Config) == "" {
+	if len(provider.Config) == 0 {
 		return nil, nil, errors.New("auth provider service: ldap provider not configured")
 	}
 
 	var cfg models.LDAPConfig
-	if err := json.Unmarshal([]byte(provider.Config), &cfg); err != nil {
+	if err := json.Unmarshal(provider.Config, &cfg); err != nil {
 		return nil, nil, fmt.Errorf("auth provider service: decode ldap config: %w", err)
 	}
 

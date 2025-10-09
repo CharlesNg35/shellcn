@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
@@ -67,7 +68,7 @@ func (s *OrganizationService) Create(ctx context.Context, input CreateOrganizati
 		if err != nil {
 			return nil, fmt.Errorf("organization service: marshal settings: %w", err)
 		}
-		org.Settings = string(data)
+		org.Settings = datatypes.JSON(data)
 	}
 
 	if err := s.db.WithContext(ctx).Create(org).Error; err != nil {
@@ -143,7 +144,7 @@ func (s *OrganizationService) Update(ctx context.Context, id string, input Updat
 		if err != nil {
 			return nil, fmt.Errorf("organization service: marshal settings: %w", err)
 		}
-		updates["settings"] = string(data)
+		updates["settings"] = datatypes.JSON(data)
 	}
 
 	if len(updates) == 0 {

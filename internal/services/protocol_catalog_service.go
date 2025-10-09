@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -77,8 +78,8 @@ func (s *ProtocolCatalogService) Sync(ctx context.Context, protoReg *protocols.R
 			Description:   proto.Description,
 			DefaultPort:   proto.DefaultPort,
 			SortOrder:     proto.SortOrder,
-			Features:      string(featuresJSON),
-			Capabilities:  string(capabilitiesJSON),
+			Features:      datatypes.JSON(featuresJSON),
+			Capabilities:  datatypes.JSON(capabilitiesJSON),
 			DriverEnabled: driverEnabled,
 			ConfigEnabled: configEnabled,
 		}
