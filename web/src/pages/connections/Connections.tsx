@@ -55,10 +55,11 @@ export function Connections() {
     isError: protocolsError,
   } = useAvailableProtocols()
   const {
-    data: connections = [],
+    data: connectionsResult,
     isLoading: connectionsLoading,
     isError: connectionsError,
   } = useConnections()
+  const connections = connectionsResult?.data ?? []
 
   const protocolLookup = useMemo(() => {
     return protocols.reduce<Record<string, Protocol>>((acc, protocol) => {

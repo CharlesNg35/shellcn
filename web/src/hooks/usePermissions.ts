@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { ApiError } from '@/lib/api/http'
 import { permissionsApi } from '@/lib/api/permissions'
 import { useCurrentUser } from './useCurrentUser'
+import type { AuthUser } from '@/types/auth'
 
 export const MY_PERMISSIONS_QUERY_KEY = ['permissions', 'my'] as const
 
@@ -16,7 +17,8 @@ export interface UsePermissionsResult {
 }
 
 export function usePermissions(): UsePermissionsResult {
-  const { data: currentUser } = useCurrentUser()
+  const currentUserQuery = useCurrentUser()
+  const currentUser = currentUserQuery.data as AuthUser | undefined
 
   const query = useQuery<string[], ApiError>({
     queryKey: MY_PERMISSIONS_QUERY_KEY,

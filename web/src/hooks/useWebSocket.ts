@@ -36,12 +36,12 @@ export function useWebSocket<TMessage = unknown>(
   const [isConnected, setIsConnected] = useState(false)
   const [lastMessage, setLastMessage] = useState<TMessage | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current)
-      reconnectTimerRef.current = undefined
+      reconnectTimerRef.current = null
     }
   }, [])
 
