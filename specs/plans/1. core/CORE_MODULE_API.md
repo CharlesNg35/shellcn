@@ -436,6 +436,7 @@ Content-Type: application/json
 | Method | Path                                     | Description                                       | Permission          | Handler                                |
 | ------ | ---------------------------------------- | ------------------------------------------------- | ------------------- | -------------------------------------- |
 | GET    | `/api/permissions/registry`              | Tree of registered permissions with dependencies. | `permission.view`   | `PermissionHandler.Registry`           |
+| GET    | `/api/permissions/my`                    | List permissions for current user.                | Authenticated       | `PermissionHandler.MyPermissions`      |
 | GET    | `/api/permissions/roles`                 | List roles and assigned permissions.              | `permission.view`   | `PermissionHandler.ListRoles`          |
 | POST   | `/api/permissions/roles`                 | Create role.                                      | `permission.manage` | `PermissionHandler.CreateRole`         |
 | PATCH  | `/api/permissions/roles/:id`             | Update role name/description.                     | `permission.manage` | `PermissionHandler.UpdateRole`         |
@@ -963,6 +964,20 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 > **Identity integration:** Drivers declare credential requirements (SSH key, kubeconfig, database DSN). The Identity service satisfies these bindings via `secret_id` or settings. The preview endpoint allows overriding identities for diagnostics.
 
+### 8.3 Notifications
+
+| Method | Path                            | Description                                      | Permission            | Handler                           |
+| ------ | ------------------------------- | ------------------------------------------------ | --------------------- | --------------------------------- |
+| GET    | `/api/notifications`            | List notifications for current user (paginated). | `notification.view`   | `NotificationHandler.List`        |
+| POST   | `/api/notifications/read-all`   | Mark all notifications as read.                  | `notification.view`   | `NotificationHandler.MarkAllRead` |
+| POST   | `/api/notifications`            | Create a notification (system/admin).            | `notification.manage` | `NotificationHandler.Create`      |
+| POST   | `/api/notifications/:id/read`   | Mark one notification as read.                   | `notification.view`   | `NotificationHandler.MarkRead`    |
+| POST   | `/api/notifications/:id/unread` | Mark one notification as unread.                 | `notification.view`   | `NotificationHandler.MarkUnread`  |
+| DELETE | `/api/notifications/:id`        | Delete a notification.                           | `notification.view`   | `NotificationHandler.Delete`      |
+
+- WebSocket stream: `GET /ws/notifications` (upgrade). Emits real-time notifications for the authenticated user.
+- Pagination follows the standard envelope (`meta.page`, `meta.per_page`, `meta.total`).
+
 ---
 
 ## 9. Health & Observability
@@ -1101,6 +1116,7 @@ Webhooks are not part of Phase 1. When implemented they will emit signed JSON pa
 ### Permissions & Roles
 
 - `GET /api/permissions/registry` - Permission registry
+- `GET /api/permissions/my` - My permissions
 - `GET /api/permissions/roles` - List roles
 - `POST /api/permissions/roles` - Create role
 - `PATCH /api/permissions/roles/:id` - Update role
@@ -1112,6 +1128,15 @@ Webhooks are not part of Phase 1. When implemented they will emit signed JSON pa
 - `GET /api/sessions/me` - List my sessions
 - `POST /api/sessions/revoke/:id` - Revoke session
 - `POST /api/sessions/revoke_all` - Revoke all sessions
+
+### Notifications
+
+- `GET /api/notifications` - List notifications
+- `POST /api/notifications/read-all` - Mark all read
+- `POST /api/notifications/:id/read` - Mark one read
+- `POST /api/notifications/:id/unread` - Mark one unread
+- `DELETE /api/notifications/:id` - Delete notification
+- WebSocket: `GET /ws/notifications` - Real-time stream
 
 ### Audit & Security
 
@@ -1136,6 +1161,8 @@ Webhooks are not part of Phase 1. When implemented they will emit signed JSON pa
 ---
 
 ## 13. Change Log
+
+- **2025-10-09** — Added Notifications section and documented `/api/permissions/my`; verified WebSocket `/ws/notifications` endpoint for real-time updates.
 
 - **2025-10-08** — Comprehensive update with actual implementation details, complete request/response samples, handler references, and implementation checklist based on `internal/api/router.go` and route files.
 - **2024-10-08** — Initial draft covering core authentication, identity, permissions, and provider administration APIs for Phase 7 deliverables.

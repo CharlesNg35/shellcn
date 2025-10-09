@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -189,16 +188,4 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusCreated, dto)
-}
-
-func parseIntQuery(c *gin.Context, key string, fallback int) int {
-	value := strings.TrimSpace(c.Query(key))
-	if value == "" {
-		return fallback
-	}
-	parsed, err := strconv.Atoi(value)
-	if err != nil {
-		return fallback
-	}
-	return parsed
 }

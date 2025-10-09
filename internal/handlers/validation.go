@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -71,4 +72,16 @@ func prettifyFieldName(name string) string {
 	}
 	name = strings.ReplaceAll(name, "_", " ")
 	return strings.ToLower(name)
+}
+
+func parseIntQuery(c *gin.Context, key string, fallback int) int {
+	value := strings.TrimSpace(c.Query(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }

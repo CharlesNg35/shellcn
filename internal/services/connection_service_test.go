@@ -52,7 +52,7 @@ func TestConnectionServiceListVisible(t *testing.T) {
 		Targets: []models.ConnectionTarget{
 			{
 				Host: "10.0.0.5",
-				Port: ptrInt(22),
+				Port: *ptrInt(22),
 			},
 		},
 	}

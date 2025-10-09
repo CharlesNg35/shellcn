@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -97,17 +96,6 @@ func parseIncludes(includeParam string) (bool, bool) {
 		}
 	}
 	return includeTargets, includeVisibility
-}
-
-func parseIntQuery(c *gin.Context, key string, fallback int) int {
-	value := strings.TrimSpace(c.Query(key))
-	if value == "" {
-		return fallback
-	}
-	if parsed, err := strconv.Atoi(value); err == nil {
-		return parsed
-	}
-	return fallback
 }
 
 func computeTotalPages(total, perPage int64) int {
