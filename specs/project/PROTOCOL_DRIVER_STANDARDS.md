@@ -76,6 +76,11 @@ permissions.Register(&permissions.Permission{ID: profile.BaseConnect, Module: dr
 - Secrets either reference `vault.Credential` IDs or embed inline encrypted payloads.
 - `Identity` feature (future) must map to driver requirements using the same key names to allow auto-binding.
 - `ProtocolService` and UI should surface missing credential requirements so users can attach identities before launching.
+- Connection credentials follow a dual-source strategy:
+  - **Identity-backed** connections provide `secret_id`, pointing to a vault/identity record containing reusable credentials (shared SSH keys, kubeconfigs, database secrets).
+  - **Inline overrides** can still be stored directly in `Connection.Settings` for one-off credentials outside the identity scope. These are encrypted in the DB using the vault key to keep them safe, and driver specs must flag which settings accept inline secrets.
+  - When launching, the backend merges identity secrets and inline overrides: identity values populate defaults, inline settings override them for temporary needs. Drivers should be written defensively (e.g., prefer inline username only if provided, else fall back to identity value).
+  - Driver specs must clearly state whether identities are mandatory (SSH, Kubernetes, database) or optional (Telnet, health probes) so UI flows can prompt users accordingly.
 
 ## 7. Frontend Contract
 
