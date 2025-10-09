@@ -1871,106 +1871,37 @@ CORE_PERMISSIONS = {
 }
 ```
 
-### 7.4 Module-Specific Permissions
+### 7.4 Protocol Driver Permissions (Modules → Drivers)
 
-**SSH Module Permissions:**
-```go
-// internal/modules/ssh/permissions.go
-SSH_PERMISSIONS = {
-    "ssh.connect": {
-        "module": "ssh",
-        "depends_on": ["vault.view"],  // Can use identities
-        "description": "Connect to SSH servers",
-    },
-    "ssh.execute": {
-        "module": "ssh",
-        "depends_on": ["ssh.connect"],
-        "description": "Execute commands",
-    },
-    "ssh.session.share": {
-        "module": "ssh",
-        "depends_on": ["ssh.connect"],
-        "description": "Share SSH sessions",
-    },
-    "ssh.clipboard.sync": {
-        "module": "ssh",
-        "depends_on": ["ssh.connect"],
-        "description": "Enable clipboard sync",
-    },
-}
-```
+- The product now standardizes on the term **protocol driver** (earlier documents may still say *module*).
+- Every driver contributes a permission profile that hangs from the `connection.*` core permissions:
+  - `{driver}.connect` → depends on `connection.launch`; grants runtime usage (SSH terminal, Docker attach, Kubernetes exec).
+  - `{driver}.manage` → depends on `connection.manage`; grants configuration updates and advanced driver tuning.
+  - Optional feature scopes (e.g., `kubernetes.exec`, `docker.logs`, `database.query.read`) depend on `connection.launch` unless they mutate infrastructure, in which case they depend on `connection.manage`.
+  - Optional admin scopes (e.g., `kubernetes.cluster.admin`, `docker.stack.deploy`, `database.cluster.manage`) always depend on `connection.manage` and may imply additional feature scopes.
+- Driver specs live under `specs/project/drivers/<driver>.md` and must capture:
+  - Connection settings persisted in `connections.settings` (host, port, namespace, context, tls flags, etc.).
+  - Required credential or identity bindings (vault secret keys, inline fields).
+  - Permission profile details plus the capability flags surfaced to the frontend.
+  - Auditing hooks (what actions emit `AuditEntry` records).
+- Default driver scopes (non-exhaustive):
 
-**Docker Module Permissions:**
-```go
-// internal/modules/docker/permissions.go
-DOCKER_PERMISSIONS = {
-    "docker.connect": {
-        "module": "docker",
-        "depends_on": [],
-        "description": "Connect to Docker hosts",
-    },
-    "docker.container.list": {
-        "module": "docker",
-        "depends_on": ["docker.connect"],
-    },
-    "docker.container.exec": {
-        "module": "docker",
-        "depends_on": ["docker.container.list"],
-    },
-}
-```
+| Driver | Base Permission | Manage Permission | Feature Scopes | Admin Scopes |
+|--------|-----------------|-------------------|----------------|--------------|
+| SSH | `ssh.connect` | `ssh.manage` | `ssh.sftp`, `ssh.port_forward`, `ssh.clipboard` | `ssh.global.manage` |
+| Docker | `docker.connect` | `docker.manage` | `docker.logs`, `docker.exec` | `docker.stack.deploy` |
+| Kubernetes | `kubernetes.connect` | `kubernetes.manage` | `kubernetes.exec`, `kubernetes.port_forward`, `kubernetes.terminal` | `kubernetes.cluster.admin` |
+| Database | `database.connect` | `database.manage` | `database.query.read`, `database.query.write` | `database.cluster.manage` |
 
-**Database Module Permissions:**
-```go
-// internal/modules/database/permissions.go
-DATABASE_PERMISSIONS = {
-    "database.connect": {
-        "module": "database",
-        "depends_on": ["vault.view"],  // Can use stored credentials
-        "description": "Connect to databases",
-    },
-    "database.query.read": {
-        "module": "database",
-        "depends_on": ["database.connect"],
-        "description": "Execute SELECT queries",
-    },
-    "database.query.write": {
-        "module": "database",
-        "depends_on": ["database.query.read"],
-        "description": "Execute INSERT/UPDATE/DELETE",
-    },
-}
-```
+All feature/admin scopes must still be registered through the standard permission registry and synced to the database so they appear in role editors.
 
-### 7.5 Permission Registration
+### 7.5 Permission Registration Workflow
 
-**Each module registers its permissions on initialization:**
-```go
-// internal/modules/ssh/permissions.go
-package ssh
-
-import "github.com/your-org/shellcn/internal/permissions"
-
-func RegisterPermissions() {
-    permissions.Register(SSH_PERMISSIONS)
-}
-
-// internal/app/app.go
-func (app *App) InitializeModules() {
-    // Core permissions always registered
-    core.RegisterPermissions()
-    vault.RegisterPermissions()
-
-    // Module permissions registered conditionally
-    if app.Config.Modules.SSH.Enabled {
-        ssh.RegisterPermissions()
-    }
-    if app.Config.Modules.Docker.Enabled {
-        docker.RegisterPermissions()
-    }
-    // ... etc
-}
-```
+- Core permissions register in `internal/permissions/core.go`.
+- Driver-specific permissions register via helper methods during bootstrap (`internal/protocols/permissions.go`) after driver descriptors load but before `permissions.Sync`.
+- The catalog sync persists permission definitions and protocol metadata together to keep the system self-describing.
+- Feature toggles from configuration (`config.modules.<driver>.enabled`) only influence availability; they do not remove permission rows, ensuring historical audit entries remain valid.
+- Tests should assert that `permissions.ResolveDependencies` covers driver scopes and that `ProtocolService` hides unavailable drivers for users lacking `{driver}.connect`.
 
 ---
 

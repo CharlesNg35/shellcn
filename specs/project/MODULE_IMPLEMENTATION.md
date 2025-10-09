@@ -2,6 +2,8 @@
 
 This document provides a detailed breakdown of all modules, their features, implementation requirements, and dependencies.
 
+> **Terminology update:** The platform now refers to these runtime components as **protocol drivers** (formerly “modules”). Existing section titles retain the historical naming for continuity, but new specs and code should prefer the driver terminology described in `specs/project/PROTOCOL_DRIVER_STANDARDS.md`.
+
 ---
 
 ## Table of Contents

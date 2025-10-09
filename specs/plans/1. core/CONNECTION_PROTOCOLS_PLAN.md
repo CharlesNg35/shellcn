@@ -20,6 +20,17 @@ This plan delivers Phase 3 of the Core module ([ROADMAP.md:37-41](../../ROADMAP.
 
 ---
 
+### Terminology
+
+- **Protocol Driver** – the executable implementation that knows how to initiate a connection. Earlier documents referenced these as *modules*; protocol driver is now the canonical term.
+- **Protocol Definition** – catalog metadata produced by the driver registry (id, labels, sort order, capabilities).
+- **Connection** – a persisted record that references a protocol definition plus organization/team visibility and identity bindings.
+- **Capabilities** – feature flags a driver exposes (terminal, desktop, recording, metrics, extras) which guide permissions and UI elements.
+
+Legacy references in specs that still mention “module” should be interpreted as “protocol driver.” Each driver spec must comply with the standards in `specs/project/PROTOCOL_DRIVER_STANDARDS.md`.
+
+---
+
 ## Domain Model
 
 ### Tables & Relationships
@@ -106,6 +117,20 @@ Key points:
 - Org-level template connections are possible by setting `OrganizationID=nil`.
 - Team-level scoping allows curated sets for squads.
 - Visibility table enables sharing with explicit users (similar to vault shares).
+
+---
+
+## Driver Specification Artifacts
+
+- Each driver owns a spec file in `specs/project/drivers/<driver>.md` following `PROTOCOL_DRIVER_STANDARDS.md`.
+- Driver specs must define:
+  - Descriptor metadata (title, icon, category, default sort order).
+  - Connection property schema (settings fields, validation, defaults).
+  - Capability flags surfaced to frontend.
+  - Permission profile (connect/manage/feature/admin scopes).
+  - Identity or credential requirements that the upcoming Identity system satisfies.
+  - Testing guidance (unit + integration + frontend acceptance criteria).
+- The protocol catalog sync will fail CI if a driver registers without its corresponding spec entry.
 
 ---
 
@@ -239,6 +264,19 @@ connection.audit         (depends on audit.view)
 
 Dependencies flow through `permissions.Register`, just like core permissions.
 
+### Driver Permission Profiles
+
+Every protocol driver must declare a permission profile when registering with the registry:
+
+| Scope Type | Naming | Description | Dependency |
+|------------|--------|-------------|------------|
+| Base usage | `{protocol}.connect` | Launch / attach runtime session | `connection.launch` |
+| Advanced settings | `{protocol}.manage` | Edit driver-specific settings (namespaces, daemon sockets, tunables) | `connection.manage` |
+| Optional runtime scopes | `{protocol}.use.<feature>` | Feature toggles such as `kubernetes.exec`, `docker.attach`, `rdp.recording` | `connection.launch` |
+| Optional admin scopes | `{protocol}.admin.<feature>` | Sensitive operations such as `kubernetes.cluster.admin`, `database.schema.manage` | `connection.manage` |
+
+Driver packages emit these scopes via `protocols.RegisterDriverPermissions(protoID, profile)` and list them in `specs/project/drivers/<protocol>.md`. Kubernetes, Docker, Databases, and File Share drivers use custom subsets from this table. Each new scope must be appended to the in-memory registry before `permissions.Sync` executes so database state stays consistent.
+
 ### Roles
 
 Seed two roles (updated `internal/database/seed.go`):
@@ -354,6 +392,7 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
 - `web/src/types/connections.ts` – connection payload with targets + visibility summary.
 - `web/src/lib/api/protocols.ts` – fetch list/detail/test endpoints.
 - `web/src/lib/api/connections.ts` – CRUD for connections + share + preview.
+- `web/src/types/identities.ts` (future) – aligns identity payloads with driver credential requirements from driver specs.
 
 ### Hooks
 
@@ -368,6 +407,7 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
 - Connection cards show organization/team badges, availability chips, and driver icons.
 - "Launch" button disabled when driver not available for user (lack permission or config disabled).
 - Share modal lists organizations/teams (leveraging `/api/orgs` and `/api/teams`).
+- Identity picker surfaces credential suggestions based on driver spec metadata (e.g., show kubeconfigs for Kubernetes drivers).
 
 ---
 
