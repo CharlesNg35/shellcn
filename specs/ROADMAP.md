@@ -32,6 +32,14 @@
 - [x] Create ProtectedRoute component
 - [x] Write tests for authentication flows
 
+### Phase 3: Connections & API Integration (Week 2)
+
+- [ ] Create API endpoints for connections, returning available or enabled connections.
+- [ ] A connection is considered enabled if its driver has been implemented.
+- [ ] The UI should display only enabled connections.
+- [ ] The UI should display only connections available to the user, based on their permissions.
+- [ ] Permissions should be fetched based on the user's role; if the user is an admin, all connections should be fetched.
+
 ### Phase 3: Dashboard & Layout (Week 3)
 
 - [ ] Create DashboardLayout with Sidebar and Header
