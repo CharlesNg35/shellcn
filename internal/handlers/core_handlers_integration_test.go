@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -118,6 +119,122 @@ func TestUserHandler_CreateValidation(t *testing.T) {
 	require.False(t, decoded.Success)
 	require.NotNil(t, decoded.Error)
 	require.Equal(t, "BAD_REQUEST", decoded.Error.Code)
+}
+
+func TestUserHandler_UpdateActivateDelete(t *testing.T) {
+	env := testutil.NewEnv(t)
+	root := env.CreateRootUser("RootManage123!")
+	login := env.Login(root.Username, "RootManage123!")
+	token := login.AccessToken
+
+	createPayload := map[string]any{
+		"username":   "manage-" + uuid.NewString(),
+		"email":      "manage-" + uuid.NewString() + "@example.com",
+		"password":   "Password123!",
+		"first_name": "First",
+		"last_name":  "User",
+	}
+	createResp := env.Request(http.MethodPost, "/api/users", createPayload, token)
+	require.Equal(t, http.StatusCreated, createResp.Code, createResp.Body.String())
+	createDecoded := testutil.DecodeResponse(t, createResp)
+	require.True(t, createDecoded.Success)
+	var created map[string]any
+	testutil.DecodeInto(t, createDecoded.Data, &created)
+	userID := created["id"].(string)
+
+	updatePayload := map[string]any{
+		"first_name": "Updated",
+		"last_name":  "Person",
+		"avatar":     "https://example.com/avatar.png",
+	}
+	updateResp := env.Request(http.MethodPatch, fmt.Sprintf("/api/users/%s", userID), updatePayload, token)
+	require.Equal(t, http.StatusOK, updateResp.Code, updateResp.Body.String())
+	updateDecoded := testutil.DecodeResponse(t, updateResp)
+	require.True(t, updateDecoded.Success)
+	var updated map[string]any
+	testutil.DecodeInto(t, updateDecoded.Data, &updated)
+	require.Equal(t, "Updated", updated["first_name"])
+	require.Equal(t, "Person", updated["last_name"])
+
+	deactivateResp := env.Request(http.MethodPost, fmt.Sprintf("/api/users/%s/deactivate", userID), nil, token)
+	require.Equal(t, http.StatusOK, deactivateResp.Code, deactivateResp.Body.String())
+	deactivateDecoded := testutil.DecodeResponse(t, deactivateResp)
+	require.True(t, deactivateDecoded.Success)
+	var deactivated map[string]any
+	testutil.DecodeInto(t, deactivateDecoded.Data, &deactivated)
+	require.False(t, deactivated["is_active"].(bool))
+
+	activateResp := env.Request(http.MethodPost, fmt.Sprintf("/api/users/%s/activate", userID), nil, token)
+	require.Equal(t, http.StatusOK, activateResp.Code, activateResp.Body.String())
+	activateDecoded := testutil.DecodeResponse(t, activateResp)
+	require.True(t, activateDecoded.Success)
+	var activated map[string]any
+	testutil.DecodeInto(t, activateDecoded.Data, &activated)
+	require.True(t, activated["is_active"].(bool))
+
+	passwordPayload := map[string]any{"password": "NewPassword567!"}
+	passwordResp := env.Request(http.MethodPost, fmt.Sprintf("/api/users/%s/password", userID), passwordPayload, token)
+	require.Equal(t, http.StatusOK, passwordResp.Code, passwordResp.Body.String())
+
+	deleteResp := env.Request(http.MethodDelete, fmt.Sprintf("/api/users/%s", userID), nil, token)
+	require.Equal(t, http.StatusOK, deleteResp.Code, deleteResp.Body.String())
+
+	getDeleted := env.Request(http.MethodGet, fmt.Sprintf("/api/users/%s", userID), nil, token)
+	require.Equal(t, http.StatusNotFound, getDeleted.Code)
+
+	rootDeactivate := env.Request(http.MethodPost, fmt.Sprintf("/api/users/%s/deactivate", root.ID), nil, token)
+	require.Equal(t, http.StatusBadRequest, rootDeactivate.Code)
+	rootDeactivateDecoded := testutil.DecodeResponse(t, rootDeactivate)
+	require.False(t, rootDeactivateDecoded.Success)
+	require.Equal(t, "BAD_REQUEST", rootDeactivateDecoded.Error.Code)
+}
+
+func TestUserHandler_BulkOperations(t *testing.T) {
+	env := testutil.NewEnv(t)
+	root := env.CreateRootUser("BulkRoot123!")
+	login := env.Login(root.Username, "BulkRoot123!")
+	token := login.AccessToken
+
+	var userIDs []string
+	for i := 0; i < 3; i++ {
+		payload := map[string]any{
+			"username": fmt.Sprintf("bulk-%d-%s", i, uuid.NewString()),
+			"email":    fmt.Sprintf("bulk-%d-%s@example.com", i, uuid.NewString()),
+			"password": "BulkPassword123!",
+		}
+		createResp := env.Request(http.MethodPost, "/api/users", payload, token)
+		require.Equal(t, http.StatusCreated, createResp.Code, createResp.Body.String())
+		var created map[string]any
+		testutil.DecodeInto(t, testutil.DecodeResponse(t, createResp).Data, &created)
+		userIDs = append(userIDs, created["id"].(string))
+	}
+
+	deactivatePayload := map[string]any{
+		"user_ids": userIDs,
+	}
+	deactivateResp := env.Request(http.MethodPost, "/api/users/bulk/deactivate", deactivatePayload, token)
+	require.Equal(t, http.StatusOK, deactivateResp.Code, deactivateResp.Body.String())
+	deactivateDecoded := testutil.DecodeResponse(t, deactivateResp)
+	require.True(t, deactivateDecoded.Success)
+
+	for _, id := range userIDs {
+		getResp := env.Request(http.MethodGet, fmt.Sprintf("/api/users/%s", id), nil, token)
+		require.Equal(t, http.StatusOK, getResp.Code)
+		var fetched map[string]any
+		testutil.DecodeInto(t, testutil.DecodeResponse(t, getResp).Data, &fetched)
+		require.False(t, fetched["is_active"].(bool))
+	}
+
+	activateResp := env.Request(http.MethodPost, "/api/users/bulk/activate", deactivatePayload, token)
+	require.Equal(t, http.StatusOK, activateResp.Code, activateResp.Body.String())
+
+	deleteResp := env.Request(http.MethodDelete, "/api/users/bulk", deactivatePayload, token)
+	require.Equal(t, http.StatusOK, deleteResp.Code, deleteResp.Body.String())
+
+	for _, id := range userIDs {
+		getResp := env.Request(http.MethodGet, fmt.Sprintf("/api/users/%s", id), nil, token)
+		require.Equal(t, http.StatusNotFound, getResp.Code)
+	}
 }
 
 func TestOrganizationHandler_CRUD(t *testing.T) {

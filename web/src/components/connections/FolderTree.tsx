@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { ChevronDown, ChevronRight, Folder as FolderIcon } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useInRouterContext } from 'react-router-dom'
 import type { ConnectionFolderNode } from '@/types/connections'
 import { cn } from '@/lib/utils/cn'
 
@@ -116,19 +116,38 @@ function FolderTreeNode({
           <span className="mr-1 h-5 w-5" />
         )}
 
-        <Link
-          to={href}
-          className="flex flex-1 items-center gap-2 text-muted-foreground hover:text-foreground"
-          onClick={() => onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)}
-        >
-          <FolderIcon className="h-4 w-4" />
-          <span className="truncate">{node.folder.name}</span>
-          {node.connection_count ? (
-            <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-              {node.connection_count}
-            </span>
-          ) : null}
-        </Link>
+        {useInRouterContext() ? (
+          <Link
+            to={href}
+            className="flex flex-1 items-center gap-2 text-muted-foreground hover:text-foreground"
+            onClick={() => onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)}
+          >
+            <FolderIcon className="h-4 w-4" />
+            <span className="truncate">{node.folder.name}</span>
+            {node.connection_count ? (
+              <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {node.connection_count}
+              </span>
+            ) : null}
+          </Link>
+        ) : (
+          <a
+            href={href}
+            className="flex flex-1 items-center gap-2 text-muted-foreground hover:text-foreground"
+            onClick={(e) => {
+              e.preventDefault()
+              onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)
+            }}
+          >
+            <FolderIcon className="h-4 w-4" />
+            <span className="truncate">{node.folder.name}</span>
+            {node.connection_count ? (
+              <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {node.connection_count}
+              </span>
+            ) : null}
+          </a>
+        )}
       </div>
       {hasChildren && isOpen ? (
         <div className="mt-1 space-y-1">
