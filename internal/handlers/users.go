@@ -49,6 +49,10 @@ type bulkActivationRequest struct {
 	Active  *bool    `json:"active"`
 }
 
+type updateUserRolesRequest struct {
+	RoleIDs []string `json:"role_ids" validate:"omitempty,dive,required"`
+}
+
 func NewUserHandler(db *gorm.DB) (*UserHandler, error) {
 	audit, err := services.NewAuditService(db)
 	if err != nil {
@@ -281,6 +285,21 @@ func (h *UserHandler) ChangePassword(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, gin.H{"updated": true})
+}
+
+// PUT /api/users/:id/roles
+func (h *UserHandler) SetRoles(c *gin.Context) {
+	var body updateUserRolesRequest
+	if !bindAndValidate(c, &body) {
+		return
+	}
+
+	user, err := h.service.SetRoles(requestContext(c), c.Param("id"), body.RoleIDs)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, user)
 }
 
 // POST /api/users/bulk/activate or deactivate

@@ -22,5 +22,6 @@ func registerUserRoutes(api *gin.RouterGroup, handler *handlers.UserHandler, che
 		users.POST("/:id/activate", middleware.RequirePermission(checker, "user.edit"), handler.Activate)
 		users.POST("/:id/deactivate", middleware.RequirePermission(checker, "user.edit"), handler.Deactivate)
 		users.POST("/:id/password", middleware.RequirePermission(checker, "user.edit"), handler.ChangePassword)
+		users.PUT("/:id/roles", middleware.RequirePermission(checker, "permission.manage"), handler.SetRoles)
 	}
 }

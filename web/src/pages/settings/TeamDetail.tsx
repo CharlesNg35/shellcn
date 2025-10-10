@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CalendarClock, Loader2, PencilLine, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -7,7 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { TeamMembersManager } from '@/components/teams/TeamMembersManager'
+import { TeamRolesManager } from '@/components/teams/TeamRolesManager'
 import { useTeam, useTeamMembers, useTeamMutations } from '@/hooks/useTeams'
+import { useRoles } from '@/hooks/useRoles'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -30,10 +33,14 @@ function formatDate(value?: string) {
 }
 
 export function TeamDetail() {
+  const location = useLocation()
   const { teamId } = useParams<{ teamId: string }>()
   const navigate = useNavigate()
   const teamMutations = useTeamMutations()
   const { setOverride, clearOverride } = useBreadcrumb()
+  const { data: allRoles, isLoading: isRolesLoading } = useRoles()
+  const { hasPermission } = usePermissions()
+  const canManageRoles = hasPermission(PERMISSIONS.PERMISSION.MANAGE)
 
   const { data: teamDetail, isLoading: isTeamDetailLoading } = useTeam(teamId ?? '', {
     enabled: Boolean(teamId),
@@ -142,9 +149,10 @@ export function TeamDetail() {
   }
 
   const memberCount = members?.length ?? teamDetail.members?.length ?? 0
+  const assignedRoles = teamDetail.roles ?? []
 
   return (
-    <div className="space-y-6">
+    <div key={location.pathname} className="space-y-6">
       <PageHeader
         title={teamDetail.name}
         description={
@@ -202,6 +210,9 @@ export function TeamDetail() {
                   {memberCount} {memberCount === 1 ? 'member' : 'members'}
                 </Badge>
               )}
+              <Badge variant="outline" className="text-xs">
+                {assignedRoles.length} role{assignedRoles.length === 1 ? '' : 's'} assigned
+              </Badge>
             </div>
 
             <div className="space-y-3 pt-2">
@@ -235,14 +246,24 @@ export function TeamDetail() {
           </CardContent>
         </Card>
 
-        {/* Team Members */}
-        <div className="lg:col-span-2">
+        {/* Team Roles & Members */}
+        <div className="space-y-6 lg:col-span-2">
+          <TeamRolesManager
+            teamId={teamDetail.id}
+            teamName={teamDetail.name}
+            assignedRoles={assignedRoles}
+            availableRoles={allRoles}
+            isLoadingRoles={isRolesLoading}
+            setRolesMutation={teamMutations.setRoles}
+            canManageRoles={canManageRoles}
+          />
           <TeamMembersManager
             team={teamDetail}
             members={members}
             isLoadingMembers={isMembersLoading}
             addMemberMutation={teamMutations.addMember}
             removeMemberMutation={teamMutations.removeMember}
+            teamRoles={assignedRoles}
           />
         </div>
       </div>

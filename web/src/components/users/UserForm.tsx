@@ -1,13 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Loader2, ShieldCheck } from 'lucide-react'
 import { useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { z } from 'zod'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { Checkbox } from '@/components/ui/Checkbox'
+import { Badge } from '@/components/ui/Badge'
 import { userCreateSchema, userUpdateSchema } from '@/schemas/users'
 import type { UserRecord } from '@/types/users'
 import { useUserMutations } from '@/hooks/useUsers'
+import { useRoles } from '@/hooks/useRoles'
+import { usePermissions } from '@/hooks/usePermissions'
 import { ApiError, toApiError } from '@/lib/api/http'
+import { PERMISSIONS } from '@/constants/permissions'
 
 export type UserFormMode = 'create' | 'edit'
 
@@ -24,9 +30,58 @@ type UpdateFormValues = z.infer<typeof userUpdateSchema>
 // Use a broader type that encompasses both schemas
 type FormValues = CreateFormValues & Partial<UpdateFormValues>
 
+function toSet(values: string[]): Set<string> {
+  return new Set(values)
+}
+
+function selectionsMatch(selection: string[], baseline: Set<string>): boolean {
+  if (selection.length !== baseline.size) {
+    return false
+  }
+  for (const value of selection) {
+    if (!baseline.has(value)) {
+      return false
+    }
+  }
+  return true
+}
+
 export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserFormProps) {
   const [formError, setFormError] = useState<ApiError | null>(null)
-  const { create, update } = useUserMutations()
+  const { create, update, setRoles } = useUserMutations()
+  const { data: availableRoles, isLoading: isRolesLoading } = useRoles()
+  const { hasPermission } = usePermissions()
+  const canManageRoles = hasPermission(PERMISSIONS.PERMISSION.MANAGE)
+
+  const assignedRoleIds = useMemo(() => user?.roles?.map((role) => role.id) ?? [], [user?.roles])
+  const baselineRoleSet = useMemo(() => toSet(assignedRoleIds), [assignedRoleIds])
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>(assignedRoleIds)
+
+  useEffect(() => {
+    setSelectedRoleIds(assignedRoleIds)
+  }, [assignedRoleIds])
+
+  const rolesChanged = useMemo(() => {
+    if (mode === 'create') {
+      return selectedRoleIds.length > 0
+    }
+    return !selectionsMatch(selectedRoleIds, baselineRoleSet)
+  }, [mode, selectedRoleIds, baselineRoleSet])
+
+  const sortedRoles = useMemo(() => {
+    return [...(availableRoles ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  }, [availableRoles])
+
+  const toggleRole = (roleId: string) => {
+    setSelectedRoleIds((current) => {
+      if (current.includes(roleId)) {
+        return current.filter((id) => id !== roleId)
+      }
+      return [...current, roleId]
+    })
+  }
+
+  const isRoleMutationPending = setRoles.isPending
 
   const defaultValues = useMemo(() => {
     if (mode === 'create') {
@@ -69,6 +124,27 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
     setFormError(err)
   }
 
+  const applyRoleChanges = async (currentUser: UserRecord): Promise<UserRecord | null> => {
+    if (!canManageRoles || !rolesChanged) {
+      return currentUser
+    }
+
+    try {
+      const updatedUser = await setRoles.mutateAsync({
+        userId: currentUser.id,
+        roleIds: selectedRoleIds,
+      })
+      return updatedUser
+    } catch (apiError) {
+      handleError(apiError)
+      return null
+    }
+  }
+
+  const savingInProgress =
+    isSubmitting || create.isPending || update.isPending || isRoleMutationPending
+  const roleSelectionDisabled = !canManageRoles || savingInProgress
+
   const handleSuccess = (result: UserRecord) => {
     setFormError(null)
     onSuccess?.(result)
@@ -93,7 +169,11 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
           is_root: values.is_root,
           is_active: values.is_active,
         })
-        handleSuccess(created)
+        const withRoles = await applyRoleChanges(created)
+        if (!withRoles) {
+          return
+        }
+        handleSuccess(withRoles)
       } catch (apiError) {
         handleError(apiError)
       }
@@ -121,7 +201,11 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
           avatar: values.avatar,
         },
       })
-      handleSuccess(updated)
+      const withRoles = await applyRoleChanges(updated)
+      if (!withRoles) {
+        return
+      }
+      handleSuccess(withRoles)
     } catch (apiError) {
       handleError(apiError)
     }
@@ -162,6 +246,77 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
 
       <Input label="Avatar URL" {...register('avatar')} error={errors.avatar?.message} />
 
+      <div className="space-y-3 rounded-lg border border-border/70 bg-muted/10 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Roles</p>
+            <p className="text-xs text-muted-foreground">
+              Assign roles to control {mode === 'create' ? 'the new' : 'this'} user's permissions.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+              {canManageRoles ? 'Manage' : 'Read only'}
+            </Badge>
+            <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+              {selectedRoleIds.length} selected
+            </Badge>
+          </div>
+        </div>
+
+        {isRolesLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading roles…
+          </div>
+        ) : sortedRoles.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No roles available yet. Create roles from the Permissions page first.
+          </p>
+        ) : (
+          <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+            {sortedRoles.map((role) => {
+              const checked = selectedRoleIds.includes(role.id)
+              return (
+                <label
+                  key={role.id}
+                  className="flex cursor-pointer items-start gap-3 rounded-lg border border-border/60 bg-background px-3 py-2 hover:border-border"
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={() => toggleRole(role.id)}
+                    disabled={roleSelectionDisabled}
+                  />
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-foreground">{role.name}</span>
+                      {role.is_system ? (
+                        <Badge variant="outline" className="flex items-center gap-1 text-[10px]">
+                          <ShieldCheck className="h-3 w-3" /> System
+                        </Badge>
+                      ) : null}
+                      {checked ? (
+                        <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                          Assigned
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {role.description || 'No description provided.'}
+                    </p>
+                  </div>
+                </label>
+              )
+            })}
+          </div>
+        )}
+
+        {!canManageRoles ? (
+          <p className="text-xs text-muted-foreground">
+            You do not have permission to change role assignments.
+          </p>
+        ) : null}
+      </div>
+
       {formError ? (
         <div className="rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <p className="font-medium">{formError.message}</p>
@@ -170,11 +325,11 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
 
       <div className="flex justify-end gap-2">
         {onClose ? (
-          <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+          <Button type="button" variant="outline" onClick={onClose} disabled={savingInProgress}>
             Cancel
           </Button>
         ) : null}
-        <Button type="submit" loading={isSubmitting || create.isPending || update.isPending}>
+        <Button type="submit" loading={savingInProgress}>
           {mode === 'create' ? 'Create User' : 'Save Changes'}
         </Button>
       </div>

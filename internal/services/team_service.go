@@ -139,7 +139,8 @@ func (s *TeamService) GetByID(ctx context.Context, id string) (*models.Team, err
 
 	var team models.Team
 	err := s.db.WithContext(ctx).
-		Preload("Users").
+		Preload("Users.Roles").
+		Preload("Roles").
 		First(&team, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, ErrTeamNotFound
@@ -156,6 +157,8 @@ func (s *TeamService) List(ctx context.Context) ([]models.Team, error) {
 
 	var teams []models.Team
 	if err := s.db.WithContext(ctx).
+		Preload("Users").
+		Preload("Roles").
 		Order("created_at ASC").
 		Find(&teams).Error; err != nil {
 		return nil, fmt.Errorf("team service: list teams: %w", err)
@@ -298,7 +301,7 @@ func (s *TeamService) ListMembers(ctx context.Context, teamID string) ([]models.
 
 	var team models.Team
 	if err := s.db.WithContext(ctx).
-		Preload("Users").
+		Preload("Users.Roles").
 		First(&team, "id = ?", teamID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrTeamNotFound
@@ -307,4 +310,84 @@ func (s *TeamService) ListMembers(ctx context.Context, teamID string) ([]models.
 	}
 
 	return team.Users, nil
+}
+
+// ListRoles returns roles assigned to the team.
+func (s *TeamService) ListRoles(ctx context.Context, teamID string) ([]models.Role, error) {
+	ctx = ensureContext(ctx)
+
+	if strings.TrimSpace(teamID) == "" {
+		return nil, apperrors.NewBadRequest("team id is required")
+	}
+
+	var team models.Team
+	if err := s.db.WithContext(ctx).
+		Preload("Roles").
+		First(&team, "id = ?", teamID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTeamNotFound
+		}
+		return nil, fmt.Errorf("team service: load team roles: %w", err)
+	}
+
+	return team.Roles, nil
+}
+
+// SetRoles replaces the team's role assignments.
+func (s *TeamService) SetRoles(ctx context.Context, teamID string, roleIDs []string) ([]models.Role, error) {
+	ctx = ensureContext(ctx)
+
+	teamID = strings.TrimSpace(teamID)
+	if teamID == "" {
+		return nil, apperrors.NewBadRequest("team id is required")
+	}
+
+	cleanIDs := normaliseIDs(roleIDs)
+
+	var result []models.Role
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var team models.Team
+		if err := tx.Preload("Roles").First(&team, "id = ?", teamID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrTeamNotFound
+			}
+			return fmt.Errorf("team service: load team: %w", err)
+		}
+
+		var roles []models.Role
+		if len(cleanIDs) > 0 {
+			if err := tx.Where("id IN ?", cleanIDs).Find(&roles).Error; err != nil {
+				return fmt.Errorf("team service: load roles: %w", err)
+			}
+			if len(roles) != len(cleanIDs) {
+				return apperrors.NewBadRequest("one or more roles were not found")
+			}
+		}
+
+		if err := tx.Model(&team).Association("Roles").Replace(roles); err != nil {
+			return fmt.Errorf("team service: replace roles: %w", err)
+		}
+
+		if err := tx.Preload("Roles").First(&team, "id = ?", teamID).Error; err != nil {
+			return fmt.Errorf("team service: reload team: %w", err)
+		}
+
+		result = team.Roles
+
+		recordAudit(s.auditService, ctx, AuditEntry{
+			Action:   "team.set_roles",
+			Resource: team.ID,
+			Result:   "success",
+			Metadata: map[string]any{
+				"role_ids": cleanIDs,
+			},
+		})
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

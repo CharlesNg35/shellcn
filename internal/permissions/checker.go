@@ -41,6 +41,7 @@ func (c *Checker) Check(ctx context.Context, userID, permissionID string) (bool,
 	var user models.User
 	if err := c.db.WithContext(ctx).
 		Preload("Roles.Permissions").
+		Preload("Teams.Roles.Permissions").
 		First(&user, "id = ?", userID).Error; err != nil {
 		return false, fmt.Errorf("permission checker: load user: %w", err)
 	}
@@ -85,6 +86,7 @@ func (c *Checker) GetUserPermissions(ctx context.Context, userID string) ([]stri
 	var user models.User
 	if err := c.db.WithContext(ctx).
 		Preload("Roles.Permissions").
+		Preload("Teams.Roles.Permissions").
 		First(&user, "id = ?", userID).Error; err != nil {
 		return nil, fmt.Errorf("permission checker: load user: %w", err)
 	}
@@ -117,6 +119,13 @@ func collectUserPermissions(user *models.User) (map[string]struct{}, error) {
 	for _, role := range user.Roles {
 		for _, perm := range role.Permissions {
 			granted = append(granted, perm.ID)
+		}
+	}
+	for _, team := range user.Teams {
+		for _, role := range team.Roles {
+			for _, perm := range role.Permissions {
+				granted = append(granted, perm.ID)
+			}
 		}
 	}
 

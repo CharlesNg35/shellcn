@@ -91,6 +91,8 @@ func openTeamServiceTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.AutoMigrate(
 		&models.Team{},
 		&models.User{},
+		&models.Role{},
+		&models.Permission{},
 		&models.AuditLog{},
 	))
 
@@ -101,4 +103,46 @@ func openTeamServiceTestDB(t *testing.T) *gorm.DB {
 	})
 
 	return db
+}
+
+func TestTeamServiceSetRoles(t *testing.T) {
+	db := openTeamServiceTestDB(t)
+	auditSvc, err := NewAuditService(db)
+	require.NoError(t, err)
+
+	teamSvc, err := NewTeamService(db, auditSvc)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	team, err := teamSvc.Create(ctx, CreateTeamInput{
+		Name: "Engineering",
+	})
+	require.NoError(t, err)
+
+	roleA := models.Role{
+		BaseModel: models.BaseModel{ID: "role.engineer"},
+		Name:      "Engineer",
+	}
+	roleB := models.Role{
+		BaseModel: models.BaseModel{ID: "role.devops"},
+		Name:      "DevOps",
+	}
+	require.NoError(t, db.Create(&roleA).Error)
+	require.NoError(t, db.Create(&roleB).Error)
+
+	roles, err := teamSvc.SetRoles(ctx, team.ID, []string{roleA.ID, roleB.ID})
+	require.NoError(t, err)
+	require.Len(t, roles, 2)
+
+	saved, err := teamSvc.ListRoles(ctx, team.ID)
+	require.NoError(t, err)
+	require.Len(t, saved, 2)
+
+	roles, err = teamSvc.SetRoles(ctx, team.ID, []string{roleB.ID})
+	require.NoError(t, err)
+	require.Len(t, roles, 1)
+
+	_, err = teamSvc.SetRoles(ctx, team.ID, []string{"does-not-exist"})
+	require.Error(t, err)
 }

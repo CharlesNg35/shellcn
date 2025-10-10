@@ -180,6 +180,7 @@ func setupPermissionTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, db.AutoMigrate(
 		&models.User{},
 		&models.Role{},
+		&models.Team{},
 		&models.Permission{},
 	))
 	require.NoError(t, Sync(context.Background(), db))
@@ -197,4 +198,43 @@ func removePermission(id string) {
 	globalRegistry.mu.Lock()
 	defer globalRegistry.mu.Unlock()
 	delete(globalRegistry.permissions, id)
+}
+
+func TestCheckerIncludesTeamRoles(t *testing.T) {
+	db := setupPermissionTestDB(t)
+
+	role := &models.Role{
+		BaseModel: models.BaseModel{ID: "role.team"},
+		Name:      "Team Role",
+	}
+	require.NoError(t, db.Create(role).Error)
+
+	var viewPerm models.Permission
+	require.NoError(t, db.First(&viewPerm, "id = ?", "user.view").Error)
+	require.NoError(t, db.Model(role).Association("Permissions").Append(&viewPerm))
+
+	team := &models.Team{
+		Name: "Infra",
+	}
+	require.NoError(t, db.Create(team).Error)
+	require.NoError(t, db.Model(team).Association("Roles").Append(role))
+
+	user := &models.User{
+		Username: "team-member",
+		Email:    "team@example.com",
+		Password: "secret",
+	}
+	require.NoError(t, db.Create(user).Error)
+	require.NoError(t, db.Model(team).Association("Users").Append(user))
+
+	checker, err := NewChecker(db)
+	require.NoError(t, err)
+
+	ok, err := checker.Check(context.Background(), user.ID, "user.view")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	perms, err := checker.GetUserPermissions(context.Background(), user.ID)
+	require.NoError(t, err)
+	require.Contains(t, perms, "user.view")
 }

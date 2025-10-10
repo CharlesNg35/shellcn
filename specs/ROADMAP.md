@@ -76,6 +76,7 @@
 - [x] Build team member management UI
 - [x] Implement member assignment/removal
 - [x] Build useTeams hook
+- [x] Support team-level role assignment with inherited permissions
 - [x] Write tests for team management
 
 ### Phase 6: Permission Management (Week 6)

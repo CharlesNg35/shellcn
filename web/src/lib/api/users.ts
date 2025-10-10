@@ -29,6 +29,7 @@ interface UserResponse {
     id: string
     name: string
     description?: string
+    is_system?: boolean
   }>
   teams?: Array<{
     id: string
@@ -56,7 +57,13 @@ function transformUser(raw: UserResponse): UserRecord {
     avatar: raw.avatar,
     is_root: raw.is_root,
     is_active: raw.is_active,
-    roles: raw.roles ?? [],
+    roles:
+      raw.roles?.map((role) => ({
+        id: role.id,
+        name: role.name,
+        description: role.description,
+        is_system: role.is_system,
+      })) ?? [],
     teams: raw.teams ?? [],
     last_login_at: raw.last_login_at,
     created_at: raw.created_at,
@@ -137,6 +144,17 @@ export async function changeUserPassword(userId: string, password: string): Prom
   )
 }
 
+export async function setUserRoles(userId: string, roleIds: string[]): Promise<UserRecord> {
+  const response = await apiClient.put<ApiResponse<UserResponse>>(
+    `${USERS_ENDPOINT}/${userId}/roles`,
+    {
+      role_ids: roleIds,
+    }
+  )
+  const data = unwrapResponse(response)
+  return transformUser(data)
+}
+
 async function bulkOperation(
   endpoint: string,
   payload: BulkUserPayload & { active?: boolean }
@@ -171,6 +189,7 @@ export const usersApi = {
   activate: activateUser,
   deactivate: deactivateUser,
   changePassword: changeUserPassword,
+  setRoles: setUserRoles,
   bulkActivate: bulkActivateUsers,
   bulkDeactivate: bulkDeactivateUsers,
   bulkDelete: bulkDeleteUsers,

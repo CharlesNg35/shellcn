@@ -81,6 +81,19 @@ export function TeamTable({
         enableSorting: false,
       },
       {
+        id: 'roles',
+        header: () => 'Roles',
+        cell: ({ row }) => {
+          const roleCount = row.original.roles?.length ?? 0
+          return (
+            <Badge variant="outline" className="w-fit text-xs font-medium">
+              {roleCount}
+            </Badge>
+          )
+        },
+        enableSorting: false,
+      },
+      {
         accessorKey: 'created_at',
         header: ({ column }) => (
           <Button

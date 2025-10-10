@@ -1,4 +1,5 @@
 import type { ApiMeta } from '@/types/api'
+import type { UserRoleSummary } from '@/types/users'
 
 export interface TeamRecord {
   id: string
@@ -7,6 +8,7 @@ export interface TeamRecord {
   created_at?: string
   updated_at?: string
   members?: TeamMember[]
+  roles?: UserRoleSummary[]
 }
 
 export interface TeamListResult {
@@ -34,11 +36,7 @@ export interface TeamMember {
   is_active: boolean
   is_root?: boolean
   last_login_at?: string | null
-  roles?: Array<{
-    id: string
-    name: string
-    description?: string
-  }>
+  roles?: UserRoleSummary[]
 }
 
 export interface TeamMemberAssignmentPayload {

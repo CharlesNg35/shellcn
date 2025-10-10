@@ -30,6 +30,10 @@ type teamMemberRequest struct {
 	UserID string `json:"user_id" validate:"required,uuid4"`
 }
 
+type updateTeamRolesRequest struct {
+	RoleIDs []string `json:"role_ids" validate:"omitempty,dive,required"`
+}
+
 func NewTeamHandler(db *gorm.DB) (*TeamHandler, error) {
 	audit, err := services.NewAuditService(db)
 	if err != nil {
@@ -168,4 +172,29 @@ func (h *TeamHandler) ListMembers(c *gin.Context) {
 		return
 	}
 	response.Success(c, http.StatusOK, users)
+}
+
+// GET /api/teams/:id/roles
+func (h *TeamHandler) ListRoles(c *gin.Context) {
+	roles, err := h.svc.ListRoles(requestContext(c), c.Param("id"))
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, roles)
+}
+
+// PUT /api/teams/:id/roles
+func (h *TeamHandler) SetRoles(c *gin.Context) {
+	var body updateTeamRolesRequest
+	if !bindAndValidate(c, &body) {
+		return
+	}
+
+	roles, err := h.svc.SetRoles(requestContext(c), c.Param("id"), body.RoleIDs)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, roles)
 }

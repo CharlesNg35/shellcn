@@ -5,6 +5,7 @@ import type { UserRecord } from '@/types/users'
 
 const mockCreate = vi.fn()
 const mockUpdate = vi.fn()
+const mockSetRoles = vi.fn()
 
 vi.mock('@/hooks/useUsers', () => ({
   useUserMutations: () => ({
@@ -16,6 +17,30 @@ vi.mock('@/hooks/useUsers', () => ({
       mutateAsync: mockUpdate,
       isPending: false,
     },
+    setRoles: {
+      mutateAsync: mockSetRoles,
+      isPending: false,
+    },
+  }),
+}))
+
+vi.mock('@/hooks/useRoles', () => ({
+  useRoles: () => ({
+    data: [
+      {
+        id: 'role.admin',
+        name: 'Administrator',
+        description: 'Full access',
+        is_system: true,
+      },
+    ],
+    isLoading: false,
+  }),
+}))
+
+vi.mock('@/hooks/usePermissions', () => ({
+  usePermissions: () => ({
+    hasPermission: () => true,
   }),
 }))
 
@@ -23,6 +48,7 @@ describe('UserForm', () => {
   beforeEach(() => {
     mockCreate.mockReset()
     mockUpdate.mockReset()
+    mockSetRoles.mockReset()
   })
 
   it('submits create payload', async () => {

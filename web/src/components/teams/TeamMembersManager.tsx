@@ -2,13 +2,14 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Loader2, Search, UserMinus, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { useUsers } from '@/hooks/useUsers'
 import type { TeamMember, TeamRecord } from '@/types/teams'
 import type { UserRecord } from '@/types/users'
 import { cn } from '@/lib/utils/cn'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { PERMISSIONS } from '@/constants/permissions'
+import { PermissionGuard } from '@/components/permissions/PermissionGuard'
+import type { UserRoleSummary } from '@/types/users'
 
 type AddMemberMutation = UseMutationResult<boolean, unknown, { teamId: string; userId: string }>
 type RemoveMemberMutation = UseMutationResult<boolean, unknown, { teamId: string; userId: string }>
@@ -19,6 +20,7 @@ interface TeamMembersManagerProps {
   isLoadingMembers?: boolean
   addMemberMutation: AddMemberMutation
   removeMemberMutation: RemoveMemberMutation
+  teamRoles?: UserRoleSummary[]
 }
 
 function filterAvailableUsers(users: UserRecord[], members: TeamMember[] | undefined) {
@@ -35,6 +37,7 @@ export function TeamMembersManager({
   isLoadingMembers,
   addMemberMutation,
   removeMemberMutation,
+  teamRoles,
 }: TeamMembersManagerProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedUserId, setSelectedUserId] = useState<string>('')
@@ -111,6 +114,23 @@ export function TeamMembersManager({
         <p className="text-xs text-muted-foreground">
           Add or remove users from <span className="font-medium">{team.name}</span>
         </p>
+        {teamRoles?.length ? (
+          <div className="flex flex-wrap gap-2 pt-2">
+            {teamRoles.map((role) => (
+              <Badge
+                key={role.id}
+                variant="secondary"
+                className="text-[10px] uppercase tracking-wide"
+              >
+                {role.name}
+              </Badge>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">
+            This team does not grant additional roles.
+          </p>
+        )}
       </div>
 
       <div className="mt-4 space-y-4">
@@ -212,6 +232,11 @@ export function TeamMembersManager({
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">{member.username}</p>
                   <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                  {member.roles?.length ? (
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      Direct roles: {member.roles.map((role) => role.name).join(', ')}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Badge

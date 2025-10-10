@@ -18,6 +18,7 @@ import {
   deactivateUser,
   fetchUserById,
   fetchUsers,
+  setUserRoles,
   updateUser,
 } from '@/lib/api/users'
 import type {
@@ -28,6 +29,7 @@ import type {
   UserRecord,
   UserUpdatePayload,
 } from '@/types/users'
+import { MY_PERMISSIONS_QUERY_KEY } from './usePermissions'
 
 export const USERS_LIST_QUERY_KEY = ['users', 'list'] as const
 
@@ -151,6 +153,25 @@ export function useUserMutations() {
       changeUserPassword(userId, password),
   })
 
+  const setRoles = useMutation({
+    mutationFn: ({ userId, roleIds }: { userId: string; roleIds: string[] }) =>
+      setUserRoles(userId, roleIds),
+    onSuccess: async (user) => {
+      await invalidateUsers()
+      await invalidateUser(user.id)
+      await queryClient.invalidateQueries({ queryKey: MY_PERMISSIONS_QUERY_KEY })
+      toast.success('User roles updated', {
+        description: `${user.username}'s role assignments have been saved`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
+      toast.error('Failed to update user roles', {
+        description: apiError.message || 'Please try again later',
+      })
+    },
+  })
+
   const bulkActivate = useMutation({
     mutationFn: (payload: BulkUserPayload) => bulkActivateUsers(payload.user_ids),
     onSuccess: async (_, variables) => {
@@ -208,5 +229,6 @@ export function useUserMutations() {
     bulkActivate,
     bulkDeactivate,
     bulkDelete,
+    setRoles,
   }
 }

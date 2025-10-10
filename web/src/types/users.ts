@@ -6,6 +6,7 @@ export interface UserRoleSummary {
   id: string
   name: string
   description?: string
+  is_system?: boolean
 }
 
 export interface UserTeamSummary {

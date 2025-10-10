@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -12,6 +12,7 @@ import type { TeamRecord } from '@/types/teams'
 import { PERMISSIONS } from '@/constants/permissions'
 
 export function Teams() {
+  const location = useLocation()
   const navigate = useNavigate()
   const [formMode, setFormMode] = useState<TeamFormMode>('create')
   const [teamForForm, setTeamForForm] = useState<TeamRecord | undefined>()
@@ -95,7 +96,7 @@ export function Teams() {
       : 'Update the team name or description. Changes apply immediately.'
 
   return (
-    <div className="space-y-6">
+    <div key={location.pathname} className="space-y-6">
       <PageHeader
         title="Teams"
         description="Organize users into teams to streamline permission assignment and access control. Teams can be nested by using slash-separated names (for example, Security/Incident Response)."

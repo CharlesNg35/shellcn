@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import * as useAuthModule from '@/hooks/useAuth'
 import * as useNotificationsModule from '@/hooks/useNotifications'
 import { Header } from '../Header'
+import { BreadcrumbProvider } from '@/contexts/BreadcrumbContext'
 
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: vi.fn(),
@@ -43,15 +44,21 @@ describe('Header', () => {
       markAllAsRead: vi.fn(),
     } as unknown as ReturnType<typeof useNotificationsModule.useNotifications>)
 
-    render(
-      <MemoryRouter>
-        <Header />
-      </MemoryRouter>
-    )
+    await act(async () => {
+      render(
+        <MemoryRouter>
+          <BreadcrumbProvider>
+            <Header />
+          </BreadcrumbProvider>
+        </MemoryRouter>
+      )
+    })
 
     // Open user menu by clicking on the user display name inside the menu button
     const nameEl = await screen.findByText('Alice Smith')
-    fireEvent.click(nameEl)
+    await act(async () => {
+      fireEvent.click(nameEl)
+    })
 
     // Wait for menu to open and verify items are visible
     const profileLink = await screen.findByText(/Profile/i)
@@ -59,7 +66,9 @@ describe('Header', () => {
     expect(screen.getByText(/Settings/i)).toBeInTheDocument()
 
     const signOutButton = screen.getByRole('button', { name: /Sign out/i })
-    fireEvent.click(signOutButton)
+    await act(async () => {
+      fireEvent.click(signOutButton)
+    })
 
     expect(logout).toHaveBeenCalled()
   })

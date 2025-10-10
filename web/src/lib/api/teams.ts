@@ -8,8 +8,16 @@ import type {
   TeamRecord,
   TeamUpdatePayload,
 } from '@/types/teams'
+import type { UserRoleSummary } from '@/types/users'
 
 const TEAMS_ENDPOINT = '/teams'
+
+interface TeamRoleResponse {
+  id: string
+  name: string
+  description?: string
+  is_system?: boolean
+}
 
 interface TeamMemberResponse {
   id: string
@@ -21,11 +29,7 @@ interface TeamMemberResponse {
   is_active: boolean
   is_root?: boolean
   last_login_at?: string | null
-  roles?: Array<{
-    id: string
-    name: string
-    description?: string
-  }>
+  roles?: TeamRoleResponse[]
 }
 
 interface TeamResponse {
@@ -35,6 +39,7 @@ interface TeamResponse {
   created_at?: string
   updated_at?: string
   users?: TeamMemberResponse[]
+  roles?: TeamRoleResponse[]
 }
 
 function transformTeamMember(raw: TeamMemberResponse): TeamMember {
@@ -48,7 +53,16 @@ function transformTeamMember(raw: TeamMemberResponse): TeamMember {
     is_active: raw.is_active,
     is_root: raw.is_root,
     last_login_at: raw.last_login_at,
-    roles: raw.roles ?? [],
+    roles: raw.roles?.map(transformRoleSummary) ?? [],
+  }
+}
+
+function transformRoleSummary(raw: TeamRoleResponse): UserRoleSummary {
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description,
+    is_system: raw.is_system,
   }
 }
 
@@ -60,6 +74,7 @@ function transformTeam(raw: TeamResponse): TeamRecord {
     created_at: raw.created_at,
     updated_at: raw.updated_at,
     members: raw.users ? raw.users.map(transformTeamMember) : undefined,
+    roles: raw.roles?.map(transformRoleSummary) ?? [],
   }
 }
 
@@ -127,6 +142,16 @@ export async function removeTeamMember(teamId: string, userId: string): Promise<
   return Boolean(data?.removed)
 }
 
+export async function setTeamRoles(teamId: string, roleIds: string[]): Promise<UserRoleSummary[]> {
+  const response = await apiClient.put<ApiResponse<TeamRoleResponse[]>>(
+    `${TEAMS_ENDPOINT}/${teamId}/roles`,
+    {
+      role_ids: roleIds,
+    }
+  )
+  return unwrapResponse(response).map(transformRoleSummary)
+}
+
 export const teamsApi = {
   list: fetchTeams,
   get: fetchTeamById,
@@ -136,4 +161,5 @@ export const teamsApi = {
   delete: deleteTeam,
   addMember: addTeamMember,
   removeMember: removeTeamMember,
+  setRoles: setTeamRoles,
 }

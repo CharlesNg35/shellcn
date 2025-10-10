@@ -16,6 +16,7 @@ import {
   fetchTeamMembers,
   fetchTeams,
   removeTeamMember,
+  setTeamRoles,
   updateTeam,
 } from '@/lib/api/teams'
 import type {
@@ -25,6 +26,8 @@ import type {
   TeamRecord,
   TeamUpdatePayload,
 } from '@/types/teams'
+import type { UserRoleSummary } from '@/types/users'
+import { MY_PERMISSIONS_QUERY_KEY } from './usePermissions'
 
 export const TEAMS_LIST_QUERY_KEY = ['teams', 'list'] as const
 
@@ -198,11 +201,35 @@ export function useTeamMutations() {
     },
   })
 
+  const setRolesMutation = useMutation<
+    UserRoleSummary[],
+    ApiError,
+    { teamId: string; roleIds: string[] }
+  >({
+    mutationFn: ({ teamId, roleIds }: { teamId: string; roleIds: string[] }) =>
+      setTeamRoles(teamId, roleIds),
+    onSuccess: async (_, variables) => {
+      await invalidateTeam(variables.teamId)
+      await invalidateTeams()
+      await queryClient.invalidateQueries({ queryKey: MY_PERMISSIONS_QUERY_KEY })
+      toast.success('Team roles updated', {
+        description: 'Role assignments saved successfully',
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
+      toast.error('Failed to update team roles', {
+        description: apiError.message || 'Please try again later',
+      })
+    },
+  })
+
   return {
     create,
     update,
     remove,
     addMember: addMemberMutation,
     removeMember: removeMemberMutation,
+    setRoles: setRolesMutation,
   }
 }

@@ -248,6 +248,70 @@ func (s *UserService) Update(ctx context.Context, id string, input UpdateUserInp
 	return &user, nil
 }
 
+// SetRoles replaces role assignments for the specified user.
+func (s *UserService) SetRoles(ctx context.Context, id string, roleIDs []string) (*models.User, error) {
+	ctx = ensureContext(ctx)
+
+	userID := strings.TrimSpace(id)
+	if userID == "" {
+		return nil, apperrors.NewBadRequest("user id is required")
+	}
+
+	cleanIDs := normaliseIDs(roleIDs)
+
+	var result *models.User
+
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var user models.User
+		if err := tx.Preload("Roles").First(&user, "id = ?", userID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return ErrUserNotFound
+			}
+			return fmt.Errorf("user service: load user: %w", err)
+		}
+
+		var roles []models.Role
+		if len(cleanIDs) > 0 {
+			if err := tx.Where("id IN ?", cleanIDs).Find(&roles).Error; err != nil {
+				return fmt.Errorf("user service: load roles: %w", err)
+			}
+			if len(roles) != len(cleanIDs) {
+				return apperrors.NewBadRequest("one or more roles were not found")
+			}
+		}
+
+		if err := tx.Model(&user).Association("Roles").Replace(roles); err != nil {
+			return fmt.Errorf("user service: replace roles: %w", err)
+		}
+
+		if err := tx.
+			Preload("Roles").
+			Preload("Teams").
+			Preload("Teams.Roles").
+			First(&user, "id = ?", userID).Error; err != nil {
+			return fmt.Errorf("user service: reload user: %w", err)
+		}
+
+		result = &user
+
+		recordAudit(s.auditService, ctx, AuditEntry{
+			Action:   "user.set_roles",
+			Resource: user.ID,
+			Result:   "success",
+			Metadata: map[string]any{
+				"role_ids": cleanIDs,
+			},
+		})
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 // Delete removes a user unless the account is marked as root.
 func (s *UserService) Delete(ctx context.Context, id string) error {
 	ctx = ensureContext(ctx)
