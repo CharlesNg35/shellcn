@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -29,7 +30,13 @@ func (h *ConnectionFolderHandler) ListTree(c *gin.Context) {
 		return
 	}
 
-	tree, err := h.svc.ListTree(requestContext(c), userID)
+	teamQuery := strings.TrimSpace(c.Query("team_id"))
+	var teamFilter *string
+	if teamQuery != "" {
+		teamFilter = &teamQuery
+	}
+
+	tree, err := h.svc.ListTree(requestContext(c), userID, teamFilter)
 	if err != nil {
 		response.Error(c, err)
 		return

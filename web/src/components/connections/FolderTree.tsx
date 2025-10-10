@@ -10,6 +10,7 @@ interface FolderTreeProps {
   onSelect?: (folderId: string | null) => void
   basePath?: string
   className?: string
+  disableNavigation?: boolean
 }
 
 export function FolderTree({
@@ -18,6 +19,7 @@ export function FolderTree({
   onSelect,
   basePath = '/connections',
   className,
+  disableNavigation = false,
 }: FolderTreeProps) {
   const [openNodes, setOpenNodes] = useState<Record<string, boolean>>({})
 
@@ -62,6 +64,7 @@ export function FolderTree({
           basePath={basePath}
           depth={0}
           activeFolderId={activeFolderId}
+          disableNavigation={disableNavigation}
         />
       ))}
     </div>
@@ -76,6 +79,7 @@ interface FolderTreeNodeProps {
   basePath: string
   depth: number
   activeFolderId?: string | null
+  disableNavigation?: boolean
 }
 
 function FolderTreeNode({
@@ -86,6 +90,7 @@ function FolderTreeNode({
   basePath,
   depth,
   activeFolderId,
+  disableNavigation,
 }: FolderTreeNodeProps) {
   const hasChildren = node.children && node.children.length > 0
   const paddingLeft = depth * 12
@@ -116,7 +121,7 @@ function FolderTreeNode({
           <span className="mr-1 h-5 w-5" />
         )}
 
-        {useInRouterContext() ? (
+        {useInRouterContext() && !disableNavigation ? (
           <Link
             to={href}
             className="flex flex-1 items-center gap-2 text-muted-foreground hover:text-foreground"

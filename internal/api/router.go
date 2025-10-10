@@ -155,12 +155,6 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	registerUserRoutes(api, userHandler, checker)
 
-	teamHandler, err := handlers.NewTeamHandler(db)
-	if err != nil {
-		return nil, err
-	}
-	registerTeamRoutes(api, teamHandler, checker)
-
 	// Permissions
 	permHandler, err := handlers.NewPermissionHandler(db)
 	if err != nil {
@@ -194,6 +188,12 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	connectionFolderHandler := handlers.NewConnectionFolderHandler(folderSvc)
 	registerConnectionFolderRoutes(api, connectionFolderHandler, checker)
+
+	teamHandler, err := handlers.NewTeamHandler(db, checker, connectionSvc, folderSvc)
+	if err != nil {
+		return nil, err
+	}
+	registerTeamRoutes(api, teamHandler, checker)
 
 	// Protocols
 	protocolSvc, err := services.NewProtocolService(db, checker)

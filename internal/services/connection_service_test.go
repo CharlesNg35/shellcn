@@ -29,6 +29,7 @@ func TestConnectionServiceListVisible(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&team).Error)
 	require.NoError(t, db.Model(&user).Association("Teams").Append(&team))
+	teamID := team.ID
 
 	first := models.Connection{
 		Name:        "Primary SSH",
@@ -60,6 +61,7 @@ func TestConnectionServiceListVisible(t *testing.T) {
 		Name:        "Team database",
 		ProtocolID:  "postgres",
 		OwnerUserID: "user-other",
+		TeamID:      &teamID,
 		Visibility: []models.ConnectionVisibility{
 			{
 				TeamID:          &team.ID,
@@ -92,6 +94,16 @@ func TestConnectionServiceListVisible(t *testing.T) {
 	require.Contains(t, names, "Primary SSH")
 	require.Contains(t, names, "Kubernetes control plane")
 	require.Contains(t, names, "Team database")
+
+	teamScoped, err := svc.ListVisible(context.Background(), ListConnectionsOptions{
+		UserID:            user.ID,
+		TeamID:            team.ID,
+		IncludeTargets:    false,
+		IncludeVisibility: false,
+	})
+	require.NoError(t, err)
+	require.Len(t, teamScoped.Connections, 1)
+	require.Equal(t, "Team database", teamScoped.Connections[0].Name)
 }
 
 func TestConnectionServiceGetVisibleRespectsPermissions(t *testing.T) {
@@ -176,6 +188,74 @@ func TestConnectionServiceCountByFolder(t *testing.T) {
 
 	require.Equal(t, int64(2), counts["folder-1"])
 	require.Equal(t, int64(1), counts["unassigned"])
+}
+
+func TestConnectionServiceCountByProtocol(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+
+	user := models.User{
+		BaseModel: models.BaseModel{ID: "user-protocol"},
+		Username:  "proto",
+		Email:     "proto@example.com",
+		Password:  "secret",
+	}
+	require.NoError(t, db.Create(&user).Error)
+
+	team := models.Team{
+		BaseModel: models.BaseModel{ID: "team-proto"},
+		Name:      "Platform",
+	}
+	require.NoError(t, db.Create(&team).Error)
+	require.NoError(t, db.Model(&user).Association("Teams").Append(&team))
+
+	teamID := team.ID
+	require.NoError(t, db.Create(&models.Connection{
+		Name:        "Team SSH",
+		ProtocolID:  "ssh",
+		OwnerUserID: user.ID,
+		TeamID:      &teamID,
+	}).Error)
+
+	require.NoError(t, db.Create(&models.Connection{
+		Name:        "Team DB",
+		ProtocolID:  "postgres",
+		OwnerUserID: "other",
+		TeamID:      &teamID,
+		Visibility: []models.ConnectionVisibility{
+			{
+				TeamID:          &teamID,
+				PermissionScope: "view",
+			},
+		},
+	}).Error)
+
+	require.NoError(t, db.Create(&models.Connection{
+		Name:        "Personal RDP",
+		ProtocolID:  "rdp",
+		OwnerUserID: user.ID,
+	}).Error)
+
+	svc, err := NewConnectionService(db, &mockPermissionChecker{
+		grants: map[string]bool{
+			"connection.view": true,
+		},
+	})
+	require.NoError(t, err)
+
+	counts, err := svc.CountByProtocol(context.Background(), ListConnectionsOptions{UserID: user.ID})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), counts["rdp"])
+	require.Equal(t, int64(1), counts["ssh"])
+	require.Equal(t, int64(1), counts["postgres"])
+
+	teamCounts, err := svc.CountByProtocol(context.Background(), ListConnectionsOptions{
+		UserID: user.ID,
+		TeamID: team.ID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), teamCounts["ssh"])
+	require.Equal(t, int64(1), teamCounts["postgres"])
+	require.Zero(t, teamCounts["rdp"])
 }
 
 func mustJSON(t *testing.T, value any) []byte {

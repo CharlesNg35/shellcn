@@ -14,7 +14,12 @@ export function useProtocols(options?: UseQueryOptions<ProtocolListResult, ApiEr
   })
 }
 
-export function useAvailableProtocols(options?: UseQueryOptions<ProtocolListResult, ApiError>) {
+type ProtocolQueryOptions = Omit<
+  UseQueryOptions<ProtocolListResult, ApiError>,
+  'queryKey' | 'queryFn'
+>
+
+export function useAvailableProtocols(options?: ProtocolQueryOptions) {
   return useQuery<ProtocolListResult, ApiError>({
     queryKey: AVAILABLE_PROTOCOLS_QUERY_KEY,
     queryFn: fetchAvailableProtocols,

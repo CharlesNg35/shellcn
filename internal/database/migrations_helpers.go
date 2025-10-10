@@ -44,3 +44,21 @@ func assignRolePermissions(db *gorm.DB, roleID string, permissionIDs []string) e
 
 	return db.Model(&role).Association("Permissions").Append(toAttach)
 }
+
+func ensureRoleHasAllPermissions(db *gorm.DB, roleID string) error {
+	var role models.Role
+	if err := db.Where("id = ?", roleID).First(&role).Error; err != nil {
+		return err
+	}
+
+	var permissions []models.Permission
+	if err := db.Find(&permissions).Error; err != nil {
+		return err
+	}
+
+	if len(permissions) == 0 {
+		return nil
+	}
+
+	return db.Model(&role).Association("Permissions").Replace(permissions)
+}

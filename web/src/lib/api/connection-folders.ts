@@ -11,9 +11,13 @@ export interface ConnectionFolderNode {
   children?: ConnectionFolderNode[]
 }
 
-export async function fetchConnectionFolderTree() {
+export async function fetchConnectionFolderTree(teamId?: string) {
+  const params = teamId ? { team_id: teamId } : undefined
   const response = await apiClient.get<ApiResponse<ConnectionFolderNode[]>>(
-    `${FOLDER_ENDPOINT}/tree`
+    `${FOLDER_ENDPOINT}/tree`,
+    {
+      params,
+    }
   )
   return unwrapResponse(response)
 }

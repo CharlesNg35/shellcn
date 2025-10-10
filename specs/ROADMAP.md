@@ -119,6 +119,7 @@
 - [ ] Create useSessions hook
 - [ ] Add session activity timeline
 - [ ] Write tests for session management
+- [ ] Sidebar: surface active connection sessions once backend exposes activity feed (critical for final navigation polish)
 
 ### Phase 9: Audit Log Viewer (Week 9)
 

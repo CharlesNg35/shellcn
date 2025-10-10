@@ -38,16 +38,18 @@ type UpdateTeamInput struct {
 type TeamService struct {
 	db           *gorm.DB
 	auditService *AuditService
+	checker      PermissionChecker
 }
 
 // NewTeamService constructs a TeamService instance.
-func NewTeamService(db *gorm.DB, auditService *AuditService) (*TeamService, error) {
+func NewTeamService(db *gorm.DB, auditService *AuditService, checker PermissionChecker) (*TeamService, error) {
 	if db == nil {
 		return nil, errors.New("team service: db is required")
 	}
 	return &TeamService{
 		db:           db,
 		auditService: auditService,
+		checker:      checker,
 	}, nil
 }
 
@@ -133,8 +135,8 @@ func (s *TeamService) Update(ctx context.Context, id string, input UpdateTeamInp
 	return &team, nil
 }
 
-// GetByID loads a team with related membership.
-func (s *TeamService) GetByID(ctx context.Context, id string) (*models.Team, error) {
+// GetByID loads a team with related membership for the requesting user.
+func (s *TeamService) GetByID(ctx context.Context, id, requesterID string) (*models.Team, error) {
 	ctx = ensureContext(ctx)
 
 	var team models.Team
@@ -148,19 +150,84 @@ func (s *TeamService) GetByID(ctx context.Context, id string) (*models.Team, err
 	if err != nil {
 		return nil, fmt.Errorf("team service: get team: %w", err)
 	}
+
+	requesterID = strings.TrimSpace(requesterID)
+	if requesterID == "" {
+		return &team, nil
+	}
+
+	userCtx, err := s.userContext(ctx, requesterID)
+	if err != nil {
+		return nil, err
+	}
+
+	if userCtx.IsRoot {
+		return &team, nil
+	}
+
+	canManage, err := s.canManageTeams(ctx, requesterID)
+	if err != nil {
+		return nil, err
+	}
+	if canManage {
+		return &team, nil
+	}
+
+	if containsString(userCtx.TeamIDs, id) {
+		return &team, nil
+	}
+
+	canView, err := s.canViewTeams(ctx, requesterID)
+	if err != nil {
+		return nil, err
+	}
+	if !canView {
+		return nil, apperrors.ErrForbidden
+	}
+
 	return &team, nil
 }
 
-// List returns all teams.
-func (s *TeamService) List(ctx context.Context) ([]models.Team, error) {
+// List returns teams visible to the requesting user.
+func (s *TeamService) List(ctx context.Context, requesterID string) ([]models.Team, error) {
 	ctx = ensureContext(ctx)
 
-	var teams []models.Team
-	if err := s.db.WithContext(ctx).
+	requesterID = strings.TrimSpace(requesterID)
+	var userCtx teamUserContext
+	var err error
+	if requesterID != "" {
+		userCtx, err = s.userContext(ctx, requesterID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	canManage := false
+	if requesterID == "" {
+		canManage = true
+	} else if userCtx.IsRoot {
+		canManage = true
+	} else {
+		canManage, err = s.canManageTeams(ctx, requesterID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	query := s.db.WithContext(ctx).
 		Preload("Users").
 		Preload("Roles").
-		Order("created_at ASC").
-		Find(&teams).Error; err != nil {
+		Order("created_at ASC")
+
+	if !canManage {
+		if len(userCtx.TeamIDs) == 0 {
+			return []models.Team{}, nil
+		}
+		query = query.Where("id IN ?", userCtx.TeamIDs)
+	}
+
+	var teams []models.Team
+	if err := query.Find(&teams).Error; err != nil {
 		return nil, fmt.Errorf("team service: list teams: %w", err)
 	}
 
@@ -292,42 +359,32 @@ func (s *TeamService) RemoveMember(ctx context.Context, teamID, userID string) e
 }
 
 // ListMembers returns the users assigned to a team.
-func (s *TeamService) ListMembers(ctx context.Context, teamID string) ([]models.User, error) {
+func (s *TeamService) ListMembers(ctx context.Context, requesterID, teamID string) ([]models.User, error) {
 	ctx = ensureContext(ctx)
 
 	if strings.TrimSpace(teamID) == "" {
 		return nil, apperrors.NewBadRequest("team id is required")
 	}
 
-	var team models.Team
-	if err := s.db.WithContext(ctx).
-		Preload("Users.Roles").
-		First(&team, "id = ?", teamID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrTeamNotFound
-		}
-		return nil, fmt.Errorf("team service: load team: %w", err)
+	team, err := s.GetByID(ctx, teamID, requesterID)
+	if err != nil {
+		return nil, err
 	}
 
 	return team.Users, nil
 }
 
 // ListRoles returns roles assigned to the team.
-func (s *TeamService) ListRoles(ctx context.Context, teamID string) ([]models.Role, error) {
+func (s *TeamService) ListRoles(ctx context.Context, requesterID, teamID string) ([]models.Role, error) {
 	ctx = ensureContext(ctx)
 
 	if strings.TrimSpace(teamID) == "" {
 		return nil, apperrors.NewBadRequest("team id is required")
 	}
 
-	var team models.Team
-	if err := s.db.WithContext(ctx).
-		Preload("Roles").
-		First(&team, "id = ?", teamID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrTeamNotFound
-		}
-		return nil, fmt.Errorf("team service: load team roles: %w", err)
+	team, err := s.GetByID(ctx, teamID, requesterID)
+	if err != nil {
+		return nil, err
 	}
 
 	return team.Roles, nil
@@ -390,4 +447,63 @@ func (s *TeamService) SetRoles(ctx context.Context, teamID string, roleIDs []str
 	}
 
 	return result, nil
+}
+
+func (s *TeamService) canViewTeams(ctx context.Context, userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return true, nil
+	}
+	if s.checker == nil {
+		return true, nil
+	}
+	return s.checker.Check(ctx, userID, "team.view")
+}
+
+func (s *TeamService) canManageTeams(ctx context.Context, userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return true, nil
+	}
+	if s.checker == nil {
+		return true, nil
+	}
+	if ok, err := s.checker.Check(ctx, userID, "team.manage"); err != nil {
+		return false, err
+	} else if ok {
+		return true, nil
+	}
+	return s.checker.Check(ctx, userID, "permission.manage")
+}
+
+func (s *TeamService) userContext(ctx context.Context, userID string) (teamUserContext, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return teamUserContext{}, errors.New("team service: user id is required")
+	}
+
+	var user models.User
+	if err := s.db.WithContext(ctx).
+		Preload("Teams").
+		First(&user, "id = ?", userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return teamUserContext{}, apperrors.ErrNotFound
+		}
+		return teamUserContext{}, fmt.Errorf("team service: load user context: %w", err)
+	}
+
+	teamIDs := make([]string, 0, len(user.Teams))
+	for _, team := range user.Teams {
+		teamIDs = append(teamIDs, team.ID)
+	}
+
+	return teamUserContext{
+		ID:      user.ID,
+		IsRoot:  user.IsRoot,
+		TeamIDs: teamIDs,
+	}, nil
+}
+
+type teamUserContext struct {
+	ID      string
+	IsRoot  bool
+	TeamIDs []string
 }

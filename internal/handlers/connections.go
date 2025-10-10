@@ -38,6 +38,7 @@ func (h *ConnectionHandler) List(c *gin.Context) {
 	result, err := h.svc.ListVisible(ctx, services.ListConnectionsOptions{
 		UserID:            userID,
 		ProtocolID:        c.Query("protocol_id"),
+		TeamID:            strings.TrimSpace(c.Query("team_id")),
 		FolderID:          c.Query("folder_id"),
 		Search:            c.Query("search"),
 		IncludeTargets:    includeTargets,
@@ -57,6 +58,35 @@ func (h *ConnectionHandler) List(c *gin.Context) {
 		TotalPages: computeTotalPages(result.Total, int64(result.PerPage)),
 	}
 	response.SuccessWithMeta(c, http.StatusOK, result.Connections, meta)
+}
+
+// Summary returns connection counts grouped by protocol for the authenticated user.
+func (h *ConnectionHandler) Summary(c *gin.Context) {
+	userID := c.GetString(middleware.CtxUserIDKey)
+	if userID == "" {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+
+	ctx := requestContext(c)
+	counts, err := h.svc.CountByProtocol(ctx, services.ListConnectionsOptions{
+		UserID: userID,
+		TeamID: strings.TrimSpace(c.Query("team_id")),
+	})
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	summaries := make([]protocolCount, 0, len(counts))
+	for protocolID, count := range counts {
+		summaries = append(summaries, protocolCount{
+			ProtocolID: protocolID,
+			Count:      count,
+		})
+	}
+
+	response.Success(c, http.StatusOK, summaries)
 }
 
 // Get fetches a single connection if the user can access it.
@@ -108,4 +138,9 @@ func computeTotalPages(total, perPage int64) int {
 		return 1
 	}
 	return int(pages)
+}
+
+type protocolCount struct {
+	ProtocolID string `json:"protocol_id"`
+	Count      int64  `json:"count"`
 }

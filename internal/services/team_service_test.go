@@ -17,7 +17,13 @@ func TestTeamServiceMembershipLifecycle(t *testing.T) {
 	auditSvc, err := NewAuditService(db)
 	require.NoError(t, err)
 
-	teamSvc, err := NewTeamService(db, auditSvc)
+	teamSvc, err := NewTeamService(db, auditSvc, &mockPermissionChecker{
+		grants: map[string]bool{
+			"team.view":         true,
+			"team.manage":       true,
+			"permission.manage": true,
+		},
+	})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -41,7 +47,7 @@ func TestTeamServiceMembershipLifecycle(t *testing.T) {
 	err = teamSvc.AddMember(ctx, team.ID, user.ID)
 	require.NoError(t, err)
 
-	members, err := teamSvc.ListMembers(ctx, team.ID)
+	members, err := teamSvc.ListMembers(ctx, user.ID, team.ID)
 	require.NoError(t, err)
 	require.Len(t, members, 1)
 	require.Equal(t, user.ID, members[0].ID)
@@ -61,7 +67,13 @@ func TestTeamServiceUpdateAndList(t *testing.T) {
 	auditSvc, err := NewAuditService(db)
 	require.NoError(t, err)
 
-	teamSvc, err := NewTeamService(db, auditSvc)
+	teamSvc, err := NewTeamService(db, auditSvc, &mockPermissionChecker{
+		grants: map[string]bool{
+			"team.view":         true,
+			"team.manage":       true,
+			"permission.manage": true,
+		},
+	})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -77,7 +89,7 @@ func TestTeamServiceUpdateAndList(t *testing.T) {
 	require.Equal(t, name, updated.Name)
 
 	// Verify team was updated
-	found, err := teamSvc.GetByID(ctx, team.ID)
+	found, err := teamSvc.GetByID(ctx, team.ID, "")
 	require.NoError(t, err)
 	require.Equal(t, name, found.Name)
 }
@@ -110,7 +122,13 @@ func TestTeamServiceSetRoles(t *testing.T) {
 	auditSvc, err := NewAuditService(db)
 	require.NoError(t, err)
 
-	teamSvc, err := NewTeamService(db, auditSvc)
+	teamSvc, err := NewTeamService(db, auditSvc, &mockPermissionChecker{
+		grants: map[string]bool{
+			"team.view":         true,
+			"team.manage":       true,
+			"permission.manage": true,
+		},
+	})
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -135,7 +153,7 @@ func TestTeamServiceSetRoles(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, roles, 2)
 
-	saved, err := teamSvc.ListRoles(ctx, team.ID)
+	saved, err := teamSvc.ListRoles(ctx, "", team.ID)
 	require.NoError(t, err)
 	require.Len(t, saved, 2)
 

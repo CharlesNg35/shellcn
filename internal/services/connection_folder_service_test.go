@@ -74,7 +74,7 @@ func TestConnectionFolderServiceLifecycle(t *testing.T) {
 		OwnerUserID: user.ID,
 	}).Error)
 
-	tree, err := folderSvc.ListTree(context.Background(), user.ID)
+	tree, err := folderSvc.ListTree(context.Background(), user.ID, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, tree)
 
@@ -86,7 +86,7 @@ func TestConnectionFolderServiceLifecycle(t *testing.T) {
 
 	require.NoError(t, folderSvc.Delete(context.Background(), user.ID, child.ID))
 
-	remainingTree, err := folderSvc.ListTree(context.Background(), user.ID)
+	remainingTree, err := folderSvc.ListTree(context.Background(), user.ID, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, remainingTree)
 }

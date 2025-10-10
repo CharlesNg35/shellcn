@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
 import { fetchConnectionFolderTree } from '@/lib/api/connection-folders'
 import type { ConnectionFolderNode } from '@/types/connections'
@@ -10,10 +11,15 @@ type FolderQueryOptions = Omit<
   'queryKey' | 'queryFn'
 >
 
-export function useConnectionFolders(options?: FolderQueryOptions) {
+export function useConnectionFolders(teamId?: string, options?: FolderQueryOptions) {
+  const queryKey = useMemo(
+    () => [...CONNECTION_FOLDERS_QUERY_KEY, teamId ?? 'all'] as const,
+    [teamId]
+  )
+
   return useQuery<ConnectionFolderNode[], ApiError>({
-    queryKey: CONNECTION_FOLDERS_QUERY_KEY,
-    queryFn: fetchConnectionFolderTree,
+    queryKey,
+    queryFn: () => fetchConnectionFolderTree(teamId),
     staleTime: 60_000,
     ...options,
   })

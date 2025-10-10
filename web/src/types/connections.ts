@@ -60,3 +60,8 @@ export interface ConnectionRecord {
 }
 
 export type ConnectionStatus = 'ready' | 'connected' | 'disconnected' | 'error' | 'unknown'
+
+export interface ConnectionProtocolSummary {
+  protocol_id: string
+  count: number
+}

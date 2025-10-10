@@ -14,8 +14,8 @@ import { getFilteredNavigationGroups, type NavigationItem } from '@/lib/navigati
 import { cn } from '@/lib/utils/cn'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
-import { useConnectionFolders } from '@/hooks/useConnectionFolders'
-import { FolderTree } from '@/components/connections/FolderTree'
+import { useConnectionSummary } from '@/hooks/useConnectionSummary'
+import { useAvailableProtocols } from '@/hooks/useProtocols'
 import { PERMISSIONS } from '@/constants/permissions'
 
 interface SidebarProps {
@@ -26,12 +26,31 @@ interface SidebarProps {
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const location = useLocation()
   const { hasPermission } = usePermissions()
-  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
-  const activeFolderId =
-    searchParams.get('folder') ?? (searchParams.get('view') === 'unassigned' ? 'unassigned' : null)
-  const { data: folderTree, isLoading: foldersLoading } = useConnectionFolders({
-    enabled: hasPermission(PERMISSIONS.CONNECTION_FOLDER.VIEW),
+
+  const { data: protocolSummary, isLoading: summaryLoading } = useConnectionSummary(undefined, {
+    enabled: hasPermission(PERMISSIONS.CONNECTION.VIEW),
   })
+  const { data: availableProtocols } = useAvailableProtocols({
+    enabled: hasPermission(PERMISSIONS.CONNECTION.VIEW),
+  })
+  const protocols = useMemo(() => availableProtocols?.data ?? [], [availableProtocols?.data])
+  const summaryByProtocol = useMemo(() => {
+    if (!protocolSummary?.length) {
+      return []
+    }
+    const lookup = protocols.reduce<Record<string, string>>((acc, protocol) => {
+      acc[protocol.id] = protocol.name
+      return acc
+    }, {})
+    return protocolSummary
+      .filter((item) => item.count > 0)
+      .map((item) => ({
+        id: item.protocol_id,
+        name: lookup[item.protocol_id] ?? item.protocol_id.toUpperCase(),
+        count: item.count,
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [protocolSummary, protocols])
 
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -73,10 +92,10 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           />
         ))}
 
-        {hasPermission(PERMISSIONS.CONNECTION_FOLDER.VIEW) ? (
+        {hasPermission(PERMISSIONS.CONNECTION.VIEW) ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <span>Connection Folders</span>
+              <span>Protocols</span>
               <Link
                 to="/connections/new"
                 className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
@@ -85,17 +104,46 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                 New
               </Link>
             </div>
-            {foldersLoading ? (
+            {summaryLoading ? (
               <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading folders...
+                Loading protocols...
+              </div>
+            ) : summaryByProtocol.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-xs text-muted-foreground">
+                No active connections yet
               </div>
             ) : (
-              <FolderTree
-                nodes={folderTree}
-                activeFolderId={activeFolderId}
-                basePath="/connections"
-              />
+              <div className="space-y-1">
+                <NavLink
+                  to="/connections"
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
+                      isActive ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    )
+                  }
+                >
+                  <span>All Connections</span>
+                </NavLink>
+                {summaryByProtocol.map((item) => (
+                  <NavLink
+                    key={item.id}
+                    to={`/connections?protocol_id=${encodeURIComponent(item.id)}`}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
+                        isActive ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )
+                    }
+                  >
+                    <span className="truncate">{item.name}</span>
+                    <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                      {item.count}
+                    </span>
+                  </NavLink>
+                ))}
+              </div>
             )}
           </div>
         ) : null}

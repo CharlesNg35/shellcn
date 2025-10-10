@@ -22,3 +22,16 @@ func normaliseIDs(values []string) []string {
 	}
 	return out
 }
+
+func containsString(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+	for _, value := range values {
+		if strings.TrimSpace(value) == target {
+			return true
+		}
+	}
+	return false
+}

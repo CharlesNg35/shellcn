@@ -67,6 +67,7 @@ type ConnectionFolderDTO struct {
 type ListConnectionsOptions struct {
 	UserID            string
 	ProtocolID        string
+	TeamID            string
 	FolderID          string
 	Search            string
 	IncludeTargets    bool
@@ -242,6 +243,53 @@ func (s *ConnectionService) CountByFolder(ctx context.Context, opts ListConnecti
 	return result, nil
 }
 
+// CountByProtocol returns visible connection counts keyed by protocol ID.
+func (s *ConnectionService) CountByProtocol(ctx context.Context, opts ListConnectionsOptions) (map[string]int64, error) {
+	ctx = ensureContext(ctx)
+	userCtx, err := s.userContext(ctx, opts.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	canView, err := s.canViewConnections(ctx, opts.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if !canView && !userCtx.IsRoot {
+		return map[string]int64{}, nil
+	}
+
+	manageAll, err := s.canManageConnections(ctx, opts.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	query := s.db.WithContext(ctx).
+		Model(&models.Connection{}).
+		Select("connections.protocol_id, COUNT(DISTINCT connections.id) AS total").
+		Group("connections.protocol_id")
+
+	query = s.applyFilters(query, opts, userCtx, manageAll)
+
+	var rows []struct {
+		ProtocolID string
+		Total      int64
+	}
+	if err := query.Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("connection service: count by protocol: %w", err)
+	}
+
+	result := make(map[string]int64, len(rows))
+	for _, row := range rows {
+		if row.ProtocolID == "" {
+			continue
+		}
+		result[row.ProtocolID] = row.Total
+	}
+
+	return result, nil
+}
+
 func (s *ConnectionService) preloadScopes(ctx context.Context, opts ListConnectionsOptions) *gorm.DB {
 	db := s.db.WithContext(ctx).Model(&models.Connection{})
 	db = db.Preload("Folder")
@@ -257,6 +305,10 @@ func (s *ConnectionService) preloadScopes(ctx context.Context, opts ListConnecti
 func (s *ConnectionService) applyFilters(db *gorm.DB, opts ListConnectionsOptions, userCtx userContext, allowAll bool) *gorm.DB {
 	if protocol := strings.TrimSpace(opts.ProtocolID); protocol != "" {
 		db = db.Where("connections.protocol_id = ?", protocol)
+	}
+
+	if teamID := strings.TrimSpace(opts.TeamID); teamID != "" {
+		db = db.Where("connections.team_id = ?", teamID)
 	}
 
 	if folderID := strings.TrimSpace(opts.FolderID); folderID != "" {

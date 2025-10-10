@@ -59,8 +59,8 @@ func NewConnectionFolderService(db *gorm.DB, checker PermissionChecker, connecti
 	}, nil
 }
 
-// ListTree returns the accessible folder hierarchy for a user.
-func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string) ([]ConnectionFolderNode, error) {
+// ListTree returns the accessible folder hierarchy for a user, optionally scoped to a team.
+func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string, teamID *string) ([]ConnectionFolderNode, error) {
 	ctx = ensureContext(ctx)
 	userCtx, err := s.resolveUserContext(ctx, userID)
 	if err != nil {
@@ -69,6 +69,11 @@ func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string) (
 
 	var folders []models.ConnectionFolder
 	query := s.db.WithContext(ctx).Model(&models.ConnectionFolder{}).Order("ordering ASC, name ASC")
+	if teamID != nil {
+		if trimmed := strings.TrimSpace(*teamID); trimmed != "" {
+			query = query.Where("team_id = ?", trimmed)
+		}
+	}
 	if !userCtx.IsRoot {
 		clauses := []string{"owner_user_id = ?"}
 		args := []any{userCtx.ID}
@@ -85,6 +90,12 @@ func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string) (
 
 	counts, err := s.connectionSvc.CountByFolder(ctx, ListConnectionsOptions{
 		UserID: userID,
+		TeamID: func() string {
+			if teamID == nil {
+				return ""
+			}
+			return strings.TrimSpace(*teamID)
+		}(),
 	})
 	if err != nil {
 		return nil, err

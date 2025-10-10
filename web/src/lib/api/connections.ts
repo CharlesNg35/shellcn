@@ -1,5 +1,10 @@
 import type { ApiMeta, ApiResponse } from '@/types/api'
-import type { ConnectionRecord, ConnectionTarget, ConnectionVisibility } from '@/types/connections'
+import type {
+  ConnectionRecord,
+  ConnectionTarget,
+  ConnectionVisibility,
+  ConnectionProtocolSummary,
+} from '@/types/connections'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
 import { isApiSuccess } from '@/types/api'
@@ -134,6 +139,7 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
 
 export interface FetchConnectionsParams {
   protocol_id?: string
+  team_id?: string
   folder_id?: string
   search?: string
   include?: string
@@ -170,4 +176,22 @@ export async function fetchConnectionById(id: string, include?: string): Promise
   )
   const data = unwrapResponse(response)
   return transformConnection(data)
+}
+
+interface ConnectionSummaryResponse {
+  protocol_id: string
+  count: number
+}
+
+export async function fetchConnectionSummary(params?: {
+  team_id?: string
+}): Promise<ConnectionProtocolSummary[]> {
+  const response = await apiClient.get<ApiResponse<ConnectionSummaryResponse[]>>(
+    `${CONNECTIONS_ENDPOINT}/summary`,
+    {
+      params,
+    }
+  )
+  const data = unwrapResponse(response)
+  return data.map((item) => ({ protocol_id: item.protocol_id, count: item.count }))
 }
