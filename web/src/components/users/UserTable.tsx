@@ -52,7 +52,7 @@ export function UserTable({
           <Checkbox
             checked={table.getIsAllPageRowsSelected()}
             indeterminate={table.getIsSomePageRowsSelected()}
-            onCheckedChange={(checked) => table.toggleAllPageRowsSelected(checked)}
+            onCheckedChange={(checked) => table.toggleAllPageRowsSelected(!!checked)}
             disabled={!table.getRowModel().rows.length}
             aria-label="Select all users"
           />
@@ -60,7 +60,7 @@ export function UserTable({
         cell: ({ row }) => (
           <Checkbox
             checked={row.getIsSelected()}
-            onCheckedChange={(checked) => row.toggleSelected(checked)}
+            onCheckedChange={(checked) => row.toggleSelected(!!checked)}
             aria-label={`Select ${row.original.username}`}
           />
         ),

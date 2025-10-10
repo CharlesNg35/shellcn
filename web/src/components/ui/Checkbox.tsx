@@ -8,10 +8,15 @@ export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement
 }
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
-  ({ className, indeterminate, onChange, onCheckedChange, checked, ...props }, ref) => {
+  ({ className, indeterminate, onChange, onCheckedChange, checked, disabled, ...props }, ref) => {
     const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
       onChange?.(event)
       onCheckedChange?.(event.target.checked)
+    }
+
+    const handleClick = () => {
+      if (disabled) return
+      onCheckedChange?.(!checked)
     }
 
     return (
@@ -22,15 +27,17 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           className="peer sr-only"
           checked={checked}
           onChange={handleChange}
+          disabled={disabled}
           {...props}
         />
         <div
+          onClick={handleClick}
           className={cn(
             'flex h-4 w-4 items-center justify-center rounded border border-input bg-background',
             'peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2',
             'peer-disabled:cursor-not-allowed peer-disabled:opacity-50',
             'peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground',
-            'cursor-pointer transition-colors hover:border-primary/50',
+            disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-primary/50',
             className
           )}
         >
