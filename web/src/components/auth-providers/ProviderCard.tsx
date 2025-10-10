@@ -66,12 +66,6 @@ export function ProviderCard({
           }
         )
         break
-      case 'invite':
-        metadata.push({
-          label: 'Email verification',
-          value: provider.requireEmailVerification ? 'Required' : 'Optional',
-        })
-        break
       default:
         metadata.push(
           {

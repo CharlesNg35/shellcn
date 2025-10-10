@@ -668,16 +668,6 @@ Response:
       "description": "Sign in with Google",
       "icon": "google",
       "created_at": "2025-10-02T14:00:00Z"
-    },
-    {
-      "id": "prov_03H...",
-      "type": "invite",
-      "name": "Email Invitation",
-      "enabled": false,
-      "require_email_verification": true,
-      "description": "Invite users via email",
-      "icon": "mail",
-      "created_at": "2025-10-01T10:00:00Z"
     }
   ]
 }
@@ -723,6 +713,80 @@ Content-Type: application/json
       "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
       "last_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
     }
+  }
+}
+```
+
+### User Invitations
+
+Invitations allow administrators to onboard users without manually setting initial passwords. Invited users receive a link to choose their credentials and are signed in automatically after completion.
+
+| Method | Path                         | Description                                           | Permission     | Handler                     |
+| ------ | ---------------------------- | ----------------------------------------------------- | -------------- | --------------------------- |
+| GET    | `/api/invites`               | List invitations with status metadata.                | `user.invite`  | `InviteHandler.List`        |
+| POST   | `/api/invites`               | Create a new invite and (optionally) email the link.  | `user.invite`  | `InviteHandler.Create`      |
+| DELETE | `/api/invites/:id`           | Revoke a pending invitation.                          | `user.invite`  | `InviteHandler.Delete`      |
+| POST   | `/api/auth/invite/redeem`    | Accept an invitation and create the user account.     | Public         | `InviteHandler.Redeem`      |
+
+**Sample** — Create Invitation:
+
+```http
+POST /api/invites
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "email": "new.user@example.com"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "invite": {
+      "id": "inv_01H...",
+      "email": "new.user@example.com",
+      "status": "pending",
+      "created_at": "2025-10-02T15:00:00Z",
+      "expires_at": "2025-10-05T15:00:00Z"
+    },
+    "token": "yktLp...",
+    "link": "/invite/accept?token=yktLp..."
+  }
+}
+```
+
+**Sample** — Redeem Invitation:
+
+```http
+POST /api/auth/invite/redeem
+Content-Type: application/json
+
+{
+  "token": "yktLp...",
+  "username": "new.user",
+  "password": "StrongPassword123!",
+  "first_name": "New",
+  "last_name": "User"
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "user": {
+      "id": "usr_01H...",
+      "username": "new.user",
+      "email": "new.user@example.com",
+      "is_active": true
+    },
+    "message": "Account created successfully. You can now sign in."
   }
 }
 ```

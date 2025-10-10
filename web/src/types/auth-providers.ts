@@ -1,4 +1,4 @@
-export type AuthProviderType = 'local' | 'invite' | 'oidc' | 'saml' | 'ldap' | (string & {})
+export type AuthProviderType = 'local' | 'oidc' | 'saml' | 'ldap' | (string & {})
 
 export interface AuthProviderRecord {
   id: string
@@ -31,11 +31,6 @@ export interface LocalAuthSettings {
   allowRegistration: boolean
   requireEmailVerification: boolean
   allowPasswordReset: boolean
-}
-
-export interface InviteAuthSettings {
-  enabled: boolean
-  requireEmailVerification: boolean
 }
 
 export interface OIDCProviderConfig {

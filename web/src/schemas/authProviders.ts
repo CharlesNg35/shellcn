@@ -6,11 +6,6 @@ export const localAuthSettingsSchema = z.object({
   allowPasswordReset: z.boolean(),
 })
 
-export const inviteAuthSettingsSchema = z.object({
-  enabled: z.boolean(),
-  requireEmailVerification: z.boolean(),
-})
-
 export const oidcConfigSchema = z.object({
   issuer: z.string().trim().url('Issuer must be a valid URL'),
   clientId: z.string().trim().min(1, 'Client ID is required'),

@@ -46,3 +46,17 @@ export const mfaVerificationSchema = z.object({
     .min(6, 'Code must be at least 6 digits')
     .max(10, 'Code must be at most 10 digits'),
 })
+
+export const inviteAcceptSchema = z
+  .object({
+    token: z.string().min(1, 'Invite token is required'),
+    username: z.string().min(3, 'Username must be at least 3 characters').max(64),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    confirmPassword: z.string().min(8, 'Confirm password is required'),
+    firstName: z.string().trim().max(128).optional(),
+    lastName: z.string().trim().max(128).optional(),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ['confirmPassword'],
+  })

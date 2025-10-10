@@ -18,6 +18,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/realtime"
 	"github.com/charlesng35/shellcn/internal/services"
+	"github.com/charlesng35/shellcn/pkg/mail"
 	"github.com/charlesng35/shellcn/web"
 )
 
@@ -72,6 +73,33 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 
+	var mailer mail.Mailer
+	if cfg.Email.SMTP.Enabled {
+		mailer, err = mail.NewSMTPMailer(mail.SMTPSettings{
+			Enabled:  cfg.Email.SMTP.Enabled,
+			Host:     cfg.Email.SMTP.Host,
+			Port:     cfg.Email.SMTP.Port,
+			Username: cfg.Email.SMTP.Username,
+			Password: cfg.Email.SMTP.Password,
+			From:     cfg.Email.SMTP.From,
+			UseTLS:   cfg.Email.SMTP.UseTLS,
+			Timeout:  cfg.Email.SMTP.Timeout,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("configure smtp mailer: %w", err)
+		}
+	}
+
+	inviteSvc, err := services.NewInviteService(db, mailer, services.WithInviteBaseURL("/invite/accept"))
+	if err != nil {
+		return nil, err
+	}
+
+	verificationSvc, err := services.NewEmailVerificationService(db, mailer)
+	if err != nil {
+		return nil, err
+	}
+
 	providerRegistry := providers.NewRegistry()
 	if err := providerRegistry.Register(providers.NewOIDCDescriptor(providers.OIDCOptions{})); err != nil {
 		return nil, err
@@ -94,6 +122,13 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	authProviderHandler := handlers.NewAuthProviderHandler(authProviderSvc)
 	authHandler := handlers.NewAuthHandler(db, jwt, sessions, authProviderSvc, ssoManager)
 
+	userSvcForInvites, err := services.NewUserService(db, auditSvc)
+	if err != nil {
+		return nil, err
+	}
+
+	inviteHandler := handlers.NewInviteHandler(inviteSvc, userSvcForInvites, verificationSvc)
+
 	// Auth routes
 
 	// Protected routes
@@ -111,6 +146,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		ProviderHandler:   authProviderHandler,
 		SSOHandler:        ssoHandler,
 		PermissionChecker: checker,
+		InviteHandler:     inviteHandler,
 	})
 
 	userHandler, err := handlers.NewUserHandler(db)

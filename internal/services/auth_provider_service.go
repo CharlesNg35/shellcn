@@ -142,6 +142,9 @@ func (s *AuthProviderService) GetEnabledPublic(ctx context.Context) ([]PublicPro
 
 	result := make([]PublicProvider, 0, len(providers))
 	for _, provider := range providers {
+		if provider.Type == "invite" {
+			continue
+		}
 		flow := "redirect"
 		switch provider.Type {
 		case "local", "ldap":

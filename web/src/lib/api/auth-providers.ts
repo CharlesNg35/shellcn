@@ -5,7 +5,6 @@ import {
   type AuthProviderPublicRecord,
   type AuthProviderRecord,
   type AuthProviderType,
-  type InviteAuthSettings,
   type LDAPProviderConfig,
   type LocalAuthSettings,
   type OIDCProviderConfig,
@@ -236,17 +235,6 @@ export async function updateLocalAuthSettings(payload: LocalAuthSettings): Promi
   unwrapResponse(response)
 }
 
-export async function updateInviteAuthSettings(payload: InviteAuthSettings): Promise<void> {
-  const response = await apiClient.post<ApiResponse<UpdateResponse>>(
-    `${AUTH_PROVIDERS_BASE}/invite/settings`,
-    {
-      enabled: payload.enabled,
-      require_email_verification: payload.requireEmailVerification,
-    }
-  )
-  unwrapResponse(response)
-}
-
 export async function configureOIDCProvider(payload: {
   enabled: boolean
   allowRegistration: boolean
@@ -345,7 +333,6 @@ export const authProvidersApi = {
   getPublic: getPublicAuthProviders,
   getDetails: getAuthProviderDetails,
   updateLocalSettings: updateLocalAuthSettings,
-  updateInviteSettings: updateInviteAuthSettings,
   configureOIDC: configureOIDCProvider,
   configureSAML: configureSAMLProvider,
   configureLDAP: configureLDAPProvider,

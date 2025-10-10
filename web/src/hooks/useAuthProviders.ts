@@ -66,7 +66,7 @@ export function useAuthProviderDetails(
   options?: { enabled?: boolean }
 ): UseQueryResult<AuthProviderDetails<LDAPProviderConfig>, ApiError>
 export function useAuthProviderDetails(
-  providerType: 'local' | 'invite',
+  providerType: 'local',
   options?: { enabled?: boolean }
 ): UseQueryResult<AuthProviderDetails<undefined>, ApiError>
 export function useAuthProviderDetails<T extends AuthProviderType>(

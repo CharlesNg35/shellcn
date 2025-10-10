@@ -4,6 +4,7 @@ export const PERMISSIONS = {
     CREATE: 'user.create',
     EDIT: 'user.edit',
     DELETE: 'user.delete',
+    INVITE: 'user.invite',
   },
   TEAM: {
     VIEW: 'team.view',
@@ -57,6 +58,7 @@ export const PERMISSION_IDS = [
   PERMISSIONS.USER.CREATE,
   PERMISSIONS.USER.EDIT,
   PERMISSIONS.USER.DELETE,
+  PERMISSIONS.USER.INVITE,
   PERMISSIONS.TEAM.VIEW,
   PERMISSIONS.TEAM.MANAGE,
   PERMISSIONS.CONNECTION.VIEW,

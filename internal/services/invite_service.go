@@ -28,6 +28,8 @@ var (
 	ErrInviteExpired = errors.New("invite: expired")
 	// ErrInviteAlreadyUsed signals that the invite has already been accepted.
 	ErrInviteAlreadyUsed = errors.New("invite: already accepted")
+	// ErrInviteAlreadyPending indicates an invite already exists for the email.
+	ErrInviteAlreadyPending = errors.New("invite: already pending")
 )
 
 // InviteOption customises InviteService behaviour.
@@ -99,27 +101,39 @@ func NewInviteService(db *gorm.DB, mailer mail.Mailer, opts ...InviteOption) (*I
 }
 
 // GenerateInvite creates a new invite token for the provided email address and optionally dispatches an email.
-func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy string) (token, link string, err error) {
+func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy string) (invite *models.UserInvite, token, link string, err error) {
+	ctx = ensureContext(ctx)
+
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
-		return "", "", errors.New("invite service: email is required")
+		return nil, "", "", errors.New("invite service: email is required")
+	}
+
+	now := s.now()
+
+	var existing models.UserInvite
+	if err := s.db.WithContext(ctx).
+		Where("LOWER(email) = ? AND accepted_at IS NULL AND expires_at > ?", email, now).
+		Take(&existing).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, "", "", fmt.Errorf("invite service: check existing invites: %w", err)
+	} else if err == nil {
+		return nil, "", "", ErrInviteAlreadyPending
 	}
 
 	rawToken, err := crypto.GenerateToken(s.tokenLength)
 	if err != nil {
-		return "", "", fmt.Errorf("invite service: generate token: %w", err)
+		return nil, "", "", fmt.Errorf("invite service: generate token: %w", err)
 	}
 
-	now := s.now()
-	invite := models.UserInvite{
+	invite = &models.UserInvite{
 		Email:     email,
 		TokenHash: tokenHash(rawToken),
 		InvitedBy: strings.TrimSpace(invitedBy),
 		ExpiresAt: now.Add(s.expiry),
 	}
 
-	if err := s.db.WithContext(ctx).Create(&invite).Error; err != nil {
-		return "", "", fmt.Errorf("invite service: create invite: %w", err)
+	if err := s.db.WithContext(ctx).Create(invite).Error; err != nil {
+		return nil, "", "", fmt.Errorf("invite service: create invite: %w", err)
 	}
 
 	link = s.inviteLink(rawToken)
@@ -131,15 +145,34 @@ func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy str
 			Body:    s.inviteBody(link, email),
 		}
 		if mailErr := s.mailer.Send(ctx, message); mailErr != nil && !errors.Is(mailErr, mail.ErrSMTPDisabled) {
-			return "", "", fmt.Errorf("invite service: send email: %w", mailErr)
+			return nil, "", "", fmt.Errorf("invite service: send email: %w", mailErr)
 		}
 	}
 
-	return rawToken, link, nil
+	return invite, rawToken, link, nil
 }
 
 // RedeemInvite validates the token and marks the invite as accepted.
 func (s *InviteService) RedeemInvite(ctx context.Context, token string) (*models.UserInvite, error) {
+	ctx = ensureContext(ctx)
+
+	invite, err := s.ValidateToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.AcceptInvite(ctx, invite.ID); err != nil {
+		return nil, err
+	}
+
+	invite.AcceptedAt = ptrTime(s.now())
+	return invite, nil
+}
+
+// ValidateToken ensures the token corresponds to a pending invite that has not expired.
+func (s *InviteService) ValidateToken(ctx context.Context, token string) (*models.UserInvite, error) {
+	ctx = ensureContext(ctx)
+
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, errors.New("invite service: token is required")
@@ -163,16 +196,109 @@ func (s *InviteService) RedeemInvite(ctx context.Context, token string) (*models
 		return nil, ErrInviteAlreadyUsed
 	}
 
-	if err := s.db.WithContext(ctx).
-		Model(&invite).
-		Updates(map[string]any{"accepted_at": now}).Error; err != nil {
-		return nil, fmt.Errorf("invite service: mark accepted: %w", err)
-	}
-
-	invite.AcceptedAt = &now
 	return &invite, nil
 }
 
+// AcceptInvite marks a pending invite as accepted.
+func (s *InviteService) AcceptInvite(ctx context.Context, inviteID string) error {
+	ctx = ensureContext(ctx)
+
+	if strings.TrimSpace(inviteID) == "" {
+		return errors.New("invite service: invite id is required")
+	}
+
+	now := s.now()
+
+	result := s.db.WithContext(ctx).
+		Model(&models.UserInvite{}).
+		Where("id = ? AND accepted_at IS NULL", inviteID).
+		Update("accepted_at", now)
+
+	if result.Error != nil {
+		return fmt.Errorf("invite service: mark accepted: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		// Determine reason
+		var invite models.UserInvite
+		err := s.db.WithContext(ctx).First(&invite, "id = ?", inviteID).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrInviteNotFound
+		}
+		if err != nil {
+			return fmt.Errorf("invite service: reload invite: %w", err)
+		}
+		if invite.AcceptedAt != nil {
+			return ErrInviteAlreadyUsed
+		}
+		if invite.ExpiresAt.Before(now) {
+			return ErrInviteExpired
+		}
+		return ErrInviteNotFound
+	}
+
+	return nil
+}
+
+// List returns invites, optionally filtered by status or search query.
+func (s *InviteService) List(ctx context.Context, status, search string) ([]models.UserInvite, error) {
+	ctx = ensureContext(ctx)
+
+	query := s.db.WithContext(ctx).Model(&models.UserInvite{})
+	now := s.now()
+
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "pending":
+		query = query.Where("accepted_at IS NULL AND expires_at > ?", now)
+	case "expired":
+		query = query.Where("accepted_at IS NULL AND expires_at <= ?", now)
+	case "accepted":
+		query = query.Where("accepted_at IS NOT NULL")
+	}
+
+	if trimmed := strings.ToLower(strings.TrimSpace(search)); trimmed != "" {
+		like := "%" + trimmed + "%"
+		query = query.Where("LOWER(email) LIKE ?", like)
+	}
+
+	var invites []models.UserInvite
+	if err := query.Order("created_at DESC").Find(&invites).Error; err != nil {
+		return nil, fmt.Errorf("invite service: list invites: %w", err)
+	}
+
+	return invites, nil
+}
+
+// Delete removes an invite if it has not been accepted already.
+func (s *InviteService) Delete(ctx context.Context, inviteID string) error {
+	ctx = ensureContext(ctx)
+
+	if strings.TrimSpace(inviteID) == "" {
+		return errors.New("invite service: invite id is required")
+	}
+
+	var invite models.UserInvite
+	if err := s.db.WithContext(ctx).First(&invite, "id = ?", inviteID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrInviteNotFound
+		}
+		return fmt.Errorf("invite service: load invite: %w", err)
+	}
+	if invite.AcceptedAt != nil {
+		return ErrInviteAlreadyUsed
+	}
+
+	if err := s.db.WithContext(ctx).Delete(&models.UserInvite{}, "id = ?", inviteID).Error; err != nil {
+		return fmt.Errorf("invite service: delete invite: %w", err)
+	}
+
+	return nil
+}
+
+func ptrTime(t time.Time) *time.Time {
+	return &t
+}
+
+// RedeemInvite validates the token and marks the invite as accepted.
 func (s *InviteService) inviteLink(token string) string {
 	if s.baseURL == "" {
 		return token

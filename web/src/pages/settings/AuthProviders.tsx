@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Building, Key, Mail, Shield, ShieldCheck } from 'lucide-react'
+import { Building, Key, Shield, ShieldCheck } from 'lucide-react'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { ProviderCard } from '@/components/auth-providers/ProviderCard'
 import { LocalSettingsForm } from '@/components/auth-providers/LocalSettingsForm'
-import { InviteSettingsForm } from '@/components/auth-providers/InviteSettingsForm'
 import { OIDCConfigForm } from '@/components/auth-providers/OIDCConfigForm'
 import { SAMLConfigForm } from '@/components/auth-providers/SAMLConfigForm'
 import { LDAPConfigForm } from '@/components/auth-providers/LDAPConfigForm'
@@ -38,12 +37,6 @@ const PROVIDER_DEFINITIONS: ProviderDefinition[] = [
     description: 'Built-in username and password authentication managed by ShellCN.',
     icon: Key,
     disableToggle: true,
-  },
-  {
-    type: 'invite',
-    name: 'Email Invitations',
-    description: 'Provision new users via invitation links with optional verification.',
-    icon: Mail,
   },
   {
     type: 'oidc',
@@ -158,7 +151,7 @@ export function AuthProviders() {
       <div className="space-y-6">
         <PageHeader
           title="Authentication Providers"
-          description="Enable and configure authentication options for your organization. Manage local login policies, invitation workflows, and external identity providers."
+          description="Enable and configure authentication options for your organization. Manage local login policies and external identity providers."
         />
 
         {loadError ? (
@@ -191,7 +184,7 @@ export function AuthProviders() {
                         ? undefined
                         : (enabled) => handleToggle(definition.type, enabled)
                     }
-                    toggleDisabled={!provider && definition.type !== 'invite'}
+                    toggleDisabled={!provider}
                     toggleLoading={isToggleLoading}
                     onTestConnection={
                       definition.supportsTest ? () => handleTest(definition.type) : undefined
@@ -211,19 +204,6 @@ export function AuthProviders() {
         >
           <LocalSettingsForm
             provider={providerMap.get('local')}
-            onCancel={() => setActiveModal(null)}
-            onSuccess={() => setActiveModal(null)}
-          />
-        </Modal>
-
-        <Modal
-          open={activeModal === 'invite'}
-          onClose={() => setActiveModal(null)}
-          title="Invitation Settings"
-          description="Customize the invitation experience for administrators inviting new users."
-        >
-          <InviteSettingsForm
-            provider={providerMap.get('invite')}
             onCancel={() => setActiveModal(null)}
             onSuccess={() => setActiveModal(null)}
           />

@@ -62,7 +62,8 @@ describe('LocalSettingsForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /save changes/i }))
 
     await waitFor(() => {
-      expect(mockUpdateLocal).toHaveBeenCalledWith(
+      expect(mockUpdateLocal).toHaveBeenCalled()
+      expect(mockUpdateLocal.mock.calls[0][0]).toEqual(
         expect.objectContaining({
           allowRegistration: false,
           requireEmailVerification: true,

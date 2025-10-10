@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
@@ -9,7 +9,10 @@ import { UserTable } from '@/components/users/UserTable'
 import { UserForm } from '@/components/users/UserForm'
 import { UserDetailModal } from '@/components/users/UserDetailModal'
 import { UserBulkActionsBar } from '@/components/users/UserBulkActionsBar'
+import { UserInviteForm } from '@/components/users/UserInviteForm'
+import { UserInviteList } from '@/components/users/UserInviteList'
 import { useUserMutations, useUsers } from '@/hooks/useUsers'
+import { useInvites, useInviteMutations } from '@/hooks/useInvites'
 import type { UserRecord } from '@/types/users'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -21,6 +24,7 @@ export function Users() {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [detailUserId, setDetailUserId] = useState<string | undefined>(undefined)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null)
 
   const queryParams = useMemo(() => {
@@ -33,6 +37,13 @@ export function Users() {
 
   const { data, isLoading, refetch } = useUsers(queryParams)
   const { bulkActivate, bulkDeactivate, bulkDelete } = useUserMutations()
+  const invitesQuery = useInvites()
+  const { remove: revokeInvite } = useInviteMutations()
+  const isRevokingInvite = useCallback(
+    (inviteId: string) =>
+      revokeInvite.isPending && (revokeInvite.variables as string | undefined) === inviteId,
+    [revokeInvite.isPending, revokeInvite.variables]
+  )
 
   useEffect(() => {
     setPage(1)
@@ -95,12 +106,20 @@ export function Users() {
         title="Users"
         description="Manage platform users, activation status, and administrative privileges. Create new accounts, assign roles, and control access to system resources."
         action={
-          <PermissionGuard permission={PERMISSIONS.USER.CREATE}>
-            <Button onClick={() => setIsCreateModalOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create User
-            </Button>
-          </PermissionGuard>
+          <div className="flex flex-wrap gap-2">
+            <PermissionGuard permission={PERMISSIONS.USER.INVITE}>
+              <Button variant="outline" onClick={() => setIsInviteModalOpen(true)}>
+                <UserPlus className="mr-2 h-4 w-4" />
+                Invite User
+              </Button>
+            </PermissionGuard>
+            <PermissionGuard permission={PERMISSIONS.USER.CREATE}>
+              <Button onClick={() => setIsCreateModalOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create User
+              </Button>
+            </PermissionGuard>
+          </div>
         }
       />
 
@@ -164,6 +183,30 @@ export function Users() {
           setDetailUserId(undefined)
         }}
       />
+
+      <Modal
+        open={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        title="Invite User"
+        description="Send an invitation link so the recipient can create their own credentials."
+      >
+        <UserInviteForm onClose={() => setIsInviteModalOpen(false)} />
+      </Modal>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-foreground">User Invitations</h2>
+          <p className="text-sm text-muted-foreground">
+            Track pending invitations and revoke them when they are no longer needed.
+          </p>
+        </div>
+        <UserInviteList
+          invites={invitesQuery.data}
+          isLoading={invitesQuery.isLoading}
+          onRevoke={(inviteId) => revokeInvite.mutate(inviteId)}
+          isRevoking={isRevokingInvite}
+        />
+      </div>
     </div>
   )
 }

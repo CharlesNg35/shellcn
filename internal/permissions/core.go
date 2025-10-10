@@ -26,6 +26,12 @@ func init() {
 			Description: "Delete users",
 		},
 		{
+			ID:          "user.invite",
+			Module:      "core",
+			DependsOn:   []string{"user.view"},
+			Description: "Invite users via email",
+		},
+		{
 			ID:          "team.view",
 			Module:      "core",
 			Description: "View teams",

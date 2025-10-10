@@ -93,18 +93,18 @@
 
 ### Phase 7: Auth Provider Administration (Week 7)
 
-- [ ] Create AuthProviders page
-- [ ] Build ProviderCard component
-- [ ] Implement OIDCConfigForm
-- [ ] Create SAMLConfigForm
-- [ ] Build LDAPConfigForm
-- [ ] Implement LocalSettingsForm
-- [ ] Create InviteSettingsForm
-- [ ] Build provider enable/disable toggle
-- [ ] Implement provider test connection
-- [ ] Create useAuthProviders hook
-- [ ] Add provider configuration validation
-- [ ] Write tests for provider management
+- [x] Create AuthProviders page
+- [x] Build ProviderCard component
+- [x] Implement OIDCConfigForm
+- [x] Create SAMLConfigForm
+- [x] Build LDAPConfigForm
+- [x] Implement LocalSettingsForm
+- [x] Implement user invitation flow (API, UI, and acceptance page)
+- [x] Build provider enable/disable toggle
+- [x] Implement provider test connection
+- [x] Create useAuthProviders hook
+- [x] Add provider configuration validation
+- [x] Write tests for provider management
 
 ### Phase 8: Session Management (Week 8)
 

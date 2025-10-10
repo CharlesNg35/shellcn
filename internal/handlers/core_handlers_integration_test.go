@@ -416,22 +416,6 @@ func TestAuthProviderHandler_Flow(t *testing.T) {
 	require.Equal(t, "local", localDetail.Provider["type"])
 	require.Equal(t, true, localDetail.Provider["allow_registration"])
 
-	invitePayload := map[string]any{
-		"enabled":                    true,
-		"require_email_verification": true,
-	}
-	inviteResp := env.Request(http.MethodPost, "/api/auth/providers/invite/settings", invitePayload, token)
-	require.Equal(t, http.StatusOK, inviteResp.Code, inviteResp.Body.String())
-
-	inviteDetails := env.Request(http.MethodGet, "/api/auth/providers/invite", nil, token)
-	require.Equal(t, http.StatusOK, inviteDetails.Code, inviteDetails.Body.String())
-	var inviteDetail struct {
-		Provider map[string]any `json:"provider"`
-	}
-	testutil.DecodeInto(t, testutil.DecodeResponse(t, inviteDetails).Data, &inviteDetail)
-	require.Equal(t, "invite", inviteDetail.Provider["type"])
-	require.Equal(t, true, inviteDetail.Provider["enabled"])
-
 	oidcPayload := map[string]any{
 		"enabled":            true,
 		"allow_registration": true,
@@ -498,6 +482,56 @@ func TestAuthProviderHandler_Flow(t *testing.T) {
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, ldapDetails).Data, &ldapDetail)
 	require.Equal(t, "ldap", ldapDetail.Provider["type"])
 	require.Equal(t, "ldap.example.com", ldapDetail.Config["host"])
+}
+
+func TestInviteHandler_Flow(t *testing.T) {
+	env := testutil.NewEnv(t)
+	root := env.CreateRootUser("InviteFlowPassw0rd!")
+	login := env.Login(root.Username, "InviteFlowPassw0rd!")
+	token := login.AccessToken
+
+	createPayload := map[string]any{
+		"email": "invitee@example.com",
+	}
+	createResp := env.Request(http.MethodPost, "/api/invites", createPayload, token)
+	require.Equal(t, http.StatusCreated, createResp.Code, createResp.Body.String())
+
+	var createData struct {
+		Invite map[string]any `json:"invite"`
+		Token  string         `json:"token"`
+		Link   string         `json:"link"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, createResp).Data, &createData)
+	require.NotEmpty(t, createData.Token)
+	require.Equal(t, "invitee@example.com", createData.Invite["email"])
+
+	listResp := env.Request(http.MethodGet, "/api/invites", nil, token)
+	require.Equal(t, http.StatusOK, listResp.Code)
+	var listPayload struct {
+		Invites []map[string]any `json:"invites"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, listResp).Data, &listPayload)
+	require.NotEmpty(t, listPayload.Invites)
+
+	redeemPayload := map[string]any{
+		"token":      createData.Token,
+		"username":   "invited-user",
+		"password":   "InviteePassword123!",
+		"first_name": "Invited",
+		"last_name":  "User",
+	}
+	redeemResp := env.Request(http.MethodPost, "/api/auth/invite/redeem", redeemPayload, "")
+	require.Equal(t, http.StatusCreated, redeemResp.Code, redeemResp.Body.String())
+
+	// New user should be able to authenticate immediately.
+	loginResult := env.Login("invited-user", "InviteePassword123!")
+	require.NotEmpty(t, loginResult.AccessToken)
+
+	// Listing invites should show status updated.
+	listResp = env.Request(http.MethodGet, "/api/invites", nil, token)
+	require.Equal(t, http.StatusOK, listResp.Code)
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, listResp).Data, &listPayload)
+	require.NotEmpty(t, listPayload.Invites)
 }
 
 func TestSecurityHandler_Audit(t *testing.T) {
