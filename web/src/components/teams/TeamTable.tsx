@@ -1,17 +1,22 @@
-import type { ReactNode } from 'react'
-import { PencilLine, Trash2, UserPlus, Users } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
+import { useMemo, useState, type ReactNode } from 'react'
+import {
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  type ColumnDef,
+  type SortingState,
+  useReactTable,
+} from '@tanstack/react-table'
+import { ArrowUpDown, Eye, Loader2, PencilLine, Trash2, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
-import { Skeleton } from '@/components/ui/Skeleton'
+import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import type { TeamRecord } from '@/types/teams'
-import { cn } from '@/lib/utils/cn'
 import { PERMISSIONS } from '@/constants/permissions'
 
 interface TeamTableProps {
   teams: TeamRecord[]
-  selectedTeamId?: string
   isLoading?: boolean
   memberCounts?: Record<string, number | undefined>
   onSelectTeam: (teamId: string) => void
@@ -22,7 +27,6 @@ interface TeamTableProps {
 
 export function TeamTable({
   teams,
-  selectedTeamId,
   isLoading,
   memberCounts,
   onSelectTeam,
@@ -30,26 +34,136 @@ export function TeamTable({
   onDeleteTeam,
   emptyAction,
 }: TeamTableProps) {
+  const [sorting, setSorting] = useState<SortingState>([])
+
+  const columns = useMemo<ColumnDef<TeamRecord>[]>(
+    () => [
+      {
+        accessorKey: 'name',
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-3"
+            type="button"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          >
+            Team Name
+            <ArrowUpDown className="ml-2 h-3 w-3" />
+          </Button>
+        ),
+        cell: ({ row }) => (
+          <div className="flex flex-col">
+            <span className="font-medium text-sm text-foreground">{row.original.name}</span>
+            {row.original.description ? (
+              <span className="text-xs text-muted-foreground line-clamp-1">
+                {row.original.description}
+              </span>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: 'members',
+        header: () => 'Members',
+        cell: ({ row }) => {
+          const memberCount = memberCounts?.[row.original.id] ?? row.original.members?.length
+          return (
+            <Badge
+              variant="secondary"
+              className="flex items-center gap-1 w-fit text-xs font-medium"
+            >
+              <Users className="h-3 w-3" />
+              {typeof memberCount === 'number' ? memberCount : 0}
+            </Badge>
+          )
+        },
+        enableSorting: false,
+      },
+      {
+        accessorKey: 'created_at',
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          >
+            Created
+            <ArrowUpDown className="ml-2 h-3 w-3" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const value = row.original.created_at
+          if (!value) {
+            return <span className="text-xs text-muted-foreground">—</span>
+          }
+          const date = new Date(value)
+          return <span className="text-xs text-muted-foreground">{date.toLocaleDateString()}</span>
+        },
+      },
+      {
+        id: 'actions',
+        header: () => <span className="sr-only">Actions</span>,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onSelectTeam(row.original.id)}
+              aria-label={`View ${row.original.name}`}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onEditTeam?.(row.original)}
+                aria-label={`Edit ${row.original.name}`}
+              >
+                <PencilLine className="h-4 w-4" />
+              </Button>
+            </PermissionGuard>
+            <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => onDeleteTeam?.(row.original)}
+                aria-label={`Delete ${row.original.name}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </PermissionGuard>
+          </div>
+        ),
+        enableSorting: false,
+        size: 120,
+      },
+    ],
+    [memberCounts, onSelectTeam, onEditTeam, onDeleteTeam]
+  )
+
+  const table = useReactTable({
+    data: teams,
+    columns,
+    state: {
+      sorting,
+    },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getRowId: (row) => row.id,
+  })
+
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-            <Users className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="text-lg font-semibold text-foreground">Teams</p>
-            <p className="text-sm text-muted-foreground">Loading teams…</p>
-          </div>
-        </div>
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="rounded-lg border border-border/50 bg-muted/40 p-4">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="mt-2 h-3 w-48" />
-            </div>
-          ))}
-        </div>
+      <div className="flex items-center justify-center rounded-lg border border-border bg-card py-10">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -57,7 +171,7 @@ export function TeamTable({
   if (!teams.length) {
     return (
       <EmptyState
-        icon={UserPlus}
+        icon={Users}
         title="No teams created yet"
         description="Organize your users into teams to simplify permission management and access control."
         action={emptyAction}
@@ -66,91 +180,42 @@ export function TeamTable({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-            <Users className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <div>
-            <p className="text-lg font-semibold text-foreground">Teams</p>
-            <p className="text-sm text-muted-foreground">
-              Select a team to view details and manage membership
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {teams.map((team) => {
-          const isSelected = team.id === selectedTeamId
-          const memberCount = memberCounts?.[team.id] ?? team.members?.length
-
-          return (
-            <button
-              key={team.id}
-              type="button"
-              onClick={() => onSelectTeam(team.id)}
-              className={cn(
-                'group flex w-full items-center justify-between gap-4 rounded-lg border border-transparent px-4 py-3 text-left transition',
-                'hover:border-border hover:bg-muted/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                isSelected && 'border-primary bg-primary/5'
-              )}
-            >
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-foreground">{team.name}</span>
-                {team.description ? (
-                  <span className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                    {team.description}
-                  </span>
-                ) : (
-                  <span className="mt-1 text-xs text-muted-foreground">
-                    No description provided
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Badge variant="secondary" className="flex items-center gap-1 text-xs font-medium">
-                  <Users className="h-3 w-3" />
-                  {typeof memberCount === 'number' ? `${memberCount} members` : '—'}
-                </Badge>
-
-                <div className="hidden gap-1 group-hover:flex">
-                  <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Edit ${team.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onEditTeam?.(team)
-                      }}
-                    >
-                      <PencilLine className="h-4 w-4" />
-                    </Button>
-                  </PermissionGuard>
-                  <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      aria-label={`Delete ${team.name}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onDeleteTeam?.(team)
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </PermissionGuard>
-                </div>
-              </div>
-            </button>
-          )
-        })}
+    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-muted/50 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <th key={header.id} className="px-4 py-3 text-left">
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {table.getRowModel().rows.map((row) => (
+              <tr
+                key={row.id}
+                className="border-t border-border/60 hover:bg-muted/40 cursor-pointer"
+                onClick={() => onSelectTeam(row.original.id)}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td
+                    key={cell.id}
+                    className="px-4 py-3 text-sm align-middle"
+                    onClick={cell.column.id === 'actions' ? (e) => e.stopPropagation() : undefined}
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )

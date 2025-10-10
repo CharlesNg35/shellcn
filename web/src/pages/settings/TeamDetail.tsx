@@ -1,0 +1,251 @@
+import { useEffect } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, CalendarClock, Loader2, PencilLine, Trash2, Users } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
+import { Badge } from '@/components/ui/Badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { PermissionGuard } from '@/components/permissions/PermissionGuard'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { TeamMembersManager } from '@/components/teams/TeamMembersManager'
+import { useTeam, useTeamMembers, useTeamMutations } from '@/hooks/useTeams'
+import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
+import { PERMISSIONS } from '@/constants/permissions'
+
+function formatDate(value?: string) {
+  if (!value) {
+    return '—'
+  }
+  try {
+    const date = new Date(value)
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return value
+  }
+}
+
+export function TeamDetail() {
+  const { teamId } = useParams<{ teamId: string }>()
+  const navigate = useNavigate()
+  const teamMutations = useTeamMutations()
+  const { setOverride, clearOverride } = useBreadcrumb()
+
+  const { data: teamDetail, isLoading: isTeamDetailLoading } = useTeam(teamId ?? '', {
+    enabled: Boolean(teamId),
+  })
+
+  const { data: members, isLoading: isMembersLoading } = useTeamMembers(teamId ?? '', {
+    enabled: Boolean(teamId),
+  })
+
+  // Set breadcrumb override for this team
+  useEffect(() => {
+    if (teamDetail?.name && teamId) {
+      const path = `/settings/teams/${teamId}`
+      setOverride(path, teamDetail.name)
+      return () => {
+        clearOverride(path)
+      }
+    }
+  }, [teamDetail?.name, teamId, setOverride, clearOverride])
+
+  const handleBack = () => {
+    navigate('/settings/teams')
+  }
+
+  const handleEdit = () => {
+    navigate(`/settings/teams/${teamId}/edit`)
+  }
+
+  const handleDelete = async () => {
+    if (!teamDetail) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Delete team "${teamDetail.name}"? This will remove team membership assignments.`
+    )
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      await teamMutations.remove.mutateAsync(teamDetail.id)
+      navigate('/settings/teams')
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  if (!teamId) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Team Not Found"
+          description="The requested team could not be found."
+          action={
+            <Button onClick={handleBack} variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Teams
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
+
+  if (isTeamDetailLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Loading..."
+          description="Please wait while we load the team details."
+          action={
+            <Button onClick={handleBack} variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Teams
+            </Button>
+          }
+        />
+        <Card>
+          <CardContent className="flex min-h-[300px] items-center justify-center p-8">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Loading team details...
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!teamDetail) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Team Not Found"
+          description="The requested team could not be found."
+          action={
+            <Button onClick={handleBack} variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Teams
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
+
+  const memberCount = members?.length ?? teamDetail.members?.length ?? 0
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title={teamDetail.name}
+        description={
+          teamDetail.description?.trim()?.length
+            ? teamDetail.description
+            : 'No description provided for this team.'
+        }
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleBack} variant="outline">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Teams
+            </Button>
+            <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
+              <Button type="button" variant="outline" onClick={handleEdit}>
+                <PencilLine className="mr-2 h-4 w-4" />
+                Edit
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={handleDelete}
+                disabled={teamMutations.remove.isPending}
+              >
+                {teamMutations.remove.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="mr-2 h-4 w-4" />
+                )}
+                Delete
+              </Button>
+            </PermissionGuard>
+          </div>
+        }
+      />
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Team Info Card */}
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle>Team Information</CardTitle>
+            <CardDescription>Basic details about this team</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              {teamDetail.members?.some((member) => member.is_root) && (
+                <Badge variant="destructive" className="text-xs">
+                  Root member
+                </Badge>
+              )}
+              {typeof memberCount === 'number' && (
+                <Badge variant="secondary" className="text-xs">
+                  <Users className="mr-1 h-3 w-3" />
+                  {memberCount} {memberCount === 1 ? 'member' : 'members'}
+                </Badge>
+              )}
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
+                  <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Created
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {formatDate(teamDetail.created_at)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
+                  <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Last updated
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-foreground">
+                    {formatDate(teamDetail.updated_at)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Team Members */}
+        <div className="lg:col-span-2">
+          <TeamMembersManager
+            team={teamDetail}
+            members={members}
+            isLoadingMembers={isMembersLoading}
+            addMemberMutation={teamMutations.addMember}
+            removeMemberMutation={teamMutations.removeMember}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}

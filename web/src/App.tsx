@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
+import { BreadcrumbProvider } from '@/contexts/BreadcrumbContext'
 import { Toaster } from '@/components/ui/Toaster'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -17,6 +18,7 @@ import { Connections } from '@/pages/connections/Connections'
 import { Identities } from '@/pages/settings/Identities'
 import { Users } from '@/pages/settings/Users'
 import { Teams } from '@/pages/settings/Teams'
+import { TeamDetail } from '@/pages/settings/TeamDetail'
 import { Permissions } from '@/pages/settings/Permissions'
 import { Sessions } from '@/pages/settings/Sessions'
 import { AuditLogs } from '@/pages/settings/AuditLogs'
@@ -46,6 +48,7 @@ function AppRoutes() {
             <Route path="/settings/identities" element={<Identities />} />
             <Route path="/settings/users" element={<Users />} />
             <Route path="/settings/teams" element={<Teams />} />
+            <Route path="/settings/teams/:teamId" element={<TeamDetail />} />
             <Route path="/settings/permissions" element={<Permissions />} />
             <Route path="/settings/sessions" element={<Sessions />} />
             <Route path="/settings/audit" element={<AuditLogs />} />
@@ -65,7 +68,9 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <BrowserRouter>
-          <AppRoutes />
+          <BreadcrumbProvider>
+            <AppRoutes />
+          </BreadcrumbProvider>
         </BrowserRouter>
         <Toaster />
       </ThemeProvider>

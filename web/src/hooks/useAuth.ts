@@ -89,6 +89,8 @@ export function useAuth(options: UseAuthOptions = {}) {
     [completeSetup]
   )
 
+  const getSetupStatus = useCallback(() => fetchSetupStatus(), [fetchSetupStatus])
+
   return useMemo(
     () => ({
       status,
@@ -104,7 +106,7 @@ export function useAuth(options: UseAuthOptions = {}) {
       verifyMfa: verifyMfaCode,
       refreshUser,
       loadProviders,
-      fetchSetupStatus,
+      fetchSetupStatus: getSetupStatus,
       completeSetup: completeInitialSetup,
       logout,
       clearError,
@@ -128,7 +130,7 @@ export function useAuth(options: UseAuthOptions = {}) {
       verifyMfaCode,
       refreshUser,
       loadProviders,
-      fetchSetupStatus,
+      getSetupStatus,
       completeInitialSetup,
       logout,
       clearError,

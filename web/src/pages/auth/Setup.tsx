@@ -14,7 +14,7 @@ type SetupFormData = z.infer<typeof setupSchema>
 
 export function Setup() {
   const navigate = useNavigate()
-  const { completeSetup, fetchSetupStatus } = useAuth({ autoInitialize: false })
+  const { completeSetup } = useAuth({ autoInitialize: false })
   const {
     register,
     handleSubmit,
@@ -35,38 +35,12 @@ export function Setup() {
 
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
-  const [statusChecked, setStatusChecked] = useState(false)
 
   const passwordValue = watch('password')
 
   useEffect(() => {
     setFocus('username')
   }, [setFocus])
-
-  useEffect(() => {
-    let active = true
-    fetchSetupStatus()
-      .then((status) => {
-        if (!active) {
-          return
-        }
-
-        if (status.status === 'complete') {
-          navigate('/login', { replace: true })
-        } else {
-          setStatusChecked(true)
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setStatusChecked(true)
-        }
-      })
-
-    return () => {
-      active = false
-    }
-  }, [fetchSetupStatus, navigate])
 
   const onSubmit = async (data: SetupFormData) => {
     setFormError(null)
@@ -93,15 +67,6 @@ export function Setup() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  if (!statusChecked) {
-    return (
-      <div className="flex flex-col items-center gap-3 text-center">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-muted border-t-primary" />
-        <p className="text-sm text-muted-foreground">Preparing setup wizard...</p>
-      </div>
-    )
   }
 
   return (

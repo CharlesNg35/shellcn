@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ChevronRight, Home } from 'lucide-react'
 import { getBreadcrumbItems } from '@/lib/navigation'
+import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
 import { cn } from '@/lib/utils/cn'
 
 interface BreadcrumbsProps {
@@ -10,8 +11,16 @@ interface BreadcrumbsProps {
 
 export function Breadcrumbs({ className }: BreadcrumbsProps) {
   const location = useLocation()
+  const { overrides } = useBreadcrumb()
 
-  const crumbs = useMemo(() => getBreadcrumbItems(location.pathname), [location.pathname])
+  const crumbs = useMemo(() => {
+    const items = getBreadcrumbItems(location.pathname)
+    // Apply overrides to crumbs
+    return items.map((item) => ({
+      ...item,
+      label: overrides[item.path] || item.label,
+    }))
+  }, [location.pathname, overrides])
 
   if (!crumbs.length) {
     return null
