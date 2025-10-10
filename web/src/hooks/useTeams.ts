@@ -6,7 +6,7 @@ import {
   type UseQueryOptions,
   type UseQueryResult,
 } from '@tanstack/react-query'
-import type { ApiError } from '@/lib/api/http'
+import { toApiError, type ApiError } from '@/lib/api/http'
 import { toast } from '@/lib/utils/toast'
 import {
   addTeamMember,
@@ -127,9 +127,10 @@ export function useTeamMutations() {
         description: `${team.name} is now available for member assignment`,
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to create team', {
-        description: error.message || 'Please try again later',
+        description: apiError.message || 'Please try again later',
       })
     },
   })
@@ -144,9 +145,10 @@ export function useTeamMutations() {
         description: `${team.name} saved successfully`,
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to update team', {
-        description: error.message || 'Please try again later',
+        description: apiError.message || 'Please try again later',
       })
     },
   })
@@ -158,9 +160,10 @@ export function useTeamMutations() {
       await invalidateTeam(teamId)
       toast.success('Team deleted')
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to delete team', {
-        description: error.message || 'Please try again later',
+        description: apiError.message || 'Please try again later',
       })
     },
   })
@@ -172,9 +175,10 @@ export function useTeamMutations() {
       await invalidateTeam(variables.teamId)
       toast.success('Member added to team')
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to add member', {
-        description: error.message || 'Please try again later',
+        description: apiError.message || 'Please try again later',
       })
     },
   })
@@ -186,9 +190,10 @@ export function useTeamMutations() {
       await invalidateTeam(variables.teamId)
       toast.success('Member removed from team')
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to remove member', {
-        description: error.message || 'Please try again later',
+        description: apiError.message || 'Please try again later',
       })
     },
   })

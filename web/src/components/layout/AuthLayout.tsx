@@ -27,9 +27,9 @@ export function AuthLayout() {
           {/* Logo and title */}
           <div className="space-y-6">
             <Link to="/" className="flex items-center gap-3">
-              <Logo size="xl" />
+              <Logo size="xl" className="-mt-4" />
               <div>
-                <h1 className="text-2xl font-bold text-foreground">{APP_NAME}</h1>
+                <h1 className="text-2xl font-bold text-foreground mb-1">{APP_NAME}</h1>
                 <p className="text-sm text-muted-foreground">{APP_DESCRIPTION}</p>
               </div>
             </Link>

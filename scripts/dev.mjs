@@ -112,10 +112,10 @@ function shutdown(exitCode = 0) {
         child.kill("SIGTERM");
       }
     }
-  }, 1_000);
+  }, 200);
   setTimeout(() => {
     process.exit(exitCode);
-  }, 1_000);
+  }, 200);
 }
 
 process.on("SIGINT", () => {

@@ -6,7 +6,7 @@ import {
   type UseQueryResult,
   type UseQueryOptions,
 } from '@tanstack/react-query'
-import type { ApiError } from '@/lib/api/http'
+import { toApiError, type ApiError } from '@/lib/api/http'
 import { toast } from '@/lib/utils/toast'
 import {
   activateUser,
@@ -106,9 +106,10 @@ export function useUserMutations() {
         description: `${user.username} has been added to the system`,
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to create user', {
-        description: error.message || 'Please try again',
+        description: apiError.message || 'Please try again',
       })
     },
   })
@@ -121,9 +122,10 @@ export function useUserMutations() {
       await invalidateUser(result?.id)
       toast.success('User updated successfully')
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to update user', {
-        description: error.message || 'Please try again',
+        description: apiError.message || 'Please try again',
       })
     },
   })
@@ -157,9 +159,10 @@ export function useUserMutations() {
         description: `${variables.user_ids.length} user(s) activated successfully`,
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to activate users', {
-        description: error.message || 'Please try again',
+        description: apiError.message || 'Please try again',
       })
     },
   })
@@ -172,9 +175,10 @@ export function useUserMutations() {
         description: `${variables.user_ids.length} user(s) deactivated successfully`,
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to deactivate users', {
-        description: error.message || 'Please try again',
+        description: apiError.message || 'Please try again',
       })
     },
   })
@@ -187,9 +191,10 @@ export function useUserMutations() {
         description: `${variables.user_ids.length} user(s) deleted successfully`,
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to delete users', {
-        description: error.message || 'Please try again',
+        description: apiError.message || 'Please try again',
       })
     },
   })

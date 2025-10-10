@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { ApiError } from '@/lib/api/http'
+import { toApiError } from '@/lib/api/http'
 import {
   confirmPasswordReset as confirmPasswordResetApi,
   fetchCurrentUser,
@@ -39,6 +39,7 @@ interface AuthState {
   providers: AuthProviderMetadata[]
   mfaChallenge?: MfaChallenge
   error: string | null
+  errorCode: string | null
 }
 
 interface AuthActions {
@@ -80,12 +81,13 @@ export const useAuthStore = create<AuthStore>((set, get) => {
     providers: [],
     mfaChallenge: undefined,
     error: null,
+    errorCode: null,
 
     initialize: async () => {
       const { tokens } = get()
 
       if (!tokens) {
-        set({ status: 'unauthenticated', initialized: true })
+        set({ status: 'unauthenticated', initialized: true, error: null, errorCode: null })
         return
       }
 
@@ -101,6 +103,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
           status: 'authenticated',
           initialized: true,
           error: null,
+          errorCode: null,
         })
       } catch {
         clearTokens()
@@ -110,12 +113,13 @@ export const useAuthStore = create<AuthStore>((set, get) => {
           initialized: true,
           user: null,
           error: null,
+          errorCode: null,
         })
       }
     },
 
     login: async (credentials) => {
-      set({ status: 'loading', error: null })
+      set({ status: 'loading', error: null, errorCode: null })
 
       try {
         const result = await apiLogin(credentials)
@@ -125,6 +129,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
             status: 'mfa_required',
             mfaChallenge: result.challenge,
             error: null,
+            errorCode: null,
           })
 
           return result
@@ -145,22 +150,24 @@ export const useAuthStore = create<AuthStore>((set, get) => {
           initialized: true,
           mfaChallenge: undefined,
           error: null,
+          errorCode: null,
         })
 
         return result
       } catch (error) {
-        const message = extractErrorMessage(error)
+        const apiError = toApiError(error)
         set({
           status: 'unauthenticated',
-          error: message,
+          error: apiError.message,
+          errorCode: apiError.code ?? null,
           mfaChallenge: undefined,
         })
-        throw error
+        throw apiError
       }
     },
 
     verifyMfa: async (payload) => {
-      set({ status: 'loading', error: null })
+      set({ status: 'loading', error: null, errorCode: null })
 
       try {
         const tokens = await apiVerifyMfa(payload)
@@ -175,14 +182,16 @@ export const useAuthStore = create<AuthStore>((set, get) => {
           status: 'authenticated',
           mfaChallenge: undefined,
           error: null,
+          errorCode: null,
         })
       } catch (error) {
-        const message = extractErrorMessage(error)
+        const apiError = toApiError(error)
         set({
           status: 'mfa_required',
-          error: message,
+          error: apiError.message,
+          errorCode: apiError.code ?? null,
         })
-        throw error
+        throw apiError
       }
     },
 
@@ -193,16 +202,19 @@ export const useAuthStore = create<AuthStore>((set, get) => {
           user,
           status: 'authenticated',
           error: null,
+          errorCode: null,
           initialized: true,
         })
         return user
       } catch (error) {
         clearTokens()
+        const apiError = toApiError(error)
         set({
           tokens: null,
           user: null,
           status: 'unauthenticated',
-          error: extractErrorMessage(error),
+          error: apiError.message,
+          errorCode: apiError.code ?? null,
         })
         return null
       }
@@ -251,24 +263,13 @@ export const useAuthStore = create<AuthStore>((set, get) => {
           initialized: true,
           mfaChallenge: undefined,
           error: null,
+          errorCode: null,
         })
       }
     },
 
-    clearError: () => set({ error: null }),
+    clearError: () => set({ error: null, errorCode: null }),
 
     setUser: (user) => set({ user }),
   }
 })
-
-function extractErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    return error.message
-  }
-
-  if (error instanceof Error) {
-    return error.message
-  }
-
-  return 'An unexpected error occurred'
-}

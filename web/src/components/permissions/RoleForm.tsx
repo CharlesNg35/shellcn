@@ -7,7 +7,7 @@ import { roleCreateSchema, roleUpdateSchema } from '@/schemas/roles'
 import type { RoleRecord } from '@/types/permission'
 import type { RoleCreateSchema, RoleUpdateSchema } from '@/schemas/roles'
 import { useRoleMutations } from '@/hooks/useRoles'
-import type { ApiError } from '@/lib/api/http'
+import { ApiError, toApiError, type ApiError as ApiErrorType } from '@/lib/api/http'
 
 export type RoleFormMode = 'create' | 'edit'
 
@@ -25,7 +25,7 @@ type FormValues = CreateFormValues & Partial<UpdateFormValues>
 
 export function RoleForm({ mode = 'create', role, onClose, onSuccess }: RoleFormProps) {
   const { createRole, updateRole } = useRoleMutations()
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [formError, setFormError] = useState<ApiErrorType | null>(null)
 
   const defaultValues = useMemo(() => {
     if (mode === 'create') {
@@ -57,12 +57,12 @@ export function RoleForm({ mode = 'create', role, onClose, onSuccess }: RoleForm
   })
 
   const handleError = (apiError: unknown) => {
-    const err = apiError as ApiError
-    setErrorMessage(err?.message || 'Unable to save role. Please try again.')
+    const err = toApiError(apiError)
+    setFormError(err)
   }
 
   const handleSuccess = (result: RoleRecord) => {
-    setErrorMessage(null)
+    setFormError(null)
     onSuccess?.(result)
     if (mode === 'create') {
       reset()
@@ -71,7 +71,7 @@ export function RoleForm({ mode = 'create', role, onClose, onSuccess }: RoleForm
   }
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
-    setErrorMessage(null)
+    setFormError(null)
 
     if (mode === 'create') {
       try {
@@ -87,7 +87,12 @@ export function RoleForm({ mode = 'create', role, onClose, onSuccess }: RoleForm
     }
 
     if (!role) {
-      setErrorMessage('Unable to load role context.')
+      setFormError(
+        new ApiError({
+          code: 'ROLE_CONTEXT_MISSING',
+          message: 'Unable to load role context.',
+        })
+      )
       return
     }
 
@@ -124,9 +129,9 @@ export function RoleForm({ mode = 'create', role, onClose, onSuccess }: RoleForm
         error={errors.description?.message}
       />
 
-      {errorMessage ? (
+      {formError ? (
         <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {errorMessage}
+          <p className="font-medium">{formError.message}</p>
         </div>
       ) : null}
 

@@ -3,7 +3,7 @@ import type { AuthTokens, RefreshResponsePayload } from '@/types/auth'
 import type { ApiResponse } from '@/types/api'
 import { clearTokens, getTokens, setTokens } from './token-storage'
 import { attachCSRFToken } from './csrf'
-import { unwrapResponse } from './http'
+import { toApiError, unwrapResponse } from './http'
 import { toAuthTokens } from './transformers'
 
 type RetryableRequestConfig = InternalAxiosRequestConfig & {
@@ -48,19 +48,19 @@ apiClient.interceptors.response.use(
     const { response, config } = error
 
     if (!response || !config) {
-      return Promise.reject(error)
+      return Promise.reject(toApiError(error))
     }
 
     const status = response.status
 
     if (status !== 401) {
-      return Promise.reject(error)
+      return Promise.reject(toApiError(error))
     }
 
     const requestConfig = config as RetryableRequestConfig
 
     if (requestConfig._retry) {
-      return Promise.reject(error)
+      return Promise.reject(toApiError(error))
     }
 
     const requestUrl = requestConfig.url ?? ''
@@ -69,14 +69,14 @@ apiClient.interceptors.response.use(
       requestUrl.startsWith(AUTH_REFRESH_ENDPOINT) ||
       requestUrl.startsWith(AUTH_LOGIN_ENDPOINT)
     ) {
-      return Promise.reject(error)
+      return Promise.reject(toApiError(error))
     }
 
     const tokens = getTokens()
 
     if (!tokens?.refreshToken) {
       clearTokens()
-      return Promise.reject(error)
+      return Promise.reject(toApiError(error))
     }
 
     try {
@@ -93,7 +93,7 @@ apiClient.interceptors.response.use(
       return apiClient(requestConfig)
     } catch (refreshError) {
       clearTokens()
-      return Promise.reject(refreshError)
+      return Promise.reject(toApiError(refreshError))
     }
   }
 )

@@ -1,3 +1,5 @@
+import { cn } from '@/lib/utils/cn'
+
 /**
  * Logo component with inline SVG for reliable display in embedded builds.
  * This approach ensures the logo displays correctly whether served by Vite dev server
@@ -19,7 +21,7 @@ const sizes = {
 export function Logo({ className, size = 'md' }: LogoProps) {
   return (
     <svg
-      className={className || sizes[size]}
+      className={cn(sizes[size], className)}
       viewBox="0 0 200 200"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -64,7 +66,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
 export function LogoIcon({ className }: { className?: string }) {
   return (
     <svg
-      className={className || 'h-8 w-8'}
+      className={cn('h-8 w-8', className)}
       viewBox="0 0 32 32"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

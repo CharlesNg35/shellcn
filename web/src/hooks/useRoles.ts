@@ -6,7 +6,7 @@ import {
   type UseQueryOptions,
   type UseQueryResult,
 } from '@tanstack/react-query'
-import type { ApiError } from '@/lib/api/http'
+import { toApiError, type ApiError } from '@/lib/api/http'
 import {
   createRole as createRoleApi,
   deleteRole as deleteRoleApi,
@@ -65,9 +65,10 @@ export function useRoleMutations() {
         description: `${role.name} is now available for assignment`,
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to create role', {
-        description: error.message || 'Please try again later',
+        description: apiError.message || 'Please try again later',
       })
     },
   })
@@ -81,9 +82,10 @@ export function useRoleMutations() {
         description: `${role.name} saved successfully`,
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
       toast.error('Failed to update role', {
-        description: error.message || 'Please try again later',
+        description: apiError.message || 'Please try again later',
       })
     },
   })
@@ -98,9 +100,10 @@ export function useRoleMutations() {
           : `Role ${variables.roleId} has been removed`,
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error) => {
+      const apiError = toApiError(error)
       toast.error('Failed to delete role', {
-        description: error.message || 'Please try again later',
+        description: apiError.message || 'Please try again later',
       })
     },
   })
@@ -115,9 +118,10 @@ export function useRoleMutations() {
           : 'Role permissions have been saved',
       })
     },
-    onError: (error: ApiError) => {
+    onError: (error) => {
+      const apiError = toApiError(error)
       toast.error('Failed to update permissions', {
-        description: error.message || 'Please try again later',
+        description: apiError.message || 'Please try again later',
       })
     },
   })

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { userCreateSchema, userUpdateSchema } from '@/schemas/users'
 import type { UserRecord } from '@/types/users'
 import { useUserMutations } from '@/hooks/useUsers'
-import type { ApiError } from '@/lib/api/http'
+import { ApiError, toApiError } from '@/lib/api/http'
 
 export type UserFormMode = 'create' | 'edit'
 
@@ -25,7 +25,7 @@ type UpdateFormValues = z.infer<typeof userUpdateSchema>
 type FormValues = CreateFormValues & Partial<UpdateFormValues>
 
 export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserFormProps) {
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [formError, setFormError] = useState<ApiError | null>(null)
   const { create, update } = useUserMutations()
 
   const defaultValues = useMemo(() => {
@@ -65,16 +65,12 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
   })
 
   const handleError = (apiError: unknown) => {
-    const err = apiError as ApiError
-    if (err?.message) {
-      setErrorMessage(err.message)
-    } else {
-      setErrorMessage('Unable to save user. Please try again.')
-    }
+    const err = toApiError(apiError)
+    setFormError(err)
   }
 
   const handleSuccess = (result: UserRecord) => {
-    setErrorMessage(null)
+    setFormError(null)
     onSuccess?.(result)
     if (mode === 'create') {
       reset()
@@ -83,7 +79,7 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
   }
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
-    setErrorMessage(null)
+    setFormError(null)
 
     if (mode === 'create') {
       try {
@@ -105,7 +101,12 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
     }
 
     if (!user) {
-      setErrorMessage('Missing user context for update.')
+      setFormError(
+        new ApiError({
+          code: 'USER_CONTEXT_MISSING',
+          message: 'Missing user context for update.',
+        })
+      )
       return
     }
 
@@ -161,9 +162,9 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
 
       <Input label="Avatar URL" {...register('avatar')} error={errors.avatar?.message} />
 
-      {errorMessage ? (
+      {formError ? (
         <div className="rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {errorMessage}
+          <p className="font-medium">{formError.message}</p>
         </div>
       ) : null}
 

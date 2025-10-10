@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { teamCreateSchema, teamUpdateSchema } from '@/schemas/teams'
 import type { TeamRecord } from '@/types/teams'
 import { useTeamMutations } from '@/hooks/useTeams'
-import type { ApiError } from '@/lib/api/http'
+import { ApiError, toApiError, type ApiError as ApiErrorType } from '@/lib/api/http'
 
 export type TeamFormMode = 'create' | 'edit'
 
@@ -25,7 +25,7 @@ type UpdateFormValues = z.infer<typeof teamUpdateSchema>
 type FormValues = CreateFormValues & Partial<UpdateFormValues>
 
 export function TeamForm({ mode = 'create', team, onClose, onSuccess }: TeamFormProps) {
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [formError, setFormError] = useState<ApiErrorType | null>(null)
   const { create, update } = useTeamMutations()
 
   const defaultValues = useMemo(() => {
@@ -59,16 +59,12 @@ export function TeamForm({ mode = 'create', team, onClose, onSuccess }: TeamForm
   }, [defaultValues, reset])
 
   const handleError = (error: unknown) => {
-    const apiError = error as ApiError | undefined
-    if (apiError?.message) {
-      setErrorMessage(apiError.message)
-      return
-    }
-    setErrorMessage('Unable to save team. Please try again.')
+    const apiError = toApiError(error)
+    setFormError(apiError)
   }
 
   const handleSuccess = (result: TeamRecord) => {
-    setErrorMessage(null)
+    setFormError(null)
     onSuccess?.(result)
     if (mode === 'create') {
       reset({
@@ -80,7 +76,7 @@ export function TeamForm({ mode = 'create', team, onClose, onSuccess }: TeamForm
   }
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
-    setErrorMessage(null)
+    setFormError(null)
 
     if (mode === 'create') {
       try {
@@ -96,7 +92,12 @@ export function TeamForm({ mode = 'create', team, onClose, onSuccess }: TeamForm
     }
 
     if (!team) {
-      setErrorMessage('Team context is missing for update.')
+      setFormError(
+        new ApiError({
+          code: 'TEAM_CONTEXT_MISSING',
+          message: 'Team context is missing for update.',
+        })
+      )
       return
     }
 
@@ -134,9 +135,9 @@ export function TeamForm({ mode = 'create', team, onClose, onSuccess }: TeamForm
         helpText="Optional — maximum 512 characters"
       />
 
-      {errorMessage ? (
+      {formError ? (
         <div className="rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {errorMessage}
+          <p className="font-medium">{formError.message}</p>
         </div>
       ) : null}
 
