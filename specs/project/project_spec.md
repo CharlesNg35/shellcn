@@ -32,7 +32,7 @@ A comprehensive web-based **remote client platform** for managing enterprise inf
 
 **Enterprise Features:**
 - Fine-grained permission system with dependencies
-- Multi-tenancy with organizations and teams
+- Team-based multi-user collaboration
 - **Enterprise authentication (OIDC, SAML, LDAP, Local)** - All providers configured via UI by admins
 - **Secret management (Credential Vault)** - Store SSH keys, passwords, database credentials
 - **Connection profiles with reusable identities**
@@ -481,7 +481,7 @@ shellcn/
 │   │   └── handlers/                    # HTTP handlers
 │   │       ├── auth.go                  # Auth endpoints
 │   │       ├── users.go                 # User management
-│   │       ├── organizations.go         # Organization management
+│   │       ├── teams.go                 # Team management
 │   │       ├── permissions.go           # Permission management
 │   │       ├── websocket.go             # WebSocket handler
 │   │       ├── health.go                # Health check
@@ -541,7 +541,6 @@ shellcn/
 │   │
 │   ├── models/                          # Data models
 │   │   ├── user.go
-│   │   ├── organization.go
 │   │   ├── role.go
 │   │   ├── permission.go
 │   │   ├── identity.go                  # Vault identity
@@ -1788,7 +1787,7 @@ func (h *SetupHandler) CreateFirstUser(c *gin.Context) {
 - ✅ Cannot have `IsSuperuser` flag removed by other users
 - ✅ Full access to admin panel, audit logs, system settings
 - ✅ Can create other admin users
-- ✅ Can manage all organizations, teams, users
+- ✅ Can manage all teams and users
 
 **Non-Root Users:**
 - ❌ Must have explicit permission grants
@@ -1820,16 +1819,6 @@ CORE_PERMISSIONS = {
     "user.delete": {
         "module": "core",
         "depends_on": ["user.view", "user.edit"],
-    },
-
-    // Organization Management
-    "org.view": {
-        "module": "core",
-        "depends_on": [],
-    },
-    "org.manage": {
-        "module": "core",
-        "depends_on": ["org.view"],
     },
 
     // Vault/Credential Management (CORE)
@@ -2188,10 +2177,7 @@ modules:
   /ssh-keys                     # SSH Key Management
   /profile                      # User profile
   /security                     # Security settings (MFA, sessions)
-  /organizations                # Organization management
-    /                           # Organization list
-    /:id/teams                  # Team management
-    /:id/members                # Member management
+  /teams                        # Team management
   /notifications                # Notification preferences
 
 # Session Management

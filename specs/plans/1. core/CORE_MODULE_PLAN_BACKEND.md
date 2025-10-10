@@ -15,7 +15,7 @@
 5. [Authentication System](#authentication-system)
 6. [Authorization & Permission System](#authorization--permission-system)
 7. [User Management](#user-management)
-8. [Organization & Team Management](#organization--team-management)
+8. [Team Management](#team-management)
 9. [Session Management](#session-management)
 10. [Audit Logging](#audit-logging)
 11. [First-Time Setup](#first-time-setup)
@@ -58,10 +58,8 @@ The Core Module provides the foundational authentication, authorization, user ma
   - User activation/deactivation
   - Root user safeguards
 
-- **Organization & Team Management:**
+- **Team Management:**
 
-  - Multi-tenancy support
-  - Organization hierarchy
   - Team-based access control
   - Member management
 
@@ -121,7 +119,6 @@ shellcn/
 │   │       ├── auth.go                  # Auth endpoints
 │   │       ├── setup.go                 # First-time setup
 │   │       ├── users.go                 # User management
-│   │       ├── organizations.go         # Organization management
 │   │       ├── teams.go                 # Team management
 │   │       ├── permissions.go           # Permission management
 │   │       ├── sessions.go              # Session management
@@ -150,7 +147,6 @@ shellcn/
 │   │
 │   ├── models/                          # Data models
 │   │   ├── user.go
-│   │   ├── organization.go
 │   │   ├── team.go
 │   │   ├── role.go
 │   │   ├── permission.go
@@ -167,7 +163,6 @@ shellcn/
 │   │   ├── migrations.go                # Migration runner
 │   │   └── repositories/
 │   │       ├── user_repository.go
-│   │       ├── organization_repository.go
 │   │       ├── team_repository.go
 │   │       ├── role_repository.go
 │   │       ├── permission_repository.go
@@ -177,7 +172,6 @@ shellcn/
 │   └── services/                        # Business logic
 │       ├── user_service.go
 │       ├── auth_service.go
-│       ├── organization_service.go
 │       ├── team_service.go
 │       ├── permission_service.go
 │       ├── session_service.go
@@ -329,9 +323,6 @@ type User struct {
     MFASecret  *MFASecret    `gorm:"foreignKey:UserID" json:"-"`
 
     // Relationships
-    OrganizationID *string   `gorm:"type:uuid" json:"organization_id"`
-    Organization   *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
-
     Teams      []Team        `gorm:"many2many:user_teams;" json:"teams,omitempty"`
     Roles      []Role        `gorm:"many2many:user_roles;" json:"roles,omitempty"`
     Sessions   []Session     `gorm:"foreignKey:UserID" json:"-"`
@@ -356,29 +347,7 @@ func (u *User) BeforeCreate(tx *gorm.DB) error {
 }
 ```
 
-#### 2. Organization Model (`organization.go`)
-
-```go
-package models
-
-type Organization struct {
-    ID          string    `gorm:"primaryKey;type:uuid" json:"id"`
-    Name        string    `gorm:"not null" json:"name"`
-    Description string    `json:"description"`
-
-    // Settings
-    Settings    string    `gorm:"type:json" json:"settings"` // JSON blob
-
-    // Relationships
-    Users       []User    `gorm:"foreignKey:OrganizationID" json:"users,omitempty"`
-    Teams       []Team    `gorm:"foreignKey:OrganizationID" json:"teams,omitempty"`
-
-    CreatedAt   time.Time `json:"created_at"`
-    UpdatedAt   time.Time `json:"updated_at"`
-}
-```
-
-#### 3. Team Model (`team.go`)
+#### 2. Team Model (`team.go`)
 
 ```go
 package models
@@ -388,9 +357,6 @@ type Team struct {
     Name           string       `gorm:"not null" json:"name"`
     Description    string       `json:"description"`
 
-    OrganizationID string       `gorm:"type:uuid;not null" json:"organization_id"`
-    Organization   *Organization `gorm:"foreignKey:OrganizationID" json:"organization,omitempty"`
-
     Users          []User       `gorm:"many2many:user_teams;" json:"users,omitempty"`
 
     CreatedAt      time.Time    `json:"created_at"`
@@ -398,7 +364,7 @@ type Team struct {
 }
 ```
 
-#### 4. Role Model (`role.go`)
+#### 3. Role Model (`role.go`)
 
 ```go
 package models
@@ -417,7 +383,7 @@ type Role struct {
 }
 ```
 
-#### 5. Permission Model (`permission.go`)
+#### 4. Permission Model (`permission.go`)
 
 ```go
 package models
@@ -434,7 +400,7 @@ type Permission struct {
 }
 ```
 
-#### 6. Session Model (`session.go`)
+#### 5. Session Model (`session.go`)
 
 ```go
 package models
@@ -460,7 +426,7 @@ type Session struct {
 }
 ```
 
-#### 7. AuditLog Model (`audit_log.go`)
+#### 6. AuditLog Model (`audit_log.go`)
 
 ```go
 package models
@@ -487,7 +453,7 @@ type AuditLog struct {
 }
 ```
 
-#### 8. MFASecret Model (`mfa_secret.go`)
+#### 7. MFASecret Model (`mfa_secret.go`)
 
 ```go
 package models
@@ -504,7 +470,7 @@ type MFASecret struct {
 }
 ```
 
-#### 9. PasswordResetToken Model (`password_reset_token.go`)
+#### 8. PasswordResetToken Model (`password_reset_token.go`)
 
 ```go
 package models
@@ -521,7 +487,7 @@ type PasswordResetToken struct {
 }
 ```
 
-#### 10. AuthProvider Model (`auth_provider.go`)
+#### 9. AuthProvider Model (`auth_provider.go`)
 
 **IMPORTANT:** Authentication providers are configured via UI by admins, not config files.
 
@@ -587,7 +553,7 @@ type LDAPConfig struct {
 }
 ```
 
-#### 11. CacheEntry Model (`cache_entry.go`)
+#### 10. CacheEntry Model (`cache_entry.go`)
 
 ```go
 package models
@@ -620,7 +586,6 @@ import (
 func AutoMigrate(db *gorm.DB) error {
     return db.AutoMigrate(
         &models.User{},
-        &models.Organization{},
         &models.Team{},
         &models.Role{},
         &models.Permission{},
@@ -1407,28 +1372,6 @@ func init() {
         Description: "Delete users",
     })
 
-    // Organization Management
-    Register(&Permission{
-        ID:          "org.view",
-        Module:      "core",
-        DependsOn:   []string{},
-        Description: "View organizations",
-    })
-
-    Register(&Permission{
-        ID:          "org.create",
-        Module:      "core",
-        DependsOn:   []string{"org.view"},
-        Description: "Create organizations",
-    })
-
-    Register(&Permission{
-        ID:          "org.manage",
-        Module:      "core",
-        DependsOn:   []string{"org.view"},
-        Description: "Manage organizations",
-    })
-
     // Permission Management
     Register(&Permission{
         ID:          "permission.view",
@@ -1623,7 +1566,7 @@ func (s *UserService) Create(username, email, password string, isRoot bool) (*mo
 // Get user by ID
 func (s *UserService) GetByID(id string) (*models.User, error) {
     var user models.User
-    if err := s.db.Preload("Organization").Preload("Teams").Preload("Roles").
+    if err := s.db.Preload("Teams").Preload("Roles").
         First(&user, "id = ?", id).Error; err != nil {
         return nil, err
     }
@@ -1638,9 +1581,6 @@ func (s *UserService) List(page, perPage int, filters map[string]interface{}) ([
     query := s.db.Model(&models.User{})
 
     // Apply filters
-    if orgID, ok := filters["organization_id"]; ok {
-        query = query.Where("organization_id = ?", orgID)
-    }
     if isActive, ok := filters["is_active"]; ok {
         query = query.Where("is_active = ?", isActive)
     }
@@ -1651,7 +1591,7 @@ func (s *UserService) List(page, perPage int, filters map[string]interface{}) ([
     // Paginate
     offset := (page - 1) * perPage
     if err := query.Offset(offset).Limit(perPage).
-        Preload("Organization").Preload("Roles").
+        Preload("Roles").
         Find(&users).Error; err != nil {
         return nil, 0, err
     }
@@ -1747,64 +1687,7 @@ func (s *UserService) ChangePassword(id, newPassword string) error {
 
 ---
 
-## Organization & Team Management
-
-### Organization Service
-
-**Location:** `internal/services/organization_service.go`
-
-```go
-package services
-
-import (
-    "gorm.io/gorm"
-    "shellcn/internal/models"
-)
-
-type OrganizationService struct {
-    db           *gorm.DB
-    auditService *AuditService
-}
-
-func NewOrganizationService(db *gorm.DB, auditService *AuditService) *OrganizationService {
-    return &OrganizationService{
-        db:           db,
-        auditService: auditService,
-    }
-}
-
-func (s *OrganizationService) Create(name, description string) (*models.Organization, error) {
-    org := &models.Organization{
-        Name:        name,
-        Description: description,
-    }
-
-    if err := s.db.Create(org).Error; err != nil {
-        return nil, err
-    }
-
-    s.auditService.Log("org.create", org.ID, "success", nil)
-
-    return org, nil
-}
-
-func (s *OrganizationService) GetByID(id string) (*models.Organization, error) {
-    var org models.Organization
-    if err := s.db.Preload("Users").Preload("Teams").
-        First(&org, "id = ?", id).Error; err != nil {
-        return nil, err
-    }
-    return &org, nil
-}
-
-func (s *OrganizationService) List() ([]models.Organization, error) {
-    var orgs []models.Organization
-    if err := s.db.Find(&orgs).Error; err != nil {
-        return nil, err
-    }
-    return orgs, nil
-}
-```
+## Team Management
 
 ### Team Service
 
@@ -1830,9 +1713,8 @@ func NewTeamService(db *gorm.DB, auditService *AuditService) *TeamService {
     }
 }
 
-func (s *TeamService) Create(orgID, name, description string) (*models.Team, error) {
+func (s *TeamService) Create(name, description string) (*models.Team, error) {
     team := &models.Team{
-        OrganizationID: orgID,
         Name:           name,
         Description:    description,
     }
@@ -2590,23 +2472,13 @@ func SetupRouter(
             users.POST("/:id/deactivate", permMiddleware.Require("user.edit"), userHandler.Deactivate)
         }
 
-        // Organizations
-        orgs := protected.Group("/organizations")
-        {
-            orgs.GET("", permMiddleware.Require("org.view"), orgHandler.List)
-            orgs.GET("/:id", permMiddleware.Require("org.view"), orgHandler.Get)
-            orgs.POST("", permMiddleware.Require("org.create"), orgHandler.Create)
-            orgs.PUT("/:id", permMiddleware.Require("org.manage"), orgHandler.Update)
-            orgs.DELETE("/:id", permMiddleware.Require("org.manage"), orgHandler.Delete)
-        }
-
         // Teams
         teams := protected.Group("/teams")
         {
-            teams.GET("", permMiddleware.Require("org.view"), teamHandler.List)
-            teams.POST("", permMiddleware.Require("org.manage"), teamHandler.Create)
-            teams.POST("/:id/members", permMiddleware.Require("org.manage"), teamHandler.AddMember)
-            teams.DELETE("/:id/members/:user_id", permMiddleware.Require("org.manage"), teamHandler.RemoveMember)
+            teams.GET("", teamHandler.List)
+            teams.POST("", teamHandler.Create)
+            teams.POST("/:id/members", teamHandler.AddMember)
+            teams.DELETE("/:id/members/:user_id", teamHandler.RemoveMember)
         }
 
         // Permissions
@@ -2692,22 +2564,13 @@ func SetupRouter(
 | POST | `/api/users/:id/activate` | `user.edit` | Activate user |
 | POST | `/api/users/:id/deactivate` | `user.edit` | Deactivate user |
 
-**Organizations:**
-| Method | Path | Permission | Description |
-|--------|------|------------|-------------|
-| GET | `/api/organizations` | `org.view` | List organizations |
-| GET | `/api/organizations/:id` | `org.view` | Get organization |
-| POST | `/api/organizations` | `org.create` | Create organization |
-| PUT | `/api/organizations/:id` | `org.manage` | Update organization |
-| DELETE | `/api/organizations/:id` | `org.manage` | Delete organization |
-
 **Teams:**
 | Method | Path | Permission | Description |
 |--------|------|------------|-------------|
-| GET | `/api/teams` | `org.view` | List teams |
-| POST | `/api/teams` | `org.manage` | Create team |
-| POST | `/api/teams/:id/members` | `org.manage` | Add team member |
-| DELETE | `/api/teams/:id/members/:user_id` | `org.manage` | Remove team member |
+| GET | `/api/teams` | - | List teams |
+| POST | `/api/teams` | - | Create team |
+| POST | `/api/teams/:id/members` | - | Add team member |
+| DELETE | `/api/teams/:id/members/:user_id` | - | Remove team member |
 
 **Permissions:**
 | Method | Path | Permission | Description |
@@ -3411,11 +3274,6 @@ go tool cover -html=coverage.out
   - [x] Implement password management
   - [x] Write user service tests
 
-- [x] **Organization Service**
-
-  - [x] Implement CRUD operations
-  - [x] Write organization service tests
-
 - [x] **Team Service**
 
   - [x] Implement team management
@@ -3454,7 +3312,6 @@ go tool cover -html=coverage.out
   - [x] Implement auth handlers
   - [x] Implement setup handler
   - [x] Implement user handlers
-  - [x] Implement organization handlers
   - [x] Implement team handlers
   - [x] Implement permission handlers
   - [x] Implement session handlers
@@ -3578,7 +3435,7 @@ This implementation plan provides a complete roadmap for building the Core Modul
 1. **Robust Authentication:** Local auth, JWT sessions, optional MFA
 2. **Flexible Authorization:** RBAC with permission dependencies, root user bypass
 3. **Complete User Management:** CRUD, activation, password management
-4. **Multi-tenancy:** Organizations and teams
+4. **Team-based collaboration:** Team management and member control
 5. **Audit Trail:** Comprehensive logging of all actions
 6. **Security:** Encryption, secure sessions, password policies
 7. **Observability:** Prometheus metrics, structured logging, health checks

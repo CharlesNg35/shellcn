@@ -14,7 +14,7 @@
 4. [Application Architecture](#application-architecture)
 5. [Authentication & Setup Flows](#authentication--setup-flows)
 6. [User Management UI](#user-management-ui)
-7. [Organization & Team Management](#organization--team-management)
+7. [Team Management](#team-management)
 8. [Permission Management](#permission-management)
 9. [Session Management](#session-management)
 10. [Audit Log Viewer](#audit-log-viewer)
@@ -31,7 +31,7 @@
 
 ## Overview
 
-The Core Module frontend provides the user interface for authentication, user management, organization management, permission management, and audit logging. This is the foundation that all other modules build upon.
+The Core Module frontend provides the user interface for authentication, user management, team management, permission management, and audit logging. This is the foundation that all other modules build upon.
 
 ### Key Features
 
@@ -49,11 +49,10 @@ The Core Module frontend provides the user interface for authentication, user ma
   - Password management
   - Profile management
 
-- **Organization & Team Management:**
-  - Organization CRUD
-  - Team management
+- **Team Management:**
+  - Team CRUD
   - Member assignment
-  - Hierarchical views
+  - Team hierarchy views
 
 - **Permission Management:**
   - Permission matrix view
@@ -136,7 +135,6 @@ web/
 │   │   │
 │   │   └── settings/
 │   │       ├── Users.tsx
-│   │       ├── Organizations.tsx
 │   │       ├── Teams.tsx
 │   │       ├── Permissions.tsx
 │   │       ├── Security.tsx
@@ -203,7 +201,6 @@ web/
 │   │   ├── useCurrentUser.ts
 │   │   ├── usePermissions.ts
 │   │   ├── useUsers.ts
-│   │   ├── useOrganizations.ts
 │   │   ├── useTeams.ts
 │   │   ├── useSessions.ts
 │   │   ├── useAuditLogs.ts
@@ -214,7 +211,6 @@ web/
 │   │   │   ├── client.ts               # Axios instance
 │   │   │   ├── auth.ts
 │   │   │   ├── users.ts
-│   │   │   ├── organizations.ts
 │   │   │   ├── teams.ts
 │   │   │   ├── permissions.ts
 │   │   │   ├── sessions.ts
@@ -236,7 +232,6 @@ web/
 │   ├── types/                          # TypeScript types
 │   │   ├── auth.ts
 │   │   ├── user.ts
-│   │   ├── organization.ts
 │   │   ├── team.ts
 │   │   ├── permission.ts
 │   │   ├── session.ts
@@ -246,7 +241,6 @@ web/
 │   ├── schemas/                        # Zod validation schemas
 │   │   ├── auth.ts
 │   │   ├── user.ts
-│   │   ├── organization.ts
 │   │   └── team.ts
 │   │
 │   ├── App.tsx                         # Root component
@@ -403,12 +397,6 @@ export function Sidebar() {
       icon: Users,
       label: 'Users',
       permission: 'user.view'
-    },
-    {
-      to: '/settings/organizations',
-      icon: Building,
-      label: 'Organizations',
-      permission: 'org.view'
     },
     {
       to: '/settings/permissions',
@@ -2198,7 +2186,6 @@ import { Setup } from '@/pages/auth/Setup'
 import { PasswordReset } from '@/pages/auth/PasswordReset'
 import { Dashboard } from '@/pages/dashboard/Dashboard'
 import { Users } from '@/pages/settings/Users'
-import { Organizations } from '@/pages/settings/Organizations'
 import { Teams } from '@/pages/settings/Teams'
 import { Permissions } from '@/pages/settings/Permissions'
 import { Security } from '@/pages/settings/Security'
@@ -2270,10 +2257,6 @@ export const router = createBrowserRouter([
           {
             path: 'users',
             element: <Users />,
-          },
-          {
-            path: 'organizations',
-            element: <Organizations />,
           },
           {
             path: 'teams',
@@ -2690,13 +2673,11 @@ export const Disabled: Story = {
 
 - [ ] **API Modules**
   - [ ] Users API
-  - [ ] Organizations API
   - [ ] Teams API
 
 - [ ] **User Management Pages**
   - [ ] Users list page
   - [ ] User detail page
-  - [ ] Organizations page
   - [ ] Teams page
 
 - [ ] **User Components**
@@ -2708,12 +2689,10 @@ export const Disabled: Story = {
 - [ ] **Hooks**
   - [ ] useUsers hook
   - [ ] useUser hook
-  - [ ] useOrganizations hook
   - [ ] useTeams hook
 
 - [ ] **Schemas**
   - [ ] User validation schema
-  - [ ] Organization validation schema
   - [ ] Team validation schema
 
 ### Phase 5: Permission System (Week 5)
@@ -2844,8 +2823,6 @@ export interface User {
   is_root: boolean
   is_active: boolean
   mfa_enabled: boolean
-  organization_id?: string
-  organization?: Organization
   teams?: Team[]
   roles?: Role[]
   created_at: string
@@ -3135,17 +3112,14 @@ export default defineConfig({
 - [ ] Implement bulk operations
 - [ ] Write tests for user management
 
-### Phase 5: Organization & Team Management (Week 5)
-- [ ] Create Organizations list page
-- [ ] Build OrganizationForm component
+### Phase 5: Team Management (Week 5)
 - [ ] Implement Teams list page
 - [ ] Create TeamForm component
 - [ ] Build team member management UI
 - [ ] Implement member assignment/removal
-- [ ] Create useOrganizations hook
 - [ ] Build useTeams hook
-- [ ] Add hierarchical organization view
-- [ ] Write tests for org/team management
+- [ ] Add hierarchical team view
+- [ ] Write tests for team management
 
 ### Phase 6: Permission Management (Week 6)
 - [ ] Create Permissions page

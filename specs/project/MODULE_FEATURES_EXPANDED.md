@@ -94,13 +94,10 @@ This document contains the complete, expanded feature sets for Core, Docker, Kub
 - View user sessions
 - User profile management
 
-### 1.5 Organization & Team Management
-- Multi-tenancy support
-- Create organizations
-- Create teams within organizations
+### 1.5 Team Management
+- Create teams
 - Assign users to teams
 - Team-based permissions
-- Organization-level settings
 
 ### 1.6 Permission System
 - Fine-grained permission system

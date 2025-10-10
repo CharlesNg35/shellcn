@@ -593,7 +593,6 @@ internal/
 │       ├── auth.go         # Login, logout, refresh
 │       ├── setup.go        # First user setup
 │       ├── users.go        # User CRUD
-│       ├── organizations.go
 │       ├── teams.go
 │       ├── permissions.go
 │       ├── sessions.go
@@ -620,7 +619,6 @@ internal/
 │
 ├── models/
 │   ├── user.go
-│   ├── organization.go
 │   ├── team.go
 │   ├── role.go
 │   ├── permission.go

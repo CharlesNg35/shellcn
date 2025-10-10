@@ -17,7 +17,7 @@ A comprehensive web-based remote client platform for managing enterprise infrast
 ### Core Features
 
 - 🔐 **Secure Credential Vault** - AES-256-GCM encrypted credential storage
-- 👥 **Multi-User & Organizations** - Team-based access control
+- 👥 **Multi-User & Teams** - Team-based access control
 - 🔑 **Role-Based Permissions** - Granular permission system with dependencies
 - 📊 **Monitoring & Audit** - Prometheus metrics and comprehensive audit logging
 - 🖥️ **Terminal Interface** - xterm.js-based terminal with user preferences
@@ -239,7 +239,7 @@ make build-rust
 
 ShellCN uses a modular permission-based architecture:
 
-1. **Core Module** - Authentication, users, organizations, permissions
+1. **Core Module** - Authentication, users, teams, permissions
 2. **Vault Module** - Encrypted credential storage (AES-256-GCM)
 3. **Protocol Modules** - SSH, Telnet, RDP, VNC, Docker, K8s, Databases
 4. **Monitoring Module** - Prometheus metrics and health checks

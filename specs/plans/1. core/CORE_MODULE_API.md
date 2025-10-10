@@ -234,7 +234,7 @@ Response:
 | Method | Path                    | Description                                            | Permission                           | Handler                   |
 | ------ | ----------------------- | ------------------------------------------------------ | ------------------------------------ | ------------------------- |
 | GET    | `/api/setup/status`     | Returns `"pending"` until first admin exists.          | Public                               | `SetupHandler.Status`     |
-| POST   | `/api/setup/initialize` | Creates initial root admin and bootstrap organisation. | Public (guarded by empty user table) | `SetupHandler.Initialize` |
+| POST   | `/api/setup/initialize` | Creates initial root admin. | Public (guarded by empty user table) | `SetupHandler.Initialize` |
 
 **Sample** — Check Setup Status:
 
@@ -877,7 +877,7 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 **Supported query parameters for `GET /api/connections`:**
 
 - `protocol_id`: filter by driver.
-- `organization_id`, `team_id`: scope to tenant subset.
+- `team_id`: scope to tenant subset.
 - `folder_id`: filter by folder (`unassigned` for folderless).
 - `search`: case-insensitive substring match across name, host, tags, metadata.
 - `include=targets,visibility`: opt-in expansions (default `targets`).

@@ -24,7 +24,7 @@ This plan delivers Phase 3 of the Core module ([ROADMAP.md:37-41](../../ROADMAP.
 
 - **Protocol Driver** – the executable implementation that knows how to initiate a connection. Earlier documents referenced these as *modules*; protocol driver is now the canonical term.
 - **Protocol Definition** – catalog metadata produced by the driver registry (id, labels, sort order, capabilities).
-- **Connection** – a persisted record that references a protocol definition plus organization/team visibility and identity bindings.
+- **Connection** – a persisted record that references a protocol definition plus team visibility and identity bindings.
 - **Capabilities** – feature flags a driver exposes (terminal, desktop, recording, metrics, extras) which guide permissions and UI elements.
 
 Legacy references in specs that still mention “module” should be interpreted as “protocol driver.” Each driver spec must comply with the standards in `specs/project/PROTOCOL_DRIVER_STANDARDS.md`.
@@ -40,7 +40,7 @@ Legacy references in specs that still mention “module” should be interpreted
 | `connection_protocols`   | Snapshot of driver metadata + config enable state (registry mirror).      |
 | `connections`            | Base connection definition (name, protocol, org/team ownership, settings).|
 | `connection_targets`     | One-to-many endpoints (primary + fallback hosts, labels).                 |
-| `connection_visibilities`| Row-level ACL for organizations, teams, and direct-user grants.           |
+| `connection_visibilities`| Row-level ACL for teams and direct-user grants.           |
 | `connection_labels`      | (Optional) Tagging table for filters/search (future).                     |
 
 ### GORM Models
@@ -236,7 +236,7 @@ VisibilityService.Allowed(user, connectionID or protocol scope)
 - Driver readiness toggles `connection_protocols.driver_enabled`.
 - Configuration toggles `connection_protocols.config_enabled` (per tenant; default seeded from config file).
 - Permissions drawn from the modular system (see next section).
-- Visibility: per-connection access lists and organization/team scoping.
+- Visibility: per-connection access lists and team scoping.
 
 Root users bypass all gates except visibility (they can still manage shares) per `project_spec`.
 
@@ -405,9 +405,9 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
 ### UI Updates (`web/src/pages/connections/Connections.tsx`)
 
 - Tabs generated from `useUserProtocols` (category icons, capability chips).
-- Connection cards show organization/team badges, availability chips, and driver icons.
+- Connection cards show team badges, availability chips, and driver icons.
 - "Launch" button disabled when driver not available for user (lack permission or config disabled).
-- Share modal lists organizations/teams (leveraging `/api/orgs` and `/api/teams`).
+- Share modal lists teams (leveraging `/api/teams`).
 - Identity picker surfaces credential suggestions based on driver spec metadata (e.g., show kubeconfigs for Kubernetes drivers).
 
 ---
@@ -425,7 +425,7 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
    ```
 2. Update seeding to call `protocols.RegisterPermissions()`, `permissions.Sync`, and `protocols.Sync(ctx, db, cfg)`.
 3. Rename `AutoMigrateAndSeed` to accept `*app.Config` and pass from `cmd/server/main.go`.
-4. Add indexes for frequently queried columns (organization_id, protocol_id, permission_scope).
+4. Add indexes for frequently queried columns (team_id, protocol_id, permission_scope).
 
 ---
 
