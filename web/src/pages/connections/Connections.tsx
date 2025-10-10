@@ -55,10 +55,11 @@ export function Connections() {
   const unassignedView = searchParams.get('view') === 'unassigned'
 
   const {
-    data: protocols = [],
+    data: protocolsResult,
     isLoading: protocolsLoading,
     isError: protocolsError,
   } = useAvailableProtocols()
+  const protocols = useMemo(() => protocolsResult?.data ?? [], [protocolsResult])
   const { data: folderTree = [], isLoading: foldersLoading } = useConnectionFolders()
 
   const {

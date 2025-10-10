@@ -53,6 +53,12 @@ var (
 		StatusCode: http.StatusUnauthorized,
 	}
 
+	ErrInvalidCredentials = &AppError{
+		Code:       "INVALID_CREDENTIALS",
+		Message:    "Invalid username or password",
+		StatusCode: http.StatusUnauthorized,
+	}
+
 	ErrForbidden = &AppError{
 		Code:       "FORBIDDEN",
 		Message:    "Permission denied",

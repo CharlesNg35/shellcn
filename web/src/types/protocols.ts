@@ -24,3 +24,8 @@ export interface Protocol {
   configEnabled: boolean
   available: boolean
 }
+
+export interface ProtocolListResult {
+  data: Protocol[]
+  count: number
+}

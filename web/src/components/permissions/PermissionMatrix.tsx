@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Search, ShieldAlert } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Search,
+  ShieldAlert,
+} from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { Badge } from '@/components/ui/Badge'
@@ -308,7 +315,11 @@ export function PermissionMatrix({
                 <div className="flex flex-wrap items-center gap-1">
                   <span className="mr-1 font-medium">Implies:</span>
                   {permission.implies.map((dep) => (
-                    <Badge key={dep} variant="outline" className="text-[11px] uppercase tracking-wide">
+                    <Badge
+                      key={dep}
+                      variant="outline"
+                      className="text-[11px] uppercase tracking-wide"
+                    >
                       {dep}
                     </Badge>
                   ))}
@@ -386,13 +397,7 @@ export function PermissionMatrix({
           <span>out of {totalPermissions} permissions</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={expandAll}
-            className="gap-1.5"
-          >
+          <Button type="button" variant="outline" size="sm" onClick={expandAll} className="gap-1.5">
             <ChevronsDownUp className="h-4 w-4" />
             Expand All
           </Button>

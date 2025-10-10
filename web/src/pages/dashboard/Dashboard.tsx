@@ -18,7 +18,8 @@ export function Dashboard() {
     { staleTime: 30_000 }
   )
   const { data: folderTree = [] } = useConnectionFolders()
-  const { data: protocols = [] } = useAvailableProtocols()
+  const { data: availableProtocols } = useAvailableProtocols()
+  const protocols = availableProtocols?.data ?? []
 
   const connections = useMemo(() => connectionsResult?.data ?? [], [connectionsResult?.data])
 

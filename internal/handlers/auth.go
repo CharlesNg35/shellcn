@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	stdErrors "errors"
 	"net/http"
 	"strings"
 
@@ -167,7 +168,7 @@ func (h *AuthHandler) handleLocalLogin(c *gin.Context, req loginRequest) {
 	})
 	if err != nil {
 		metrics.AuthAttempts.WithLabelValues("failure").Inc()
-		response.Error(c, errors.ErrUnauthorized)
+		response.Error(c, errors.ErrInvalidCredentials)
 		return
 	}
 
@@ -211,7 +212,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 	})
 	if err != nil {
 		metrics.AuthAttempts.WithLabelValues("failure").Inc()
-		response.Error(c, errors.ErrUnauthorized)
+		response.Error(c, errors.ErrInvalidCredentials)
 		return
 	}
 
@@ -224,7 +225,14 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 	})
 	if err != nil {
 		metrics.AuthAttempts.WithLabelValues("failure").Inc()
-		response.Error(c, errors.ErrUnauthorized)
+		switch {
+		case stdErrors.Is(err, iauth.ErrSSOUserNotFound),
+			stdErrors.Is(err, iauth.ErrSSOUserDisabled),
+			stdErrors.Is(err, iauth.ErrSSOEmailRequired):
+			response.Error(c, errors.ErrInvalidCredentials)
+		default:
+			response.Error(c, errors.ErrUnauthorized)
+		}
 		return
 	}
 

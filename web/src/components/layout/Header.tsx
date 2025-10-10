@@ -67,7 +67,7 @@ export function Header({ onToggleSidebar }: HeaderProps) {
         <Breadcrumbs className="hidden flex-1 truncate md:flex" />
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 -mr-3.5">
         <NotificationBell />
         <ThemeToggle />
         <div className="relative" ref={menuRef}>

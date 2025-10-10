@@ -1,5 +1,5 @@
 import type { ApiResponse } from '@/types/api'
-import type { Protocol, ProtocolCapabilities } from '@/types/protocols'
+import type { Protocol, ProtocolCapabilities, ProtocolListResult } from '@/types/protocols'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
 
@@ -64,16 +64,43 @@ function transformProtocol(raw: ProtocolResponse): Protocol {
   }
 }
 
-export async function fetchProtocols(): Promise<Protocol[]> {
-  const response = await apiClient.get<ApiResponse<ProtocolResponse[]>>(PROTOCOLS_ENDPOINT)
-  const data = unwrapResponse(response)
-  return data.map(transformProtocol)
+interface ProtocolListResponse {
+  protocols?: ProtocolResponse[]
+  count?: number
 }
 
-export async function fetchAvailableProtocols(): Promise<Protocol[]> {
-  const response = await apiClient.get<ApiResponse<ProtocolResponse[]>>(
+function transformProtocolList(
+  payload: ProtocolListResponse | ProtocolResponse[]
+): ProtocolListResult {
+  const protocolsArray = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.protocols)
+      ? payload.protocols
+      : []
+
+  const transformed = protocolsArray.map(transformProtocol)
+  const count =
+    !Array.isArray(payload) && typeof payload?.count === 'number'
+      ? payload.count
+      : transformed.length
+
+  return {
+    data: transformed,
+    count,
+  }
+}
+
+export async function fetchProtocols(): Promise<ProtocolListResult> {
+  const response =
+    await apiClient.get<ApiResponse<ProtocolListResponse | ProtocolResponse[]>>(PROTOCOLS_ENDPOINT)
+  const data = unwrapResponse(response)
+  return transformProtocolList(data)
+}
+
+export async function fetchAvailableProtocols(): Promise<ProtocolListResult> {
+  const response = await apiClient.get<ApiResponse<ProtocolListResponse | ProtocolResponse[]>>(
     PROTOCOLS_AVAILABLE_ENDPOINT
   )
   const data = unwrapResponse(response)
-  return data.map(transformProtocol)
+  return transformProtocolList(data)
 }
