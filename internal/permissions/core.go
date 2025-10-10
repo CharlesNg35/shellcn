@@ -26,6 +26,17 @@ func init() {
 			Description: "Delete users",
 		},
 		{
+			ID:          "team.view",
+			Module:      "core",
+			Description: "View teams",
+		},
+		{
+			ID:          "team.manage",
+			Module:      "core",
+			DependsOn:   []string{"team.view"},
+			Description: "Create and manage teams",
+		},
+		{
 			ID:          "connection.view",
 			Module:      "core",
 			Description: "View connection protocols and resources",
@@ -138,6 +149,17 @@ func init() {
 			Module:      "core",
 			DependsOn:   []string{"notification.view"},
 			Description: "Manage in-app notifications and broadcasts",
+		},
+		{
+			ID:          "org.view",
+			Module:      "core",
+			Description: "View organization settings",
+		},
+		{
+			ID:          "org.manage",
+			Module:      "core",
+			DependsOn:   []string{"org.view"},
+			Description: "Manage organization settings",
 		},
 	}
 

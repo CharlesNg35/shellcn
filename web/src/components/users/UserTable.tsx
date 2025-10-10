@@ -201,6 +201,7 @@ export function UserTable({
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getRowId: (row) => row.id,
   })
 
   useEffect(() => {
@@ -243,27 +244,28 @@ export function UserTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <table className="w-full min-w-[720px]">
-        <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <tr key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <th key={header.id} className="px-4 py-3 text-left">
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.header, header.getContext())}
-                </th>
-              ))}
-            </tr>
-          ))}
-        </thead>
+    <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px]">
+          <thead className="bg-muted/50 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <th key={header.id} className="px-4 py-3 text-left">
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => (
             <tr
               key={row.id}
               className={cn(
-                'border-t border-border/60 transition-colors',
+                'border-t border-border/60',
                 row.getIsSelected() ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/40'
               )}
             >
@@ -281,9 +283,10 @@ export function UserTable({
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-4 py-3 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 bg-muted/20 px-4 py-3 text-sm">
         <div className="text-muted-foreground">
           Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} of {total}
         </div>
@@ -297,7 +300,7 @@ export function UserTable({
           >
             Previous
           </Button>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-xs font-medium text-muted-foreground">
             Page {page} of {totalPages}
           </div>
           <Button

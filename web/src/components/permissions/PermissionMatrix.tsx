@@ -192,7 +192,7 @@ export function PermissionMatrix({
                   <div
                     key={permission.id}
                     className={cn(
-                      'flex flex-col gap-2 px-5 py-4 transition-colors md:flex-row md:items-start md:justify-between',
+                      'flex flex-col gap-2 px-5 py-4 md:flex-row md:items-start md:justify-between',
                       isChecked ? 'bg-primary/5' : 'hover:bg-muted/40'
                     )}
                   >

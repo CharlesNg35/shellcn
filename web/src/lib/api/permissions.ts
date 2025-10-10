@@ -16,8 +16,8 @@ const MY_PERMISSIONS_ENDPOINT = '/permissions/my'
 const ROLES_ENDPOINT = '/permissions/roles'
 
 interface PermissionRegistryEntryResponse {
-  id: string
-  module: string
+  id?: string
+  module?: string
   description?: string
   depends_on?: unknown
   implies?: unknown
@@ -58,10 +58,28 @@ function normalisePermissionIds(source: unknown): string[] {
   return []
 }
 
-function transformPermission(raw: PermissionRegistryEntryResponse): PermissionDefinition {
+function toPermissionId(value: unknown, fallback?: string): string | null {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value.trim()
+  }
+  if (fallback && fallback.trim().length > 0) {
+    return fallback.trim()
+  }
+  return null
+}
+
+function transformPermission(
+  raw: PermissionRegistryEntryResponse,
+  fallbackId?: string
+): PermissionDefinition | null {
+  const id = toPermissionId(raw.id, fallbackId)
+  if (!id) {
+    return null
+  }
+
   return {
-    id: raw.id,
-    module: raw.module,
+    id,
+    module: toPermissionId(raw.module, 'core') ?? 'core',
     description: raw.description,
     depends_on: normalisePermissionIds(raw.depends_on),
     implies: normalisePermissionIds(raw.implies),
@@ -69,18 +87,30 @@ function transformPermission(raw: PermissionRegistryEntryResponse): PermissionDe
 }
 
 function transformRegistry(payload: PermissionRegistryResponse): PermissionRegistry {
-  return Object.fromEntries(
-    Object.entries(payload ?? {}).map(([id, definition]) => [id, transformPermission(definition)])
-  )
+  const entries: Array<[string, PermissionDefinition]> = []
+
+  Object.entries(payload ?? {}).forEach(([id, definition]) => {
+    const transformed = transformPermission(definition, id)
+    if (transformed) {
+      entries.push([transformed.id, transformed])
+    }
+  })
+
+  return Object.fromEntries(entries)
 }
 
 function transformRole(raw: RoleResponse): RoleRecord {
+  const permissions =
+    raw.permissions
+      ?.map((permission) => transformPermission(permission, permission.id))
+      .filter((permission): permission is PermissionDefinition => permission !== null) ?? []
+
   return {
     id: raw.id,
     name: raw.name,
     description: raw.description,
     is_system: Boolean(raw.is_system),
-    permissions: raw.permissions?.map(transformPermission) ?? [],
+    permissions,
     created_at: raw.created_at,
     updated_at: raw.updated_at,
   }

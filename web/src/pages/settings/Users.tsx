@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -81,6 +81,14 @@ export function Users() {
     refetch()
   }
 
+  const handleViewUser = useCallback((record: UserRecord) => {
+    setDetailUserId(record.id)
+  }, [])
+
+  const handleEditUser = useCallback((record: UserRecord) => {
+    setEditingUser(record)
+  }, [])
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -115,8 +123,8 @@ export function Users() {
           isLoading={isLoading}
           onPageChange={setPage}
           onSelectionChange={setSelectedIds}
-          onViewUser={(record) => setDetailUserId(record.id)}
-          onEditUser={(record) => setEditingUser(record)}
+          onViewUser={handleViewUser}
+          onEditUser={handleEditUser}
         />
       </div>
 

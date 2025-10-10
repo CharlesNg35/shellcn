@@ -59,11 +59,11 @@ export function UserFilters({ filters, onChange }: UserFiltersProps) {
   }, [filters.search, filters.status])
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-card p-4">
+    <div className="flex flex-col gap-4 rounded-lg border border-border/60 bg-card p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <Filter className="h-4 w-4" />
-          Filters
+          <span>Filter users</span>
         </div>
         <Button
           type="button"
@@ -77,29 +77,32 @@ export function UserFilters({ filters, onChange }: UserFiltersProps) {
         </Button>
       </div>
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+      <div className="flex flex-col gap-3">
         <Input
-          label="Search"
-          placeholder="Search by username, email, or name"
+          placeholder="Search by username, email, or name..."
           value={searchValue}
           onChange={(event) => setSearchValue(event.target.value)}
+          className="w-full"
         />
 
-        <div className="flex flex-1 flex-wrap gap-2">
-          {STATUS_FILTERS.map((status) => {
-            const isActive = activeStatus === status.value
-            return (
-              <Button
-                key={status.value}
-                type="button"
-                variant={isActive ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => onChange({ ...filters, status: status.value })}
-              >
-                {status.label}
-              </Button>
-            )
-          })}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Status:</span>
+          <div className="flex flex-wrap gap-2">
+            {STATUS_FILTERS.map((status) => {
+              const isActive = activeStatus === status.value
+              return (
+                <Button
+                  key={status.value}
+                  type="button"
+                  variant={isActive ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => onChange({ ...filters, status: status.value })}
+                >
+                  {status.label}
+                </Button>
+              )
+            })}
+          </div>
         </div>
       </div>
     </div>

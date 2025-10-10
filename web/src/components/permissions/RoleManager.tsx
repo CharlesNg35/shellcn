@@ -154,7 +154,7 @@ export function RoleManager({
                   <li
                     key={role.id}
                     className={cn(
-                      'group relative flex cursor-pointer items-center justify-between px-4 py-3 transition-colors hover:bg-primary/5',
+                      'group relative flex cursor-pointer items-center justify-between px-4 py-3 hover:bg-primary/5',
                       isSelected && 'bg-primary/10'
                     )}
                     onClick={() => onSelectRole(role.id)}
