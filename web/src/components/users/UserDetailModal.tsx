@@ -111,7 +111,7 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
           </PermissionGuard>
 
           <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
-            <form className="space-y-3" onSubmit={handlePasswordSubmit}>
+            <form className="space-y-3" autoComplete="off" onSubmit={handlePasswordSubmit}>
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-muted-foreground">Password Management</p>
                 <Input

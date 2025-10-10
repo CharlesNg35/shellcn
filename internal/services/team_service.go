@@ -65,7 +65,7 @@ func (s *TeamService) Create(ctx context.Context, input CreateTeamInput) (*model
 	}
 
 	if err := s.db.WithContext(ctx).Create(team).Error; err != nil {
-		return nil, fmt.Errorf("team service: create team: %w", err)
+		return nil, fmt.Errorf("failed to create team: %w", err)
 	}
 
 	recordAudit(s.auditService, ctx, AuditEntry{

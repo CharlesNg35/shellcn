@@ -108,7 +108,7 @@ export function RoleForm({ mode = 'create', role, onClose, onSuccess }: RoleForm
   const isSaving = isSubmitting || createRole.isPending || updateRole.isPending
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+    <form className="space-y-4" autoComplete="off" onSubmit={handleSubmit(onSubmit)}>
       <Input
         label="Role name"
         placeholder="Viewer"

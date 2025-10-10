@@ -122,7 +122,7 @@ export function TeamMembersManager({
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">Add member</span>
               <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-                Requires team.manage
+                Requires {PERMISSIONS.TEAM.MANAGE}
               </Badge>
             </div>
 

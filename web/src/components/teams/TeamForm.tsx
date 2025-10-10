@@ -117,7 +117,7 @@ export function TeamForm({ mode = 'create', team, onClose, onSuccess }: TeamForm
   const isLoading = isSubmitting || create.isPending || update.isPending
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+    <form className="space-y-4" autoComplete="off" onSubmit={handleSubmit(onSubmit)}>
       <Input
         label="Team name"
         placeholder="Security Operations"

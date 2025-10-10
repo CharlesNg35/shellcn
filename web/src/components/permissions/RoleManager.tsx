@@ -189,36 +189,37 @@ export function RoleManager({
                       </div>
                     </div>
 
-                    <PermissionGuard permission={PERMISSIONS.PERMISSION.MANAGE}>
-                      <div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onEditRole(role)
-                          }}
-                          disabled={role.is_system}
-                        >
-                          <PencilLine className="h-4 w-4" />
-                          <span className="sr-only">Edit {role.name}</span>
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onDeleteRole(role)
-                          }}
-                          disabled={role.is_system}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                          <span className="sr-only">Delete {role.name}</span>
-                        </Button>
-                      </div>
-                    </PermissionGuard>
+                    {!role.is_system ? (
+                      <PermissionGuard permission={PERMISSIONS.PERMISSION.MANAGE}>
+                        <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onEditRole(role)
+                            }}
+                            aria-label={`Edit ${role.name}`}
+                          >
+                            <PencilLine className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onDeleteRole(role)
+                            }}
+                            className="text-destructive hover:text-destructive"
+                            aria-label={`Delete ${role.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </PermissionGuard>
+                    ) : null}
                   </li>
                 )
               })}
