@@ -12,9 +12,7 @@ export interface NotificationPayload {
   severity?: NotificationSeverity
 }
 
-export interface NotificationEventPayload {
-  event: string
-  data?: NotificationPayload
+export interface NotificationEventData {
   notification?: NotificationPayload
   notification_id?: string
 }

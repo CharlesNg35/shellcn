@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/notifications"
+	"github.com/charlesng35/shellcn/internal/realtime"
 	apperrors "github.com/charlesng35/shellcn/pkg/errors"
 )
 
@@ -52,14 +52,20 @@ type ListNotificationsInput struct {
 	Offset int
 }
 
+// NotificationEventPayload represents data sent to realtime consumers.
+type NotificationEventPayload struct {
+	Notification   *NotificationDTO `json:"notification,omitempty"`
+	NotificationID string           `json:"notification_id,omitempty"`
+}
+
 // NotificationService manages user in-app notifications.
 type NotificationService struct {
 	db  *gorm.DB
-	hub *notifications.Hub
+	hub *realtime.Hub
 }
 
 // NewNotificationService constructs a NotificationService.
-func NewNotificationService(db *gorm.DB, hub *notifications.Hub) (*NotificationService, error) {
+func NewNotificationService(db *gorm.DB, hub *realtime.Hub) (*NotificationService, error) {
 	if db == nil {
 		return nil, errors.New("notification service: db is required")
 	}
@@ -132,9 +138,8 @@ func (s *NotificationService) Create(ctx context.Context, input CreateNotificati
 	}
 
 	dto := mapNotification(notification)
-	s.broadcast(userID, notifications.Event{
-		Event:        "notification.created",
-		Notification: dto,
+	s.broadcast(userID, "notification.created", &NotificationEventPayload{
+		Notification: &dto,
 	})
 	return &dto, nil
 }
@@ -168,9 +173,8 @@ func (s *NotificationService) MarkRead(ctx context.Context, userID, notification
 	dto.IsRead = true
 	dto.ReadAt = &now
 
-	s.broadcast(userID, notifications.Event{
-		Event:          "notification.read",
-		Notification:   dto,
+	s.broadcast(userID, "notification.read", &NotificationEventPayload{
+		Notification:   &dto,
 		NotificationID: notification.ID,
 	})
 
@@ -202,9 +206,8 @@ func (s *NotificationService) MarkUnread(ctx context.Context, userID, notificati
 	notification.ReadAt = nil
 	dto := mapNotification(notification)
 
-	s.broadcast(userID, notifications.Event{
-		Event:          "notification.updated",
-		Notification:   dto,
+	s.broadcast(userID, "notification.updated", &NotificationEventPayload{
+		Notification:   &dto,
 		NotificationID: notification.ID,
 	})
 
@@ -224,8 +227,7 @@ func (s *NotificationService) Delete(ctx context.Context, userID, notificationID
 		return apperrors.ErrNotFound
 	}
 
-	s.broadcast(userID, notifications.Event{
-		Event:          "notification.deleted",
+	s.broadcast(userID, "notification.deleted", &NotificationEventPayload{
 		NotificationID: notificationID,
 	})
 	return nil
@@ -245,16 +247,22 @@ func (s *NotificationService) MarkAllRead(ctx context.Context, userID string) er
 		return fmt.Errorf("notification service: mark all read: %w", err)
 	}
 
-	s.broadcast(userID, notifications.Event{
-		Event: "notification.read_all",
-	})
+	s.broadcast(userID, "notification.read_all", nil)
 	return nil
 }
 
-func (s *NotificationService) broadcast(userID string, event notifications.Event) {
-	if s.hub != nil {
-		s.hub.Broadcast(userID, event)
+func (s *NotificationService) broadcast(userID, event string, payload *NotificationEventPayload) {
+	if s.hub == nil {
+		return
 	}
+	message := realtime.Message{
+		Stream: realtime.StreamNotifications,
+		Event:  event,
+	}
+	if payload != nil {
+		message.Data = payload
+	}
+	s.hub.BroadcastToUser(realtime.StreamNotifications, userID, message)
 }
 
 func mapNotificationRows(rows []models.Notification) []NotificationDTO {

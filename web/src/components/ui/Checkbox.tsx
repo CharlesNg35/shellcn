@@ -15,7 +15,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
     }
 
     return (
-      <div className="relative inline-flex">
+      <div className="relative inline-flex cursor-pointer">
         <input
           ref={ref}
           type="checkbox"
@@ -30,7 +30,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
             'peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2',
             'peer-disabled:cursor-not-allowed peer-disabled:opacity-50',
             'peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground',
-            'transition-colors',
+            'cursor-pointer transition-colors hover:border-primary/50',
             className
           )}
         >

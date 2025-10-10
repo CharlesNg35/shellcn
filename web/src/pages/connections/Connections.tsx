@@ -160,6 +160,14 @@ export function Connections() {
         </Button>
       </header>
 
+      {hasError && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+          <p className="text-sm font-medium text-destructive">
+            Failed to load data. Check your network connection or permissions.
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -224,8 +232,6 @@ export function Connections() {
 
           {isLoading ? (
             <LoadingState />
-          ) : hasError ? (
-            <ErrorState />
           ) : filteredConnections.length === 0 ? (
             <EmptyState hasProtocols={protocols.length > 0} search={normalizedSearch} />
           ) : (
@@ -375,21 +381,13 @@ function EmptyState({ hasProtocols, search }: EmptyStateProps) {
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/50 py-16 text-center">
       <Server className="mb-4 h-12 w-12 text-muted-foreground" />
       <h3 className="mb-2 text-lg font-semibold">{search ? 'No matches' : 'No connections yet'}</h3>
-      <p className="mb-4 max-w-md text-sm text-muted-foreground">
+      <p className="max-w-md text-sm text-muted-foreground">
         {search
           ? 'Try refining your search or switch to a different protocol tab.'
           : hasProtocols
             ? 'Create a connection to reuse driver settings and shared identities.'
             : 'No protocol drivers are currently available. Check your permissions or driver health.'}
       </p>
-      {!search && (
-        <Button asChild size="sm">
-          <Link to="/connections/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Connection
-          </Link>
-        </Button>
-      )}
     </div>
   )
 }
@@ -401,17 +399,6 @@ function LoadingState() {
         <Loader2 className="h-4 w-4 animate-spin" />
         <span>Loading connections…</span>
       </div>
-    </div>
-  )
-}
-
-function ErrorState() {
-  return (
-    <div className="flex min-h-[200px] flex-col items-center justify-center rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-6 text-center">
-      <p className="font-semibold text-destructive">Unable to load connections</p>
-      <p className="text-sm text-destructive">
-        Check your network connection or verify you have the required permissions.
-      </p>
     </div>
   )
 }

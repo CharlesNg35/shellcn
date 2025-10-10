@@ -13,15 +13,15 @@ import (
 	"github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/notifications"
+	"github.com/charlesng35/shellcn/internal/realtime"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/pkg/response"
 )
 
 func TestNotificationHandlerListAndMarkRead(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
-	hub := notifications.NewHub()
-	handler, err := NewNotificationHandler(db, hub, nil)
+	hub := realtime.NewHub()
+	handler, err := NewNotificationHandler(db, hub)
 	require.NoError(t, err)
 
 	user := models.User{

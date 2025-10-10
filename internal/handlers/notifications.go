@@ -7,9 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/middleware"
-	"github.com/charlesng35/shellcn/internal/notifications"
+	"github.com/charlesng35/shellcn/internal/realtime"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/pkg/errors"
 	"github.com/charlesng35/shellcn/pkg/response"
@@ -18,20 +17,16 @@ import (
 // NotificationHandler exposes HTTP endpoints for notifications.
 type NotificationHandler struct {
 	service *services.NotificationService
-	hub     *notifications.Hub
-	jwt     *iauth.JWTService
 }
 
 // NewNotificationHandler constructs a notification handler.
-func NewNotificationHandler(db *gorm.DB, hub *notifications.Hub, jwt *iauth.JWTService) (*NotificationHandler, error) {
+func NewNotificationHandler(db *gorm.DB, hub *realtime.Hub) (*NotificationHandler, error) {
 	service, err := services.NewNotificationService(db, hub)
 	if err != nil {
 		return nil, err
 	}
 	return &NotificationHandler{
 		service: service,
-		hub:     hub,
-		jwt:     jwt,
 	}, nil
 }
 
@@ -124,35 +119,6 @@ func (h *NotificationHandler) MarkAllRead(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, gin.H{"updated": true})
-}
-
-// Stream upgrades the connection to a WebSocket for notification streaming.
-func (h *NotificationHandler) Stream(c *gin.Context) {
-	if h.jwt == nil || h.hub == nil {
-		response.Error(c, errors.ErrNotFound)
-		return
-	}
-
-	token := strings.TrimSpace(c.Query("token"))
-	if token == "" {
-		authz := c.GetHeader("Authorization")
-		if strings.HasPrefix(strings.ToLower(authz), "bearer ") {
-			token = strings.TrimSpace(authz[7:])
-		}
-	}
-
-	if token == "" {
-		response.Error(c, errors.ErrUnauthorized)
-		return
-	}
-
-	claims, err := h.jwt.ValidateAccessToken(token)
-	if err != nil {
-		response.Error(c, errors.ErrUnauthorized)
-		return
-	}
-
-	h.hub.Serve(claims.UserID, c.Writer, c.Request)
 }
 
 // Create allows internal systems to create a notification (primarily for tests/admin).

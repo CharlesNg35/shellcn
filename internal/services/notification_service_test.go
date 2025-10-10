@@ -8,7 +8,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/notifications"
+	"github.com/charlesng35/shellcn/internal/realtime"
 )
 
 func TestNotificationServiceCreateAndList(t *testing.T) {
@@ -22,7 +22,7 @@ func TestNotificationServiceCreateAndList(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&user).Error)
 
-	hub := notifications.NewHub()
+	hub := realtime.NewHub()
 	svc, err := NewNotificationService(db, hub)
 	require.NoError(t, err)
 
@@ -56,7 +56,7 @@ func TestNotificationServiceMarkReadAndUnread(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&user).Error)
 
-	svc, err := NewNotificationService(db, notifications.NewHub())
+	svc, err := NewNotificationService(db, realtime.NewHub())
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -90,7 +90,7 @@ func TestNotificationServiceDeleteAndMarkAll(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&user).Error)
 
-	svc, err := NewNotificationService(db, notifications.NewHub())
+	svc, err := NewNotificationService(db, realtime.NewHub())
 	require.NoError(t, err)
 
 	ctx := context.Background()

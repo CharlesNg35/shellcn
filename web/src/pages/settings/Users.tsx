@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { UserFilters, normalizeFilters, type UserFilterState } from '@/components/users/UserFilters'
 import { UserTable } from '@/components/users/UserTable'
 import { UserForm } from '@/components/users/UserForm'
 import { UserDetailModal } from '@/components/users/UserDetailModal'
 import { UserBulkActionsBar } from '@/components/users/UserBulkActionsBar'
-import { Modal } from '@/components/ui/Modal'
 import { useUserMutations, useUsers } from '@/hooks/useUsers'
 import type { UserRecord } from '@/types/users'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -69,7 +70,7 @@ export function Users() {
 
   const handleCreateSuccess = () => {
     setIsCreateModalOpen(false)
-    refetch() // Refresh the list after creation
+    refetch()
   }
 
   const handleEditSuccess = (updated: UserRecord) => {
@@ -77,52 +78,53 @@ export function Users() {
     if (detailUserId === updated.id) {
       setDetailUserId(updated.id)
     }
-    refetch() // Refresh the list after edit
+    refetch()
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold text-foreground">Users</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage platform users, activation status, and administrative privileges
-          </p>
-        </div>
-        <PermissionGuard permission={PERMISSIONS.USER.CREATE}>
-          <Button onClick={() => setIsCreateModalOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create user
-          </Button>
-        </PermissionGuard>
+      <PageHeader
+        title="Users"
+        description="Manage platform users, activation status, and administrative privileges. Create new accounts, assign roles, and control access to system resources."
+        action={
+          <PermissionGuard permission={PERMISSIONS.USER.CREATE}>
+            <Button onClick={() => setIsCreateModalOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create User
+            </Button>
+          </PermissionGuard>
+        }
+      />
+
+      <div className="space-y-4">
+        <UserFilters filters={filters} onChange={setFilters} />
+
+        <UserBulkActionsBar
+          selectedCount={selectedIds.length}
+          onActivate={handleBulkActivate}
+          onDeactivate={handleBulkDeactivate}
+          onDelete={handleBulkDelete}
+          isProcessing={isBulkProcessing}
+        />
+
+        <UserTable
+          users={users}
+          meta={meta}
+          page={meta?.page ?? page}
+          perPage={meta?.per_page ?? DEFAULT_PER_PAGE}
+          isLoading={isLoading}
+          onPageChange={setPage}
+          onSelectionChange={setSelectedIds}
+          onViewUser={(record) => setDetailUserId(record.id)}
+          onEditUser={(record) => setEditingUser(record)}
+        />
       </div>
-
-      <UserFilters filters={filters} onChange={setFilters} />
-
-      <UserBulkActionsBar
-        selectedCount={selectedIds.length}
-        onActivate={handleBulkActivate}
-        onDeactivate={handleBulkDeactivate}
-        onDelete={handleBulkDelete}
-        isProcessing={isBulkProcessing}
-      />
-
-      <UserTable
-        users={users}
-        meta={meta}
-        page={meta?.page ?? page}
-        perPage={meta?.per_page ?? DEFAULT_PER_PAGE}
-        isLoading={isLoading}
-        onPageChange={setPage}
-        onSelectionChange={setSelectedIds}
-        onViewUser={(record) => setDetailUserId(record.id)}
-        onEditUser={(record) => setEditingUser(record)}
-      />
 
       <Modal
         open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
-        title="Create user"
+        title="Create User"
+        description="Add a new user account to the platform. Set initial credentials, status, and administrative privileges."
       >
         <UserForm
           mode="create"
@@ -134,7 +136,8 @@ export function Users() {
       <Modal
         open={Boolean(editingUser)}
         onClose={() => setEditingUser(null)}
-        title={editingUser ? `Edit ${editingUser.username}` : 'Edit user'}
+        title={editingUser ? `Edit ${editingUser.username}` : 'Edit User'}
+        description="Update user account details, status, and permissions. Changes take effect immediately."
       >
         <UserForm
           mode="edit"

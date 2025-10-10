@@ -2,7 +2,9 @@ import { useCallback, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notificationsApi } from '@/lib/api/notifications'
 import { buildWebSocketUrl } from '@/lib/utils/websocket'
-import type { NotificationEventPayload, NotificationPayload } from '@/types/notifications'
+import type { NotificationEventData, NotificationPayload } from '@/types/notifications'
+import type { RealtimeMessage } from '@/types/realtime'
+import { REALTIME_STREAM_NOTIFICATIONS } from '@/types/realtime'
 import { useAuth } from './useAuth'
 import { useWebSocket } from './useWebSocket'
 
@@ -29,7 +31,7 @@ function removeNotification(existing: NotificationPayload[], notificationId: str
 }
 
 export function useNotifications() {
-  const { isAuthenticated } = useAuth({ autoInitialize: true })
+  const { isAuthenticated, tokens } = useAuth({ autoInitialize: true })
   const queryClient = useQueryClient()
 
   const notificationsQuery = useQuery({
@@ -43,63 +45,61 @@ export function useNotifications() {
   const notifications = useMemo(() => notificationsQuery.data ?? [], [notificationsQuery.data])
 
   const handleSocketMessage = useCallback(
-    (payload: NotificationEventPayload | NotificationPayload | null) => {
-      if (!payload) {
+    (message: RealtimeMessage<NotificationEventData> | null) => {
+      if (!message || message.stream !== REALTIME_STREAM_NOTIFICATIONS) {
         return
       }
 
       queryClient.setQueryData<NotificationPayload[]>(NOTIFICATION_QUERY_KEY, (current = []) => {
-        if ('event' in (payload as NotificationEventPayload)) {
-          const eventPayload = payload as NotificationEventPayload
-          const eventType = eventPayload.event
-          const notificationData = eventPayload.data ?? eventPayload.notification ?? undefined
+        const { event: eventType, data } = message
+        const notificationData = data?.notification
+        const notificationId = data?.notification_id ?? notificationData?.id
 
-          if (!eventType) {
+        switch (eventType) {
+          case 'notification.created':
+          case 'notification.updated':
+            if (notificationData) {
+              return mergeNotification(current, notificationData)
+            }
             return current
-          }
-
-          switch (eventType) {
-            case 'notification.created':
-            case 'notification.updated':
-              if (notificationData) {
-                return mergeNotification(current, notificationData)
-              }
-              return current
-            case 'notification.read':
-              if (eventPayload.notification_id) {
-                return current.map((item) =>
-                  item.id === eventPayload.notification_id ? { ...item, is_read: true } : item
-                )
-              }
-              if (notificationData) {
-                return mergeNotification(current, { ...notificationData, is_read: true })
-              }
-              return current
-            case 'notification.deleted':
-              if (eventPayload.notification_id) {
-                return removeNotification(current, eventPayload.notification_id)
-              }
-              if (notificationData?.id) {
-                return removeNotification(current, notificationData.id)
-              }
-              return current
-            default:
-              return current
-          }
+          case 'notification.read':
+            if (notificationId) {
+              return current.map((item) =>
+                item.id === notificationId ? { ...item, is_read: true } : item
+              )
+            }
+            if (notificationData) {
+              return mergeNotification(current, { ...notificationData, is_read: true })
+            }
+            return current
+          case 'notification.deleted':
+            if (notificationId) {
+              return removeNotification(current, notificationId)
+            }
+            return current
+          case 'notification.read_all':
+            return current.map((item) => ({ ...item, is_read: true }))
+          default:
+            return current
         }
-
-        return mergeNotification(current, payload as NotificationPayload)
       })
     },
     [queryClient]
   )
 
-  const websocketUrl = useMemo(
-    () => (isAuthenticated ? buildWebSocketUrl('/ws/notifications') : ''),
-    [isAuthenticated]
-  )
+  const accessToken = tokens?.accessToken ?? ''
 
-  const { isConnected } = useWebSocket(websocketUrl, {
+  const websocketUrl = useMemo(() => {
+    if (!isAuthenticated || !accessToken) {
+      return ''
+    }
+    return buildWebSocketUrl('/ws', {
+      token: accessToken,
+      streams: REALTIME_STREAM_NOTIFICATIONS,
+    })
+  }, [accessToken, isAuthenticated])
+
+  const { isConnected } = useWebSocket<RealtimeMessage<NotificationEventData>>(websocketUrl, {
     enabled: isAuthenticated && Boolean(websocketUrl),
     autoReconnect: true,
     onMessage: handleSocketMessage,

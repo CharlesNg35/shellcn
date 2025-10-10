@@ -15,8 +15,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/auth/providers"
 	"github.com/charlesng35/shellcn/internal/handlers"
 	"github.com/charlesng35/shellcn/internal/middleware"
-	"github.com/charlesng35/shellcn/internal/notifications"
 	"github.com/charlesng35/shellcn/internal/permissions"
+	"github.com/charlesng35/shellcn/internal/realtime"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/web"
 )
@@ -132,15 +132,17 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	registerPermissionRoutes(api, permHandler, checker)
 
-	// Notifications
-	notificationHub := notifications.NewHub()
-	notificationHandler, err := handlers.NewNotificationHandler(db, notificationHub, jwt)
+	// Realtime hub + notifications
+	realtimeHub := realtime.NewHub()
+	notificationHandler, err := handlers.NewNotificationHandler(db, realtimeHub)
 	if err != nil {
 		return nil, err
 	}
 	registerNotificationRoutes(api, notificationHandler, checker)
 
-	r.GET("/ws/notifications", notificationHandler.Stream)
+	realtimeHandler := handlers.NewRealtimeHandler(realtimeHub, jwt, realtime.StreamNotifications)
+	r.GET("/ws", realtimeHandler.Stream)
+	r.GET("/ws/:stream", realtimeHandler.Stream)
 
 	// Connections and folders
 	connectionSvc, err := services.NewConnectionService(db, checker)

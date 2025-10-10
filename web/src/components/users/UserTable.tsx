@@ -260,7 +260,13 @@ export function UserTable({
         </thead>
         <tbody>
           {table.getRowModel().rows.map((row) => (
-            <tr key={row.id} className="border-t border-border/60 hover:bg-muted/40">
+            <tr
+              key={row.id}
+              className={cn(
+                'border-t border-border/60 transition-colors',
+                row.getIsSelected() ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/40'
+              )}
+            >
               {row.getVisibleCells().map((cell) => (
                 <td
                   key={cell.id}

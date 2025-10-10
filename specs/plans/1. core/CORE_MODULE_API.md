@@ -940,7 +940,7 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 | POST   | `/api/notifications/:id/unread` | Mark one notification as unread.                 | `notification.view`   | `NotificationHandler.MarkUnread`  |
 | DELETE | `/api/notifications/:id`        | Delete a notification.                           | `notification.view`   | `NotificationHandler.Delete`      |
 
-- WebSocket stream: `GET /ws/notifications` (upgrade). Emits real-time notifications for the authenticated user.
+- WebSocket stream: `GET /ws` (upgrade) with `streams=notifications`. `/ws/notifications` remains as a legacy alias. Emits real-time notifications for the authenticated user.
 - Pagination follows the standard envelope (`meta.page`, `meta.per_page`, `meta.total`).
 
 ---
@@ -1092,7 +1092,7 @@ Webhooks are not part of Phase 1. When implemented they will emit signed JSON pa
 - `POST /api/notifications/:id/read` - Mark one read
 - `POST /api/notifications/:id/unread` - Mark one unread
 - `DELETE /api/notifications/:id` - Delete notification
-- WebSocket: `GET /ws/notifications` - Real-time stream
+- WebSocket: `GET /ws` with `streams=notifications` (`/ws/notifications` legacy) - Real-time stream
 
 ### Audit & Security
 
@@ -1118,7 +1118,7 @@ Webhooks are not part of Phase 1. When implemented they will emit signed JSON pa
 
 ## 13. Change Log
 
-- **2025-10-09** — Added Notifications section and documented `/api/permissions/my`; verified WebSocket `/ws/notifications` endpoint for real-time updates.
+- **2025-10-09** — Added Notifications section and documented `/api/permissions/my`; verified WebSocket `/ws` endpoint (`streams=notifications`).
 
 - **2025-10-08** — Comprehensive update with actual implementation details, complete request/response samples, handler references, and implementation checklist based on `internal/api/router.go` and route files.
 - **2024-10-08** — Initial draft covering core authentication, identity, permissions, and provider administration APIs for Phase 7 deliverables.

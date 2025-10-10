@@ -2,8 +2,9 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Clock, FolderTree, Layers, Plus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { useAuth } from '@/hooks/useAuth'
 import { useConnections } from '@/hooks/useConnections'
 import { useConnectionFolders } from '@/hooks/useConnectionFolders'
@@ -33,34 +34,33 @@ export function Dashboard() {
 
   const totalFolders = useMemo(() => folderTree.length, [folderTree])
 
+  const greeting = user?.first_name ? `Welcome back, ${user.first_name}` : 'Welcome back'
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Welcome back{user?.first_name ? `, ${user.first_name}` : ''}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Monitor your infrastructure access, organize folders, and jump into recent sessions.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" asChild size="sm">
-            <Link to="/connections">
-              View Connections
-              <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link to="/connections/new">
-              <Plus className="mr-1 h-4 w-4" />
-              New Connection
-            </Link>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={greeting}
+        description="Monitor your infrastructure access, organize folders, and jump into recent sessions. Your central hub for managing all remote connections."
+        action={
+          <>
+            <Button variant="outline" asChild size="sm">
+              <Link to="/connections">
+                View All Connections
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link to="/connections/new">
+                <Plus className="mr-2 h-4 w-4" />
+                New Connection
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* Statistics Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Total Connections"
           value={totalConnections}
@@ -88,63 +88,88 @@ export function Dashboard() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Recent Connections */}
         <Card className="lg:col-span-2">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div>
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                Recent Connections
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Jump back into a recently used resource.
-              </p>
+          <CardHeader className="border-b border-border">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle className="text-base">Recent Connections</CardTitle>
+                <CardDescription>Jump back into a recently used resource</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/connections">
+                  View all
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
             </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/connections">
-                View all
-                <ArrowRight className="ml-1 h-4 w-4" />
-              </Link>
-            </Button>
-          </div>
-          <div className="divide-y divide-border">
+          </CardHeader>
+          <CardContent className="p-0">
             {recentConnections.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-sm text-muted-foreground">
-                No recent activity yet.
+              <div className="flex min-h-[200px] flex-col items-center justify-center p-8 text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <Layers className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="mt-4 text-sm font-medium text-foreground">No connections yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Create your first connection to get started
+                </p>
+                <Button asChild size="sm" className="mt-4">
+                  <Link to="/connections/new">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Connection
+                  </Link>
+                </Button>
               </div>
             ) : (
-              recentConnections.map((connection) => (
-                <RecentConnection key={connection.id} connection={connection} />
-              ))
+              <div className="divide-y divide-border">
+                {recentConnections.map((connection) => (
+                  <RecentConnection key={connection.id} connection={connection} />
+                ))}
+              </div>
             )}
-          </div>
+          </CardContent>
         </Card>
 
+        {/* Protocol Mix */}
         <Card>
-          <div className="border-b border-border px-4 py-3">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              Protocol Mix
-            </h2>
-          </div>
-          <div className="space-y-3 p-4">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="text-base">Protocol Mix</CardTitle>
+            <CardDescription>Your most used protocols</CardDescription>
+          </CardHeader>
+          <CardContent className="p-4">
             {topProtocols.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No protocols configured yet.</p>
+              <div className="flex min-h-[200px] flex-col items-center justify-center text-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                  <Zap className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="mt-4 text-sm text-muted-foreground">No protocols configured yet</p>
+              </div>
             ) : (
-              topProtocols.map(([protocolId, count]) => {
-                const protocol = protocols.find((proto) => proto.id === protocolId)
-                return (
-                  <div key={protocolId} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium">{protocol?.name ?? protocolId}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {protocol?.category ?? 'Custom driver'}
-                      </p>
+              <div className="space-y-4">
+                {topProtocols.map(([protocolId, count]) => {
+                  const protocol = protocols.find((proto) => proto.id === protocolId)
+                  return (
+                    <div key={protocolId} className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {protocol?.name ?? protocolId}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {protocol?.category ?? 'Custom driver'}
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="shrink-0">
+                        {count}
+                      </Badge>
                     </div>
-                    <Badge variant="secondary">{count}</Badge>
-                  </div>
-                )
-              })
+                  )
+                })}
+              </div>
             )}
-          </div>
+          </CardContent>
         </Card>
       </div>
     </div>
@@ -161,34 +186,41 @@ interface StatCardProps {
 
 function StatCard({ title, value, description, icon, loading }: StatCardProps) {
   return (
-    <Card className="flex flex-col gap-2 p-4">
-      <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        <span>{title}</span>
-        {icon}
-      </div>
-      <div className="flex items-baseline gap-2">
-        <p className="text-2xl font-bold">{loading ? '—' : value}</p>
-      </div>
-      <p className="text-xs text-muted-foreground">{description}</p>
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {title}
+          </p>
+          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
+            {icon}
+          </div>
+        </div>
+        <div className="mt-3 flex items-baseline gap-2">
+          <p className="text-2xl font-bold text-foreground">{loading ? '—' : value}</p>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+      </CardContent>
     </Card>
   )
 }
 
 function RecentConnection({ connection }: { connection: ConnectionRecord }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-muted/40">
-      <div className="flex flex-col">
-        <Link to={`/connections/${connection.id}`} className="font-medium hover:underline">
-          {connection.name}
-        </Link>
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+    <Link
+      to={`/connections/${connection.id}`}
+      className="flex items-center justify-between px-6 py-4 transition hover:bg-muted/40"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate font-medium text-foreground hover:underline">{connection.name}</p>
+        <p className="mt-0.5 truncate text-xs uppercase tracking-wide text-muted-foreground">
           {connection.protocol_id}
-        </span>
+        </p>
       </div>
-      <Badge variant="outline" className="text-xs capitalize">
+      <Badge variant="outline" className="ml-4 shrink-0 text-xs capitalize">
         {connection.folder?.name ?? 'Unassigned'}
       </Badge>
-    </div>
+    </Link>
   )
 }
 
