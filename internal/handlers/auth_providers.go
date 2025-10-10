@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	stdErrors "errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -67,6 +68,32 @@ func (h *AuthProviderHandler) UpdateLocalSettings(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"updated": true})
 }
 
+// POST /api/auth/providers/invite/settings
+func (h *AuthProviderHandler) UpdateInviteSettings(c *gin.Context) {
+	var body struct {
+		Enabled                  bool `json:"enabled"`
+		RequireEmailVerification bool `json:"require_email_verification"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		response.Error(c, errors.ErrBadRequest)
+		return
+	}
+	if err := h.svc.UpdateInviteSettings(
+		requestContext(c),
+		body.Enabled,
+		body.RequireEmailVerification,
+	); err != nil {
+		switch {
+		case stdErrors.Is(err, services.ErrAuthProviderNotFound):
+			response.Error(c, errors.ErrNotFound)
+		default:
+			response.Error(c, errors.ErrInternalServer)
+		}
+		return
+	}
+	response.Success(c, http.StatusOK, gin.H{"updated": true})
+}
+
 // POST /api/auth/providers/:type/enable
 func (h *AuthProviderHandler) SetEnabled(c *gin.Context) {
 	var body struct {
@@ -77,7 +104,14 @@ func (h *AuthProviderHandler) SetEnabled(c *gin.Context) {
 		return
 	}
 	if err := h.svc.SetEnabled(requestContext(c), c.Param("type"), body.Enabled); err != nil {
-		response.Error(c, errors.ErrInternalServer)
+		switch {
+		case stdErrors.Is(err, services.ErrAuthProviderNotFound):
+			response.Error(c, errors.ErrNotFound)
+		case stdErrors.Is(err, services.ErrAuthProviderImmutable):
+			response.Error(c, errors.ErrBadRequest)
+		default:
+			response.Error(c, errors.ErrInternalServer)
+		}
 		return
 	}
 	response.Success(c, http.StatusOK, gin.H{"updated": true})
@@ -86,10 +120,71 @@ func (h *AuthProviderHandler) SetEnabled(c *gin.Context) {
 // POST /api/auth/providers/:type/test
 func (h *AuthProviderHandler) TestConnection(c *gin.Context) {
 	if err := h.svc.TestConnection(requestContext(c), c.Param("type")); err != nil {
-		response.Error(c, errors.ErrInternalServer)
+		switch {
+		case stdErrors.Is(err, services.ErrAuthProviderNotFound):
+			response.Error(c, errors.ErrNotFound)
+		default:
+			response.Error(c, errors.ErrInternalServer)
+		}
 		return
 	}
 	response.Success(c, http.StatusOK, gin.H{"ok": true})
+}
+
+// GET /api/auth/providers/:type
+func (h *AuthProviderHandler) Get(c *gin.Context) {
+	ctx := requestContext(c)
+	providerType := c.Param("type")
+
+	provider, err := h.svc.GetByType(ctx, providerType)
+	if err != nil {
+		switch {
+		case stdErrors.Is(err, services.ErrAuthProviderNotFound):
+			response.Error(c, errors.ErrNotFound)
+		default:
+			response.Error(c, errors.ErrInternalServer)
+		}
+		return
+	}
+
+	sanitized := *provider
+	sanitized.Config = nil
+
+	payload := gin.H{
+		"provider": sanitized,
+	}
+
+	switch providerType {
+	case "oidc":
+		if len(provider.Config) > 0 {
+			_, cfg, loadErr := h.svc.LoadOIDCConfig(ctx)
+			if loadErr != nil {
+				response.Error(c, errors.ErrInternalServer)
+				return
+			}
+			payload["config"] = cfg
+		}
+	case "saml":
+		if len(provider.Config) > 0 {
+			_, cfg, loadErr := h.svc.LoadSAMLConfig(ctx)
+			if loadErr != nil {
+				response.Error(c, errors.ErrInternalServer)
+				return
+			}
+			payload["config"] = cfg
+		}
+	case "ldap":
+		if len(provider.Config) > 0 {
+			_, cfg, loadErr := h.svc.LoadLDAPConfig(ctx)
+			if loadErr != nil {
+				response.Error(c, errors.ErrInternalServer)
+				return
+			}
+			payload["config"] = cfg
+		}
+	}
+
+	response.Success(c, http.StatusOK, payload)
 }
 
 // POST /api/auth/providers/:type/configure

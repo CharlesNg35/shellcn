@@ -407,8 +407,34 @@ func TestAuthProviderHandler_Flow(t *testing.T) {
 	localResp := env.Request(http.MethodPost, "/api/auth/providers/local/settings", localPayload, token)
 	require.Equal(t, http.StatusOK, localResp.Code, localResp.Body.String())
 
+	localDetails := env.Request(http.MethodGet, "/api/auth/providers/local", nil, token)
+	require.Equal(t, http.StatusOK, localDetails.Code, localDetails.Body.String())
+	var localDetail struct {
+		Provider map[string]any `json:"provider"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, localDetails).Data, &localDetail)
+	require.Equal(t, "local", localDetail.Provider["type"])
+	require.Equal(t, true, localDetail.Provider["allow_registration"])
+
+	invitePayload := map[string]any{
+		"enabled":                    true,
+		"require_email_verification": true,
+	}
+	inviteResp := env.Request(http.MethodPost, "/api/auth/providers/invite/settings", invitePayload, token)
+	require.Equal(t, http.StatusOK, inviteResp.Code, inviteResp.Body.String())
+
+	inviteDetails := env.Request(http.MethodGet, "/api/auth/providers/invite", nil, token)
+	require.Equal(t, http.StatusOK, inviteDetails.Code, inviteDetails.Body.String())
+	var inviteDetail struct {
+		Provider map[string]any `json:"provider"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, inviteDetails).Data, &inviteDetail)
+	require.Equal(t, "invite", inviteDetail.Provider["type"])
+	require.Equal(t, true, inviteDetail.Provider["enabled"])
+
 	oidcPayload := map[string]any{
-		"enabled": true,
+		"enabled":            true,
+		"allow_registration": true,
 		"config": map[string]any{
 			"issuer":        "https://accounts.example.com",
 			"client_id":     "oidc-client",
@@ -426,8 +452,20 @@ func TestAuthProviderHandler_Flow(t *testing.T) {
 	testOIDC := env.Request(http.MethodPost, "/api/auth/providers/oidc/test", nil, token)
 	require.Equal(t, http.StatusOK, testOIDC.Code, testOIDC.Body.String())
 
+	oidcDetails := env.Request(http.MethodGet, "/api/auth/providers/oidc", nil, token)
+	require.Equal(t, http.StatusOK, oidcDetails.Code, oidcDetails.Body.String())
+	var oidcDetail struct {
+		Provider map[string]any `json:"provider"`
+		Config   map[string]any `json:"config"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, oidcDetails).Data, &oidcDetail)
+	require.Equal(t, "oidc", oidcDetail.Provider["type"])
+	require.Equal(t, "https://accounts.example.com", oidcDetail.Config["issuer"])
+	require.Equal(t, "oidc-client", oidcDetail.Config["client_id"])
+
 	ldapPayload := map[string]any{
-		"enabled": true,
+		"enabled":            true,
+		"allow_registration": false,
 		"config": map[string]any{
 			"host":          "ldap.example.com",
 			"port":          389,
@@ -450,6 +488,16 @@ func TestAuthProviderHandler_Flow(t *testing.T) {
 
 	testLDAP := env.Request(http.MethodPost, "/api/auth/providers/ldap/test", nil, token)
 	require.Equal(t, http.StatusOK, testLDAP.Code, testLDAP.Body.String())
+
+	ldapDetails := env.Request(http.MethodGet, "/api/auth/providers/ldap", nil, token)
+	require.Equal(t, http.StatusOK, ldapDetails.Code, ldapDetails.Body.String())
+	var ldapDetail struct {
+		Provider map[string]any `json:"provider"`
+		Config   map[string]any `json:"config"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, ldapDetails).Data, &ldapDetail)
+	require.Equal(t, "ldap", ldapDetail.Provider["type"])
+	require.Equal(t, "ldap.example.com", ldapDetail.Config["host"])
 }
 
 func TestSecurityHandler_Audit(t *testing.T) {
