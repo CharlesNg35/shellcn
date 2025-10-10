@@ -71,12 +71,12 @@
 
 ### Phase 5: Team Management (Week 5)
 
-- [ ] Implement Teams list page
-- [ ] Create TeamForm component
-- [ ] Build team member management UI
-- [ ] Implement member assignment/removal
-- [ ] Build useTeams hook
-- [ ] Write tests for team management
+- [x] Implement Teams list page
+- [x] Create TeamForm component
+- [x] Build team member management UI
+- [x] Implement member assignment/removal
+- [x] Build useTeams hook
+- [x] Write tests for team management
 
 ### Phase 6: Permission Management (Week 6)
 
