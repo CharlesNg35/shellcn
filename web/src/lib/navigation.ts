@@ -128,15 +128,32 @@ export function getBreadcrumbItems(pathname: string): NavigationItem[] {
 
   segments.forEach((segment) => {
     currentPath = `${currentPath}/${segment}`
-    const match = findNavigationItem(currentPath)
+    const exactMatch = NAVIGATION_ITEMS.find((item) => item.path === currentPath)
 
-    if (match) {
-      crumbs.push(match)
+    if (exactMatch) {
+      // Found an exact match in navigation
+      crumbs.push(exactMatch)
     } else {
-      crumbs.push({
-        label: segment.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
-        path: currentPath,
-      })
+      // Check if this is a detail/child page of a parent route
+      const parentMatch = NAVIGATION_ITEMS.find(
+        (item) =>
+          item.path !== '/' &&
+          currentPath.startsWith(item.path.endsWith('/') ? item.path : `${item.path}/`)
+      )
+
+      if (parentMatch && crumbs[crumbs.length - 1]?.path === parentMatch.path) {
+        // Parent is already in breadcrumbs, add this as a child
+        crumbs.push({
+          label: segment.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+          path: currentPath,
+        })
+      } else {
+        // No parent in breadcrumbs yet, add as regular item
+        crumbs.push({
+          label: segment.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+          path: currentPath,
+        })
+      }
     }
   })
 

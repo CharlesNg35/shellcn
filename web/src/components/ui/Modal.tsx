@@ -54,7 +54,7 @@ function DialogContent({
         )}
         {...props}
       >
-        <div className="overflow-y-auto overscroll-contain p-6">{children}</div>
+        <div className="overflow-y-auto overscroll-contain p-4 sm:p-6">{children}</div>
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
@@ -119,7 +119,7 @@ interface ModalProps {
   title?: string
   description?: string
   children: React.ReactNode
-  size?: 'sm' | 'default' | 'lg' | 'xl'
+  size?: 'sm' | 'default' | 'lg' | 'xl' | '2xl'
 }
 
 export function Modal({
@@ -131,17 +131,18 @@ export function Modal({
   size = 'default',
 }: ModalProps) {
   const sizeClasses = {
-    sm: 'max-w-sm',
-    default: 'max-w-lg',
-    lg: 'max-w-2xl',
-    xl: 'max-w-4xl',
+    sm: 'sm:max-w-md',
+    default: 'sm:max-w-xl',
+    lg: 'sm:max-w-3xl',
+    xl: 'sm:max-w-4xl',
+    '2xl': 'sm:max-w-6xl',
   }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className={sizeClasses[size]}>
         {(title || description) && (
-          <DialogHeader>
+          <DialogHeader className="mb-4">
             {title && <DialogTitle>{title}</DialogTitle>}
             {description && <DialogDescription>{description}</DialogDescription>}
           </DialogHeader>
