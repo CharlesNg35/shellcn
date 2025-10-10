@@ -133,6 +133,13 @@ func (s *PermissionService) DeleteRole(ctx context.Context, roleID string) error
 		return ErrSystemRoleImmutable
 	}
 
+	if err := s.db.WithContext(ctx).Model(&role).Association("Permissions").Clear(); err != nil {
+		return fmt.Errorf("permission service: clear role permissions: %w", err)
+	}
+	if err := s.db.WithContext(ctx).Model(&role).Association("Users").Clear(); err != nil {
+		return fmt.Errorf("permission service: clear role users: %w", err)
+	}
+
 	if err := s.db.WithContext(ctx).Delete(&role).Error; err != nil {
 		return fmt.Errorf("permission service: delete role: %w", err)
 	}
