@@ -16,6 +16,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import type { ApiMeta } from '@/types/api'
 import type { UserRecord } from '@/types/users'
 import { cn } from '@/lib/utils/cn'
+import { PERMISSIONS } from '@/constants/permissions'
 
 interface UserTableProps {
   users: UserRecord[]
@@ -155,7 +156,7 @@ export function UserTable({
             >
               <Eye className="h-4 w-4" />
             </Button>
-            <PermissionGuard permission="user.edit">
+            <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
               <Button
                 type="button"
                 variant="ghost"
@@ -168,7 +169,7 @@ export function UserTable({
             {row.original.is_root ? (
               <ShieldAlert className="h-4 w-4 text-muted-foreground" />
             ) : (
-              <PermissionGuard permission="user.edit">
+              <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
                 <Button
                   type="button"
                   variant="ghost"

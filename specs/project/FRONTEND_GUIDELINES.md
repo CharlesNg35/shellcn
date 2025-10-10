@@ -153,6 +153,12 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = 'Button';
 ```
 
+### 2.3 Permission Handling
+
+- Always reference platform permissions through the typed `PERMISSIONS` map defined in `web/src/constants/permissions.ts`; never hardcode permission strings.
+- `PermissionGuard` accepts `PermissionId` values and optional `anyOf` / `allOf` arrays. Prefer colocating permission checks close to the UI they protect.
+- Utilities and configs (`navigation`, `features`, etc.) must use the same constants to stay in sync with backend definitions (`internal/permissions/core.go`). Update the shared constants whenever new permissions are introduced.
+
 ---
 
 ## 3. API Communication

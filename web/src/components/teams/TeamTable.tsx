@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import type { TeamRecord } from '@/types/teams'
 import { cn } from '@/lib/utils/cn'
+import { PERMISSIONS } from '@/constants/permissions'
 
 interface TeamTableProps {
   teams: TeamRecord[]
@@ -116,7 +117,7 @@ export function TeamTable({
                 </Badge>
 
                 <div className="hidden gap-1 group-hover:flex">
-                  <PermissionGuard permission="team.manage">
+                  <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
                     <Button
                       type="button"
                       variant="ghost"
@@ -130,7 +131,7 @@ export function TeamTable({
                       <PencilLine className="h-4 w-4" />
                     </Button>
                   </PermissionGuard>
-                  <PermissionGuard permission="team.manage">
+                  <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
                     <Button
                       type="button"
                       variant="ghost"

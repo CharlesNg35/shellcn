@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import { usePermissions } from '@/hooks/usePermissions'
+import type { PermissionId } from '@/constants/permissions'
 
 interface PermissionGuardProps {
-  permission?: string
-  anyOf?: string[]
-  allOf?: string[]
+  permission?: PermissionId
+  anyOf?: ReadonlyArray<PermissionId>
+  allOf?: ReadonlyArray<PermissionId>
   fallback?: ReactNode
   loadingFallback?: ReactNode
   children: ReactNode

@@ -10,6 +10,7 @@ import { TeamHierarchy } from '@/components/teams/TeamHierarchy'
 import { useTeam, useTeamMembers, useTeamMutations, useTeams } from '@/hooks/useTeams'
 import type { TeamRecord } from '@/types/teams'
 import { Badge } from '@/components/ui/Badge'
+import { PERMISSIONS } from '@/constants/permissions'
 
 function formatDate(value?: string) {
   if (!value) {
@@ -173,7 +174,7 @@ export function Teams() {
             can be nested by using “/” separated names (for example, Security/Incident Response).
           </p>
         </div>
-        <PermissionGuard permission="team.manage">
+        <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
           <Button onClick={handleOpenCreateModal}>
             <Plus className="mr-2 h-4 w-4" />
             Create Team
@@ -192,7 +193,7 @@ export function Teams() {
             onEditTeam={(team) => handleOpenEditModal(team)}
             onDeleteTeam={(team) => handleDeleteTeam(team)}
             emptyAction={
-              <PermissionGuard permission="team.manage">
+              <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
                 <Button onClick={handleOpenCreateModal}>
                   <Plus className="mr-2 h-4 w-4" />
                   Create Team
@@ -236,7 +237,7 @@ export function Teams() {
                     </p>
                   </div>
 
-                  <PermissionGuard permission="team.manage">
+                  <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
                     <div className="flex flex-wrap gap-2">
                       {(teamDetail ?? selectedTeam) ? (
                         <>

@@ -7,6 +7,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { useUserMutations, useUser } from '@/hooks/useUsers'
 import type { UserRecord } from '@/types/users'
 import { cn } from '@/lib/utils/cn'
+import { PERMISSIONS } from '@/constants/permissions'
 
 interface UserDetailModalProps {
   userId?: string
@@ -93,7 +94,7 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
             ) : null}
           </div>
 
-          <PermissionGuard permission="user.edit">
+          <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => onEdit?.(user)}>
                 Edit user
@@ -109,7 +110,7 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
             </div>
           </PermissionGuard>
 
-          <PermissionGuard permission="user.edit">
+          <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
             <form className="space-y-3" onSubmit={handlePasswordSubmit}>
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-muted-foreground">Password Management</p>

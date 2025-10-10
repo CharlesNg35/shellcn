@@ -1,6 +1,7 @@
 import { ShieldCheck, ShieldOff, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
+import { PERMISSIONS } from '@/constants/permissions'
 
 interface UserBulkActionsBarProps {
   selectedCount: number
@@ -27,7 +28,7 @@ export function UserBulkActionsBar({
         {selectedCount} user{selectedCount === 1 ? '' : 's'} selected
       </div>
       <div className="flex flex-wrap gap-2">
-        <PermissionGuard permission="user.edit">
+        <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
           <Button size="sm" variant="secondary" onClick={onActivate} disabled={isProcessing}>
             <ShieldCheck className="mr-2 h-4 w-4" /> Activate
           </Button>
@@ -35,7 +36,7 @@ export function UserBulkActionsBar({
             <ShieldOff className="mr-2 h-4 w-4" /> Deactivate
           </Button>
         </PermissionGuard>
-        <PermissionGuard permission="user.delete">
+        <PermissionGuard permission={PERMISSIONS.USER.DELETE}>
           <Button size="sm" variant="destructive" onClick={onDelete} disabled={isProcessing}>
             <Trash2 className="mr-2 h-4 w-4" /> Delete
           </Button>

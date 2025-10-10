@@ -10,6 +10,7 @@ import { UserBulkActionsBar } from '@/components/users/UserBulkActionsBar'
 import { Modal } from '@/components/ui/Modal'
 import { useUserMutations, useUsers } from '@/hooks/useUsers'
 import type { UserRecord } from '@/types/users'
+import { PERMISSIONS } from '@/constants/permissions'
 
 const DEFAULT_PER_PAGE = 20
 
@@ -88,7 +89,7 @@ export function Users() {
             Manage platform users, activation status, and administrative privileges
           </p>
         </div>
-        <PermissionGuard permission="user.create">
+        <PermissionGuard permission={PERMISSIONS.USER.CREATE}>
           <Button onClick={() => setIsCreateModalOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Create user

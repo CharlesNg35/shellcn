@@ -16,6 +16,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { useConnectionFolders } from '@/hooks/useConnectionFolders'
 import { FolderTree } from '@/components/connections/FolderTree'
+import { PERMISSIONS } from '@/constants/permissions'
 
 interface SidebarProps {
   isOpen?: boolean
@@ -29,7 +30,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const activeFolderId =
     searchParams.get('folder') ?? (searchParams.get('view') === 'unassigned' ? 'unassigned' : null)
   const { data: folderTree, isLoading: foldersLoading } = useConnectionFolders({
-    enabled: hasPermission('connection.folder.view'),
+    enabled: hasPermission(PERMISSIONS.CONNECTION_FOLDER.VIEW),
   })
 
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -72,7 +73,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           />
         ))}
 
-        {hasPermission('connection.folder.view') ? (
+        {hasPermission(PERMISSIONS.CONNECTION_FOLDER.VIEW) ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               <span>Connection Folders</span>

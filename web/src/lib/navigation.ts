@@ -10,12 +10,14 @@ import {
   Users,
 } from 'lucide-react'
 import { isFeatureEnabled } from './features'
+import { PERMISSIONS } from '@/constants/permissions'
+import type { PermissionId } from '@/constants/permissions'
 
 export interface NavigationItem {
   label: string
   path: string
   icon?: LucideIcon
-  permission?: string
+  permission?: PermissionId
   children?: NavigationItem[]
   exact?: boolean
   group?: string
@@ -36,7 +38,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         label: 'Connections',
         path: '/connections',
         icon: FolderKanban,
-        permission: 'connection.view',
+        permission: PERMISSIONS.CONNECTION.VIEW,
         featureId: 'connections',
       },
     ],
@@ -49,7 +51,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         label: 'Users',
         path: '/settings/users',
         icon: Users,
-        permission: 'user.view',
+        permission: PERMISSIONS.USER.VIEW,
         featureId: 'users',
       },
       {
@@ -57,19 +59,20 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         path: '/settings/teams',
         icon: Users,
         featureId: 'teams',
+        permission: PERMISSIONS.TEAM.VIEW,
       },
       {
         label: 'Permissions',
         path: '/settings/permissions',
         icon: Shield,
-        permission: 'permission.view',
+        permission: PERMISSIONS.PERMISSION.VIEW,
         featureId: 'permissions',
       },
       {
         label: 'Auth Providers',
         path: '/settings/auth-providers',
         icon: Key,
-        permission: 'permission.manage',
+        permission: PERMISSIONS.PERMISSION.MANAGE,
         featureId: 'authProviders',
       },
       { label: 'Sessions', path: '/settings/sessions', icon: Activity, featureId: 'sessions' },
@@ -77,7 +80,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         label: 'Audit Logs',
         path: '/settings/audit',
         icon: FileText,
-        permission: 'audit.view',
+        permission: PERMISSIONS.AUDIT.VIEW,
         featureId: 'auditLogs',
       },
       { label: 'Security', path: '/settings/security', icon: Settings, featureId: 'security' },

@@ -1,3 +1,6 @@
+import { PERMISSIONS } from '@/constants/permissions'
+import type { PermissionId } from '@/constants/permissions'
+
 /**
  * Feature flags and module configuration
  * Controls which core features and settings pages are enabled
@@ -13,7 +16,7 @@ export interface FeatureModule {
   id: string
   name: string
   enabled: boolean
-  permission?: string
+  permission?: PermissionId
   description?: string
   category?: 'core' | 'settings'
 }
@@ -32,7 +35,7 @@ export const FEATURE_MODULES: Record<string, FeatureModule> = {
     name: 'Connections',
     enabled: true,
     category: 'core',
-    permission: 'connection.view',
+    permission: PERMISSIONS.CONNECTION.VIEW,
     description: 'Unified connection management for all protocols',
   },
   identities: {
@@ -49,7 +52,7 @@ export const FEATURE_MODULES: Record<string, FeatureModule> = {
     name: 'Users',
     enabled: true,
     category: 'settings',
-    permission: 'user.view',
+    permission: PERMISSIONS.USER.VIEW,
     description: 'User management and administration',
   },
   teams: {
@@ -57,7 +60,7 @@ export const FEATURE_MODULES: Record<string, FeatureModule> = {
     name: 'Teams',
     enabled: true,
     category: 'settings',
-    permission: 'org.view',
+    permission: PERMISSIONS.ORGANIZATION.VIEW,
     description: 'Team management and user grouping',
   },
   permissions: {
@@ -65,7 +68,7 @@ export const FEATURE_MODULES: Record<string, FeatureModule> = {
     name: 'Permissions',
     enabled: true,
     category: 'settings',
-    permission: 'permission.view',
+    permission: PERMISSIONS.PERMISSION.VIEW,
     description: 'Permission and role management',
   },
   authProviders: {
@@ -73,7 +76,7 @@ export const FEATURE_MODULES: Record<string, FeatureModule> = {
     name: 'Auth Providers',
     enabled: true,
     category: 'settings',
-    permission: 'permission.manage',
+    permission: PERMISSIONS.PERMISSION.MANAGE,
     description: 'SSO and authentication provider configuration',
   },
   sessions: {
@@ -88,7 +91,7 @@ export const FEATURE_MODULES: Record<string, FeatureModule> = {
     name: 'Audit Logs',
     enabled: true,
     category: 'settings',
-    permission: 'audit.view',
+    permission: PERMISSIONS.AUDIT.VIEW,
     description: 'Security audit trail and compliance logs',
   },
   security: {

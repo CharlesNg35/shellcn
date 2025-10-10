@@ -8,6 +8,7 @@ import type { TeamMember, TeamRecord } from '@/types/teams'
 import type { UserRecord } from '@/types/users'
 import { cn } from '@/lib/utils/cn'
 import type { UseMutationResult } from '@tanstack/react-query'
+import { PERMISSIONS } from '@/constants/permissions'
 
 type AddMemberMutation = UseMutationResult<boolean, unknown, { teamId: string; userId: string }>
 type RemoveMemberMutation = UseMutationResult<boolean, unknown, { teamId: string; userId: string }>
@@ -113,7 +114,7 @@ export function TeamMembersManager({
       </div>
 
       <div className="mt-4 space-y-4">
-        <PermissionGuard permission="team.manage">
+        <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
           <form
             className="flex flex-col gap-3 rounded-lg border border-dashed border-border/80 bg-muted/30 p-3"
             onSubmit={handleAddMember}
@@ -219,7 +220,7 @@ export function TeamMembersManager({
                   >
                     {member.is_active ? 'Active' : 'Inactive'}
                   </Badge>
-                  <PermissionGuard permission="team.manage">
+                  <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
                     <Button
                       type="button"
                       variant="ghost"

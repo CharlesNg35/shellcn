@@ -21,7 +21,7 @@ export interface AuthUser {
   is_active: boolean
   teams?: AuthTeamSummary[]
   roles?: AuthRoleSummary[]
-  permissions?: string[]
+  permissions?: import('@/constants/permissions').PermissionId[]
   mfa_enrolled?: boolean
   last_login_at?: string
 }

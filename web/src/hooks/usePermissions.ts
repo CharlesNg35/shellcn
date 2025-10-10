@@ -4,14 +4,15 @@ import type { ApiError } from '@/lib/api/http'
 import { permissionsApi } from '@/lib/api/permissions'
 import { useCurrentUser } from './useCurrentUser'
 import type { AuthUser } from '@/types/auth'
+import type { PermissionId } from '@/constants/permissions'
 
 export const MY_PERMISSIONS_QUERY_KEY = ['permissions', 'my'] as const
 
 export interface UsePermissionsResult {
-  permissions: string[]
-  hasPermission: (permissionId: string) => boolean
-  hasAnyPermission: (permissionIds: string[]) => boolean
-  hasAllPermissions: (permissionIds: string[]) => boolean
+  permissions: PermissionId[]
+  hasPermission: (permissionId: PermissionId | null | undefined) => boolean
+  hasAnyPermission: (permissionIds: ReadonlyArray<PermissionId>) => boolean
+  hasAllPermissions: (permissionIds: ReadonlyArray<PermissionId>) => boolean
   isLoading: boolean
   refetch: () => Promise<void>
 }
@@ -20,21 +21,21 @@ export function usePermissions(): UsePermissionsResult {
   const currentUserQuery = useCurrentUser()
   const currentUser = currentUserQuery.data as AuthUser | undefined
 
-  const query = useQuery<string[], ApiError>({
+  const query = useQuery<PermissionId[], ApiError>({
     queryKey: MY_PERMISSIONS_QUERY_KEY,
     queryFn: permissionsApi.getMyPermissions,
     enabled: Boolean(currentUser),
-    initialData: currentUser?.permissions ?? [],
+    initialData: (currentUser?.permissions ?? []) as PermissionId[],
     staleTime: 2 * 60 * 1000,
   })
 
-  const permissionSet = useMemo(
-    () => new Set(query.data ?? currentUser?.permissions ?? []),
-    [currentUser?.permissions, query.data]
-  )
+  const permissionSet = useMemo(() => {
+    const permissions = query.data ?? (currentUser?.permissions as PermissionId[] | undefined) ?? []
+    return new Set<PermissionId>(permissions)
+  }, [currentUser?.permissions, query.data])
 
   const hasPermission = useCallback(
-    (permissionId: string) => {
+    (permissionId: PermissionId | null | undefined) => {
       if (!permissionId) {
         return true
       }
@@ -47,7 +48,7 @@ export function usePermissions(): UsePermissionsResult {
   )
 
   const hasAnyPermission = useCallback(
-    (permissionIds: string[]) => {
+    (permissionIds: ReadonlyArray<PermissionId>) => {
       if (!permissionIds.length) {
         return true
       }
@@ -57,7 +58,7 @@ export function usePermissions(): UsePermissionsResult {
   )
 
   const hasAllPermissions = useCallback(
-    (permissionIds: string[]) => {
+    (permissionIds: ReadonlyArray<PermissionId>) => {
       if (!permissionIds.length) {
         return true
       }

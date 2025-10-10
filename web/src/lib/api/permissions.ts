@@ -1,5 +1,6 @@
 import type { ApiResponse } from '@/types/api'
 import type { PermissionRecord } from '@/types/permission'
+import type { PermissionId } from '@/constants/permissions'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
 
@@ -12,8 +13,8 @@ export async function fetchPermissions(): Promise<PermissionRecord[]> {
   return unwrapResponse(response)
 }
 
-export async function fetchMyPermissions(): Promise<string[]> {
-  const response = await apiClient.get<ApiResponse<string[]>>(MY_PERMISSIONS_ENDPOINT)
+export async function fetchMyPermissions(): Promise<PermissionId[]> {
+  const response = await apiClient.get<ApiResponse<PermissionId[]>>(MY_PERMISSIONS_ENDPOINT)
   return unwrapResponse(response)
 }
 
