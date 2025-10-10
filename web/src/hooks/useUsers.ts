@@ -7,6 +7,7 @@ import {
   type UseQueryOptions,
 } from '@tanstack/react-query'
 import type { ApiError } from '@/lib/api/http'
+import { toast } from '@/lib/utils/toast'
 import {
   activateUser,
   bulkActivateUsers,
@@ -99,8 +100,16 @@ export function useUserMutations() {
 
   const create = useMutation({
     mutationFn: (payload: UserCreatePayload) => createUser(payload),
-    onSuccess: async () => {
+    onSuccess: async (user) => {
       await invalidateUsers()
+      toast.success('User created successfully', {
+        description: `${user.username} has been added to the system`,
+      })
+    },
+    onError: (error: ApiError) => {
+      toast.error('Failed to create user', {
+        description: error.message || 'Please try again',
+      })
     },
   })
 
@@ -110,6 +119,12 @@ export function useUserMutations() {
     onSuccess: async (result) => {
       await invalidateUsers()
       await invalidateUser(result?.id)
+      toast.success('User updated successfully')
+    },
+    onError: (error: ApiError) => {
+      toast.error('Failed to update user', {
+        description: error.message || 'Please try again',
+      })
     },
   })
 
@@ -136,22 +151,46 @@ export function useUserMutations() {
 
   const bulkActivate = useMutation({
     mutationFn: (payload: BulkUserPayload) => bulkActivateUsers(payload.user_ids),
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
       await invalidateUsers()
+      toast.success('Users activated', {
+        description: `${variables.user_ids.length} user(s) activated successfully`,
+      })
+    },
+    onError: (error: ApiError) => {
+      toast.error('Failed to activate users', {
+        description: error.message || 'Please try again',
+      })
     },
   })
 
   const bulkDeactivate = useMutation({
     mutationFn: (payload: BulkUserPayload) => bulkDeactivateUsers(payload.user_ids),
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
       await invalidateUsers()
+      toast.success('Users deactivated', {
+        description: `${variables.user_ids.length} user(s) deactivated successfully`,
+      })
+    },
+    onError: (error: ApiError) => {
+      toast.error('Failed to deactivate users', {
+        description: error.message || 'Please try again',
+      })
     },
   })
 
   const bulkDelete = useMutation({
     mutationFn: (payload: BulkUserPayload) => bulkDeleteUsers(payload.user_ids),
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
       await invalidateUsers()
+      toast.success('Users deleted', {
+        description: `${variables.user_ids.length} user(s) deleted successfully`,
+      })
+    },
+    onError: (error: ApiError) => {
+      toast.error('Failed to delete users', {
+        description: error.message || 'Please try again',
+      })
     },
   })
 

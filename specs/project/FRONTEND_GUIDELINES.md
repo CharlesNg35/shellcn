@@ -1164,40 +1164,75 @@ describe('IdentitySelector', () => {
 
 ## 12. Code Quality Checklist
 
-### Before Committing:
+### Before Committing - ALWAYS Run These Commands:
+
+**IMPORTANT**: Always run these commands before committing to ensure code quality:
+
+```bash
+# 1. Run type checking and build
+pnpm run build
+
+# 2. Run linting
+pnpm run lint
+
+# 3. Run tests
+pnpm run test
+
+# Fix any errors before committing!
+```
+
+If any of these commands fail, **fix the errors before committing**. Never commit broken code.
+
+### Code Quality Checklist:
+
+- [ ] **Build & Tests**
+  - [ ] ✅ `pnpm run build` passes with no errors
+  - [ ] ✅ `pnpm run lint` passes with no errors
+  - [ ] ✅ `pnpm run test` passes with no failures
+  - [ ] All TypeScript errors resolved
+  - [ ] No console errors in browser
 
 - [ ] **TypeScript**
   - [ ] All types properly defined (no `any`)
   - [ ] Interfaces created for complex objects
   - [ ] Generics used where appropriate
+  - [ ] No implicit any warnings
 
 - [ ] **Components**
   - [ ] Small and focused (single responsibility)
   - [ ] Props properly typed
   - [ ] Error states handled
-  - [ ] Loading states added
+  - [ ] Loading states added (with skeleton loaders)
+  - [ ] Empty states with EmptyState component
   - [ ] User preferences respected (no hardcoded values)
+  - [ ] Toast notifications for user actions
 
 - [ ] **State Management**
   - [ ] Server state managed with TanStack Query
   - [ ] Client state managed with Zustand (if needed)
   - [ ] Cache invalidation handled correctly
+  - [ ] Optimistic updates for better UX (optional)
 
 - [ ] **Forms**
   - [ ] Validation with Zod schemas
   - [ ] Error messages user-friendly
   - [ ] Loading/submitting states shown
-  - [ ] Success feedback provided
+  - [ ] Success feedback provided (with toast)
+  - [ ] Error feedback provided (with toast)
 
 - [ ] **Styling**
-  - [ ] Responsive design tested
+  - [ ] Responsive design tested (mobile, tablet, desktop)
   - [ ] Accessibility considered (ARIA labels, keyboard navigation)
-  - [ ] Dark/light theme support
+  - [ ] Dark/light theme support verified
+  - [ ] No layout shift issues
+  - [ ] Proper focus states
 
 - [ ] **Testing**
   - [ ] Component tests added
   - [ ] User interactions tested
   - [ ] Edge cases covered
+  - [ ] Error states tested
+  - [ ] Loading states tested
 
 ---
 
@@ -1251,6 +1286,210 @@ export function PermissionGuard({
 </PermissionGuard>
 ```
 
+### 13.3 Toast Notifications Pattern
+
+**Always provide user feedback for actions using toast notifications.**
+
+```tsx
+// lib/utils/toast.ts
+import { toast } from '@/lib/utils/toast';
+
+// Success notifications
+toast.success('Connection created successfully');
+
+// Error notifications with description
+toast.error('Failed to connect to server', {
+    description: 'Invalid credentials provided'
+});
+
+// Info notifications
+toast.info('Session recording started');
+
+// Warning notifications
+toast.warning('Connection unstable', {
+    description: 'Network latency detected'
+});
+
+// Loading notifications
+const toastId = toast.loading('Connecting to server...');
+// Later dismiss it
+toast.dismiss(toastId);
+
+// Promise-based notifications (auto-handles loading, success, error)
+toast.promise(
+    connectToServer(id),
+    {
+        loading: 'Connecting to server...',
+        success: (data) => `Connected to ${data.name}`,
+        error: (err) => `Failed: ${err.message}`
+    }
+);
+
+// Toast with action button
+toast.success('Session terminated', {
+    description: 'Session ended by administrator',
+    action: {
+        label: 'Reconnect',
+        onClick: () => reconnect()
+    }
+});
+```
+
+**Use toast notifications in mutation hooks:**
+
+```tsx
+// hooks/useUsers.ts
+import { toast } from '@/lib/utils/toast';
+
+export function useUserMutations() {
+    const queryClient = useQueryClient();
+
+    const create = useMutation({
+        mutationFn: (payload: UserCreatePayload) => createUser(payload),
+        onSuccess: async (user) => {
+            await queryClient.invalidateQueries({ queryKey: ['users'] });
+            toast.success('User created successfully', {
+                description: `${user.username} has been added to the system`
+            });
+        },
+        onError: (error: ApiError) => {
+            toast.error('Failed to create user', {
+                description: error.message || 'Please try again'
+            });
+        }
+    });
+
+    return { create };
+}
+```
+
+### 13.4 Empty States Pattern
+
+**Use descriptive empty states with icons and actions.**
+
+```tsx
+// components/ui/EmptyState.tsx
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Server } from 'lucide-react';
+
+// Usage in components
+export function ConnectionList() {
+    const { data: connections } = useConnections();
+
+    if (connections.length === 0) {
+        return (
+            <EmptyState
+                icon={Server}
+                title="No connections yet"
+                description="Get started by creating your first connection profile"
+                action={
+                    <Button asChild>
+                        <Link to="/connections/new">
+                            <Plus className="mr-2 h-4 w-4" />
+                            Create Connection
+                        </Link>
+                    </Button>
+                }
+            />
+        );
+    }
+
+    return <ConnectionTable connections={connections} />;
+}
+```
+
+### 13.5 Skeleton Loaders Pattern
+
+**Use skeleton loaders instead of full-page loading states for better perceived performance.**
+
+```tsx
+// components/ui/Skeleton.tsx
+import { Skeleton, ConnectionCardSkeleton, StatCardSkeleton } from '@/components/ui/Skeleton';
+
+// Usage for loading states
+export function Dashboard() {
+    const { data: connections, isLoading } = useConnections();
+
+    if (isLoading) {
+        return (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+                <StatCardSkeleton />
+            </div>
+        );
+    }
+
+    return <DashboardContent connections={connections} />;
+}
+
+// Custom skeleton for specific components
+export function ConnectionCard({ connection }: { connection?: Connection }) {
+    if (!connection) {
+        return <ConnectionCardSkeleton />;
+    }
+
+    return (
+        <div className="rounded-lg border border-border bg-card p-4">
+            {/* Card content */}
+        </div>
+    );
+}
+```
+
+**Common skeleton patterns:**
+
+```tsx
+// Simple skeleton
+<Skeleton className="h-12 w-full" />
+<Skeleton className="h-4 w-[250px]" />
+
+// Connection card skeleton
+<ConnectionCardSkeleton />
+
+// Table skeleton
+{Array.from({ length: 10 }).map((_, i) => (
+    <TableRowSkeleton key={i} columns={5} />
+))}
+
+// List skeleton
+{Array.from({ length: 5 }).map((_, i) => (
+    <ListItemSkeleton key={i} />
+))}
+```
+
+### 13.6 Inline SVG Components Pattern
+
+**For logos and critical assets, use inline SVG components to avoid path resolution issues in embedded builds.**
+
+```tsx
+// components/ui/Logo.tsx
+export function Logo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' | 'xl' }) {
+    return (
+        <svg
+            className={sizes[size]}
+            viewBox="0 0 200 200"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-label="ShellCN Logo"
+        >
+            {/* SVG content */}
+        </svg>
+    );
+}
+
+// Usage
+<Logo size="md" />
+```
+
+**Benefits:**
+- ✅ Works in dev, production, and embedded Go builds
+- ✅ No external file dependencies
+- ✅ No CSP img-src issues
+- ✅ Better performance (no HTTP request)
+- ✅ Scalable without quality loss
+
 ---
 
 ## Quick Reference
@@ -1271,6 +1510,7 @@ export function PermissionGuard({
 - **react-hook-form** + **Zod** for forms
 - **xterm.js** for terminals
 - **lucide-react** for icons
+- **sonner** for toast notifications
 
 ### Important Principles
 - ✅ Always use user preferences (never hardcode terminal settings, themes, etc.)
@@ -1279,6 +1519,10 @@ export function PermissionGuard({
 - ✅ Provide sensible defaults but allow full customization
 - ✅ Re-render components when preferences change
 - ✅ Test with different preference combinations
+- ✅ Always provide user feedback with toast notifications for actions
+- ✅ Use skeleton loaders for better perceived performance
+- ✅ Show descriptive empty states with icons and call-to-action
+- ✅ Use inline SVG components for critical assets (logos, icons)
 
 ---
 

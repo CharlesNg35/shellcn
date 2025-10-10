@@ -8,8 +8,8 @@ import {
   MoreHorizontal,
   Settings as SettingsIcon,
 } from 'lucide-react'
-import logo from '@/assets/logo.svg'
 import { APP_NAME } from '@/lib/constants'
+import { Logo } from '@/components/ui/Logo'
 import { getFilteredNavigationGroups, type NavigationItem } from '@/lib/navigation'
 import { cn } from '@/lib/utils/cn'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -49,7 +49,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     <div className="flex h-full flex-col">
       <div className="flex h-14 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">
-          <img src={logo} alt={APP_NAME} className="h-6 w-6" />
+          <Logo size="md" />
           <span className="text-sm font-semibold tracking-wide">{APP_NAME}</span>
         </div>
         <button

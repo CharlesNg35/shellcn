@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
+import { Toaster } from '@/components/ui/Toaster'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { SetupGuard } from '@/components/auth/SetupGuard'
@@ -64,6 +65,7 @@ function App() {
         <BrowserRouter>
           <AppRoutes />
         </BrowserRouter>
+        <Toaster />
       </ThemeProvider>
     </ErrorBoundary>
   )

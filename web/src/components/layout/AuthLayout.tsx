@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import logo from '@/assets/logo.svg'
+import { Logo } from '@/components/ui/Logo'
 import { useAuth } from '@/hooks/useAuth'
 import { SSOButtons } from '@/components/auth/SSOButtons'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
@@ -27,7 +27,7 @@ export function AuthLayout() {
           {/* Logo and title */}
           <div className="space-y-6">
             <Link to="/" className="flex items-center gap-3">
-              <img src={logo} alt={APP_NAME} className="h-12 w-12" />
+              <Logo size="xl" />
               <div>
                 <h1 className="text-2xl font-bold text-foreground">{APP_NAME}</h1>
                 <p className="text-sm text-muted-foreground">{APP_DESCRIPTION}</p>
@@ -95,7 +95,7 @@ export function AuthLayout() {
 
           {/* Mobile logo */}
           <div className="mb-10 flex items-center gap-3 lg:hidden">
-            <img src={logo} alt={APP_NAME} className="h-10 w-10" />
+            <Logo size="lg" />
             <div>
               <h1 className="text-xl font-bold text-foreground">{APP_NAME}</h1>
               <p className="text-sm text-muted-foreground">{APP_DESCRIPTION}</p>
