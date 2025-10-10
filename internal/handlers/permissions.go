@@ -51,7 +51,7 @@ func (h *PermissionHandler) MyPermissions(c *gin.Context) {
 func (h *PermissionHandler) ListRoles(c *gin.Context) {
 	roles, err := h.svc.ListRoles(requestContext(c))
 	if err != nil {
-		response.Error(c, errors.ErrInternalServer)
+		response.Error(c, err)
 		return
 	}
 	response.Success(c, http.StatusOK, roles)
@@ -69,7 +69,7 @@ func (h *PermissionHandler) CreateRole(c *gin.Context) {
 	}
 	role, err := h.svc.CreateRole(requestContext(c), services.CreateRoleInput{Name: body.Name, Description: body.Description, IsSystem: body.IsSystem})
 	if err != nil {
-		response.Error(c, errors.ErrInternalServer)
+		response.Error(c, err)
 		return
 	}
 	response.Success(c, http.StatusCreated, role)
@@ -84,7 +84,7 @@ func (h *PermissionHandler) UpdateRole(c *gin.Context) {
 	}
 	role, err := h.svc.UpdateRole(requestContext(c), c.Param("id"), services.UpdateRoleInput{Name: body.Name, Description: body.Description})
 	if err != nil {
-		response.Error(c, errors.ErrInternalServer)
+		response.Error(c, err)
 		return
 	}
 	response.Success(c, http.StatusOK, role)
@@ -93,7 +93,7 @@ func (h *PermissionHandler) UpdateRole(c *gin.Context) {
 // DELETE /api/permissions/roles/:id
 func (h *PermissionHandler) DeleteRole(c *gin.Context) {
 	if err := h.svc.DeleteRole(requestContext(c), c.Param("id")); err != nil {
-		response.Error(c, errors.ErrInternalServer)
+		response.Error(c, err)
 		return
 	}
 	response.Success(c, http.StatusOK, gin.H{"deleted": true})
@@ -107,7 +107,7 @@ func (h *PermissionHandler) SetRolePermissions(c *gin.Context) {
 		return
 	}
 	if err := h.svc.SetRolePermissions(requestContext(c), c.Param("id"), body.Permissions); err != nil {
-		response.Error(c, errors.ErrInternalServer)
+		response.Error(c, err)
 		return
 	}
 	response.Success(c, http.StatusOK, gin.H{"updated": true})

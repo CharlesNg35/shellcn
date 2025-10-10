@@ -95,7 +95,7 @@ func (h *UserHandler) List(c *gin.Context) {
 		Filters:  filters,
 	})
 	if err != nil {
-		response.Error(c, appErrors.ErrInternalServer)
+		response.Error(c, err)
 		return
 	}
 
@@ -117,11 +117,7 @@ func (h *UserHandler) Get(c *gin.Context) {
 	id := c.Param("id")
 	user, err := h.service.GetByID(requestContext(c), id)
 	if err != nil {
-		if errors.Is(err, services.ErrUserNotFound) {
-			response.Error(c, appErrors.ErrNotFound)
-			return
-		}
-		response.Error(c, appErrors.ErrInternalServer)
+		respondUserError(c, err, "retrieved")
 		return
 	}
 	response.Success(c, http.StatusOK, user)
@@ -158,7 +154,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 
 	user, err := h.service.Create(requestContext(c), input)
 	if err != nil {
-		response.Error(c, appErrors.ErrInternalServer)
+		response.Error(c, err)
 		return
 	}
 	response.Success(c, http.StatusCreated, user)
@@ -369,26 +365,43 @@ func (h *UserHandler) BulkDelete(c *gin.Context) {
 }
 
 func respondUserError(c *gin.Context, err error, action string) {
-	switch {
-	case errors.Is(err, services.ErrUserNotFound):
+	if err == nil {
+		response.Error(c, appErrors.ErrInternalServer)
+		return
+	}
+
+	if errors.Is(err, services.ErrUserNotFound) {
 		response.Error(c, appErrors.ErrNotFound)
-	case errors.Is(err, services.ErrRootUserImmutable):
+		return
+	}
+
+	if errors.Is(err, services.ErrRootUserImmutable) {
 		if action == "" {
 			action = "modified"
 		}
 		response.Error(c, appErrors.NewBadRequest("root user cannot be "+action))
-	default:
-		response.Error(c, appErrors.ErrInternalServer)
+		return
 	}
+
+	if appErr, ok := err.(*appErrors.AppError); ok {
+		response.Error(c, appErr)
+		return
+	}
+
+	response.Error(c, appErrors.ErrInternalServer)
 }
 
 func classifyUserError(err error) string {
-	switch {
-	case errors.Is(err, services.ErrUserNotFound):
+	if errors.Is(err, services.ErrUserNotFound) {
 		return "not_found"
-	case errors.Is(err, services.ErrRootUserImmutable):
-		return "root_user_immutable"
-	default:
-		return "internal_error"
 	}
+	if errors.Is(err, services.ErrRootUserImmutable) {
+		return "root_user_immutable"
+	}
+	if appErr, ok := err.(*appErrors.AppError); ok {
+		if appErr.StatusCode >= 400 && appErr.StatusCode < 500 {
+			return strings.ToLower(appErr.Code)
+		}
+	}
+	return "internal_error"
 }

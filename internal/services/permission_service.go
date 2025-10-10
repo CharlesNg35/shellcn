@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 
@@ -11,13 +12,14 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/permissions"
+	apperrors "github.com/charlesng35/shellcn/pkg/errors"
 )
 
 var (
 	// ErrRoleNotFound indicates the requested role does not exist.
-	ErrRoleNotFound = errors.New("permission service: role not found")
+	ErrRoleNotFound = apperrors.New("ROLE_NOT_FOUND", "Role not found", http.StatusNotFound)
 	// ErrSystemRoleImmutable prevents destructive operations on system roles.
-	ErrSystemRoleImmutable = errors.New("permission service: system roles are immutable")
+	ErrSystemRoleImmutable = apperrors.New("ROLE_IMMUTABLE", "System roles cannot be modified", http.StatusBadRequest)
 )
 
 // PermissionService provides role management and permission assignment helpers.
@@ -52,7 +54,7 @@ func (s *PermissionService) CreateRole(ctx context.Context, input CreateRoleInpu
 
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
-		return nil, errors.New("permission service: role name is required")
+		return nil, apperrors.NewBadRequest("role name is required")
 	}
 
 	role := &models.Role{
@@ -62,6 +64,9 @@ func (s *PermissionService) CreateRole(ctx context.Context, input CreateRoleInpu
 	}
 
 	if err := s.db.WithContext(ctx).Create(role).Error; err != nil {
+		if isUniqueConstraintError(err) {
+			return nil, apperrors.NewBadRequest("role name already exists")
+		}
 		return nil, fmt.Errorf("permission service: create role: %w", err)
 	}
 
@@ -99,6 +104,9 @@ func (s *PermissionService) UpdateRole(ctx context.Context, roleID string, input
 	}
 
 	if err := s.db.WithContext(ctx).Model(&role).Updates(updates).Error; err != nil {
+		if isUniqueConstraintError(err) {
+			return nil, apperrors.NewBadRequest("role name already exists")
+		}
 		return nil, fmt.Errorf("permission service: update role: %w", err)
 	}
 
@@ -200,14 +208,14 @@ func expandWithDependencies(permissionIDs []string) (map[string]struct{}, error)
 			continue
 		}
 		if _, ok := permissions.Get(id); !ok {
-			return nil, fmt.Errorf("%w %q", permissions.ErrUnknownPermission, id)
+			return nil, apperrors.NewBadRequest(fmt.Sprintf("%s %q", permissions.ErrUnknownPermission.Error(), id))
 		}
 
 		final[id] = struct{}{}
 
 		deps, err := permissions.ResolveDependencies(id)
 		if err != nil {
-			return nil, err
+			return nil, apperrors.NewBadRequest(err.Error())
 		}
 		for _, dep := range deps {
 			final[dep] = struct{}{}

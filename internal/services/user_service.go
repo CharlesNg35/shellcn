@@ -4,19 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/pkg/crypto"
+	apperrors "github.com/charlesng35/shellcn/pkg/errors"
 )
 
 var (
 	// ErrUserNotFound indicates the requested user does not exist.
-	ErrUserNotFound = errors.New("user service: user not found")
+	ErrUserNotFound = apperrors.New("USER_NOT_FOUND", "User not found", http.StatusNotFound)
 	// ErrRootUserImmutable ensures the root account cannot be deactivated or deleted.
-	ErrRootUserImmutable = errors.New("user service: root user is immutable for this operation")
+	ErrRootUserImmutable = apperrors.New("USER_ROOT_IMMUTABLE", "Root user cannot perform this operation", http.StatusBadRequest)
 )
 
 // CreateUserInput describes the fields accepted when creating a user.
@@ -77,13 +79,13 @@ func (s *UserService) Create(ctx context.Context, input CreateUserInput) (*model
 	username := strings.TrimSpace(input.Username)
 	email := strings.ToLower(strings.TrimSpace(input.Email))
 	if username == "" {
-		return nil, errors.New("user service: username is required")
+		return nil, apperrors.NewBadRequest("username is required")
 	}
 	if email == "" {
-		return nil, errors.New("user service: email is required")
+		return nil, apperrors.NewBadRequest("email is required")
 	}
 	if strings.TrimSpace(input.Password) == "" {
-		return nil, errors.New("user service: password is required")
+		return nil, apperrors.NewBadRequest("password is required")
 	}
 
 	hashed, err := crypto.HashPassword(input.Password)
@@ -107,6 +109,9 @@ func (s *UserService) Create(ctx context.Context, input CreateUserInput) (*model
 	}
 
 	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
+		if isUniqueConstraintError(err) {
+			return nil, apperrors.NewBadRequest("username or email already exists")
+		}
 		return nil, fmt.Errorf("user service: create user: %w", err)
 	}
 
@@ -223,6 +228,9 @@ func (s *UserService) Update(ctx context.Context, id string, input UpdateUserInp
 	}
 
 	if err := s.db.WithContext(ctx).Model(&user).Updates(updates).Error; err != nil {
+		if isUniqueConstraintError(err) {
+			return nil, apperrors.NewBadRequest("username or email already exists")
+		}
 		return nil, fmt.Errorf("user service: update user: %w", err)
 	}
 
@@ -310,7 +318,7 @@ func (s *UserService) ChangePassword(ctx context.Context, id, newPassword string
 	ctx = ensureContext(ctx)
 
 	if strings.TrimSpace(newPassword) == "" {
-		return errors.New("user service: new password is required")
+		return apperrors.NewBadRequest("new password is required")
 	}
 
 	hashed, err := crypto.HashPassword(newPassword)

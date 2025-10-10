@@ -4,20 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	apperrors "github.com/charlesng35/shellcn/pkg/errors"
 )
 
 var (
 	// ErrTeamNotFound indicates the requested team does not exist.
-	ErrTeamNotFound = errors.New("team service: team not found")
+	ErrTeamNotFound = apperrors.New("TEAM_NOT_FOUND", "Team not found", http.StatusNotFound)
 	// ErrTeamMemberAlreadyExists signals the user is already a member of the team.
-	ErrTeamMemberAlreadyExists = errors.New("team service: user already assigned to team")
+	ErrTeamMemberAlreadyExists = apperrors.New("TEAM_MEMBER_EXISTS", "User already assigned to team", http.StatusConflict)
 	// ErrTeamMemberNotFound indicates the requested membership does not exist.
-	ErrTeamMemberNotFound = errors.New("team service: user is not a member of the team")
+	ErrTeamMemberNotFound = apperrors.New("TEAM_MEMBER_NOT_FOUND", "User is not a member of the team", http.StatusNotFound)
 )
 
 // CreateTeamInput captures new team metadata.
@@ -56,7 +58,7 @@ func (s *TeamService) Create(ctx context.Context, input CreateTeamInput) (*model
 	name := strings.TrimSpace(input.Name)
 
 	if name == "" {
-		return nil, errors.New("team service: name is required")
+		return nil, apperrors.NewBadRequest("team name is required")
 	}
 
 	team := &models.Team{
@@ -65,6 +67,9 @@ func (s *TeamService) Create(ctx context.Context, input CreateTeamInput) (*model
 	}
 
 	if err := s.db.WithContext(ctx).Create(team).Error; err != nil {
+		if isUniqueConstraintError(err) {
+			return nil, apperrors.NewBadRequest("team name already exists")
+		}
 		return nil, fmt.Errorf("failed to create team: %w", err)
 	}
 
@@ -108,6 +113,9 @@ func (s *TeamService) Update(ctx context.Context, id string, input UpdateTeamInp
 	}
 
 	if err := s.db.WithContext(ctx).Model(&team).Updates(updates).Error; err != nil {
+		if isUniqueConstraintError(err) {
+			return nil, apperrors.NewBadRequest("team name already exists")
+		}
 		return nil, fmt.Errorf("team service: update team: %w", err)
 	}
 
@@ -187,7 +195,7 @@ func (s *TeamService) AddMember(ctx context.Context, teamID, userID string) erro
 	ctx = ensureContext(ctx)
 
 	if strings.TrimSpace(teamID) == "" || strings.TrimSpace(userID) == "" {
-		return errors.New("team service: team id and user id are required")
+		return apperrors.NewBadRequest("team id and user id are required")
 	}
 
 	var team models.Team
@@ -236,7 +244,7 @@ func (s *TeamService) RemoveMember(ctx context.Context, teamID, userID string) e
 	ctx = ensureContext(ctx)
 
 	if strings.TrimSpace(teamID) == "" || strings.TrimSpace(userID) == "" {
-		return errors.New("team service: team id and user id are required")
+		return apperrors.NewBadRequest("team id and user id are required")
 	}
 
 	var team models.Team
@@ -285,7 +293,7 @@ func (s *TeamService) ListMembers(ctx context.Context, teamID string) ([]models.
 	ctx = ensureContext(ctx)
 
 	if strings.TrimSpace(teamID) == "" {
-		return nil, errors.New("team service: team id is required")
+		return nil, apperrors.NewBadRequest("team id is required")
 	}
 
 	var team models.Team
