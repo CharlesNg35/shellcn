@@ -5,14 +5,15 @@ import { permissionsApi } from '@/lib/api/permissions'
 import { useCurrentUser } from './useCurrentUser'
 import type { AuthUser } from '@/types/auth'
 import type { PermissionId } from '@/constants/permissions'
+import type { PermissionIdentifier } from '@/types/permission'
 
 export const MY_PERMISSIONS_QUERY_KEY = ['permissions', 'my'] as const
 
 export interface UsePermissionsResult {
-  permissions: PermissionId[]
-  hasPermission: (permissionId: PermissionId | null | undefined) => boolean
-  hasAnyPermission: (permissionIds: ReadonlyArray<PermissionId>) => boolean
-  hasAllPermissions: (permissionIds: ReadonlyArray<PermissionId>) => boolean
+  permissions: PermissionIdentifier[]
+  hasPermission: (permissionId: PermissionIdentifier | null | undefined) => boolean
+  hasAnyPermission: (permissionIds: ReadonlyArray<PermissionIdentifier>) => boolean
+  hasAllPermissions: (permissionIds: ReadonlyArray<PermissionIdentifier>) => boolean
   isLoading: boolean
   refetch: () => Promise<void>
 }
@@ -30,12 +31,16 @@ export function usePermissions(): UsePermissionsResult {
   })
 
   const permissionSet = useMemo(() => {
-    const permissions = query.data ?? (currentUser?.permissions as PermissionId[] | undefined) ?? []
-    return new Set<PermissionId>(permissions)
+    const permissions = (
+      query.data ??
+      (currentUser?.permissions as PermissionIdentifier[] | undefined) ??
+      []
+    ).map((permission) => permission as PermissionIdentifier)
+    return new Set<PermissionIdentifier>(permissions)
   }, [currentUser?.permissions, query.data])
 
   const hasPermission = useCallback(
-    (permissionId: PermissionId | null | undefined) => {
+    (permissionId: PermissionIdentifier | null | undefined) => {
       if (!permissionId) {
         return true
       }
@@ -48,7 +53,7 @@ export function usePermissions(): UsePermissionsResult {
   )
 
   const hasAnyPermission = useCallback(
-    (permissionIds: ReadonlyArray<PermissionId>) => {
+    (permissionIds: ReadonlyArray<PermissionIdentifier>) => {
       if (!permissionIds.length) {
         return true
       }
@@ -58,7 +63,7 @@ export function usePermissions(): UsePermissionsResult {
   )
 
   const hasAllPermissions = useCallback(
-    (permissionIds: ReadonlyArray<PermissionId>) => {
+    (permissionIds: ReadonlyArray<PermissionIdentifier>) => {
       if (!permissionIds.length) {
         return true
       }

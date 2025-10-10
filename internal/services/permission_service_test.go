@@ -97,6 +97,36 @@ func TestPermissionService_UpdateRole(t *testing.T) {
 	require.Equal(t, "Updated description", updated.Description)
 }
 
+func TestPermissionService_ListRolesIncludesPermissions(t *testing.T) {
+	db, svc := setupPermissionServiceTest(t)
+
+	role, err := svc.CreateRole(context.Background(), CreateRoleInput{
+		Name: "Auditor",
+	})
+	require.NoError(t, err)
+
+	err = svc.SetRolePermissions(context.Background(), role.ID, []string{"user.view"})
+	require.NoError(t, err)
+
+	roles, err := svc.ListRoles(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, roles)
+
+	var found *models.Role
+	for i := range roles {
+		if roles[i].ID == role.ID {
+			found = &roles[i]
+			break
+		}
+	}
+	require.NotNil(t, found)
+	require.Len(t, found.Permissions, 1)
+	require.Equal(t, "user.view", found.Permissions[0].ID)
+
+	var stored models.Role
+	require.NoError(t, db.Preload("Permissions").First(&stored, "id = ?", role.ID).Error)
+}
+
 func setupPermissionServiceTest(t *testing.T) (*gorm.DB, *PermissionService) {
 	t.Helper()
 

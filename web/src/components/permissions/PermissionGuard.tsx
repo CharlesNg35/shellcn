@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import { usePermissions } from '@/hooks/usePermissions'
-import type { PermissionId } from '@/constants/permissions'
+import type { PermissionIdentifier } from '@/types/permission'
 
 interface PermissionGuardProps {
-  permission?: PermissionId
-  anyOf?: ReadonlyArray<PermissionId>
-  allOf?: ReadonlyArray<PermissionId>
+  permission?: PermissionIdentifier | null
+  anyOf?: ReadonlyArray<PermissionIdentifier>
+  allOf?: ReadonlyArray<PermissionIdentifier>
+  not?: ReadonlyArray<PermissionIdentifier>
   fallback?: ReactNode
   loadingFallback?: ReactNode
   children: ReactNode
@@ -15,6 +16,7 @@ export function PermissionGuard({
   permission,
   anyOf,
   allOf,
+  not,
   fallback = null,
   loadingFallback = null,
   children,
@@ -37,6 +39,10 @@ export function PermissionGuard({
 
   if (anyOf?.length) {
     checks.push(hasAnyPermission(anyOf))
+  }
+
+  if (not?.length) {
+    checks.push(!hasAnyPermission(not))
   }
 
   const canRender = checks.length ? checks.every(Boolean) : true

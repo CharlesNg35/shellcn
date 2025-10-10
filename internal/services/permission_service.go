@@ -137,7 +137,7 @@ func (s *PermissionService) ListRoles(ctx context.Context) ([]models.Role, error
 	ctx = ensureContext(ctx)
 
 	var roles []models.Role
-	if err := s.db.WithContext(ctx).Order("created_at ASC").Find(&roles).Error; err != nil {
+	if err := s.db.WithContext(ctx).Preload("Permissions").Order("created_at ASC").Find(&roles).Error; err != nil {
 		return nil, fmt.Errorf("permission service: list roles: %w", err)
 	}
 	return roles, nil

@@ -1,19 +1,38 @@
-export interface PermissionRecord {
+import type { PermissionId } from '@/constants/permissions'
+
+export type PermissionIdentifier = PermissionId | (string & {})
+
+export interface PermissionDefinition {
+  id: PermissionIdentifier
+  module: string
+  description?: string
+  depends_on: PermissionIdentifier[]
+  implies: PermissionIdentifier[]
+}
+
+export type PermissionRegistry = Record<string, PermissionDefinition>
+
+export interface RoleRecord {
   id: string
   name: string
   description?: string
-  category?: string
-  module?: string
-  depends_on?: string[]
+  is_system: boolean
+  permissions?: PermissionDefinition[]
+  created_at?: string
+  updated_at?: string
 }
 
-export interface PermissionGroup {
-  id: string
+export interface RoleCreatePayload {
   name: string
-  permissions: PermissionRecord[]
+  description?: string
+  is_system?: boolean
 }
 
-export interface RolePermissionSummary {
-  role_id: string
-  permission_id: string
+export interface RoleUpdatePayload {
+  name?: string
+  description?: string
+}
+
+export interface SetRolePermissionsPayload {
+  permissions: PermissionIdentifier[]
 }
