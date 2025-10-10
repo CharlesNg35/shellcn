@@ -174,7 +174,6 @@ export function Permissions() {
       <PageHeader
         title="Permissions"
         description="Review role assignments and manage fine-grained permissions across the platform. Changes take effect immediately for all users assigned to a role."
-        badge={<Badge variant="outline">Core Platform</Badge>}
       />
 
       {showRegistryError ? (

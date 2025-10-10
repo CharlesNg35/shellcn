@@ -35,18 +35,37 @@ describe('<PermissionMatrix />', () => {
 
     render(<PermissionMatrix registry={registry} selected={new Set()} onChange={onChange} />)
 
+    // First, expand the module to reveal permissions
+    const moduleButton = screen.getByRole('button', { name: /Core Platform/i })
+    await user.click(moduleButton)
+
+    // Then expand the "user" namespace
+    const userNamespaceButton = screen.getByRole('button', { name: /^User/i })
+    await user.click(userNamespaceButton)
+
+    // Now we can access the checkbox
     const deleteCheckbox = screen.getByRole('checkbox', { name: 'user.delete' })
     await user.click(deleteCheckbox)
 
     expect(onChange).toHaveBeenCalledTimes(1)
     const nextSelection = onChange.mock.calls[0][0] as string[]
-    expect(nextSelection).toEqual(['user.delete', 'user.view', 'user.edit'])
+    expect(nextSelection.sort()).toEqual(['user.delete', 'user.edit', 'user.view'].sort())
   })
 
-  it('locks dependencies when they are required by selected permissions', () => {
+  it('locks dependencies when they are required by selected permissions', async () => {
+    const user = userEvent.setup()
     const selected = new Set(['user.view', 'user.edit', 'user.delete'])
     render(<PermissionMatrix registry={registry} selected={selected} onChange={vi.fn()} />)
 
+    // Expand the module to reveal permissions
+    const moduleButton = screen.getByRole('button', { name: /Core Platform/i })
+    await user.click(moduleButton)
+
+    // Then expand the "user" namespace
+    const userNamespaceButton = screen.getByRole('button', { name: /^User/i })
+    await user.click(userNamespaceButton)
+
+    // Now check if the checkbox is disabled
     const editCheckbox = screen.getByRole('checkbox', { name: 'user.edit' })
     expect(editCheckbox).toBeDisabled()
   })

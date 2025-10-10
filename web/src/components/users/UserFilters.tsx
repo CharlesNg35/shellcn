@@ -79,6 +79,7 @@ export function UserFilters({ filters, onChange }: UserFiltersProps) {
 
       <div className="flex flex-col gap-3">
         <Input
+          aria-label="Search users"
           placeholder="Search by username, email, or name..."
           value={searchValue}
           onChange={(event) => setSearchValue(event.target.value)}
