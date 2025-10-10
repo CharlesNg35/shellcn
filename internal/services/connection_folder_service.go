@@ -71,7 +71,11 @@ func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string, t
 	query := s.db.WithContext(ctx).Model(&models.ConnectionFolder{}).Order("ordering ASC, name ASC")
 	if teamID != nil {
 		if trimmed := strings.TrimSpace(*teamID); trimmed != "" {
-			query = query.Where("team_id = ?", trimmed)
+			if strings.EqualFold(trimmed, "personal") {
+				query = query.Where("team_id IS NULL")
+			} else {
+				query = query.Where("team_id = ?", trimmed)
+			}
 		}
 	}
 	if !userCtx.IsRoot {

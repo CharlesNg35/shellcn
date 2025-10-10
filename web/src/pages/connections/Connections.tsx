@@ -22,10 +22,13 @@ import { Input } from '@/components/ui/Input'
 import { useAvailableProtocols } from '@/hooks/useProtocols'
 import { useConnections } from '@/hooks/useConnections'
 import { useConnectionFolders } from '@/hooks/useConnectionFolders'
+import { useTeams } from '@/hooks/useTeams'
+import { usePermissions } from '@/hooks/usePermissions'
 import type { Protocol } from '@/types/protocols'
 import type { ConnectionRecord, ConnectionTarget } from '@/types/connections'
 import { FolderTree } from '@/components/connections/FolderTree'
 import { cn } from '@/lib/utils/cn'
+import { PERMISSIONS } from '@/constants/permissions'
 
 const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
   terminal: Server,
@@ -53,6 +56,26 @@ export function Connections() {
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const activeFolder = searchParams.get('folder')
   const unassignedView = searchParams.get('view') === 'unassigned'
+  const teamParam = searchParams.get('team') ?? 'all'
+
+  const teamFilterValue = teamParam === 'all' ? undefined : teamParam
+
+  const { hasPermission } = usePermissions()
+  const canViewTeams = hasPermission(PERMISSIONS.TEAM.VIEW)
+  const {
+    data: teamsResult,
+    isLoading: teamsLoading,
+  } = useTeams({
+    enabled: canViewTeams,
+    staleTime: 60_000,
+  })
+  const teams = useMemo(() => teamsResult?.data ?? [], [teamsResult?.data])
+  const teamLookup = useMemo(() => {
+    return teams.reduce<Record<string, string>>((acc, team) => {
+      acc[team.id] = team.name
+      return acc
+    }, {})
+  }, [teams])
 
   const {
     data: protocolsResult,
@@ -60,7 +83,12 @@ export function Connections() {
     isError: protocolsError,
   } = useAvailableProtocols()
   const protocols = useMemo(() => protocolsResult?.data ?? [], [protocolsResult])
-  const { data: folderTree = [], isLoading: foldersLoading } = useConnectionFolders()
+  const { data: folderTree = [], isLoading: foldersLoading } = useConnectionFolders(
+    teamFilterValue,
+    {
+      staleTime: 60_000,
+    }
+  )
 
   const {
     data: connectionsResult,
@@ -69,6 +97,7 @@ export function Connections() {
   } = useConnections({
     folder_id: activeFolder ?? (unassignedView ? 'unassigned' : undefined),
     search: search || undefined,
+    team_id: teamFilterValue,
   })
   const connections = useMemo(() => connectionsResult?.data ?? [], [connectionsResult?.data])
 
@@ -189,10 +218,43 @@ export function Connections() {
             className="pl-9"
           />
         </div>
-        <Button variant="outline" size="sm">
-          <Filter className="mr-2 h-4 w-4" />
-          Filter
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm">
+            <Filter className="mr-2 h-4 w-4" />
+            Filter
+          </Button>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-muted-foreground" htmlFor="team-filter">
+              Team
+            </label>
+            <select
+              id="team-filter"
+              value={teamParam}
+              onChange={(event) => {
+                const value = event.target.value
+                const params = new URLSearchParams(searchParams)
+                if (value === 'all') {
+                  params.delete('team')
+                } else {
+                  params.set('team', value)
+                }
+                params.delete('folder')
+                params.delete('view')
+                setSearchParams(params, { replace: true })
+              }}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              disabled={teamsLoading && canViewTeams}
+            >
+              <option value="all">All connections</option>
+              <option value="personal">Personal connections</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row">
@@ -242,6 +304,7 @@ export function Connections() {
                   key={connection.id}
                   connection={connection}
                   protocol={protocolLookup[connection.protocol_id]}
+                  teamName={connection.team_id ? teamLookup[connection.team_id] : undefined}
                 />
               ))}
             </div>
@@ -300,13 +363,15 @@ function ProtocolTabs({ tabs, isLoading, activeTab, onTabChange }: ProtocolTabsP
 interface ConnectionCardProps {
   connection: ConnectionRecord
   protocol?: Protocol
+  teamName?: string
 }
 
-function ConnectionCard({ connection, protocol }: ConnectionCardProps) {
+function ConnectionCard({ connection, protocol, teamName }: ConnectionCardProps) {
   const tags = extractTags(connection.metadata)
   const endpoint = resolvePrimaryEndpoint(connection.targets, connection.settings)
   const status = resolveStatus(connection)
   const ProtocolIcon = resolveProtocolIcon(protocol)
+  const isPersonal = !connection.team_id
 
   return (
     <div className="group relative rounded-lg border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
@@ -318,11 +383,16 @@ function ConnectionCard({ connection, protocol }: ConnectionCardProps) {
           <div>
             <h3 className="font-semibold">{connection.name}</h3>
             <p className="text-sm text-muted-foreground">{endpoint ?? 'No target configured'}</p>
-            {protocol ? (
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                {protocol.name}
-              </p>
-            ) : null}
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              {protocol ? (
+                <Badge variant="outline" className="text-[11px] uppercase tracking-wide">
+                  {protocol.name}
+                </Badge>
+              ) : null}
+              <Badge variant={isPersonal ? 'secondary' : 'outline'} className="text-[11px] uppercase tracking-wide">
+                {isPersonal ? 'Personal' : `Team: ${teamName ?? 'Unknown'}`}
+              </Badge>
+            </div>
           </div>
         </div>
         <button className="rounded-md p-1 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100">

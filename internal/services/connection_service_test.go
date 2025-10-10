@@ -104,6 +104,20 @@ func TestConnectionServiceListVisible(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, teamScoped.Connections, 1)
 	require.Equal(t, "Team database", teamScoped.Connections[0].Name)
+
+	personalScoped, err := svc.ListVisible(context.Background(), ListConnectionsOptions{
+		UserID:            user.ID,
+		TeamID:            "personal",
+		IncludeTargets:    false,
+		IncludeVisibility: false,
+	})
+	require.NoError(t, err)
+	require.Len(t, personalScoped.Connections, 2)
+	namesPersonal := make([]string, 0, len(personalScoped.Connections))
+	for _, conn := range personalScoped.Connections {
+		namesPersonal = append(namesPersonal, conn.Name)
+	}
+	require.ElementsMatch(t, []string{"Primary SSH", "Kubernetes control plane"}, namesPersonal)
 }
 
 func TestConnectionServiceGetVisibleRespectsPermissions(t *testing.T) {
@@ -188,6 +202,11 @@ func TestConnectionServiceCountByFolder(t *testing.T) {
 
 	require.Equal(t, int64(2), counts["folder-1"])
 	require.Equal(t, int64(1), counts["unassigned"])
+
+	personalCounts, err := svc.CountByFolder(context.Background(), ListConnectionsOptions{UserID: user.ID, TeamID: "personal"})
+	require.NoError(t, err)
+	require.Equal(t, int64(1), personalCounts["unassigned"])
+	require.Equal(t, int64(2), personalCounts["folder-1"])
 }
 
 func TestConnectionServiceCountByProtocol(t *testing.T) {
@@ -256,6 +275,15 @@ func TestConnectionServiceCountByProtocol(t *testing.T) {
 	require.Equal(t, int64(1), teamCounts["ssh"])
 	require.Equal(t, int64(1), teamCounts["postgres"])
 	require.Zero(t, teamCounts["rdp"])
+
+	personalCounts, err := svc.CountByProtocol(context.Background(), ListConnectionsOptions{
+		UserID: user.ID,
+		TeamID: "personal",
+	})
+	require.NoError(t, err)
+	require.Zero(t, personalCounts["ssh"])
+	require.Equal(t, int64(1), personalCounts["rdp"])
+	require.Zero(t, personalCounts["postgres"])
 }
 
 func mustJSON(t *testing.T, value any) []byte {

@@ -84,6 +84,15 @@ func TestConnectionFolderServiceLifecycle(t *testing.T) {
 	}
 	require.Equal(t, int64(2), total)
 
+	personal := "personal"
+	personalTree, err := folderSvc.ListTree(context.Background(), user.ID, &personal)
+	require.NoError(t, err)
+	require.Len(t, personalTree, 2)
+	require.Equal(t, "unassigned", personalTree[0].Folder.ID)
+	require.Equal(t, int64(1), personalTree[0].ConnectionCount)
+	require.Equal(t, root.ID, personalTree[1].Folder.ID)
+	require.Equal(t, int64(1), personalTree[1].ConnectionCount)
+
 	require.NoError(t, folderSvc.Delete(context.Background(), user.ID, child.ID))
 
 	remainingTree, err := folderSvc.ListTree(context.Background(), user.ID, nil)

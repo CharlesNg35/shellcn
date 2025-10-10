@@ -366,12 +366,17 @@ Content-Type: application/json
 
 | Method | Path                             | Description         | Permission    | Handler                    |
 | ------ | -------------------------------- | ------------------- | ------------- | -------------------------- |
+| GET    | `/api/teams`                     | List teams visible to caller (membership-aware). | `team.view`   | `TeamHandler.List`         |
 | GET    | `/api/teams/:id`                 | Team & members.     | `team.view`   | `TeamHandler.Get`          |
 | POST   | `/api/teams`                     | Create team.        | `team.manage` | `TeamHandler.Create`       |
 | PATCH  | `/api/teams/:id`                 | Rename/update team. | `team.manage` | `TeamHandler.Update`       |
 | POST   | `/api/teams/:id/members`         | Append member IDs.  | `team.manage` | `TeamHandler.AddMember`    |
 | DELETE | `/api/teams/:id/members/:userID` | Remove member.      | `team.manage` | `TeamHandler.RemoveMember` |
 | GET    | `/api/teams/:id/members`         | List members.       | `team.view`   | `TeamHandler.ListMembers`  |
+| GET    | `/api/teams/:id/roles`           | List roles assigned to team. | `team.view`   | `TeamHandler.ListRoles`    |
+| PUT    | `/api/teams/:id/roles`           | Replace team role assignments. | `permission.manage` | `TeamHandler.SetRoles` |
+| GET    | `/api/teams/:id/connections`     | List connections scoped to a team. | `team.view`   | `TeamHandler.ListConnections` |
+| GET    | `/api/teams/:id/folders`         | Folder hierarchy for the team.   | `team.view`   | `TeamHandler.ListConnectionFolders` |
 
 **Sample** — Create Team:
 
@@ -928,6 +933,7 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 | ------ | ------------------------------ | -------------------------------------------------------------- | ---------------------------------------- | ------------------------------------ |
 | GET    | `/api/connections`             | List connections visible to the caller (supports filters).     | `connection.view`                        | `ConnectionHandler.List`             |
 | GET    | `/api/connections/:id`         | Retrieve a specific connection with targets + visibility data. | `connection.view`                        | `ConnectionHandler.Get`              |
+| GET    | `/api/connections/summary`     | Aggregate counts grouped by protocol (supports team filters).  | `connection.view`                        | `ConnectionHandler.Summary`          |
 | POST   | `/api/connections`             | Create a connection (settings, visibility, targets).           | `connection.manage`                      | `ConnectionHandler.Create`           |
 | PATCH  | `/api/connections/:id`         | Update connection metadata/settings/targets.                   | `connection.manage`                      | `ConnectionHandler.Update`           |
 | DELETE | `/api/connections/:id`         | Delete a connection.                                           | `connection.manage`                      | `ConnectionHandler.Delete`           |
@@ -941,11 +947,13 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 **Supported query parameters for `GET /api/connections`:**
 
 - `protocol_id`: filter by driver.
-- `team_id`: scope to tenant subset.
+- `team_id`: scope to tenant subset. Use a concrete team ID or `personal` to request user-owned (non-team) connections.
 - `folder_id`: filter by folder (`unassigned` for folderless).
 - `search`: case-insensitive substring match across name, host, tags, metadata.
 - `include=targets,visibility`: opt-in expansions (default `targets`).
 - `page`, `per_page`: pagination controls (standard envelope).
+
+`GET /api/connection-folders/tree` accepts the same `team_id` semantics (team UUID or `personal`) to scope the returned hierarchy and connection counts.
 
 **Connection payload**
 

@@ -308,7 +308,11 @@ func (s *ConnectionService) applyFilters(db *gorm.DB, opts ListConnectionsOption
 	}
 
 	if teamID := strings.TrimSpace(opts.TeamID); teamID != "" {
-		db = db.Where("connections.team_id = ?", teamID)
+		if strings.EqualFold(teamID, "personal") {
+			db = db.Where("connections.team_id IS NULL")
+		} else {
+			db = db.Where("connections.team_id = ?", teamID)
+		}
 	}
 
 	if folderID := strings.TrimSpace(opts.FolderID); folderID != "" {
