@@ -22,7 +22,7 @@ This plan delivers Phase 3 of the Core module ([ROADMAP.md:37-41](../../ROADMAP.
 
 ### Terminology
 
-- **Protocol Driver** – the executable implementation that knows how to initiate a connection. Earlier documents referenced these as *modules*; protocol driver is now the canonical term.
+- **Protocol Driver** – the executable implementation that knows how to initiate a connection. Earlier documents referenced these as _modules_; protocol driver is now the canonical term.
 - **Protocol Definition** – catalog metadata produced by the driver registry (id, labels, sort order, capabilities).
 - **Connection** – a persisted record that references a protocol definition plus team visibility and identity bindings.
 - **Capabilities** – feature flags a driver exposes (terminal, desktop, recording, metrics, extras) which guide permissions and UI elements.
@@ -35,17 +35,18 @@ Legacy references in specs that still mention “module” should be interpreted
 
 ### Tables & Relationships
 
-| Table                    | Purpose                                                                   |
-|--------------------------|---------------------------------------------------------------------------|
-| `connection_protocols`   | Snapshot of driver metadata + config enable state (registry mirror).      |
-| `connections`            | Base connection definition (name, protocol, org/team ownership, settings).|
-| `connection_targets`     | One-to-many endpoints (primary + fallback hosts, labels).                 |
-| `connection_visibilities`| Row-level ACL for teams and direct-user grants.           |
-| `connection_labels`      | (Optional) Tagging table for filters/search (future).                     |
+| Table                     | Purpose                                                                    |
+| ------------------------- | -------------------------------------------------------------------------- |
+| `connection_protocols`    | Snapshot of driver metadata + config enable state (registry mirror).       |
+| `connections`             | Base connection definition (name, protocol, org/team ownership, settings). |
+| `connection_targets`      | One-to-many endpoints (primary + fallback hosts, labels).                  |
+| `connection_visibilities` | Row-level ACL for teams and direct-user grants.                            |
+| `connection_labels`       | (Optional) Tagging table for filters/search (future).                      |
 
 ### GORM Models
 
 **`internal/models/connection_protocol.go`**
+
 ```go
 type ConnectionProtocol struct {
     BaseModel
@@ -69,6 +70,7 @@ func (c *ConnectionProtocol) IsAvailable() bool {
 ```
 
 **`internal/models/connection.go`**
+
 ```go
 type Connection struct {
     BaseModel
@@ -89,6 +91,7 @@ type Connection struct {
 ```
 
 **`internal/models/connection_target.go`**
+
 ```go
 type ConnectionTarget struct {
     BaseModel
@@ -101,6 +104,7 @@ type ConnectionTarget struct {
 ```
 
 **`internal/models/connection_visibility.go`**
+
 ```go
 type ConnectionVisibility struct {
     BaseModel
@@ -112,6 +116,7 @@ type ConnectionVisibility struct {
 ```
 
 Key points:
+
 - Team-level scoping allows curated sets for squads.
 - Visibility table enables sharing with explicit users (similar to vault shares).
 - Connections without a team are personal to the owner user.
@@ -143,6 +148,7 @@ Key points:
 ### Driver Interface
 
 **`internal/drivers/driver.go`**
+
 ```go
 type Driver interface {
     Descriptor() Descriptor
@@ -178,6 +184,7 @@ type Capabilities struct {
 ```
 
 Drivers may optionally implement:
+
 ```go
 type HealthChecker interface {
     HealthCheck(ctx context.Context) error
@@ -191,6 +198,7 @@ type SchemaProvider interface {
 ### Driver Registry
 
 **`internal/drivers/registry.go`**
+
 ```go
 type Registry interface {
     Register(driver Driver) error
@@ -247,6 +255,7 @@ Root users bypass all gates except visibility (they can still manage shares) per
 ### Registry Setup
 
 **`internal/protocols/permissions.go`**
+
 ```go
 // Base connection permissions
 connection.view
@@ -266,18 +275,19 @@ Dependencies flow through `permissions.Register`, just like core permissions.
 
 Every protocol driver must declare a permission profile when registering with the registry:
 
-| Scope Type | Naming | Description | Dependency |
-|------------|--------|-------------|------------|
-| Base usage | `{protocol}.connect` | Launch / attach runtime session | `connection.launch` |
-| Advanced settings | `{protocol}.manage` | Edit driver-specific settings (namespaces, daemon sockets, tunables) | `connection.manage` |
-| Optional runtime scopes | `{protocol}.use.<feature>` | Feature toggles such as `kubernetes.exec`, `docker.attach`, `rdp.recording` | `connection.launch` |
-| Optional admin scopes | `{protocol}.admin.<feature>` | Sensitive operations such as `kubernetes.cluster.admin`, `database.schema.manage` | `connection.manage` |
+| Scope Type              | Naming                       | Description                                                                       | Dependency          |
+| ----------------------- | ---------------------------- | --------------------------------------------------------------------------------- | ------------------- |
+| Base usage              | `{protocol}.connect`         | Launch / attach runtime session                                                   | `connection.launch` |
+| Advanced settings       | `{protocol}.manage`          | Edit driver-specific settings (namespaces, daemon sockets, tunables)              | `connection.manage` |
+| Optional runtime scopes | `{protocol}.use.<feature>`   | Feature toggles such as `kubernetes.exec`, `docker.attach`, `rdp.recording`       | `connection.launch` |
+| Optional admin scopes   | `{protocol}.admin.<feature>` | Sensitive operations such as `kubernetes.cluster.admin`, `database.schema.manage` | `connection.manage` |
 
 Driver packages emit these scopes via `protocols.RegisterDriverPermissions(protoID, profile)` and list them in `specs/project/drivers/<protocol>.md`. Kubernetes, Docker, Databases, and File Share drivers use custom subsets from this table. Each new scope must be appended to the in-memory registry before `permissions.Sync` executes so database state stays consistent.
 
 ### Roles
 
 Seed two roles (updated `internal/database/seed.go`):
+
 - `connection.viewer` → `connection.view`, selected `{protocol}.connect` for commonly enabled drivers.
 - `connection.admin` → all connection + protocol manage permissions.
 
@@ -290,6 +300,7 @@ Team-specific roles can be created later by admins using `/api/permissions/roles
 ### ProtocolService (`internal/services/protocol_service.go`)
 
 Responsibilities:
+
 - Read `connection_protocols` table and merge with driver metadata (capabilities, schema).
 - Provide `GetAvailableProtocols(ctx)` (all) and `GetUserProtocols(ctx, userID)` (permission-filtered).
 - Offer `TestDriver(ctx, protocolID)` for admins (delegates to driver `TestConnection` with synthetic payload).
@@ -298,6 +309,7 @@ Responsibilities:
 ### ConnectionService (`internal/services/connection_service.go`)
 
 Key APIs:
+
 ```go
 type CreateConnectionInput struct {
     Name           string
@@ -313,6 +325,7 @@ type CreateConnectionInput struct {
 ```
 
 Behaviors:
+
 - Validate driver exists and is available (DriverEnabled + ConfigEnabled) before create.
 - Call driver `ValidateConfig` using provided settings.
 - Serialize `Settings` and `Metadata` as JSON; encrypt secret payloads via Credential Vault service when inline.
@@ -323,6 +336,7 @@ Behaviors:
 ### Visibility & Permission Enforcement
 
 `ConnectionService` checks permissions before mutating:
+
 - Create/Update/Delete require `connection.manage` + `permissions.Check(user, protocolID+".manage")` for driver-specific settings.
 - Share updates require `connection.share`.
 - Launch preview/test requires `connection.launch` + `{protocol}.connect`.
@@ -370,6 +384,7 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
 ## Sync & Bootstrap Flow
 
 1. `cmd/server/main.go`
+
    - Load config.
    - Initialize DB.
    - Call `drivers.Bootstrap()`.
@@ -378,6 +393,7 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
    - `database.SeedData(db, cfg)` seeds roles + default connections (optional sample).
 
 2. Background job `ProtocolWatchdog`
+
    - Every hour: run driver `HealthCheck`, update DB, emit audit events on changes.
    - Emit websocket event `protocol.updated` for live UI refresh.
 

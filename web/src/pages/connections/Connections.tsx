@@ -28,6 +28,7 @@ import { TeamFilterTabs } from '@/components/connections/TeamFilterTabs'
 import { FolderSidebar } from '@/components/connections/FolderSidebar'
 import { cn } from '@/lib/utils/cn'
 import { PERMISSIONS } from '@/constants/permissions'
+import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 
 const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
   terminal: Server,
@@ -178,12 +179,15 @@ export function Connections() {
             Manage and launch your infrastructure connections
           </p>
         </div>
-        <Button asChild size="default" className="shadow-sm">
-          <Link to="/connections/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Connection
-          </Link>
-        </Button>
+
+        <PermissionGuard permission={PERMISSIONS.CONNECTION.MANAGE}>
+          <Button asChild size="default" className="shadow-sm">
+            <Link to="/connections/new">
+              <Plus className="mr-2 h-4 w-4" />
+              New Connection
+            </Link>
+          </Button>
+        </PermissionGuard>
       </header>
 
       {hasError && (

@@ -21,7 +21,22 @@ export function FolderTree({
   className,
   disableNavigation = false,
 }: FolderTreeProps) {
-  const [openNodes, setOpenNodes] = useState<Record<string, boolean>>({})
+  // Initialize all nodes as open by default
+  const [openNodes, setOpenNodes] = useState<Record<string, boolean>>(() => {
+    const initialState: Record<string, boolean> = {}
+    const initializeNodes = (nodeList: ConnectionFolderNode[]) => {
+      nodeList.forEach((node) => {
+        initialState[node.folder.id] = true
+        if (node.children) {
+          initializeNodes(node.children)
+        }
+      })
+    }
+    if (nodes) {
+      initializeNodes(nodes)
+    }
+    return initialState
+  })
 
   const toggleNode = useCallback((nodeId: string) => {
     setOpenNodes((prev) => ({
@@ -58,7 +73,7 @@ export function FolderTree({
         <FolderTreeNode
           key={node.folder.id}
           node={node}
-          isOpen={openNodes[node.folder.id] ?? true}
+          openNodes={openNodes}
           onToggle={toggleNode}
           onSelect={handleSelect}
           basePath={basePath}
@@ -73,7 +88,7 @@ export function FolderTree({
 
 interface FolderTreeNodeProps {
   node: ConnectionFolderNode
-  isOpen: boolean
+  openNodes: Record<string, boolean>
   onToggle: (id: string) => void
   onSelect: (folderId: string | null) => void
   basePath: string
@@ -84,7 +99,7 @@ interface FolderTreeNodeProps {
 
 function FolderTreeNode({
   node,
-  isOpen,
+  openNodes,
   onToggle,
   onSelect,
   basePath,
@@ -93,6 +108,7 @@ function FolderTreeNode({
   disableNavigation,
 }: FolderTreeNodeProps) {
   const hasChildren = node.children && node.children.length > 0
+  const isOpen = openNodes[node.folder.id] ?? true
   const paddingLeft = depth * 12
   const isFolderActive = activeFolderId === node.folder.id
   const href =
@@ -154,22 +170,23 @@ function FolderTreeNode({
           </a>
         )}
       </div>
-      {hasChildren && isOpen ? (
-        <div className="mt-1 space-y-1">
+      {hasChildren && isOpen && (
+        <div className="space-y-1">
           {node.children!.map((child) => (
             <FolderTreeNode
               key={child.folder.id}
               node={child}
-              isOpen={true}
+              openNodes={openNodes}
               onToggle={onToggle}
               onSelect={onSelect}
               basePath={basePath}
               depth={depth + 1}
               activeFolderId={activeFolderId}
+              disableNavigation={disableNavigation}
             />
           ))}
         </div>
-      ) : null}
+      )}
     </div>
   )
 }

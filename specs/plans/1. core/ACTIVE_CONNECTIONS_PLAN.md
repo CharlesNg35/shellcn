@@ -8,6 +8,62 @@ Expose live connection activity ("**active connections**") across the platform a
 
 ---
 
+## 🔑 Critical Session Constraints
+
+### Session Uniqueness: Per User AND Per Connection
+
+**IMPORTANT:** Active sessions are tracked **per user AND per connection**, NOT per protocol:
+
+1. **One Session Per User Per Connection**
+   - ✅ User A can have ONE active session on "prod-server-01" (SSH)
+   - ✅ User B can ALSO have ONE active session on "prod-server-01" (SSH) **simultaneously**
+   - ❌ User A CANNOT have TWO active sessions on "prod-server-01" at the same time
+   - ✅ User A CAN have sessions on BOTH "prod-server-01" (SSH) AND "staging-db" (Database)
+
+2. **Composite Unique Key: `(user_id, connection_id)`**
+   - Sessions are uniquely identified by the combination of user and connection
+   - NOT by protocol type (multiple connections can use the same protocol)
+   - The same connection can have multiple active sessions from different users
+
+3. **Session Visibility Rules**
+   - **Regular Users:** See ONLY their own active sessions
+   - **Admins:** See ALL active sessions across all users, WITH username/user info displayed
+   - **Team Members:** See sessions from other team members on shared team connections (optional based on permissions)
+
+### Example Scenarios
+
+**Scenario 1: Multiple Users, Same Connection**
+```
+Connection: "prod-server-01" (SSH)
+- Session 1: User Alice → ACTIVE ✅
+- Session 2: User Bob → ACTIVE ✅
+- Session 3: User Alice (second attempt) → REJECTED ❌ (already has active session)
+```
+
+**Scenario 2: Single User, Multiple Connections**
+```
+User: Alice
+- "prod-server-01" (SSH) → ACTIVE ✅
+- "staging-db" (PostgreSQL) → ACTIVE ✅
+- "k8s-cluster" (Kubernetes) → ACTIVE ✅
+- "prod-server-01" (second attempt) → REJECTED ❌ (already has active session on this connection)
+```
+
+**Scenario 3: Admin View vs Regular User View**
+```
+Admin sees:
+- prod-server-01 (3 active sessions)
+  - Alice (started 10m ago)
+  - Bob (started 5m ago)
+  - Charlie (started 2m ago)
+
+Alice sees (regular user):
+- prod-server-01 (1 active session)
+  - My session (started 10m ago)
+```
+
+---
+
 ## Critical Distinction: Protocols vs Connections vs Active Sessions
 
 ### ❌ **WRONG Understanding** (What the Original Plan Said)
@@ -118,7 +174,8 @@ import (
 type ActiveSessionRecord struct {
     ID           string    `json:"id"`            // Session UUID
     ConnectionID string    `json:"connection_id"` // FK to connections table
-    UserID       string    `json:"user_id"`
+    UserID       string    `json:"user_id"`       // User who owns this session
+    UserName     string    `json:"user_name"`     // Username for admin display
     TeamID       *string   `json:"team_id"`
     ProtocolID   string    `json:"protocol_id"`   // ssh, docker, kubernetes, etc.
     StartedAt    time.Time `json:"started_at"`
@@ -132,27 +189,40 @@ type ActiveSessionRecord struct {
 type ActiveSessionService struct {
     mu       sync.RWMutex
     sessions map[string]*ActiveSessionRecord // Key: session ID
+    userConnIndex map[string]string          // Key: "userID:connectionID" -> session ID
     hub      *realtime.Hub
 }
 
 func NewActiveSessionService(hub *realtime.Hub) *ActiveSessionService {
     return &ActiveSessionService{
         sessions: make(map[string]*ActiveSessionRecord),
+        userConnIndex: make(map[string]string),
         hub:      hub,
     }
 }
 
-func (s *ActiveSessionService) RegisterSession(session *ActiveSessionRecord) {
+func (s *ActiveSessionService) RegisterSession(session *ActiveSessionRecord) error {
     s.mu.Lock()
     defer s.mu.Unlock()
 
+    // Check if user already has an active session on this connection
+    indexKey := fmt.Sprintf("%s:%s", session.UserID, session.ConnectionID)
+    if existingSessionID, exists := s.userConnIndex[indexKey]; exists {
+        return fmt.Errorf("user %s already has an active session (%s) on connection %s",
+            session.UserID, existingSessionID, session.ConnectionID)
+    }
+
+    // Register the session
     s.sessions[session.ID] = session
+    s.userConnIndex[indexKey] = session.ID
 
     // Broadcast session.opened event
     s.hub.BroadcastStream("connection.sessions", realtime.Message{
         Event: "session.opened",
         Data:  session,
     })
+
+    return nil
 }
 
 func (s *ActiveSessionService) UnregisterSession(sessionID string) {
@@ -164,7 +234,10 @@ func (s *ActiveSessionService) UnregisterSession(sessionID string) {
         return
     }
 
+    // Remove from both indexes
     delete(s.sessions, sessionID)
+    indexKey := fmt.Sprintf("%s:%s", session.UserID, session.ConnectionID)
+    delete(s.userConnIndex, indexKey)
 
     // Broadcast session.closed event
     s.hub.BroadcastStream("connection.sessions", realtime.Message{
@@ -172,6 +245,7 @@ func (s *ActiveSessionService) UnregisterSession(sessionID string) {
         Data: map[string]any{
             "id":            session.ID,
             "connection_id": session.ConnectionID,
+            "user_id":       session.UserID,
         },
     })
 }
@@ -185,17 +259,27 @@ func (s *ActiveSessionService) Heartbeat(sessionID string) {
     }
 }
 
-func (s *ActiveSessionService) ListActive(userID string, teamIDs []string) []*ActiveSessionRecord {
+func (s *ActiveSessionService) ListActive(userID string, teamIDs []string, isAdmin bool) []*ActiveSessionRecord {
     s.mu.RLock()
     defer s.mu.RUnlock()
 
     var results []*ActiveSessionRecord
     for _, session := range s.sessions {
-        // Filter by user ownership or team membership
+        // Admin sees ALL sessions across all users
+        if isAdmin {
+            results = append(results, session)
+            continue
+        }
+
+        // Regular users see ONLY their own sessions
         if session.UserID == userID {
             results = append(results, session)
             continue
         }
+
+        // Optional: Team members can see each other's sessions on shared team connections
+        // Uncomment below if you want team visibility
+        /*
         if session.TeamID != nil {
             for _, teamID := range teamIDs {
                 if *session.TeamID == teamID {
@@ -204,8 +288,19 @@ func (s *ActiveSessionService) ListActive(userID string, teamIDs []string) []*Ac
                 }
             }
         }
+        */
     }
     return results
+}
+
+// HasActiveSession checks if a user already has an active session on a connection
+func (s *ActiveSessionService) HasActiveSession(userID, connectionID string) bool {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+
+    indexKey := fmt.Sprintf("%s:%s", userID, connectionID)
+    _, exists := s.userConnIndex[indexKey]
+    return exists
 }
 
 // Cleanup expired sessions (run periodically)
@@ -216,13 +311,17 @@ func (s *ActiveSessionService) CleanupStale(gracePeriod time.Duration) {
     now := time.Now()
     for sessionID, session := range s.sessions {
         if now.Sub(session.LastSeenAt) > gracePeriod {
+            // Remove from both indexes
             delete(s.sessions, sessionID)
+            indexKey := fmt.Sprintf("%s:%s", session.UserID, session.ConnectionID)
+            delete(s.userConnIndex, indexKey)
 
             s.hub.BroadcastStream("connection.sessions", realtime.Message{
                 Event: "session.closed",
                 Data: map[string]any{
                     "id":            sessionID,
                     "connection_id": session.ConnectionID,
+                    "user_id":       session.UserID,
                     "reason":        "timeout",
                 },
             })
@@ -241,6 +340,7 @@ CREATE TABLE connection_sessions (
     id TEXT PRIMARY KEY,
     connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES users(id),
+    user_name TEXT NOT NULL,
     team_id TEXT REFERENCES teams(id),
     protocol_id TEXT NOT NULL,
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -250,11 +350,29 @@ CREATE TABLE connection_sessions (
     metadata TEXT,
     INDEX idx_connection_sessions_connection (connection_id),
     INDEX idx_connection_sessions_user (user_id),
-    INDEX idx_connection_sessions_active (last_seen_at)
+    INDEX idx_connection_sessions_active (last_seen_at),
+    UNIQUE INDEX idx_user_connection_unique (user_id, connection_id)  -- Enforce one session per user per connection
 );
 ```
 
 **Recommendation:** Start with **Option A (In-Memory)** for simplicity. Add database persistence later if needed for audit trails.
+
+---
+
+### Session Uniqueness Enforcement
+
+**CRITICAL:** Both implementations MUST enforce the `(user_id, connection_id)` uniqueness constraint:
+
+- **In-Memory:** Use `userConnIndex` map with composite key `"userID:connectionID"`
+- **Database:** Use `UNIQUE INDEX idx_user_connection_unique (user_id, connection_id)`
+
+**Before launching a connection:**
+```go
+// Check if user already has active session
+if sessionService.HasActiveSession(userID, connectionID) {
+    return errors.New("You already have an active session on this connection")
+}
+```
 
 ---
 
@@ -278,26 +396,35 @@ type SSHDriver struct {
 }
 
 func (d *SSHDriver) Launch(ctx context.Context, req drivers.SessionRequest) (drivers.SessionHandle, error) {
-    // 1. Establish SSH connection
+    // 1. Check if user already has an active session on this connection
+    if d.sessionService.HasActiveSession(req.UserID, req.ConnectionID) {
+        return nil, errors.New("you already have an active session on this connection")
+    }
+
+    // 2. Establish SSH connection
     conn, err := d.connect(req)
     if err != nil {
         return nil, err
     }
 
-    // 2. Register active session
+    // 3. Register active session
     sessionID := generateUUID()
-    d.sessionService.RegisterSession(&services.ActiveSessionRecord{
+    if err := d.sessionService.RegisterSession(&services.ActiveSessionRecord{
         ID:           sessionID,
         ConnectionID: req.ConnectionID,
         UserID:       req.UserID,
+        UserName:     req.UserName,  // Include username for admin display
         ProtocolID:   req.ProtocolID,
         StartedAt:    time.Now(),
         LastSeenAt:   time.Now(),
         Host:         req.Settings["host"].(string),
         Port:         req.Settings["port"].(int),
-    })
+    }); err != nil {
+        conn.Close()
+        return nil, fmt.Errorf("failed to register session: %w", err)
+    }
 
-    // 3. Return session handle
+    // 4. Return session handle
     return &SSHSession{
         id:             sessionID,
         conn:           conn,
@@ -349,11 +476,20 @@ Handler implementation (`internal/handlers/connections.go`):
 func (h *ConnectionHandler) ListActive(c *gin.Context) {
     userID := c.GetString("user_id") // From auth middleware
 
-    // Get user's teams
+    // Get user's teams and role
     var user models.User
-    if err := h.db.Preload("Teams").First(&user, "id = ?", userID).Error; err != nil {
+    if err := h.db.Preload("Teams").Preload("Roles").First(&user, "id = ?", userID).Error; err != nil {
         response.Error(c, errors.ErrUnauthorized)
         return
+    }
+
+    // Check if user is admin
+    isAdmin := false
+    for _, role := range user.Roles {
+        if role.Name == "admin" || role.Name == "super_admin" {
+            isAdmin = true
+            break
+        }
     }
 
     teamIDs := make([]string, len(user.Teams))
@@ -366,7 +502,9 @@ func (h *ConnectionHandler) ListActive(c *gin.Context) {
     teamID := c.Query("team_id")
 
     // Get active sessions
-    sessions := h.activeSessionService.ListActive(userID, teamIDs)
+    // Regular users see only their own sessions
+    // Admins see ALL sessions with user information
+    sessions := h.activeSessionService.ListActive(userID, teamIDs, isAdmin)
 
     // Apply filters
     var filtered []*services.ActiveSessionRecord
@@ -428,15 +566,69 @@ const (
 
 ---
 
-### 5. Permissions
+### 5. Permissions & Visibility
 
-Active connection visibility follows existing `connection.view` permission. No new permissions needed.
+Active connection visibility follows existing `connection.view` permission with role-based filtering:
 
 ```go
-// User can see active sessions for:
-// - Connections they own (owner_user_id = user_id)
-// - Connections in their teams (team_id IN user's teams)
-// - Connections shared via visibility ACL
+// Session Visibility Rules:
+//
+// REGULAR USERS:
+// - See ONLY their own active sessions
+// - Cannot see sessions from other users (even on same connection)
+// - Cannot see username of other users
+//
+// ADMINS:
+// - See ALL active sessions across all users
+// - See username/user_id for each session
+// - Can identify which user owns each session
+// - Useful for monitoring and support
+//
+// OPTIONAL - TEAM MEMBERS:
+// - Can optionally see sessions from team members on shared team connections
+// - Controlled by permission check (currently disabled in code)
+```
+
+**Session Display by Role:**
+
+```go
+// Regular User View (user_id: "usr_alice")
+// Only sees own sessions
+[
+  {
+    "id": "sess_001",
+    "connection_id": "conn_prod_server",
+    "user_id": "usr_alice",
+    "user_name": "alice",  // Own username (safe to show)
+    "started_at": "..."
+  }
+]
+
+// Admin View (user_id: "usr_admin", role: "admin")
+// Sees ALL sessions with user information
+[
+  {
+    "id": "sess_001",
+    "connection_id": "conn_prod_server",
+    "user_id": "usr_alice",
+    "user_name": "alice",  // Shows username for monitoring
+    "started_at": "..."
+  },
+  {
+    "id": "sess_002",
+    "connection_id": "conn_prod_server",
+    "user_id": "usr_bob",
+    "user_name": "bob",    // Shows username for monitoring
+    "started_at": "..."
+  },
+  {
+    "id": "sess_003",
+    "connection_id": "conn_staging_db",
+    "user_id": "usr_charlie",
+    "user_name": "charlie",
+    "started_at": "..."
+  }
+]
 ```
 
 ---
@@ -481,15 +673,20 @@ audit.Log(&models.AuditLog{
 
 Create `web/src/hooks/useActiveConnections.ts`:
 
+**🔥 RECOMMENDED: Polling Approach (Simpler, Good Enough)**
+
 ```typescript
-import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useWebSocket } from '@/hooks/useWebSocket'
+import { useQuery, type UseQueryOptions } from '@tanstack/react-query'
+import { apiClient } from '@/lib/api/client'
+import { unwrapResponse } from '@/lib/api/http'
+import type { ApiResponse } from '@/types/api'
+import { ApiError } from '@/lib/api/http'
 
 export interface ActiveConnectionSession {
   id: string
   connection_id: string
   user_id: string
+  user_name: string           // Username for admin display
   team_id?: string | null
   protocol_id: string
   started_at: string
@@ -502,7 +699,62 @@ interface UseActiveConnectionsOptions {
   protocol_id?: string
   team_id?: string
   enabled?: boolean
+  refetchInterval?: number // Poll interval in ms (default: 10 seconds)
 }
+
+type QueryOptions = Omit<
+  UseQueryOptions<ActiveConnectionSession[], ApiError>,
+  'queryKey' | 'queryFn'
+>
+
+export function useActiveConnections(options: UseActiveConnectionsOptions = {}) {
+  const {
+    protocol_id,
+    team_id,
+    enabled = true,
+    refetchInterval = 10_000, // Poll every 10 seconds
+    ...queryOptions
+  } = options
+
+  return useQuery<ActiveConnectionSession[], ApiError>({
+    queryKey: ['connections', 'active', { protocol_id, team_id }],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (protocol_id) params.set('protocol_id', protocol_id)
+      if (team_id) params.set('team_id', team_id)
+
+      const response = await apiClient.get<ApiResponse<ActiveConnectionSession[]>>(
+        '/connections/active',
+        { params }
+      )
+      return unwrapResponse(response)
+    },
+    enabled,
+    staleTime: 5_000,       // Consider stale after 5 seconds
+    refetchInterval,        // Auto-refresh every 10 seconds
+    refetchOnWindowFocus: true, // Refresh when tab gains focus
+    ...queryOptions,
+  })
+}
+```
+
+**Why Polling is Better for Active Connections:**
+
+1. ✅ **Simplicity** - No WebSocket connection management
+2. ✅ **React Query handles everything** - Auto-refetch, caching, error handling
+3. ✅ **Good enough** - 10-second delay is acceptable for session tracking
+4. ✅ **Works everywhere** - No WebSocket infrastructure issues
+5. ✅ **Low overhead** - Active sessions endpoint is lightweight
+
+**⚠️ OPTIONAL: WebSocket Approach (If Real-time is Critical)**
+
+<details>
+<summary>Click to see WebSocket implementation (only if polling isn't good enough)</summary>
+
+```typescript
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useWebSocket } from '@/hooks/useWebSocket'
 
 export function useActiveConnections(options: UseActiveConnectionsOptions = {}) {
   const { protocol_id, team_id, enabled = true } = options
@@ -539,17 +791,14 @@ export function useActiveConnections(options: UseActiveConnectionsOptions = {}) 
 
     if (lastMessage?.event === 'session.opened') {
       const session = lastMessage.data as ActiveConnectionSession
-      // Add new session if not already present
       if (!updated.find(s => s.id === session.id)) {
         updated.push(session)
       }
     } else if (lastMessage?.event === 'session.closed') {
       const { id } = lastMessage.data as { id: string }
-      // Remove closed session
       updated = updated.filter(s => s.id !== id)
     }
 
-    // Apply filters
     return updated.filter(session => {
       if (protocol_id && session.protocol_id !== protocol_id) return false
       if (team_id === 'personal' && session.team_id != null) return false
@@ -566,6 +815,13 @@ export function useActiveConnections(options: UseActiveConnectionsOptions = {}) 
   }
 }
 ```
+
+**When to use WebSocket instead:**
+- Real-time collaboration (multiple users on same connection)
+- Immediate feedback required (< 1 second latency)
+- High-frequency session changes
+
+</details>
 
 ---
 
@@ -697,24 +953,31 @@ const activeConnectionsGrouped = useMemo(() => {
     connection_name: string
     protocol_id: string
     session_count: number
+    sessions: ActiveConnectionSession[]  // Store sessions for admin tooltip
   }>()
 
   sessions.forEach(session => {
     const existing = grouped.get(session.connection_id)
     if (existing) {
       existing.session_count++
+      existing.sessions.push(session)
     } else {
       grouped.set(session.connection_id, {
         connection_id: session.connection_id,
         connection_name: connectionLookup[session.connection_id] || session.connection_id,
         protocol_id: session.protocol_id,
         session_count: 1,
+        sessions: [session],
       })
     }
   })
 
   return Array.from(grouped.values())
 }, [sessions, connectionLookup])
+
+// Check if current user is admin
+const { user } = useAuth()
+const isAdmin = user?.roles?.some(role => role.name === 'admin' || role.name === 'super_admin')
 
 // Render NEW section (BELOW the Protocols section)
 {hasPermission(PERMISSIONS.CONNECTION.VIEW) && (
@@ -732,28 +995,48 @@ const activeConnectionsGrouped = useMemo(() => {
     ) : (
       <div className="space-y-1">
         {activeConnectionsGrouped.map((item) => (
-          <NavLink
-            key={item.connection_id}
-            to={`/connections/${item.connection_id}`}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
-                isActive
-                  ? 'bg-primary text-primary-foreground shadow'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )
-            }
-          >
-            <span className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="truncate">{item.connection_name}</span>
-            </span>
-            {item.session_count > 1 && (
-              <Badge variant="secondary" className="text-[10px]">
-                {item.session_count}
-              </Badge>
+          <Tooltip key={item.connection_id}>
+            <TooltipTrigger asChild>
+              <NavLink
+                to={`/connections/${item.connection_id}`}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )
+                }
+              >
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="truncate">{item.connection_name}</span>
+                </span>
+                {item.session_count > 1 && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {item.session_count}
+                  </Badge>
+                )}
+              </NavLink>
+            </TooltipTrigger>
+            {/* Show session details in tooltip (usernames visible only to admins) */}
+            {isAdmin && item.session_count > 1 && (
+              <TooltipContent side="right" className="max-w-xs">
+                <div className="space-y-1">
+                  <p className="font-semibold text-xs mb-2">Active Users:</p>
+                  {item.sessions.map((session) => (
+                    <div key={session.id} className="flex items-center gap-2 text-xs">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                      <span>{session.user_name}</span>
+                      <span className="text-muted-foreground">
+                        ({formatDistanceToNow(new Date(session.started_at))} ago)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </TooltipContent>
             )}
-          </NavLink>
+          </Tooltip>
         ))}
       </div>
     )}
@@ -761,12 +1044,14 @@ const activeConnectionsGrouped = useMemo(() => {
 )}
 ```
 
-**Key Differences from Original Plan:**
+**Key Features:**
 
 1. ✅ **Keep existing "Protocols" section** - shows connection counts (e.g., "SSH: 5 connections")
 2. ✅ **Add NEW "Active Sessions" section** - shows live sessions (e.g., "prod-server-01 (SSH) - Live")
 3. ✅ **Display connection NAMES** not protocol names (e.g., "Production Server" not "SSH")
 4. ✅ **Show session count per connection** (e.g., if 2 users are using same connection)
+5. ✅ **Admin-only tooltip** - Hover over connections with multiple sessions to see which users are active (admins only)
+6. ✅ **Session uniqueness enforced** - One session per user per connection (enforced at backend)
 
 ---
 
@@ -816,26 +1101,44 @@ import { useActiveConnections } from '@/hooks/useActiveConnections'
 
 export function ConnectionCard({ connection, ... }: ConnectionCardProps) {
   const { sessions } = useActiveConnections()
+  const { user } = useAuth()
+  const isAdmin = user?.roles?.some(role => role.name === 'admin' || role.name === 'super_admin')
 
-  const isActive = useMemo(() => {
-    return sessions.some(s => s.connection_id === connection.id)
+  const activeSessions = useMemo(() => {
+    return sessions.filter(s => s.connection_id === connection.id)
   }, [sessions, connection.id])
 
-  const sessionCount = useMemo(() => {
-    return sessions.filter(s => s.connection_id === connection.id).length
-  }, [sessions, connection.id])
+  const isActive = activeSessions.length > 0
+  const sessionCount = activeSessions.length
 
   return (
     <div className="...">
       {/* Existing card content */}
 
       {isActive && (
-        <div className="absolute top-2 right-2">
-          <Badge variant="success" className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            Live {sessionCount > 1 && `(${sessionCount})`}
-          </Badge>
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="absolute top-2 right-2">
+              <Badge variant="success" className="flex items-center gap-1 cursor-help">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                Live {sessionCount > 1 && `(${sessionCount})`}
+              </Badge>
+            </div>
+          </TooltipTrigger>
+          {/* Admin tooltip showing active usernames */}
+          {isAdmin && sessionCount > 0 && (
+            <TooltipContent>
+              <div className="space-y-1">
+                <p className="font-semibold text-xs">Active Users:</p>
+                {activeSessions.map((session) => (
+                  <div key={session.id} className="text-xs">
+                    • {session.user_name} ({formatDistanceToNow(new Date(session.started_at))} ago)
+                  </div>
+                ))}
+              </div>
+            </TooltipContent>
+          )}
+        </Tooltip>
       )}
     </div>
   )
@@ -881,15 +1184,37 @@ func CleanupStaleSessions(db *gorm.DB, gracePeriod time.Duration) error {
 1. **Unit Tests** (`internal/services/active_session_service_test.go`)
    ```go
    func TestRegisterSession(t *testing.T) { ... }
+   func TestRegisterSession_DuplicateUserConnection_ReturnsError(t *testing.T) {
+       // Test that registering the same user+connection twice fails
+   }
    func TestUnregisterSession(t *testing.T) { ... }
+   func TestUnregisterSession_RemovesFromBothIndexes(t *testing.T) {
+       // Test that both sessions map and userConnIndex are cleaned up
+   }
+   func TestHasActiveSession(t *testing.T) { ... }
    func TestListActive_FiltersByUser(t *testing.T) { ... }
+   func TestListActive_AdminSeesAllSessions(t *testing.T) {
+       // Test that admins see all sessions with usernames
+   }
+   func TestListActive_RegularUserSeesOnlyOwn(t *testing.T) {
+       // Test that regular users only see their own sessions
+   }
    func TestCleanupStale(t *testing.T) { ... }
+   func TestMultipleUsersOnSameConnection(t *testing.T) {
+       // Test that Alice and Bob can both have sessions on same connection
+   }
    ```
 
 2. **Integration Tests** (`internal/handlers/connections_test.go`)
    ```go
    func TestListActive_ReturnsActiveSessionsForUser(t *testing.T) { ... }
    func TestListActive_FiltersTeamSessions(t *testing.T) { ... }
+   func TestListActive_AdminSeesUsernames(t *testing.T) {
+       // Test admin gets user_name field in response
+   }
+   func TestLaunchConnection_RejectsDuplicateSession(t *testing.T) {
+       // Test that launching connection twice for same user fails
+   }
    ```
 
 3. **WebSocket Tests** (`internal/realtime/hub_test.go`)
@@ -941,10 +1266,15 @@ func CleanupStaleSessions(db *gorm.DB, gracePeriod time.Duration) error {
 - [ ] Write frontend tests
 
 ### Phase 4: QA & Launch
-- [ ] Test with multiple concurrent sessions (SSH + Docker + K8s)
-- [ ] Test WebSocket reconnection behavior
+- [ ] Test session uniqueness constraint (one session per user per connection)
+- [ ] Test multiple users on same connection (Alice + Bob on "prod-server-01")
+- [ ] Test single user on multiple connections (Alice on SSH + Docker + K8s)
+- [ ] Test admin view shows all sessions with usernames
+- [ ] Test regular user view shows only own sessions
+- [ ] Test duplicate session rejection (error message when user tries to launch twice)
+- [ ] Test WebSocket reconnection behavior (if using WebSocket)
 - [ ] Test permission filtering (team vs personal)
-- [ ] Load test with 50+ active sessions
+- [ ] Load test with 50+ active sessions across multiple users
 - [ ] Document API endpoints in CORE_MODULE_API.md
 
 ---
@@ -970,6 +1300,7 @@ func CleanupStaleSessions(db *gorm.DB, gracePeriod time.Duration) error {
       "id": "sess_abc123",
       "connection_id": "conn_xyz789",
       "user_id": "usr_001",
+      "user_name": "alice",
       "team_id": "team_platform",
       "protocol_id": "ssh",
       "started_at": "2025-10-10T14:22:00Z",
@@ -980,6 +1311,10 @@ func CleanupStaleSessions(db *gorm.DB, gracePeriod time.Duration) error {
   ]
 }
 ```
+
+**Notes:**
+- Regular users only see their own sessions in the response
+- Admins see all sessions across all users (with `user_name` visible for each)
 
 ### WebSocket Stream
 
@@ -996,7 +1331,7 @@ func CleanupStaleSessions(db *gorm.DB, gracePeriod time.Duration) error {
 
 - **No `connection_sessions` database table** - Use in-memory registry for MVP (add persistence later if needed)
 - **Driver responsibility** - Each protocol driver emits session lifecycle events
-- **Realtime-first** - WebSocket updates provide instant feedback, REST endpoint for initial load
+- **Polling-first approach** - Use React Query polling (10s interval) for simplicity
 - **Permission-aware** - Users only see sessions for connections they can access
 - **Protocol-agnostic** - Works with SSH, Docker, Kubernetes, Database, RDP, VNC, etc.
 
@@ -1009,11 +1344,29 @@ func CleanupStaleSessions(db *gorm.DB, gracePeriod time.Duration) error {
 - ✅ **Add NEW "Active Sessions" sidebar section** - Shows live connection sessions
   - Displays connection NAMES (e.g., "prod-server-01") not protocol types
   - Links to: `/connections/{connection_id}` (specific connection detail)
-  - Data source: `GET /api/connections/active` (new endpoint) + WebSocket
+  - Data source: `GET /api/connections/active` (new endpoint) + optional WebSocket
 
 - ❌ **DO NOT replace protocols section** - They serve different purposes!
   - Protocols = "what drivers exist and how many connections use them"
   - Active Sessions = "which specific connections are running right now"
+
+### 🔑 Critical Session Constraints (Summary)
+
+**Session Uniqueness:**
+- ✅ **One session per (user, connection) pair** - Composite unique key enforced
+- ✅ **Multiple users can use same connection** - Alice and Bob can both connect to "prod-server-01"
+- ❌ **One user CANNOT have multiple sessions on same connection** - Second launch attempt is rejected
+
+**Session Visibility:**
+- 👤 **Regular Users:** See ONLY their own sessions (no visibility into other users)
+- 👑 **Admins:** See ALL sessions across all users WITH usernames (for monitoring/support)
+- 🏢 **Team Members:** Optionally see team sessions (currently disabled, can be enabled)
+
+**UI Indicators:**
+- 💚 **Green pulse dot** - Connection has active sessions
+- 🔢 **Session count badge** - Shows "(2)" if multiple users on same connection
+- 🛠️ **Admin tooltip** - Hover to see which users are active (admins only)
+- 🚫 **Error on duplicate** - "You already have an active session on this connection"
 
 ---
 
