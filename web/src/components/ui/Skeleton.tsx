@@ -1,7 +1,5 @@
 import { cn } from '@/lib/utils/cn'
 
-interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {}
-
 /**
  * Skeleton loading placeholder component.
  *
@@ -11,7 +9,7 @@ interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {}
  * <Skeleton className="h-4 w-[250px]" />
  * ```
  */
-export function Skeleton({ className, ...props }: SkeletonProps) {
+export function Skeleton({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('animate-pulse rounded-md bg-muted', className)} {...props} />
 }
 
