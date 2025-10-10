@@ -5,16 +5,14 @@ import {
   Cloud,
   Container,
   Database,
-  Filter,
   Folder,
   HardDrive,
-  Loader2,
   Monitor,
-  MoreVertical,
   Network,
   Plus,
   Search,
   Server,
+  X,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -25,8 +23,9 @@ import { useConnectionFolders } from '@/hooks/useConnectionFolders'
 import { useTeams } from '@/hooks/useTeams'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { Protocol } from '@/types/protocols'
-import type { ConnectionRecord, ConnectionTarget } from '@/types/connections'
-import { FolderTree } from '@/components/connections/FolderTree'
+import { ConnectionCard } from '@/components/connections/ConnectionCard'
+import { TeamFilterTabs } from '@/components/connections/TeamFilterTabs'
+import { FolderSidebar } from '@/components/connections/FolderSidebar'
 import { cn } from '@/lib/utils/cn'
 import { PERMISSIONS } from '@/constants/permissions'
 
@@ -52,20 +51,17 @@ interface ProtocolTab {
 
 export function Connections() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [selectedTab, setSelectedTab] = useState<string>('all')
+  const [selectedProtocol, setSelectedProtocol] = useState<string | null>(null)
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
   const activeFolder = searchParams.get('folder')
-  const unassignedView = searchParams.get('view') === 'unassigned'
   const teamParam = searchParams.get('team') ?? 'all'
 
-  const teamFilterValue = teamParam === 'all' ? undefined : teamParam
+  const teamFilterValue =
+    teamParam === 'all' ? undefined : teamParam === 'personal' ? 'personal' : teamParam
 
   const { hasPermission } = usePermissions()
   const canViewTeams = hasPermission(PERMISSIONS.TEAM.VIEW)
-  const {
-    data: teamsResult,
-    isLoading: teamsLoading,
-  } = useTeams({
+  const { data: teamsResult } = useTeams({
     enabled: canViewTeams,
     staleTime: 60_000,
   })
@@ -95,7 +91,7 @@ export function Connections() {
     isLoading: connectionsLoading,
     isError: connectionsError,
   } = useConnections({
-    folder_id: activeFolder ?? (unassignedView ? 'unassigned' : undefined),
+    folder_id: activeFolder || undefined,
     search: search || undefined,
     team_id: teamFilterValue,
   })
@@ -112,26 +108,32 @@ export function Connections() {
 
   const filteredConnections = useMemo(() => {
     return connections.filter((connection) => {
-      const matchesProtocol = selectedTab === 'all' || connection.protocol_id === selectedTab
+      // Filter by protocol if one is selected
+      const matchesProtocol = !selectedProtocol || connection.protocol_id === selectedProtocol
       if (!matchesProtocol) {
         return false
       }
 
+      // If no search, return true (show all matching protocol filter)
       if (!normalizedSearch) {
         return true
       }
 
+      // Search filtering
       const protocol = protocolLookup[connection.protocol_id]
       const metadata = connection.metadata ?? {}
       const targets = connection.targets ?? []
-      const tags = extractTags(metadata)
+      const rawTags = metadata.tags
+      const tags = Array.isArray(rawTags)
+        ? rawTags.filter((tag): tag is string => typeof tag === 'string')
+        : []
       const hostMatches = targets.some((target) =>
         target.host.toLowerCase().includes(normalizedSearch)
       )
       const metadataMatch = Object.values(metadata).some(
         (value) => typeof value === 'string' && value.toLowerCase().includes(normalizedSearch)
       )
-      const tagMatch = tags.some((tag) => tag.toLowerCase().includes(normalizedSearch))
+      const tagMatch = tags.some((tag: string) => tag.toLowerCase().includes(normalizedSearch))
 
       return (
         connection.name.toLowerCase().includes(normalizedSearch) ||
@@ -142,7 +144,7 @@ export function Connections() {
         protocol?.name.toLowerCase().includes(normalizedSearch)
       )
     })
-  }, [connections, normalizedSearch, protocolLookup, selectedTab])
+  }, [connections, normalizedSearch, protocolLookup, selectedProtocol])
 
   const tabs: ProtocolTab[] = useMemo(() => {
     const counts = connections.reduce<Record<string, number>>((acc, connection) => {
@@ -150,39 +152,33 @@ export function Connections() {
       return acc
     }, {})
 
-    const base: ProtocolTab[] = protocols.map((protocol) => ({
-      id: protocol.id,
-      label: protocol.name,
-      icon: resolveProtocolIcon(protocol),
-      count: counts[protocol.id] ?? 0,
-      features: protocol.features,
-    }))
+    const protocolTabs: ProtocolTab[] = protocols
+      .map((protocol) => ({
+        id: protocol.id,
+        label: protocol.name,
+        icon: resolveProtocolIcon(protocol),
+        count: counts[protocol.id] ?? 0,
+        features: protocol.features,
+      }))
+      .filter((tab) => tab.count > 0) // Only show protocols that have connections
 
-    return [
-      {
-        id: 'all',
-        label: 'All Connections',
-        icon: DEFAULT_PROTOCOL_ICON,
-        count: connections.length,
-        features: [],
-      },
-      ...base,
-    ]
+    return protocolTabs
   }, [connections, protocols])
 
   const isLoading = protocolsLoading || connectionsLoading
   const hasError = protocolsError || connectionsError
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Connections</h1>
+    <div className="flex h-full flex-col space-y-6 p-6">
+      {/* Page Header */}
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
           <p className="text-sm text-muted-foreground">
-            Discover available protocol drivers and launch saved infrastructure connections
+            Manage and launch your infrastructure connections
           </p>
         </div>
-        <Button asChild size="sm">
+        <Button asChild size="default" className="shadow-sm">
           <Link to="/connections/new">
             <Plus className="mr-2 h-4 w-4" />
             New Connection
@@ -191,18 +187,19 @@ export function Connections() {
       </header>
 
       {hasError && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3">
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 shadow-sm">
           <p className="text-sm font-medium text-destructive">
             Failed to load data. Check your network connection or permissions.
           </p>
         </div>
       )}
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-center">
-        <div className="relative flex-1">
+      {/* Search Bar */}
+      <div className="rounded-lg border border-border/60 bg-card p-4 shadow-sm">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by name, host, or tag"
+            placeholder="Search by name, host, tag, or protocol..."
             value={search}
             onChange={(event) => {
               const value = event.target.value
@@ -215,95 +212,84 @@ export function Connections() {
               }
               setSearchParams(params, { replace: true })
             }}
-            className="pl-9"
+            className="h-10 pl-9 pr-9"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Filter className="mr-2 h-4 w-4" />
-            Filter
-          </Button>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-muted-foreground" htmlFor="team-filter">
-              Team
-            </label>
-            <select
-              id="team-filter"
-              value={teamParam}
-              onChange={(event) => {
-                const value = event.target.value
+          {search && (
+            <button
+              onClick={() => {
+                setSearch('')
                 const params = new URLSearchParams(searchParams)
-                if (value === 'all') {
-                  params.delete('team')
-                } else {
-                  params.set('team', value)
-                }
-                params.delete('folder')
-                params.delete('view')
+                params.delete('search')
                 setSearchParams(params, { replace: true })
               }}
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              disabled={teamsLoading && canViewTeams}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
-              <option value="all">All connections</option>
-              <option value="personal">Personal connections</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 lg:flex-row">
-        <div className="space-y-3 lg:w-64">
-          <div className="rounded-lg border border-border/70 bg-card p-3">
-            <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <span>Folders</span>
-              {foldersLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            </div>
-            <FolderTree
-              nodes={folderTree}
-              activeFolderId={activeFolder ?? (unassignedView ? 'unassigned' : null)}
-              onSelect={(folderId) => {
-                const params = new URLSearchParams(searchParams)
-                if (folderId && folderId !== 'unassigned') {
-                  params.set('folder', folderId)
-                  params.delete('view')
-                } else if (folderId === null) {
-                  params.delete('folder')
-                  params.delete('view')
-                } else {
-                  params.delete('folder')
-                  params.set('view', 'unassigned')
-                }
-                setSearchParams(params, { replace: true })
-              }}
-            />
-          </div>
-        </div>
+      {/* Team Filter Tabs */}
+      {canViewTeams && (
+        <TeamFilterTabs
+          teams={teams}
+          connections={connections}
+          activeTeam={teamParam}
+          onTeamChange={(teamId) => {
+            const params = new URLSearchParams(searchParams)
+            if (teamId === 'all') {
+              params.delete('team')
+            } else {
+              params.set('team', teamId)
+            }
+            params.delete('folder')
+            setSearchParams(params, { replace: true })
+          }}
+        />
+      )}
 
-        <div className="flex-1 space-y-4">
+      {/* Main Content Area */}
+      <div className="flex flex-1 gap-6 overflow-hidden">
+        {/* Folders Sidebar */}
+        <FolderSidebar
+          folders={folderTree}
+          activeFolderId={activeFolder}
+          isLoading={foldersLoading}
+          onFolderSelect={(folderId) => {
+            const params = new URLSearchParams(searchParams)
+            if (folderId) {
+              params.set('folder', folderId)
+            } else {
+              params.delete('folder')
+            }
+            setSearchParams(params, { replace: true })
+          }}
+        />
+
+        {/* Main Content */}
+        <div className="flex min-w-0 flex-1 flex-col space-y-4 overflow-auto">
+          {/* Protocol Tabs */}
           <ProtocolTabs
             tabs={tabs}
             isLoading={protocolsLoading}
-            activeTab={selectedTab}
-            onTabChange={setSelectedTab}
+            activeTab={selectedProtocol}
+            onTabChange={setSelectedProtocol}
           />
 
+          {/* Connections Grid or Empty/Loading State */}
           {isLoading ? (
             <LoadingState />
           ) : filteredConnections.length === 0 ? (
             <EmptyState hasProtocols={protocols.length > 0} search={normalizedSearch} />
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 pb-6 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredConnections.map((connection) => (
                 <ConnectionCard
                   key={connection.id}
                   connection={connection}
                   protocol={protocolLookup[connection.protocol_id]}
+                  protocolIcon={resolveProtocolIcon(protocolLookup[connection.protocol_id])}
                   teamName={connection.team_id ? teamLookup[connection.team_id] : undefined}
                 />
               ))}
@@ -318,125 +304,68 @@ export function Connections() {
 interface ProtocolTabsProps {
   tabs: ProtocolTab[]
   isLoading: boolean
-  activeTab: string
-  onTabChange: (tabId: string) => void
+  activeTab: string | null
+  onTabChange: (tabId: string | null) => void
 }
 
 function ProtocolTabs({ tabs, isLoading, activeTab, onTabChange }: ProtocolTabsProps) {
   if (isLoading && !tabs.length) {
     return (
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
         {Array.from({ length: 4 }).map((_, index) => (
           <div
             key={`protocol-skeleton-${index}`}
-            className="h-10 w-32 animate-pulse rounded-md bg-muted"
+            className="h-11 w-36 animate-pulse rounded-lg bg-muted"
           />
         ))}
       </div>
     )
   }
 
-  return (
-    <div className="flex gap-2 overflow-x-auto pb-2">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => onTabChange(tab.id)}
-          className={cn(
-            'flex items-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition-colors',
-            activeTab === tab.id
-              ? 'bg-primary text-primary-foreground shadow'
-              : 'bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-          )}
-        >
-          <tab.icon className="h-4 w-4" />
-          <span>{tab.label}</span>
-          <Badge variant="secondary" className="ml-1">
-            {tab.count}
-          </Badge>
-        </button>
-      ))}
-    </div>
-  )
-}
-
-interface ConnectionCardProps {
-  connection: ConnectionRecord
-  protocol?: Protocol
-  teamName?: string
-}
-
-function ConnectionCard({ connection, protocol, teamName }: ConnectionCardProps) {
-  const tags = extractTags(connection.metadata)
-  const endpoint = resolvePrimaryEndpoint(connection.targets, connection.settings)
-  const status = resolveStatus(connection)
-  const ProtocolIcon = resolveProtocolIcon(protocol)
-  const isPersonal = !connection.team_id
+  if (tabs.length === 0) {
+    return null // No protocol tabs to show
+  }
 
   return (
-    <div className="group relative rounded-lg border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-            <ProtocolIcon className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="font-semibold">{connection.name}</h3>
-            <p className="text-sm text-muted-foreground">{endpoint ?? 'No target configured'}</p>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              {protocol ? (
-                <Badge variant="outline" className="text-[11px] uppercase tracking-wide">
-                  {protocol.name}
-                </Badge>
-              ) : null}
-              <Badge variant={isPersonal ? 'secondary' : 'outline'} className="text-[11px] uppercase tracking-wide">
-                {isPersonal ? 'Personal' : `Team: ${teamName ?? 'Unknown'}`}
-              </Badge>
-            </div>
-          </div>
-        </div>
-        <button className="rounded-md p-1 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100">
-          <MoreVertical className="h-4 w-4" />
-        </button>
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Filter by Protocol
+        </h3>
+        {activeTab && (
+          <button
+            onClick={() => onTabChange(null)}
+            className="text-xs text-muted-foreground hover:text-foreground"
+          >
+            Clear
+          </button>
+        )}
       </div>
-
-      <div className="mt-3 flex items-center gap-2">
-        <StatusDot status={status} />
-        <span className="text-xs capitalize text-muted-foreground">{status}</span>
-        {connection.last_used_at ? (
-          <span className="text-xs text-muted-foreground">
-            Last used {new Date(connection.last_used_at).toLocaleDateString()}
-          </span>
-        ) : null}
-      </div>
-
-      {tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {tags.map((tag) => (
-            <Badge key={tag} variant="outline" className="text-xs">
-              {tag}
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            className={cn(
+              'group flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-lg px-4 py-2.5 text-sm font-medium transition-all',
+              activeTab === tab.id
+                ? 'bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20'
+                : 'bg-card text-muted-foreground shadow-sm ring-1 ring-border/60 hover:bg-accent hover:text-accent-foreground hover:shadow'
+            )}
+          >
+            <tab.icon className={cn('h-4 w-4 transition-transform group-hover:scale-110')} />
+            <span>{tab.label}</span>
+            <Badge
+              variant={activeTab === tab.id ? 'secondary' : 'outline'}
+              className={cn(
+                'ml-0.5 text-xs font-semibold',
+                activeTab === tab.id && 'bg-primary-foreground/20'
+              )}
+            >
+              {tab.count}
             </Badge>
-          ))}
-        </div>
-      )}
-
-      {protocol?.features?.length ? (
-        <div className="mt-4 flex flex-wrap gap-1">
-          {protocol.features.map((feature) => (
-            <Badge key={feature} variant="secondary" className="text-xs uppercase">
-              {feature.replace(/_/g, ' ')}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="mt-4 flex gap-2">
-        <Button size="sm" className="flex-1" asChild>
-          <Link to={`/connections/${connection.id}`}>Launch</Link>
-        </Button>
-        <Button size="sm" variant="outline" asChild>
-          <Link to={`/connections/${connection.id}/edit`}>Edit</Link>
-        </Button>
+          </button>
+        ))}
       </div>
     </div>
   )
@@ -449,27 +378,68 @@ interface EmptyStateProps {
 
 function EmptyState({ hasProtocols, search }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/50 py-16 text-center">
-      <Server className="mb-4 h-12 w-12 text-muted-foreground" />
-      <h3 className="mb-2 text-lg font-semibold">{search ? 'No matches' : 'No connections yet'}</h3>
-      <p className="max-w-md text-sm text-muted-foreground">
+    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/30 py-20 text-center">
+      <div className="mb-4 rounded-full bg-muted p-4 ring-2 ring-border/40">
+        <Server className="h-10 w-10 text-muted-foreground" />
+      </div>
+      <h3 className="mb-2 text-xl font-semibold">
+        {search ? 'No matches found' : 'No connections yet'}
+      </h3>
+      <p className="mb-6 max-w-md text-sm text-muted-foreground">
         {search
           ? 'Try refining your search or switch to a different protocol tab.'
           : hasProtocols
             ? 'Create a connection to reuse driver settings and shared identities.'
             : 'No protocol drivers are currently available. Check your permissions or driver health.'}
       </p>
+      {!search && hasProtocols && (
+        <Button asChild size="default">
+          <Link to="/connections/new">
+            <Plus className="mr-2 h-4 w-4" />
+            Create Connection
+          </Link>
+        </Button>
+      )}
     </div>
   )
 }
 
 function LoadingState() {
   return (
-    <div className="flex min-h-[200px] items-center justify-center rounded-lg border border-dashed border-border">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span>Loading connections…</span>
-      </div>
+    <div className="grid gap-4 pb-6 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      {Array.from({ length: 8 }).map((_, index) => (
+        <div
+          key={`connection-skeleton-${index}`}
+          className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm"
+        >
+          {/* Header skeleton */}
+          <div className="border-b border-border/40 bg-muted/30 p-4">
+            <div className="flex items-start gap-3">
+              <div className="h-12 w-12 animate-pulse rounded-lg bg-muted" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-48 animate-pulse rounded bg-muted" />
+              </div>
+            </div>
+          </div>
+          {/* Body skeleton */}
+          <div className="flex-1 space-y-3 p-4">
+            <div className="flex gap-2">
+              <div className="h-5 w-16 animate-pulse rounded bg-muted" />
+              <div className="h-5 w-20 animate-pulse rounded bg-muted" />
+            </div>
+            <div className="h-3 w-full animate-pulse rounded bg-muted" />
+            <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+          </div>
+          {/* Footer skeleton */}
+          <div className="border-t border-border/40 bg-muted/20 p-3">
+            <div className="flex gap-2">
+              <div className="h-9 flex-1 animate-pulse rounded bg-muted" />
+              <div className="h-9 w-9 animate-pulse rounded bg-muted" />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -507,47 +477,4 @@ function resolveProtocolIcon(protocol?: Protocol): LucideIcon {
   }
 
   return DEFAULT_PROTOCOL_ICON
-}
-
-function extractTags(metadata?: Record<string, unknown>): string[] {
-  if (!metadata) {
-    return []
-  }
-  const raw = metadata.tags
-  if (Array.isArray(raw)) {
-    return raw.filter((tag): tag is string => typeof tag === 'string')
-  }
-  return []
-}
-
-function resolvePrimaryEndpoint(targets?: ConnectionTarget[], settings?: Record<string, unknown>) {
-  if (targets && targets.length > 0) {
-    const target = targets[0]
-    if (target.host) {
-      return target.port ? `${target.host}:${target.port}` : target.host
-    }
-  }
-  const host = typeof settings?.host === 'string' ? settings.host : undefined
-  const portValue = typeof settings?.port === 'number' ? settings.port : undefined
-  return host ? (portValue ? `${host}:${portValue}` : host) : undefined
-}
-
-function resolveStatus(connection: ConnectionRecord): string {
-  const metadataStatus = connection.metadata?.status
-  if (typeof metadataStatus === 'string') {
-    return metadataStatus.toLowerCase()
-  }
-  return 'ready'
-}
-
-function StatusDot({ status }: { status: string }) {
-  const color =
-    status === 'connected'
-      ? 'bg-green-500'
-      : status === 'error'
-        ? 'bg-destructive'
-        : status === 'ready'
-          ? 'bg-blue-500'
-          : 'bg-muted-foreground'
-  return <span className={cn('h-2 w-2 rounded-full', color)} />
 }

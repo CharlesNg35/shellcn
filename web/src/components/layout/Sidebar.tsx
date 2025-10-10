@@ -120,7 +120,9 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                   className={({ isActive }) =>
                     cn(
                       'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
-                      isActive ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      isActive
+                        ? 'bg-primary text-primary-foreground shadow'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                     )
                   }
                 >
@@ -133,7 +135,9 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                     className={({ isActive }) =>
                       cn(
                         'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
-                        isActive ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        isActive
+                          ? 'bg-primary text-primary-foreground shadow'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       )
                     }
                   >

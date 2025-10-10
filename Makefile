@@ -86,6 +86,8 @@ fmt: fmt-web
 	@echo "Formatting code..."
 	@find . -name '*.go' -not -path './vendor/*' -not -path './.git/*' -print0 | xargs -0 gofmt -w
 
+format: fmt
+
 tidy:
 	@echo "Tidying module dependencies..."
 	@go mod tidy
