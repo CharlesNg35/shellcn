@@ -30,15 +30,14 @@ type ConnectionFolderNode struct {
 
 // ConnectionFolderInput describes folder create/update payloads.
 type ConnectionFolderInput struct {
-	Name           string
-	Description    string
-	Icon           string
-	Color          string
-	ParentID       *string
-	OrganizationID *string
-	TeamID         *string
-	Metadata       map[string]any
-	Ordering       *int
+	Name        string
+	Description string
+	Icon        string
+	Color       string
+	ParentID    *string
+	TeamID      *string
+	Metadata    map[string]any
+	Ordering    *int
 }
 
 // NewConnectionFolderService constructs a folder service.
@@ -73,11 +72,6 @@ func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string) (
 	if !userCtx.IsRoot {
 		clauses := []string{"owner_user_id = ?"}
 		args := []any{userCtx.ID}
-		clauses = append(clauses, "organization_id IS NULL")
-		if userCtx.OrganizationID != nil {
-			clauses = append(clauses, "organization_id = ?")
-			args = append(args, *userCtx.OrganizationID)
-		}
 		if len(userCtx.TeamIDs) > 0 {
 			clauses = append(clauses, "team_id IN ?")
 			args = append(args, userCtx.TeamIDs)
@@ -101,16 +95,15 @@ func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string) (
 
 	for _, folder := range folders {
 		dto := ConnectionFolderDTO{
-			ID:             folder.ID,
-			Name:           folder.Name,
-			Slug:           folder.Slug,
-			Description:    folder.Description,
-			Icon:           folder.Icon,
-			Color:          folder.Color,
-			ParentID:       folder.ParentID,
-			OrganizationID: folder.OrganizationID,
-			TeamID:         folder.TeamID,
-			Metadata:       decodeJSONMap(folder.Metadata),
+			ID:          folder.ID,
+			Name:        folder.Name,
+			Slug:        folder.Slug,
+			Description: folder.Description,
+			Icon:        folder.Icon,
+			Color:       folder.Color,
+			ParentID:    folder.ParentID,
+			TeamID:      folder.TeamID,
+			Metadata:    decodeJSONMap(folder.Metadata),
 		}
 		node := &ConnectionFolderNode{
 			Folder:          dto,
@@ -166,15 +159,14 @@ func (s *ConnectionFolderService) Create(ctx context.Context, userID string, inp
 	}
 
 	folder := models.ConnectionFolder{
-		Name:           strings.TrimSpace(input.Name),
-		Slug:           slugify(slug),
-		Description:    strings.TrimSpace(input.Description),
-		Icon:           strings.TrimSpace(input.Icon),
-		Color:          strings.TrimSpace(input.Color),
-		ParentID:       input.ParentID,
-		OrganizationID: input.OrganizationID,
-		TeamID:         input.TeamID,
-		OwnerUserID:    userID,
+		Name:        strings.TrimSpace(input.Name),
+		Slug:        slugify(slug),
+		Description: strings.TrimSpace(input.Description),
+		Icon:        strings.TrimSpace(input.Icon),
+		Color:       strings.TrimSpace(input.Color),
+		ParentID:    input.ParentID,
+		TeamID:      input.TeamID,
+		OwnerUserID: userID,
 	}
 
 	if input.Metadata != nil {
@@ -227,9 +219,6 @@ func (s *ConnectionFolderService) Update(ctx context.Context, userID, folderID s
 	}
 	if input.ParentID != nil {
 		updates["parent_id"] = input.ParentID
-	}
-	if input.OrganizationID != nil {
-		updates["organization_id"] = input.OrganizationID
 	}
 	if input.TeamID != nil {
 		updates["team_id"] = input.TeamID
@@ -296,16 +285,15 @@ func (s *ConnectionFolderService) Delete(ctx context.Context, userID, folderID s
 
 func (s *ConnectionFolderService) mapFolder(folder models.ConnectionFolder) ConnectionFolderDTO {
 	return ConnectionFolderDTO{
-		ID:             folder.ID,
-		Name:           folder.Name,
-		Slug:           folder.Slug,
-		Description:    folder.Description,
-		Icon:           folder.Icon,
-		Color:          folder.Color,
-		ParentID:       folder.ParentID,
-		OrganizationID: folder.OrganizationID,
-		TeamID:         folder.TeamID,
-		Metadata:       decodeJSONMap(folder.Metadata),
+		ID:          folder.ID,
+		Name:        folder.Name,
+		Slug:        folder.Slug,
+		Description: folder.Description,
+		Icon:        folder.Icon,
+		Color:       folder.Color,
+		ParentID:    folder.ParentID,
+		TeamID:      folder.TeamID,
+		Metadata:    decodeJSONMap(folder.Metadata),
 	}
 }
 

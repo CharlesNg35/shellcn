@@ -29,12 +29,12 @@ export function Users() {
     }
   }, [filters, page])
 
-  const { data, isLoading } = useUsers(queryParams)
+  const { data, isLoading, refetch } = useUsers(queryParams)
   const { bulkActivate, bulkDeactivate, bulkDelete } = useUserMutations()
 
   useEffect(() => {
     setPage(1)
-  }, [filters.status, filters.search, filters.organization_id])
+  }, [filters.status, filters.search])
 
   const users = data?.data ?? []
   const meta = data?.meta
@@ -65,6 +65,19 @@ export function Users() {
 
   const isBulkProcessing =
     bulkActivate.isPending || bulkDeactivate.isPending || bulkDelete.isPending
+
+  const handleCreateSuccess = () => {
+    setIsCreateModalOpen(false)
+    refetch() // Refresh the list after creation
+  }
+
+  const handleEditSuccess = (updated: UserRecord) => {
+    setEditingUser(null)
+    if (detailUserId === updated.id) {
+      setDetailUserId(updated.id)
+    }
+    refetch() // Refresh the list after edit
+  }
 
   return (
     <div className="space-y-6">
@@ -113,7 +126,7 @@ export function Users() {
         <UserForm
           mode="create"
           onClose={() => setIsCreateModalOpen(false)}
-          onSuccess={() => setIsCreateModalOpen(false)}
+          onSuccess={handleCreateSuccess}
         />
       </Modal>
 
@@ -126,12 +139,7 @@ export function Users() {
           mode="edit"
           user={editingUser ?? undefined}
           onClose={() => setEditingUser(null)}
-          onSuccess={(updated) => {
-            setEditingUser(null)
-            if (detailUserId === updated.id) {
-              setDetailUserId(updated.id)
-            }
-          }}
+          onSuccess={handleEditSuccess}
         />
       </Modal>
 

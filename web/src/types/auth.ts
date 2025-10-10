@@ -11,11 +11,6 @@ export interface AuthTeamSummary {
   name: string
 }
 
-export interface AuthOrganizationSummary {
-  id: string
-  name: string
-}
-
 export interface AuthUser {
   id: string
   username: string
@@ -24,7 +19,6 @@ export interface AuthUser {
   last_name?: string
   is_root: boolean
   is_active: boolean
-  organization?: AuthOrganizationSummary
   teams?: AuthTeamSummary[]
   roles?: AuthRoleSummary[]
   permissions?: string[]

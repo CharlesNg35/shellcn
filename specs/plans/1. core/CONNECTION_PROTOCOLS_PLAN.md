@@ -4,19 +4,19 @@
 
 This plan delivers Phase 3 of the Core module ([ROADMAP.md:37-41](../../ROADMAP.md)). It turns the protocol registry into a complete **Connection Platform** with:
 
-- Canonical **Connection** entities scoped to organizations and teams.
+- Canonical **Connection** entities scoped to teams and users.
 - A scalable **driver system** that supports native Go clients, Rust FFI modules, and future proxy adapters.
-- Deterministic **availability rules** that combine driver readiness, tenant configuration, row-level visibility, and modular permissions.
+- Deterministic **availability rules** that combine driver readiness, configuration, row-level visibility, and modular permissions.
 - Service + API layers to power the `Connections` UI (creation, filtering, launch preview, sharing).
-- Auditability and fine-grained permissions aligned with `specs/project/project_spec.md` (remote access, credential vault, multi-tenancy).
+- Auditability and fine-grained permissions aligned with `specs/project/project_spec.md` (remote access, credential vault).
 
 ### Goals
 
-1. Model connections as reusable assets that can be owned globally or per organization/team.
+1. Model connections as reusable assets that can be owned per team or by individual users.
 2. Provide a driver registry/descriptor system with capabilities metadata and health reporting.
 3. Keep protocol availability derived from three levers: driver readiness, configuration toggles, and permission grants.
 4. Expose REST endpoints and frontend hooks that surface only the protocols/connections a user can access.
-5. Ensure every change (driver readiness, protocol sync, connection edits) emits audit records and respects organizations/teams.
+5. Ensure every change (driver readiness, protocol sync, connection edits) emits audit records and respects team boundaries.
 
 ---
 
@@ -72,11 +72,10 @@ func (c *ConnectionProtocol) IsAvailable() bool {
 ```go
 type Connection struct {
     BaseModel
-    Name           string  `gorm:"not null;uniqueIndex:conn_org_name" json:"name"`
+    Name           string  `gorm:"not null;uniqueIndex:conn_team_name" json:"name"`
     Description    string  `json:"description"`
     ProtocolID     string  `gorm:"not null;index" json:"protocol_id"`
-    OrganizationID *string `gorm:"type:uuid;index;uniqueIndex:conn_org_name" json:"organization_id"`
-    TeamID         *string `gorm:"type:uuid;index" json:"team_id"`
+    TeamID         *string `gorm:"type:uuid;index;uniqueIndex:conn_team_name" json:"team_id"`
     OwnerUserID    string  `gorm:"type:uuid;index" json:"owner_user_id"`
     Metadata       string  `gorm:"type:json" json:"metadata"`
     Settings       string  `gorm:"type:json" json:"settings"`
@@ -106,7 +105,6 @@ type ConnectionTarget struct {
 type ConnectionVisibility struct {
     BaseModel
     ConnectionID    string  `gorm:"type:uuid;index" json:"connection_id"`
-    OrganizationID  *string `gorm:"type:uuid;index" json:"organization_id"`
     TeamID          *string `gorm:"type:uuid;index" json:"team_id"`
     UserID          *string `gorm:"type:uuid;index" json:"user_id"`
     PermissionScope string  `gorm:"type:varchar(32)" json:"permission_scope"` // view|use|manage
@@ -114,9 +112,9 @@ type ConnectionVisibility struct {
 ```
 
 Key points:
-- Org-level template connections are possible by setting `OrganizationID=nil`.
 - Team-level scoping allows curated sets for squads.
 - Visibility table enables sharing with explicit users (similar to vault shares).
+- Connections without a team are personal to the owner user.
 
 ---
 
@@ -305,7 +303,6 @@ type CreateConnectionInput struct {
     Name           string
     Description    string
     ProtocolID     string
-    OrganizationID *string
     TeamID         *string
     Metadata       map[string]any
     Settings       map[string]any
@@ -319,9 +316,9 @@ Behaviors:
 - Validate driver exists and is available (DriverEnabled + ConfigEnabled) before create.
 - Call driver `ValidateConfig` using provided settings.
 - Serialize `Settings` and `Metadata` as JSON; encrypt secret payloads via Credential Vault service when inline.
-- Manage `ConnectionVisibility` rows (org/team/user scopes). Enforce at least one scope when connection is org-owned.
+- Manage `ConnectionVisibility` rows (team/user scopes). Enforce at least one scope when connection is team-owned.
 - Record audit entries: `connection.create`, `connection.update`, `connection.delete`, `connection.share`, `connection.launch.preview`.
-- Provide `ListForUser(ctx, userID, filter)` combining organization membership, team membership, and explicit share rows.
+- Provide `ListForUser(ctx, userID, filter)` combining team membership and explicit share rows.
 
 ### Visibility & Permission Enforcement
 
@@ -362,7 +359,11 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
 
 - `ProtocolHandler` orchestrates ProtocolService methods and handles permission errors gracefully.
 - `ConnectionHandler` binds/validates payloads (`internal/handlers/validation.go`), calls ConnectionService, and serializes visibility records.
-- `middleware.OrganizationScope` ensures the org in the path matches the authenticated user when present (reused from other modules).
+
+### Handler Responsibilities
+
+- `ProtocolHandler` orchestrates ProtocolService methods and handles permission errors gracefully.
+- `ConnectionHandler` binds/validates payloads (`internal/handlers/validation.go`), calls ConnectionService, and serializes visibility records.
 
 ---
 
@@ -454,11 +455,11 @@ Mock utilities: add `testutil.NewDriverRegistry()` to isolate driver behaviors.
 
 - ✅ Driver registry successfully initializes native + FFI drivers, surfacing capability metadata.
 - ✅ Config toggles and driver health status produce consistent availability flags in API responses.
-- ✅ Connection CRUD respects organization/team visibility and modular permissions.
+- ✅ Connection CRUD respects team visibility and modular permissions.
 - ✅ Protocol and connection endpoints integrate with middleware.Auth + RequirePermission.
 - ✅ Audit log entries create traceability for all connection/driver operations.
 - ✅ Frontend auto-updates connection tabs and cards based on API results.
-- ✅ Root users see/manage everything; scoped admins only see what they should.
+- ✅ Root users see/manage everything; team-scoped users only see what they should.
 
 ---
 

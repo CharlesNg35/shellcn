@@ -25,11 +25,6 @@ interface UserResponse {
   avatar?: string
   is_root: boolean
   is_active: boolean
-  organization_id?: string | null
-  organization?: {
-    id: string
-    name: string
-  } | null
   roles?: Array<{
     id: string
     name: string
@@ -61,8 +56,6 @@ function transformUser(raw: UserResponse): UserRecord {
     avatar: raw.avatar,
     is_root: raw.is_root,
     is_active: raw.is_active,
-    organization_id: raw.organization_id ?? undefined,
-    organization: raw.organization ?? undefined,
     roles: raw.roles ?? [],
     teams: raw.teams ?? [],
     last_login_at: raw.last_login_at,
@@ -81,9 +74,6 @@ export async function fetchUsers(params: UserListParams = {}): Promise<UserListR
   }
   if (params.search) {
     queryParams.search = params.search
-  }
-  if (params.organization_id) {
-    queryParams.organization_id = params.organization_id
   }
   if (params.status && params.status !== 'all') {
     queryParams.status = params.status

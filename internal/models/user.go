@@ -2,7 +2,7 @@ package models
 
 import "time"
 
-// User describes platform users with relationships to organisations, teams, and roles.
+// User describes platform users with relationships to teams and roles.
 type User struct {
 	BaseModel
 
@@ -17,10 +17,8 @@ type User struct {
 	IsRoot   bool `gorm:"default:false" json:"is_root"`
 	IsActive bool `gorm:"default:true" json:"is_active"`
 
-	MFAEnabled     bool          `gorm:"default:false" json:"mfa_enabled"`
-	MFASecret      *MFASecret    `gorm:"foreignKey:UserID" json:"-"`
-	OrganizationID *string       `gorm:"type:uuid" json:"organization_id"`
-	Organization   *Organization `json:"organization,omitempty"`
+	MFAEnabled bool       `gorm:"default:false" json:"mfa_enabled"`
+	MFASecret  *MFASecret `gorm:"foreignKey:UserID" json:"-"`
 
 	Teams    []Team    `gorm:"many2many:user_teams;" json:"teams,omitempty"`
 	Roles    []Role    `gorm:"many2many:user_roles;" json:"roles,omitempty"`

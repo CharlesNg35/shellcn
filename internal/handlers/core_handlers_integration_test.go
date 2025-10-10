@@ -237,76 +237,15 @@ func TestUserHandler_BulkOperations(t *testing.T) {
 	}
 }
 
-func TestOrganizationHandler_CRUD(t *testing.T) {
-	env := testutil.NewEnv(t)
-	root := env.CreateRootUser("OrgPassw0rd!")
-	login := env.Login(root.Username, "OrgPassw0rd!")
-	token := login.AccessToken
-
-	createPayload := map[string]any{
-		"name":        "Test Org",
-		"description": "organization used in tests",
-	}
-	created := env.Request(http.MethodPost, "/api/orgs", createPayload, token)
-	require.Equal(t, http.StatusCreated, created.Code, created.Body.String())
-	createResp := testutil.DecodeResponse(t, created)
-	require.True(t, createResp.Success)
-
-	var org map[string]any
-	testutil.DecodeInto(t, createResp.Data, &org)
-	orgID := org["id"].(string)
-
-	list := env.Request(http.MethodGet, "/api/orgs", nil, token)
-	require.Equal(t, http.StatusOK, list.Code)
-	listResp := testutil.DecodeResponse(t, list)
-	require.True(t, listResp.Success)
-	var orgs []map[string]any
-	testutil.DecodeInto(t, listResp.Data, &orgs)
-	require.NotEmpty(t, orgs)
-
-	get := env.Request(http.MethodGet, "/api/orgs/"+orgID, nil, token)
-	require.Equal(t, http.StatusOK, get.Code)
-
-	updatePayload := map[string]any{"description": "updated description"}
-	updated := env.Request(http.MethodPatch, "/api/orgs/"+orgID, updatePayload, token)
-	require.Equal(t, http.StatusOK, updated.Code)
-	updateResp := testutil.DecodeResponse(t, updated)
-	var updatedOrg map[string]any
-	testutil.DecodeInto(t, updateResp.Data, &updatedOrg)
-	require.Equal(t, "updated description", updatedOrg["description"])
-
-	deleteResp := env.Request(http.MethodDelete, "/api/orgs/"+orgID, nil, token)
-	require.Equal(t, http.StatusOK, deleteResp.Code)
-
-	// ensure deleted
-	getAfterDelete := env.Request(http.MethodGet, "/api/orgs/"+orgID, nil, token)
-	require.Equal(t, http.StatusNotFound, getAfterDelete.Code)
-	errPayload := testutil.DecodeResponse(t, getAfterDelete)
-	require.False(t, errPayload.Success)
-	require.NotNil(t, errPayload.Error)
-	require.Equal(t, "NOT_FOUND", errPayload.Error.Code)
-}
-
 func TestTeamHandler_Flow(t *testing.T) {
 	env := testutil.NewEnv(t)
 	root := env.CreateRootUser("TeamPassw0rd!")
 	login := env.Login(root.Username, "TeamPassw0rd!")
 	token := login.AccessToken
 
-	orgPayload := map[string]any{
-		"name":        "Team Org",
-		"description": "org for team tests",
-	}
-	orgResp := env.Request(http.MethodPost, "/api/orgs", orgPayload, token)
-	require.Equal(t, http.StatusCreated, orgResp.Code)
-	var org map[string]any
-	testutil.DecodeInto(t, testutil.DecodeResponse(t, orgResp).Data, &org)
-	orgID := org["id"].(string)
-
 	teamPayload := map[string]any{
-		"organization_id": orgID,
-		"name":            "Platform",
-		"description":     "platform team",
+		"name":        "Platform",
+		"description": "platform team",
 	}
 	teamResp := env.Request(http.MethodPost, "/api/teams", teamPayload, token)
 	require.Equal(t, http.StatusCreated, teamResp.Code, teamResp.Body.String())
@@ -344,12 +283,6 @@ func TestTeamHandler_Flow(t *testing.T) {
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, listMembers).Data, &members)
 	require.Len(t, members, 1)
 	require.Equal(t, memberID, members[0]["id"])
-
-	orgTeams := env.Request(http.MethodGet, "/api/organizations/"+orgID+"/teams", nil, token)
-	require.Equal(t, http.StatusOK, orgTeams.Code)
-	var teams []map[string]any
-	testutil.DecodeInto(t, testutil.DecodeResponse(t, orgTeams).Data, &teams)
-	require.NotEmpty(t, teams)
 
 	removeResp := env.Request(http.MethodDelete, "/api/teams/"+teamID+"/members/"+memberID, nil, token)
 	require.Equal(t, http.StatusOK, removeResp.Code)

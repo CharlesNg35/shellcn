@@ -24,7 +24,6 @@ export interface UpsertFolderPayload {
   icon?: string
   color?: string
   parent_id?: string | null
-  organization_id?: string | null
   team_id?: string | null
   metadata?: Record<string, unknown>
   ordering?: number

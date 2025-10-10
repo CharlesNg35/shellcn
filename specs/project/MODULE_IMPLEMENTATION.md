@@ -189,12 +189,12 @@ func init() {
         Description: "Delete users",
     })
 
-    // Organization Management
+    // Team Management
     Register(&Permission{
-        ID:          "org.view",
+        ID:          "team.view",
         Module:      "core",
         DependsOn:   []string{},
-        Description: "View organizations",
+        Description: "View teams",
     })
 
     // Permission Management
@@ -539,11 +539,9 @@ export function UserManagement() {
   - First user created as superuser/root
   - Password encryption with bcrypt
 
-#### 1.4 Organization & Team Management
-- Create organizations
-- Create teams within organizations
+#### 1.4 Team Management
+- Create teams
 - Assign users to teams
-- Organization-level settings
 - Team-based access control
 
 #### 1.5 Permission System
@@ -660,7 +658,6 @@ web/src/
 │   └── settings/
 │       ├── Profile.tsx
 │       ├── Security.tsx
-│       ├── Organizations.tsx
 │       ├── Teams.tsx
 │       └── Users.tsx       # Admin only
 │
@@ -680,13 +677,13 @@ web/src/
 │   ├── useAuth.ts
 │   ├── usePermissions.ts
 │   ├── useCurrentUser.ts
-│   └── useOrganization.ts
+│   └── useTeams.ts
 │
 └── lib/
     └── api/
         ├── auth.ts
         ├── users.ts
-        ├── organizations.ts
+        ├── teams.ts
         └── permissions.ts
 ```
 
@@ -716,21 +713,21 @@ CORE_PERMISSIONS = {
         "description": "Delete users",
     },
 
-    // Organization Management
-    "org.view": {
+    // Team Management
+    "team.view": {
         "module": "core",
         "depends_on": [],
-        "description": "View organizations",
+        "description": "View teams",
     },
-    "org.create": {
+    "team.create": {
         "module": "core",
-        "depends_on": ["org.view"],
-        "description": "Create organizations",
+        "depends_on": ["team.view"],
+        "description": "Create teams",
     },
-    "org.manage": {
+    "team.manage": {
         "module": "core",
-        "depends_on": ["org.view"],
-        "description": "Manage organizations",
+        "depends_on": ["team.view"],
+        "description": "Manage teams",
     },
 
     // Permission Management
@@ -3429,7 +3426,7 @@ Core Module (Required)
 ## Implementation Checklist
 
 ### Phase 1: Core Foundation
-- [ ] Core module (auth, users, organizations, permissions)
+- [ ] Core module (auth, users, teams, permissions)
 - [ ] Vault module (identities, SSH keys, encryption)
 - [ ] First-time setup UI
 - [ ] Database schema (SQLite)

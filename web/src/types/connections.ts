@@ -8,7 +8,6 @@ export interface ConnectionTarget {
 
 export interface ConnectionVisibility {
   id?: string
-  organization_id?: string | null
   team_id?: string | null
   user_id?: string | null
   permission_scope: string
@@ -33,7 +32,6 @@ export interface ConnectionFolderSummary {
   icon?: string
   color?: string
   parent_id?: string | null
-  organization_id?: string | null
   team_id?: string | null
   metadata?: Record<string, unknown>
 }
@@ -49,7 +47,6 @@ export interface ConnectionRecord {
   name: string
   description?: string
   protocol_id: string
-  organization_id?: string | null
   team_id?: string | null
   owner_user_id?: string | null
   folder_id?: string | null

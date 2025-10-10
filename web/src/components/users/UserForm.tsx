@@ -49,7 +49,6 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
       first_name: user.first_name ?? '',
       last_name: user.last_name ?? '',
       avatar: user.avatar ?? '',
-      organization_id: user.organization_id ?? undefined,
       is_active: user.is_active,
     }
   }, [mode, user])
@@ -95,7 +94,6 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
           first_name: values.first_name,
           last_name: values.last_name,
           avatar: values.avatar,
-          organization_id: values.organization_id,
           is_root: values.is_root,
           is_active: values.is_active,
         })
@@ -120,7 +118,6 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
           first_name: values.first_name,
           last_name: values.last_name,
           avatar: values.avatar,
-          organization_id: values.organization_id,
         },
       })
       handleSuccess(updated)

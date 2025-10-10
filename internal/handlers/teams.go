@@ -17,9 +17,8 @@ type TeamHandler struct {
 }
 
 type createTeamRequest struct {
-	OrganizationID string `json:"organization_id" validate:"required,uuid4"`
-	Name           string `json:"name" validate:"required,min=2,max=128"`
-	Description    string `json:"description" validate:"omitempty,max=512"`
+	Name        string `json:"name" validate:"required,min=2,max=128"`
+	Description string `json:"description" validate:"omitempty,max=512"`
 }
 
 type updateTeamRequest struct {
@@ -43,9 +42,9 @@ func NewTeamHandler(db *gorm.DB) (*TeamHandler, error) {
 	return &TeamHandler{svc: svc}, nil
 }
 
-// GET /api/orgs/:orgID/teams
-func (h *TeamHandler) ListByOrg(c *gin.Context) {
-	teams, err := h.svc.ListByOrganization(requestContext(c), c.Param("orgID"))
+// GET /api/teams
+func (h *TeamHandler) List(c *gin.Context) {
+	teams, err := h.svc.List(requestContext(c))
 	if err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
@@ -70,21 +69,15 @@ func (h *TeamHandler) Create(c *gin.Context) {
 		return
 	}
 
-	orgID := strings.TrimSpace(body.OrganizationID)
 	name := strings.TrimSpace(body.Name)
-	if orgID == "" {
-		response.Error(c, errors.NewBadRequest("organization id is required"))
-		return
-	}
 	if name == "" {
 		response.Error(c, errors.NewBadRequest("name is required"))
 		return
 	}
 
 	input := services.CreateTeamInput{
-		OrganizationID: orgID,
-		Name:           name,
-		Description:    strings.TrimSpace(body.Description),
+		Name:        name,
+		Description: strings.TrimSpace(body.Description),
 	}
 
 	team, err := h.svc.Create(requestContext(c), input)
@@ -93,6 +86,15 @@ func (h *TeamHandler) Create(c *gin.Context) {
 		return
 	}
 	response.Success(c, http.StatusCreated, team)
+}
+
+// DELETE /api/teams/:id
+func (h *TeamHandler) Delete(c *gin.Context) {
+	if err := h.svc.Delete(requestContext(c), c.Param("id")); err != nil {
+		response.Error(c, errors.ErrNotFound)
+		return
+	}
+	response.Success(c, http.StatusOK, gin.H{"deleted": true})
 }
 
 // PATCH /api/teams/:id

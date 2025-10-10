@@ -119,15 +119,11 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	registerUserRoutes(api, userHandler, checker)
 
-	orgHandler, err := handlers.NewOrganizationHandler(db)
-	if err != nil {
-		return nil, err
-	}
 	teamHandler, err := handlers.NewTeamHandler(db)
 	if err != nil {
 		return nil, err
 	}
-	registerOrganizationRoutes(api, orgHandler, teamHandler, checker)
+	registerTeamRoutes(api, teamHandler, checker)
 
 	// Permissions
 	permHandler, err := handlers.NewPermissionHandler(db)

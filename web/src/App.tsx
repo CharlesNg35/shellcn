@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
@@ -13,7 +14,6 @@ import { Dashboard } from '@/pages/dashboard/Dashboard'
 import { Connections } from '@/pages/connections/Connections'
 import { Identities } from '@/pages/settings/Identities'
 import { Users } from '@/pages/settings/Users'
-import { Organizations } from '@/pages/settings/Organizations'
 import { Teams } from '@/pages/settings/Teams'
 import { Permissions } from '@/pages/settings/Permissions'
 import { Sessions } from '@/pages/settings/Sessions'
@@ -38,9 +38,10 @@ function AppRoutes() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/connections" element={<Connections />} />
+
+            {/* Settings */}
             <Route path="/settings/identities" element={<Identities />} />
             <Route path="/settings/users" element={<Users />} />
-            <Route path="/settings/organizations" element={<Organizations />} />
             <Route path="/settings/teams" element={<Teams />} />
             <Route path="/settings/permissions" element={<Permissions />} />
             <Route path="/settings/sessions" element={<Sessions />} />
@@ -58,11 +59,13 @@ function AppRoutes() {
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark">
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="dark">
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

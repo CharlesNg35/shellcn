@@ -15,26 +15,17 @@ import (
 func TestConnectionServiceListVisible(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 
-	orgID := "org-123"
-	org := models.Organization{
-		BaseModel: models.BaseModel{ID: orgID},
-		Name:      "Acme",
-	}
-	require.NoError(t, db.Create(&org).Error)
-
 	user := models.User{
-		BaseModel:      models.BaseModel{ID: "user-123"},
-		Username:       "viewer",
-		Email:          "viewer@example.com",
-		Password:       "secret",
-		OrganizationID: &orgID,
+		BaseModel: models.BaseModel{ID: "user-123"},
+		Username:  "viewer",
+		Email:     "viewer@example.com",
+		Password:  "secret",
 	}
 	require.NoError(t, db.Create(&user).Error)
 
 	team := models.Team{
-		BaseModel:      models.BaseModel{ID: "team-1"},
-		Name:           "Ops",
-		OrganizationID: orgID,
+		BaseModel: models.BaseModel{ID: "team-1"},
+		Name:      "Ops",
 	}
 	require.NoError(t, db.Create(&team).Error)
 	require.NoError(t, db.Model(&user).Association("Teams").Append(&team))
@@ -53,13 +44,12 @@ func TestConnectionServiceListVisible(t *testing.T) {
 	require.NoError(t, db.Create(&first).Error)
 
 	second := models.Connection{
-		Name:           "Kubernetes control plane",
-		ProtocolID:     "kubernetes",
-		OrganizationID: &orgID,
-		OwnerUserID:    "user-other",
+		Name:        "Kubernetes control plane",
+		ProtocolID:  "kubernetes",
+		OwnerUserID: "user-other",
 		Visibility: []models.ConnectionVisibility{
 			{
-				OrganizationID:  &orgID,
+				UserID:          &user.ID,
 				PermissionScope: "view",
 			},
 		},

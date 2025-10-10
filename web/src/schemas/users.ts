@@ -13,15 +13,6 @@ export const userBaseSchema = z.object({
   first_name: optionalString,
   last_name: optionalString,
   avatar: optionalString,
-  organization_id: z
-    .union([z.string().uuid(), z.literal(''), z.null()])
-    .optional()
-    .transform((value) => {
-      if (!value || value === '') {
-        return undefined
-      }
-      return value
-    }),
   is_active: z.boolean().optional(),
   is_root: z.boolean().optional(),
 })

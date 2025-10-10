@@ -21,10 +21,6 @@ func TestEmbeddedModelsUseBaseBeforeCreate(t *testing.T) {
 			u := &User{}
 			return &u.BaseModel
 		}},
-		{"organization", func() *BaseModel {
-			o := &Organization{}
-			return &o.BaseModel
-		}},
 		{"team", func() *BaseModel {
 			m := &Team{}
 			return &m.BaseModel

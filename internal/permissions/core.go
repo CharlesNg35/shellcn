@@ -26,23 +26,6 @@ func init() {
 			Description: "Delete users",
 		},
 		{
-			ID:          "org.view",
-			Module:      "core",
-			Description: "View organizations",
-		},
-		{
-			ID:          "org.create",
-			Module:      "core",
-			DependsOn:   []string{"org.view"},
-			Description: "Create organizations",
-		},
-		{
-			ID:          "org.manage",
-			Module:      "core",
-			DependsOn:   []string{"org.view"},
-			Description: "Manage organizations",
-		},
-		{
 			ID:          "connection.view",
 			Module:      "core",
 			Description: "View connection protocols and resources",

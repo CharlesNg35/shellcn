@@ -18,24 +18,22 @@ type UserHandler struct {
 }
 
 type createUserRequest struct {
-	Username       string `json:"username" validate:"required,min=3,max=64"`
-	Email          string `json:"email" validate:"required,email"`
-	Password       string `json:"password" validate:"required,min=8"`
-	FirstName      string `json:"first_name" validate:"omitempty,max=128"`
-	LastName       string `json:"last_name" validate:"omitempty,max=128"`
-	Avatar         string `json:"avatar" validate:"omitempty,max=512"`
-	OrganizationID string `json:"organization_id" validate:"omitempty,uuid4"`
-	IsRoot         bool   `json:"is_root"`
-	IsActive       *bool  `json:"is_active"`
+	Username  string `json:"username" validate:"required,min=3,max=64"`
+	Email     string `json:"email" validate:"required,email"`
+	Password  string `json:"password" validate:"required,min=8"`
+	FirstName string `json:"first_name" validate:"omitempty,max=128"`
+	LastName  string `json:"last_name" validate:"omitempty,max=128"`
+	Avatar    string `json:"avatar" validate:"omitempty,max=512"`
+	IsRoot    bool   `json:"is_root"`
+	IsActive  *bool  `json:"is_active"`
 }
 
 type updateUserRequest struct {
-	Username       *string `json:"username" validate:"omitempty,min=3,max=64"`
-	Email          *string `json:"email" validate:"omitempty,email"`
-	FirstName      *string `json:"first_name" validate:"omitempty,max=128"`
-	LastName       *string `json:"last_name" validate:"omitempty,max=128"`
-	Avatar         *string `json:"avatar" validate:"omitempty,max=512"`
-	OrganizationID *string `json:"organization_id" validate:"omitempty,uuid4"`
+	Username  *string `json:"username" validate:"omitempty,min=3,max=64"`
+	Email     *string `json:"email" validate:"omitempty,email"`
+	FirstName *string `json:"first_name" validate:"omitempty,max=128"`
+	LastName  *string `json:"last_name" validate:"omitempty,max=128"`
+	Avatar    *string `json:"avatar" validate:"omitempty,max=512"`
 }
 
 type userPasswordRequest struct {
@@ -73,7 +71,6 @@ func (h *UserHandler) List(c *gin.Context) {
 
 	search := strings.TrimSpace(c.DefaultQuery("search", c.DefaultQuery("query", "")))
 	statusFilter := strings.ToLower(strings.TrimSpace(c.Query("status")))
-	orgFilter := strings.TrimSpace(c.Query("organization_id"))
 
 	var isActive *bool
 	switch statusFilter {
@@ -86,8 +83,7 @@ func (h *UserHandler) List(c *gin.Context) {
 	}
 
 	filters := services.UserFilters{
-		OrganizationID: orgFilter,
-		Query:          search,
+		Query: search,
 	}
 	if isActive != nil {
 		filters.IsActive = isActive
@@ -149,21 +145,15 @@ func (h *UserHandler) Create(c *gin.Context) {
 		return
 	}
 
-	var orgID *string
-	if trimmed := strings.TrimSpace(body.OrganizationID); trimmed != "" {
-		orgID = &trimmed
-	}
-
 	input := services.CreateUserInput{
-		Username:       username,
-		Email:          email,
-		Password:       body.Password,
-		FirstName:      strings.TrimSpace(body.FirstName),
-		LastName:       strings.TrimSpace(body.LastName),
-		Avatar:         strings.TrimSpace(body.Avatar),
-		OrganizationID: orgID,
-		IsRoot:         body.IsRoot,
-		IsActive:       body.IsActive,
+		Username:  username,
+		Email:     email,
+		Password:  body.Password,
+		FirstName: strings.TrimSpace(body.FirstName),
+		LastName:  strings.TrimSpace(body.LastName),
+		Avatar:    strings.TrimSpace(body.Avatar),
+		IsRoot:    body.IsRoot,
+		IsActive:  body.IsActive,
 	}
 
 	user, err := h.service.Create(requestContext(c), input)
@@ -182,7 +172,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 
 	if body.Username == nil && body.Email == nil && body.FirstName == nil &&
-		body.LastName == nil && body.Avatar == nil && body.OrganizationID == nil {
+		body.LastName == nil && body.Avatar == nil {
 		response.Error(c, appErrors.NewBadRequest("no fields provided for update"))
 		return
 	}
@@ -227,19 +217,12 @@ func (h *UserHandler) Update(c *gin.Context) {
 		avatarPtr = &avatar
 	}
 
-	var orgPtr *string
-	if body.OrganizationID != nil {
-		org := strings.TrimSpace(*body.OrganizationID)
-		orgPtr = &org
-	}
-
 	input := services.UpdateUserInput{
-		Username:       usernamePtr,
-		Email:          emailPtr,
-		FirstName:      firstPtr,
-		LastName:       lastPtr,
-		Avatar:         avatarPtr,
-		OrganizationID: orgPtr,
+		Username:  usernamePtr,
+		Email:     emailPtr,
+		FirstName: firstPtr,
+		LastName:  lastPtr,
+		Avatar:    avatarPtr,
 	}
 
 	user, err := h.service.Update(requestContext(c), c.Param("id"), input)

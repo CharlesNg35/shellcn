@@ -13,11 +13,6 @@ export interface UserTeamSummary {
   name: string
 }
 
-export interface UserOrganizationSummary {
-  id: string
-  name: string
-}
-
 export interface UserRecord {
   id: string
   username: string
@@ -27,8 +22,6 @@ export interface UserRecord {
   avatar?: string
   is_root: boolean
   is_active: boolean
-  organization_id?: string | null
-  organization?: UserOrganizationSummary | null
   roles?: UserRoleSummary[]
   teams?: UserTeamSummary[]
   last_login_at?: string | null
@@ -46,7 +39,6 @@ export interface UserListParams {
   per_page?: number
   search?: string
   status?: UserStatus | 'all'
-  organization_id?: string
 }
 
 export interface UserCreatePayload {
@@ -56,7 +48,6 @@ export interface UserCreatePayload {
   first_name?: string
   last_name?: string
   avatar?: string
-  organization_id?: string | null
   is_root?: boolean
   is_active?: boolean
 }
@@ -67,7 +58,6 @@ export interface UserUpdatePayload {
   first_name?: string
   last_name?: string
   avatar?: string
-  organization_id?: string | null
 }
 
 export interface BulkUserPayload {

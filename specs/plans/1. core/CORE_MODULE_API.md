@@ -131,7 +131,7 @@ Content-Type: application/json
           "description": "Full system access"
         }
       ],
-      "permissions": ["user.view", "user.create", "org.manage", "..."]
+      "permissions": ["user.view", "user.create", "team.manage", "..."]
     }
   }
 }
@@ -168,10 +168,6 @@ Response:
     "last_name": "Smith",
     "is_root": false,
     "is_active": true,
-    "organization": {
-      "id": "org_01H...",
-      "name": "Acme Corp"
-    },
     "teams": [
       {
         "id": "team_01H...",
@@ -303,6 +299,8 @@ Response:
 }
 ```
 
+Note: The first user is automatically assigned as root/superuser with full system access.
+
 ---
 
 ## 4. User & Identity Management
@@ -334,7 +332,6 @@ Response:
       "last_name": "Smith",
       "is_root": false,
       "is_active": true,
-      "organization_id": "org_01H...",
       "created_at": "2025-10-01T10:00:00Z",
       "last_login_at": "2025-10-08T14:30:00Z"
     }
@@ -361,47 +358,20 @@ Content-Type: application/json
   "password": "SecurePass123!",
   "first_name": "Bob",
   "last_name": "Johnson",
-  "organization_id": "org_01H...",
   "is_active": true
 }
 ```
 
-### 4.1 Organisations & Teams
+### 4.1 Teams
 
-#### Organizations
-
-| Method | Path                              | Description                    | Permission   | Handler                      |
-| ------ | --------------------------------- | ------------------------------ | ------------ | ---------------------------- |
-| GET    | `/api/orgs`                       | List organisations.            | `org.view`   | `OrganizationHandler.List`   |
-| GET    | `/api/orgs/:id`                   | Get organisation detail.       | `org.view`   | `OrganizationHandler.Get`    |
-| POST   | `/api/orgs`                       | Create organisation.           | `org.create` | `OrganizationHandler.Create` |
-| PATCH  | `/api/orgs/:id`                   | Update display name, metadata. | `org.manage` | `OrganizationHandler.Update` |
-| DELETE | `/api/orgs/:id`                   | Soft delete organisation.      | `org.manage` | `OrganizationHandler.Delete` |
-| GET    | `/api/organizations/:orgID/teams` | List teams for organisation.   | `org.view`   | `TeamHandler.ListByOrg`      |
-
-**Sample** — Create Organization:
-
-```http
-POST /api/orgs
-Authorization: Bearer <access-token>
-Content-Type: application/json
-
-{
-  "name": "Engineering Department",
-  "description": "Main engineering team"
-}
-```
-
-#### Teams
-
-| Method | Path                             | Description         | Permission   | Handler                    |
-| ------ | -------------------------------- | ------------------- | ------------ | -------------------------- |
-| GET    | `/api/teams/:id`                 | Team & members.     | `org.view`   | `TeamHandler.Get`          |
-| POST   | `/api/teams`                     | Create team.        | `org.manage` | `TeamHandler.Create`       |
-| PATCH  | `/api/teams/:id`                 | Rename/update team. | `org.manage` | `TeamHandler.Update`       |
-| POST   | `/api/teams/:id/members`         | Append member IDs.  | `org.manage` | `TeamHandler.AddMember`    |
-| DELETE | `/api/teams/:id/members/:userID` | Remove member.      | `org.manage` | `TeamHandler.RemoveMember` |
-| GET    | `/api/teams/:id/members`         | List members.       | `org.view`   | `TeamHandler.ListMembers`  |
+| Method | Path                             | Description         | Permission    | Handler                    |
+| ------ | -------------------------------- | ------------------- | ------------- | -------------------------- |
+| GET    | `/api/teams/:id`                 | Team & members.     | `team.view`   | `TeamHandler.Get`          |
+| POST   | `/api/teams`                     | Create team.        | `team.manage` | `TeamHandler.Create`       |
+| PATCH  | `/api/teams/:id`                 | Rename/update team. | `team.manage` | `TeamHandler.Update`       |
+| POST   | `/api/teams/:id/members`         | Append member IDs.  | `team.manage` | `TeamHandler.AddMember`    |
+| DELETE | `/api/teams/:id/members/:userID` | Remove member.      | `team.manage` | `TeamHandler.RemoveMember` |
+| GET    | `/api/teams/:id/members`         | List members.       | `team.view`   | `TeamHandler.ListMembers`  |
 
 **Sample** — Create Team:
 
@@ -412,8 +382,7 @@ Content-Type: application/json
 
 {
   "name": "Backend Team",
-  "description": "Backend developers",
-  "organization_id": "org_01H..."
+  "description": "Backend developers"
 }
 ```
 
@@ -922,7 +891,6 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
   "name": "Production Cluster",
   "description": "Primary Kubernetes control plane",
   "protocol_id": "kubernetes",
-  "organization_id": "org_acme",
   "team_id": "team_platform",
   "owner_user_id": "usr_root",
   "metadata": {
@@ -951,14 +919,6 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
   "visibility": [
     {
       "connection_id": "conn_01J4TF5YBHW",
-      "organization_id": "org_acme",
-      "team_id": null,
-      "user_id": null,
-      "permission_scope": "view"
-    },
-    {
-      "connection_id": "conn_01J4TF5YBHW",
-      "organization_id": null,
       "team_id": "team_platform",
       "user_id": null,
       "permission_scope": "use"
@@ -1099,15 +1059,6 @@ Webhooks are not part of Phase 1. When implemented they will emit signed JSON pa
 - `GET /api/users` - List users
 - `GET /api/users/:id` - Get user
 - `POST /api/users` - Create user
-
-### Organizations
-
-- `GET /api/orgs` - List organizations
-- `GET /api/orgs/:id` - Get organization
-- `POST /api/orgs` - Create organization
-- `PATCH /api/orgs/:id` - Update organization
-- `DELETE /api/orgs/:id` - Delete organization
-- `GET /api/organizations/:orgID/teams` - List teams by org
 
 ### Teams
 

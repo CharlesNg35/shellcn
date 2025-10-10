@@ -12,17 +12,13 @@ import (
 )
 
 func TestUserServiceCreateGetAndList(t *testing.T) {
-	db, userSvc, auditSvc := setupUserServiceTest(t)
+	_, userSvc, auditSvc := setupUserServiceTest(t)
 	ctx := context.Background()
 
-	org := models.Organization{Name: "Primary Org"}
-	require.NoError(t, db.Create(&org).Error)
-
 	user, err := userSvc.Create(ctx, CreateUserInput{
-		Username:       "alice",
-		Email:          "alice@example.com",
-		Password:       "S3cret!!",
-		OrganizationID: &org.ID,
+		Username: "alice",
+		Email:    "alice@example.com",
+		Password: "S3cret!!",
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, user.ID)
@@ -32,13 +28,10 @@ func TestUserServiceCreateGetAndList(t *testing.T) {
 	fetched, err := userSvc.GetByID(ctx, user.ID)
 	require.NoError(t, err)
 	require.Equal(t, "alice", fetched.Username)
-	require.NotNil(t, fetched.Organization)
-	require.Equal(t, org.ID, fetched.Organization.ID)
 
 	users, total, err := userSvc.List(ctx, ListUsersOptions{
 		Page:     1,
 		PageSize: 5,
-		Filters:  UserFilters{OrganizationID: org.ID},
 	})
 	require.NoError(t, err)
 	require.Equal(t, int64(1), total)
@@ -122,7 +115,6 @@ func setupUserServiceTest(t *testing.T) (*gorm.DB, *UserService, *AuditService) 
 	require.NoError(t, err)
 
 	require.NoError(t, db.AutoMigrate(
-		&models.Organization{},
 		&models.Team{},
 		&models.Role{},
 		&models.Permission{},

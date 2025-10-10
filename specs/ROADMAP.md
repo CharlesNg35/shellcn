@@ -69,18 +69,14 @@
 - [x] Implement bulk operations
 - [x] Write tests for user management
 
-### Phase 5: Organization & Team Management (Week 5)
+### Phase 5: Team Management (Week 5)
 
-- [ ] Create Organizations list page
-- [ ] Build OrganizationForm component
 - [ ] Implement Teams list page
 - [ ] Create TeamForm component
 - [ ] Build team member management UI
 - [ ] Implement member assignment/removal
-- [ ] Create useOrganizations hook
 - [ ] Build useTeams hook
-- [ ] Add hierarchical organization view
-- [ ] Write tests for org/team management
+- [ ] Write tests for team management
 
 ### Phase 6: Permission Management (Week 6)
 

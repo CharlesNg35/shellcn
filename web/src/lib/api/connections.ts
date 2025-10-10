@@ -16,7 +16,6 @@ interface ConnectionTargetResponse {
 
 interface ConnectionVisibilityResponse {
   id?: string
-  organization_id?: string | null
   team_id?: string | null
   user_id?: string | null
   permission_scope: string
@@ -30,7 +29,6 @@ interface ConnectionFolderResponse {
   icon?: string
   color?: string
   parent_id?: string | null
-  organization_id?: string | null
   team_id?: string | null
   metadata?: Record<string, unknown> | string | null
 }
@@ -40,7 +38,6 @@ interface ConnectionResponse {
   name: string
   description?: string
   protocol_id: string
-  organization_id?: string | null
   team_id?: string | null
   owner_user_id?: string | null
   folder_id?: string | null
@@ -98,7 +95,6 @@ function transformVisibility(visibility?: ConnectionVisibilityResponse[]): Conne
   }
   return visibility.map((entry) => ({
     id: entry.id,
-    organization_id: entry.organization_id ?? null,
     team_id: entry.team_id ?? null,
     user_id: entry.user_id ?? null,
     permission_scope: entry.permission_scope,
@@ -111,7 +107,6 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
     name: raw.name,
     description: raw.description,
     protocol_id: raw.protocol_id,
-    organization_id: raw.organization_id ?? null,
     team_id: raw.team_id ?? null,
     owner_user_id: raw.owner_user_id ?? null,
     folder_id: raw.folder_id ?? null,
@@ -130,7 +125,6 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
           icon: raw.folder.icon,
           color: raw.folder.color,
           parent_id: raw.folder.parent_id ?? null,
-          organization_id: raw.folder.organization_id ?? null,
           team_id: raw.folder.team_id ?? null,
           metadata: coerceObject(raw.folder.metadata),
         }

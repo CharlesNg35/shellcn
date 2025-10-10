@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import logo from '@/assets/logo.svg'
 import { APP_NAME } from '@/lib/constants'
-import { NAVIGATION_GROUPS, type NavigationItem } from '@/lib/navigation'
+import { getFilteredNavigationGroups, type NavigationItem } from '@/lib/navigation'
 import { cn } from '@/lib/utils/cn'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
@@ -34,13 +34,15 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   const [settingsOpen, setSettingsOpen] = useState(false)
 
+  const navigationGroups = useMemo(() => getFilteredNavigationGroups(), [])
+
   const settingsGroup = useMemo(
-    () => NAVIGATION_GROUPS.find((group) => group.label === 'Settings'),
-    []
+    () => navigationGroups.find((group) => group.label === 'Settings'),
+    [navigationGroups]
   )
   const otherGroups = useMemo(
-    () => NAVIGATION_GROUPS.filter((group) => group.label !== 'Settings'),
-    []
+    () => navigationGroups.filter((group) => group.label !== 'Settings'),
+    [navigationGroups]
   )
 
   const navContent = (

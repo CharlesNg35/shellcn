@@ -5,7 +5,6 @@ type ConnectionVisibility struct {
 	BaseModel
 
 	ConnectionID    string  `gorm:"type:uuid;index" json:"connection_id"`
-	OrganizationID  *string `gorm:"type:uuid;index" json:"organization_id"`
 	TeamID          *string `gorm:"type:uuid;index" json:"team_id"`
 	UserID          *string `gorm:"type:uuid;index" json:"user_id"`
 	PermissionScope string  `gorm:"type:varchar(32);index" json:"permission_scope"`

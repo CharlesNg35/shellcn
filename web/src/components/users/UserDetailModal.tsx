@@ -79,12 +79,6 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
               <p className="text-sm font-semibold text-muted-foreground">Email</p>
               <p className="text-sm text-foreground">{user.email}</p>
             </div>
-            {user.organization ? (
-              <div>
-                <p className="text-sm font-semibold text-muted-foreground">Organization</p>
-                <p className="text-sm text-foreground">{user.organization.name}</p>
-              </div>
-            ) : null}
             {user.roles?.length ? (
               <div>
                 <p className="text-sm font-semibold text-muted-foreground">Roles</p>

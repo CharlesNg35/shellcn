@@ -129,7 +129,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	userID, _ := v.(string)
 
 	var user models.User
-	if err := h.db.Preload("Organization").Preload("Teams").Preload("Roles").Take(&user, "id = ?", userID).Error; err != nil {
+	if err := h.db.Preload("Teams").Preload("Roles").Take(&user, "id = ?", userID).Error; err != nil {
 		response.Error(c, errors.ErrNotFound)
 		return
 	}

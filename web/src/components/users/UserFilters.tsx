@@ -7,7 +7,6 @@ import type { UserListParams } from '@/types/users'
 export interface UserFilterState {
   search?: string
   status?: 'all' | 'active' | 'inactive'
-  organization_id?: string
 }
 
 interface UserFiltersProps {
@@ -26,9 +25,6 @@ export function normalizeFilters(filters: UserFilterState): UserListParams {
   const normalized: UserListParams = {}
   if (filters.search) {
     normalized.search = filters.search
-  }
-  if (filters.organization_id) {
-    normalized.organization_id = filters.organization_id
   }
   if (filters.status) {
     normalized.status = filters.status

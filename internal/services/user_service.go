@@ -21,32 +21,29 @@ var (
 
 // CreateUserInput describes the fields accepted when creating a user.
 type CreateUserInput struct {
-	Username       string
-	Email          string
-	Password       string
-	FirstName      string
-	LastName       string
-	Avatar         string
-	OrganizationID *string
-	IsRoot         bool
-	IsActive       *bool
+	Username  string
+	Email     string
+	Password  string
+	FirstName string
+	LastName  string
+	Avatar    string
+	IsRoot    bool
+	IsActive  *bool
 }
 
 // UpdateUserInput enumerates mutable user attributes.
 type UpdateUserInput struct {
-	Username       *string
-	Email          *string
-	FirstName      *string
-	LastName       *string
-	Avatar         *string
-	OrganizationID *string
+	Username  *string
+	Email     *string
+	FirstName *string
+	LastName  *string
+	Avatar    *string
 }
 
 // UserFilters captures listing filters.
 type UserFilters struct {
-	OrganizationID string
-	IsActive       *bool
-	Query          string
+	IsActive *bool
+	Query    string
 }
 
 // ListUsersOptions controls pagination for user listing.
@@ -95,24 +92,18 @@ func (s *UserService) Create(ctx context.Context, input CreateUserInput) (*model
 	}
 
 	user := &models.User{
-		Username:     username,
-		Email:        email,
-		Password:     hashed,
-		FirstName:    strings.TrimSpace(input.FirstName),
-		LastName:     strings.TrimSpace(input.LastName),
-		Avatar:       strings.TrimSpace(input.Avatar),
-		IsRoot:       input.IsRoot,
-		IsActive:     true,
-		Organization: nil,
+		Username:  username,
+		Email:     email,
+		Password:  hashed,
+		FirstName: strings.TrimSpace(input.FirstName),
+		LastName:  strings.TrimSpace(input.LastName),
+		Avatar:    strings.TrimSpace(input.Avatar),
+		IsRoot:    input.IsRoot,
+		IsActive:  true,
 	}
 
 	if input.IsActive != nil {
 		user.IsActive = *input.IsActive
-	}
-
-	if input.OrganizationID != nil && strings.TrimSpace(*input.OrganizationID) != "" {
-		orgID := strings.TrimSpace(*input.OrganizationID)
-		user.OrganizationID = &orgID
 	}
 
 	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
@@ -139,7 +130,6 @@ func (s *UserService) GetByID(ctx context.Context, id string) (*models.User, err
 
 	var user models.User
 	err := s.db.WithContext(ctx).
-		Preload("Organization").
 		Preload("Teams").
 		Preload("Roles.Permissions").
 		First(&user, "id = ?", id).Error
@@ -166,9 +156,6 @@ func (s *UserService) List(ctx context.Context, opts ListUsersOptions) ([]models
 	}
 
 	query := s.db.WithContext(ctx).Model(&models.User{})
-	if opts.Filters.OrganizationID != "" {
-		query = query.Where("organization_id = ?", opts.Filters.OrganizationID)
-	}
 	if opts.Filters.IsActive != nil {
 		query = query.Where("is_active = ?", *opts.Filters.IsActive)
 	}
@@ -187,7 +174,6 @@ func (s *UserService) List(ctx context.Context, opts ListUsersOptions) ([]models
 		Order("created_at DESC").
 		Offset((page - 1) * perPage).
 		Limit(perPage).
-		Preload("Organization").
 		Preload("Roles.Permissions").
 		Preload("Teams").
 		Find(&users).Error; err != nil {
@@ -230,14 +216,6 @@ func (s *UserService) Update(ctx context.Context, id string, input UpdateUserInp
 	}
 	if input.Avatar != nil {
 		updates["avatar"] = strings.TrimSpace(*input.Avatar)
-	}
-	if input.OrganizationID != nil {
-		orgID := strings.TrimSpace(*input.OrganizationID)
-		if orgID == "" {
-			updates["organization_id"] = nil
-		} else {
-			updates["organization_id"] = orgID
-		}
 	}
 
 	if len(updates) == 0 {

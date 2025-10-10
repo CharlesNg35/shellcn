@@ -22,24 +22,19 @@ func TestTeamServiceMembershipLifecycle(t *testing.T) {
 
 	ctx := context.Background()
 
-	org := models.Organization{Name: "Org"}
-	require.NoError(t, db.Create(&org).Error)
-
 	hashed, err := crypto.HashPassword("p@ssW0rd!")
 	require.NoError(t, err)
 
 	user := models.User{
-		Username:       "member",
-		Email:          "member@example.com",
-		Password:       hashed,
-		OrganizationID: &org.ID,
+		Username: "member",
+		Email:    "member@example.com",
+		Password: hashed,
 	}
 	require.NoError(t, db.Create(&user).Error)
 
 	team, err := teamSvc.Create(ctx, CreateTeamInput{
-		OrganizationID: org.ID,
-		Name:           "Operations",
-		Description:    "Ops team",
+		Name:        "Operations",
+		Description: "Ops team",
 	})
 	require.NoError(t, err)
 
@@ -71,12 +66,8 @@ func TestTeamServiceUpdateAndList(t *testing.T) {
 
 	ctx := context.Background()
 
-	org := models.Organization{Name: "Org"}
-	require.NoError(t, db.Create(&org).Error)
-
 	team, err := teamSvc.Create(ctx, CreateTeamInput{
-		OrganizationID: org.ID,
-		Name:           "Support",
+		Name: "Support",
 	})
 	require.NoError(t, err)
 
@@ -85,9 +76,10 @@ func TestTeamServiceUpdateAndList(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, name, updated.Name)
 
-	teams, err := teamSvc.ListByOrganization(ctx, org.ID)
+	// Verify team was updated
+	found, err := teamSvc.GetByID(ctx, team.ID)
 	require.NoError(t, err)
-	require.Len(t, teams, 1)
+	require.Equal(t, name, found.Name)
 }
 
 func openTeamServiceTestDB(t *testing.T) *gorm.DB {
@@ -97,7 +89,6 @@ func openTeamServiceTestDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 
 	require.NoError(t, db.AutoMigrate(
-		&models.Organization{},
 		&models.Team{},
 		&models.User{},
 		&models.AuditLog{},

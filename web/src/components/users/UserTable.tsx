@@ -11,6 +11,7 @@ import {
 import { ArrowUpDown, Eye, Loader2, MoreHorizontal, PencilLine, ShieldAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
+import { Checkbox } from '@/components/ui/Checkbox'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import type { ApiMeta } from '@/types/api'
 import type { UserRecord } from '@/types/users'
@@ -26,24 +27,6 @@ interface UserTableProps {
   onSelectionChange?: (selectedIds: string[]) => void
   onViewUser?: (user: UserRecord) => void
   onEditUser?: (user: UserRecord) => void
-}
-
-interface SelectionCheckboxProps {
-  checked: boolean
-  onChange: (checked: boolean) => void
-  disabled?: boolean
-}
-
-function SelectionCheckbox({ checked, onChange, disabled }: SelectionCheckboxProps) {
-  return (
-    <input
-      type="checkbox"
-      className="h-4 w-4 rounded border border-input text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-      checked={checked}
-      onChange={(event) => onChange(event.target.checked)}
-      disabled={disabled}
-    />
-  )
 }
 
 export function UserTable({
@@ -65,16 +48,19 @@ export function UserTable({
       {
         id: 'select',
         header: ({ table }) => (
-          <SelectionCheckbox
+          <Checkbox
             checked={table.getIsAllPageRowsSelected()}
-            onChange={(checked) => table.toggleAllPageRowsSelected(checked)}
+            indeterminate={table.getIsSomePageRowsSelected()}
+            onCheckedChange={(checked) => table.toggleAllPageRowsSelected(checked)}
             disabled={!table.getRowModel().rows.length}
+            aria-label="Select all users"
           />
         ),
         cell: ({ row }) => (
-          <SelectionCheckbox
+          <Checkbox
             checked={row.getIsSelected()}
-            onChange={(checked) => row.toggleSelected(checked)}
+            onCheckedChange={(checked) => row.toggleSelected(checked)}
+            aria-label={`Select ${row.original.username}`}
           />
         ),
         enableSorting: false,

@@ -1,22 +1,15 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
-  Building2,
-  Cloud,
-  Container,
-  Database,
   FileText,
   FolderKanban,
-  HardDrive,
   Key,
   LayoutDashboard,
-  Monitor,
-  Network,
-  Server,
   Settings,
   Shield,
   Users,
 } from 'lucide-react'
+import { isFeatureEnabled } from './features'
 
 export interface NavigationItem {
   label: string
@@ -26,6 +19,7 @@ export interface NavigationItem {
   children?: NavigationItem[]
   exact?: boolean
   group?: string
+  featureId?: string // Feature module ID for toggling
 }
 
 export interface NavigationGroup {
@@ -37,66 +31,56 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
   {
     label: 'Main',
     items: [
-      { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+      { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, featureId: 'dashboard' },
       {
         label: 'Connections',
         path: '/connections',
         icon: FolderKanban,
         permission: 'connection.view',
-        children: [
-          { label: 'All Connections', path: '/connections' },
-          { label: 'Folders', path: '/connections/folders', permission: 'connection.folder.view' },
-          { label: 'New Connection', path: '/connections/new' },
-        ],
+        featureId: 'connections',
       },
-    ],
-  },
-  {
-    label: 'Protocol Catalog',
-    items: [
-      { label: 'SSH / Telnet', path: '/ssh', icon: Server },
-      { label: 'RDP', path: '/rdp', icon: Monitor },
-      { label: 'VNC', path: '/vnc', icon: Monitor },
-      { label: 'Docker', path: '/docker', icon: Container },
-      { label: 'Kubernetes', path: '/kubernetes', icon: Cloud },
-      { label: 'Databases', path: '/databases', icon: Database },
-      { label: 'File Share', path: '/file-share', icon: HardDrive },
-      { label: 'Proxmox', path: '/proxmox', icon: HardDrive },
-      { label: 'Network Devices', path: '/network', icon: Network },
     ],
   },
   {
     label: 'Settings',
     items: [
-      { label: 'Identities', path: '/settings/identities', icon: Key },
-      { label: 'Users', path: '/settings/users', icon: Users, permission: 'user.view' },
+      { label: 'Identities', path: '/settings/identities', icon: Key, featureId: 'identities' },
       {
-        label: 'Organizations',
-        path: '/settings/organizations',
-        icon: Building2,
-        permission: 'org.view',
+        label: 'Users',
+        path: '/settings/users',
+        icon: Users,
+        permission: 'user.view',
+        featureId: 'users',
       },
-      { label: 'Teams', path: '/settings/teams', icon: Users, permission: 'org.view' },
+      {
+        label: 'Teams',
+        path: '/settings/teams',
+        icon: Users,
+        featureId: 'teams',
+      },
       {
         label: 'Permissions',
         path: '/settings/permissions',
         icon: Shield,
         permission: 'permission.view',
+        featureId: 'permissions',
       },
       {
         label: 'Auth Providers',
         path: '/settings/auth-providers',
         icon: Key,
         permission: 'permission.manage',
+        featureId: 'authProviders',
       },
-      { label: 'Sessions', path: '/settings/sessions', icon: Activity },
+      { label: 'Sessions', path: '/settings/sessions', icon: Activity, featureId: 'sessions' },
       {
         label: 'Audit Logs',
         path: '/settings/audit',
         icon: FileText,
         permission: 'audit.view',
+        featureId: 'auditLogs',
       },
-      { label: 'Security', path: '/settings/security', icon: Settings },
+      { label: 'Security', path: '/settings/security', icon: Settings, featureId: 'security' },
     ],
   },
 ]
@@ -154,4 +138,20 @@ export function getBreadcrumbItems(pathname: string): NavigationItem[] {
   })
 
   return crumbs
+}
+
+/**
+ * Filter navigation groups by enabled features
+ */
+export function getFilteredNavigationGroups(): NavigationGroup[] {
+  return NAVIGATION_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      // If item has a featureId, check if it's enabled
+      if (item.featureId && !isFeatureEnabled(item.featureId)) {
+        return false
+      }
+      return true
+    }),
+  })).filter((group) => group.items.length > 0) // Remove empty groups
 }

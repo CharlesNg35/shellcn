@@ -17,21 +17,20 @@ import (
 
 // ConnectionDTO represents a sanitized connection payload for API responses.
 type ConnectionDTO struct {
-	ID             string                    `json:"id"`
-	Name           string                    `json:"name"`
-	Description    string                    `json:"description"`
-	ProtocolID     string                    `json:"protocol_id"`
-	OrganizationID *string                   `json:"organization_id"`
-	TeamID         *string                   `json:"team_id"`
-	OwnerUserID    string                    `json:"owner_user_id"`
-	FolderID       *string                   `json:"folder_id"`
-	Metadata       map[string]any            `json:"metadata,omitempty"`
-	Settings       map[string]any            `json:"settings,omitempty"`
-	SecretID       *string                   `json:"secret_id"`
-	LastUsedAt     *time.Time                `json:"last_used_at,omitempty"`
-	Targets        []ConnectionTargetDTO     `json:"targets,omitempty"`
-	Visibility     []ConnectionVisibilityDTO `json:"visibility,omitempty"`
-	Folder         *ConnectionFolderDTO      `json:"folder,omitempty"`
+	ID          string                    `json:"id"`
+	Name        string                    `json:"name"`
+	Description string                    `json:"description"`
+	ProtocolID  string                    `json:"protocol_id"`
+	TeamID      *string                   `json:"team_id"`
+	OwnerUserID string                    `json:"owner_user_id"`
+	FolderID    *string                   `json:"folder_id"`
+	Metadata    map[string]any            `json:"metadata,omitempty"`
+	Settings    map[string]any            `json:"settings,omitempty"`
+	SecretID    *string                   `json:"secret_id"`
+	LastUsedAt  *time.Time                `json:"last_used_at,omitempty"`
+	Targets     []ConnectionTargetDTO     `json:"targets,omitempty"`
+	Visibility  []ConnectionVisibilityDTO `json:"visibility,omitempty"`
+	Folder      *ConnectionFolderDTO      `json:"folder,omitempty"`
 }
 
 // ConnectionTargetDTO returns target metadata for API consumers.
@@ -46,7 +45,6 @@ type ConnectionTargetDTO struct {
 // ConnectionVisibilityDTO models ACL style visibility records.
 type ConnectionVisibilityDTO struct {
 	ID              string  `json:"id"`
-	OrganizationID  *string `json:"organization_id"`
 	TeamID          *string `json:"team_id"`
 	UserID          *string `json:"user_id"`
 	PermissionScope string  `json:"permission_scope"`
@@ -54,16 +52,15 @@ type ConnectionVisibilityDTO struct {
 
 // ConnectionFolderDTO summarizes folder metadata.
 type ConnectionFolderDTO struct {
-	ID             string         `json:"id"`
-	Name           string         `json:"name"`
-	Slug           string         `json:"slug"`
-	Description    string         `json:"description"`
-	Icon           string         `json:"icon"`
-	Color          string         `json:"color"`
-	ParentID       *string        `json:"parent_id"`
-	OrganizationID *string        `json:"organization_id"`
-	TeamID         *string        `json:"team_id"`
-	Metadata       map[string]any `json:"metadata,omitempty"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Slug        string         `json:"slug"`
+	Description string         `json:"description"`
+	Icon        string         `json:"icon"`
+	Color       string         `json:"color"`
+	ParentID    *string        `json:"parent_id"`
+	TeamID      *string        `json:"team_id"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
 // ListConnectionsOptions defines filters for connection lookups.
@@ -281,12 +278,7 @@ func (s *ConnectionService) applyFilters(db *gorm.DB, opts ListConnectionsOption
 
 	connClauses := []string{"connections.owner_user_id = ?"}
 	connArgs := []any{userCtx.ID}
-	connClauses = append(connClauses, "connections.organization_id IS NULL")
 
-	if userCtx.OrganizationID != nil {
-		connClauses = append(connClauses, "connections.organization_id = ?")
-		connArgs = append(connArgs, *userCtx.OrganizationID)
-	}
 	if len(userCtx.TeamIDs) > 0 {
 		connClauses = append(connClauses, "connections.team_id IN ?")
 		connArgs = append(connArgs, userCtx.TeamIDs)
@@ -296,10 +288,6 @@ func (s *ConnectionService) applyFilters(db *gorm.DB, opts ListConnectionsOption
 
 	visClauses := []string{"vis.user_id = ?"}
 	visArgs := []any{userCtx.ID}
-	if userCtx.OrganizationID != nil {
-		visClauses = append(visClauses, "vis.organization_id = ?")
-		visArgs = append(visArgs, *userCtx.OrganizationID)
-	}
 	if len(userCtx.TeamIDs) > 0 {
 		visClauses = append(visClauses, "vis.team_id IN ?")
 		visArgs = append(visArgs, userCtx.TeamIDs)
@@ -342,10 +330,9 @@ func (s *ConnectionService) userContext(ctx context.Context, userID string) (use
 	}
 
 	return userContext{
-		ID:             user.ID,
-		IsRoot:         user.IsRoot,
-		OrganizationID: user.OrganizationID,
-		TeamIDs:        teamIDs,
+		ID:      user.ID,
+		IsRoot:  user.IsRoot,
+		TeamIDs: teamIDs,
 	}, nil
 }
 
@@ -373,16 +360,15 @@ func mapConnections(rows []models.Connection, includeTargets, includeVisibility 
 
 func mapConnection(row models.Connection, includeTargets, includeVisibility bool) ConnectionDTO {
 	dto := ConnectionDTO{
-		ID:             row.ID,
-		Name:           row.Name,
-		Description:    row.Description,
-		ProtocolID:     row.ProtocolID,
-		OrganizationID: row.OrganizationID,
-		TeamID:         row.TeamID,
-		OwnerUserID:    row.OwnerUserID,
-		FolderID:       row.FolderID,
-		Metadata:       decodeJSONMap(row.Metadata),
-		Settings:       decodeJSONMap(row.Settings),
+		ID:          row.ID,
+		Name:        row.Name,
+		Description: row.Description,
+		ProtocolID:  row.ProtocolID,
+		TeamID:      row.TeamID,
+		OwnerUserID: row.OwnerUserID,
+		FolderID:    row.FolderID,
+		Metadata:    decodeJSONMap(row.Metadata),
+		Settings:    decodeJSONMap(row.Settings),
 	}
 	if row.SecretID != nil {
 		dto.SecretID = row.SecretID
@@ -400,16 +386,15 @@ func mapConnection(row models.Connection, includeTargets, includeVisibility bool
 	}
 	if row.Folder != nil {
 		dto.Folder = &ConnectionFolderDTO{
-			ID:             row.Folder.ID,
-			Name:           row.Folder.Name,
-			Slug:           row.Folder.Slug,
-			Description:    row.Folder.Description,
-			Icon:           row.Folder.Icon,
-			Color:          row.Folder.Color,
-			ParentID:       row.Folder.ParentID,
-			OrganizationID: row.Folder.OrganizationID,
-			TeamID:         row.Folder.TeamID,
-			Metadata:       decodeJSONMap(row.Folder.Metadata),
+			ID:          row.Folder.ID,
+			Name:        row.Folder.Name,
+			Slug:        row.Folder.Slug,
+			Description: row.Folder.Description,
+			Icon:        row.Folder.Icon,
+			Color:       row.Folder.Color,
+			ParentID:    row.Folder.ParentID,
+			TeamID:      row.Folder.TeamID,
+			Metadata:    decodeJSONMap(row.Folder.Metadata),
 		}
 	}
 
@@ -436,7 +421,6 @@ func mapVisibility(rows []models.ConnectionVisibility) []ConnectionVisibilityDTO
 	for _, row := range rows {
 		items = append(items, ConnectionVisibilityDTO{
 			ID:              row.ID,
-			OrganizationID:  row.OrganizationID,
 			TeamID:          row.TeamID,
 			UserID:          row.UserID,
 			PermissionScope: row.PermissionScope,
@@ -480,10 +464,9 @@ func decodeJSONMapString(value datatypes.JSON) map[string]string {
 }
 
 type userContext struct {
-	ID             string
-	IsRoot         bool
-	OrganizationID *string
-	TeamIDs        []string
+	ID      string
+	IsRoot  bool
+	TeamIDs []string
 }
 
 func sanitizePerPage(perPage int) int {

@@ -22,9 +22,8 @@ var (
 
 // CreateTeamInput captures new team metadata.
 type CreateTeamInput struct {
-	OrganizationID string
-	Name           string
-	Description    string
+	Name        string
+	Description string
 }
 
 // UpdateTeamInput describes mutable team fields.
@@ -50,24 +49,19 @@ func NewTeamService(db *gorm.DB, auditService *AuditService) (*TeamService, erro
 	}, nil
 }
 
-// Create registers a new team under an organisation.
+// Create registers a new team.
 func (s *TeamService) Create(ctx context.Context, input CreateTeamInput) (*models.Team, error) {
 	ctx = ensureContext(ctx)
 
-	orgID := strings.TrimSpace(input.OrganizationID)
 	name := strings.TrimSpace(input.Name)
 
-	if orgID == "" {
-		return nil, errors.New("team service: organization id is required")
-	}
 	if name == "" {
 		return nil, errors.New("team service: name is required")
 	}
 
 	team := &models.Team{
-		OrganizationID: orgID,
-		Name:           name,
-		Description:    strings.TrimSpace(input.Description),
+		Name:        name,
+		Description: strings.TrimSpace(input.Description),
 	}
 
 	if err := s.db.WithContext(ctx).Create(team).Error; err != nil {
@@ -79,8 +73,7 @@ func (s *TeamService) Create(ctx context.Context, input CreateTeamInput) (*model
 		Resource: team.ID,
 		Result:   "success",
 		Metadata: map[string]any{
-			"name":            team.Name,
-			"organization_id": team.OrganizationID,
+			"name": team.Name,
 		},
 	})
 
@@ -149,23 +142,44 @@ func (s *TeamService) GetByID(ctx context.Context, id string) (*models.Team, err
 	return &team, nil
 }
 
-// ListByOrganization returns teams within an organisation.
-func (s *TeamService) ListByOrganization(ctx context.Context, orgID string) ([]models.Team, error) {
+// List returns all teams.
+func (s *TeamService) List(ctx context.Context) ([]models.Team, error) {
 	ctx = ensureContext(ctx)
-
-	if strings.TrimSpace(orgID) == "" {
-		return nil, errors.New("team service: organization id is required")
-	}
 
 	var teams []models.Team
 	if err := s.db.WithContext(ctx).
-		Where("organization_id = ?", orgID).
 		Order("created_at ASC").
 		Find(&teams).Error; err != nil {
 		return nil, fmt.Errorf("team service: list teams: %w", err)
 	}
 
 	return teams, nil
+}
+
+// Delete removes a team by identifier.
+func (s *TeamService) Delete(ctx context.Context, id string) error {
+	ctx = ensureContext(ctx)
+
+	var team models.Team
+	err := s.db.WithContext(ctx).First(&team, "id = ?", id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ErrTeamNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("team service: load team: %w", err)
+	}
+
+	if err := s.db.WithContext(ctx).Delete(&team).Error; err != nil {
+		return fmt.Errorf("team service: delete team: %w", err)
+	}
+
+	recordAudit(s.auditService, ctx, AuditEntry{
+		Action:   "team.delete",
+		Resource: team.ID,
+		Result:   "success",
+	})
+
+	return nil
 }
 
 // AddMember attaches a user to a team.
