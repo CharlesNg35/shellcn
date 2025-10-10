@@ -150,17 +150,6 @@ func init() {
 			DependsOn:   []string{"notification.view"},
 			Description: "Manage in-app notifications and broadcasts",
 		},
-		{
-			ID:          "org.view",
-			Module:      "core",
-			Description: "View organization settings",
-		},
-		{
-			ID:          "org.manage",
-			Module:      "core",
-			DependsOn:   []string{"org.view"},
-			Description: "Manage organization settings",
-		},
 	}
 
 	for _, perm := range perms {

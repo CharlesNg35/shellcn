@@ -511,7 +511,7 @@ Authorization: Bearer <access-token>
 Content-Type: application/json
 
 {
-  "permissions": ["user.view", "org.view", "audit.view"]
+  "permissions": ["user.view", "audit.view"]
 }
 ```
 

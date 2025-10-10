@@ -60,7 +60,7 @@ export const FEATURE_MODULES: Record<string, FeatureModule> = {
     name: 'Teams',
     enabled: true,
     category: 'settings',
-    permission: PERMISSIONS.ORGANIZATION.VIEW,
+    permission: PERMISSIONS.TEAM.VIEW,
     description: 'Team management and user grouping',
   },
   permissions: {

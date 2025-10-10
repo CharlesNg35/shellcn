@@ -39,10 +39,6 @@ export const PERMISSIONS = {
   SECURITY: {
     AUDIT: 'security.audit',
   },
-  ORGANIZATION: {
-    VIEW: 'org.view',
-    MANAGE: 'org.manage',
-  },
   NOTIFICATION: {
     VIEW: 'notification.view',
     MANAGE: 'notification.manage',
@@ -81,8 +77,6 @@ export const PERMISSION_IDS = [
   PERMISSIONS.AUDIT.VIEW,
   PERMISSIONS.AUDIT.EXPORT,
   PERMISSIONS.SECURITY.AUDIT,
-  PERMISSIONS.ORGANIZATION.VIEW,
-  PERMISSIONS.ORGANIZATION.MANAGE,
   PERMISSIONS.NOTIFICATION.VIEW,
   PERMISSIONS.NOTIFICATION.MANAGE,
 ] as const satisfies ReadonlyArray<PermissionId>
