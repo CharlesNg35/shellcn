@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
+import { Badge } from '@/components/ui/Badge'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { UserFilters, normalizeFilters, type UserFilterState } from '@/components/users/UserFilters'
@@ -16,6 +17,7 @@ import { useUserMutations, useUsers } from '@/hooks/useUsers'
 import { useInvites, useInviteMutations } from '@/hooks/useInvites'
 import type { UserRecord } from '@/types/users'
 import { PERMISSIONS } from '@/constants/permissions'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 
 const DEFAULT_PER_PAGE = 20
 
@@ -28,6 +30,7 @@ export function Users() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<UserRecord | null>(null)
+  const [activeTab, setActiveTab] = useState<'users' | 'invites'>('users')
 
   const queryParams = useMemo(() => {
     return {
@@ -53,6 +56,8 @@ export function Users() {
 
   const users = data?.data ?? []
   const meta = data?.meta
+  const userCount = meta?.total ?? users.length
+  const inviteCount = invitesQuery.data?.length ?? 0
 
   const handleBulkActivate = async () => {
     if (!selectedIds.length) {
@@ -130,29 +135,73 @@ export function Users() {
         }
       />
 
-      <div className="space-y-4">
-        <UserFilters filters={filters} onChange={setFilters} />
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'users' | 'invites')}>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <TabsList className="gap-2">
+              <TabsTrigger value="users" className="gap-2">
+                <span>Users</span>
+                <Badge
+                  variant={activeTab === 'users' ? 'secondary' : 'outline'}
+                  className="text-xs font-semibold"
+                >
+                  {userCount}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="invites" className="gap-2">
+                <span>Invitations</span>
+                <Badge
+                  variant={activeTab === 'invites' ? 'secondary' : 'outline'}
+                  className="text-xs font-semibold"
+                >
+                  {invitesQuery.isLoading ? '...' : inviteCount}
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
+            <p className="text-sm text-muted-foreground">
+              {activeTab === 'users'
+                ? 'Review user accounts, filters, and bulk actions.'
+                : 'Monitor pending invitations and revoke access when needed.'}
+            </p>
+          </div>
 
-        <UserBulkActionsBar
-          selectedCount={selectedIds.length}
-          onActivate={handleBulkActivate}
-          onDeactivate={handleBulkDeactivate}
-          onDelete={handleBulkDelete}
-          isProcessing={isBulkProcessing}
-        />
+          <TabsContent value="users" className="space-y-4">
+            <UserFilters filters={filters} onChange={setFilters} />
 
-        <UserTable
-          users={users}
-          meta={meta}
-          page={meta?.page ?? page}
-          perPage={meta?.per_page ?? DEFAULT_PER_PAGE}
-          isLoading={isLoading}
-          onPageChange={setPage}
-          onSelectionChange={setSelectedIds}
-          onViewUser={handleViewUser}
-          onEditUser={handleEditUser}
-        />
-      </div>
+            <UserBulkActionsBar
+              selectedCount={selectedIds.length}
+              onActivate={handleBulkActivate}
+              onDeactivate={handleBulkDeactivate}
+              onDelete={handleBulkDelete}
+              isProcessing={isBulkProcessing}
+            />
+
+            <UserTable
+              users={users}
+              meta={meta}
+              page={meta?.page ?? page}
+              perPage={meta?.per_page ?? DEFAULT_PER_PAGE}
+              isLoading={isLoading}
+              onPageChange={setPage}
+              onSelectionChange={setSelectedIds}
+              onViewUser={handleViewUser}
+              onEditUser={handleEditUser}
+            />
+          </TabsContent>
+
+          <TabsContent value="invites" className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Track pending invitations and revoke them when they are no longer needed.
+            </p>
+            <UserInviteList
+              invites={invitesQuery.data}
+              isLoading={invitesQuery.isLoading}
+              onRevoke={(inviteId) => revokeInvite.mutate(inviteId)}
+              isRevoking={isRevokingInvite}
+            />
+          </TabsContent>
+        </div>
+      </Tabs>
 
       <Modal
         open={isCreateModalOpen}
@@ -199,21 +248,6 @@ export function Users() {
       >
         <UserInviteForm onClose={() => setIsInviteModalOpen(false)} />
       </Modal>
-
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-foreground">User Invitations</h2>
-          <p className="text-sm text-muted-foreground">
-            Track pending invitations and revoke them when they are no longer needed.
-          </p>
-        </div>
-        <UserInviteList
-          invites={invitesQuery.data}
-          isLoading={invitesQuery.isLoading}
-          onRevoke={(inviteId) => revokeInvite.mutate(inviteId)}
-          isRevoking={isRevokingInvite}
-        />
-      </div>
     </div>
   )
 }
