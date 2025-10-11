@@ -57,9 +57,7 @@ export function DeleteFolderConfirmModal({
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive" />
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-foreground">
-                This action cannot be undone.
-              </p>
+              <p className="text-sm font-semibold text-foreground">This action cannot be undone.</p>
               <p className="text-sm text-muted-foreground">{description}</p>
               <p className="text-xs text-muted-foreground">
                 Type the folder name to confirm: <span className="font-medium">{folderName}</span>

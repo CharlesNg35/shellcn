@@ -133,7 +133,13 @@ export function ResourceSelectionModal({
   )
 }
 
-function ProtocolCard({ protocol, onSelect }: { protocol: Protocol; onSelect: (protocol: Protocol) => void }) {
+function ProtocolCard({
+  protocol,
+  onSelect,
+}: {
+  protocol: Protocol
+  onSelect: (protocol: Protocol) => void
+}) {
   const Icon = resolveProtocolIcon(protocol)
   return (
     <button
@@ -162,7 +168,11 @@ function ProtocolCard({ protocol, onSelect }: { protocol: Protocol; onSelect: (p
       {protocol.features?.length ? (
         <div className="flex flex-wrap gap-1.5">
           {protocol.features.slice(0, 3).map((feature) => (
-            <Badge key={feature} variant="secondary" className="text-[10px] uppercase tracking-wide">
+            <Badge
+              key={feature}
+              variant="secondary"
+              className="text-[10px] uppercase tracking-wide"
+            >
               {feature.replace(/_/g, ' ')}
             </Badge>
           ))}
@@ -173,7 +183,5 @@ function ProtocolCard({ protocol, onSelect }: { protocol: Protocol; onSelect: (p
 }
 
 function formatCategoryLabel(category: string) {
-  return category
-    .replace(/[_-]/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase())
+  return category.replace(/[_-]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }

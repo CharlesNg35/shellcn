@@ -143,7 +143,11 @@ export function FolderSidebar({
                 className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 aria-label={collapsed ? 'Expand folders' : 'Collapse folders'}
               >
-                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                {collapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" />
+                )}
               </button>
             </div>
           </div>

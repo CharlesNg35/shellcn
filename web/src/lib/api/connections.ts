@@ -188,8 +188,13 @@ export async function fetchConnectionById(id: string, include?: string): Promise
   return transformConnection(data)
 }
 
-export async function createConnection(payload: ConnectionCreatePayload): Promise<ConnectionRecord> {
-  const response = await apiClient.post<ApiResponse<ConnectionResponse>>(CONNECTIONS_ENDPOINT, payload)
+export async function createConnection(
+  payload: ConnectionCreatePayload
+): Promise<ConnectionRecord> {
+  const response = await apiClient.post<ApiResponse<ConnectionResponse>>(
+    CONNECTIONS_ENDPOINT,
+    payload
+  )
   const data = unwrapResponse(response)
   return transformConnection(data)
 }

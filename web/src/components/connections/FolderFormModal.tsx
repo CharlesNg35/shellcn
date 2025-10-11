@@ -10,7 +10,11 @@ import type { ConnectionFolderSummary } from '@/types/connections'
 import type { TeamRecord } from '@/types/teams'
 import { useConnectionFolderMutations } from '@/hooks/useConnectionFolderMutations'
 import { FOLDER_CONFIG } from '@/config/folders'
-import { DEFAULT_FOLDER_ICON_ID, FOLDER_COLOR_OPTIONS, FOLDER_ICON_OPTIONS } from '@/constants/folders'
+import {
+  DEFAULT_FOLDER_ICON_ID,
+  FOLDER_COLOR_OPTIONS,
+  FOLDER_ICON_OPTIONS,
+} from '@/constants/folders'
 import { cn } from '@/lib/utils/cn'
 import type { ApiError } from '@/lib/api/http'
 import { toApiError } from '@/lib/api/http'
@@ -125,7 +129,7 @@ export function FolderFormModal({
       description: values.description?.trim() || undefined,
       icon: values.icon?.trim() || undefined,
       color: values.color?.trim() || undefined,
-      parent_id: FOLDER_CONFIG.allowParentSelection ? parentFolder?.id ?? null : null,
+      parent_id: FOLDER_CONFIG.allowParentSelection ? (parentFolder?.id ?? null) : null,
       team_id: denormalizeTeamValue(values.team_id),
     }
 
@@ -237,7 +241,9 @@ export function FolderFormModal({
                 id="folder-team"
                 className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 value={watch('team_id') ?? ''}
-                onChange={(event) => setValue('team_id', event.target.value, { shouldValidate: true })}
+                onChange={(event) =>
+                  setValue('team_id', event.target.value, { shouldValidate: true })
+                }
               >
                 <option value="">Personal workspace</option>
                 {teams.map((team) => (
