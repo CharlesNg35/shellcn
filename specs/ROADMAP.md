@@ -95,6 +95,15 @@
 - [x] Build permission search
 - [x] Write tests for permission management
 
+### Phase 6.5: Resource-Scoped Permissions & Sharing (Week 6+)
+
+- [x] Introduce `resource_permissions` table and permission checker integration
+- [x] Ship connection share service and `/api/connections/:id/shares` CRUD
+- [x] Surface team capability endpoint (`/api/teams/:id/capabilities`) and UI card
+- [x] Auto-grant missing team permissions during connection creation
+- [ ] Evaluate team-wide capability grants for protocol enablement
+- [ ] Document the hybrid permission model for backend and frontend contributors
+
 ### Phase 7: Auth Provider Administration (Week 7)
 
 - [x] Create AuthProviders page

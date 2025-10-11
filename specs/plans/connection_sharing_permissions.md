@@ -64,7 +64,7 @@ This plan now aligns with the broader permission-system overhaul (see `permissio
 3. **Connection listing (`ConnectionService.ListVisible`)**
 
    - Aggregate role permissions + resource grants to determine effective access.
-   - Include in API payload: `is_shared`, `shared_from`, `shared_scopes[]`, `share_expires_at` when the caller relies on a resource grant.
+   - Include in API payload a `share_summary` block describing whether the connection is shared for the caller and, if so, the grant entries (principal, granted-by actor, scopes, expiry).
 
 4. **Protocol permissions endpoint**
 
@@ -94,7 +94,7 @@ This plan now aligns with the broader permission-system overhaul (see `permissio
 
 3. **Connection list badges**
 
-   - Display “Shared by …” chip when `is_shared` is true.
+   - Display “Shared by …” chip when `share_summary.shared` is true and at least one entry exists.
    - Tooltips show granted scopes, expiration, and grantor; filters allow “Shared with me” view.
 
 4. **Permissions administration surfaces**

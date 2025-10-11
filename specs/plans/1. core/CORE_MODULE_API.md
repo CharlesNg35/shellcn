@@ -231,10 +231,10 @@ Response:
 
 ## 3. Setup Workflow
 
-| Method | Path                    | Description                                            | Permission                           | Handler                   |
-| ------ | ----------------------- | ------------------------------------------------------ | ------------------------------------ | ------------------------- |
-| GET    | `/api/setup/status`     | Returns `"pending"` until first admin exists.          | Public                               | `SetupHandler.Status`     |
-| POST   | `/api/setup/initialize` | Creates initial root admin. | Public (guarded by empty user table) | `SetupHandler.Initialize` |
+| Method | Path                    | Description                                   | Permission                           | Handler                   |
+| ------ | ----------------------- | --------------------------------------------- | ------------------------------------ | ------------------------- |
+| GET    | `/api/setup/status`     | Returns `"pending"` until first admin exists. | Public                               | `SetupHandler.Status`     |
+| POST   | `/api/setup/initialize` | Creates initial root admin.                   | Public (guarded by empty user table) | `SetupHandler.Initialize` |
 
 **Sample** — Check Setup Status:
 
@@ -364,19 +364,20 @@ Content-Type: application/json
 
 ### 4.1 Teams
 
-| Method | Path                             | Description         | Permission    | Handler                    |
-| ------ | -------------------------------- | ------------------- | ------------- | -------------------------- |
-| GET    | `/api/teams`                     | List teams visible to caller (membership-aware). | `team.view`   | `TeamHandler.List`         |
-| GET    | `/api/teams/:id`                 | Team & members.     | `team.view`   | `TeamHandler.Get`          |
-| POST   | `/api/teams`                     | Create team.        | `team.manage` | `TeamHandler.Create`       |
-| PATCH  | `/api/teams/:id`                 | Rename/update team. | `team.manage` | `TeamHandler.Update`       |
-| POST   | `/api/teams/:id/members`         | Append member IDs.  | `team.manage` | `TeamHandler.AddMember`    |
-| DELETE | `/api/teams/:id/members/:userID` | Remove member.      | `team.manage` | `TeamHandler.RemoveMember` |
-| GET    | `/api/teams/:id/members`         | List members.       | `team.view`   | `TeamHandler.ListMembers`  |
-| GET    | `/api/teams/:id/roles`           | List roles assigned to team. | `team.view`   | `TeamHandler.ListRoles`    |
-| PUT    | `/api/teams/:id/roles`           | Replace team role assignments. | `permission.manage` | `TeamHandler.SetRoles` |
-| GET    | `/api/teams/:id/connections`     | List connections scoped to a team. | `team.view`   | `TeamHandler.ListConnections` |
-| GET    | `/api/teams/:id/folders`         | Folder hierarchy for the team.   | `team.view`   | `TeamHandler.ListConnectionFolders` |
+| Method | Path                             | Description                                      | Permission          | Handler                             |
+| ------ | -------------------------------- | ------------------------------------------------ | ------------------- | ----------------------------------- |
+| GET    | `/api/teams`                     | List teams visible to caller (membership-aware). | `team.view`         | `TeamHandler.List`                  |
+| GET    | `/api/teams/:id`                 | Team & members.                                  | `team.view`         | `TeamHandler.Get`                   |
+| POST   | `/api/teams`                     | Create team.                                     | `team.manage`       | `TeamHandler.Create`                |
+| PATCH  | `/api/teams/:id`                 | Rename/update team.                              | `team.manage`       | `TeamHandler.Update`                |
+| POST   | `/api/teams/:id/members`         | Append member IDs.                               | `team.manage`       | `TeamHandler.AddMember`             |
+| DELETE | `/api/teams/:id/members/:userID` | Remove member.                                   | `team.manage`       | `TeamHandler.RemoveMember`          |
+| GET    | `/api/teams/:id/members`         | List members.                                    | `team.view`         | `TeamHandler.ListMembers`           |
+| GET    | `/api/teams/:id/roles`           | List roles assigned to team.                     | `team.view`         | `TeamHandler.ListRoles`             |
+| GET    | `/api/teams/:id/capabilities`    | Aggregate team permissions plus resource grants. | `team.view`         | `TeamHandler.Capabilities`          |
+| PUT    | `/api/teams/:id/roles`           | Replace team role assignments.                   | `permission.manage` | `TeamHandler.SetRoles`              |
+| GET    | `/api/teams/:id/connections`     | List connections scoped to a team.               | `team.view`         | `TeamHandler.ListConnections`       |
+| GET    | `/api/teams/:id/folders`         | Folder hierarchy for the team.                   | `team.view`         | `TeamHandler.ListConnectionFolders` |
 
 **Sample** — Create Team:
 
@@ -726,12 +727,12 @@ Content-Type: application/json
 
 Invitations allow administrators to onboard users without manually setting initial passwords. Invited users receive a link to choose their credentials and are signed in automatically after completion.
 
-| Method | Path                         | Description                                           | Permission     | Handler                     |
-| ------ | ---------------------------- | ----------------------------------------------------- | -------------- | --------------------------- |
-| GET    | `/api/invites`               | List invitations with status metadata.                | `user.invite`  | `InviteHandler.List`        |
-| POST   | `/api/invites`               | Create a new invite and (optionally) email the link.  | `user.invite`  | `InviteHandler.Create`      |
-| DELETE | `/api/invites/:id`           | Revoke a pending invitation.                          | `user.invite`  | `InviteHandler.Delete`      |
-| POST   | `/api/auth/invite/redeem`    | Accept an invitation and create the user account.     | Public         | `InviteHandler.Redeem`      |
+| Method | Path                      | Description                                          | Permission    | Handler                |
+| ------ | ------------------------- | ---------------------------------------------------- | ------------- | ---------------------- |
+| GET    | `/api/invites`            | List invitations with status metadata.               | `user.invite` | `InviteHandler.List`   |
+| POST   | `/api/invites`            | Create a new invite and (optionally) email the link. | `user.invite` | `InviteHandler.Create` |
+| DELETE | `/api/invites/:id`        | Revoke a pending invitation.                         | `user.invite` | `InviteHandler.Delete` |
+| POST   | `/api/auth/invite/redeem` | Accept an invitation and create the user account.    | Public        | `InviteHandler.Redeem` |
 
 **Sample** — Create Invitation:
 
@@ -887,11 +888,11 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ### 8.1 Protocol Catalog
 
-| Method | Path                       | Description                                                           | Permission          | Handler                       |
-| ------ | -------------------------- | --------------------------------------------------------------------- | ------------------- | ----------------------------- |
-| GET    | `/api/protocols`           | Return the full driver catalog (driver + config enablement metadata). | `connection.view`   | `ProtocolHandler.ListAll`     |
-| GET    | `/api/protocols/available` | Return only protocols available to the calling user.                  | `connection.view`   | `ProtocolHandler.ListForUser` |
-| POST   | `/api/protocols/:id/test`  | Trigger a driver self-test/diagnostic (writes audit trail).           | `connection.manage` | `ProtocolHandler.TestDriver`  |
+| Method | Path                             | Description                                                           | Permission        | Handler                           |
+| ------ | -------------------------------- | --------------------------------------------------------------------- | ----------------- | --------------------------------- |
+| GET    | `/api/protocols`                 | Return the full driver catalog (driver + config enablement metadata). | `connection.view` | `ProtocolHandler.ListAll`         |
+| GET    | `/api/protocols/available`       | Return only protocols available to the calling user.                  | `connection.view` | `ProtocolHandler.ListForUser`     |
+| GET    | `/api/protocols/:id/permissions` | List permission metadata registered by the driver.                    | `connection.view` | `ProtocolHandler.ListPermissions` |
 
 **ProtocolInfo Example**
 
@@ -929,20 +930,16 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ### 8.2 Connections API
 
-| Method | Path                           | Description                                                    | Permission                               | Handler                              |
-| ------ | ------------------------------ | -------------------------------------------------------------- | ---------------------------------------- | ------------------------------------ |
-| GET    | `/api/connections`             | List connections visible to the caller (supports filters).     | `connection.view`                        | `ConnectionHandler.List`             |
-| GET    | `/api/connections/:id`         | Retrieve a specific connection with targets + visibility data. | `connection.view`                        | `ConnectionHandler.Get`              |
-| GET    | `/api/connections/summary`     | Aggregate counts grouped by protocol (supports team filters).  | `connection.view`                        | `ConnectionHandler.Summary`          |
-| POST   | `/api/connections`             | Create a connection (settings, visibility, targets).           | `connection.manage`                      | `ConnectionHandler.Create`           |
-| PATCH  | `/api/connections/:id`         | Update connection metadata/settings/targets.                   | `connection.manage`                      | `ConnectionHandler.Update`           |
-| DELETE | `/api/connections/:id`         | Delete a connection.                                           | `connection.manage`                      | `ConnectionHandler.Delete`           |
-| POST   | `/api/connections/:id/share`   | Replace visibility ACLs (org/team/user scopes).                | `connection.share`                       | `ConnectionHandler.UpdateVisibility` |
-| POST   | `/api/connections/:id/preview` | Run a dry-run or configuration validation.                     | `connection.launch` + `{driver}.connect` | `ConnectionHandler.LaunchPreview`    |
-| GET    | `/api/connection-folders/tree` | Folder hierarchy plus connection counts.                       | `connection.folder.view`                 | `ConnectionFolderHandler.ListTree`   |
-| POST   | `/api/connection-folders`      | Create a new connection folder.                                | `connection.folder.manage`               | `ConnectionFolderHandler.Create`     |
-| PATCH  | `/api/connection-folders/:id`  | Update folder metadata (name, parent, color, etc.).            | `connection.folder.manage`               | `ConnectionFolderHandler.Update`     |
-| DELETE | `/api/connection-folders/:id`  | Delete a folder (children reassigned, connections unassigned). | `connection.folder.manage`               | `ConnectionFolderHandler.Delete`     |
+| Method | Path                           | Description                                                    | Permission                 | Handler                            |
+| ------ | ------------------------------ | -------------------------------------------------------------- | -------------------------- | ---------------------------------- |
+| GET    | `/api/connections`             | List connections visible to the caller (supports filters).     | `connection.view`          | `ConnectionHandler.List`           |
+| GET    | `/api/connections/:id`         | Retrieve a specific connection with targets and share summary. | `connection.view`          | `ConnectionHandler.Get`            |
+| GET    | `/api/connections/summary`     | Aggregate counts grouped by protocol (supports team filters).  | `connection.view`          | `ConnectionHandler.Summary`        |
+| POST   | `/api/connections`             | Create a connection (metadata, folder, optional team).         | `connection.manage`        | `ConnectionHandler.Create`         |
+| GET    | `/api/connection-folders/tree` | Folder hierarchy plus connection counts.                       | `connection.folder.view`   | `ConnectionFolderHandler.ListTree` |
+| POST   | `/api/connection-folders`      | Create a new connection folder.                                | `connection.folder.manage` | `ConnectionFolderHandler.Create`   |
+| PATCH  | `/api/connection-folders/:id`  | Update folder metadata (name, parent, color, etc.).            | `connection.folder.manage` | `ConnectionFolderHandler.Update`   |
+| DELETE | `/api/connection-folders/:id`  | Delete a folder (children reassigned, connections unassigned). | `connection.folder.manage` | `ConnectionFolderHandler.Delete`   |
 
 **Supported query parameters for `GET /api/connections`:**
 
@@ -950,7 +947,7 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 - `team_id`: scope to tenant subset. Use a concrete team ID or `personal` to request user-owned (non-team) connections.
 - `folder_id`: filter by folder (`unassigned` for folderless).
 - `search`: case-insensitive substring match across name, host, tags, metadata.
-- `include=targets,visibility`: opt-in expansions (default `targets`).
+- `include`: comma-delimited expansions. Supported values are `targets` and `shares`. Targets are included by default; add `shares` to embed share entries (`share_summary` is always present). Omitting `targets` in the list will exclude them from the payload.
 - `page`, `per_page`: pagination controls (standard envelope).
 
 `GET /api/connection-folders/tree` accepts the same `team_id` semantics (team UUID or `personal`) to scope the returned hierarchy and connection counts.
@@ -976,6 +973,26 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
   },
   "secret_id": "vault_secret_admin",
   "last_used_at": "2025-10-09T14:22:00Z",
+  "share_summary": {
+    "shared": true,
+    "entries": [
+      {
+        "principal": {
+          "id": "team_platform",
+          "type": "team",
+          "name": "Platform Engineering"
+        },
+        "granted_by": {
+          "id": "usr_admin",
+          "type": "user",
+          "name": "Alice Smith",
+          "email": "alice@example.com"
+        },
+        "permission_scopes": ["connection.launch", "protocol:ssh.connect"],
+        "expires_at": "2025-10-12T12:00:00Z"
+      }
+    ]
+  },
   "targets": [
     {
       "id": "target_primary",
@@ -988,20 +1005,41 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
       "ordering": 0
     }
   ],
-  "visibility": [
-    {
-      "connection_id": "conn_01J4TF5YBHW",
-      "team_id": "team_platform",
-      "user_id": null,
-      "permission_scope": "use"
-    }
-  ]
+  "folder": {
+    "id": "fldr_prod_infra",
+    "name": "Production/Infra",
+    "slug": "production-infra"
+  }
 }
 ```
 
-> **Identity integration:** Drivers declare credential requirements (SSH key, kubeconfig, database DSN). The Identity service satisfies these bindings via `secret_id` or settings. The preview endpoint allows overriding identities for diagnostics.
+> **Identity integration:** Drivers declare credential requirements (SSH key, kubeconfig, database DSN). The Identity service satisfies these bindings via `secret_id` or settings. Resource-specific grants are surfaced through `share_summary`.
 
-### 8.3 Notifications
+### 8.3 Connection Shares API
+
+| Method | Path                                   | Description                                          | Permission         | Handler                         |
+| ------ | -------------------------------------- | ---------------------------------------------------- | ------------------ | ------------------------------- |
+| GET    | `/api/connections/:id/shares`          | List active resource grants for a connection.        | `connection.share` | `ConnectionShareHandler.List`   |
+| POST   | `/api/connections/:id/shares`          | Replace grants for a user or team (normalises deps). | `connection.share` | `ConnectionShareHandler.Create` |
+| DELETE | `/api/connections/:id/shares/:shareId` | Revoke an existing grant by share identifier.        | `connection.share` | `ConnectionShareHandler.Delete` |
+
+**Payload — Create Share**
+
+```http
+POST /api/connections/conn_01J4TF5YBHW/shares
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "team_id": "team_platform",
+  "permission_scopes": ["connection.launch", "protocol:ssh.connect"],
+  "expires_at": "2025-10-12T12:00:00Z"
+}
+```
+
+The service automatically expands dependency permissions (e.g., `connection.view`) and ensures the grantor already holds each scope. Responses mirror `ConnectionShareDTO`, which aligns with `share_summary.entries`.
+
+### 8.4 Notifications
 
 | Method | Path                            | Description                                      | Permission            | Handler                           |
 | ------ | ------------------------------- | ------------------------------------------------ | --------------------- | --------------------------------- |
