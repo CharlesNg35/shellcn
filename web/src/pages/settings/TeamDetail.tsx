@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CalendarClock, Loader2, PencilLine, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -14,6 +14,8 @@ import { useRoles } from '@/hooks/useRoles'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
 import { PERMISSIONS } from '@/constants/permissions'
+import { Modal } from '@/components/ui/Modal'
+import { TeamForm } from '@/components/teams/TeamForm'
 
 function formatDate(value?: string) {
   if (!value) {
@@ -34,7 +36,6 @@ function formatDate(value?: string) {
 }
 
 export function TeamDetail() {
-  const location = useLocation()
   const { teamId } = useParams<{ teamId: string }>()
   const navigate = useNavigate()
   const teamMutations = useTeamMutations()
@@ -42,6 +43,7 @@ export function TeamDetail() {
   const { data: allRoles, isLoading: isRolesLoading } = useRoles()
   const { hasPermission } = usePermissions()
   const canManageRoles = hasPermission(PERMISSIONS.PERMISSION.MANAGE)
+  const [isEditModalOpen, setEditModalOpen] = useState(false)
 
   const { data: teamDetail, isLoading: isTeamDetailLoading } = useTeam(teamId ?? '', {
     enabled: Boolean(teamId),
@@ -53,12 +55,18 @@ export function TeamDetail() {
 
   // Set breadcrumb override for this team
   useEffect(() => {
-    if (teamDetail?.name && teamId) {
-      const path = `/settings/teams/${teamId}`
+    if (!teamId) {
+      return
+    }
+    const path = `/settings/teams/${teamId}`
+    if (teamDetail?.name) {
       setOverride(path, teamDetail.name)
       return () => {
         clearOverride(path)
       }
+    }
+    return () => {
+      clearOverride(path)
     }
   }, [teamDetail?.name, teamId, setOverride, clearOverride])
 
@@ -67,7 +75,7 @@ export function TeamDetail() {
   }
 
   const handleEdit = () => {
-    navigate(`/settings/teams/${teamId}/edit`)
+    setEditModalOpen(true)
   }
 
   const handleDelete = async () => {
@@ -153,7 +161,7 @@ export function TeamDetail() {
   const assignedRoles = teamDetail.roles ?? []
 
   return (
-    <div key={location.pathname} className="space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title={teamDetail.name}
         description={
@@ -274,6 +282,20 @@ export function TeamDetail() {
           />
         </div>
       </div>
+
+      <Modal
+        open={isEditModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        title={`Edit ${teamDetail.name}`}
+        description="Update the team name or description. Changes take effect immediately."
+      >
+        <TeamForm
+          mode="edit"
+          team={teamDetail}
+          onClose={() => setEditModalOpen(false)}
+          onSuccess={() => setEditModalOpen(false)}
+        />
+      </Modal>
     </div>
   )
 }

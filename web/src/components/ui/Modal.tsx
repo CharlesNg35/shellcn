@@ -139,7 +139,14 @@ export function Modal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          onClose()
+        }
+      }}
+    >
       <DialogContent className={sizeClasses[size]}>
         {(title || description) && (
           <DialogHeader className="mb-4">
