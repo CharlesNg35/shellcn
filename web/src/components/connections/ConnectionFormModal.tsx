@@ -194,26 +194,28 @@ export function ConnectionFormModal({
           <div className="grid gap-3">
             <label className="text-sm font-medium text-foreground">Icon</label>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {(iconOptions.length ? iconOptions : CONNECTION_ICON_OPTIONS).map(({ id, label, icon: OptionIcon }) => {
-                const isActive = (selectedIcon || DEFAULT_CONNECTION_ICON_ID) === id
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setValue('icon', id, { shouldValidate: true })}
-                    className={cn(
-                      'flex h-12 items-center justify-center gap-2 rounded-lg border text-sm transition-colors',
-                      isActive
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border text-muted-foreground hover:border-border/80 hover:bg-muted/40'
-                    )}
-                    aria-pressed={isActive}
-                  >
-                    <OptionIcon className="h-4 w-4" />
-                    <span className="truncate">{label}</span>
-                  </button>
-                )
-              })}
+              {(iconOptions.length ? iconOptions : CONNECTION_ICON_OPTIONS).map(
+                ({ id, label, icon: OptionIcon }) => {
+                  const isActive = (selectedIcon || DEFAULT_CONNECTION_ICON_ID) === id
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setValue('icon', id, { shouldValidate: true })}
+                      className={cn(
+                        'flex h-12 items-center justify-center gap-2 rounded-lg border text-sm transition-colors',
+                        isActive
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:border-border/80 hover:bg-muted/40'
+                      )}
+                      aria-pressed={isActive}
+                    >
+                      <OptionIcon className="h-4 w-4" />
+                      <span className="truncate">{label}</span>
+                    </button>
+                  )
+                }
+              )}
             </div>
           </div>
 
