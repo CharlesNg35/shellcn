@@ -14,12 +14,13 @@ import (
 
 // ConnectionHandler exposes connection APIs.
 type ConnectionHandler struct {
-	svc *services.ConnectionService
+	svc      *services.ConnectionService
+	shareSvc *services.ConnectionShareService
 }
 
 // NewConnectionHandler constructs a handler using the provided service.
-func NewConnectionHandler(svc *services.ConnectionService) *ConnectionHandler {
-	return &ConnectionHandler{svc: svc}
+func NewConnectionHandler(svc *services.ConnectionService, shareSvc *services.ConnectionShareService) *ConnectionHandler {
+	return &ConnectionHandler{svc: svc, shareSvc: shareSvc}
 }
 
 // List returns visible connections for the authenticated user.
@@ -73,7 +74,9 @@ func (h *ConnectionHandler) Create(c *gin.Context) {
 		return
 	}
 
-	connection, err := h.svc.Create(requestContext(c), userID, services.CreateConnectionInput{
+	ctx := requestContext(c)
+
+	connection, err := h.svc.Create(ctx, userID, services.CreateConnectionInput{
 		Name:        payload.Name,
 		Description: payload.Description,
 		ProtocolID:  payload.ProtocolID,
@@ -85,6 +88,20 @@ func (h *ConnectionHandler) Create(c *gin.Context) {
 	if err != nil {
 		response.Error(c, err)
 		return
+	}
+
+	if h.shareSvc != nil && connection.TeamID != nil && len(payload.GrantTeamPermissions) > 0 {
+		pruned := dedupePermissions(payload.GrantTeamPermissions)
+		if len(pruned) > 0 {
+			if _, err := h.shareSvc.CreateShare(ctx, userID, connection.ID, services.CreateShareInput{
+				PrincipalType: services.PrincipalTypeTeam,
+				PrincipalID:   *connection.TeamID,
+				PermissionIDs: pruned,
+			}); err != nil {
+				response.Error(c, err)
+				return
+			}
+		}
 	}
 
 	response.Success(c, http.StatusCreated, connection)
@@ -176,11 +193,34 @@ type protocolCount struct {
 }
 
 type createConnectionPayload struct {
-	Name        string         `json:"name" binding:"required"`
-	Description string         `json:"description"`
-	ProtocolID  string         `json:"protocol_id" binding:"required"`
-	TeamID      *string        `json:"team_id"`
-	FolderID    *string        `json:"folder_id"`
-	Metadata    map[string]any `json:"metadata"`
-	Settings    map[string]any `json:"settings"`
+	Name                 string         `json:"name" binding:"required"`
+	Description          string         `json:"description"`
+	ProtocolID           string         `json:"protocol_id" binding:"required"`
+	TeamID               *string        `json:"team_id"`
+	FolderID             *string        `json:"folder_id"`
+	Metadata             map[string]any `json:"metadata"`
+	Settings             map[string]any `json:"settings"`
+	GrantTeamPermissions []string       `json:"grant_team_permissions"`
+}
+
+func dedupePermissions(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(ids))
+	for _, raw := range ids {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		seen[id] = struct{}{}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(seen))
+	for id := range seen {
+		result = append(result, id)
+	}
+	return result
 }

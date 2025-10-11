@@ -22,6 +22,7 @@ export interface ConnectionCreatePayload {
   folder_id?: string | null
   metadata?: Record<string, unknown>
   settings?: Record<string, unknown>
+  grant_team_permissions?: string[]
 }
 
 interface ConnectionTargetResponse {

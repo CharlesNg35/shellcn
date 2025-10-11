@@ -48,7 +48,7 @@ func TestConnectionHandlerList(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	handler := NewConnectionHandler(svc)
+	handler := NewConnectionHandler(svc, nil)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

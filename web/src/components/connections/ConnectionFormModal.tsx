@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import { useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,6 +7,8 @@ import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
+import { Checkbox } from '@/components/ui/Checkbox'
+import { Badge } from '@/components/ui/Badge'
 import type { Protocol } from '@/types/protocols'
 import type { ConnectionFolderNode, ConnectionRecord } from '@/types/connections'
 import type { TeamRecord } from '@/types/teams'
@@ -15,6 +17,7 @@ import { useConnectionMutations } from '@/hooks/useConnectionMutations'
 import type { ApiError } from '@/lib/api/http'
 import { toApiError } from '@/lib/api/http'
 import { teamsApi } from '@/lib/api/teams'
+import type { ConnectionCreatePayload } from '@/lib/api/connections'
 import {
   CONNECTION_COLOR_OPTIONS,
   CONNECTION_ICON_OPTIONS,
@@ -67,6 +70,8 @@ export function ConnectionFormModal({
 }: ConnectionFormModalProps) {
   const { create } = useConnectionMutations()
   const [formError, setFormError] = useState<ApiError | null>(null)
+  const grantToggleInteractedRef = useRef(false)
+  const [autoGrantTeamPermissions, setAutoGrantTeamPermissions] = useState(false)
 
   const iconOptions = useMemo(() => {
     return getIconOptionsForProtocol(protocol?.id, protocol?.category)
@@ -103,6 +108,8 @@ export function ConnectionFormModal({
     if (open) {
       reset(defaultValues)
       setFormError(null)
+      grantToggleInteractedRef.current = false
+      setAutoGrantTeamPermissions(false)
     }
   }, [defaultValues, open, reset])
 
@@ -124,37 +131,76 @@ export function ConnectionFormModal({
     staleTime: 60_000,
   })
 
-  const teamCapabilityWarnings = useMemo(() => {
+  const selectedTeam = useMemo(() => {
     if (!effectiveTeamId) {
-      return [] as string[]
+      return null
+    }
+    return teams.find((team) => team.id === effectiveTeamId) ?? null
+  }, [effectiveTeamId, teams])
+
+  const teamCapabilityAnalysis = useMemo(() => {
+    const result = {
+      missingPermissionIds: [] as string[],
+      messages: [] as string[],
+    }
+    if (!effectiveTeamId) {
+      return result
     }
     const capabilities = teamCapabilitiesQuery.data
     if (!capabilities) {
-      return [] as string[]
+      return result
     }
+    const granted = new Set(capabilities.permission_ids ?? [])
 
-    const warnings: string[] = []
-    if (!capabilities.permission_ids.includes('connection.launch')) {
-      warnings.push(
-        'Team members will not be able to launch this connection without an additional role or share (missing connection.launch).'
+    if (!granted.has('connection.launch')) {
+      result.missingPermissionIds.push('connection.launch')
+      result.messages.push(
+        'Team members will not be able to launch this connection without granting connection.launch.'
       )
     }
-    if (!capabilities.permission_ids.includes('connection.manage')) {
-      warnings.push(
+    if (!granted.has('connection.manage')) {
+      result.messages.push(
         'Team members will not be able to edit this connection (missing connection.manage).'
       )
     }
     if (protocol) {
       const connectPermissionId = `protocol:${protocol.id}.connect`
-      if (!capabilities.permission_ids.includes(connectPermissionId)) {
-        warnings.push(
-          `Team members currently lack ${protocol.name} protocol access (missing ${connectPermissionId}). Consider updating team roles or sharing the connection directly.`
+      if (!granted.has(connectPermissionId)) {
+        result.missingPermissionIds.push(connectPermissionId)
+        result.messages.push(
+          `Team currently lacks ${protocol.name} protocol access (missing ${connectPermissionId}).`
         )
       }
     }
-
-    return warnings
+    return result
   }, [effectiveTeamId, teamCapabilitiesQuery.data, protocol])
+
+  const missingTeamPermissionIds = teamCapabilityAnalysis.missingPermissionIds
+  const teamCapabilityWarnings = teamCapabilityAnalysis.messages
+
+  const handleAutoGrantToggle = (checked: boolean) => {
+    grantToggleInteractedRef.current = true
+    setAutoGrantTeamPermissions(checked)
+  }
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    if (missingTeamPermissionIds.length === 0) {
+      return
+    }
+    if (!grantToggleInteractedRef.current) {
+      setAutoGrantTeamPermissions(true)
+    }
+  }, [missingTeamPermissionIds.length, open])
+
+  useEffect(() => {
+    if (missingTeamPermissionIds.length === 0) {
+      grantToggleInteractedRef.current = false
+      setAutoGrantTeamPermissions(false)
+    }
+  }, [missingTeamPermissionIds.length])
 
   useEffect(() => {
     if (!selectedIcon) {
@@ -178,14 +224,23 @@ export function ConnectionFormModal({
         metadata.color = colorValue
       }
 
-      const connection = await create.mutateAsync({
+      const payload: ConnectionCreatePayload = {
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
         protocol_id: protocol.id,
         folder_id: sanitizeId(values.folder_id),
         team_id: denormalizeTeamValue(values.team_id),
         metadata: Object.keys(metadata).length ? metadata : undefined,
-      })
+      }
+
+      if (effectiveTeamId && autoGrantTeamPermissions && missingTeamPermissionIds.length > 0) {
+        const uniquePermissions = Array.from(new Set(missingTeamPermissionIds))
+        if (uniquePermissions.length > 0) {
+          payload.grant_team_permissions = uniquePermissions
+        }
+      }
+
+      const connection = await create.mutateAsync(payload)
       onSuccess(connection)
       onClose()
     } catch (error) {
@@ -337,11 +392,44 @@ export function ConnectionFormModal({
                   ) : teamCapabilityWarnings.length === 0 ? (
                     'Team currently has the required permissions to launch this connection.'
                   ) : (
-                    <ul className="list-disc space-y-1 pl-4">
-                      {teamCapabilityWarnings.map((warning) => (
-                        <li key={warning}>{warning}</li>
-                      ))}
-                    </ul>
+                    <div className="space-y-2">
+                      <ul className="list-disc space-y-1 pl-4">
+                        {teamCapabilityWarnings.map((warning) => (
+                          <li key={warning}>{warning}</li>
+                        ))}
+                      </ul>
+                      {missingTeamPermissionIds.length > 0 ? (
+                        <label
+                          htmlFor="auto-grant-team-permissions"
+                          className="flex items-start gap-3 rounded-md border border-dashed border-border/60 bg-background px-3 py-2 text-foreground"
+                        >
+                          <Checkbox
+                            id="auto-grant-team-permissions"
+                            checked={autoGrantTeamPermissions}
+                            onCheckedChange={(value) => handleAutoGrantToggle(value === true)}
+                            className="mt-1"
+                          />
+                          <div className="space-y-1 text-xs text-muted-foreground">
+                            <p className="font-medium text-foreground">
+                              Grant missing permissions to{' '}
+                              {selectedTeam?.name ?? 'the selected team'} for this connection.
+                            </p>
+                            <p>The team will receive:</p>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              {missingTeamPermissionIds.map((permissionId) => (
+                                <Badge
+                                  key={permissionId}
+                                  variant="secondary"
+                                  className="text-[10px] uppercase tracking-wide"
+                                >
+                                  {permissionId}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        </label>
+                      ) : null}
+                    </div>
                   )}
                 </div>
               ) : null}

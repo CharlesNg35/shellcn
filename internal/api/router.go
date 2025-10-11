@@ -179,13 +179,13 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err != nil {
 		return nil, err
 	}
-	connectionHandler := handlers.NewConnectionHandler(connectionSvc)
-	registerConnectionRoutes(api, connectionHandler, checker)
-
 	shareSvc, err := services.NewConnectionShareService(db, checker)
 	if err != nil {
 		return nil, err
 	}
+	connectionHandler := handlers.NewConnectionHandler(connectionSvc, shareSvc)
+	registerConnectionRoutes(api, connectionHandler, checker)
+
 	shareHandler := handlers.NewConnectionShareHandler(shareSvc)
 	registerConnectionShareRoutes(api, shareHandler, checker)
 

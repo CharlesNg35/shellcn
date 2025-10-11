@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 
 interface BreadcrumbOverride {
   [path: string]: string
@@ -15,27 +15,32 @@ const BreadcrumbContext = createContext<BreadcrumbContextValue | undefined>(unde
 export function BreadcrumbProvider({ children }: { children: ReactNode }) {
   const [overrides, setOverrides] = useState<BreadcrumbOverride>({})
 
-  const setOverride = (path: string, label: string) => {
-    if (overrides[path] === label) {
-      return
-    }
-    setOverrides((prev) => ({ ...prev, [path]: label }))
-  }
-
-  const clearOverride = (path: string) => {
-    if (!(path in overrides)) {
-      return
-    }
+  const setOverride = useCallback((path: string, label: string) => {
     setOverrides((prev) => {
+      if (prev[path] === label) {
+        return prev
+      }
+      return { ...prev, [path]: label }
+    })
+  }, [])
+
+  const clearOverride = useCallback((path: string) => {
+    setOverrides((prev) => {
+      if (!(path in prev)) {
+        return prev
+      }
       const next = { ...prev }
       delete next[path]
       return next
     })
-  }
+  }, [])
 
   return (
     <BreadcrumbContext.Provider
-      value={useMemo(() => ({ overrides, setOverride, clearOverride }), [overrides])}
+      value={useMemo(
+        () => ({ overrides, setOverride, clearOverride }),
+        [overrides, setOverride, clearOverride]
+      )}
     >
       {children}
     </BreadcrumbContext.Provider>
