@@ -17,6 +17,8 @@ import {
   CONNECTION_COLOR_OPTIONS,
   CONNECTION_ICON_OPTIONS,
   DEFAULT_CONNECTION_ICON_ID,
+  getDefaultIconForProtocol,
+  getIconOptionsForProtocol,
 } from '@/constants/connections'
 import { cn } from '@/lib/utils/cn'
 
@@ -64,16 +66,24 @@ export function ConnectionFormModal({
   const { create } = useConnectionMutations()
   const [formError, setFormError] = useState<ApiError | null>(null)
 
+  const iconOptions = useMemo(() => {
+    return getIconOptionsForProtocol(protocol?.id, protocol?.category)
+  }, [protocol?.category, protocol?.id])
+
+  const defaultIcon = useMemo(() => {
+    return getDefaultIconForProtocol(protocol?.id, protocol?.category)
+  }, [protocol?.category, protocol?.id])
+
   const defaultValues = useMemo<ConnectionFormValues>(() => {
     return {
       name: '',
       description: '',
       folder_id: '',
       team_id: normalizeTeamValue(teamId),
-      icon: DEFAULT_CONNECTION_ICON_ID,
+      icon: defaultIcon ?? DEFAULT_CONNECTION_ICON_ID,
       color: '',
     }
-  }, [teamId])
+  }, [defaultIcon, teamId])
 
   const {
     register,
@@ -99,9 +109,9 @@ export function ConnectionFormModal({
 
   useEffect(() => {
     if (!selectedIcon) {
-      setValue('icon', DEFAULT_CONNECTION_ICON_ID, { shouldValidate: false })
+      setValue('icon', defaultIcon ?? DEFAULT_CONNECTION_ICON_ID, { shouldValidate: false })
     }
-  }, [selectedIcon, setValue])
+  }, [defaultIcon, selectedIcon, setValue])
 
   const onSubmit: SubmitHandler<ConnectionFormValues> = async (values) => {
     setFormError(null)
@@ -184,7 +194,7 @@ export function ConnectionFormModal({
           <div className="grid gap-3">
             <label className="text-sm font-medium text-foreground">Icon</label>
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {CONNECTION_ICON_OPTIONS.map(({ id, label, icon: OptionIcon }) => {
+              {(iconOptions.length ? iconOptions : CONNECTION_ICON_OPTIONS).map(({ id, label, icon: OptionIcon }) => {
                 const isActive = (selectedIcon || DEFAULT_CONNECTION_ICON_ID) === id
                 return (
                   <button
