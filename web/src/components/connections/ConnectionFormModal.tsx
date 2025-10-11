@@ -84,6 +84,9 @@ export function ConnectionFormModal({
 
   const onSubmit: SubmitHandler<ConnectionFormValues> = async (values) => {
     setFormError(null)
+    if (!protocol) {
+      return
+    }
     try {
       const connection = await create.mutateAsync({
         name: values.name.trim(),
