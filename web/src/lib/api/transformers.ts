@@ -22,7 +22,7 @@ export function toAuthTokens(payload: TokenSource): AuthTokens | null {
   }
 }
 
-export function normalizeAuthProvider(provider?: string | null): string | undefined {
+export function normalizeAuthProvider(provider?: string | null): string {
   if (!provider) {
     return 'local'
   }

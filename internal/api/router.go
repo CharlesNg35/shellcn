@@ -50,8 +50,8 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if cfg.Server.CSRF.Enabled {
 		r.Use(middleware.CSRF())
 	}
-	// Basic rate limiting: 100 requests/minute per IP+path
-	r.Use(middleware.RateLimit(rateStore, 100, time.Minute))
+	// Basic rate limiting: 300 requests/minute per IP+path
+	r.Use(middleware.RateLimit(rateStore, 300, time.Minute))
 
 	registerHealthRoutes(r, db)
 

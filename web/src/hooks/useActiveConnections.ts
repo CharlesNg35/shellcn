@@ -24,7 +24,7 @@ export function useActiveConnections(
   options: UseActiveConnectionsOptions = {},
   queryOptions?: QueryOptions
 ) {
-  const { protocol_id, team_id, enabled = true, refetchInterval = 10_000 } = options
+  const { protocol_id, team_id, enabled = true, refetchInterval = 20_000 } = options
 
   const queryKey = useMemo(
     () => [...ACTIVE_CONNECTIONS_QUERY_KEY, { protocol_id, team_id }] as const,
@@ -34,9 +34,10 @@ export function useActiveConnections(
   return useQuery<ActiveConnectionSession[], ApiError>({
     queryKey,
     queryFn: () => fetchActiveConnectionSessions({ protocol_id, team_id }),
-    staleTime: 5_000,
+    staleTime: 15_000,
     refetchInterval,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     enabled,
     ...queryOptions,
   })
