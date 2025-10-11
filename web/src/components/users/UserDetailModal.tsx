@@ -41,6 +41,9 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
     }
   }
 
+  const authProvider = user?.auth_provider?.toUpperCase() ?? 'LOCAL'
+  const isExternal = Boolean(user?.auth_provider && user.auth_provider !== 'local')
+
   const handlePasswordSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (!user || !passwordValue) {
@@ -77,6 +80,18 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
               </Badge>
             </div>
             <div>
+              <p className="text-sm font-semibold text-muted-foreground">Auth Provider</p>
+              <Badge variant={isExternal ? 'secondary' : 'outline'} className="mt-2">
+                {authProvider}
+              </Badge>
+              {isExternal ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Profile attributes are managed by the upstream provider. You can still adjust
+                  roles and account status here.
+                </p>
+              ) : null}
+            </div>
+            <div>
               <p className="text-sm font-semibold text-muted-foreground">Email</p>
               <p className="text-sm text-foreground">{user.email}</p>
             </div>
@@ -97,7 +112,7 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
           <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => onEdit?.(user)}>
-                Edit user
+                {isExternal ? 'Manage access' : 'Edit user'}
               </Button>
               <Button
                 variant={user.is_active ? 'secondary' : 'default'}

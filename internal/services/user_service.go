@@ -61,6 +61,11 @@ type UserService struct {
 	auditService *AuditService
 }
 
+func isExternalProvider(provider string) bool {
+	p := strings.ToLower(strings.TrimSpace(provider))
+	return p != "" && p != "local"
+}
+
 // NewUserService constructs a UserService instance.
 func NewUserService(db *gorm.DB, auditService *AuditService) (*UserService, error) {
 	if db == nil {
@@ -230,8 +235,7 @@ func (s *UserService) Update(ctx context.Context, id string, input UpdateUserInp
 		return nil, fmt.Errorf("user service: load user: %w", err)
 	}
 
-	provider := strings.ToLower(strings.TrimSpace(user.AuthProvider))
-	if provider != "" && provider != "local" {
+	if isExternalProvider(user.AuthProvider) {
 		if input.Username != nil {
 			trimmed := strings.TrimSpace(*input.Username)
 			if trimmed != "" && trimmed != user.Username {

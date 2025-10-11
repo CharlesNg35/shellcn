@@ -8,7 +8,15 @@ import {
   type SortingState,
   useReactTable,
 } from '@tanstack/react-table'
-import { ArrowUpDown, Eye, Loader2, MoreHorizontal, PencilLine, ShieldAlert } from 'lucide-react'
+import {
+  ArrowUpDown,
+  Eye,
+  Loader2,
+  MoreHorizontal,
+  PencilLine,
+  ShieldAlert,
+  UserCog,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Checkbox } from '@/components/ui/Checkbox'
@@ -113,6 +121,20 @@ export function UserTable({
         },
       },
       {
+        accessorKey: 'auth_provider',
+        header: () => 'Provider',
+        cell: ({ row }) => {
+          const provider = row.original.auth_provider?.toUpperCase() ?? 'LOCAL'
+          const variant = provider === 'LOCAL' ? 'outline' : 'secondary'
+          return (
+            <Badge variant={variant} className="text-xs">
+              {provider}
+            </Badge>
+          )
+        },
+        size: 90,
+      },
+      {
         accessorKey: 'is_active',
         header: () => 'Status',
         cell: ({ row }) => (
@@ -162,8 +184,17 @@ export function UserTable({
                 variant="ghost"
                 size="sm"
                 onClick={() => onEditUser?.(row.original)}
+                aria-label={
+                  row.original.auth_provider && row.original.auth_provider !== 'local'
+                    ? `Manage access for ${row.original.username}`
+                    : `Edit ${row.original.username}`
+                }
               >
-                <PencilLine className="h-4 w-4" />
+                {row.original.auth_provider && row.original.auth_provider !== 'local' ? (
+                  <UserCog className="h-4 w-4" />
+                ) : (
+                  <PencilLine className="h-4 w-4" />
+                )}
               </Button>
             </PermissionGuard>
             {row.original.is_root ? (

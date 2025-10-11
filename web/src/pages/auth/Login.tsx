@@ -95,13 +95,19 @@ export function Login() {
         )
         break
       case 'user_disabled':
-        setSsoError('Your account has been disabled. Please contact an administrator for assistance.')
+        setSsoError(
+          'Your account has been disabled. Please contact an administrator for assistance.'
+        )
         break
       case 'email_required':
-        setSsoError('The identity provider did not return an email address. Please contact your administrator.')
+        setSsoError(
+          'The identity provider did not return an email address. Please contact your administrator.'
+        )
         break
       case 'not_found':
-        setSsoError('We could not match your identity to an existing account. If you expect access, contact your administrator.')
+        setSsoError(
+          'We could not match your identity to an existing account. If you expect access, contact your administrator.'
+        )
         break
       default:
         setSsoError(null)
