@@ -2,20 +2,16 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import * as usePermissionsModule from '@/hooks/usePermissions'
-import * as useConnectionSummaryModule from '@/hooks/useConnectionSummary'
-import * as useProtocolsModule from '@/hooks/useProtocols'
+import * as useActiveConnectionsModule from '@/hooks/useActiveConnections'
 import { Sidebar } from '../Sidebar'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: vi.fn(),
 }))
 
-vi.mock('@/hooks/useConnectionSummary', () => ({
-  useConnectionSummary: vi.fn(),
-}))
-
-vi.mock('@/hooks/useProtocols', () => ({
-  useAvailableProtocols: vi.fn(),
+vi.mock('@/hooks/useActiveConnections', () => ({
+  useActiveConnections: vi.fn(),
 }))
 
 describe('Sidebar', () => {
@@ -29,38 +25,27 @@ describe('Sidebar', () => {
       refetch: async () => {},
     } as unknown as ReturnType<typeof usePermissionsModule.usePermissions>)
 
-    vi.spyOn(useConnectionSummaryModule, 'useConnectionSummary').mockReturnValue({
-      data: [
-        { protocol_id: 'ssh', count: 5 },
-        { protocol_id: 'rdp', count: 2 },
-      ],
+    vi.spyOn(useActiveConnectionsModule, 'useActiveConnections').mockReturnValue({
+      data: [],
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
-    } as unknown as ReturnType<typeof useConnectionSummaryModule.useConnectionSummary>)
+    } as unknown as ReturnType<typeof useActiveConnectionsModule.useActiveConnections>)
 
-    vi.spyOn(useProtocolsModule, 'useAvailableProtocols').mockReturnValue({
-      data: {
-        data: [
-          { id: 'ssh', name: 'SSH', description: '', features: [], icon: 'ssh' },
-          { id: 'rdp', name: 'RDP', description: '', features: [], icon: 'rdp' },
-        ],
-      },
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof useProtocolsModule.useAvailableProtocols>)
+    const queryClient = new QueryClient()
 
     render(
-      <MemoryRouter>
-        <Sidebar />
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <Sidebar />
+        </MemoryRouter>
+      </QueryClientProvider>
     )
 
     // Sidebar renders twice (desktop + mobile), so we use getAllByText
     expect(screen.getAllByText(/Dashboard/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Connections/i).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/Settings/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/Protocols/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Active Sessions/i).length).toBeGreaterThan(0)
   })
 })
