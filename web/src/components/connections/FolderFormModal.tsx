@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button'
 import type { ConnectionFolderSummary } from '@/types/connections'
 import type { TeamRecord } from '@/types/teams'
 import { useConnectionFolderMutations } from '@/hooks/useConnectionFolderMutations'
-import { FOLDER_CONFIG } from '@/config/folders'
+import { FOLDER_CONFIG } from '@/constants/folders'
 import {
   DEFAULT_FOLDER_ICON_ID,
   FOLDER_COLOR_OPTIONS,
