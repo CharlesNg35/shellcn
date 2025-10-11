@@ -56,8 +56,6 @@ type ConnectionFolderDTO struct {
 	Name        string         `json:"name"`
 	Slug        string         `json:"slug"`
 	Description string         `json:"description"`
-	Icon        string         `json:"icon"`
-	Color       string         `json:"color"`
 	ParentID    *string        `json:"parent_id"`
 	TeamID      *string        `json:"team_id"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
@@ -213,7 +211,7 @@ func (s *ConnectionService) ListVisible(ctx context.Context, opts ListConnection
 	offset := (page - 1) * perPage
 
 	dataQuery := s.applyFilters(s.preloadScopes(ctx, opts), opts, userCtx, manageAll).
-		Order("connections.created_at DESC").
+		Order("LOWER(connections.name) ASC, connections.created_at DESC, connections.id ASC").
 		Limit(perPage).
 		Offset(offset)
 
@@ -534,8 +532,6 @@ func mapConnection(row models.Connection, includeTargets, includeVisibility bool
 			Name:        row.Folder.Name,
 			Slug:        row.Folder.Slug,
 			Description: row.Folder.Description,
-			Icon:        row.Folder.Icon,
-			Color:       row.Folder.Color,
 			ParentID:    row.Folder.ParentID,
 			TeamID:      row.Folder.TeamID,
 			Metadata:    decodeJSONMap(row.Folder.Metadata),

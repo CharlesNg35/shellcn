@@ -11,7 +11,6 @@ import type { TeamRecord } from '@/types/teams'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PERMISSIONS } from '@/constants/permissions'
 import { useConnectionFolderMutations } from '@/hooks/useConnectionFolderMutations'
-import { resolveFolderIcon } from '@/constants/folders'
 import { Button } from '@/components/ui/Button'
 
 interface FolderSidebarProps {
@@ -26,7 +25,6 @@ interface FolderSidebarProps {
 interface FolderFormState {
   mode: FolderFormMode
   folder?: ConnectionFolderSummary
-  parent?: ConnectionFolderSummary | null
 }
 
 export function FolderSidebar({
@@ -53,22 +51,29 @@ export function FolderSidebar({
   )
   const hasUserFolders = userFolders.length > 0
 
-  const handleOpenCreate = (parent?: ConnectionFolderSummary | null) => {
+  const handleOpenCreate = () => {
+    if (!canManageFolders) {
+      return
+    }
     setFormState({
       mode: 'create',
-      parent: parent ?? null,
     })
   }
 
   const handleOpenEdit = (folder: ConnectionFolderSummary) => {
+    if (!canManageFolders) {
+      return
+    }
     setFormState({
       mode: 'edit',
       folder,
-      parent: null,
     })
   }
 
   const handleDelete = (node: ConnectionFolderNode) => {
+    if (!canManageFolders) {
+      return
+    }
     setDeleteTarget(node)
   }
 
@@ -122,14 +127,14 @@ export function FolderSidebar({
                 collapsed ? (
                   <button
                     type="button"
-                    onClick={() => handleOpenCreate(null)}
+                    onClick={() => handleOpenCreate()}
                     className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     aria-label="Create folder"
                   >
                     <Plus className="h-4 w-4" />
                   </button>
                 ) : (
-                  <Button size="sm" onClick={() => handleOpenCreate(null)}>
+                  <Button size="sm" onClick={() => handleOpenCreate()}>
                     <Plus className="mr-1.5 h-3.5 w-3.5" />
                     New Folder
                   </Button>
@@ -231,7 +236,6 @@ export function FolderSidebar({
           open={Boolean(formState)}
           mode={formState.mode}
           folder={formState.folder}
-          parentFolder={formState.parent}
           onClose={closeForm}
           onSuccess={handleFormSuccess}
           teamId={teamId ?? null}
@@ -288,7 +292,6 @@ function CollapsedFolderNode({
   activeFolderId: string | null
   onSelect: (folderId: string | null) => void
 }) {
-  const Icon = resolveFolderIcon(node.folder.icon)
   const isActive = activeFolderId === node.folder.id
 
   return (
@@ -297,7 +300,7 @@ function CollapsedFolderNode({
         label={node.folder.name}
         isActive={isActive}
         onClick={() => onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)}
-        icon={<Icon className="h-4 w-4" style={{ color: node.folder.color || undefined }} />}
+        icon={<Folder className="h-4 w-4" />}
       />
       {node.children?.map((child) => (
         <CollapsedFolderNode

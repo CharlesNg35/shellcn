@@ -7,6 +7,7 @@ import type { Protocol } from '@/types/protocols'
 import type { ConnectionRecord } from '@/types/connections'
 import { cn } from '@/lib/utils/cn'
 import { useState } from 'react'
+import { resolveConnectionIcon } from '@/constants/connections'
 
 interface ConnectionCardProps {
   connection: ConnectionRecord
@@ -26,18 +27,32 @@ export function ConnectionCard({
   onDelete,
 }: ConnectionCardProps) {
   const [showMenu, setShowMenu] = useState(false)
-  const tags = extractTags(connection.metadata)
+  const metadata = connection.metadata ?? {}
+  const tags = extractTags(metadata)
   const endpoint = resolvePrimaryEndpoint(connection.targets, connection.settings)
   const status = resolveStatus(connection)
   const isPersonal = !connection.team_id
+  const metadataIcon = typeof metadata.icon === 'string' ? metadata.icon : undefined
+  const metadataColor = typeof metadata.color === 'string' ? metadata.color : undefined
+  const VisualIcon = metadataIcon ? resolveConnectionIcon(metadataIcon) : ProtocolIcon
+  const iconAccentStyle = metadataColor
+    ? {
+        color: metadataColor,
+        backgroundColor: hexToRgba(metadataColor, 0.12),
+        boxShadow: `0 0 0 1px ${hexToRgba(metadataColor, 0.2)}`,
+      }
+    : undefined
 
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border/60 bg-card transition-all hover:border-border hover:shadow-lg">
       {/* Card Header */}
       <div className="flex items-start justify-between border-b border-border/40 bg-muted/30 p-4">
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20">
-            <ProtocolIcon className="h-6 w-6 text-primary" />
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/20"
+            style={iconAccentStyle}
+          >
+            <VisualIcon className="h-6 w-6" />
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-base truncate" title={connection.name}>
@@ -192,6 +207,20 @@ function extractTags(metadata?: Record<string, unknown>): string[] {
     return raw.filter((tag): tag is string => typeof tag === 'string')
   }
   return []
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.trim().replace('#', '')
+  if (normalized.length !== 6) {
+    return hex
+  }
+  const r = Number.parseInt(normalized.slice(0, 2), 16)
+  const g = Number.parseInt(normalized.slice(2, 4), 16)
+  const b = Number.parseInt(normalized.slice(4, 6), 16)
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+    return hex
+  }
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 function resolvePrimaryEndpoint(

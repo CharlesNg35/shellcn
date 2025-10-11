@@ -32,8 +32,6 @@ type ConnectionFolderNode struct {
 type ConnectionFolderInput struct {
 	Name        string
 	Description string
-	Icon        string
-	Color       string
 	ParentID    *string
 	TeamID      *string
 	Metadata    map[string]any
@@ -114,8 +112,6 @@ func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string, t
 			Name:        folder.Name,
 			Slug:        folder.Slug,
 			Description: folder.Description,
-			Icon:        folder.Icon,
-			Color:       folder.Color,
 			ParentID:    folder.ParentID,
 			TeamID:      folder.TeamID,
 			Metadata:    decodeJSONMap(folder.Metadata),
@@ -177,8 +173,6 @@ func (s *ConnectionFolderService) Create(ctx context.Context, userID string, inp
 		Name:        strings.TrimSpace(input.Name),
 		Slug:        slugify(slug),
 		Description: strings.TrimSpace(input.Description),
-		Icon:        strings.TrimSpace(input.Icon),
-		Color:       strings.TrimSpace(input.Color),
 		ParentID:    input.ParentID,
 		TeamID:      input.TeamID,
 		OwnerUserID: userID,
@@ -225,12 +219,6 @@ func (s *ConnectionFolderService) Update(ctx context.Context, userID, folderID s
 	}
 	if desc := strings.TrimSpace(input.Description); desc != folder.Description {
 		updates["description"] = desc
-	}
-	if icon := strings.TrimSpace(input.Icon); icon != folder.Icon {
-		updates["icon"] = icon
-	}
-	if color := strings.TrimSpace(input.Color); color != folder.Color {
-		updates["color"] = color
 	}
 	if input.ParentID != nil {
 		updates["parent_id"] = input.ParentID
@@ -304,8 +292,6 @@ func (s *ConnectionFolderService) mapFolder(folder models.ConnectionFolder) Conn
 		Name:        folder.Name,
 		Slug:        folder.Slug,
 		Description: folder.Description,
-		Icon:        folder.Icon,
-		Color:       folder.Color,
 		ParentID:    folder.ParentID,
 		TeamID:      folder.TeamID,
 		Metadata:    decodeJSONMap(folder.Metadata),

@@ -97,6 +97,15 @@ func (e *Env) CreateRootUser(password string) *models.User {
 	}
 
 	require.NoError(e.T, e.DB.Create(user).Error)
+
+	var roles []models.Role
+	require.NoError(e.T, e.DB.Where("id IN ?", []string{"admin", "user"}).Find(&roles).Error)
+	require.Len(e.T, roles, 2)
+	roleInterfaces := make([]any, len(roles))
+	for i := range roles {
+		roleInterfaces[i] = &roles[i]
+	}
+	require.NoError(e.T, e.DB.Model(user).Association("Roles").Append(roleInterfaces...))
 	return user
 }
 

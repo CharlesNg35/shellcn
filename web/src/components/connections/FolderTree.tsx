@@ -1,9 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Folder as FolderIcon } from 'lucide-react'
 import { Link, useInRouterContext } from 'react-router-dom'
 import type { ConnectionFolderNode } from '@/types/connections'
 import { cn } from '@/lib/utils/cn'
-import { resolveFolderIcon } from '@/constants/folders'
 
 interface FolderTreeProps {
   nodes?: ConnectionFolderNode[]
@@ -121,10 +120,6 @@ function FolderTreeNode({
     node.folder.id === 'unassigned'
       ? `${basePath}?view=unassigned`
       : `${basePath}?folder=${node.folder.id}`
-  const Icon = resolveFolderIcon(node.folder.icon)
-  const iconColor =
-    node.folder.id === 'unassigned' || !node.folder.color ? undefined : node.folder.color
-
   const connectionBadge = node.connection_count ? (
     <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
       {node.connection_count}
@@ -159,10 +154,8 @@ function FolderTreeNode({
               className="flex flex-1 items-center gap-2 text-muted-foreground hover:text-foreground"
               onClick={() => onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)}
             >
-              <Icon className="h-4 w-4" style={{ color: iconColor }} />
-              <span className="truncate" style={{ color: iconColor }}>
-                {node.folder.name}
-              </span>
+              <FolderIcon className="h-4 w-4" />
+              <span className="truncate">{node.folder.name}</span>
             </Link>
           ) : (
             <button
@@ -170,10 +163,8 @@ function FolderTreeNode({
               className="flex flex-1 items-center gap-2 text-left text-muted-foreground hover:text-foreground"
               onClick={() => onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)}
             >
-              <Icon className="h-4 w-4" style={{ color: iconColor }} />
-              <span className="truncate" style={{ color: iconColor }}>
-                {node.folder.name}
-              </span>
+              <FolderIcon className="h-4 w-4" />
+              <span className="truncate">{node.folder.name}</span>
             </button>
           )}
 

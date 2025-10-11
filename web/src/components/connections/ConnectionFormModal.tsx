@@ -13,6 +13,12 @@ import { resolveProtocolIcon } from '@/lib/utils/protocolIcons'
 import { useConnectionMutations } from '@/hooks/useConnectionMutations'
 import type { ApiError } from '@/lib/api/http'
 import { toApiError } from '@/lib/api/http'
+import {
+  CONNECTION_COLOR_OPTIONS,
+  CONNECTION_ICON_OPTIONS,
+  DEFAULT_CONNECTION_ICON_ID,
+} from '@/constants/connections'
+import { cn } from '@/lib/utils/cn'
 
 const connectionSchema = z.object({
   name: z
@@ -28,6 +34,8 @@ const connectionSchema = z.object({
     .or(z.literal('')),
   folder_id: z.string().trim().optional().or(z.literal('')),
   team_id: z.string().trim().optional().or(z.literal('')),
+  icon: z.string().trim().optional().or(z.literal('')),
+  color: z.string().trim().optional().or(z.literal('')),
 })
 
 type ConnectionFormValues = z.infer<typeof connectionSchema>
@@ -62,6 +70,8 @@ export function ConnectionFormModal({
       description: '',
       folder_id: '',
       team_id: normalizeTeamValue(teamId),
+      icon: DEFAULT_CONNECTION_ICON_ID,
+      color: '',
     }
   }, [teamId])
 
@@ -69,6 +79,8 @@ export function ConnectionFormModal({
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ConnectionFormValues>({
     resolver: zodResolver(connectionSchema),
@@ -82,18 +94,38 @@ export function ConnectionFormModal({
     }
   }, [defaultValues, open, reset])
 
+  const selectedIcon = watch('icon')
+  const selectedColor = watch('color')
+
+  useEffect(() => {
+    if (!selectedIcon) {
+      setValue('icon', DEFAULT_CONNECTION_ICON_ID, { shouldValidate: false })
+    }
+  }, [selectedIcon, setValue])
+
   const onSubmit: SubmitHandler<ConnectionFormValues> = async (values) => {
     setFormError(null)
     if (!protocol) {
       return
     }
     try {
+      const metadata: Record<string, unknown> = {}
+      const iconValue = values.icon?.trim()
+      const colorValue = values.color?.trim()
+      if (iconValue) {
+        metadata.icon = iconValue
+      }
+      if (colorValue) {
+        metadata.color = colorValue
+      }
+
       const connection = await create.mutateAsync({
         name: values.name.trim(),
         description: values.description?.trim() || undefined,
         protocol_id: protocol.id,
         folder_id: sanitizeId(values.folder_id),
         team_id: denormalizeTeamValue(values.team_id),
+        metadata: Object.keys(metadata).length ? metadata : undefined,
       })
       onSuccess(connection)
       onClose()
@@ -148,6 +180,54 @@ export function ConnectionFormModal({
             {...register('description')}
             error={errors.description?.message}
           />
+
+          <div className="grid gap-3">
+            <label className="text-sm font-medium text-foreground">Icon</label>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {CONNECTION_ICON_OPTIONS.map(({ id, label, icon: OptionIcon }) => {
+                const isActive = (selectedIcon || DEFAULT_CONNECTION_ICON_ID) === id
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setValue('icon', id, { shouldValidate: true })}
+                    className={cn(
+                      'flex h-12 items-center justify-center gap-2 rounded-lg border text-sm transition-colors',
+                      isActive
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:border-border/80 hover:bg-muted/40'
+                    )}
+                    aria-pressed={isActive}
+                  >
+                    <OptionIcon className="h-4 w-4" />
+                    <span className="truncate">{label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            <label className="text-sm font-medium text-foreground">Accent color</label>
+            <div className="flex flex-wrap gap-2">
+              <ColorSwatch
+                key="none"
+                label="Default"
+                color=""
+                isActive={!selectedColor}
+                onSelect={() => setValue('color', '', { shouldValidate: true })}
+              />
+              {CONNECTION_COLOR_OPTIONS.map((option) => (
+                <ColorSwatch
+                  key={option.id}
+                  label={option.label}
+                  color={option.value}
+                  isActive={selectedColor === option.value}
+                  onSelect={() => setValue('color', option.value, { shouldValidate: true })}
+                />
+              ))}
+            </div>
+          </div>
 
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-foreground" htmlFor="connection-folder">
@@ -222,6 +302,35 @@ export function ConnectionFormModal({
 interface FolderOption {
   id: string
   label: string
+}
+
+interface ColorSwatchProps {
+  label: string
+  color: string
+  isActive: boolean
+  onSelect: () => void
+}
+
+function ColorSwatch({ label, color, isActive, onSelect }: ColorSwatchProps) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        'flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        isActive
+          ? 'border-primary bg-primary/10 text-primary'
+          : 'border-border text-muted-foreground hover:bg-muted/40'
+      )}
+      aria-pressed={isActive}
+    >
+      <span
+        className="h-3 w-3 rounded-full border border-border/40"
+        style={{ backgroundColor: color || 'transparent' }}
+      />
+      {label}
+    </button>
+  )
 }
 
 function flattenFolders(nodes: ConnectionFolderNode[], depth = 0): FolderOption[] {

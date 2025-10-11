@@ -54,11 +54,9 @@ func TestConnectionFolderServiceLifecycle(t *testing.T) {
 
 	updated, err := folderSvc.Update(context.Background(), user.ID, child.ID, ConnectionFolderInput{
 		Description: "Handles HTTP ingress",
-		Color:       "#ff00aa",
 	})
 	require.NoError(t, err)
 	require.Equal(t, "Handles HTTP ingress", updated.Description)
-	require.Equal(t, "#ff00aa", updated.Color)
 
 	// Seed connections for tree counts.
 	require.NoError(t, db.Create(&models.Connection{

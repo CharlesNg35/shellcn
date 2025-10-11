@@ -108,7 +108,35 @@ func (s *UserService) Create(ctx context.Context, input CreateUserInput) (*model
 		user.IsActive = *input.IsActive
 	}
 
-	if err := s.db.WithContext(ctx).Create(user).Error; err != nil {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+
+		defaultRoleIDs := []string{"user"}
+		if user.IsRoot {
+			defaultRoleIDs = append(defaultRoleIDs, "admin")
+		}
+
+		var roles []models.Role
+		if err := tx.Where("id IN ?", defaultRoleIDs).Find(&roles).Error; err != nil {
+			return fmt.Errorf("user service: load default roles: %w", err)
+		}
+		if len(roles) != len(defaultRoleIDs) {
+			return fmt.Errorf("user service: default roles missing: expected %d, found %d", len(defaultRoleIDs), len(roles))
+		}
+
+		roleInterfaces := make([]any, len(roles))
+		for i := range roles {
+			roleInterfaces[i] = &roles[i]
+		}
+		if err := tx.Model(user).Association("Roles").Append(roleInterfaces...); err != nil {
+			return fmt.Errorf("user service: assign default roles: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
 		if isUniqueConstraintError(err) {
 			return nil, apperrors.NewBadRequest("username or email already exists")
 		}
@@ -327,6 +355,13 @@ func (s *UserService) Delete(ctx context.Context, id string) error {
 
 	if user.IsRoot {
 		return ErrRootUserImmutable
+	}
+
+	if err := s.db.WithContext(ctx).Model(&user).Association("Roles").Clear(); err != nil {
+		return fmt.Errorf("user service: clear user roles: %w", err)
+	}
+	if err := s.db.WithContext(ctx).Model(&user).Association("Teams").Clear(); err != nil {
+		return fmt.Errorf("user service: clear user teams: %w", err)
 	}
 
 	if err := s.db.WithContext(ctx).Delete(&user).Error; err != nil {

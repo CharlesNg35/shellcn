@@ -14,6 +14,8 @@ export interface ConnectionVisibility {
 }
 
 export interface ConnectionMetadata {
+  icon?: string
+  color?: string
   tags?: string[]
   [key: string]: unknown
 }
@@ -29,8 +31,6 @@ export interface ConnectionFolderSummary {
   name: string
   slug?: string
   description?: string
-  icon?: string
-  color?: string
   parent_id?: string | null
   team_id?: string | null
   metadata?: Record<string, unknown>

@@ -25,8 +25,6 @@ export async function fetchConnectionFolderTree(teamId?: string) {
 export interface UpsertFolderPayload {
   name: string
   description?: string
-  icon?: string
-  color?: string
   parent_id?: string | null
   team_id?: string | null
   metadata?: Record<string, unknown>

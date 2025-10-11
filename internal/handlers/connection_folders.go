@@ -108,8 +108,6 @@ func (h *ConnectionFolderHandler) Delete(c *gin.Context) {
 type folderPayload struct {
 	Name        string         `json:"name" binding:"omitempty"`
 	Description string         `json:"description"`
-	Icon        string         `json:"icon"`
-	Color       string         `json:"color"`
 	ParentID    *string        `json:"parent_id"`
 	TeamID      *string        `json:"team_id"`
 	Metadata    map[string]any `json:"metadata"`
@@ -120,8 +118,6 @@ func (p folderPayload) toInput() services.ConnectionFolderInput {
 	return services.ConnectionFolderInput{
 		Name:        p.Name,
 		Description: p.Description,
-		Icon:        p.Icon,
-		Color:       p.Color,
 		ParentID:    p.ParentID,
 		TeamID:      p.TeamID,
 		Metadata:    p.Metadata,

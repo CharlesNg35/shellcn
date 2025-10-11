@@ -100,6 +100,7 @@ func SeedData(db *gorm.DB) error {
 		"notification.view", "team.view",
 		"connection.folder.view",
 		"connection.view",
+		"team.view",
 	}); err != nil {
 		return err
 	}

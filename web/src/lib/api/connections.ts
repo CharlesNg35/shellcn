@@ -137,8 +137,6 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
           name: raw.folder.name,
           slug: raw.folder.slug,
           description: raw.folder.description,
-          icon: raw.folder.icon,
-          color: raw.folder.color,
           parent_id: raw.folder.parent_id ?? null,
           team_id: raw.folder.team_id ?? null,
           metadata: coerceObject(raw.folder.metadata),
