@@ -27,7 +27,7 @@ Each driver receives its own spec file under `specs/project/drivers/<driver-id>.
 2. Driver registers with `drivers.Registry` during bootstrap (`drivers.MustRegister`).
 3. `protocols.Registry.SyncFromDrivers` ingests descriptors & capabilities.
 4. `ProtocolCatalogService.Sync` persists metadata + enablement state.
-5. `protocols.RegisterDriverPermissions` (see section 4) registers permission ids before `permissions.Sync`.
+5. Driver `init()` functions must register protocol-scoped permissions using `permissions.RegisterProtocolPermission` (see section 4) before `permissions.Sync` is invoked.
 6. Frontend fetches protocol catalog and driver schema from `/api/protocols`.
 
 ## 4. Permission Model
@@ -39,29 +39,38 @@ Each driver receives its own spec file under `specs/project/drivers/<driver-id>.
 | `connection.manage` | Required for CRUD operations on connections and driver advanced settings. |
 | `connection.share`  | Required for editing visibility ACLs.                                     |
 
-Every driver defines a `PermissionProfile` struct:
+### 4.1 Permission Prefix & Naming
+
+- All protocol permissions must use the canonical id format `protocol:<driver-id>.<action>`.
+- Modules default to `protocols.<driver-id>` unless overridden.
+- Categories default to `protocol:<driver-id>` to simplify registry filters.
+- Metadata **must** include the driver id (automatically enforced by the helper) and may add capability hints (e.g. `capability: "exec"`).
+
+### 4.2 Registration Helper
+
+Drivers register their permissions in `init()` using the dedicated helper:
 
 ```go
-type PermissionProfile struct {
-    BaseConnect   string   // defaults to "{driver}.connect"
-    Manage        string   // defaults to "{driver}.manage"
-    FeatureScopes []string // optional extras like "kubernetes.exec"
-    AdminScopes   []string // optional admin extras like "kubernetes.cluster.admin"
+func init() {
+    permissions.Must(permissions.RegisterProtocolPermission("ssh", "connect", &permissions.Permission{
+        DisplayName:  "SSH Connect",
+        Description:  "Initiate SSH sessions",
+        DefaultScope: "resource",
+        DependsOn:    []string{"connection.launch"},
+    }))
 }
 ```
 
-Rules:
+Notes:
 
-- Base connect scopes depend on `connection.launch`.
-- Manage + admin scopes depend on `connection.manage`.
-- Feature scopes depend on `connection.launch` unless they mutate state; mutating scopes must depend on `connection.manage`.
-- Shared database drivers may add child scopes (e.g. `database.mysql.connect`, `database.redis.manage`). These still register under the database driver spec file.
-
-Permission registration occurs in driver init:
-
-```go
-permissions.Register(&permissions.Permission{ID: profile.BaseConnect, Module: driverID, DependsOn: []string{"connection.launch"}})
-```
+- Use `RegisterProtocolPermission(driverID, action, definition)` instead of `Register` to guarantee consistent prefixes and metadata.
+- `RegisterProtocolPermission` does **not** panic; drivers should wrap it in a small helper (for example, `func must(err error) { if err != nil { panic(err) } }`) or bubble the error during bootstrap.
+- Declare additional actions (e.g. `port_forward`, `exec`, `desktop_control`) with the same helper. Dependencies can reference previously registered protocol permissions (`protocol:<driver>.connect`) or global ones (`connection.manage`).
+- Avoid registering protocol permissions from `internal/permissions/core.go`; ownership lives inside each driver package so optional drivers can gate their scopes cleanly.
+- Dependency guidelines:
+  - Base connect scopes must depend on `connection.launch`.
+  - Mutating actions (write, manage, admin) must depend on `connection.manage`.
+  - Read-only feature scopes may depend on either the base connect scope or `connection.launch`, whichever best reflects runtime enforcement.
 
 ## 5. Connection Schema Requirements
 
@@ -97,12 +106,14 @@ permissions.Register(&permissions.Permission{ID: profile.BaseConnect, Module: dr
 
 ## 9. Example Permission Profiles
 
-| Driver     | Base Connect         | Manage              | Feature Scopes                                | Admin Scopes               |
-| ---------- | -------------------- | ------------------- | --------------------------------------------- | -------------------------- |
-| SSH        | `ssh.connect`        | `ssh.manage`        | `ssh.sftp`, `ssh.port_forward`                | `ssh.global.manage`        |
-| Kubernetes | `kubernetes.connect` | `kubernetes.manage` | `kubernetes.exec`, `kubernetes.port_forward`  | `kubernetes.cluster.admin` |
-| Docker     | `docker.connect`     | `docker.manage`     | `docker.logs`, `docker.exec`                  | `docker.stack.deploy`      |
-| Database   | `database.connect`   | `database.manage`   | `database.query.read`, `database.query.write` | `database.cluster.manage`  |
+| Driver     | Base Connect                  | Manage Permission            | Feature Scopes                                                  | Admin Scopes                        |
+| ---------- | ----------------------------- | ---------------------------- | --------------------------------------------------------------- | ----------------------------------- |
+| SSH        | `protocol:ssh.connect`        | `protocol:ssh.manage`\*      | `protocol:ssh.port_forward`, `protocol:ssh.sftp`\*              | `protocol:ssh.global_admin`\*       |
+| Kubernetes | `protocol:kubernetes.connect` | `protocol:kubernetes.manage` | `protocol:kubernetes.exec`, `protocol:kubernetes.port_forward`  | `protocol:kubernetes.cluster_admin` |
+| Docker     | `protocol:docker.connect`     | `protocol:docker.manage`\*   | `protocol:docker.exec`, `protocol:docker.logs`\*                | `protocol:docker.stack.deploy`\*    |
+| Database   | `protocol:database.connect`   | `protocol:database.manage`\* | `protocol:database.query.read`, `protocol:database.query.write` | `protocol:database.cluster.manage`  |
+
+(\*) Illustrative examples; drivers should define only the scopes they truly support.
 
 ## 10. Migration Notes
 

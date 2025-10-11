@@ -9,6 +9,18 @@ export interface ProtocolCapabilities {
   extras: Record<string, boolean>
 }
 
+export interface ProtocolPermission {
+  id: string
+  display_name?: string
+  description?: string
+  category?: string
+  default_scope?: string
+  module?: string
+  depends_on?: string[]
+  implies?: string[]
+  metadata?: Record<string, unknown>
+}
+
 export interface Protocol {
   id: string
   name: string
@@ -23,6 +35,7 @@ export interface Protocol {
   driverEnabled: boolean
   configEnabled: boolean
   available: boolean
+  permissions: ProtocolPermission[]
 }
 
 export interface ProtocolListResult {

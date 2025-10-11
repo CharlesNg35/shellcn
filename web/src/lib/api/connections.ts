@@ -175,25 +175,35 @@ function transformShares(shares?: ConnectionShareResponse[] | null): ConnectionS
   if (!shares?.length) {
     return []
   }
-  return shares
-    .map((share) => {
-      const principal = transformShareActor(share.principal)
-      if (!principal) {
-        return null
-      }
-      const grantedBy = transformShareActor(share.granted_by)
-      const metadata =
-        typeof share.metadata === 'object' && share.metadata !== null ? share.metadata : undefined
-      return {
-        share_id: share.share_id ?? `${principal.type}:${principal.id}`,
-        principal,
-        permission_scopes: normaliseStringArray(share.permission_scopes),
-        expires_at: share.expires_at ?? undefined,
-        granted_by: grantedBy ?? null,
-        metadata,
-      }
-    })
-    .filter((share): share is ConnectionShare => share !== null)
+
+  const result: ConnectionShare[] = []
+  shares.forEach((share) => {
+    const principal = transformShareActor(share.principal)
+    if (!principal) {
+      return
+    }
+
+    const entry: ConnectionShare = {
+      share_id: share.share_id ?? `${principal.type}:${principal.id}`,
+      principal,
+      permission_scopes: normaliseStringArray(share.permission_scopes),
+    }
+
+    const grantedBy = transformShareActor(share.granted_by)
+    if (grantedBy !== undefined) {
+      entry.granted_by = grantedBy ?? null
+    }
+    if (share.expires_at !== undefined) {
+      entry.expires_at = share.expires_at
+    }
+    if (share.metadata && typeof share.metadata === 'object') {
+      entry.metadata = share.metadata as Record<string, unknown>
+    }
+
+    result.push(entry)
+  })
+
+  return result
 }
 
 function transformShareSummary(
@@ -203,21 +213,28 @@ function transformShareSummary(
     return undefined
   }
 
-  const entries = (raw.entries ?? [])
-    .map((entry) => {
-      const principal = transformShareActor(entry.principal)
-      if (!principal) {
-        return null
-      }
-      const grantedBy = transformShareActor(entry.granted_by)
-      return {
-        principal,
-        granted_by: grantedBy ?? null,
-        permission_scopes: normaliseStringArray(entry.permission_scopes),
-        expires_at: entry.expires_at ?? undefined,
-      }
-    })
-    .filter((entry): entry is ConnectionShareEntry => entry !== null)
+  const entries: ConnectionShareEntry[] = []
+  ;(raw.entries ?? []).forEach((entry) => {
+    const principal = transformShareActor(entry.principal)
+    if (!principal) {
+      return
+    }
+
+    const transformed: ConnectionShareEntry = {
+      principal,
+      permission_scopes: normaliseStringArray(entry.permission_scopes),
+    }
+
+    const grantedBy = transformShareActor(entry.granted_by)
+    if (grantedBy !== undefined) {
+      transformed.granted_by = grantedBy ?? null
+    }
+    if (entry.expires_at !== undefined) {
+      transformed.expires_at = entry.expires_at
+    }
+
+    entries.push(transformed)
+  })
 
   return {
     shared: raw.shared ?? entries.length > 0,

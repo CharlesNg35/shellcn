@@ -239,64 +239,6 @@ func init() {
 		},
 	}
 
-	driverPerms := []*Permission{
-		{
-			ID:           "protocol:ssh.connect",
-			Module:       "protocols.ssh",
-			DependsOn:    []string{"connection.launch"},
-			Category:     "protocol:ssh",
-			DisplayName:  "SSH Connect",
-			Description:  "Initiate SSH sessions",
-			DefaultScope: "resource",
-			Metadata: map[string]any{
-				"driver":      "ssh",
-				"capability":  "connect",
-				"displayIcon": "terminal",
-			},
-		},
-		{
-			ID:           "protocol:ssh.port_forward",
-			Module:       "protocols.ssh",
-			DependsOn:    []string{"protocol:ssh.connect"},
-			Category:     "protocol:ssh",
-			DisplayName:  "SSH Port Forward",
-			Description:  "Forward ports through SSH tunnels",
-			DefaultScope: "resource",
-			Metadata: map[string]any{
-				"driver":     "ssh",
-				"capability": "port_forward",
-			},
-		},
-		{
-			ID:           "protocol:docker.exec",
-			Module:       "protocols.docker",
-			DependsOn:    []string{"connection.launch"},
-			Category:     "protocol:docker",
-			DisplayName:  "Docker Exec",
-			Description:  "Execute commands in Docker containers",
-			DefaultScope: "resource",
-			Metadata: map[string]any{
-				"driver":     "docker",
-				"capability": "exec",
-			},
-		},
-		{
-			ID:           "protocol:vnc.desktop_control",
-			Module:       "protocols.vnc",
-			DependsOn:    []string{"connection.launch"},
-			Category:     "protocol:vnc",
-			DisplayName:  "Control Desktops",
-			Description:  "Control VNC desktop sessions",
-			DefaultScope: "resource",
-			Metadata: map[string]any{
-				"driver":     "vnc",
-				"capability": "desktop_control",
-			},
-		},
-	}
-
-	perms = append(perms, driverPerms...)
-
 	for _, perm := range perms {
 		if err := Register(perm); err != nil {
 			panic(err)

@@ -144,9 +144,17 @@ export function ConnectionFormModal({
         'Team members will not be able to edit this connection (missing connection.manage).'
       )
     }
+    if (protocol) {
+      const connectPermissionId = `protocol:${protocol.id}.connect`
+      if (!capabilities.permission_ids.includes(connectPermissionId)) {
+        warnings.push(
+          `Team members currently lack ${protocol.name} protocol access (missing ${connectPermissionId}). Consider updating team roles or sharing the connection directly.`
+        )
+      }
+    }
 
     return warnings
-  }, [effectiveTeamId, teamCapabilitiesQuery.data])
+  }, [effectiveTeamId, teamCapabilitiesQuery.data, protocol])
 
   useEffect(() => {
     if (!selectedIcon) {

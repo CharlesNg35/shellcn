@@ -46,3 +46,16 @@ func (h *ProtocolHandler) ListForUser(c *gin.Context) {
 	}
 	response.Success(c, http.StatusOK, gin.H{"protocols": protocols, "count": len(protocols)})
 }
+
+// GET /api/protocols/:id/permissions
+func (h *ProtocolHandler) ListPermissions(c *gin.Context) {
+	perms, err := h.service.ListPermissions(requestContext(c), c.Param("id"))
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, gin.H{
+		"permissions": perms,
+		"count":       len(perms),
+	})
+}

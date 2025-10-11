@@ -16,6 +16,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/services"
 )
 
@@ -34,6 +35,7 @@ func (h *handlerPermissionStub) CheckResource(ctx context.Context, userID, resou
 func TestProtocolHandlerListAll(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	ensureHandlerProtocolPermissions(t)
 	insertProtocolRecord(t, db, models.ConnectionProtocol{ProtocolID: "ssh", Name: "SSH", Module: "ssh", DriverEnabled: true, ConfigEnabled: true}, drivers.Capabilities{Terminal: true})
 
 	svc, err := services.NewProtocolService(db, nil)
@@ -53,11 +55,12 @@ func TestProtocolHandlerListAll(t *testing.T) {
 func TestProtocolHandlerListForUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	ensureHandlerProtocolPermissions(t)
 	insertProtocolRecord(t, db, models.ConnectionProtocol{ProtocolID: "ssh", Name: "SSH", Module: "ssh", DriverEnabled: true, ConfigEnabled: true}, drivers.Capabilities{Terminal: true})
 
 	checker := &handlerPermissionStub{grants: map[string]bool{
-		"connection.view": true,
-		"ssh.connect":     true,
+		"connection.view":      true,
+		"protocol:ssh.connect": true,
 	}}
 	svc, err := services.NewProtocolService(db, checker)
 	require.NoError(t, err)
@@ -70,6 +73,27 @@ func TestProtocolHandlerListForUser(t *testing.T) {
 	ctx.Set(middleware.CtxUserIDKey, "user-123")
 
 	handler.ListForUser(ctx)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestProtocolHandlerListPermissions(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	ensureHandlerProtocolPermissions(t)
+	insertProtocolRecord(t, db, models.ConnectionProtocol{ProtocolID: "ssh", Name: "SSH", Module: "ssh", DriverEnabled: true, ConfigEnabled: true}, drivers.Capabilities{Terminal: true})
+
+	svc, err := services.NewProtocolService(db, nil)
+	require.NoError(t, err)
+	handler := NewProtocolHandler(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/protocols/ssh/permissions", nil)
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = req
+	ctx.Params = gin.Params{{Key: "id", Value: "ssh"}}
+
+	handler.ListPermissions(ctx)
 
 	require.Equal(t, http.StatusOK, rec.Code)
 }
@@ -97,4 +121,26 @@ func deriveHandlerFeatures(caps drivers.Capabilities) []string {
 		features = append(features, "desktop")
 	}
 	return features
+}
+
+func ensureHandlerProtocolPermissions(t *testing.T) {
+	t.Helper()
+
+	if _, ok := permissions.Get("protocol:ssh.connect"); !ok {
+		require.NoError(t, permissions.RegisterProtocolPermission("ssh", "connect", &permissions.Permission{
+			DisplayName:  "SSH Connect",
+			Description:  "Initiate SSH sessions",
+			DefaultScope: "resource",
+			DependsOn:    []string{"connection.launch"},
+		}))
+	}
+
+	if _, ok := permissions.Get("protocol:ssh.port_forward"); !ok {
+		require.NoError(t, permissions.RegisterProtocolPermission("ssh", "port_forward", &permissions.Permission{
+			DisplayName:  "SSH Port Forward",
+			Description:  "Forward ports through SSH tunnels",
+			DefaultScope: "resource",
+			DependsOn:    []string{"protocol:ssh.connect"},
+		}))
+	}
 }

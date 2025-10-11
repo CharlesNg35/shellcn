@@ -14,7 +14,8 @@ import {
   fetchConnectionShares,
   type ConnectionSharePayload,
 } from '@/lib/api/connections'
-import type { ConnectionRecord, ConnectionShare } from '@/types/connections'
+import { fetchProtocolPermissions } from '@/lib/api/protocols'
+import type { ConnectionRecord } from '@/types/connections'
 import type { TeamRecord } from '@/types/teams'
 import type { PermissionDefinition } from '@/types/permission'
 import { cn } from '@/lib/utils/cn'
@@ -57,6 +58,15 @@ export function ShareConnectionModal({
     staleTime: 30_000,
   })
 
+  const protocolPermissionsQuery = useQuery({
+    queryKey: connection
+      ? ['protocols', connection.protocol_id, 'permissions']
+      : ['protocols', 'permissions'],
+    queryFn: () => fetchProtocolPermissions(connection!.protocol_id),
+    enabled: open && Boolean(connection?.protocol_id),
+    staleTime: 5 * 60 * 1000,
+  })
+
   const baseScopeIds = useMemo(
     () => ['connection.view', 'connection.launch', 'connection.manage'],
     []
@@ -64,33 +74,24 @@ export function ShareConnectionModal({
 
   const permissionOptions = useMemo(() => {
     const registry = registryQuery.data
-    if (!registry) {
-      return baseScopeIds.map((id) => buildPermissionOption(id, registry))
-    }
-
-    const protocolSpecific = Object.values(registry)
-      .filter((definition) => {
-        const driver = (definition.metadata?.driver as string | undefined) ?? undefined
-        if (driver) {
-          return driver === connection?.protocol_id
-        }
-        return definition.module?.startsWith('protocols.') && definition.id.startsWith('protocol:')
-      })
-      .map((definition) => buildPermissionOption(definition.id, registry))
-      .filter(Boolean)
+    const protocolPermissions = protocolPermissionsQuery.data ?? []
 
     const baseOptions = baseScopeIds
       .map((id) => buildPermissionOption(id, registry))
       .filter(Boolean)
 
+    const protocolOptions = protocolPermissions
+      .map((permission) => buildPermissionOption(permission.id, registry))
+      .filter(Boolean)
+
     const uniqueById = new Map<string, ReturnType<typeof buildPermissionOption>>()
-    ;[...baseOptions, ...protocolSpecific].forEach((option) => {
+    ;[...baseOptions, ...protocolOptions].forEach((option) => {
       if (option) {
         uniqueById.set(option.id, option)
       }
     })
     return Array.from(uniqueById.values()).filter(Boolean) as PermissionOption[]
-  }, [baseScopeIds, registryQuery.data, connection?.protocol_id])
+  }, [baseScopeIds, registryQuery.data, protocolPermissionsQuery.data])
 
   const userQueryParams = useMemo(
     () => ({
@@ -227,7 +228,7 @@ export function ShareConnectionModal({
     <Modal
       open={open}
       onClose={() => {
-        if (!createShareMutation.isLoading && !deleteShareMutation.isLoading) {
+        if (!createShareMutation.isPending && !deleteShareMutation.isPending) {
           onClose()
         }
       }}
@@ -283,7 +284,7 @@ export function ShareConnectionModal({
                           variant="outline"
                           className="text-xs"
                           onClick={() => deleteShareMutation.mutate(share.share_id)}
-                          disabled={deleteShareMutation.isLoading}
+                          disabled={deleteShareMutation.isPending}
                         >
                           Revoke
                         </Button>
@@ -470,12 +471,12 @@ export function ShareConnectionModal({
                 type="button"
                 variant="outline"
                 onClick={onClose}
-                disabled={createShareMutation.isLoading}
+                disabled={createShareMutation.isPending}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={createShareMutation.isLoading}>
-                {createShareMutation.isLoading ? (
+              <Button type="submit" disabled={createShareMutation.isPending}>
+                {createShareMutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
                 Share connection

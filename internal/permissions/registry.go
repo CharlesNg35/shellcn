@@ -74,6 +74,47 @@ func Register(perm *Permission) error {
 	return nil
 }
 
+// RegisterProtocolPermission registers a protocol-scoped permission using the canonical prefix.
+// The resulting permission ID follows the pattern protocol:<protocolID>.<action>.
+// When Module or Category are omitted, they default to protocols.<protocolID> and protocol:<protocolID> respectively.
+// Metadata is augmented to include the protocol driver identifier.
+func RegisterProtocolPermission(protocolID, action string, perm *Permission) error {
+	if perm == nil {
+		return errNilPermission
+	}
+
+	protocolID = strings.TrimSpace(protocolID)
+	action = strings.TrimSpace(action)
+	if protocolID == "" {
+		return errors.New("permission: protocol id is required")
+	}
+	if action == "" {
+		return errors.New("permission: action is required")
+	}
+
+	def := clonePermission(perm)
+	def.ID = fmt.Sprintf("protocol:%s.%s", protocolID, action)
+
+	if strings.TrimSpace(def.Module) == "" {
+		def.Module = fmt.Sprintf("protocols.%s", protocolID)
+	}
+	if strings.TrimSpace(def.Category) == "" {
+		def.Category = fmt.Sprintf("protocol:%s", protocolID)
+	}
+
+	if def.Metadata == nil {
+		def.Metadata = map[string]any{}
+	}
+	if _, exists := def.Metadata["driver"]; !exists {
+		def.Metadata["driver"] = protocolID
+	}
+	if _, exists := def.Metadata["action"]; !exists {
+		def.Metadata["action"] = action
+	}
+
+	return Register(def)
+}
+
 // Get returns a copy of the permission definition when registered.
 func Get(id string) (*Permission, bool) {
 	globalRegistry.mu.RLock()
