@@ -164,7 +164,6 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 
 	// Realtime hub + notifications
 	realtimeHub := realtime.NewHub()
-	activeSessionSvc := services.NewActiveSessionService(realtimeHub)
 
 	notificationHandler, err := handlers.NewNotificationHandler(db, realtimeHub)
 	if err != nil {
@@ -190,11 +189,16 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err != nil {
 		return nil, err
 	}
+
 	connectionHandler := handlers.NewConnectionHandler(connectionSvc, shareSvc)
 	registerConnectionRoutes(api, connectionHandler, checker)
+
+	// Connection Sessions
+	activeSessionSvc := services.NewActiveSessionService(realtimeHub)
 	activeConnectionHandler := handlers.NewActiveConnectionHandler(activeSessionSvc, checker)
 	registerConnectionSessionRoutes(api, activeConnectionHandler, checker)
 
+	// Connection Share
 	shareHandler := handlers.NewConnectionShareHandler(shareSvc)
 	registerConnectionShareRoutes(api, shareHandler, checker)
 
