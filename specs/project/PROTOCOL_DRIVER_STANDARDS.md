@@ -27,8 +27,9 @@ Each driver receives its own spec file under `specs/project/drivers/<driver-id>.
 2. Driver registers with `drivers.Registry` during bootstrap (`drivers.MustRegister`).
 3. `protocols.Registry.SyncFromDrivers` ingests descriptors & capabilities.
 4. `ProtocolCatalogService.Sync` persists metadata + enablement state.
-5. Driver `init()` functions must register protocol-scoped permissions using `permissions.RegisterProtocolPermission` (see section 4) before `permissions.Sync` is invoked.
-6. Frontend fetches protocol catalog and driver schema from `/api/protocols`.
+5. Driver packages declare launch support by implementing `drivers.Launcher`. Launchers must cooperate with the shared session lifecycle hooks described in §11 (register session on success, propagate heartbeats, unregister on close/error).
+6. Driver `init()` functions must register protocol-scoped permissions using `permissions.RegisterProtocolPermission` (see section 4) before `permissions.Sync` is invoked.
+7. Frontend fetches protocol catalog and driver schema from `/api/protocols`.
 
 ## 4. Permission Model
 
@@ -120,6 +121,37 @@ Notes:
 - Historical references to the "Core Module" now map to the "Core Protocol Driver Set". Where documentation still mentions modules, annotate them with the new term on sight to maintain clarity.
 - New drivers must include their spec document _before_ code merges.
 - Any config change that toggles driver availability must update the relevant spec sections (config schema + permission updates).
+
+## 11. Session Lifecycle & Active Connection Tracking
+
+Active connection visibility is powered by `services.ActiveSessionService`. Every launcher-enabled driver participates in the following flow:
+
+1. **Launch Gatekeeping**
+   - API layer checks `ActiveSessionService.HasActiveSession(userID, connectionID)` to enforce the one-session-per-(user, connection) rule.
+   - Launch is rejected with `ErrActiveSessionExists` when violated.
+2. **Successful Launch Registration**
+   - After a driver establishes the transport and returns a `drivers.SessionHandle`, the orchestrator calls  
+     `ActiveSessionService.RegisterSession(&ActiveSessionRecord{ ... })`.
+   - Drivers must supply enough metadata for the record:
+     - `ID`: unique session identifier (driver-specific UUID).
+     - `ConnectionID`, `UserID`, `ProtocolID` (required).
+     - `ConnectionName`, `UserName`, `TeamID` when available.
+     - Protocol metadata such as `Host`, `Port`, or additional `Metadata` map (e.g. namespace, pod, database).
+3. **Heartbeat**
+   - Long-running drivers should periodically call `ActiveSessionService.Heartbeat(sessionID)` or delegate to a scheduler so that stale sessions (timeout default: 5 minutes) are not garbage collected.
+   - Drivers without natural heartbeats must emit one when user activity is detected (command executed, data streamed, etc.).
+4. **Close / Error Handling**
+   - `SessionHandle.Close` must invoke `ActiveSessionService.UnregisterSession(sessionID)` even on error paths.
+   - If a driver detects a disconnect asynchronously (e.g., remote host dropped), it must unregister and surface the failure back to callers so UI and auditing remain consistent.
+5. **Broadcasts & Consumers**
+   - Registering/unregistering sessions triggers `realtime.StreamConnectionSessions` events (`session.opened`, `session.closed`), consumed by React hooks such as `useActiveConnections` to keep the sidebar and badges in sync.
+   - Admin users receive enriched payloads (`user_name`, `team_id`) while regular users only receive their own sessions via `/api/connections/active`.
+6. **Driver-Specific Data**
+   - Drivers should populate `ActiveSessionRecord.Metadata` with protocol context (e.g., Kubernetes namespace/workload, database name) using flat JSON-friendly primitives.
+   - Avoid storing sensitive secrets in metadata; leverage Vault identities instead.
+7. **Testing**
+   - Unit tests must assert that session registration occurs on launch success and that `Close` tears down sessions.
+   - Integration tests should verify that `/api/connections/active` reflects driver launches and that duplicate launches are rejected.
 
 ---
 

@@ -1,5 +1,6 @@
 import type { ApiMeta, ApiResponse } from '@/types/api'
 import type {
+  ActiveConnectionSession,
   ConnectionRecord,
   ConnectionTarget,
   ConnectionShare,
@@ -13,6 +14,7 @@ import { unwrapResponse } from './http'
 import { isApiSuccess } from '@/types/api'
 
 const CONNECTIONS_ENDPOINT = '/connections'
+const ACTIVE_CONNECTIONS_ENDPOINT = '/connections/active'
 
 export interface ConnectionCreatePayload {
   name: string
@@ -296,6 +298,11 @@ export interface ConnectionSharePayload {
   metadata?: Record<string, unknown>
 }
 
+export interface FetchActiveConnectionSessionsParams {
+  protocol_id?: string
+  team_id?: string
+}
+
 export async function fetchConnections(
   params?: FetchConnectionsParams
 ): Promise<ConnectionListResult> {
@@ -309,6 +316,19 @@ export async function fetchConnections(
     data: data.map(transformConnection),
     meta,
   }
+}
+
+export async function fetchActiveConnectionSessions(
+  params?: FetchActiveConnectionSessionsParams
+): Promise<ActiveConnectionSession[]> {
+  const response = await apiClient.get<ApiResponse<ActiveConnectionSession[]>>(
+    ACTIVE_CONNECTIONS_ENDPOINT,
+    {
+      params,
+    }
+  )
+  const data = unwrapResponse(response)
+  return Array.isArray(data) ? data : []
 }
 
 export async function fetchConnectionById(id: string, include?: string): Promise<ConnectionRecord> {

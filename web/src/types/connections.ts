@@ -89,3 +89,18 @@ export interface ConnectionProtocolSummary {
   protocol_id: string
   count: number
 }
+
+export interface ActiveConnectionSession {
+  id: string
+  connection_id: string
+  connection_name?: string
+  user_id: string
+  user_name?: string
+  team_id?: string | null
+  protocol_id: string
+  started_at: string
+  last_seen_at: string
+  host?: string
+  port?: number
+  metadata?: Record<string, unknown>
+}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
-import { Plus, Search, Server, X } from 'lucide-react'
+import { Loader2, Plus, Search, Server, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -11,7 +11,7 @@ import { useConnectionFolders } from '@/hooks/useConnectionFolders'
 import { useTeams } from '@/hooks/useTeams'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { Protocol } from '@/types/protocols'
-import type { ConnectionRecord } from '@/types/connections'
+import type { ActiveConnectionSession, ConnectionRecord } from '@/types/connections'
 import { ConnectionCard } from '@/components/connections/ConnectionCard'
 import { TeamFilterTabs } from '@/components/connections/TeamFilterTabs'
 import { FolderSidebar } from '@/components/connections/FolderSidebar'
@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils/cn'
 import { PERMISSIONS } from '@/constants/permissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { resolveProtocolIcon } from '@/lib/utils/protocolIcons'
+import { useActiveConnections } from '@/hooks/useActiveConnections'
 
 interface ProtocolTab {
   id: string
@@ -40,6 +41,7 @@ export function Connections() {
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [shareTargetConnection, setShareTargetConnection] = useState<ConnectionRecord | null>(null)
+  const [showActiveOnly, setShowActiveOnly] = useState(false)
   const activeFolder = searchParams.get('folder')
   const teamParam = searchParams.get('team') ?? 'all'
 
@@ -58,6 +60,9 @@ export function Connections() {
   const canManageConnections = hasPermission(PERMISSIONS.CONNECTION.MANAGE)
   const canManageTeams = hasPermission(PERMISSIONS.TEAM.MANAGE)
   const canShareConnections = hasPermission(PERMISSIONS.CONNECTION.SHARE)
+  const canViewConnections = hasPermission(PERMISSIONS.CONNECTION.VIEW)
+  const isAdmin =
+    hasPermission(PERMISSIONS.PERMISSION.MANAGE) || hasPermission(PERMISSIONS.CONNECTION.MANAGE)
   const { data: teamsResult } = useTeams({
     enabled: canViewTeams,
     staleTime: 60_000,
@@ -116,47 +121,108 @@ export function Connections() {
     return protocols.find((protocol) => protocol.id === selectedProtocolId) ?? null
   }, [protocols, selectedProtocolId])
 
+  const { data: activeSessionData = [], isLoading: activeSessionsLoading } = useActiveConnections({
+    enabled: canViewConnections,
+    refetchInterval: 10_000,
+  })
+
+  const activeSessionsByConnection = useMemo(() => {
+    const collections: Record<string, ActiveConnectionSession[]> = {}
+    if (!activeSessionData?.length) {
+      return collections
+    }
+
+    const toTimestamp = (value?: string) => {
+      if (!value) {
+        return 0
+      }
+      const millis = new Date(value).getTime()
+      return Number.isNaN(millis) ? 0 : millis
+    }
+
+    activeSessionData.forEach((session) => {
+      const key = session.connection_id
+      if (!collections[key]) {
+        collections[key] = []
+      }
+      collections[key].push(session)
+    })
+
+    Object.values(collections).forEach((sessions) =>
+      sessions.sort((a, b) => toTimestamp(b.last_seen_at) - toTimestamp(a.last_seen_at))
+    )
+
+    return collections
+  }, [activeSessionData])
+
+  const activeConnectionIds = useMemo(
+    () => Object.keys(activeSessionsByConnection),
+    [activeSessionsByConnection]
+  )
+
   const normalizedSearch = search.trim().toLowerCase()
 
   const filteredConnections = useMemo(() => {
-    return connectionsForView.filter((connection) => {
-      // Filter by protocol if one is selected
-      const matchesProtocol = !protocolFilter || connection.protocol_id === protocolFilter
-      if (!matchesProtocol) {
-        return false
-      }
+    const activeIdSet = showActiveOnly ? new Set(activeConnectionIds) : null
 
-      // If no search, return true (show all matching protocol filter)
-      if (!normalizedSearch) {
-        return true
-      }
+    return connectionsForView
+      .filter((connection) => {
+        // Filter by protocol if one is selected
+        const matchesProtocol = !protocolFilter || connection.protocol_id === protocolFilter
+        if (!matchesProtocol) {
+          return false
+        }
 
-      // Search filtering
-      const protocol = protocolLookup[connection.protocol_id]
-      const metadata = connection.metadata ?? {}
-      const targets = connection.targets ?? []
-      const rawTags = metadata.tags
-      const tags = Array.isArray(rawTags)
-        ? rawTags.filter((tag): tag is string => typeof tag === 'string')
-        : []
-      const hostMatches = targets.some((target) =>
-        target.host.toLowerCase().includes(normalizedSearch)
-      )
-      const metadataMatch = Object.values(metadata).some(
-        (value) => typeof value === 'string' && value.toLowerCase().includes(normalizedSearch)
-      )
-      const tagMatch = tags.some((tag: string) => tag.toLowerCase().includes(normalizedSearch))
+        // If no search, return true (show all matching protocol filter)
+        if (!normalizedSearch) {
+          if (showActiveOnly && activeIdSet && !activeIdSet.has(connection.id)) {
+            return false
+          }
+          return true
+        }
 
-      return (
-        connection.name.toLowerCase().includes(normalizedSearch) ||
-        (connection.description?.toLowerCase().includes(normalizedSearch) ?? false) ||
-        hostMatches ||
-        metadataMatch ||
-        tagMatch ||
-        protocol?.name.toLowerCase().includes(normalizedSearch)
-      )
-    })
-  }, [connectionsForView, normalizedSearch, protocolLookup, protocolFilter])
+        // Search filtering
+        const protocol = protocolLookup[connection.protocol_id]
+        const metadata = connection.metadata ?? {}
+        const targets = connection.targets ?? []
+        const rawTags = metadata.tags
+        const tags = Array.isArray(rawTags)
+          ? rawTags.filter((tag): tag is string => typeof tag === 'string')
+          : []
+        const hostMatches = targets.some((target) =>
+          target.host.toLowerCase().includes(normalizedSearch)
+        )
+        const metadataMatch = Object.values(metadata).some(
+          (value) => typeof value === 'string' && value.toLowerCase().includes(normalizedSearch)
+        )
+        const tagMatch = tags.some((tag: string) => tag.toLowerCase().includes(normalizedSearch))
+
+        return (
+          connection.name.toLowerCase().includes(normalizedSearch) ||
+          (connection.description?.toLowerCase().includes(normalizedSearch) ?? false) ||
+          hostMatches ||
+          metadataMatch ||
+          tagMatch ||
+          protocol?.name.toLowerCase().includes(normalizedSearch)
+        )
+      })
+      .filter((connection) => {
+        if (!showActiveOnly) {
+          return true
+        }
+        if (!activeIdSet || activeIdSet.size === 0) {
+          return false
+        }
+        return activeIdSet.has(connection.id)
+      })
+  }, [
+    connectionsForView,
+    normalizedSearch,
+    protocolLookup,
+    protocolFilter,
+    showActiveOnly,
+    activeConnectionIds,
+  ])
 
   const tabs: ProtocolTab[] = useMemo(() => {
     const counts = connectionsForView.reduce<Record<string, number>>((acc, connection) => {
@@ -247,37 +313,61 @@ export function Connections() {
 
       {/* Search Bar */}
       <div className="rounded-lg border border-border/60 bg-card p-4 shadow-sm">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, host, tag, or protocol..."
-            value={search}
-            onChange={(event) => {
-              const value = event.target.value
-              setSearch(value)
-              const params = new URLSearchParams(searchParams)
-              if (value) {
-                params.set('search', value)
-              } else {
-                params.delete('search')
-              }
-              setSearchParams(params, { replace: true })
-            }}
-            className="h-10 pl-9 pr-9"
-          />
-          {search && (
-            <button
-              onClick={() => {
-                setSearch('')
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="relative w-full sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, host, tag, or protocol..."
+              value={search}
+              onChange={(event) => {
+                const value = event.target.value
+                setSearch(value)
                 const params = new URLSearchParams(searchParams)
-                params.delete('search')
+                if (value) {
+                  params.set('search', value)
+                } else {
+                  params.delete('search')
+                }
                 setSearchParams(params, { replace: true })
               }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="h-10 pl-9 pr-9"
+            />
+            {search && (
+              <button
+                onClick={() => {
+                  setSearch('')
+                  const params = new URLSearchParams(searchParams)
+                  params.delete('search')
+                  setSearchParams(params, { replace: true })
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={showActiveOnly ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowActiveOnly((value) => !value)}
+              aria-pressed={showActiveOnly}
+              className="inline-flex items-center gap-2"
             >
-              <X className="h-4 w-4" />
-            </button>
-          )}
+              <span>{showActiveOnly ? 'Showing Active' : 'Active Only'}</span>
+              {activeSessionsLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+            </Button>
+            {showActiveOnly && (
+              <span className="text-xs text-muted-foreground">
+                {activeSessionsLoading
+                  ? 'Checking activity...'
+                  : filteredConnections.length > 0
+                    ? `${filteredConnections.length} active`
+                    : 'No active sessions'}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -339,6 +429,7 @@ export function Connections() {
               search={normalizedSearch}
               canCreate={canManageConnections}
               onCreateConnection={handleStartCreateConnection}
+              showingActiveOnly={showActiveOnly}
             />
           ) : (
             <div className="grid gap-4 pb-6 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -350,6 +441,8 @@ export function Connections() {
                   protocolIcon={resolveProtocolIcon(protocolLookup[connection.protocol_id])}
                   teamName={connection.team_id ? teamLookup[connection.team_id] : undefined}
                   onShare={canShareConnections ? handleOpenShareModal : undefined}
+                  activeSessions={activeSessionsByConnection[connection.id]}
+                  showActiveUsers={isAdmin}
                 />
               ))}
             </div>
@@ -471,24 +564,37 @@ interface EmptyStateProps {
   search: string
   canCreate: boolean
   onCreateConnection: () => void
+  showingActiveOnly?: boolean
 }
 
-function EmptyState({ hasProtocols, search, canCreate, onCreateConnection }: EmptyStateProps) {
+function EmptyState({
+  hasProtocols,
+  search,
+  canCreate,
+  onCreateConnection,
+  showingActiveOnly,
+}: EmptyStateProps) {
+  const heading = showingActiveOnly
+    ? 'No active connections'
+    : search
+      ? 'No matches found'
+      : 'No connections yet'
+
+  const description = showingActiveOnly
+    ? 'There are no live sessions right now. Launch a connection to see it appear here.'
+    : search
+      ? 'Try refining your search or switch to a different protocol tab.'
+      : hasProtocols
+        ? 'Create a connection to reuse driver settings and shared identities.'
+        : 'No protocol drivers are currently available. Check your permissions or driver health.'
+
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/30 py-20 text-center">
       <div className="mb-4 rounded-full bg-muted p-4 ring-2 ring-border/40">
         <Server className="h-10 w-10 text-muted-foreground" />
       </div>
-      <h3 className="mb-2 text-xl font-semibold">
-        {search ? 'No matches found' : 'No connections yet'}
-      </h3>
-      <p className="mb-6 max-w-md text-sm text-muted-foreground">
-        {search
-          ? 'Try refining your search or switch to a different protocol tab.'
-          : hasProtocols
-            ? 'Create a connection to reuse driver settings and shared identities.'
-            : 'No protocol drivers are currently available. Check your permissions or driver health.'}
-      </p>
+      <h3 className="mb-2 text-xl font-semibold">{heading}</h3>
+      <p className="mb-6 max-w-md text-sm text-muted-foreground">{description}</p>
       {!search && hasProtocols && canCreate && (
         <Button size="default" onClick={onCreateConnection}>
           <Plus className="mr-2 h-4 w-4" />

@@ -5,7 +5,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import type { Protocol } from '@/types/protocols'
-import type { ConnectionRecord } from '@/types/connections'
+import type { ActiveConnectionSession, ConnectionRecord } from '@/types/connections'
 import { cn } from '@/lib/utils/cn'
 import { useState } from 'react'
 import { resolveConnectionIcon } from '@/constants/connections'
@@ -18,6 +18,8 @@ interface ConnectionCardProps {
   onEdit?: (id: string) => void
   onDelete?: (id: string) => void
   onShare?: (id: string) => void
+  activeSessions?: ActiveConnectionSession[]
+  showActiveUsers?: boolean
 }
 
 export function ConnectionCard({
@@ -28,6 +30,8 @@ export function ConnectionCard({
   onEdit,
   onDelete,
   onShare,
+  activeSessions,
+  showActiveUsers = false,
 }: ConnectionCardProps) {
   const [showMenu, setShowMenu] = useState(false)
   const metadata = connection.metadata ?? {}
@@ -81,8 +85,51 @@ export function ConnectionCard({
         .join('\n')
     : undefined
 
+  const activeSessionsList = activeSessions ?? []
+  const sessionCount = activeSessionsList.length
+  const hasActiveSessions = sessionCount > 0
+
+  const formatRelative = (value?: string) => {
+    if (!value) {
+      return null
+    }
+    const timestamp = new Date(value)
+    if (Number.isNaN(timestamp.getTime())) {
+      return null
+    }
+    return formatDistanceToNow(timestamp, { addSuffix: true })
+  }
+
+  const latestSessionLabel = hasActiveSessions
+    ? formatRelative(activeSessionsList[0]?.last_seen_at ?? undefined)
+    : null
+
+  const activeBadgeTitle = hasActiveSessions
+    ? showActiveUsers
+      ? activeSessionsList
+          .map((session) => {
+            const userName = session.user_name?.trim() || session.user_id
+            const since = formatRelative(session.started_at)
+            return since ? `${userName} • ${since}` : userName
+          })
+          .join('\n')
+      : latestSessionLabel
+        ? `Last activity ${latestSessionLabel}`
+        : undefined
+    : undefined
+
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border/60 bg-card transition-all hover:border-border hover:shadow-lg">
+      {hasActiveSessions && (
+        <Badge
+          variant="success"
+          className="absolute right-3 top-3 z-10 flex items-center gap-1 text-[11px] font-semibold"
+          title={activeBadgeTitle}
+        >
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Live{sessionCount > 1 ? ` (${sessionCount})` : ''}</span>
+        </Badge>
+      )}
       {/* Card Header */}
       <div className="flex items-start justify-between border-b border-border/40 bg-muted/30 p-4">
         <div className="flex items-start gap-3 flex-1 min-w-0">

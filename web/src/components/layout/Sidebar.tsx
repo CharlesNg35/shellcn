@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
-  BadgePlus,
   ChevronDown,
   ChevronRight,
   Loader2,
   MoreHorizontal,
   Settings as SettingsIcon,
 } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
 import { APP_NAME } from '@/lib/constants'
 import { Logo } from '@/components/ui/Logo'
+import { Badge } from '@/components/ui/Badge'
 import { getFilteredNavigationGroups, type NavigationItem } from '@/lib/navigation'
 import { cn } from '@/lib/utils/cn'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
-import { useConnectionSummary } from '@/hooks/useConnectionSummary'
-import { useAvailableProtocols } from '@/hooks/useProtocols'
+import { useActiveConnections } from '@/hooks/useActiveConnections'
 import { PERMISSIONS } from '@/constants/permissions'
 
 interface SidebarProps {
@@ -27,30 +27,75 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const location = useLocation()
   const { hasPermission } = usePermissions()
 
-  const { data: protocolSummary, isLoading: summaryLoading } = useConnectionSummary(undefined, {
-    enabled: hasPermission(PERMISSIONS.CONNECTION.VIEW),
+  const canViewConnections = hasPermission(PERMISSIONS.CONNECTION.VIEW)
+  const isAdmin =
+    hasPermission(PERMISSIONS.PERMISSION.MANAGE) || hasPermission(PERMISSIONS.CONNECTION.MANAGE)
+
+  const { data: activeSessions = [], isLoading: activeSessionsLoading } = useActiveConnections({
+    enabled: canViewConnections,
+    refetchInterval: 10_000,
   })
-  const { data: availableProtocols } = useAvailableProtocols({
-    enabled: hasPermission(PERMISSIONS.CONNECTION.VIEW),
-  })
-  const protocols = useMemo(() => availableProtocols?.data ?? [], [availableProtocols?.data])
-  const summaryByProtocol = useMemo(() => {
-    if (!protocolSummary?.length) {
+
+  const activeConnections = useMemo(() => {
+    if (!activeSessions?.length) {
       return []
     }
-    const lookup = protocols.reduce<Record<string, string>>((acc, protocol) => {
-      acc[protocol.id] = protocol.name
-      return acc
-    }, {})
-    return protocolSummary
-      .filter((item) => item.count > 0)
-      .map((item) => ({
-        id: item.protocol_id,
-        name: lookup[item.protocol_id] ?? item.protocol_id.toUpperCase(),
-        count: item.count,
-      }))
-      .sort((a, b) => b.count - a.count)
-  }, [protocolSummary, protocols])
+
+    const grouped = new Map<
+      string,
+      {
+        connectionId: string
+        connectionName: string
+        sessions: typeof activeSessions
+      }
+    >()
+
+    activeSessions.forEach((session) => {
+      const key = session.connection_id
+      const resolvedName =
+        (session.connection_name && session.connection_name.trim()) ||
+        (session.host && session.host.trim()) ||
+        key
+      const existing = grouped.get(key)
+      if (existing) {
+        existing.sessions.push(session)
+        if (!existing.connectionName && resolvedName) {
+          existing.connectionName = resolvedName
+        }
+      } else {
+        grouped.set(key, {
+          connectionId: key,
+          connectionName: resolvedName,
+          sessions: [session],
+        })
+      }
+    })
+
+    const toTimestamp = (value: string | null) => {
+      if (!value) {
+        return 0
+      }
+      const millis = new Date(value).getTime()
+      return Number.isNaN(millis) ? 0 : millis
+    }
+
+    const items = Array.from(grouped.values()).map((entry) => {
+      entry.sessions.sort(
+        (a, b) => toTimestamp(b.last_seen_at ?? null) - toTimestamp(a.last_seen_at ?? null)
+      )
+      const latest = entry.sessions[0]?.last_seen_at ?? null
+      return {
+        connectionId: entry.connectionId,
+        connectionName: entry.connectionName || entry.connectionId,
+        sessions: entry.sessions,
+        sessionCount: entry.sessions.length,
+        lastSeenAt: latest,
+      }
+    })
+
+    items.sort((a, b) => toTimestamp(b.lastSeenAt) - toTimestamp(a.lastSeenAt))
+    return items
+  }, [activeSessions])
 
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -95,61 +140,75 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           />
         ))}
 
-        {hasPermission(PERMISSIONS.CONNECTION.VIEW) ? (
+        {canViewConnections ? (
           <div className="space-y-2">
-            <div className="flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              <span>Protocols</span>
-              <Link
-                to="/connections/new"
-                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
-              >
-                <BadgePlus className="h-3 w-3" />
-                New
-              </Link>
+            <div className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Active Sessions
             </div>
-            {summaryLoading ? (
+            {activeSessionsLoading ? (
               <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Loading protocols...
+                Tracking sessions...
               </div>
-            ) : summaryByProtocol.length === 0 ? (
+            ) : activeConnections.length === 0 ? (
               <div className="rounded-md border border-dashed border-border/60 px-3 py-4 text-center text-xs text-muted-foreground">
-                No active connections yet
+                No active sessions
               </div>
             ) : (
               <div className="space-y-1">
-                <NavLink
-                  to="/connections"
-                  className={({ isActive }) =>
-                    cn(
-                      'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
-                      isActive
-                        ? 'bg-primary text-primary-foreground shadow'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )
-                  }
-                >
-                  <span>All Connections</span>
-                </NavLink>
-                {summaryByProtocol.map((item) => (
-                  <NavLink
-                    key={item.id}
-                    to={`/connections?protocol_id=${encodeURIComponent(item.id)}`}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
-                        isActive
-                          ? 'bg-primary text-primary-foreground shadow'
-                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                      )
-                    }
-                  >
-                    <span className="truncate">{item.name}</span>
-                    <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                      {item.count}
-                    </span>
-                  </NavLink>
-                ))}
+                {activeConnections.map((item) => {
+                  const latestSeen = item.lastSeenAt ? new Date(item.lastSeenAt) : null
+                  const latestSeenLabel =
+                    latestSeen && !Number.isNaN(latestSeen.getTime())
+                      ? formatDistanceToNow(latestSeen, { addSuffix: true })
+                      : null
+                  const adminTooltip = isAdmin
+                    ? item.sessions
+                        .map((session) => {
+                          const userName = session.user_name?.trim() || session.user_id
+                          const startedAt = session.started_at ? new Date(session.started_at) : null
+                          const startedLabel =
+                            startedAt && !Number.isNaN(startedAt.getTime())
+                              ? formatDistanceToNow(startedAt, { addSuffix: true })
+                              : null
+                          return startedLabel ? `${userName} • ${startedLabel}` : userName
+                        })
+                        .join('\n')
+                    : undefined
+
+                  return (
+                    <NavLink
+                      key={item.connectionId}
+                      to={`/connections/${item.connectionId}`}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
+                          isActive
+                            ? 'bg-primary text-primary-foreground shadow'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                        )
+                      }
+                      title={adminTooltip ?? latestSeenLabel ?? undefined}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                        <span className="truncate">{item.connectionName}</span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        {latestSeenLabel && (
+                          <span className="hidden text-[11px] text-muted-foreground sm:inline">
+                            {latestSeenLabel}
+                          </span>
+                        )}
+                        {item.sessionCount > 1 && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {item.sessionCount}
+                          </Badge>
+                        )}
+                      </span>
+                    </NavLink>
+                  )
+                })}
               </div>
             )}
           </div>
