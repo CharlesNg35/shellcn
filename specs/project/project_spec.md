@@ -32,8 +32,8 @@ A comprehensive web-based **remote client platform** for managing enterprise inf
 
 **Enterprise Features:**
 - Fine-grained permission system with dependencies
-- Multi-tenancy with organizations and teams
-- Enterprise authentication (OIDC, SAML, LDAP, Local)
+- Team-based multi-user collaboration
+- **Enterprise authentication (OIDC, SAML, LDAP, Local)** - All providers configured via UI by admins
 - **Secret management (Credential Vault)** - Store SSH keys, passwords, database credentials
 - **Connection profiles with reusable identities**
 - Session recording and audit logging
@@ -481,7 +481,7 @@ shellcn/
 │   │   └── handlers/                    # HTTP handlers
 │   │       ├── auth.go                  # Auth endpoints
 │   │       ├── users.go                 # User management
-│   │       ├── organizations.go         # Organization management
+│   │       ├── teams.go                 # Team management
 │   │       ├── permissions.go           # Permission management
 │   │       ├── websocket.go             # WebSocket handler
 │   │       ├── health.go                # Health check
@@ -541,7 +541,6 @@ shellcn/
 │   │
 │   ├── models/                          # Data models
 │   │   ├── user.go
-│   │   ├── organization.go
 │   │   ├── role.go
 │   │   ├── permission.go
 │   │   ├── identity.go                  # Vault identity
@@ -1768,7 +1767,7 @@ func (h *SetupHandler) CreateFirstUser(c *gin.Context) {
 
 **First Access Flow:**
 
-1. User opens browser → `http://localhost:8080`
+1. User opens browser → `http://localhost:8000`
 2. System detects no users exist
 3. Redirects to `/setup` page
 4. User fills out form:
@@ -1788,7 +1787,7 @@ func (h *SetupHandler) CreateFirstUser(c *gin.Context) {
 - ✅ Cannot have `IsSuperuser` flag removed by other users
 - ✅ Full access to admin panel, audit logs, system settings
 - ✅ Can create other admin users
-- ✅ Can manage all organizations, teams, users
+- ✅ Can manage all teams and users
 
 **Non-Root Users:**
 - ❌ Must have explicit permission grants
@@ -1820,16 +1819,6 @@ CORE_PERMISSIONS = {
     "user.delete": {
         "module": "core",
         "depends_on": ["user.view", "user.edit"],
-    },
-
-    // Organization Management
-    "org.view": {
-        "module": "core",
-        "depends_on": [],
-    },
-    "org.manage": {
-        "module": "core",
-        "depends_on": ["org.view"],
     },
 
     // Vault/Credential Management (CORE)
@@ -1871,115 +1860,48 @@ CORE_PERMISSIONS = {
 }
 ```
 
-### 7.4 Module-Specific Permissions
+### 7.4 Protocol Driver Permissions (Modules → Drivers)
 
-**SSH Module Permissions:**
-```go
-// internal/modules/ssh/permissions.go
-SSH_PERMISSIONS = {
-    "ssh.connect": {
-        "module": "ssh",
-        "depends_on": ["vault.view"],  // Can use identities
-        "description": "Connect to SSH servers",
-    },
-    "ssh.execute": {
-        "module": "ssh",
-        "depends_on": ["ssh.connect"],
-        "description": "Execute commands",
-    },
-    "ssh.session.share": {
-        "module": "ssh",
-        "depends_on": ["ssh.connect"],
-        "description": "Share SSH sessions",
-    },
-    "ssh.clipboard.sync": {
-        "module": "ssh",
-        "depends_on": ["ssh.connect"],
-        "description": "Enable clipboard sync",
-    },
-}
-```
+- The product now standardizes on the term **protocol driver** (earlier documents may still say *module*).
+- Every driver contributes a permission profile that hangs from the `connection.*` core permissions:
+  - `{driver}.connect` → depends on `connection.launch`; grants runtime usage (SSH terminal, Docker attach, Kubernetes exec).
+  - `{driver}.manage` → depends on `connection.manage`; grants configuration updates and advanced driver tuning.
+  - Optional feature scopes (e.g., `kubernetes.exec`, `docker.logs`, `database.query.read`) depend on `connection.launch` unless they mutate infrastructure, in which case they depend on `connection.manage`.
+  - Optional admin scopes (e.g., `kubernetes.cluster.admin`, `docker.stack.deploy`, `database.cluster.manage`) always depend on `connection.manage` and may imply additional feature scopes.
+- Driver specs live under `specs/project/drivers/<driver>.md` and must capture:
+  - Connection settings persisted in `connections.settings` (host, port, namespace, context, tls flags, etc.).
+  - Required credential or identity bindings (vault secret keys, inline fields).
+  - Permission profile details plus the capability flags surfaced to the frontend.
+  - Auditing hooks (what actions emit `AuditEntry` records).
+- Default driver scopes (non-exhaustive):
 
-**Docker Module Permissions:**
-```go
-// internal/modules/docker/permissions.go
-DOCKER_PERMISSIONS = {
-    "docker.connect": {
-        "module": "docker",
-        "depends_on": [],
-        "description": "Connect to Docker hosts",
-    },
-    "docker.container.list": {
-        "module": "docker",
-        "depends_on": ["docker.connect"],
-    },
-    "docker.container.exec": {
-        "module": "docker",
-        "depends_on": ["docker.container.list"],
-    },
-}
-```
+| Driver | Base Permission | Manage Permission | Feature Scopes | Admin Scopes |
+|--------|-----------------|-------------------|----------------|--------------|
+| SSH | `ssh.connect` | `ssh.manage` | `ssh.sftp`, `ssh.port_forward`, `ssh.clipboard` | `ssh.global.manage` |
+| Docker | `docker.connect` | `docker.manage` | `docker.logs`, `docker.exec` | `docker.stack.deploy` |
+| Kubernetes | `kubernetes.connect` | `kubernetes.manage` | `kubernetes.exec`, `kubernetes.port_forward`, `kubernetes.terminal` | `kubernetes.cluster.admin` |
+| Database | `database.connect` | `database.manage` | `database.query.read`, `database.query.write` | `database.cluster.manage` |
 
-**Database Module Permissions:**
-```go
-// internal/modules/database/permissions.go
-DATABASE_PERMISSIONS = {
-    "database.connect": {
-        "module": "database",
-        "depends_on": ["vault.view"],  // Can use stored credentials
-        "description": "Connect to databases",
-    },
-    "database.query.read": {
-        "module": "database",
-        "depends_on": ["database.connect"],
-        "description": "Execute SELECT queries",
-    },
-    "database.query.write": {
-        "module": "database",
-        "depends_on": ["database.query.read"],
-        "description": "Execute INSERT/UPDATE/DELETE",
-    },
-}
-```
+All feature/admin scopes must still be registered through the standard permission registry and synced to the database so they appear in role editors.
 
-### 7.5 Permission Registration
+### 7.5 Permission Registration Workflow
 
-**Each module registers its permissions on initialization:**
-```go
-// internal/modules/ssh/permissions.go
-package ssh
-
-import "github.com/your-org/shellcn/internal/permissions"
-
-func RegisterPermissions() {
-    permissions.Register(SSH_PERMISSIONS)
-}
-
-// internal/app/app.go
-func (app *App) InitializeModules() {
-    // Core permissions always registered
-    core.RegisterPermissions()
-    vault.RegisterPermissions()
-
-    // Module permissions registered conditionally
-    if app.Config.Modules.SSH.Enabled {
-        ssh.RegisterPermissions()
-    }
-    if app.Config.Modules.Docker.Enabled {
-        docker.RegisterPermissions()
-    }
-    // ... etc
-}
-```
+- Core permissions register in `internal/permissions/core.go`.
+- Driver-specific permissions register via helper methods during bootstrap (`internal/protocols/permissions.go`) after driver descriptors load but before `permissions.Sync`.
+- The catalog sync persists permission definitions and protocol metadata together to keep the system self-describing.
+- Feature toggles from configuration (`config.modules.<driver>.enabled`) only influence availability; they do not remove permission rows, ensuring historical audit entries remain valid.
+- Tests should assert that `permissions.ResolveDependencies` covers driver scopes and that `ProtocolService` hides unavailable drivers for users lacking `{driver}.connect`.
 
 ---
 
 ## 8. Configuration
 
+ShellCN provides an optional cache layer. When Redis is configured the platform uses it for session caching, rate limiting, and other high-frequency lookups. When Redis is not supplied (or becomes unavailable) the system transparently falls back to the primary SQL database by storing cached artefacts in the `cache_entries` table. This guarantees the application runs in development and single-node deployments without any additional services.
+
 ```yaml
 # config.yaml
 server:
-  port: 8080
+  port: 8000
 
 database:
   driver: sqlite  # sqlite, postgres, mysql
@@ -1999,6 +1921,16 @@ database:
     database: shellcn
     username: root
     password: ${DB_PASSWORD}
+
+cache:
+  redis:
+    enabled: false
+    address: 127.0.0.1:6379
+    username: ""
+    password: ""
+    db: 0
+    tls: false
+    timeout: 5s
 
 vault:
   encryption_key: ${VAULT_ENCRYPTION_KEY}
@@ -2101,16 +2033,16 @@ modules:
 # ShellCN Platform v1.0.0
 # ✓ Created data directory: ./data
 # ✓ Initialized SQLite database: ./data/database.sqlite
-# ✓ Server started on http://localhost:8080
+# ✓ Server started on http://localhost:8000
 #
-# → Open http://localhost:8080 to create your first admin user
+# → Open http://localhost:8000 to create your first admin user
 #
-# ✓ Metrics: http://localhost:8080/metrics
-# ✓ Health: http://localhost:8080/health
+# ✓ Metrics: http://localhost:8000/metrics
+# ✓ Health: http://localhost:8000/health
 ```
 
 **First Access (Browser):**
-1. Navigate to `http://localhost:8080`
+1. Navigate to `http://localhost:8000`
 2. Auto-redirected to `/setup` (no users exist)
 3. Fill out first admin user form:
    - Username: `your-username`
@@ -2245,10 +2177,7 @@ modules:
   /ssh-keys                     # SSH Key Management
   /profile                      # User profile
   /security                     # Security settings (MFA, sessions)
-  /organizations                # Organization management
-    /                           # Organization list
-    /:id/teams                  # Team management
-    /:id/members                # Member management
+  /teams                        # Team management
   /notifications                # Notification preferences
 
 # Session Management

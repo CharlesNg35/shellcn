@@ -17,7 +17,7 @@ A comprehensive web-based remote client platform for managing enterprise infrast
 ### Core Features
 
 - 🔐 **Secure Credential Vault** - AES-256-GCM encrypted credential storage
-- 👥 **Multi-User & Organizations** - Team-based access control
+- 👥 **Multi-User & Teams** - Team-based access control
 - 🔑 **Role-Based Permissions** - Granular permission system with dependencies
 - 📊 **Monitoring & Audit** - Prometheus metrics and comprehensive audit logging
 - 🖥️ **Terminal Interface** - xterm.js-based terminal with user preferences
@@ -76,36 +76,107 @@ make build
 
 ### First-Time Setup
 
-1. Navigate to `http://localhost:8080/setup`
+1. Navigate to `http://localhost:8000/setup`
 2. Create the first admin user
 3. Login with your credentials
 4. Start adding connections!
 
 ## Configuration
 
-Create a `.env` file in the project root:
+ShellCN reads configuration from a YAML file (default: `config/config.yaml`) and environment variables using the `SHELLCN_` prefix. Environment variables override file values automatically.
 
-```env
-# Server
-PORT=8080
-GIN_MODE=release
+### Sample `config/config.yaml`
 
-# Database
-DB_TYPE=sqlite
-DB_PATH=./data/shellcn.db
+```yaml
+server:
+  port: 8000
 
-# Security
-JWT_SECRET=your-secret-key-here
-VAULT_ENCRYPTION_KEY=your-32-byte-encryption-key
+database:
+  driver: sqlite # sqlite | postgres | mysql
+  path: ./data/shellcn.db # used when driver is sqlite
+  postgres:
+    enabled: false
+    host: localhost
+    port: 5432
+    database: shellcn
+    username: postgres
+    password: ${DB_PASSWORD}
+  mysql:
+    enabled: false
+    host: localhost
+    port: 3306
+    database: shellcn
+    username: root
+    password: ${DB_PASSWORD}
 
-# Optional: External Database
-# DB_TYPE=postgres
-# DB_HOST=localhost
-# DB_PORT=5432
-# DB_NAME=shellcn
-# DB_USER=shellcn
-# DB_PASSWORD=password
+vault:
+  encryption_key: ${VAULT_ENCRYPTION_KEY}
+  algorithm: aes-256-gcm
+  key_rotation_days: 90
+
+auth:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: shellcn.local
+    access_token_ttl: 15m
+  session:
+    refresh_token_ttl: 720h # 30 days
+    refresh_token_length: 48
+  local:
+    lockout_threshold: 5
+    lockout_duration: 15m
+
+modules:
+  ssh:
+    enabled: true
+    default_port: 22
+    ssh_v1_enabled: false
+    ssh_v2_enabled: true
+    auto_reconnect: true
+    max_reconnect_attempts: 3
+    keepalive_interval: 60
+  telnet:
+    enabled: true
+    default_port: 23
+    auto_reconnect: true
+  sftp:
+    enabled: true
+    default_port: 22
+  rdp:
+    enabled: true
+    default_port: 3389
+  vnc:
+    enabled: true
+    default_port: 5900
+  docker:
+    enabled: true
+  kubernetes:
+    enabled: false
+  database:
+    enabled: true
+    mysql: true
+    postgres: true
+    redis: true
+    mongodb: true
+  proxmox:
+    enabled: false
+  file_share:
+    enabled: false
 ```
+
+### Environment Overrides
+
+Every field can be overridden via environment variables by replacing dots with underscores and prefixing with `SHELLCN_`. For example:
+
+```bash
+export SHELLCN_SERVER_PORT=9090
+export SHELLCN_AUTH_JWT_SECRET="dev-secret"
+export SHELLCN_DATABASE_DRIVER=postgres
+export SHELLCN_DATABASE_POSTGRES_ENABLED=true
+export SHELLCN_DATABASE_POSTGRES_PASSWORD="p@ssw0rd"
+```
+
+This makes it easy to adapt configuration per environment (development, CI, production) without changing the YAML file.
 
 ## Development
 
@@ -168,7 +239,7 @@ make build-rust
 
 ShellCN uses a modular permission-based architecture:
 
-1. **Core Module** - Authentication, users, organizations, permissions
+1. **Core Module** - Authentication, users, teams, permissions
 2. **Vault Module** - Encrypted credential storage (AES-256-GCM)
 3. **Protocol Modules** - SSH, Telnet, RDP, VNC, Docker, K8s, Databases
 4. **Monitoring Module** - Prometheus metrics and health checks

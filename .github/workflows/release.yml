@@ -1,0 +1,186 @@
+name: Release (GHCR)
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag to publish (e.g. v1.2.3)"
+        required: false
+      publish_latest:
+        description: "Also push the latest tag"
+        required: false
+        default: "false"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/shellcn
+  GO_VERSION: "1.24"
+  RUST_VERSION: "1.75"
+  NODE_VERSION: "20"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Derive version and detect FFI
+        id: vars
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME}"
+          fi
+          if [ -z "$VERSION" ]; then
+            echo "Version input or tag is required" >&2
+            exit 1
+          fi
+
+          # Auto-detect FFI modules by checking for any Cargo.toml files
+          ENABLE_FFI="false"
+          if [ -d "rust-modules" ]; then
+            FFI_MODULES=$(find rust-modules -maxdepth 2 -name "Cargo.toml" -type f)
+            if [ -n "$FFI_MODULES" ]; then
+              ENABLE_FFI="true"
+              echo "✅ FFI modules detected - Rust toolchain will be installed"
+              echo "$FFI_MODULES" | while read -r cargo_file; do
+                module_name=$(dirname "$cargo_file" | xargs basename)
+                echo "  - ${module_name} module found"
+              done
+            else
+              echo "ℹ️  No FFI modules found - building without FFI"
+            fi
+          else
+            echo "ℹ️  No rust-modules directory - building without FFI"
+          fi
+
+          SEMVER="${VERSION#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "enable_ffi=$ENABLE_FFI" >> "$GITHUB_OUTPUT"
+          echo "publish_latest=${{ github.event.inputs.publish_latest == 'true' || github.event_name == 'push' }}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+          cache: true
+
+      - name: Set up Rust (if FFI enabled)
+        if: steps.vars.outputs.enable_ffi == 'true'
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: web
+        run: pnpm build
+
+      - name: Run frontend tests
+        working-directory: web
+        run: pnpm test run
+
+      - name: Run backend tests
+        run: go test ./...
+
+      # - name: Set up QEMU
+      #   uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USERNAME || github.actor }}
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.vars.outputs.version }}
+            type=raw,value=${{ steps.vars.outputs.semver }}
+            type=raw,value=latest,enable=${{ steps.vars.outputs.publish_latest == 'true' }}
+          labels: |
+            org.opencontainers.image.title=ShellCN
+            org.opencontainers.image.description=Enterprise Remote Access Platform
+            org.opencontainers.image.version=${{ steps.vars.outputs.semver }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ steps.vars.outputs.semver }}
+            GO_VERSION=${{ env.GO_VERSION }}
+            RUST_VERSION=${{ env.RUST_VERSION }}
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}
+          format: spdx-json
+          output-file: shellcn-sbom.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ steps.vars.outputs.version }}
+          path: shellcn-sbom.spdx.json
+
+      - name: Install cosign
+        if: vars.COSIGN_KEY != ''
+        uses: sigstore/cosign-installer@v3.5.0
+
+      - name: Sign container image (cosign)
+        if: vars.COSIGN_KEY != ''
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          echo "${{ secrets.COSIGN_KEY }}" > cosign.key
+          cosign sign --key cosign.key "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }}"
+          rm cosign.key
+        shell: bash

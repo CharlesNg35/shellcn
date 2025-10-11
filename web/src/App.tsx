@@ -1,0 +1,81 @@
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
+import { ThemeProvider } from '@/components/theme/ThemeProvider'
+import { BreadcrumbProvider } from '@/contexts/BreadcrumbContext'
+import { Toaster } from '@/components/ui/Toaster'
+import { AuthLayout } from '@/components/layout/AuthLayout'
+import { DashboardLayout } from '@/components/layout/DashboardLayout'
+import { SetupGuard } from '@/components/auth/SetupGuard'
+import { Login } from '@/pages/auth/Login'
+import { Setup } from '@/pages/auth/Setup'
+import { PasswordResetRequest } from '@/pages/auth/PasswordResetRequest'
+import { PasswordResetConfirm } from '@/pages/auth/PasswordResetConfirm'
+import { MfaVerification } from '@/pages/auth/MfaVerification'
+import { InviteAccept } from '@/pages/auth/InviteAccept'
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { Dashboard } from '@/pages/dashboard/Dashboard'
+import { Connections } from '@/pages/connections/Connections'
+import { Identities } from '@/pages/settings/Identities'
+import { Users } from '@/pages/settings/Users'
+import { Teams } from '@/pages/settings/Teams'
+import { TeamDetail } from '@/pages/settings/TeamDetail'
+import { Permissions } from '@/pages/settings/Permissions'
+import { Sessions } from '@/pages/settings/Sessions'
+import { AuditLogs } from '@/pages/settings/AuditLogs'
+import { AuthProviders } from '@/pages/settings/AuthProviders'
+import { Security } from '@/pages/settings/Security'
+
+function AppRoutes() {
+  return (
+    <Routes>
+      <Route element={<SetupGuard />}>
+        <Route element={<AuthLayout />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/setup" element={<Setup />} />
+          <Route path="/password-reset" element={<PasswordResetRequest />} />
+          <Route path="/password-reset/confirm" element={<PasswordResetConfirm />} />
+          <Route path="/mfa" element={<MfaVerification />} />
+          <Route path="/invite/accept" element={<InviteAccept />} />
+        </Route>
+
+        <Route element={<ProtectedRoute />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/connections" element={<Connections />} />
+
+            {/* Settings */}
+            <Route path="/settings/identities" element={<Identities />} />
+            <Route path="/settings/users" element={<Users />} />
+            <Route path="/settings/teams" element={<Teams />} />
+            <Route path="/settings/teams/:teamId" element={<TeamDetail />} />
+            <Route path="/settings/permissions" element={<Permissions />} />
+            <Route path="/settings/sessions" element={<Sessions />} />
+            <Route path="/settings/audit" element={<AuditLogs />} />
+            <Route path="/settings/auth-providers" element={<AuthProviders />} />
+            <Route path="/settings/security" element={<Security />} />
+          </Route>
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>
+  )
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <ThemeProvider defaultTheme="dark">
+        <BrowserRouter>
+          <BreadcrumbProvider>
+            <AppRoutes />
+          </BreadcrumbProvider>
+        </BrowserRouter>
+        <Toaster />
+      </ThemeProvider>
+    </ErrorBoundary>
+  )
+}
+
+export default App

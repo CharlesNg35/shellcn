@@ -1,0 +1,37 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { createConnection, type ConnectionCreatePayload } from '@/lib/api/connections'
+import { toast } from '@/lib/utils/toast'
+import { toApiError } from '@/lib/api/http'
+import { CONNECTIONS_QUERY_BASE_KEY } from './useConnections'
+import { CONNECTION_FOLDERS_QUERY_KEY } from './useConnectionFolders'
+
+export function useConnectionMutations() {
+  const queryClient = useQueryClient()
+
+  const invalidate = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_BASE_KEY }),
+      queryClient.invalidateQueries({ queryKey: CONNECTION_FOLDERS_QUERY_KEY }),
+    ])
+  }
+
+  const create = useMutation({
+    mutationFn: (payload: ConnectionCreatePayload) => createConnection(payload),
+    onSuccess: async (connection) => {
+      await invalidate()
+      toast.success('Connection created', {
+        description: `${connection.name} is ready to launch.`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
+      toast.error('Failed to create connection', {
+        description: apiError.message,
+      })
+    },
+  })
+
+  return {
+    create,
+  }
+}
