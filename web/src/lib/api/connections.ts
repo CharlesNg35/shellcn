@@ -2,7 +2,10 @@ import type { ApiMeta, ApiResponse } from '@/types/api'
 import type {
   ConnectionRecord,
   ConnectionTarget,
-  ConnectionVisibility,
+  ConnectionShare,
+  ConnectionShareEntry,
+  ConnectionShareSummary,
+  ConnectionSharePrincipal,
   ConnectionProtocolSummary,
 } from '@/types/connections'
 import { apiClient } from './client'
@@ -29,11 +32,32 @@ interface ConnectionTargetResponse {
   ordering?: number
 }
 
-interface ConnectionVisibilityResponse {
+interface ConnectionShareActorResponse {
   id?: string
-  team_id?: string | null
-  user_id?: string | null
-  permission_scope: string
+  type?: string
+  name?: string
+  email?: string | null
+}
+
+interface ConnectionShareResponse {
+  share_id?: string
+  principal?: ConnectionShareActorResponse
+  permission_scopes?: unknown
+  expires_at?: string | null
+  granted_by?: ConnectionShareActorResponse | null
+  metadata?: Record<string, unknown> | string | null
+}
+
+interface ConnectionShareEntryResponse {
+  principal?: ConnectionShareActorResponse
+  granted_by?: ConnectionShareActorResponse | null
+  permission_scopes?: unknown
+  expires_at?: string | null
+}
+
+interface ConnectionShareSummaryResponse {
+  shared?: boolean
+  entries?: ConnectionShareEntryResponse[] | null
 }
 
 interface ConnectionFolderResponse {
@@ -61,7 +85,8 @@ interface ConnectionResponse {
   secret_id?: string | null
   last_used_at?: string | null
   targets?: ConnectionTargetResponse[]
-  visibility?: ConnectionVisibilityResponse[]
+  shares?: ConnectionShareResponse[] | null
+  share_summary?: ConnectionShareSummaryResponse | null
   folder?: ConnectionFolderResponse | null
 }
 
@@ -104,16 +129,100 @@ function transformTargets(targets?: ConnectionTargetResponse[]): ConnectionTarge
   }))
 }
 
-function transformVisibility(visibility?: ConnectionVisibilityResponse[]): ConnectionVisibility[] {
-  if (!visibility?.length) {
+function normaliseStringArray(value: unknown): string[] {
+  if (!value) {
     return []
   }
-  return visibility.map((entry) => ({
-    id: entry.id,
-    team_id: entry.team_id ?? null,
-    user_id: entry.user_id ?? null,
-    permission_scope: entry.permission_scope,
-  }))
+  if (Array.isArray(value)) {
+    return value
+      .map((scope) => (typeof scope === 'string' ? scope.trim() : String(scope).trim()))
+      .filter((scope) => scope.length > 0)
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((scope) => (typeof scope === 'string' ? scope.trim() : String(scope).trim()))
+          .filter((scope) => scope.length > 0)
+      }
+    } catch {
+      return value
+        .split(',')
+        .map((scope) => scope.trim())
+        .filter((scope) => scope.length > 0)
+    }
+  }
+  return []
+}
+
+function transformShareActor(
+  raw?: ConnectionShareActorResponse | null
+): ConnectionSharePrincipal | undefined {
+  if (!raw?.id) {
+    return undefined
+  }
+  const type = typeof raw.type === 'string' && raw.type.trim().length > 0 ? raw.type.trim() : 'user'
+  return {
+    id: raw.id,
+    type: type as ConnectionSharePrincipal['type'],
+    name: raw.name ?? raw.id,
+    email: raw.email ?? undefined,
+  }
+}
+
+function transformShares(shares?: ConnectionShareResponse[] | null): ConnectionShare[] {
+  if (!shares?.length) {
+    return []
+  }
+  return shares
+    .map((share) => {
+      const principal = transformShareActor(share.principal)
+      if (!principal) {
+        return null
+      }
+      const grantedBy = transformShareActor(share.granted_by)
+      const metadata =
+        typeof share.metadata === 'object' && share.metadata !== null ? share.metadata : undefined
+      return {
+        share_id: share.share_id ?? `${principal.type}:${principal.id}`,
+        principal,
+        permission_scopes: normaliseStringArray(share.permission_scopes),
+        expires_at: share.expires_at ?? undefined,
+        granted_by: grantedBy ?? null,
+        metadata,
+      }
+    })
+    .filter((share): share is ConnectionShare => share !== null)
+}
+
+function transformShareSummary(
+  raw?: ConnectionShareSummaryResponse | null
+): ConnectionShareSummary | undefined {
+  if (!raw) {
+    return undefined
+  }
+
+  const entries = (raw.entries ?? [])
+    .map((entry) => {
+      const principal = transformShareActor(entry.principal)
+      if (!principal) {
+        return null
+      }
+      const grantedBy = transformShareActor(entry.granted_by)
+      return {
+        principal,
+        granted_by: grantedBy ?? null,
+        permission_scopes: normaliseStringArray(entry.permission_scopes),
+        expires_at: entry.expires_at ?? undefined,
+      }
+    })
+    .filter((entry): entry is ConnectionShareEntry => entry !== null)
+
+  return {
+    shared: raw.shared ?? entries.length > 0,
+    entries,
+  }
 }
 
 function transformConnection(raw: ConnectionResponse): ConnectionRecord {
@@ -130,7 +239,8 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
     secret_id: raw.secret_id ?? null,
     last_used_at: raw.last_used_at ?? null,
     targets: transformTargets(raw.targets),
-    visibility: transformVisibility(raw.visibility),
+    shares: transformShares(raw.shares),
+    share_summary: transformShareSummary(raw.share_summary),
     folder: raw.folder
       ? {
           id: raw.folder.id,
@@ -158,6 +268,14 @@ export interface FetchConnectionsParams {
 export interface ConnectionListResult {
   data: ConnectionRecord[]
   meta?: ApiMeta
+}
+
+export interface ConnectionSharePayload {
+  user_id?: string | null
+  team_id?: string | null
+  permission_scopes: string[]
+  expires_at?: string | null
+  metadata?: Record<string, unknown>
 }
 
 export async function fetchConnections(
@@ -195,6 +313,38 @@ export async function createConnection(
   )
   const data = unwrapResponse(response)
   return transformConnection(data)
+}
+
+export async function fetchConnectionShares(connectionId: string): Promise<ConnectionShare[]> {
+  const response = await apiClient.get<ApiResponse<ConnectionShareResponse[]>>(
+    `${CONNECTIONS_ENDPOINT}/${connectionId}/shares`
+  )
+  const data = unwrapResponse(response)
+  return transformShares(data)
+}
+
+export async function createConnectionShare(
+  connectionId: string,
+  payload: ConnectionSharePayload
+): Promise<ConnectionShare> {
+  const response = await apiClient.post<ApiResponse<ConnectionShareResponse>>(
+    `${CONNECTIONS_ENDPOINT}/${connectionId}/shares`,
+    payload
+  )
+  const data = unwrapResponse(response)
+  const [share] = transformShares([data])
+  return share
+}
+
+export async function deleteConnectionShare(
+  connectionId: string,
+  shareId: string
+): Promise<boolean> {
+  const response = await apiClient.delete<ApiResponse<{ deleted: boolean }>>(
+    `${CONNECTIONS_ENDPOINT}/${connectionId}/shares/${shareId}`
+  )
+  const data = unwrapResponse(response)
+  return Boolean((data as { deleted?: boolean })?.deleted)
 }
 
 interface ConnectionSummaryResponse {

@@ -15,6 +15,7 @@ func registerTeamRoutes(api *gin.RouterGroup, teamHandler *handlers.TeamHandler,
 		teams.GET("/:id", middleware.RequirePermission(checker, "team.view"), teamHandler.Get)
 		teams.GET("/:id/roles", middleware.RequirePermission(checker, "team.view"), teamHandler.ListRoles)
 		teams.GET("/:id/connections", middleware.RequirePermission(checker, "team.view"), teamHandler.ListConnections)
+		teams.GET("/:id/capabilities", middleware.RequirePermission(checker, "team.view"), teamHandler.Capabilities)
 		teams.GET("/:id/folders", middleware.RequirePermission(checker, "team.view"), teamHandler.ListConnectionFolders)
 		teams.POST("", middleware.RequirePermission(checker, "team.manage"), teamHandler.Create)
 		teams.PATCH("/:id", middleware.RequirePermission(checker, "team.manage"), teamHandler.Update)

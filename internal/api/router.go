@@ -182,6 +182,13 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	connectionHandler := handlers.NewConnectionHandler(connectionSvc)
 	registerConnectionRoutes(api, connectionHandler, checker)
 
+	shareSvc, err := services.NewConnectionShareService(db, checker)
+	if err != nil {
+		return nil, err
+	}
+	shareHandler := handlers.NewConnectionShareHandler(shareSvc)
+	registerConnectionShareRoutes(api, shareHandler, checker)
+
 	folderSvc, err := services.NewConnectionFolderService(db, checker, connectionSvc)
 	if err != nil {
 		return nil, err

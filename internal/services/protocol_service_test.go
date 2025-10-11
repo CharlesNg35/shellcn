@@ -26,6 +26,13 @@ func (s *stubPermissionChecker) Check(ctx context.Context, userID, permissionID 
 	return s.grants[permissionID], nil
 }
 
+func (s *stubPermissionChecker) CheckResource(ctx context.Context, userID, resourceType, resourceID, permissionID string) (bool, error) {
+	if s.err != nil {
+		return false, s.err
+	}
+	return s.grants[permissionID], nil
+}
+
 func TestProtocolServiceListAll(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 

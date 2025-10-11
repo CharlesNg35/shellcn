@@ -17,6 +17,7 @@ import { TeamFilterTabs } from '@/components/connections/TeamFilterTabs'
 import { FolderSidebar } from '@/components/connections/FolderSidebar'
 import { ResourceSelectionModal } from '@/components/connections/ResourceSelectionModal'
 import { ConnectionFormModal } from '@/components/connections/ConnectionFormModal'
+import { ShareConnectionModal } from '@/components/connections/ShareConnectionModal'
 import { cn } from '@/lib/utils/cn'
 import { PERMISSIONS } from '@/constants/permissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
@@ -37,16 +38,26 @@ export function Connections() {
   const [resourceModalOpen, setResourceModalOpen] = useState(false)
   const [connectionModalOpen, setConnectionModalOpen] = useState(false)
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
+  const [shareModalOpen, setShareModalOpen] = useState(false)
+  const [shareTargetConnection, setShareTargetConnection] = useState<ConnectionRecord | null>(null)
   const activeFolder = searchParams.get('folder')
   const teamParam = searchParams.get('team') ?? 'all'
 
+  const isSharedFilter = teamParam === 'shared'
   const teamFilterValue =
-    teamParam === 'all' ? undefined : teamParam === 'personal' ? 'personal' : teamParam
+    teamParam === 'all'
+      ? undefined
+      : teamParam === 'personal'
+        ? 'personal'
+        : isSharedFilter
+          ? undefined
+          : teamParam
 
   const { hasPermission } = usePermissions()
   const canViewTeams = hasPermission(PERMISSIONS.TEAM.VIEW)
   const canManageConnections = hasPermission(PERMISSIONS.CONNECTION.MANAGE)
   const canManageTeams = hasPermission(PERMISSIONS.TEAM.MANAGE)
+  const canShareConnections = hasPermission(PERMISSIONS.CONNECTION.SHARE)
   const { data: teamsResult } = useTeams({
     enabled: canViewTeams,
     staleTime: 60_000,
@@ -76,12 +87,20 @@ export function Connections() {
     data: connectionsResult,
     isLoading: connectionsLoading,
     isError: connectionsError,
+    refetch: refetchConnections,
   } = useConnections({
     folder_id: activeFolder || undefined,
     search: search || undefined,
     team_id: teamFilterValue,
   })
   const connections = useMemo(() => connectionsResult?.data ?? [], [connectionsResult?.data])
+
+  const connectionsForView = useMemo(() => {
+    if (!isSharedFilter) {
+      return connections
+    }
+    return connections.filter((connection) => connection.share_summary?.shared)
+  }, [connections, isSharedFilter])
 
   const protocolLookup = useMemo(() => {
     return protocols.reduce<Record<string, Protocol>>((acc, protocol) => {
@@ -100,7 +119,7 @@ export function Connections() {
   const normalizedSearch = search.trim().toLowerCase()
 
   const filteredConnections = useMemo(() => {
-    return connections.filter((connection) => {
+    return connectionsForView.filter((connection) => {
       // Filter by protocol if one is selected
       const matchesProtocol = !protocolFilter || connection.protocol_id === protocolFilter
       if (!matchesProtocol) {
@@ -137,10 +156,10 @@ export function Connections() {
         protocol?.name.toLowerCase().includes(normalizedSearch)
       )
     })
-  }, [connections, normalizedSearch, protocolLookup, protocolFilter])
+  }, [connectionsForView, normalizedSearch, protocolLookup, protocolFilter])
 
   const tabs: ProtocolTab[] = useMemo(() => {
-    const counts = connections.reduce<Record<string, number>>((acc, connection) => {
+    const counts = connectionsForView.reduce<Record<string, number>>((acc, connection) => {
       acc[connection.protocol_id] = (acc[connection.protocol_id] ?? 0) + 1
       return acc
     }, {})
@@ -156,7 +175,7 @@ export function Connections() {
       .filter((tab) => tab.count > 0) // Only show protocols that have connections
 
     return protocolTabs
-  }, [connections, protocols])
+  }, [connectionsForView, protocols])
 
   const isLoading = protocolsLoading || connectionsLoading
   const hasError = protocolsError || connectionsError
@@ -188,6 +207,15 @@ export function Connections() {
       params.delete('folder')
     }
     setSearchParams(params, { replace: true })
+  }
+
+  const handleOpenShareModal = (connectionId: string) => {
+    const target = connections.find((conn) => conn.id === connectionId)
+    if (!target) {
+      return
+    }
+    setShareTargetConnection(target)
+    setShareModalOpen(true)
   }
 
   return (
@@ -321,6 +349,7 @@ export function Connections() {
                   protocol={protocolLookup[connection.protocol_id]}
                   protocolIcon={resolveProtocolIcon(protocolLookup[connection.protocol_id])}
                   teamName={connection.team_id ? teamLookup[connection.team_id] : undefined}
+                  onShare={canShareConnections ? handleOpenShareModal : undefined}
                 />
               ))}
             </div>
@@ -349,6 +378,19 @@ export function Connections() {
         teams={teams}
         allowTeamAssignment={canManageTeams}
         onSuccess={handleConnectionCreated}
+      />
+
+      <ShareConnectionModal
+        open={shareModalOpen}
+        connection={shareTargetConnection}
+        teams={teams}
+        onClose={() => {
+          setShareModalOpen(false)
+          setShareTargetConnection(null)
+        }}
+        onShareUpdated={() => {
+          void refetchConnections()
+        }}
       />
     </div>
   )

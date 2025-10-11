@@ -73,3 +73,10 @@ func (h *handlerMockChecker) Check(_ context.Context, _ string, permissionID str
 	}
 	return h.grants[permissionID], nil
 }
+
+func (h *handlerMockChecker) CheckResource(_ context.Context, _ string, _ string, _ string, permissionID string) (bool, error) {
+	if h.err != nil {
+		return false, h.err
+	}
+	return h.grants[permissionID], nil
+}

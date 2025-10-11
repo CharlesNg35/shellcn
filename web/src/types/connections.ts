@@ -6,11 +6,34 @@ export interface ConnectionTarget {
   ordering?: number
 }
 
-export interface ConnectionVisibility {
-  id?: string
-  team_id?: string | null
-  user_id?: string | null
-  permission_scope: string
+export type ConnectionPrincipalType = 'user' | 'team'
+
+export interface ConnectionSharePrincipal {
+  id: string
+  type: ConnectionPrincipalType
+  name: string
+  email?: string
+}
+
+export interface ConnectionShare {
+  share_id: string
+  principal: ConnectionSharePrincipal
+  permission_scopes: string[]
+  expires_at?: string | null
+  granted_by?: ConnectionSharePrincipal | null
+  metadata?: Record<string, unknown>
+}
+
+export interface ConnectionShareEntry {
+  principal: ConnectionSharePrincipal
+  granted_by?: ConnectionSharePrincipal | null
+  permission_scopes: string[]
+  expires_at?: string | null
+}
+
+export interface ConnectionShareSummary {
+  shared: boolean
+  entries: ConnectionShareEntry[]
 }
 
 export interface ConnectionMetadata {
@@ -55,7 +78,8 @@ export interface ConnectionRecord {
   secret_id?: string | null
   last_used_at?: string | null
   targets?: ConnectionTarget[]
-  visibility?: ConnectionVisibility[]
+  shares?: ConnectionShare[]
+  share_summary?: ConnectionShareSummary
   folder?: ConnectionFolderSummary
 }
 

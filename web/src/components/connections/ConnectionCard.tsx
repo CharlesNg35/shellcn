@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { MoreVertical, Clock, ExternalLink, Pencil, Trash2 } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
+import { MoreVertical, Clock, ExternalLink, Pencil, Trash2, Share2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -16,6 +17,7 @@ interface ConnectionCardProps {
   teamName?: string
   onEdit?: (id: string) => void
   onDelete?: (id: string) => void
+  onShare?: (id: string) => void
 }
 
 export function ConnectionCard({
@@ -25,6 +27,7 @@ export function ConnectionCard({
   teamName,
   onEdit,
   onDelete,
+  onShare,
 }: ConnectionCardProps) {
   const [showMenu, setShowMenu] = useState(false)
   const metadata = connection.metadata ?? {}
@@ -41,6 +44,41 @@ export function ConnectionCard({
         backgroundColor: hexToRgba(metadataColor, 0.12),
         boxShadow: `0 0 0 1px ${hexToRgba(metadataColor, 0.2)}`,
       }
+    : undefined
+
+  const shareSummary = connection.share_summary
+  const shareEntries = shareSummary?.entries ?? []
+  const hasShare = Boolean(shareSummary?.shared && shareEntries.length > 0)
+
+  const shareBadgeLabel = hasShare
+    ? (() => {
+        const primary = shareEntries[0]
+        const granterName = primary.granted_by?.name ?? 'Shared'
+        const baseLabel = primary.granted_by ? `Shared by ${granterName}` : 'Shared access'
+        if (primary.principal.type === 'team') {
+          return `${baseLabel} • ${primary.principal.name}`
+        }
+        return baseLabel
+      })()
+    : null
+
+  const shareTooltip = hasShare
+    ? shareEntries
+        .map((entry) => {
+          const granter = entry.granted_by?.name
+            ? `Shared by ${entry.granted_by.name}`
+            : 'Shared access'
+          const via =
+            entry.principal.type === 'team' ? `Team: ${entry.principal.name}` : 'Direct access'
+          const scopes = entry.permission_scopes.length
+            ? entry.permission_scopes.join(', ')
+            : 'connection.view'
+          const expiry = entry.expires_at
+            ? `Expires ${formatDistanceToNow(new Date(entry.expires_at), { addSuffix: true })}`
+            : 'No expiry'
+          return `${granter} • ${via} • ${scopes} • ${expiry}`
+        })
+        .join('\n')
     : undefined
 
   return (
@@ -91,6 +129,18 @@ export function ConnectionCard({
                   <Pencil className="h-4 w-4" />
                   Edit
                 </button>
+                {onShare && (
+                  <button
+                    onClick={() => {
+                      onShare(connection.id)
+                      setShowMenu(false)
+                    }}
+                    className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-foreground hover:bg-accent"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    Share
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     onDelete?.(connection.id)
@@ -119,6 +169,11 @@ export function ConnectionCard({
           <Badge variant={isPersonal ? 'secondary' : 'default'} className="text-xs font-medium">
             {isPersonal ? 'Personal' : (teamName ?? 'Team')}
           </Badge>
+          {hasShare && shareBadgeLabel && (
+            <Badge variant="secondary" className="text-xs font-medium" title={shareTooltip}>
+              {shareBadgeLabel}
+            </Badge>
+          )}
         </div>
 
         {/* Status */}

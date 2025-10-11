@@ -48,26 +48,21 @@ func TestConnectionServiceListVisible(t *testing.T) {
 		Name:        "Kubernetes control plane",
 		ProtocolID:  "kubernetes",
 		OwnerUserID: "user-other",
-		Visibility: []models.ConnectionVisibility{
-			{
-				UserID:          &user.ID,
-				PermissionScope: "view",
-			},
-		},
 	}
 	require.NoError(t, db.Create(&second).Error)
+	require.NoError(t, db.Create(&models.ResourcePermission{
+		ResourceID:    second.ID,
+		ResourceType:  "connection",
+		PrincipalType: "user",
+		PrincipalID:   user.ID,
+		PermissionID:  "connection.view",
+	}).Error)
 
 	third := models.Connection{
 		Name:        "Team database",
 		ProtocolID:  "postgres",
 		OwnerUserID: "user-other",
 		TeamID:      &teamID,
-		Visibility: []models.ConnectionVisibility{
-			{
-				TeamID:          &team.ID,
-				PermissionScope: "view",
-			},
-		},
 	}
 	require.NoError(t, db.Create(&third).Error)
 
@@ -80,36 +75,49 @@ func TestConnectionServiceListVisible(t *testing.T) {
 	require.NoError(t, err)
 
 	result, err := svc.ListVisible(context.Background(), ListConnectionsOptions{
-		UserID:            user.ID,
-		IncludeTargets:    true,
-		IncludeVisibility: true,
+		UserID:         user.ID,
+		IncludeTargets: true,
+		IncludeGrants:  true,
 	})
 	require.NoError(t, err)
 	require.Len(t, result.Connections, 3)
 
 	names := make([]string, 0, len(result.Connections))
+	var sharedShares []ConnectionShareDTO
+	var shareSummary *ConnectionShareSummary
 	for _, conn := range result.Connections {
 		names = append(names, conn.Name)
+		if conn.ID == second.ID {
+			sharedShares = conn.Shares
+			shareSummary = conn.ShareSummary
+		}
 	}
 	require.Contains(t, names, "Primary SSH")
 	require.Contains(t, names, "Kubernetes control plane")
 	require.Contains(t, names, "Team database")
+	require.Len(t, sharedShares, 1)
+	require.Equal(t, "user:"+user.ID, sharedShares[0].ShareID)
+	require.ElementsMatch(t, []string{"connection.view"}, sharedShares[0].PermissionScopes)
+	require.NotNil(t, shareSummary)
+	require.True(t, shareSummary.Shared)
+	require.Len(t, shareSummary.Entries, 1)
+	require.Equal(t, user.ID, shareSummary.Entries[0].Principal.ID)
 
 	teamScoped, err := svc.ListVisible(context.Background(), ListConnectionsOptions{
-		UserID:            user.ID,
-		TeamID:            team.ID,
-		IncludeTargets:    false,
-		IncludeVisibility: false,
+		UserID:         user.ID,
+		TeamID:         team.ID,
+		IncludeTargets: false,
+		IncludeGrants:  false,
 	})
 	require.NoError(t, err)
 	require.Len(t, teamScoped.Connections, 1)
 	require.Equal(t, "Team database", teamScoped.Connections[0].Name)
 
 	personalScoped, err := svc.ListVisible(context.Background(), ListConnectionsOptions{
-		UserID:            user.ID,
-		TeamID:            "personal",
-		IncludeTargets:    false,
-		IncludeVisibility: false,
+		UserID:         user.ID,
+		TeamID:         "personal",
+		IncludeTargets: false,
+		IncludeGrants:  false,
 	})
 	require.NoError(t, err)
 	require.Len(t, personalScoped.Connections, 2)
@@ -240,12 +248,6 @@ func TestConnectionServiceCountByProtocol(t *testing.T) {
 		ProtocolID:  "postgres",
 		OwnerUserID: "other",
 		TeamID:      &teamID,
-		Visibility: []models.ConnectionVisibility{
-			{
-				TeamID:          &teamID,
-				PermissionScope: "view",
-			},
-		},
 	}).Error)
 
 	require.NoError(t, db.Create(&models.Connection{

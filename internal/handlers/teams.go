@@ -251,18 +251,18 @@ func (h *TeamHandler) ListConnections(c *gin.Context) {
 		return
 	}
 
-	includeTargets, includeVisibility := parseConnectionIncludes(c.Query("include"))
+	includeTargets, includeGrants := parseConnectionIncludes(c.Query("include"))
 	page := parseIntQuery(c, "page", 1)
 	perPage := parseIntQuery(c, "per_page", 25)
 
 	result, err := h.connections.ListVisible(ctx, services.ListConnectionsOptions{
-		UserID:            userID,
-		TeamID:            teamID,
-		FolderID:          c.Query("folder_id"),
-		IncludeTargets:    includeTargets,
-		IncludeVisibility: includeVisibility,
-		Page:              page,
-		PerPage:           perPage,
+		UserID:         userID,
+		TeamID:         teamID,
+		FolderID:       c.Query("folder_id"),
+		IncludeTargets: includeTargets,
+		IncludeGrants:  includeGrants,
+		Page:           page,
+		PerPage:        perPage,
 	})
 	if err != nil {
 		response.Error(c, err)
@@ -276,6 +276,22 @@ func (h *TeamHandler) ListConnections(c *gin.Context) {
 		TotalPages: computePages(result.Total, int64(result.PerPage)),
 	}
 	response.SuccessWithMeta(c, http.StatusOK, result.Connections, meta)
+}
+
+// GET /api/teams/:id/capabilities
+func (h *TeamHandler) Capabilities(c *gin.Context) {
+	userID := c.GetString(middleware.CtxUserIDKey)
+	if userID == "" {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+
+	capabilities, err := h.svc.GetCapabilities(requestContext(c), c.Param("id"), userID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, capabilities)
 }
 
 // GET /api/teams/:id/folders
@@ -319,21 +335,21 @@ func (h *TeamHandler) SetRoles(c *gin.Context) {
 }
 
 func parseConnectionIncludes(includeParam string) (bool, bool) {
-	includeTargets := false
-	includeVisibility := false
 	if includeParam == "" {
 		return true, false
 	}
 
+	includeTargets := false
+	includeGrants := false
 	for _, part := range strings.Split(includeParam, ",") {
 		switch strings.TrimSpace(strings.ToLower(part)) {
 		case "targets":
 			includeTargets = true
-		case "visibility":
-			includeVisibility = true
+		case "shares":
+			includeGrants = true
 		}
 	}
-	return includeTargets, includeVisibility
+	return includeTargets, includeGrants
 }
 
 func computePages(total, perPage int64) int {

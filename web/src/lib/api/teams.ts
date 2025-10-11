@@ -2,10 +2,12 @@ import type { ApiResponse } from '@/types/api'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
 import type {
+  TeamCapabilities,
   TeamCreatePayload,
   TeamListResult,
   TeamMember,
   TeamRecord,
+  TeamResourceGrant,
   TeamUpdatePayload,
 } from '@/types/teams'
 import type { UserRoleSummary } from '@/types/users'
@@ -40,6 +42,19 @@ interface TeamResponse {
   updated_at?: string
   users?: TeamMemberResponse[]
   roles?: TeamRoleResponse[]
+}
+
+interface TeamResourceGrantResponse {
+  resource_id: string
+  resource_type: string
+  permission_id: string
+  expires_at?: string | null
+}
+
+interface TeamCapabilitiesResponse {
+  team_id: string
+  permission_ids?: string[]
+  resource_grants?: TeamResourceGrantResponse[]
 }
 
 function transformTeamMember(raw: TeamMemberResponse): TeamMember {
@@ -152,6 +167,35 @@ export async function setTeamRoles(teamId: string, roleIds: string[]): Promise<U
   return unwrapResponse(response).map(transformRoleSummary)
 }
 
+export async function fetchTeamCapabilities(teamId: string): Promise<TeamCapabilities> {
+  const response = await apiClient.get<ApiResponse<TeamCapabilitiesResponse>>(
+    `${TEAMS_ENDPOINT}/${teamId}/capabilities`
+  )
+  const data = unwrapResponse(response)
+  return transformTeamCapabilities(data)
+}
+
+function transformTeamCapabilities(raw: TeamCapabilitiesResponse): TeamCapabilities {
+  const permissionIds = Array.isArray(raw.permission_ids)
+    ? raw.permission_ids.filter((id): id is string => typeof id === 'string')
+    : []
+
+  const resourceGrants: TeamResourceGrant[] = Array.isArray(raw.resource_grants)
+    ? raw.resource_grants.map((grant) => ({
+        resource_id: grant.resource_id,
+        resource_type: grant.resource_type,
+        permission_id: grant.permission_id,
+        expires_at: grant.expires_at ?? undefined,
+      }))
+    : []
+
+  return {
+    team_id: raw.team_id,
+    permission_ids: permissionIds,
+    resource_grants: resourceGrants,
+  }
+}
+
 export const teamsApi = {
   list: fetchTeams,
   get: fetchTeamById,
@@ -162,4 +206,5 @@ export const teamsApi = {
   addMember: addTeamMember,
   removeMember: removeTeamMember,
   setRoles: setTeamRoles,
+  capabilities: fetchTeamCapabilities,
 }

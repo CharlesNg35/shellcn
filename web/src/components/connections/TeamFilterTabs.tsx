@@ -26,6 +26,7 @@ export function TeamFilterTabs({
     const counts: Record<string, number> = {
       all: connections.length,
       personal: connections.filter((c) => !c.team_id).length,
+      shared: connections.filter((c) => c.share_summary?.shared).length,
     }
 
     teams.forEach((team) => {
@@ -77,6 +78,26 @@ export function TeamFilterTabs({
             )}
           >
             {teamCounts.personal}
+          </Badge>
+        </button>
+        <button
+          onClick={() => onTeamChange('shared')}
+          className={cn(
+            'flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-all',
+            activeTeam === 'shared'
+              ? 'bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20'
+              : 'bg-card text-muted-foreground shadow-sm ring-1 ring-border/60 hover:bg-accent hover:text-foreground hover:shadow'
+          )}
+        >
+          Shared with me
+          <Badge
+            variant={activeTeam === 'shared' ? 'secondary' : 'outline'}
+            className={cn(
+              'text-xs font-semibold',
+              activeTeam === 'shared' && 'bg-primary-foreground/20'
+            )}
+          >
+            {teamCounts.shared}
           </Badge>
         </button>
         {teams.map((team) => (

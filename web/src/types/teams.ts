@@ -42,3 +42,16 @@ export interface TeamMember {
 export interface TeamMemberAssignmentPayload {
   user_id: string
 }
+
+export interface TeamResourceGrant {
+  resource_id: string
+  resource_type: string
+  permission_id: string
+  expires_at?: string | null
+}
+
+export interface TeamCapabilities {
+  team_id: string
+  permission_ids: string[]
+  resource_grants: TeamResourceGrant[]
+}

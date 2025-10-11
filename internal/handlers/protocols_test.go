@@ -27,6 +27,10 @@ func (h *handlerPermissionStub) Check(ctx context.Context, userID, permissionID 
 	return h.grants[permissionID], nil
 }
 
+func (h *handlerPermissionStub) CheckResource(ctx context.Context, userID, resourceType, resourceID, permissionID string) (bool, error) {
+	return h.grants[permissionID], nil
+}
+
 func TestProtocolHandlerListAll(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())

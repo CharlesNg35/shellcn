@@ -3,6 +3,7 @@ package permissions
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -171,6 +172,112 @@ func TestCheckerIncludesImpliedPermissions(t *testing.T) {
 	require.Contains(t, perms, parent)
 }
 
+func TestCheckerCheckResourceHonoursGrants(t *testing.T) {
+	db := setupPermissionTestDB(t)
+
+	user := &models.User{
+		Username: "resource-user",
+		Email:    "resource@example.com",
+		Password: "secret",
+	}
+	require.NoError(t, db.Create(user).Error)
+
+	resourceID := "conn-resource-1"
+
+	checker, err := NewChecker(db)
+	require.NoError(t, err)
+
+	ok, err := checker.CheckResource(context.Background(), user.ID, "connection", resourceID, "connection.view")
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	grant := models.ResourcePermission{
+		ResourceID:    resourceID,
+		ResourceType:  "connection",
+		PrincipalType: principalTypeUser,
+		PrincipalID:   user.ID,
+		PermissionID:  "connection.view",
+	}
+	require.NoError(t, db.Create(&grant).Error)
+
+	ok, err = checker.CheckResource(context.Background(), user.ID, "connection", resourceID, "connection.view")
+	require.NoError(t, err)
+	require.True(t, ok)
+}
+
+func TestCheckerCheckResourceEnforcesDependencies(t *testing.T) {
+	db := setupPermissionTestDB(t)
+
+	user := &models.User{
+		Username: "resource-deps",
+		Email:    "resource-deps@example.com",
+		Password: "secret",
+	}
+	require.NoError(t, db.Create(user).Error)
+
+	resourceID := "conn-resource-2"
+
+	checker, err := NewChecker(db)
+	require.NoError(t, err)
+
+	launchGrant := models.ResourcePermission{
+		ResourceID:    resourceID,
+		ResourceType:  "connection",
+		PrincipalType: principalTypeUser,
+		PrincipalID:   user.ID,
+		PermissionID:  "connection.launch",
+	}
+	require.NoError(t, db.Create(&launchGrant).Error)
+
+	ok, err := checker.CheckResource(context.Background(), user.ID, "connection", resourceID, "connection.launch")
+	require.NoError(t, err)
+	require.False(t, ok, "should require connection.view dependency")
+
+	viewGrant := models.ResourcePermission{
+		ResourceID:    resourceID,
+		ResourceType:  "connection",
+		PrincipalType: principalTypeUser,
+		PrincipalID:   user.ID,
+		PermissionID:  "connection.view",
+	}
+	require.NoError(t, db.Create(&viewGrant).Error)
+
+	ok, err = checker.CheckResource(context.Background(), user.ID, "connection", resourceID, "connection.launch")
+	require.NoError(t, err)
+	require.True(t, ok)
+}
+
+func TestCheckerCheckResourceHonoursExpiry(t *testing.T) {
+	db := setupPermissionTestDB(t)
+
+	user := &models.User{
+		Username: "resource-expiry",
+		Email:    "resource-expiry@example.com",
+		Password: "secret",
+	}
+	require.NoError(t, db.Create(user).Error)
+
+	resourceID := "conn-resource-3"
+
+	past := time.Now().Add(-1 * time.Hour)
+	grant := models.ResourcePermission{
+		ResourceID:    resourceID,
+		ResourceType:  "connection",
+		PrincipalType: principalTypeUser,
+		PrincipalID:   user.ID,
+		PermissionID:  "connection.view",
+		ExpiresAt:     &past,
+	}
+	require.NoError(t, db.Create(&grant).Error)
+
+	checker, err := NewChecker(db)
+	require.NoError(t, err)
+
+	ok, err := checker.CheckResource(context.Background(), user.ID, "connection", resourceID, "connection.view")
+	require.NoError(t, err)
+	require.False(t, ok)
+}
+
 func setupPermissionTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
@@ -182,6 +289,7 @@ func setupPermissionTestDB(t *testing.T) *gorm.DB {
 		&models.Role{},
 		&models.Team{},
 		&models.Permission{},
+		&models.ResourcePermission{},
 	))
 	require.NoError(t, Sync(context.Background(), db))
 

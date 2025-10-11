@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
 import { useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useQuery } from '@tanstack/react-query'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
@@ -13,6 +14,7 @@ import { resolveProtocolIcon } from '@/lib/utils/protocolIcons'
 import { useConnectionMutations } from '@/hooks/useConnectionMutations'
 import type { ApiError } from '@/lib/api/http'
 import { toApiError } from '@/lib/api/http'
+import { teamsApi } from '@/lib/api/teams'
 import {
   CONNECTION_COLOR_OPTIONS,
   CONNECTION_ICON_OPTIONS,
@@ -106,6 +108,45 @@ export function ConnectionFormModal({
 
   const selectedIcon = watch('icon')
   const selectedColor = watch('color')
+  const selectedTeamValue = watch('team_id')
+
+  const effectiveTeamId = useMemo(
+    () => denormalizeTeamValue(selectedTeamValue),
+    [selectedTeamValue]
+  )
+
+  const teamCapabilitiesQuery = useQuery({
+    queryKey: effectiveTeamId
+      ? ['teams', effectiveTeamId, 'capabilities']
+      : ['teams', 'capabilities'],
+    queryFn: () => teamsApi.capabilities(effectiveTeamId!),
+    enabled: Boolean(effectiveTeamId) && open,
+    staleTime: 60_000,
+  })
+
+  const teamCapabilityWarnings = useMemo(() => {
+    if (!effectiveTeamId) {
+      return [] as string[]
+    }
+    const capabilities = teamCapabilitiesQuery.data
+    if (!capabilities) {
+      return [] as string[]
+    }
+
+    const warnings: string[] = []
+    if (!capabilities.permission_ids.includes('connection.launch')) {
+      warnings.push(
+        'Team members will not be able to launch this connection without an additional role or share (missing connection.launch).'
+      )
+    }
+    if (!capabilities.permission_ids.includes('connection.manage')) {
+      warnings.push(
+        'Team members will not be able to edit this connection (missing connection.manage).'
+      )
+    }
+
+    return warnings
+  }, [effectiveTeamId, teamCapabilitiesQuery.data])
 
   useEffect(() => {
     if (!selectedIcon) {
@@ -281,6 +322,21 @@ export function ConnectionFormModal({
                   </option>
                 ))}
               </select>
+              {effectiveTeamId ? (
+                <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  {teamCapabilitiesQuery.isLoading ? (
+                    'Checking team capabilities…'
+                  ) : teamCapabilityWarnings.length === 0 ? (
+                    'Team currently has the required permissions to launch this connection.'
+                  ) : (
+                    <ul className="list-disc space-y-1 pl-4">
+                      {teamCapabilityWarnings.map((warning) => (
+                        <li key={warning}>{warning}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
             </div>
           ) : null}
 

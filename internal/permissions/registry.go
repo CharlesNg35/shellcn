@@ -9,11 +9,15 @@ import (
 
 // Permission describes a permission definition registered by modules.
 type Permission struct {
-	ID          string
-	Module      string
-	DependsOn   []string
-	Implies     []string
-	Description string
+	ID           string
+	Module       string
+	DependsOn    []string
+	Implies      []string
+	Description  string
+	DisplayName  string
+	Category     string
+	DefaultScope string
+	Metadata     map[string]any
 }
 
 type permissionRegistry struct {
@@ -135,6 +139,13 @@ func clonePermission(perm *Permission) *Permission {
 	}
 	if len(perm.Implies) > 0 {
 		cp.Implies = append([]string(nil), perm.Implies...)
+	}
+	if perm.Metadata != nil {
+		metaCopy := make(map[string]any, len(perm.Metadata))
+		for key, value := range perm.Metadata {
+			metaCopy[key] = value
+		}
+		cp.Metadata = metaCopy
 	}
 	return &cp
 }

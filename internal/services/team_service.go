@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -39,6 +41,21 @@ type TeamService struct {
 	db           *gorm.DB
 	auditService *AuditService
 	checker      PermissionChecker
+}
+
+// TeamCapabilities summarises aggregate permissions held by a team.
+type TeamCapabilities struct {
+	TeamID         string              `json:"team_id"`
+	PermissionIDs  []string            `json:"permission_ids"`
+	ResourceGrants []TeamResourceGrant `json:"resource_grants,omitempty"`
+}
+
+// TeamResourceGrant captures resource-level permissions granted to a team.
+type TeamResourceGrant struct {
+	ResourceID   string     `json:"resource_id"`
+	ResourceType string     `json:"resource_type"`
+	PermissionID string     `json:"permission_id"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 }
 
 // NewTeamService constructs a TeamService instance.
@@ -232,6 +249,73 @@ func (s *TeamService) List(ctx context.Context, requesterID string) ([]models.Te
 	}
 
 	return teams, nil
+}
+
+// GetCapabilities returns the aggregated permission scopes for the specified team.
+func (s *TeamService) GetCapabilities(ctx context.Context, teamID, requesterID string) (*TeamCapabilities, error) {
+	ctx = ensureContext(ctx)
+
+	if _, err := s.GetByID(ctx, teamID, requesterID); err != nil {
+		return nil, err
+	}
+
+	var team models.Team
+	if err := s.db.WithContext(ctx).
+		Preload("Roles.Permissions").
+		First(&team, "id = ?", teamID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTeamNotFound
+		}
+		return nil, fmt.Errorf("team service: load capabilities: %w", err)
+	}
+
+	permSet := make(map[string]struct{})
+	for _, role := range team.Roles {
+		for _, perm := range role.Permissions {
+			if perm.ID != "" {
+				permSet[perm.ID] = struct{}{}
+			}
+		}
+	}
+
+	var grants []models.ResourcePermission
+	if err := s.db.WithContext(ctx).
+		Where("principal_type = ? AND principal_id = ?", grantPrincipalTeam, teamID).
+		Find(&grants).Error; err != nil {
+		return nil, fmt.Errorf("team service: load resource grants: %w", err)
+	}
+
+	for _, grant := range grants {
+		if grant.PermissionID != "" {
+			permSet[grant.PermissionID] = struct{}{}
+		}
+	}
+
+	permissionIDs := make([]string, 0, len(permSet))
+	for id := range permSet {
+		permissionIDs = append(permissionIDs, id)
+	}
+	sort.Strings(permissionIDs)
+
+	resourceGrants := make([]TeamResourceGrant, 0, len(grants))
+	for _, grant := range grants {
+		entry := TeamResourceGrant{
+			ResourceID:   grant.ResourceID,
+			ResourceType: grant.ResourceType,
+			PermissionID: grant.PermissionID,
+		}
+		if grant.ExpiresAt != nil {
+			exp := *grant.ExpiresAt
+			entry.ExpiresAt = &exp
+		}
+		resourceGrants = append(resourceGrants, entry)
+	}
+
+	return &TeamCapabilities{
+		TeamID:         team.ID,
+		PermissionIDs:  permissionIDs,
+		ResourceGrants: resourceGrants,
+	}, nil
 }
 
 // Delete removes a team by identifier.

@@ -30,21 +30,21 @@ func (h *ConnectionHandler) List(c *gin.Context) {
 		return
 	}
 
-	includeTargets, includeVisibility := parseIncludes(c.Query("include"))
+	includeTargets, includeGrants := parseIncludes(c.Query("include"))
 	page := parseIntQuery(c, "page", 1)
 	perPage := parseIntQuery(c, "per_page", 25)
 
 	ctx := requestContext(c)
 	result, err := h.svc.ListVisible(ctx, services.ListConnectionsOptions{
-		UserID:            userID,
-		ProtocolID:        c.Query("protocol_id"),
-		TeamID:            strings.TrimSpace(c.Query("team_id")),
-		FolderID:          c.Query("folder_id"),
-		Search:            c.Query("search"),
-		IncludeTargets:    includeTargets,
-		IncludeVisibility: includeVisibility,
-		Page:              page,
-		PerPage:           perPage,
+		UserID:         userID,
+		ProtocolID:     c.Query("protocol_id"),
+		TeamID:         strings.TrimSpace(c.Query("team_id")),
+		FolderID:       c.Query("folder_id"),
+		Search:         c.Query("search"),
+		IncludeTargets: includeTargets,
+		IncludeGrants:  includeGrants,
+		Page:           page,
+		PerPage:        perPage,
 	})
 	if err != nil {
 		response.Error(c, err)
@@ -127,10 +127,10 @@ func (h *ConnectionHandler) Get(c *gin.Context) {
 		return
 	}
 
-	includeTargets, includeVisibility := parseIncludes(c.Query("include"))
+	includeTargets, includeGrants := parseIncludes(c.Query("include"))
 
 	ctx := requestContext(c)
-	connection, err := h.svc.GetVisible(ctx, userID, c.Param("id"), includeTargets, includeVisibility)
+	connection, err := h.svc.GetVisible(ctx, userID, c.Param("id"), includeTargets, includeGrants)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -139,21 +139,21 @@ func (h *ConnectionHandler) Get(c *gin.Context) {
 }
 
 func parseIncludes(includeParam string) (bool, bool) {
-	includeTargets := false
-	includeVisibility := false
 	if includeParam == "" {
 		return true, false
 	}
 
+	includeTargets := false
+	includeGrants := false
 	for _, part := range strings.Split(includeParam, ",") {
 		switch strings.TrimSpace(strings.ToLower(part)) {
 		case "targets":
 			includeTargets = true
-		case "visibility":
-			includeVisibility = true
+		case "shares":
+			includeGrants = true
 		}
 	}
-	return includeTargets, includeVisibility
+	return includeTargets, includeGrants
 }
 
 func computeTotalPages(total, perPage int64) int {

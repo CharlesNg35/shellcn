@@ -27,7 +27,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ConnectionProtocol{},
 		&models.Connection{},
 		&models.ConnectionTarget{},
-		&models.ConnectionVisibility{},
+		&models.ResourcePermission{},
 		&models.Notification{},
 	)
 }
@@ -47,12 +47,14 @@ func SeedData(db *gorm.DB) error {
 			Name:        "Administrator",
 			Description: "Full system access",
 			IsSystem:    true,
+			IsTemplate:  true,
 		},
 		{
 			BaseModel:   models.BaseModel{ID: "user"},
 			Name:        "User",
 			Description: "Standard user access",
 			IsSystem:    true,
+			IsTemplate:  true,
 		},
 	}
 

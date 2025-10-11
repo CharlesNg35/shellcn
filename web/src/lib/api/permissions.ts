@@ -21,6 +21,10 @@ interface PermissionRegistryEntryResponse {
   description?: string
   depends_on?: unknown
   implies?: unknown
+  display_name?: string
+  category?: string
+  default_scope?: string
+  metadata?: Record<string, unknown> | string | null
 }
 
 type PermissionRegistryResponse = Record<string, PermissionRegistryEntryResponse>
@@ -83,6 +87,25 @@ function transformPermission(
     description: raw.description,
     depends_on: normalisePermissionIds(raw.depends_on),
     implies: normalisePermissionIds(raw.implies),
+    display_name: typeof raw.display_name === 'string' ? raw.display_name : undefined,
+    category: typeof raw.category === 'string' ? raw.category : undefined,
+    default_scope: typeof raw.default_scope === 'string' ? raw.default_scope : undefined,
+    metadata: (() => {
+      if (raw.metadata && typeof raw.metadata === 'object') {
+        return raw.metadata
+      }
+      if (typeof raw.metadata === 'string' && raw.metadata.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(raw.metadata)
+          if (parsed && typeof parsed === 'object') {
+            return parsed as Record<string, unknown>
+          }
+        } catch {
+          return undefined
+        }
+      }
+      return undefined
+    })(),
   }
 }
 

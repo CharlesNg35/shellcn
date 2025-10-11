@@ -8,6 +8,10 @@ export interface PermissionDefinition {
   description?: string
   depends_on: PermissionIdentifier[]
   implies: PermissionIdentifier[]
+  display_name?: string
+  category?: string
+  default_scope?: string
+  metadata?: Record<string, unknown>
 }
 
 export type PermissionRegistry = Record<string, PermissionDefinition>

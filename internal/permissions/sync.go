@@ -37,18 +37,30 @@ func Sync(ctx context.Context, db *gorm.DB) error {
 		if err != nil {
 			return fmt.Errorf("permission: marshal implies for %s: %w", perm.ID, err)
 		}
+		var metadataJSON datatypes.JSON
+		if perm.Metadata != nil {
+			raw, err := json.Marshal(perm.Metadata)
+			if err != nil {
+				return fmt.Errorf("permission: marshal metadata for %s: %w", perm.ID, err)
+			}
+			metadataJSON = datatypes.JSON(raw)
+		}
 
 		record := models.Permission{
-			BaseModel:   models.BaseModel{ID: perm.ID},
-			Module:      perm.Module,
-			Description: perm.Description,
-			DependsOn:   datatypes.JSON(dependsJSON),
-			Implies:     datatypes.JSON(impliesJSON),
+			BaseModel:    models.BaseModel{ID: perm.ID},
+			Module:       perm.Module,
+			DisplayName:  perm.DisplayName,
+			Category:     perm.Category,
+			Description:  perm.Description,
+			DefaultScope: perm.DefaultScope,
+			Metadata:     metadataJSON,
+			DependsOn:    datatypes.JSON(dependsJSON),
+			Implies:      datatypes.JSON(impliesJSON),
 		}
 
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"module", "description", "depends_on", "implies"}),
+			DoUpdates: clause.AssignmentColumns([]string{"module", "display_name", "category", "description", "default_scope", "metadata", "depends_on", "implies"}),
 		}).Create(&record).Error; err != nil {
 			return fmt.Errorf("permission: sync %s: %w", perm.ID, err)
 		}

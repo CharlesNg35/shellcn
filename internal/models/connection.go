@@ -21,7 +21,7 @@ type Connection struct {
 	SecretID    *string        `gorm:"type:uuid" json:"secret_id"`
 	LastUsedAt  *time.Time     `json:"last_used_at"`
 
-	Targets    []ConnectionTarget     `gorm:"foreignKey:ConnectionID" json:"targets,omitempty"`
-	Visibility []ConnectionVisibility `gorm:"foreignKey:ConnectionID" json:"visibility,omitempty"`
-	Folder     *ConnectionFolder      `gorm:"foreignKey:FolderID" json:"folder,omitempty"`
+	Targets        []ConnectionTarget   `gorm:"foreignKey:ConnectionID" json:"targets,omitempty"`
+	ResourceGrants []ResourcePermission `gorm:"polymorphic:Resource;polymorphicValue:connection" json:"resource_grants,omitempty"`
+	Folder         *ConnectionFolder    `gorm:"foreignKey:FolderID" json:"folder,omitempty"`
 }
