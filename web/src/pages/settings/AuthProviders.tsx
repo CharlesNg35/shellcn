@@ -144,11 +144,15 @@ export function AuthProviders() {
     onMutate: () => {
       setActiveSync('ldap')
     },
-    onSuccess: (summary) => {
+    onSuccess: async (summary) => {
       const details = `Users: +${summary.users_created} created, ${summary.users_updated} updated, ${summary.users_skipped} skipped. Teams: +${summary.teams_created} created, ${summary.memberships_added} memberships added, ${summary.memberships_removed} removed.`
       toast.success('LDAP sync completed', {
         description: details,
       })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: AUTH_PROVIDERS_QUERY_KEY }),
+        queryClient.invalidateQueries({ queryKey: getAuthProviderDetailQueryKey('ldap') }),
+      ])
     },
     onError: (error) => {
       const apiError = toApiError(error)

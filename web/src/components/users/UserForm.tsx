@@ -145,6 +145,9 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
     isSubmitting || create.isPending || update.isPending || isRoleMutationPending
   const roleSelectionDisabled = !canManageRoles || savingInProgress
 
+  const isExternalUser =
+    mode === 'edit' && Boolean(user?.auth_provider && user.auth_provider !== 'local')
+
   const handleSuccess = (result: UserRecord) => {
     setFormError(null)
     onSuccess?.(result)
@@ -213,12 +216,22 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
 
   return (
     <form className="space-y-4" autoComplete="off" onSubmit={handleSubmit(onSubmit)}>
+      {isExternalUser ? (
+        <div className="rounded-lg border border-border/70 bg-muted/10 p-3 text-sm text-muted-foreground">
+          This account is managed by the{' '}
+          <span className="font-medium">{user?.auth_provider?.toUpperCase()}</span> identity
+          provider. Profile details are read-only, but you can adjust activation status or role
+          assignments.
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Input
           label="Username"
           placeholder="username"
           {...register('username')}
           error={errors.username?.message}
+          disabled={isExternalUser}
         />
         <Input
           type="email"
@@ -226,6 +239,7 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
           placeholder="user@example.com"
           {...register('email')}
           error={errors.email?.message}
+          disabled={isExternalUser}
         />
       </div>
 
@@ -240,11 +254,26 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
       ) : null}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Input label="First name" {...register('first_name')} error={errors.first_name?.message} />
-        <Input label="Last name" {...register('last_name')} error={errors.last_name?.message} />
+        <Input
+          label="First name"
+          {...register('first_name')}
+          error={errors.first_name?.message}
+          disabled={isExternalUser}
+        />
+        <Input
+          label="Last name"
+          {...register('last_name')}
+          error={errors.last_name?.message}
+          disabled={isExternalUser}
+        />
       </div>
 
-      <Input label="Avatar URL" {...register('avatar')} error={errors.avatar?.message} />
+      <Input
+        label="Avatar URL"
+        {...register('avatar')}
+        error={errors.avatar?.message}
+        disabled={isExternalUser}
+      />
 
       <div className="space-y-3 rounded-lg border border-border/70 bg-muted/10 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">

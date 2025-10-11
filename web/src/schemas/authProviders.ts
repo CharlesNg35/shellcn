@@ -36,17 +36,54 @@ export const samlConfigSchema = z.object({
   allowRegistration: z.boolean(),
 })
 
-export const ldapConfigSchema = z.object({
-  host: z.string().trim().min(1, 'Host is required'),
-  port: z.coerce.number().int().positive('Port must be a positive number'),
-  baseDn: z.string().trim().min(1, 'Base DN is required'),
-  bindDn: z.string().trim().min(1, 'Bind DN is required'),
-  bindPassword: z.string().trim().min(1, 'Bind password is required'),
-  userFilter: z.string().trim().min(1, 'User filter is required'),
-  useTls: z.boolean(),
-  skipVerify: z.boolean(),
-  attributeMapping: z.string().optional(),
-  syncGroups: z.boolean(),
-  enabled: z.boolean(),
-  allowRegistration: z.boolean(),
-})
+export const ldapConfigSchema = z
+  .object({
+    host: z.string().trim().min(1, 'Host is required'),
+    port: z.coerce.number().int().positive('Port must be a positive number'),
+    baseDn: z.string().trim().min(1, 'Base DN is required'),
+    bindDn: z.string().trim().min(1, 'Bind DN is required'),
+    bindPassword: z.string().trim().min(1, 'Bind password is required'),
+    userFilter: z.string().trim().min(1, 'User filter is required'),
+    useTls: z.boolean(),
+    skipVerify: z.boolean(),
+    attributeMapping: z.string().optional(),
+    syncGroups: z.boolean(),
+    groupBaseDn: z.string().trim().optional(),
+    groupNameAttribute: z.string().trim().optional(),
+    groupMemberAttribute: z.string().trim().optional(),
+    groupFilter: z.string().trim().optional(),
+    enabled: z.boolean(),
+    allowRegistration: z.boolean(),
+  })
+  .superRefine((values, ctx) => {
+    if (values.syncGroups) {
+      if (!values.groupBaseDn?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['groupBaseDn'],
+          message: 'LDAP Groups DN is required when syncing groups.',
+        })
+      }
+      if (!values.groupNameAttribute?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['groupNameAttribute'],
+          message: 'Group name attribute is required when syncing groups.',
+        })
+      }
+      if (!values.groupMemberAttribute?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['groupMemberAttribute'],
+          message: 'Membership attribute is required when syncing groups.',
+        })
+      }
+      if (!values.groupFilter?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['groupFilter'],
+          message: 'Group object filter is required when syncing groups.',
+        })
+      }
+    }
+  })

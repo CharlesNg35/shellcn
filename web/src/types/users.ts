@@ -23,6 +23,7 @@ export interface UserRecord {
   avatar?: string
   is_root: boolean
   is_active: boolean
+  auth_provider?: string
   roles?: UserRoleSummary[]
   teams?: UserTeamSummary[]
   last_login_at?: string | null

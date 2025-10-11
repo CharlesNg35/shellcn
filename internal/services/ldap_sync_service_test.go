@@ -43,7 +43,11 @@ func TestLDAPSyncServiceSyncGroups(t *testing.T) {
 	require.NoError(t, db.Create(user).Error)
 
 	cfg := models.LDAPConfig{
-		SyncGroups: true,
+		SyncGroups:           true,
+		GroupBaseDN:          "ou=Groups,dc=example,dc=com",
+		GroupFilter:          "(objectClass=nestedGroup)",
+		GroupMemberAttribute: "member",
+		GroupNameAttribute:   "cn",
 		AttributeMapping: map[string]string{
 			"groups": "memberOf",
 		},
@@ -92,7 +96,11 @@ func TestLDAPSyncServiceSyncFromIdentities(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := models.LDAPConfig{
-		SyncGroups: true,
+		SyncGroups:           true,
+		GroupBaseDN:          "ou=Groups,dc=example,dc=com",
+		GroupFilter:          "(objectClass=nestedGroup)",
+		GroupMemberAttribute: "member",
+		GroupNameAttribute:   "cn",
 		AttributeMapping: map[string]string{
 			"groups": "memberOf",
 		},

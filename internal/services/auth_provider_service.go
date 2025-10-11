@@ -258,6 +258,11 @@ func (s *AuthProviderService) ConfigureLDAP(ctx context.Context, cfg models.LDAP
 	ctx = ensureContext(ctx)
 
 	cpy := cfg
+	applyLDAPConfigDefaults(&cpy)
+	if err := validateLDAPConfig(cpy); err != nil {
+		return fmt.Errorf("auth provider service: %w", err)
+	}
+
 	password, err := crypto.Encrypt([]byte(cpy.BindPassword), s.encryptionKey)
 	if err != nil {
 		return fmt.Errorf("auth provider service: encrypt ldap password: %w", err)
@@ -426,6 +431,10 @@ func (s *AuthProviderService) TestConnection(ctx context.Context, providerType s
 		if err := json.Unmarshal(provider.Config, &cfg); err != nil {
 			return fmt.Errorf("auth provider service: decode ldap config: %w", err)
 		}
+		applyLDAPConfigDefaults(&cfg)
+		if err := validateLDAPConfig(cfg); err != nil {
+			return fmt.Errorf("auth provider service: validate ldap config: %w", err)
+		}
 		password, err := crypto.Decrypt(cfg.BindPassword, s.encryptionKey)
 		if err != nil {
 			return fmt.Errorf("auth provider service: decrypt ldap password: %w", err)
@@ -555,6 +564,62 @@ func (s *AuthProviderService) LoadLDAPConfig(ctx context.Context) (*models.AuthP
 		return nil, nil, fmt.Errorf("auth provider service: decrypt ldap bind password: %w", err)
 	}
 	cfg.BindPassword = string(password)
+	applyLDAPConfigDefaults(&cfg)
 
 	return provider, &cfg, nil
+}
+
+func applyLDAPConfigDefaults(cfg *models.LDAPConfig) {
+	cfg.Host = strings.TrimSpace(cfg.Host)
+	cfg.BaseDN = strings.TrimSpace(cfg.BaseDN)
+	cfg.UserBaseDN = strings.TrimSpace(cfg.UserBaseDN)
+	if cfg.UserBaseDN == "" {
+		cfg.UserBaseDN = cfg.BaseDN
+	}
+	if cfg.UserBaseDN != "" {
+		cfg.BaseDN = cfg.UserBaseDN
+	}
+	cfg.BindDN = strings.TrimSpace(cfg.BindDN)
+	cfg.BindPassword = strings.TrimSpace(cfg.BindPassword)
+	cfg.UserFilter = strings.TrimSpace(cfg.UserFilter)
+	cfg.GroupBaseDN = strings.TrimSpace(cfg.GroupBaseDN)
+	cfg.GroupNameAttribute = strings.TrimSpace(cfg.GroupNameAttribute)
+	if cfg.GroupNameAttribute == "" {
+		cfg.GroupNameAttribute = "cn"
+	}
+	cfg.GroupMemberAttribute = strings.TrimSpace(cfg.GroupMemberAttribute)
+	if cfg.GroupMemberAttribute == "" {
+		cfg.GroupMemberAttribute = "member"
+	}
+	cfg.GroupFilter = strings.TrimSpace(cfg.GroupFilter)
+	if cfg.GroupFilter == "" {
+		cfg.GroupFilter = "(objectClass=nestedGroup)"
+	}
+}
+
+func validateLDAPConfig(cfg models.LDAPConfig) error {
+	if strings.TrimSpace(cfg.Host) == "" {
+		return errors.New("ldap host is required")
+	}
+	if cfg.Port <= 0 {
+		return errors.New("ldap port must be positive")
+	}
+	if strings.TrimSpace(cfg.UserBaseDN) == "" {
+		return errors.New("ldap user base DN is required")
+	}
+	if cfg.SyncGroups {
+		if strings.TrimSpace(cfg.GroupBaseDN) == "" {
+			return errors.New("ldap group base DN is required when group sync is enabled")
+		}
+		if strings.TrimSpace(cfg.GroupFilter) == "" {
+			return errors.New("ldap group filter is required when group sync is enabled")
+		}
+		if strings.TrimSpace(cfg.GroupMemberAttribute) == "" {
+			return errors.New("ldap group member attribute is required when group sync is enabled")
+		}
+		if strings.TrimSpace(cfg.GroupNameAttribute) == "" {
+			return errors.New("ldap group name attribute is required when group sync is enabled")
+		}
+	}
+	return nil
 }

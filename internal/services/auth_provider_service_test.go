@@ -69,13 +69,18 @@ func TestAuthProviderServiceConfigureAndTestConnection(t *testing.T) {
 	})
 
 	err = svc.ConfigureLDAP(ctx, models.LDAPConfig{
-		Host:         "ldap.example.com",
-		Port:         389,
-		BaseDN:       "dc=example,dc=com",
-		BindDN:       "cn=admin,dc=example,dc=com",
-		BindPassword: "bind-secret",
-		UserFilter:   "(uid={username})",
-		SyncGroups:   true,
+		Host:                 "ldap.example.com",
+		Port:                 389,
+		BaseDN:               "dc=example,dc=com",
+		UserBaseDN:           "ou=Users,dc=example,dc=com",
+		GroupBaseDN:          "ou=Groups,dc=example,dc=com",
+		GroupFilter:          "(objectClass=nestedGroup)",
+		GroupMemberAttribute: "member",
+		GroupNameAttribute:   "cn",
+		BindDN:               "cn=admin,dc=example,dc=com",
+		BindPassword:         "bind-secret",
+		UserFilter:           "(uid={username})",
+		SyncGroups:           true,
 	}, true, false, "admin")
 	require.NoError(t, err)
 
@@ -83,6 +88,8 @@ func TestAuthProviderServiceConfigureAndTestConnection(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "bind-secret", capturedLDAP.BindPassword)
 	require.True(t, capturedLDAP.SyncGroups)
+	require.Equal(t, "ou=Users,dc=example,dc=com", capturedLDAP.UserBaseDN)
+	require.Equal(t, "ou=Groups,dc=example,dc=com", capturedLDAP.GroupBaseDN)
 
 	list, err := svc.List(ctx)
 	require.NoError(t, err)
@@ -177,14 +184,19 @@ func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	err = svc.ConfigureLDAP(ctx, models.LDAPConfig{
-		Host:         "ldap.example.com",
-		Port:         636,
-		BaseDN:       "dc=example,dc=com",
-		BindDN:       "cn=admin,dc=example,dc=com",
-		BindPassword: "secret",
-		UserFilter:   "(uid={username})",
-		UseTLS:       true,
-		SyncGroups:   true,
+		Host:                 "ldap.example.com",
+		Port:                 636,
+		BaseDN:               "dc=example,dc=com",
+		UserBaseDN:           "ou=Users,dc=example,dc=com",
+		GroupBaseDN:          "ou=Groups,dc=example,dc=com",
+		GroupFilter:          "(objectClass=nestedGroup)",
+		GroupMemberAttribute: "member",
+		GroupNameAttribute:   "cn",
+		BindDN:               "cn=admin,dc=example,dc=com",
+		BindPassword:         "secret",
+		UserFilter:           "(uid={username})",
+		UseTLS:               true,
+		SyncGroups:           true,
 	}, true, true, "admin-user")
 	require.NoError(t, err)
 
@@ -235,6 +247,8 @@ func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {
 	require.Equal(t, "ldap", ldapProvider.Type)
 	require.Equal(t, "secret", ldapCfg.BindPassword)
 	require.True(t, ldapCfg.SyncGroups)
+	require.Equal(t, "ou=Users,dc=example,dc=com", ldapCfg.UserBaseDN)
+	require.Equal(t, "ou=Groups,dc=example,dc=com", ldapCfg.GroupBaseDN)
 }
 
 func openAuthProviderServiceTestDB(t *testing.T) *gorm.DB {

@@ -42,7 +42,7 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
     return {
       host: config?.host ?? '',
       port: config?.port ?? 389,
-      baseDn: config?.baseDn ?? '',
+      baseDn: config?.userBaseDn ?? config?.baseDn ?? '',
       bindDn: config?.bindDn ?? '',
       bindPassword: config?.bindPassword ?? '',
       userFilter: config?.userFilter ?? '(uid={username})',
@@ -50,6 +50,10 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
       skipVerify: config?.skipVerify ?? false,
       attributeMapping: serializeAttributeMapping(config?.attributeMapping) || 'email=mail',
       syncGroups: config?.syncGroups ?? false,
+      groupBaseDn: config?.groupBaseDn ?? '',
+      groupNameAttribute: config?.groupNameAttribute ?? 'cn',
+      groupMemberAttribute: config?.groupMemberAttribute ?? 'member',
+      groupFilter: config?.groupFilter ?? '(objectClass=nestedGroup)',
       enabled: detail?.provider.enabled ?? provider?.enabled ?? false,
       allowRegistration: detail?.provider.allowRegistration ?? provider?.allowRegistration ?? false,
     }
@@ -62,10 +66,13 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
+    watch,
   } = useForm<LDAPConfigFormValues>({
     resolver: zodResolver(ldapConfigSchema) as Resolver<LDAPConfigFormValues>,
     defaultValues,
   })
+
+  const syncGroupsEnabled = watch('syncGroups')
 
   useEffect(() => {
     reset(defaultValues)
@@ -112,6 +119,7 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
         host: values.host.trim(),
         port: values.port,
         baseDn: values.baseDn.trim(),
+        userBaseDn: values.baseDn.trim(),
         bindDn: values.bindDn.trim(),
         bindPassword: values.bindPassword.trim(),
         userFilter: values.userFilter.trim(),
@@ -119,6 +127,10 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
         skipVerify: values.skipVerify,
         attributeMapping,
         syncGroups: values.syncGroups,
+        groupBaseDn: values.groupBaseDn?.trim() ?? '',
+        groupNameAttribute: values.groupNameAttribute?.trim() ?? '',
+        groupMemberAttribute: values.groupMemberAttribute?.trim() ?? '',
+        groupFilter: values.groupFilter?.trim() ?? '',
       },
     })
   })
@@ -143,7 +155,7 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
           error={errors.port?.message}
         />
         <Input
-          label="Base DN"
+          label="LDAP Users DN"
           placeholder="dc=example,dc=com"
           {...register('baseDn')}
           error={errors.baseDn?.message}
@@ -176,6 +188,37 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
         error={errors.attributeMapping?.message}
         helpText="One mapping per line in key=value format."
       />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Input
+          label="LDAP Groups DN"
+          placeholder="ou=Groups,dc=example,dc=com"
+          {...register('groupBaseDn')}
+          error={errors.groupBaseDn?.message}
+          disabled={!syncGroupsEnabled}
+        />
+        <Input
+          label="Group Filter"
+          placeholder="(objectClass=nestedGroup)"
+          {...register('groupFilter')}
+          error={errors.groupFilter?.message}
+          disabled={!syncGroupsEnabled}
+        />
+        <Input
+          label="Group Name LDAP Attribute"
+          placeholder="cn"
+          {...register('groupNameAttribute')}
+          error={errors.groupNameAttribute?.message}
+          disabled={!syncGroupsEnabled}
+        />
+        <Input
+          label="Membership LDAP Attribute"
+          placeholder="member"
+          {...register('groupMemberAttribute')}
+          error={errors.groupMemberAttribute?.message}
+          disabled={!syncGroupsEnabled}
+        />
+      </div>
 
       <div className="space-y-3">
         <Controller

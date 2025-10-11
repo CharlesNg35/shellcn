@@ -161,7 +161,15 @@ func (h *AuthProviderHandler) SyncLDAP(c *gin.Context) {
 
 	summary, err := h.ldapSync.SyncAll(ctx, authenticator, *cfg, provider.AllowRegistration)
 	if err != nil {
-		response.Error(c, errors.ErrInternalServer)
+		switch {
+		case stdErrors.Is(err, services.ErrLDAPGroupBaseRequired),
+			stdErrors.Is(err, services.ErrLDAPGroupFilterRequired),
+			stdErrors.Is(err, services.ErrLDAPGroupMemberAttrRequired),
+			stdErrors.Is(err, services.ErrLDAPGroupNameAttrRequired):
+			response.Error(c, errors.NewBadRequest(err.Error()))
+		default:
+			response.Error(c, errors.ErrInternalServer)
+		}
 		return
 	}
 

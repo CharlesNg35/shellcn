@@ -230,6 +230,40 @@ func (s *UserService) Update(ctx context.Context, id string, input UpdateUserInp
 		return nil, fmt.Errorf("user service: load user: %w", err)
 	}
 
+	provider := strings.ToLower(strings.TrimSpace(user.AuthProvider))
+	if provider != "" && provider != "local" {
+		if input.Username != nil {
+			trimmed := strings.TrimSpace(*input.Username)
+			if trimmed != "" && trimmed != user.Username {
+				return nil, apperrors.NewBadRequest("user profile is managed by an external provider")
+			}
+		}
+		if input.Email != nil {
+			trimmed := strings.ToLower(strings.TrimSpace(*input.Email))
+			if trimmed != "" && trimmed != strings.ToLower(user.Email) {
+				return nil, apperrors.NewBadRequest("user profile is managed by an external provider")
+			}
+		}
+		if input.FirstName != nil {
+			trimmed := strings.TrimSpace(*input.FirstName)
+			if trimmed != user.FirstName {
+				return nil, apperrors.NewBadRequest("user profile is managed by an external provider")
+			}
+		}
+		if input.LastName != nil {
+			trimmed := strings.TrimSpace(*input.LastName)
+			if trimmed != user.LastName {
+				return nil, apperrors.NewBadRequest("user profile is managed by an external provider")
+			}
+		}
+		if input.Avatar != nil {
+			trimmed := strings.TrimSpace(*input.Avatar)
+			if trimmed != strings.TrimSpace(user.Avatar) {
+				return nil, apperrors.NewBadRequest("user profile is managed by an external provider")
+			}
+		}
+	}
+
 	updates := map[string]any{}
 
 	if input.Username != nil {

@@ -19,6 +19,7 @@ export interface AuthUser {
   last_name?: string
   is_root: boolean
   is_active: boolean
+  auth_provider?: string
   teams?: AuthTeamSummary[]
   roles?: AuthRoleSummary[]
   permissions?: import('@/constants/permissions').PermissionId[]

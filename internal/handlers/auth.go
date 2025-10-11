@@ -238,7 +238,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 		return
 	}
 
-	if h.ldapSync != nil {
+	if h.ldapSync != nil && cfg.SyncGroups {
 		if _, syncErr := h.ldapSync.SyncGroups(requestContext(c), *cfg, user, identity.Groups); syncErr != nil {
 			metrics.AuthAttempts.WithLabelValues("failure").Inc()
 			if session != nil {

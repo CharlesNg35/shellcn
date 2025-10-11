@@ -55,6 +55,7 @@ export interface LDAPProviderConfig {
   host: string
   port: number
   baseDn: string
+  userBaseDn: string
   bindDn: string
   bindPassword: string
   userFilter: string
@@ -62,6 +63,10 @@ export interface LDAPProviderConfig {
   skipVerify: boolean
   attributeMapping: Record<string, string>
   syncGroups: boolean
+  groupBaseDn: string
+  groupNameAttribute: string
+  groupMemberAttribute: string
+  groupFilter: string
 }
 
 export type AuthProviderConfigMap = {

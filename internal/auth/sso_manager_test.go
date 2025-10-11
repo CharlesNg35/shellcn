@@ -13,7 +13,7 @@ import (
 )
 
 func TestSSOResolveExistingUser(t *testing.T) {
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 
 	clock := &testClock{current: time.Date(2024, 2, 1, 12, 0, 0, 0, time.UTC)}
 	jwtService, err := NewJWTService(JWTConfig{
@@ -71,7 +71,7 @@ func TestSSOResolveExistingUser(t *testing.T) {
 }
 
 func TestSSOResolveAutoProvision(t *testing.T) {
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 
 	clock := &testClock{current: time.Date(2024, 3, 1, 9, 30, 0, 0, time.UTC)}
 	jwtService, err := NewJWTService(JWTConfig{
@@ -122,6 +122,18 @@ func TestSSOResolveAutoProvision(t *testing.T) {
 	require.Equal(t, "203.0.113.42", stored.LastLoginIP)
 	require.Equal(t, "saml", stored.AuthProvider)
 	require.Equal(t, "abc-123", stored.AuthSubject)
+
+	var userWithRoles models.User
+	require.NoError(t, db.Preload("Roles").Take(&userWithRoles, "id = ?", resolvedUser.ID).Error)
+	require.NotEmpty(t, userWithRoles.Roles)
+	foundUserRole := false
+	for _, role := range userWithRoles.Roles {
+		if role.ID == "user" {
+			foundUserRole = true
+			break
+		}
+	}
+	require.True(t, foundUserRole)
 
 	var count int64
 	require.NoError(t, db.Model(&models.User{}).Count(&count).Error)

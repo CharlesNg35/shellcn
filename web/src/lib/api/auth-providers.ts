@@ -70,6 +70,7 @@ interface LDAPConfigResponse {
   host: string
   port: number
   base_dn: string
+  user_base_dn?: string
   bind_dn: string
   bind_password: string
   user_filter: string
@@ -77,6 +78,10 @@ interface LDAPConfigResponse {
   skip_verify: boolean
   attribute_mapping?: Record<string, string>
   sync_groups?: boolean
+  group_base_dn?: string
+  group_name_attribute?: string
+  group_member_attribute?: string
+  group_filter?: string
 }
 
 interface AuthProviderDetailResponse<TConfig = unknown> {
@@ -159,6 +164,7 @@ function transformLDAPConfig(raw: LDAPConfigResponse | undefined): LDAPProviderC
     host: raw.host,
     port: raw.port,
     baseDn: raw.base_dn,
+    userBaseDn: raw.user_base_dn ?? raw.base_dn,
     bindDn: raw.bind_dn,
     bindPassword: raw.bind_password,
     userFilter: raw.user_filter,
@@ -166,6 +172,10 @@ function transformLDAPConfig(raw: LDAPConfigResponse | undefined): LDAPProviderC
     skipVerify: raw.skip_verify,
     attributeMapping: raw.attribute_mapping ?? {},
     syncGroups: Boolean(raw.sync_groups),
+    groupBaseDn: raw.group_base_dn ?? '',
+    groupNameAttribute: raw.group_name_attribute ?? 'cn',
+    groupMemberAttribute: raw.group_member_attribute ?? 'member',
+    groupFilter: raw.group_filter ?? '(objectClass=nestedGroup)',
   }
 }
 
@@ -298,6 +308,7 @@ export async function configureLDAPProvider(payload: {
         host: payload.config.host,
         port: payload.config.port,
         base_dn: payload.config.baseDn,
+        user_base_dn: payload.config.userBaseDn,
         bind_dn: payload.config.bindDn,
         bind_password: payload.config.bindPassword,
         user_filter: payload.config.userFilter,
@@ -305,6 +316,10 @@ export async function configureLDAPProvider(payload: {
         skip_verify: payload.config.skipVerify,
         attribute_mapping: payload.config.attributeMapping,
         sync_groups: payload.config.syncGroups,
+        group_base_dn: payload.config.groupBaseDn,
+        group_name_attribute: payload.config.groupNameAttribute,
+        group_member_attribute: payload.config.groupMemberAttribute,
+        group_filter: payload.config.groupFilter,
       },
     }
   )

@@ -13,6 +13,13 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 )
 
+var (
+	ErrLDAPGroupBaseRequired       = errors.New("ldap sync service: group base DN is required when group sync is enabled")
+	ErrLDAPGroupMemberAttrRequired = errors.New("ldap sync service: group member attribute is required when group sync is enabled")
+	ErrLDAPGroupNameAttrRequired   = errors.New("ldap sync service: group name attribute is required when group sync is enabled")
+	ErrLDAPGroupFilterRequired     = errors.New("ldap sync service: group filter is required when group sync is enabled")
+)
+
 // LDAPUserSyncResult captures membership changes performed for a single user.
 type LDAPUserSyncResult struct {
 	UserID             string `json:"user_id"`
@@ -55,6 +62,9 @@ func (s *LDAPSyncService) SyncAll(ctx context.Context, auth *providers.LDAPAuthe
 	}
 
 	ctx = ensureContext(ctx)
+	if err := validateGroupSyncSettings(cfg); err != nil {
+		return LDAPSyncSummary{}, err
+	}
 
 	identities, err := auth.ListIdentities(ctx)
 	if err != nil {
@@ -77,6 +87,9 @@ func (s *LDAPSyncService) SyncGroups(ctx context.Context, cfg models.LDAPConfig,
 // SyncFromIdentities processes the supplied identities, provisioning users and synchronising memberships.
 func (s *LDAPSyncService) SyncFromIdentities(ctx context.Context, cfg models.LDAPConfig, identities []providers.Identity, allowProvision bool) (LDAPSyncSummary, error) {
 	ctx = ensureContext(ctx)
+	if err := validateGroupSyncSettings(cfg); err != nil {
+		return LDAPSyncSummary{}, err
+	}
 
 	summary := LDAPSyncSummary{}
 
@@ -143,8 +156,11 @@ func (s *LDAPSyncService) syncGroups(ctx context.Context, cfg models.LDAPConfig,
 	if !cfg.SyncGroups {
 		return result, nil
 	}
-	if cfg.AttributeMapping == nil || strings.TrimSpace(cfg.AttributeMapping["groups"]) == "" {
+	if len(rawGroups) == 0 {
 		return result, nil
+	}
+	if err := validateGroupSyncSettings(cfg); err != nil {
+		return LDAPUserSyncResult{}, err
 	}
 
 	groupMap := normaliseLDAPGroups(rawGroups)
@@ -286,17 +302,55 @@ func parseLDAPGroupValue(raw string) (string, string) {
 		return "", ""
 	}
 
-	name := trimmed
-	if strings.Contains(trimmed, "=") && strings.Contains(trimmed, ",") {
-		first := strings.Split(trimmed, ",")[0]
-		parts := strings.SplitN(first, "=", 2)
-		if len(parts) == 2 {
-			if candidate := strings.TrimSpace(parts[1]); candidate != "" {
-				name = candidate
-			}
-		}
+	dn := trimmed
+	displayName := ""
+	if strings.Contains(trimmed, "|") {
+		parts := strings.SplitN(trimmed, "|", 2)
+		displayName = strings.TrimSpace(parts[0])
+		dn = strings.TrimSpace(parts[1])
+	}
+	if dn == "" {
+		dn = displayName
 	}
 
-	externalID := strings.ToLower(trimmed)
+	name := strings.TrimSpace(displayName)
+	candidate := dn
+	if name == "" {
+		if strings.Contains(candidate, "=") && strings.Contains(candidate, ",") {
+			first := strings.Split(candidate, ",")[0]
+			parts := strings.SplitN(first, "=", 2)
+			if len(parts) == 2 {
+				if trimmedValue := strings.TrimSpace(parts[1]); trimmedValue != "" {
+					name = trimmedValue
+				}
+			}
+		} else if candidate != "" {
+			name = strings.TrimSpace(candidate)
+		}
+	}
+	if name == "" {
+		name = strings.TrimSpace(dn)
+	}
+
+	externalID := strings.ToLower(dn)
 	return externalID, name
+}
+
+func validateGroupSyncSettings(cfg models.LDAPConfig) error {
+	if !cfg.SyncGroups {
+		return nil
+	}
+	if strings.TrimSpace(cfg.GroupBaseDN) == "" {
+		return ErrLDAPGroupBaseRequired
+	}
+	if strings.TrimSpace(cfg.GroupMemberAttribute) == "" {
+		return ErrLDAPGroupMemberAttrRequired
+	}
+	if strings.TrimSpace(cfg.GroupNameAttribute) == "" {
+		return ErrLDAPGroupNameAttrRequired
+	}
+	if strings.TrimSpace(cfg.GroupFilter) == "" {
+		return ErrLDAPGroupFilterRequired
+	}
+	return nil
 }

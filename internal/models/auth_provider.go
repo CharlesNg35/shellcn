@@ -41,14 +41,19 @@ type SAMLConfig struct {
 }
 
 type LDAPConfig struct {
-	Host             string            `json:"host"`
-	Port             int               `json:"port"`
-	BaseDN           string            `json:"base_dn"`
-	BindDN           string            `json:"bind_dn"`
-	BindPassword     string            `json:"bind_password"`
-	UserFilter       string            `json:"user_filter"`
-	UseTLS           bool              `json:"use_tls"`
-	SkipVerify       bool              `json:"skip_verify"`
-	AttributeMapping map[string]string `json:"attribute_mapping"`
-	SyncGroups       bool              `json:"sync_groups"`
+	Host                 string            `json:"host"`
+	Port                 int               `json:"port"`
+	BaseDN               string            `json:"base_dn"`
+	UserBaseDN           string            `json:"user_base_dn"`
+	BindDN               string            `json:"bind_dn"`
+	BindPassword         string            `json:"bind_password"`
+	UserFilter           string            `json:"user_filter"`
+	UseTLS               bool              `json:"use_tls"`
+	SkipVerify           bool              `json:"skip_verify"`
+	AttributeMapping     map[string]string `json:"attribute_mapping"`
+	SyncGroups           bool              `json:"sync_groups"`
+	GroupBaseDN          string            `json:"group_base_dn"`
+	GroupNameAttribute   string            `json:"group_name_attribute"`
+	GroupMemberAttribute string            `json:"group_member_attribute"`
+	GroupFilter          string            `json:"group_filter"`
 }

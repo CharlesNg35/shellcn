@@ -232,6 +232,13 @@ func (m *SSOManager) provisionUser(ctx context.Context, identity providers.Ident
 				return fmt.Errorf("sso manager: create user: %w", err)
 			}
 
+			var defaultRole models.Role
+			if roleErr := tx.First(&defaultRole, "id = ?", "user").Error; roleErr == nil {
+				if assocErr := tx.Model(user).Association("Roles").Append(&defaultRole); assocErr != nil {
+					return fmt.Errorf("sso manager: assign default role: %w", assocErr)
+				}
+			}
+
 			created = user
 			return nil
 		}

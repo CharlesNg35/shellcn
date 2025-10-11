@@ -69,7 +69,7 @@ func (a *LDAPAuthenticator) Authenticate(ctx context.Context, input LDAPAuthenti
 	attributes := buildAttributeList(a.cfg.AttributeMapping)
 
 	searchRequest := ldap.NewSearchRequest(
-		a.cfg.BaseDN,
+		a.userBaseDN(),
 		ldap.ScopeWholeSubtree,
 		ldap.NeverDerefAliases,
 		0,
@@ -93,7 +93,15 @@ func (a *LDAPAuthenticator) Authenticate(ctx context.Context, input LDAPAuthenti
 		return nil, errors.New("ldap provider: invalid credentials")
 	}
 
-	return a.identityFromEntry(userEntry), nil
+	identity := a.identityFromEntry(userEntry)
+
+	groups, err := a.fetchGroups(conn, userEntry.DN)
+	if err != nil {
+		return nil, err
+	}
+	identity.Groups = mergeLDAPGroups(identity.Groups, groups)
+
+	return identity, nil
 }
 
 // ListIdentities retrieves all directory entries matching the configured user filter.
@@ -112,7 +120,7 @@ func (a *LDAPAuthenticator) ListIdentities(ctx context.Context) ([]*Identity, er
 	attributes := buildAttributeList(a.cfg.AttributeMapping)
 
 	searchRequest := ldap.NewSearchRequest(
-		a.cfg.BaseDN,
+		a.userBaseDN(),
 		ldap.ScopeWholeSubtree,
 		ldap.NeverDerefAliases,
 		0,
@@ -130,7 +138,13 @@ func (a *LDAPAuthenticator) ListIdentities(ctx context.Context) ([]*Identity, er
 
 	identities := make([]*Identity, 0, len(searchResult.Entries))
 	for _, entry := range searchResult.Entries {
-		identities = append(identities, a.identityFromEntry(entry))
+		identity := a.identityFromEntry(entry)
+		groups, err := a.fetchGroups(conn, entry.DN)
+		if err != nil {
+			return nil, err
+		}
+		identity.Groups = mergeLDAPGroups(identity.Groups, groups)
+		identities = append(identities, identity)
 	}
 
 	return identities, nil
@@ -194,6 +208,109 @@ func (a *LDAPAuthenticator) identityFromEntry(entry *ldap.Entry) *Identity {
 	}
 
 	return identity
+}
+
+func (a *LDAPAuthenticator) userBaseDN() string {
+	if base := strings.TrimSpace(a.cfg.UserBaseDN); base != "" {
+		return base
+	}
+	return strings.TrimSpace(a.cfg.BaseDN)
+}
+
+func (a *LDAPAuthenticator) groupBaseDN() string {
+	if base := strings.TrimSpace(a.cfg.GroupBaseDN); base != "" {
+		return base
+	}
+	return a.userBaseDN()
+}
+
+func (a *LDAPAuthenticator) fetchGroups(conn *ldap.Conn, userDN string) ([]string, error) {
+	if !a.cfg.SyncGroups {
+		return nil, nil
+	}
+	base := a.groupBaseDN()
+	if base == "" {
+		return nil, errors.New("ldap provider: group base dn is required when sync_groups is enabled")
+	}
+	memberAttr := strings.TrimSpace(a.cfg.GroupMemberAttribute)
+	if memberAttr == "" {
+		memberAttr = "member"
+	}
+	nameAttr := strings.TrimSpace(a.cfg.GroupNameAttribute)
+	if nameAttr == "" {
+		nameAttr = "cn"
+	}
+	filter := strings.TrimSpace(a.cfg.GroupFilter)
+	if filter == "" {
+		filter = "(objectClass=nestedGroup)"
+	}
+	escapedDN := ldap.EscapeFilter(userDN)
+	combinedFilter := fmt.Sprintf("(&%s(%s=%s))", filter, memberAttr, escapedDN)
+
+	attrs := []string{nameAttr, "dn"}
+	searchRequest := ldap.NewSearchRequest(
+		base,
+		ldap.ScopeWholeSubtree,
+		ldap.NeverDerefAliases,
+		0,
+		0,
+		false,
+		combinedFilter,
+		attrs,
+		nil,
+	)
+
+	result, err := conn.Search(searchRequest)
+	if err != nil {
+		return nil, fmt.Errorf("ldap provider: fetch groups: %w", err)
+	}
+
+	groups := make([]string, 0, len(result.Entries))
+	for _, entry := range result.Entries {
+		attrs := entryAttributes(entry)
+		value := strings.TrimSpace(entry.DN)
+		if value == "" {
+			continue
+		}
+		name := strings.TrimSpace(attributeLookup(attrs, nameAttr))
+		if name != "" {
+			groups = append(groups, fmt.Sprintf("%s|%s", name, value))
+		} else {
+			groups = append(groups, value)
+		}
+	}
+
+	return groups, nil
+}
+
+func mergeLDAPGroups(existing, additional []string) []string {
+	seen := make(map[string]struct{}, len(existing)+len(additional))
+	merged := make([]string, 0, len(existing)+len(additional))
+	for _, value := range existing {
+		clean := strings.TrimSpace(value)
+		key := strings.ToLower(clean)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, clean)
+	}
+	for _, value := range additional {
+		clean := strings.TrimSpace(value)
+		key := strings.ToLower(clean)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, clean)
+	}
+	return merged
 }
 
 func buildLDAPFilter(template string, identifier string) string {

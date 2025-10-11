@@ -1,4 +1,4 @@
-import { forwardRef } from 'react'
+import { forwardRef, type ComponentType } from 'react'
 import { Building, Globe, KeyRound, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { AuthProviderMetadata } from '@/types/auth'
@@ -11,7 +11,7 @@ interface SSOButtonsProps {
   disabled?: boolean
 }
 
-const providerIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+const providerIcons: Record<string, ComponentType<{ className?: string }>> = {
   oidc: Globe,
   saml: ShieldCheck,
   ldap: Building,
