@@ -7,7 +7,7 @@ import {
   type SortingState,
   useReactTable,
 } from '@tanstack/react-table'
-import { ArrowUpDown, Eye, Loader2, PencilLine, Trash2, Users } from 'lucide-react'
+import { ArrowUpDown, Eye, Loader2, PencilLine, Share2, Trash2, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -22,6 +22,7 @@ interface TeamTableProps {
   onSelectTeam: (teamId: string) => void
   onEditTeam?: (team: TeamRecord) => void
   onDeleteTeam?: (team: TeamRecord) => void
+  onManageResources?: (team: TeamRecord) => void
   emptyAction?: ReactNode
 }
 
@@ -32,6 +33,7 @@ export function TeamTable({
   onSelectTeam,
   onEditTeam,
   onDeleteTeam,
+  onManageResources,
   emptyAction,
 }: TeamTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
@@ -129,6 +131,17 @@ export function TeamTable({
             >
               <Eye className="h-4 w-4" />
             </Button>
+            <PermissionGuard permission={PERMISSIONS.CONNECTION.SHARE}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => onManageResources?.(row.original)}
+                aria-label={`Manage resource permissions for ${row.original.name}`}
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+            </PermissionGuard>
             <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
               <Button
                 type="button"
@@ -158,7 +171,7 @@ export function TeamTable({
         size: 120,
       },
     ],
-    [memberCounts, onSelectTeam, onEditTeam, onDeleteTeam]
+    [memberCounts, onSelectTeam, onManageResources, onEditTeam, onDeleteTeam]
   )
 
   const table = useReactTable({

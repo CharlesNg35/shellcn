@@ -47,14 +47,12 @@ func SeedData(db *gorm.DB) error {
 			Name:        "Administrator",
 			Description: "Full system access",
 			IsSystem:    true,
-			IsTemplate:  true,
 		},
 		{
 			BaseModel:   models.BaseModel{ID: "user"},
 			Name:        "User",
 			Description: "Standard user access",
 			IsSystem:    true,
-			IsTemplate:  true,
 		},
 	}
 

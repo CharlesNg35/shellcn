@@ -40,16 +40,12 @@ type CreateRoleInput struct {
 	Name        string
 	Description string
 	IsSystem    bool
-	IsTemplate  bool
-	TemplateID  *string
 }
 
 // UpdateRoleInput describes mutable fields on a role.
 type UpdateRoleInput struct {
 	Name        string
 	Description string
-	IsTemplate  *bool
-	TemplateID  *string
 }
 
 // CreateRole registers a new role.
@@ -65,25 +61,6 @@ func (s *PermissionService) CreateRole(ctx context.Context, input CreateRoleInpu
 		Name:        name,
 		Description: strings.TrimSpace(input.Description),
 		IsSystem:    input.IsSystem,
-		IsTemplate:  input.IsTemplate,
-	}
-
-	if input.TemplateID != nil {
-		templateID := strings.TrimSpace(*input.TemplateID)
-		if templateID != "" {
-			var template models.Role
-			if err := s.db.WithContext(ctx).First(&template, "id = ?", templateID).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return nil, apperrors.NewBadRequest("template role not found")
-				}
-				return nil, fmt.Errorf("permission service: load template role: %w", err)
-			}
-			if !template.IsTemplate {
-				return nil, apperrors.NewBadRequest("role is not a template")
-			}
-			templateRef := template.ID
-			role.TemplateID = &templateRef
-		}
 	}
 
 	if err := s.db.WithContext(ctx).Create(role).Error; err != nil {
@@ -120,33 +97,6 @@ func (s *PermissionService) UpdateRole(ctx context.Context, roleID string, input
 	}
 	if desc := strings.TrimSpace(input.Description); desc != role.Description {
 		updates["description"] = desc
-	}
-	if input.IsTemplate != nil && *input.IsTemplate != role.IsTemplate {
-		if role.IsSystem {
-			return nil, ErrSystemRoleImmutable
-		}
-		updates["is_template"] = *input.IsTemplate
-	}
-	if input.TemplateID != nil {
-		if role.IsSystem {
-			return nil, ErrSystemRoleImmutable
-		}
-		templateID := strings.TrimSpace(*input.TemplateID)
-		if templateID == "" {
-			updates["template_id"] = nil
-		} else {
-			var template models.Role
-			if err := s.db.WithContext(ctx).First(&template, "id = ?", templateID).Error; err != nil {
-				if errors.Is(err, gorm.ErrRecordNotFound) {
-					return nil, apperrors.NewBadRequest("template role not found")
-				}
-				return nil, fmt.Errorf("permission service: load template role: %w", err)
-			}
-			if !template.IsTemplate {
-				return nil, apperrors.NewBadRequest("role is not a template")
-			}
-			updates["template_id"] = template.ID
-		}
 	}
 
 	if len(updates) == 0 {

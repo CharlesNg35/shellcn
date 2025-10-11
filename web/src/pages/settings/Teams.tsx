@@ -89,6 +89,12 @@ export function Teams() {
     navigate(`/settings/teams/${teamId}`)
   }
 
+  const handleManageTeamResources = (team: TeamRecord) => {
+    const search = new URLSearchParams()
+    search.set('team', team.id)
+    navigate(`/connections?${search.toString()}`)
+  }
+
   const modalTitle = formMode === 'create' ? 'Create team' : 'Edit team'
   const modalDescription =
     formMode === 'create'
@@ -117,6 +123,7 @@ export function Teams() {
         onSelectTeam={handleSelectTeam}
         onEditTeam={handleOpenEditModal}
         onDeleteTeam={handleDeleteTeam}
+        onManageResources={handleManageTeamResources}
         emptyAction={
           <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
             <Button onClick={handleOpenCreateModal}>

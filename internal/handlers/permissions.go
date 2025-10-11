@@ -60,11 +60,9 @@ func (h *PermissionHandler) ListRoles(c *gin.Context) {
 // POST /api/permissions/roles
 func (h *PermissionHandler) CreateRole(c *gin.Context) {
 	var body struct {
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		IsSystem    bool    `json:"is_system"`
-		IsTemplate  bool    `json:"is_template"`
-		TemplateID  *string `json:"template_id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		IsSystem    bool   `json:"is_system"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil || body.Name == "" {
 		response.Error(c, errors.ErrBadRequest)
@@ -74,8 +72,6 @@ func (h *PermissionHandler) CreateRole(c *gin.Context) {
 		Name:        body.Name,
 		Description: body.Description,
 		IsSystem:    body.IsSystem,
-		IsTemplate:  body.IsTemplate,
-		TemplateID:  body.TemplateID,
 	})
 	if err != nil {
 		response.Error(c, err)
@@ -87,10 +83,8 @@ func (h *PermissionHandler) CreateRole(c *gin.Context) {
 // PATCH /api/permissions/roles/:id
 func (h *PermissionHandler) UpdateRole(c *gin.Context) {
 	var body struct {
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		IsTemplate  *bool   `json:"is_template"`
-		TemplateID  *string `json:"template_id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		response.Error(c, errors.ErrBadRequest)
@@ -99,8 +93,6 @@ func (h *PermissionHandler) UpdateRole(c *gin.Context) {
 	role, err := h.svc.UpdateRole(requestContext(c), c.Param("id"), services.UpdateRoleInput{
 		Name:        body.Name,
 		Description: body.Description,
-		IsTemplate:  body.IsTemplate,
-		TemplateID:  body.TemplateID,
 	})
 	if err != nil {
 		response.Error(c, err)

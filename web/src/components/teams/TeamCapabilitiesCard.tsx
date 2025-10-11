@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
-import { AlertTriangle, Compass, Layers, RefreshCw } from 'lucide-react'
+import { AlertTriangle, Compass, Layers, RefreshCw, Share2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils/cn'
 import { humanizePermissionModule } from '@/lib/utils/permissionLabels'
 import { usePermissionRegistry } from '@/hooks/usePermissionRegistry'
 import { useTeamCapabilities } from '@/hooks/useTeams'
+import { usePermissions } from '@/hooks/usePermissions'
+import { PERMISSIONS } from '@/constants/permissions'
 
 interface TeamCapabilitiesCardProps {
   teamId: string
@@ -49,7 +51,10 @@ export function TeamCapabilitiesCard({
     enabled: Boolean(teamId),
   })
   const { data: registry } = usePermissionRegistry()
+  const { hasPermission } = usePermissions()
   const [showAllPermissions, setShowAllPermissions] = useState(false)
+
+  const canShareConnections = hasPermission(PERMISSIONS.CONNECTION.SHARE)
 
   const permissionEntries = useMemo<PermissionEntry[]>(() => {
     if (!capabilities) {
@@ -97,6 +102,12 @@ export function TeamCapabilitiesCard({
     navigate('/settings/permissions')
   }
 
+  const handleNavigateToConnections = () => {
+    const params = new URLSearchParams()
+    params.set('team', teamId)
+    navigate(`/connections?${params.toString()}`)
+  }
+
   const formatExpiryLabel = (expiresAt?: string | null) => {
     if (!expiresAt) {
       return 'No expiry'
@@ -128,6 +139,17 @@ export function TeamCapabilitiesCard({
             <RefreshCw className={cn('h-4 w-4', isRefetching ? 'animate-spin' : '')} />
             Refresh
           </Button>
+          {canShareConnections ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNavigateToConnections}
+              className="gap-1.5"
+            >
+              <Share2 className="h-4 w-4" />
+              Manage Access
+            </Button>
+          ) : null}
           {canManagePermissions ? (
             <Button
               variant="outline"
