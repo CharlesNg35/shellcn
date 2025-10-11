@@ -229,6 +229,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 		metrics.AuthAttempts.WithLabelValues("failure").Inc()
 		switch {
 		case stdErrors.Is(err, iauth.ErrSSOUserNotFound),
+			stdErrors.Is(err, iauth.ErrSSOProviderMismatch),
 			stdErrors.Is(err, iauth.ErrSSOUserDisabled),
 			stdErrors.Is(err, iauth.ErrSSOEmailRequired):
 			response.Error(c, errors.ErrInvalidCredentials)

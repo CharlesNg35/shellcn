@@ -158,6 +158,7 @@ Button.displayName = 'Button';
 - Always reference platform permissions through the typed `PERMISSIONS` map defined in `web/src/constants/permissions.ts`; never hardcode permission strings.
 - `PermissionGuard` accepts `PermissionId` values and optional `anyOf` / `allOf` arrays. Prefer colocating permission checks close to the UI they protect.
 - Utilities and configs (`navigation`, `features`, etc.) must use the same constants to stay in sync with backend definitions (`internal/permissions/core.go`). Update the shared constants whenever new permissions are introduced.
+- Never render an action (buttons, links, menu items, empty‑state CTAs, header actions, etc.) unless the current user has permission to execute it. Wrap privileged UI in `PermissionGuard` (or feature-aware components) and omit it entirely when the user lacks access.
 
 ---
 

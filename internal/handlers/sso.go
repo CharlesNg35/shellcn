@@ -292,6 +292,18 @@ func redirectWithError(c *gin.Context, target string, err error) {
 
 	q := parsed.Query()
 	q.Set("error", "sso_failed")
+	switch {
+	case errors.Is(err, iauth.ErrSSOProviderMismatch):
+		q.Set("error_reason", "provider_mismatch")
+	case errors.Is(err, iauth.ErrSSOUserNotFound):
+		q.Set("error_reason", "not_found")
+	case errors.Is(err, iauth.ErrSSOEmailRequired):
+		q.Set("error_reason", "email_required")
+	case errors.Is(err, iauth.ErrSSOUserDisabled):
+		q.Set("error_reason", "user_disabled")
+	default:
+		q.Set("error_reason", "generic")
+	}
 	parsed.RawQuery = q.Encode()
 	c.Redirect(http.StatusSeeOther, parsed.String())
 }

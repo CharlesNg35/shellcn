@@ -10,6 +10,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/auth/providers"
 	testutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/pkg/crypto"
 )
 
 func TestSSOResolveExistingUser(t *testing.T) {
@@ -140,8 +141,45 @@ func TestSSOResolveAutoProvision(t *testing.T) {
 	require.Equal(t, int64(1), count)
 }
 
+func TestSSOResolveProviderMismatch(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
+
+	jwtService, err := NewJWTService(JWTConfig{
+		Secret:         "sso-secret",
+		AccessTokenTTL: time.Hour,
+	})
+	require.NoError(t, err)
+
+	sessionService, err := NewSessionService(db, jwtService, SessionConfig{})
+	require.NoError(t, err)
+
+	manager, err := NewSSOManager(db, sessionService, SSOConfig{})
+	require.NoError(t, err)
+
+	hashed, err := crypto.HashPassword("password")
+	require.NoError(t, err)
+
+	user := &models.User{
+		Username:     "ldap-user",
+		Email:        "shared@example.com",
+		Password:     hashed,
+		IsActive:     true,
+		AuthProvider: "ldap",
+	}
+	require.NoError(t, db.Create(user).Error)
+
+	identity := providers.Identity{
+		Provider: "oidc",
+		Subject:  "oidc-subject",
+		Email:    "shared@example.com",
+	}
+
+	_, _, _, err = manager.Resolve(context.Background(), identity, ResolveOptions{AutoProvision: true})
+	require.ErrorIs(t, err, ErrSSOProviderMismatch)
+}
+
 func TestSSOResolveFailsWithoutEmail(t *testing.T) {
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 
 	clock := &testClock{current: time.Now().UTC()}
 	jwtService, err := NewJWTService(JWTConfig{

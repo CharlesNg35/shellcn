@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { z } from 'zod'
 import { loginSchema } from '@/schemas/auth'
@@ -13,6 +13,7 @@ type LoginFormData = z.infer<typeof loginSchema>
 
 export function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const {
     login,
     isLoading,
@@ -40,6 +41,7 @@ export function Login() {
 
   const [setupState, setSetupState] = useState<'checking' | 'pending' | 'complete'>('checking')
   const [selectedProvider, setSelectedProvider] = useState<string>('local')
+  const [ssoError, setSsoError] = useState<string | null>(null)
 
   const passwordProviders = useMemo(
     () =>
@@ -82,6 +84,29 @@ export function Login() {
   useEffect(() => {
     setFocus('identifier')
   }, [setFocus])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const reason = params.get('error_reason')
+    switch (reason) {
+      case 'provider_mismatch':
+        setSsoError(
+          'This account is already linked to a different sign-in provider. Please use the original provider or contact an administrator.'
+        )
+        break
+      case 'user_disabled':
+        setSsoError('Your account has been disabled. Please contact an administrator for assistance.')
+        break
+      case 'email_required':
+        setSsoError('The identity provider did not return an email address. Please contact your administrator.')
+        break
+      case 'not_found':
+        setSsoError('We could not match your identity to an existing account. If you expect access, contact your administrator.')
+        break
+      default:
+        setSsoError(null)
+    }
+  }, [location.search])
 
   useEffect(() => {
     let subscribed = true
@@ -203,6 +228,12 @@ export function Login() {
         {error && (
           <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
             <p className="font-medium">{error}</p>
+          </div>
+        )}
+
+        {ssoError && (
+          <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-medium">{ssoError}</p>
           </div>
         )}
 

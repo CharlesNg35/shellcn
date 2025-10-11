@@ -10,6 +10,8 @@ import { useConnections } from '@/hooks/useConnections'
 import { useConnectionFolders } from '@/hooks/useConnectionFolders'
 import { useAvailableProtocols } from '@/hooks/useProtocols'
 import type { ConnectionRecord } from '@/types/connections'
+import { PermissionGuard } from '@/components/permissions/PermissionGuard'
+import { PERMISSIONS } from '@/constants/permissions'
 
 export function Dashboard() {
   const { user } = useAuth()
@@ -43,20 +45,24 @@ export function Dashboard() {
         title={greeting}
         description="Monitor your infrastructure access, organize folders, and jump into recent sessions. Your central hub for managing all remote connections."
         action={
-          <>
-            <Button variant="outline" asChild size="sm">
-              <Link to="/connections">
-                View All Connections
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button asChild size="sm">
-              <Link to="/connections/new">
-                <Plus className="mr-2 h-4 w-4" />
-                New Connection
-              </Link>
-            </Button>
-          </>
+          <div className="flex flex-wrap gap-2">
+            <PermissionGuard permission={PERMISSIONS.CONNECTION.VIEW}>
+              <Button variant="outline" asChild size="sm">
+                <Link to="/connections">
+                  View All Connections
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            </PermissionGuard>
+            <PermissionGuard permission={PERMISSIONS.CONNECTION.MANAGE}>
+              <Button asChild size="sm">
+                <Link to="/connections/new">
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Connection
+                </Link>
+              </Button>
+            </PermissionGuard>
+          </div>
         }
       />
 
@@ -99,12 +105,14 @@ export function Dashboard() {
                 <CardTitle className="text-base">Recent Connections</CardTitle>
                 <CardDescription>Jump back into a recently used resource</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/connections">
-                  View all
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
+              <PermissionGuard permission={PERMISSIONS.CONNECTION.VIEW}>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/connections">
+                    View all
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+              </PermissionGuard>
             </div>
           </CardHeader>
           <CardContent className="p-0">
@@ -117,12 +125,14 @@ export function Dashboard() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   Create your first connection to get started
                 </p>
-                <Button asChild size="sm" className="mt-4">
-                  <Link to="/connections/new">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Connection
-                  </Link>
-                </Button>
+                <PermissionGuard permission={PERMISSIONS.CONNECTION.MANAGE}>
+                  <Button asChild size="sm" className="mt-4">
+                    <Link to="/connections/new">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Connection
+                    </Link>
+                  </Button>
+                </PermissionGuard>
               </div>
             ) : (
               <div className="divide-y divide-border">

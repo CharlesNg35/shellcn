@@ -21,6 +21,8 @@ var (
 	ErrSSOUserNotFound = errors.New("sso manager: user not found")
 	// ErrSSOUserDisabled signals that the mapped account is inactive.
 	ErrSSOUserDisabled = errors.New("sso manager: user disabled")
+	// ErrSSOProviderMismatch indicates the email is already registered under a different provider.
+	ErrSSOProviderMismatch = errors.New("sso manager: account is registered with a different provider")
 )
 
 // SSOConfig exposes tunable behaviour for the SSOManager.
@@ -150,7 +152,7 @@ func (m *SSOManager) findOrProvisionUser(ctx context.Context, identity providers
 			existingProvider = "local"
 		}
 		if existingProvider != "" && existingProvider != incomingProvider {
-			return nil, ErrSSOUserNotFound
+			return nil, ErrSSOProviderMismatch
 		}
 
 		updates := map[string]any{}
