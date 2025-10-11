@@ -240,7 +240,7 @@ export function TeamDetail() {
             </div>
 
             <div className="space-y-3 pt-2">
-              {isExternalTeam ? (
+              {isExternalTeam && canManageRoles ? (
                 <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
                   This team is synchronized from an external provider. Team metadata is read-only,
                   but you can still manage memberships, roles, and delete the team if required.
