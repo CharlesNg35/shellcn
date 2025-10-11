@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 // Connection represents a reusable remote access definition scoped to a team or user.
@@ -24,4 +25,21 @@ type Connection struct {
 	Targets        []ConnectionTarget   `gorm:"foreignKey:ConnectionID" json:"targets,omitempty"`
 	ResourceGrants []ResourcePermission `gorm:"polymorphic:Resource;polymorphicValue:connection" json:"resource_grants,omitempty"`
 	Folder         *ConnectionFolder    `gorm:"foreignKey:FolderID" json:"folder,omitempty"`
+}
+
+// This ensures orphaned resource_permissions and connection_targets are cleaned up.
+func (c *Connection) BeforeDelete(tx *gorm.DB) error {
+	// Delete all resource permissions associated with this connection
+	if err := tx.Where("resource_type = ? AND resource_id = ?", "connection", c.ID).
+		Delete(&ResourcePermission{}).Error; err != nil {
+		return err
+	}
+
+	// Delete all connection targets associated with this connection
+	if err := tx.Where("connection_id = ?", c.ID).
+		Delete(&ConnectionTarget{}).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
