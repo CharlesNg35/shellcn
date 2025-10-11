@@ -8,6 +8,7 @@ import type {
 } from '@/types/profile'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
+import { transformAuthUser } from './transformers'
 
 const PROFILE_ENDPOINT = '/profile'
 const PROFILE_PASSWORD_ENDPOINT = '/profile/password'
@@ -17,7 +18,8 @@ const PROFILE_MFA_DISABLE_ENDPOINT = '/profile/mfa/disable'
 
 export async function updateProfile(payload: ProfileUpdatePayload): Promise<AuthUser> {
   const response = await apiClient.patch<ApiResponse<AuthUser>>(PROFILE_ENDPOINT, payload)
-  return unwrapResponse(response)
+  const result = unwrapResponse(response)
+  return transformAuthUser(result) ?? result
 }
 
 export async function changePassword(payload: PasswordChangePayload): Promise<void> {

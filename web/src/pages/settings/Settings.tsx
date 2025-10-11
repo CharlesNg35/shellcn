@@ -4,8 +4,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { AccountSettingsPanel } from '@/components/settings/AccountSettingsPanel'
 import { SecuritySettingsPanel } from '@/components/settings/SecuritySettingsPanel'
 import { AppearanceSettingsPanel } from '@/components/settings/AppearanceSettingsPanel'
-import { NotificationSettingsPanel } from '@/components/settings/NotificationSettingsPanel'
-import { SessionSettingsPanel } from '@/components/settings/SessionSettingsPanel'
 
 const SETTINGS_TABS = [
   {
@@ -21,17 +19,7 @@ const SETTINGS_TABS = [
   {
     value: 'appearance',
     label: 'Appearance',
-    description: 'Theme, density, and interface customization.',
-  },
-  {
-    value: 'notifications',
-    label: 'Notifications',
-    description: 'Control email and in-app notification preferences.',
-  },
-  {
-    value: 'sessions',
-    label: 'Sessions',
-    description: 'Session timeout, trusted devices, and reconnect behavior.',
+    description: 'Theme preferences for the web interface.',
   },
 ] as const
 
@@ -69,14 +57,6 @@ export function Settings() {
 
         <TabsContent value="appearance" className="space-y-6">
           <AppearanceSettingsPanel />
-        </TabsContent>
-
-        <TabsContent value="notifications" className="space-y-6">
-          <NotificationSettingsPanel />
-        </TabsContent>
-
-        <TabsContent value="sessions" className="space-y-6">
-          <SessionSettingsPanel />
         </TabsContent>
       </Tabs>
     </div>

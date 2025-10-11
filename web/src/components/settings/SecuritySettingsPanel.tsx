@@ -46,7 +46,8 @@ export function SecuritySettingsPanel({ className }: SecuritySettingsPanelProps)
   })
 
   const mfaEnabled = Boolean(user?.mfa_enabled || user?.mfa_enrolled)
-  const providerLabel = useMemo(() => user?.auth_provider?.toUpperCase() ?? 'LOCAL', [user])
+  const providerLabel = useMemo(() => (user?.auth_provider ?? 'local').toUpperCase(), [user])
+  const isLocalProvider = providerLabel === 'LOCAL'
 
   const handlePasswordSubmit = async (values: PasswordChangeFormValues) => {
     try {
@@ -94,7 +95,7 @@ export function SecuritySettingsPanel({ className }: SecuritySettingsPanelProps)
           <CardDescription>Update your password to secure access to the platform.</CardDescription>
         </CardHeader>
         <CardContent>
-          {providerLabel !== 'LOCAL' ? (
+          {!isLocalProvider ? (
             <div className="rounded-md border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               Passwords are managed by the {providerLabel} identity provider. Update your password
               through the external provider.

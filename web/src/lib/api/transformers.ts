@@ -1,4 +1,9 @@
-import type { AuthTokens, LoginResponsePayload, RefreshResponsePayload } from '@/types/auth'
+import type {
+  AuthTokens,
+  AuthUser,
+  LoginResponsePayload,
+  RefreshResponsePayload,
+} from '@/types/auth'
 
 type TokenSource = LoginResponsePayload | RefreshResponsePayload
 
@@ -14,5 +19,26 @@ export function toAuthTokens(payload: TokenSource): AuthTokens | null {
     refreshToken: payload.refresh_token,
     expiresIn: payload.expires_in,
     expiresAt,
+  }
+}
+
+export function normalizeAuthProvider(provider?: string | null): string | undefined {
+  if (!provider) {
+    return 'local'
+  }
+  const normalized = provider.trim().toLowerCase()
+  if (normalized === '') {
+    return 'local'
+  }
+  return normalized
+}
+
+export function transformAuthUser(user?: AuthUser | null): AuthUser | null {
+  if (!user) {
+    return user ?? null
+  }
+  return {
+    ...user,
+    auth_provider: normalizeAuthProvider(user.auth_provider),
   }
 }

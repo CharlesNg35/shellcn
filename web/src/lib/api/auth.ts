@@ -17,7 +17,7 @@ import type {
 } from '@/types/auth'
 import { apiClient } from './client'
 import { ApiError, unwrapResponse } from './http'
-import { toAuthTokens } from './transformers'
+import { toAuthTokens, transformAuthUser } from './transformers'
 
 type LoginApiPayload = LoginResponsePayload & {
   mfa_required?: boolean
@@ -68,7 +68,7 @@ export async function login(credentials: LoginCredentials): Promise<LoginResult>
 
     return {
       tokens: tokens ?? undefined,
-      user: data.user,
+      user: transformAuthUser(data.user) ?? undefined,
     }
   } catch (error) {
     if (error instanceof ApiError && error.code === 'auth.mfa_required') {
@@ -96,7 +96,9 @@ export async function verifyMfa(payload: VerifyMfaPayload): Promise<AuthTokens |
 
 export async function fetchCurrentUser(): Promise<AuthUser> {
   const response = await apiClient.get<ApiResponse<AuthUser>>(AUTH_ME_ENDPOINT)
-  return unwrapResponse(response)
+  const result = unwrapResponse(response)
+  const normalized = transformAuthUser(result)
+  return normalized ?? result
 }
 
 export async function logout(): Promise<void> {

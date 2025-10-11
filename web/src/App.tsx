@@ -68,7 +68,7 @@ function AppRoutes() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider>
         <BrowserRouter>
           <BreadcrumbProvider>
             <AppRoutes />

@@ -1,66 +1,62 @@
-import { useEffect, useState } from 'react'
-import { useSettingsPreferences } from '@/hooks/useSettingsPreferences'
+import { useCallback, useEffect, useMemo } from 'react'
+import { useSettings } from '@/hooks/useSettings'
 import type { Theme } from './theme-context'
 import { ThemeProviderContext } from './theme-context'
 
+const THEME_CLASSNAMES: Theme[] = ['light', 'dark']
+
 interface ThemeProviderProps {
   children: React.ReactNode
-  defaultTheme?: Theme
-  storageKey?: string
 }
 
-export function ThemeProvider({
-  children,
-  defaultTheme = 'system',
-  storageKey = 'shellcn-theme',
-  ...props
-}: ThemeProviderProps) {
-  const { preferences, updateAppearance } = useSettingsPreferences()
-  const preferredTheme = preferences.appearance.theme ?? defaultTheme
-  const [theme, setTheme] = useState<Theme>(preferredTheme)
+export function ThemeProvider({ children }: ThemeProviderProps) {
+  const { theme, setTheme } = useSettings()
 
   useEffect(() => {
     if (typeof window === 'undefined') {
       return
     }
-    const stored = localStorage.getItem(storageKey) as Theme | null
-    if (stored && stored !== preferredTheme) {
-      updateAppearance({ theme: stored })
-    } else {
-      localStorage.setItem(storageKey, preferredTheme)
-    }
-    setTheme(preferredTheme)
-  }, [preferredTheme, storageKey, updateAppearance])
 
-  useEffect(() => {
     const root = window.document.documentElement
 
-    root.classList.remove('light', 'dark')
+    const applyTheme = (value: Theme) => {
+      THEME_CLASSNAMES.forEach((name) => root.classList.remove(name))
 
-    if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light'
+      if (value === 'system') {
+        const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        root.classList.add(systemPrefersDark ? 'dark' : 'light')
+        return
+      }
 
-      root.classList.add(systemTheme)
+      root.classList.add(value)
+    }
+
+    applyTheme(theme)
+
+    if (theme !== 'system') {
       return
     }
 
-    root.classList.add(theme)
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const listener = () => applyTheme('system')
+    media.addEventListener('change', listener)
+    return () => media.removeEventListener('change', listener)
   }, [theme])
 
-  const value = {
-    theme,
-    setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme)
-      setTheme(theme)
-      updateAppearance({ theme })
+  const updateTheme = useCallback(
+    (value: Theme) => {
+      setTheme(value)
     },
-  }
-
-  return (
-    <ThemeProviderContext.Provider {...props} value={value}>
-      {children}
-    </ThemeProviderContext.Provider>
+    [setTheme]
   )
+
+  const value = useMemo(
+    () => ({
+      theme,
+      setTheme: updateTheme,
+    }),
+    [theme, updateTheme]
+  )
+
+  return <ThemeProviderContext.Provider value={value}>{children}</ThemeProviderContext.Provider>
 }
