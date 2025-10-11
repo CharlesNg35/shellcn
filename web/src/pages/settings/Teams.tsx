@@ -155,5 +155,5 @@ export function Teams() {
     </div>
   )
 }
-  const isExternalTeam = (team?: TeamRecord) =>
-    Boolean(team?.source && team.source.toLowerCase() !== 'local')
+const isExternalTeam = (team?: TeamRecord) =>
+  Boolean(team?.source && team.source.toLowerCase() !== 'local')

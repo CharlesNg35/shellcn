@@ -25,6 +25,8 @@ interface UserResponse {
   avatar?: string
   is_root: boolean
   is_active: boolean
+  auth_provider?: string
+  auth_subject?: string
   roles?: Array<{
     id: string
     name: string
@@ -57,6 +59,8 @@ function transformUser(raw: UserResponse): UserRecord {
     avatar: raw.avatar,
     is_root: raw.is_root,
     is_active: raw.is_active,
+    auth_provider: raw.auth_provider,
+    auth_subject: raw.auth_subject,
     roles:
       raw.roles?.map((role) => ({
         id: role.id,

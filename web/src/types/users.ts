@@ -24,6 +24,7 @@ export interface UserRecord {
   is_root: boolean
   is_active: boolean
   auth_provider?: string
+  auth_subject?: string
   roles?: UserRoleSummary[]
   teams?: UserTeamSummary[]
   last_login_at?: string | null
