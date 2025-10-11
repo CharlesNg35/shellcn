@@ -48,19 +48,28 @@ export function UserTable({
     () => [
       {
         id: 'select',
-        header: ({ table }) => (
-          <Checkbox
-            checked={table.getIsAllPageRowsSelected()}
-            indeterminate={table.getIsSomePageRowsSelected()}
-            onCheckedChange={(checked) => table.toggleAllPageRowsSelected(!!checked)}
-            disabled={!table.getRowModel().rows.length}
-            aria-label="Select all users"
-          />
-        ),
+        header: ({ table }) => {
+          const hasSelectableRows = table.getRowModel().rows.some((row) => row.getCanSelect())
+          return (
+            <Checkbox
+              checked={hasSelectableRows && table.getIsAllPageRowsSelected()}
+              indeterminate={table.getIsSomePageRowsSelected()}
+              onCheckedChange={(checked) => {
+                if (!hasSelectableRows) {
+                  return
+                }
+                table.toggleAllPageRowsSelected(!!checked)
+              }}
+              disabled={!hasSelectableRows}
+              aria-label="Select all users"
+            />
+          )
+        },
         cell: ({ row }) => (
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(checked) => row.toggleSelected(!!checked)}
+            disabled={!row.getCanSelect()}
             aria-label={`Select ${row.original.username}`}
           />
         ),
@@ -175,6 +184,12 @@ export function UserTable({
                 type="button"
                 variant="ghost"
                 size="sm"
+                disabled={row.original.is_root}
+                title={
+                  row.original.is_root
+                    ? 'Root account settings are managed from the Profile page'
+                    : undefined
+                }
                 onClick={() => onEditUser?.(row.original)}
                 aria-label={
                   row.original.auth_provider && row.original.auth_provider !== 'local'
@@ -208,7 +223,7 @@ export function UserTable({
       rowSelection,
       sorting,
     },
-    enableRowSelection: true,
+    enableRowSelection: (row) => !row.original.is_root,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),

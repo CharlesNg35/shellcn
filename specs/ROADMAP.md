@@ -146,16 +146,18 @@
 
 ### Phase 10: Settings & Preferences (Week 10)
 
-- [ ] Create Settings page with tabs
-- [ ] Build user profile settings
-- [ ] Implement password change form
-- [ ] Create MFA setup flow with QR code
-- [ ] Build appearance settings (theme, language)
-- [ ] Implement notification preferences
-- [ ] Create session preferences
-- [ ] Build settings store (Zustand)
-- [ ] Add settings persistence
-- [ ] Write tests for settings
+- [x] Create Settings page with tabs
+- [x] Build user profile settings
+- [x] Implement password change form
+- [x] Create MFA setup flow with QR code
+- [x] Update the login flow to support MFA verification
+- [x] Make sure the backend is properly integrated for MFA (TOTP)
+- [x] Build appearance settings (theme, language)
+- [x] Implement notification preferences
+- [x] Create session preferences
+- [x] Build settings store (Zustand)
+- [x] Add settings persistence
+- [x] Write tests for settings
 
 ### Phase 11: Testing & Quality Assurance (Week 11)
 

@@ -147,7 +147,9 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		"is_active":     user.IsActive,
 		"first_name":    user.FirstName,
 		"last_name":     user.LastName,
+		"avatar":        strings.TrimSpace(user.Avatar),
 		"auth_provider": user.AuthProvider,
+		"mfa_enabled":   user.MFAEnabled,
 		"permissions":   perms,
 	}
 

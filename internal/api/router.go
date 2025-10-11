@@ -12,6 +12,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/auth/mfa"
 	"github.com/charlesng35/shellcn/internal/auth/providers"
 	"github.com/charlesng35/shellcn/internal/handlers"
 	"github.com/charlesng35/shellcn/internal/middleware"
@@ -69,6 +70,11 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 
 	authProviderSvc, err := services.NewAuthProviderService(db, auditSvc, encryptionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	totpSvc, err := mfa.NewTOTPService(db, encryptionKey)
 	if err != nil {
 		return nil, err
 	}
@@ -159,6 +165,13 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 	registerUserRoutes(api, userHandler, checker)
+
+	profileUserSvc, err := services.NewUserService(db, auditSvc)
+	if err != nil {
+		return nil, err
+	}
+	profileHandler := handlers.NewProfileHandler(profileUserSvc, totpSvc)
+	registerProfileRoutes(api, profileHandler)
 
 	// Permissions
 	permHandler, err := handlers.NewPermissionHandler(db)

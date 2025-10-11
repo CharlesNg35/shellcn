@@ -17,12 +17,14 @@ export interface AuthUser {
   email: string
   first_name?: string
   last_name?: string
+  avatar?: string
   is_root: boolean
   is_active: boolean
   auth_provider?: string
   teams?: AuthTeamSummary[]
   roles?: AuthRoleSummary[]
   permissions?: import('@/constants/permissions').PermissionId[]
+  mfa_enabled?: boolean
   mfa_enrolled?: boolean
   last_login_at?: string
 }

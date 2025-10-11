@@ -141,12 +141,14 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
     }
   }
 
-  const savingInProgress =
-    isSubmitting || create.isPending || update.isPending || isRoleMutationPending
-  const roleSelectionDisabled = !canManageRoles || savingInProgress
-
   const isExternalUser =
     mode === 'edit' && Boolean(user?.auth_provider && user.auth_provider !== 'local')
+  const isRootEdit = mode === 'edit' && Boolean(user?.is_root)
+  const isReadOnly = isExternalUser || isRootEdit
+
+  const savingInProgress =
+    isSubmitting || create.isPending || update.isPending || isRoleMutationPending
+  const roleSelectionDisabled = !canManageRoles || savingInProgress || isRootEdit
 
   const handleSuccess = (result: UserRecord) => {
     setFormError(null)
@@ -193,6 +195,16 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
       return
     }
 
+    if (isRootEdit) {
+      setFormError(
+        new ApiError({
+          code: 'ROOT_USER_PROTECTED',
+          message: 'Root account updates are restricted to the Profile page.',
+        })
+      )
+      return
+    }
+
     try {
       const updated = await update.mutateAsync({
         userId: user.id,
@@ -216,6 +228,12 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
 
   return (
     <form className="space-y-4" autoComplete="off" onSubmit={handleSubmit(onSubmit)}>
+      {isRootEdit ? (
+        <div className="rounded-lg border border-border/70 bg-muted/10 p-3 text-sm text-muted-foreground">
+          The root account can only be updated from the Profile page. Fields are read-only here.
+        </div>
+      ) : null}
+
       {isExternalUser ? (
         <div className="rounded-lg border border-border/70 bg-muted/10 p-3 text-sm text-muted-foreground">
           This account is managed by the{' '}
@@ -231,7 +249,7 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
           placeholder="username"
           {...register('username')}
           error={errors.username?.message}
-          disabled={isExternalUser}
+          disabled={isReadOnly}
         />
         <Input
           type="email"
@@ -239,7 +257,7 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
           placeholder="user@example.com"
           {...register('email')}
           error={errors.email?.message}
-          disabled={isExternalUser}
+          disabled={isReadOnly}
         />
       </div>
 
@@ -258,13 +276,13 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
           label="First name"
           {...register('first_name')}
           error={errors.first_name?.message}
-          disabled={isExternalUser}
+          disabled={isReadOnly}
         />
         <Input
           label="Last name"
           {...register('last_name')}
           error={errors.last_name?.message}
-          disabled={isExternalUser}
+          disabled={isReadOnly}
         />
       </div>
 
@@ -272,7 +290,7 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
         label="Avatar URL"
         {...register('avatar')}
         error={errors.avatar?.message}
-        disabled={isExternalUser}
+        disabled={isReadOnly}
       />
 
       <div className="space-y-3 rounded-lg border border-border/70 bg-muted/10 p-4">
@@ -358,7 +376,7 @@ export function UserForm({ mode = 'create', user, onClose, onSuccess }: UserForm
             Cancel
           </Button>
         ) : null}
-        <Button type="submit" loading={savingInProgress}>
+        <Button type="submit" loading={savingInProgress} disabled={isRootEdit || savingInProgress}>
           {mode === 'create' ? 'Create User' : 'Save Changes'}
         </Button>
       </div>

@@ -18,6 +18,7 @@ import { useInvites, useInviteMutations } from '@/hooks/useInvites'
 import type { UserRecord } from '@/types/users'
 import { PERMISSIONS } from '@/constants/permissions'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
+import { toast } from '@/lib/utils/toast'
 
 const DEFAULT_PER_PAGE = 20
 
@@ -54,16 +55,24 @@ export function Users() {
     setPage(1)
   }, [filters.status, filters.search])
 
-  const users = data?.data ?? []
+  const users = useMemo(() => data?.data ?? [], [data?.data])
   const meta = data?.meta
   const userCount = meta?.total ?? users.length
   const inviteCount = invitesQuery.data?.length ?? 0
+  const rootUserIds = useMemo(() => {
+    return new Set(users.filter((user) => user.is_root).map((user) => user.id))
+  }, [users])
 
   const handleBulkActivate = async () => {
     if (!selectedIds.length) {
       return
     }
-    await bulkActivate.mutateAsync({ user_ids: selectedIds })
+    const actionableIds = selectedIds.filter((id) => !rootUserIds.has(id))
+    if (!actionableIds.length) {
+      toast.warning('Root account is excluded from bulk actions.')
+      return
+    }
+    await bulkActivate.mutateAsync({ user_ids: actionableIds })
     setSelectedIds([])
   }
 
@@ -71,7 +80,12 @@ export function Users() {
     if (!selectedIds.length) {
       return
     }
-    await bulkDeactivate.mutateAsync({ user_ids: selectedIds })
+    const actionableIds = selectedIds.filter((id) => !rootUserIds.has(id))
+    if (!actionableIds.length) {
+      toast.warning('Root account cannot be deactivated.')
+      return
+    }
+    await bulkDeactivate.mutateAsync({ user_ids: actionableIds })
     setSelectedIds([])
   }
 
@@ -79,7 +93,12 @@ export function Users() {
     if (!selectedIds.length) {
       return
     }
-    await bulkDelete.mutateAsync({ user_ids: selectedIds })
+    const actionableIds = selectedIds.filter((id) => !rootUserIds.has(id))
+    if (!actionableIds.length) {
+      toast.warning('Root account cannot be deleted.')
+      return
+    }
+    await bulkDelete.mutateAsync({ user_ids: actionableIds })
     setSelectedIds([])
   }
 
@@ -104,8 +123,27 @@ export function Users() {
   }, [])
 
   const handleEditUser = useCallback((record: UserRecord) => {
+    if (record.is_root) {
+      toast.info('Manage the root account from the Profile page. Updates are restricted here.')
+      return
+    }
     setEditingUser(record)
   }, [])
+
+  const handleSelectionChange = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) {
+        setSelectedIds([])
+        return
+      }
+      const filtered = ids.filter((id) => !rootUserIds.has(id))
+      if (filtered.length !== ids.length) {
+        toast.info('Root account cannot be selected for bulk actions.')
+      }
+      setSelectedIds(filtered)
+    },
+    [rootUserIds]
+  )
 
   return (
     <div className="space-y-6">
@@ -183,7 +221,7 @@ export function Users() {
               perPage={meta?.per_page ?? DEFAULT_PER_PAGE}
               isLoading={isLoading}
               onPageChange={setPage}
-              onSelectionChange={setSelectedIds}
+              onSelectionChange={handleSelectionChange}
               onViewUser={handleViewUser}
               onEditUser={handleEditUser}
             />
@@ -235,8 +273,10 @@ export function Users() {
         open={Boolean(detailUserId)}
         onClose={() => setDetailUserId(undefined)}
         onEdit={(record) => {
-          setEditingUser(record)
-          setDetailUserId(undefined)
+          handleEditUser(record)
+          if (!record.is_root) {
+            setDetailUserId(undefined)
+          }
         }}
       />
 

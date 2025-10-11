@@ -284,6 +284,20 @@ func (s *TOTPService) loadSecret(userID string) (*models.MFASecret, error) {
 	return &secret, nil
 }
 
+// DeleteSecret removes the MFA secret and backup codes for a user.
+func (s *TOTPService) DeleteSecret(userID string) error {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return errors.New("totp: user id is required")
+	}
+
+	if err := s.db.Where("user_id = ?", userID).Delete(&models.MFASecret{}).Error; err != nil {
+		return fmt.Errorf("totp: delete secret: %w", err)
+	}
+
+	return nil
+}
+
 func generateBackupCode() (string, error) {
 	buf := make([]byte, 5)
 	if _, err := cryptoRand.Read(buf); err != nil {

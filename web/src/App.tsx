@@ -24,6 +24,7 @@ import { Sessions } from '@/pages/settings/Sessions'
 import { AuditLogs } from '@/pages/settings/AuditLogs'
 import { AuthProviders } from '@/pages/settings/AuthProviders'
 import { Security } from '@/pages/settings/Security'
+import { Settings } from '@/pages/settings/Settings'
 
 function AppRoutes() {
   return (
@@ -42,6 +43,7 @@ function AppRoutes() {
           <Route element={<DashboardLayout />}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/connections" element={<Connections />} />
 
             {/* Settings */}

@@ -483,3 +483,32 @@ func (s *UserService) ChangePassword(ctx context.Context, id, newPassword string
 
 	return nil
 }
+
+// SetMFAEnabled toggles the MFA enabled flag for a user.
+func (s *UserService) SetMFAEnabled(ctx context.Context, id string, enabled bool) error {
+	ctx = ensureContext(ctx)
+
+	result := s.db.WithContext(ctx).Model(&models.User{}).
+		Where("id = ?", id).
+		Update("mfa_enabled", enabled)
+
+	if result.Error != nil {
+		return fmt.Errorf("user service: set mfa enabled: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrUserNotFound
+	}
+
+	action := "user.mfa_disable"
+	if enabled {
+		action = "user.mfa_enable"
+	}
+
+	recordAudit(s.auditService, ctx, AuditEntry{
+		Action:   action,
+		Resource: id,
+		Result:   "success",
+	})
+
+	return nil
+}

@@ -8,6 +8,7 @@ import { useUserMutations, useUser } from '@/hooks/useUsers'
 import type { UserRecord } from '@/types/users'
 import { cn } from '@/lib/utils/cn'
 import { PERMISSIONS } from '@/constants/permissions'
+import { toast } from '@/lib/utils/toast'
 
 interface UserDetailModalProps {
   userId?: string
@@ -34,6 +35,10 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
     if (!user) {
       return
     }
+    if (user.is_root) {
+      toast.info('Root account activation is managed from the Profile page.')
+      return
+    }
     if (user.is_active) {
       await deactivate.mutateAsync(user.id)
     } else {
@@ -43,6 +48,7 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
 
   const authProvider = user?.auth_provider?.toUpperCase() ?? 'LOCAL'
   const isExternal = Boolean(user?.auth_provider && user.auth_provider !== 'local')
+  const isRootUser = Boolean(user?.is_root)
 
   const handlePasswordSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -110,53 +116,69 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
           </div>
 
           <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => onEdit?.(user)}>
-                {isExternal ? 'Manage access' : 'Edit user'}
-              </Button>
-              <Button
-                variant={user.is_active ? 'secondary' : 'default'}
-                onClick={handleToggleActive}
-                loading={activate.isPending || deactivate.isPending}
-                disabled={user.is_root && !user.is_active}
-              >
-                {user.is_active ? 'Deactivate' : 'Activate'}
-              </Button>
-            </div>
+            {isRootUser ? (
+              <div className="rounded-md border border-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                The root account cannot be edited or disabled from the Users page. Manage it from
+                your Profile instead.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => onEdit?.(user)}>
+                  {isExternal ? 'Manage access' : 'Edit user'}
+                </Button>
+                <Button
+                  variant={user.is_active ? 'secondary' : 'default'}
+                  onClick={handleToggleActive}
+                  loading={activate.isPending || deactivate.isPending}
+                >
+                  {user.is_active ? 'Deactivate' : 'Activate'}
+                </Button>
+              </div>
+            )}
           </PermissionGuard>
 
           <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
-            <form className="space-y-3" autoComplete="off" onSubmit={handlePasswordSubmit}>
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-muted-foreground">Password Management</p>
-                <Input
-                  type="password"
-                  placeholder="Set new password"
-                  value={passwordValue}
-                  onChange={(event) => setPasswordValue(event.target.value)}
-                />
-                {passwordMessage ? (
-                  <p
-                    className={cn(
-                      'text-xs',
-                      passwordMessage.includes('successfully')
-                        ? 'text-emerald-500'
-                        : 'text-destructive'
-                    )}
+            {isRootUser ? (
+              <div className="rounded-md border border-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+                Password updates for the root account are restricted to the Profile page.
+              </div>
+            ) : (
+              <form className="space-y-3" autoComplete="off" onSubmit={handlePasswordSubmit}>
+                <div className="space-y-2">
+                  <p className="text-sm font-semibold text-muted-foreground">Password Management</p>
+                  <Input
+                    type="password"
+                    placeholder="Set new password"
+                    value={passwordValue}
+                    onChange={(event) => setPasswordValue(event.target.value)}
+                  />
+                  {passwordMessage ? (
+                    <p
+                      className={cn(
+                        'text-xs',
+                        passwordMessage.includes('successfully')
+                          ? 'text-emerald-500'
+                          : 'text-destructive'
+                      )}
+                    >
+                      {passwordMessage}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setPasswordValue('')}>
+                    Clear
+                  </Button>
+                  <Button
+                    type="submit"
+                    loading={changePassword.isPending}
+                    disabled={!passwordValue}
                   >
-                    {passwordMessage}
-                  </p>
-                ) : null}
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setPasswordValue('')}>
-                  Clear
-                </Button>
-                <Button type="submit" loading={changePassword.isPending} disabled={!passwordValue}>
-                  Update Password
-                </Button>
-              </div>
-            </form>
+                    Update Password
+                  </Button>
+                </div>
+              </form>
+            )}
           </PermissionGuard>
         </div>
       ) : (

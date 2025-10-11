@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSettingsPreferences } from '@/hooks/useSettingsPreferences'
 import type { Theme } from './theme-context'
 import { ThemeProviderContext } from './theme-context'
 
@@ -14,9 +15,22 @@ export function ThemeProvider({
   storageKey = 'shellcn-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  )
+  const { preferences, updateAppearance } = useSettingsPreferences()
+  const preferredTheme = preferences.appearance.theme ?? defaultTheme
+  const [theme, setTheme] = useState<Theme>(preferredTheme)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+    const stored = localStorage.getItem(storageKey) as Theme | null
+    if (stored && stored !== preferredTheme) {
+      updateAppearance({ theme: stored })
+    } else {
+      localStorage.setItem(storageKey, preferredTheme)
+    }
+    setTheme(preferredTheme)
+  }, [preferredTheme, storageKey, updateAppearance])
 
   useEffect(() => {
     const root = window.document.documentElement
@@ -40,6 +54,7 @@ export function ThemeProvider({
     setTheme: (theme: Theme) => {
       localStorage.setItem(storageKey, theme)
       setTheme(theme)
+      updateAppearance({ theme })
     },
   }
 
