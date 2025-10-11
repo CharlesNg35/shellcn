@@ -10,6 +10,7 @@ import { TeamForm, type TeamFormMode } from '@/components/teams/TeamForm'
 import { useTeamMutations, useTeams } from '@/hooks/useTeams'
 import type { TeamRecord } from '@/types/teams'
 import { PERMISSIONS } from '@/constants/permissions'
+import { toast } from '@/lib/utils/toast'
 
 export function Teams() {
   const location = useLocation()
@@ -44,6 +45,10 @@ export function Teams() {
   }
 
   const handleOpenEditModal = (team: TeamRecord) => {
+    if (isExternalTeam(team)) {
+      toast.warning('This team is managed by an external provider and cannot be edited.')
+      return
+    }
     setFormMode('edit')
     setTeamForForm(team)
     setIsModalOpen(true)
@@ -150,3 +155,5 @@ export function Teams() {
     </div>
   )
 }
+  const isExternalTeam = (team?: TeamRecord) =>
+    Boolean(team?.source && team.source.toLowerCase() !== 'local')

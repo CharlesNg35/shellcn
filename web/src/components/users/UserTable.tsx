@@ -8,15 +8,7 @@ import {
   type SortingState,
   useReactTable,
 } from '@tanstack/react-table'
-import {
-  ArrowUpDown,
-  Eye,
-  Loader2,
-  MoreHorizontal,
-  PencilLine,
-  ShieldAlert,
-  UserCog,
-} from 'lucide-react'
+import { ArrowUpDown, Eye, Loader2, PencilLine, ShieldAlert, UserCog } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Checkbox } from '@/components/ui/Checkbox'
@@ -199,18 +191,7 @@ export function UserTable({
             </PermissionGuard>
             {row.original.is_root ? (
               <ShieldAlert className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onViewUser?.(row.original)}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </PermissionGuard>
-            )}
+            ) : null}
           </div>
         ),
         enableSorting: false,

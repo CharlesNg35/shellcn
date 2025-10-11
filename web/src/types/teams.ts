@@ -7,6 +7,8 @@ export interface TeamRecord {
   description?: string
   created_at?: string
   updated_at?: string
+  source?: string
+  external_id?: string
   members?: TeamMember[]
   roles?: UserRoleSummary[]
 }

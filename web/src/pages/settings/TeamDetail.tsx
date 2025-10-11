@@ -16,6 +16,7 @@ import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
 import { PERMISSIONS } from '@/constants/permissions'
 import { Modal } from '@/components/ui/Modal'
 import { TeamForm } from '@/components/teams/TeamForm'
+import { cn } from '@/lib/utils/cn'
 
 function formatDate(value?: string) {
   if (!value) {
@@ -75,6 +76,9 @@ export function TeamDetail() {
   }
 
   const handleEdit = () => {
+    if (teamDetail?.source && teamDetail.source.toLowerCase() !== 'local') {
+      return
+    }
     setEditModalOpen(true)
   }
 
@@ -159,6 +163,9 @@ export function TeamDetail() {
 
   const memberCount = members?.length ?? teamDetail.members?.length ?? 0
   const assignedRoles = teamDetail.roles ?? []
+  const teamSource = teamDetail.source?.toUpperCase() ?? 'LOCAL'
+  const isExternalTeam = Boolean(teamDetail.source && teamDetail.source.toLowerCase() !== 'local')
+  const canEditTeam = !isExternalTeam
 
   return (
     <div className="space-y-6">
@@ -176,10 +183,12 @@ export function TeamDetail() {
               Back to Teams
             </Button>
             <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
-              <Button type="button" variant="outline" onClick={handleEdit}>
-                <PencilLine className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
+              {canEditTeam ? (
+                <Button type="button" variant="outline" onClick={handleEdit}>
+                  <PencilLine className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -222,9 +231,21 @@ export function TeamDetail() {
               <Badge variant="outline" className="text-xs">
                 {assignedRoles.length} role{assignedRoles.length === 1 ? '' : 's'} assigned
               </Badge>
+              <Badge
+                variant={isExternalTeam ? 'secondary' : 'outline'}
+                className={cn('text-xs', isExternalTeam ? '' : 'text-foreground')}
+              >
+                {teamSource}
+              </Badge>
             </div>
 
             <div className="space-y-3 pt-2">
+              {isExternalTeam ? (
+                <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
+                  This team is synchronized from an external provider. Team metadata is read-only, but
+                  you can still manage memberships, roles, and delete the team if required.
+                </div>
+              ) : null}
               <div className="flex items-start gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
                   <CalendarClock className="h-4 w-4 text-muted-foreground" />
@@ -283,19 +304,21 @@ export function TeamDetail() {
         </div>
       </div>
 
-      <Modal
-        open={isEditModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        title={`Edit ${teamDetail.name}`}
-        description="Update the team name or description. Changes take effect immediately."
-      >
-        <TeamForm
-          mode="edit"
-          team={teamDetail}
+      {canEditTeam ? (
+        <Modal
+          open={isEditModalOpen}
           onClose={() => setEditModalOpen(false)}
-          onSuccess={() => setEditModalOpen(false)}
-        />
-      </Modal>
+          title={`Edit ${teamDetail.name}`}
+          description="Update the team name or description. Changes take effect immediately."
+        >
+          <TeamForm
+            mode="edit"
+            team={teamDetail}
+            onClose={() => setEditModalOpen(false)}
+            onSuccess={() => setEditModalOpen(false)}
+          />
+        </Modal>
+      ) : null}
     </div>
   )
 }

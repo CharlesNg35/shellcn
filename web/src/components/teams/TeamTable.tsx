@@ -15,6 +15,9 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import type { TeamRecord } from '@/types/teams'
 import { PERMISSIONS } from '@/constants/permissions'
 
+const isExternalTeamRecord = (team: TeamRecord) =>
+  Boolean(team.source && team.source.toLowerCase() !== 'local')
+
 interface TeamTableProps {
   teams: TeamRecord[]
   isLoading?: boolean
@@ -96,6 +99,20 @@ export function TeamTable({
         enableSorting: false,
       },
       {
+        accessorKey: 'source',
+        header: () => 'Source',
+        cell: ({ row }) => {
+          const source = row.original.source?.toUpperCase() ?? 'LOCAL'
+          const variant = source === 'LOCAL' ? 'outline' : 'secondary'
+          return (
+            <Badge variant={variant} className="text-xs font-medium">
+              {source}
+            </Badge>
+          )
+        },
+        enableSorting: false,
+      },
+      {
         accessorKey: 'created_at',
         header: ({ column }) => (
           <Button
@@ -147,8 +164,17 @@ export function TeamTable({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => onEditTeam?.(row.original)}
-                aria-label={`Edit ${row.original.name}`}
+                onClick={() => {
+                  if (!isExternalTeamRecord(row.original)) {
+                    onEditTeam?.(row.original)
+                  }
+                }}
+                disabled={isExternalTeamRecord(row.original)}
+                aria-label={
+                  isExternalTeamRecord(row.original)
+                    ? `${row.original.name} is managed externally`
+                    : `Edit ${row.original.name}`
+                }
               >
                 <PencilLine className="h-4 w-4" />
               </Button>

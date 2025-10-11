@@ -40,6 +40,8 @@ interface TeamResponse {
   description?: string
   created_at?: string
   updated_at?: string
+  source?: string
+  external_id?: string
   users?: TeamMemberResponse[]
   roles?: TeamRoleResponse[]
 }
@@ -88,6 +90,8 @@ function transformTeam(raw: TeamResponse): TeamRecord {
     description: raw.description || undefined,
     created_at: raw.created_at,
     updated_at: raw.updated_at,
+    source: raw.source,
+    external_id: raw.external_id,
     members: raw.users ? raw.users.map(transformTeamMember) : undefined,
     roles: raw.roles?.map(transformRoleSummary) ?? [],
   }

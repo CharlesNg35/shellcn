@@ -114,6 +114,9 @@ func (s *LDAPSyncService) SyncFromIdentities(ctx context.Context, cfg models.LDA
 			case errors.Is(err, iauth.ErrSSOEmailRequired):
 				summary.UsersSkipped++
 				continue
+			case errors.Is(err, iauth.ErrSSOProviderMismatch):
+				summary.UsersSkipped++
+				continue
 			default:
 				return summary, fmt.Errorf("ldap sync service: link identity: %w", err)
 			}
