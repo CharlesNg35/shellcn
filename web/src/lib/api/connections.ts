@@ -11,6 +11,16 @@ import { isApiSuccess } from '@/types/api'
 
 const CONNECTIONS_ENDPOINT = '/connections'
 
+export interface ConnectionCreatePayload {
+  name: string
+  description?: string
+  protocol_id: string
+  team_id?: string | null
+  folder_id?: string | null
+  metadata?: Record<string, unknown>
+  settings?: Record<string, unknown>
+}
+
 interface ConnectionTargetResponse {
   id: string
   host: string
@@ -174,6 +184,12 @@ export async function fetchConnectionById(id: string, include?: string): Promise
       params: include ? { include } : undefined,
     }
   )
+  const data = unwrapResponse(response)
+  return transformConnection(data)
+}
+
+export async function createConnection(payload: ConnectionCreatePayload): Promise<ConnectionRecord> {
+  const response = await apiClient.post<ApiResponse<ConnectionResponse>>(CONNECTIONS_ENDPOINT, payload)
   const data = unwrapResponse(response)
   return transformConnection(data)
 }

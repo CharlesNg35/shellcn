@@ -90,12 +90,88 @@ type ConnectionService struct {
 	checker PermissionChecker
 }
 
+// CreateConnectionInput describes the fields needed to create a connection.
+type CreateConnectionInput struct {
+	Name        string
+	Description string
+	ProtocolID  string
+	TeamID      *string
+	FolderID    *string
+	Metadata    map[string]any
+	Settings    map[string]any
+}
+
 // NewConnectionService constructs a ConnectionService.
 func NewConnectionService(db *gorm.DB, checker PermissionChecker) (*ConnectionService, error) {
 	if db == nil {
 		return nil, errors.New("connection service: db is required")
 	}
 	return &ConnectionService{db: db, checker: checker}, nil
+}
+
+// Create registers a new connection owned by the supplied user.
+func (s *ConnectionService) Create(ctx context.Context, userID string, input CreateConnectionInput) (*ConnectionDTO, error) {
+	ctx = ensureContext(ctx)
+	canManage, err := s.canManageConnections(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !canManage {
+		return nil, apperrors.ErrForbidden
+	}
+
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return nil, apperrors.NewBadRequest("connection name is required")
+	}
+
+	protocolID := strings.TrimSpace(input.ProtocolID)
+	if protocolID == "" {
+		return nil, apperrors.NewBadRequest("protocol id is required")
+	}
+
+	connection := models.Connection{
+		Name:        name,
+		Description: strings.TrimSpace(input.Description),
+		ProtocolID:  protocolID,
+		OwnerUserID: userID,
+	}
+
+	if teamID := normalizeOptionalID(input.TeamID); teamID != nil {
+		connection.TeamID = teamID
+	}
+	if folderID := normalizeOptionalID(input.FolderID); folderID != nil {
+		connection.FolderID = folderID
+	}
+
+	if input.Metadata != nil {
+		data, marshalErr := json.Marshal(input.Metadata)
+		if marshalErr != nil {
+			return nil, apperrors.NewBadRequest("invalid metadata payload")
+		}
+		connection.Metadata = datatypes.JSON(data)
+	}
+
+	if input.Settings != nil {
+		data, marshalErr := json.Marshal(input.Settings)
+		if marshalErr != nil {
+			return nil, apperrors.NewBadRequest("invalid settings payload")
+		}
+		connection.Settings = datatypes.JSON(data)
+	}
+
+	if err := s.db.WithContext(ctx).Create(&connection).Error; err != nil {
+		return nil, fmt.Errorf("connection service: create connection: %w", err)
+	}
+
+	if err := s.db.WithContext(ctx).
+		Preload("Folder").
+		First(&connection, "id = ?", connection.ID).Error; err != nil {
+		return nil, fmt.Errorf("connection service: reload connection: %w", err)
+	}
+
+	dto := mapConnection(connection, false, false)
+	return &dto, nil
 }
 
 // ListVisible returns connections accessible to the supplied user, applying optional filters.
@@ -404,6 +480,18 @@ func (s *ConnectionService) canManageConnections(ctx context.Context, userID str
 		return false, nil
 	}
 	return s.checker.Check(ctx, userID, "connection.manage")
+}
+
+func normalizeOptionalID(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	result := trimmed
+	return &result
 }
 
 func mapConnections(rows []models.Connection, includeTargets, includeVisibility bool) []ConnectionDTO {

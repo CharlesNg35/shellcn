@@ -1,14 +1,52 @@
 # Connection Folders UI Specification
 
-**Version:** 1.0
+**Version:** 1.3
 **Date:** 2025-10-10
 **Status:** Draft
+**Default Mode:** Flat Structure (Single Level)
+**UI Terminology:** "Resources" (user-facing) / "Protocols" (technical)
+**Form Strategy:** Basic fields first, protocol-specific fields later
 
 ---
 
 ## 1. Overview
 
-This specification defines the UI/UX implementation for Connection Folder management in ShellCN. Folders provide hierarchical organization of connections, supporting unlimited nesting depth with parent-child relationships. The folder system is multi-tenant aware, supporting both personal and team-scoped folders.
+This specification defines the UI/UX implementation for Connection Folder management in ShellCN. Folders provide organization of connections with **configurable nesting depth** (default: single level, flat structure). The folder system is multi-tenant aware, supporting both personal and team-scoped folders.
+
+### 1.0 Folder Depth Configuration
+
+**Default Behavior: Single Level (Flat)**
+- By default, folders are **one level deep** (no subfolders)
+- Keeps the UI simple and prevents over-complication
+- Most users only need basic categorization
+
+**Configuration Option:**
+```typescript
+// web/src/config/folders.ts
+export const FOLDER_CONFIG = {
+  // Maximum folder nesting depth
+  // 1 = flat (no subfolders, default)
+  // 2 = folders can have subfolders
+  // n = unlimited depth
+  maxDepth: 1,
+
+  // Whether to show "Create Subfolder" option
+  allowSubfolders: false,
+
+  // Whether to show parent folder selector in create/edit
+  allowParentSelection: false,
+}
+```
+
+**Backend Support:**
+- Backend **already supports unlimited nesting** (via `parent_id` field)
+- No backend changes needed to enable/disable nesting
+- Simply control UI behavior via frontend configuration
+
+**Migration Path:**
+- Start with `maxDepth: 1` (flat structure) for simplicity
+- If users request hierarchical folders, change to `maxDepth: 2` or higher
+- Existing folders automatically support deeper nesting when enabled
 
 ### 1.1 Current State
 
@@ -150,7 +188,7 @@ Connections Page (pages/connections/Connections.tsx)
 
 **Features:**
 - Modal form with name, description, icon, color fields
-- Parent folder selection (hierarchical dropdown)
+- **Parent folder selection** (conditionally shown based on `FOLDER_CONFIG.allowParentSelection`)
 - Team assignment (if user has team permissions)
 - Icon picker (predefined set)
 - Color picker (predefined palette)
@@ -164,12 +202,17 @@ interface FolderFormModalProps {
   onClose: () => void
   mode: 'create' | 'edit'
   folder?: ConnectionFolderDTO  // For edit mode
-  parentFolder?: ConnectionFolderDTO  // For create with parent
+  parentFolder?: ConnectionFolderDTO  // For create with parent (if hierarchical enabled)
   teamId?: string | null  // Pre-selected team
-  availableFolders: ConnectionFolderNode[]  // For parent selection
+  availableFolders?: ConnectionFolderNode[]  // For parent selection (only if hierarchical)
   onSuccess: (folder: ConnectionFolderDTO) => void
 }
 ```
+
+**Flat Mode Behavior (maxDepth: 1):**
+- Parent folder selector is **hidden**
+- Always creates folders at root level (`parent_id: null`)
+- Simplified UI with only name, description, icon, color, team
 
 #### 3.2.2 DeleteFolderConfirmModal
 **Purpose:** Confirm folder deletion with impact preview
@@ -178,8 +221,8 @@ interface FolderFormModalProps {
 **Features:**
 - Shows folder name and description
 - Displays impact preview:
-  - Number of child folders (will be moved to parent)
-  - Number of connections (will be moved to parent or unassigned)
+  - **Number of child folders** (only shown if hierarchical mode enabled)
+  - Number of connections (will be unassigned)
 - Warning message about action
 - Confirmation input (type folder name to confirm)
 - Permission check before showing
@@ -194,9 +237,15 @@ interface DeleteFolderConfirmModalProps {
 }
 ```
 
+**Flat Mode Behavior (maxDepth: 1):**
+- Impact preview simplified: only shows connection count
+- Message: "X connections will be unassigned" (no subfolder mention)
+
 #### 3.2.3 MoveFolderModal
 **Purpose:** Change folder parent (reparent)
 **Location:** `/web/src/components/connections/MoveFolderModal.tsx`
+
+**⚠️ ONLY NEEDED IN HIERARCHICAL MODE**
 
 **Features:**
 - Current location display
@@ -216,14 +265,16 @@ interface MoveFolderModalProps {
 }
 ```
 
+**Flat Mode:** This component is **NOT implemented** when `maxDepth: 1`
+
 #### 3.2.4 FolderContextMenu
 **Purpose:** Right-click or actions menu for folders
 **Location:** `/web/src/components/connections/FolderContextMenu.tsx`
 
 **Features:**
-- Create subfolder
+- **Create subfolder** (conditionally shown based on `FOLDER_CONFIG.allowSubfolders`)
 - Edit folder
-- Move folder
+- **Move folder** (conditionally shown based on `FOLDER_CONFIG.allowParentSelection`)
 - Delete folder
 - Permission-based visibility (`connection.folder.manage`)
 
@@ -231,10 +282,85 @@ interface MoveFolderModalProps {
 ```typescript
 interface FolderContextMenuProps {
   folder: ConnectionFolderDTO
-  onCreateSubfolder: (parentId: string) => void
+  onCreateSubfolder?: (parentId: string) => void  // Optional in flat mode
   onEdit: (folder: ConnectionFolderDTO) => void
-  onMove: (folder: ConnectionFolderDTO) => void
+  onMove?: (folder: ConnectionFolderDTO) => void  // Optional in flat mode
   onDelete: (folder: ConnectionFolderDTO) => void
+}
+```
+
+**Flat Mode Behavior (maxDepth: 1):**
+- Menu shows only: **Edit** and **Delete**
+- "Create Subfolder" is **hidden**
+- "Move Folder" is **hidden**
+
+#### 3.2.5 ResourceSelectionModal
+**Purpose:** First step in connection creation - select protocol/resource type
+**Location:** `/web/src/components/connections/ResourceSelectionModal.tsx`
+
+**Features:**
+- Two-step connection creation wizard (step 1)
+- Shows available protocols from `useAvailableProtocols()` hook
+- Groups protocols by category (terminal, container, database, cloud, etc.)
+- Filters by user permissions (shows only protocols user can use)
+- Search/filter functionality
+- Visual protocol cards with icons and descriptions
+
+**Props:**
+```typescript
+interface ResourceSelectionModalProps {
+  open: boolean
+  onClose: () => void
+  onSelectProtocol: (protocolId: string) => void
+}
+```
+
+**Integration with Existing API:**
+- Uses existing `GET /api/protocols/available` endpoint
+- Filters protocols where `available: true` and user has `{protocol}.connect` permission
+- Categories from protocol metadata: `category` field (terminal, container, database, etc.)
+
+**UI Labels:**
+- Modal title: "Select Resource Type"
+- Description: "Choose the type of resource to connect to"
+- User-facing term: "Resource" (instead of "Protocol" or "Driver")
+
+#### 3.2.6 ConnectionFormModal
+**Purpose:** Second step in connection creation - configure basic connection details
+**Location:** `/web/src/components/connections/ConnectionFormModal.tsx`
+
+**Features (Initial Implementation):**
+- Basic connection entity fields only
+- Name and description inputs
+- Folder assignment dropdown
+- Team assignment (if user has teams)
+- Protocol ID from previous step (hidden)
+- Form validation (name required, max lengths)
+
+**Props:**
+```typescript
+interface ConnectionFormModalProps {
+  open: boolean
+  onClose: () => void
+  protocolId: string  // Selected from ResourceSelectionModal
+  onSuccess: (connection: ConnectionRecord) => void
+}
+```
+
+**Future Enhancement:**
+- Dynamic protocol-specific fields based on `protocolId`
+- Field schema from protocol driver metadata
+- Advanced settings (targets, identities, metadata)
+- Connection testing/preview
+
+**Form Fields (MVP):**
+```typescript
+{
+  name: string              // Required, max 255 chars
+  description?: string      // Optional, max 1000 chars
+  protocol_id: string       // From ResourceSelectionModal (hidden)
+  folder_id?: string        // Selected folder (optional)
+  team_id?: string          // Current team context (optional)
 }
 ```
 
@@ -298,7 +424,11 @@ return (
 
 ### 4.2 Create Subfolder
 
-**Flow:**
+**⚠️ ONLY APPLICABLE IN HIERARCHICAL MODE (`allowSubfolders: true`)**
+
+**Flat Mode (maxDepth: 1):** This flow is **disabled**. All folders are created at root level.
+
+**Hierarchical Mode Flow:**
 
 1. User right-clicks folder OR clicks folder actions menu (⋮)
 2. Menu shows "Create Subfolder" option
@@ -328,7 +458,11 @@ return (
 
 ### 4.4 Move Folder
 
-**Flow:**
+**⚠️ ONLY APPLICABLE IN HIERARCHICAL MODE (`allowParentSelection: true`)**
+
+**Flat Mode (maxDepth: 1):** This flow is **disabled**. Folders cannot be moved since all exist at root level.
+
+**Hierarchical Mode Flow:**
 
 1. User clicks folder actions menu → "Move"
 2. Opens `MoveFolderModal`
@@ -351,24 +485,123 @@ return (
 
 1. User clicks folder actions menu → "Delete"
 2. Opens `DeleteFolderConfirmModal`
-3. Shows impact:
+3. Shows impact based on mode:
+
+**Flat Mode (maxDepth: 1):**
+   ```
+   Delete folder "Production Servers"?
+
+   Impact:
+   • 12 connections will be unassigned
+
+   Type "Production Servers" to confirm
+   ```
+
+**Hierarchical Mode:**
    ```
    Delete folder "Backend Projects"?
 
    Impact:
-   • 3 subfolders will be moved to "Projects"
-   • 12 connections will be moved to "Projects"
+   • 3 subfolders will be moved to parent
+   • 12 connections will be unassigned
 
    Type "Backend Projects" to confirm
    ```
+
 4. User types folder name to confirm
 5. On confirm:
    - DELETE `/api/connection-folders/:id`
    - Refresh tree
    - Clear folder filter (show all)
-   - Show success toast with undo option (if feasible)
+   - Show success toast
 
-### 4.6 Move Connection to Folder
+### 4.6 Create New Connection
+
+**Entry Point:** "New Connection" button on Connections page
+
+**Permission Required:** `connection.manage`
+
+**Flow:**
+
+1. User clicks "New Connection" button (shown only with `connection.manage` permission)
+2. Opens **Resource Selection Modal** (step 1 of 2)
+3. Shows available protocols/drivers grouped by category:
+   ```
+   ┌──── Select Resource Type ─────────────┐
+   │                                       │
+   │  Choose the type of resource to      │
+   │  connect to:                         │
+   │                                       │
+   │  🖥️  Terminal & Remote Access         │
+   │    • SSH - Secure Shell              │
+   │    • RDP - Remote Desktop            │
+   │    • VNC - Virtual Network Computing │
+   │                                       │
+   │  🐳  Containers & Orchestration       │
+   │    • Docker - Container Platform     │
+   │    • Kubernetes - Container Orchestr.│
+   │                                       │
+   │  💾  Databases                        │
+   │    • PostgreSQL                      │
+   │    • MySQL                           │
+   │    • MongoDB                         │
+   │                                       │
+   │  ☁️  Cloud Platforms                  │
+   │    • AWS - Amazon Web Services       │
+   │    • Azure - Microsoft Cloud         │
+   │                                       │
+   │             [Cancel]  [Next →]       │
+   └───────────────────────────────────────┘
+   ```
+4. User selects a protocol (e.g., "SSH")
+5. Click "Next" → Opens **Connection Form** (step 2 of 2)
+6. **Initial Implementation - Basic Fields Only:**
+   - Name (required)
+   - Description (optional)
+   - **Folder assignment** (dropdown with available folders)
+   - Team assignment (if applicable)
+   - Protocol ID (hidden, from step 1 selection)
+7. **Future Enhancement - Protocol-Specific Fields:**
+   - Dynamic form fields based on selected protocol
+   - SSH: host, port, username, key selection
+   - Docker: socket path, TLS options
+   - Kubernetes: context, namespace, kubeconfig
+   - Database: connection string, database name, etc.
+   - _Note: Protocol-specific fields will be implemented in a later phase_
+8. On submit:
+   - POST `/api/connections` with:
+     ```json
+     {
+       "name": "Production Server",
+       "description": "Main production SSH server",
+       "protocol_id": "ssh",
+       "folder_id": "folder_abc123",
+       "team_id": "team_xyz789"
+       // Protocol-specific settings to be added later
+     }
+     ```
+   - Redirect to connection detail or connections list
+
+**Permission Check:**
+```typescript
+import { PERMISSIONS } from '@/constants/permissions'
+
+<PermissionGuard permission={PERMISSIONS.CONNECTION.MANAGE}>
+  <Button asChild>
+    <Link to="/connections/new">
+      <Plus className="mr-2 h-4 w-4" />
+      New Connection
+    </Link>
+  </Button>
+</PermissionGuard>
+```
+
+**UI Label Convention:**
+- In UI, refer to protocols as **"Resources"** for user-friendly terminology
+- Technical documentation uses "protocols" or "drivers"
+- Example: "Select Resource Type" instead of "Select Protocol"
+
+### 4.7 Move Connection to Folder
 
 **Proposed Enhancement (Optional):**
 
@@ -637,19 +870,24 @@ export function useDeleteFolder() {
 
 ## 9. Implementation Plan
 
-### Phase 1: Core Folder Management (MVP)
+### Phase 1: Core Folder Management - Flat Mode (MVP)
 
 **Priority: High**
+**Default Configuration: `maxDepth: 1` (flat structure)**
+
+0. **Create Folder Configuration** (30 min)
+   - [ ] Create `web/src/config/folders.ts` with `FOLDER_CONFIG`
+   - [ ] Set default `maxDepth: 1`, `allowSubfolders: false`, `allowParentSelection: false`
 
 1. **Fix Empty State** (2 hours)
    - [ ] Update `FolderSidebar.tsx` to show empty state instead of `null`
    - [ ] Create `EmptyFolderState` component with CTA
    - [ ] Add permission check for create button
 
-2. **Create FolderFormModal** (4 hours)
+2. **Create FolderFormModal - Flat Mode** (3 hours)
    - [ ] Build modal form component
    - [ ] Implement create mode with name, description, icon, color
-   - [ ] Add parent folder selection (hierarchical dropdown)
+   - [ ] **Skip parent folder selection** (always `parent_id: null`)
    - [ ] Add team assignment (if applicable)
    - [ ] Form validation and error handling
    - [ ] Integrate with `useCreateFolder` mutation
@@ -657,35 +895,95 @@ export function useDeleteFolder() {
 3. **Edit Folder** (2 hours)
    - [ ] Add edit mode to `FolderFormModal`
    - [ ] Add actions menu to folder items (⋮ button)
+   - [ ] **Menu shows only Edit + Delete** (no subfolder/move options)
    - [ ] Integrate with `useUpdateFolder` mutation
 
-4. **Delete Folder** (3 hours)
+4. **Delete Folder - Flat Mode** (2 hours)
    - [ ] Create `DeleteFolderConfirmModal`
-   - [ ] Show impact preview (children, connections count)
+   - [ ] Show impact preview: **connections only** (no children mention)
    - [ ] Confirmation input validation
    - [ ] Integrate with `useDeleteFolder` mutation
 
-### Phase 2: Enhanced UX (Nice to Have)
-
-**Priority: Medium**
-
-5. **Move Folder** (3 hours)
-   - [ ] Create `MoveFolderModal`
-   - [ ] Hierarchical folder picker with exclusions
-   - [ ] Visual preview of new location
-   - [ ] Circular reference prevention
-
-6. **Folder Context Menu** (2 hours)
-   - [ ] Right-click context menu on folders
-   - [ ] Create subfolder shortcut
-   - [ ] Quick actions (edit, move, delete)
-
-7. **Icon and Color Pickers** (3 hours)
+5. **Icon and Color Pickers** (3 hours)
    - [ ] Icon picker component with predefined set
    - [ ] Color picker with palette
    - [ ] Preview in folder tree
 
-### Phase 3: Advanced Features (Future)
+6. **Connection Creation - Resource Selection** (3 hours)
+   - [ ] Create `ResourceSelectionModal` component
+   - [ ] Integrate with `useAvailableProtocols()` hook
+   - [ ] Group protocols by category
+   - [ ] Filter by user permissions
+   - [ ] Search/filter functionality
+
+7. **Connection Creation - Basic Form** (3 hours)
+   - [ ] Create `ConnectionFormModal` component
+   - [ ] Basic fields: name, description, folder, team
+   - [ ] Folder dropdown with available folders
+   - [ ] Team assignment from context
+   - [ ] Form validation and error handling
+   - [ ] Integrate with `useCreateConnection` mutation
+   - [ ] Add info message about protocol-specific fields (future)
+
+**Total Phase 1: ~18.5 hours**
+
+### Phase 2: Hierarchical Mode (Optional Future Enhancement)
+
+**Priority: Medium (only if users request nested folders)**
+**Configuration Change: Set `maxDepth: 2+`, `allowSubfolders: true`, `allowParentSelection: true`**
+
+6. **Enable Parent Selection** (2 hours)
+   - [ ] Add parent folder dropdown to `FolderFormModal`
+   - [ ] Show only when `FOLDER_CONFIG.allowParentSelection === true`
+   - [ ] Hierarchical folder picker component
+
+7. **Move Folder Modal** (3 hours)
+   - [ ] Create `MoveFolderModal`
+   - [ ] Hierarchical folder picker with exclusions
+   - [ ] Visual preview of new location
+   - [ ] Circular reference prevention
+   - [ ] Add to folder context menu (conditional)
+
+8. **Subfolder Support** (2 hours)
+   - [ ] Add "Create Subfolder" to context menu
+   - [ ] Show only when `FOLDER_CONFIG.allowSubfolders === true`
+   - [ ] Update delete modal to show subfolder impact
+
+9. **Enhanced Tree UI** (2 hours)
+   - [ ] Visual indicators for nested folders
+   - [ ] Breadcrumb navigation
+   - [ ] Expand/collapse all option
+
+**Total Phase 2: ~9 hours**
+
+### Phase 3: Protocol-Specific Connection Fields
+
+**Priority: High (after Phase 1 complete)**
+
+10. **Dynamic Form System** (6 hours)
+    - [ ] Protocol field schema definition
+    - [ ] Dynamic form field rendering based on protocol
+    - [ ] Field type support: text, number, select, file upload, etc.
+    - [ ] Validation rules from protocol metadata
+    - [ ] Conditional field visibility
+
+11. **Protocol-Specific Implementations** (8-12 hours, varies by protocol)
+    - [ ] SSH: host, port, username, key selection, authentication method
+    - [ ] RDP: host, port, username, domain, screen resolution
+    - [ ] Docker: socket path, TLS certificate, API version
+    - [ ] Kubernetes: context, namespace, kubeconfig upload
+    - [ ] Database protocols: connection string, database name, SSL options
+    - [ ] Each protocol requires custom field mapping
+
+12. **Connection Testing** (4 hours)
+    - [ ] "Test Connection" button
+    - [ ] Preview/dry-run endpoint integration
+    - [ ] Connection validation feedback
+    - [ ] Error handling and troubleshooting hints
+
+**Total Phase 3: ~18-22 hours**
+
+### Phase 4: Advanced Features (Future)
 
 **Priority: Low**
 
@@ -763,7 +1061,7 @@ export function useDeleteFolder() {
 └─────────────────────────────────────────┘
 ```
 
-### Create Folder Modal
+### Create Folder Modal - Flat Mode (Default)
 ```
 ┌─────────── Create Folder ────────────┐
 │                                       │
@@ -773,9 +1071,6 @@ export function useDeleteFolder() {
 │  Description                          │
 │  [All production infrastructure__]    │
 │  [________________________________]    │
-│                                       │
-│  Parent Folder                        │
-│  [🏠 Root (No Parent)         ▼]      │
 │                                       │
 │  Icon           Color                 │
 │  [📁 ▼]         [🔵 Blue ▼]           │
@@ -787,7 +1082,53 @@ export function useDeleteFolder() {
 └───────────────────────────────────────┘
 ```
 
-### Delete Confirmation Modal
+**Note:** Parent Folder selector is **hidden** in flat mode.
+
+### Create Folder Modal - Hierarchical Mode (Optional)
+```
+┌─────────── Create Folder ────────────┐
+│                                       │
+│  Name *                               │
+│  [Web Services___________________]    │
+│                                       │
+│  Description                          │
+│  [Web tier services______________]    │
+│  [________________________________]    │
+│                                       │
+│  Parent Folder                        │
+│  [Production > Backend        ▼]      │
+│                                       │
+│  Icon           Color                 │
+│  [🌐 ▼]         [🟢 Green ▼]          │
+│                                       │
+│  Team                                 │
+│  [Engineering Team            ▼]      │
+│                                       │
+│           [Cancel]  [Create Folder]   │
+└───────────────────────────────────────┘
+```
+
+**Note:** Parent Folder selector is **shown** when `allowParentSelection: true`.
+
+### Delete Confirmation Modal - Flat Mode (Default)
+```
+┌──────── Delete Folder ────────────┐
+│                                   │
+│  Delete "Production Servers"?     │
+│                                   │
+│  ⚠️  This action cannot be undone │
+│                                   │
+│  Impact:                          │
+│  • 12 connections → unassigned    │
+│                                   │
+│  Type folder name to confirm:     │
+│  [________________________]       │
+│                                   │
+│      [Cancel]  [Delete Folder]    │
+└───────────────────────────────────┘
+```
+
+### Delete Confirmation Modal - Hierarchical Mode (Optional)
 ```
 ┌──────── Delete Folder ────────────┐
 │                                   │
@@ -806,7 +1147,15 @@ export function useDeleteFolder() {
 └───────────────────────────────────┘
 ```
 
-### Folder Actions Menu
+### Folder Actions Menu - Flat Mode (Default)
+```
+┌─────────────────────────┐
+│  ✏️  Edit Folder         │
+│  🗑️  Delete Folder       │
+└─────────────────────────┘
+```
+
+### Folder Actions Menu - Hierarchical Mode (Optional)
 ```
 ┌─────────────────────────┐
 │  ✏️  Edit Folder         │
@@ -814,6 +1163,67 @@ export function useDeleteFolder() {
 │  ↗️  Move Folder         │
 │  🗑️  Delete Folder       │
 └─────────────────────────┘
+```
+
+### Connection Form - Basic Fields (MVP)
+```
+┌──── New Connection: SSH ──────────┐
+│                                    │
+│  Step 2 of 2                       │
+│                                    │
+│  Name *                            │
+│  [Production SSH Server_______]   │
+│                                    │
+│  Description                       │
+│  [Main production server______]   │
+│  [______________________________]  │
+│                                    │
+│  Folder                            │
+│  [Production              ▼]       │
+│                                    │
+│  Team                              │
+│  [Engineering Team        ▼]       │
+│                                    │
+│  ℹ️  Protocol-specific settings    │
+│     will be added in a later       │
+│     update                         │
+│                                    │
+│        [← Back]  [Create]          │
+└────────────────────────────────────┘
+```
+
+### Connection Form - With Protocol Fields (Future)
+```
+┌──── New Connection: SSH ──────────┐
+│                                    │
+│  Step 2 of 2                       │
+│                                    │
+│  Name *                            │
+│  [Production SSH Server_______]   │
+│                                    │
+│  Description                       │
+│  [Main production server______]   │
+│                                    │
+│  Host *                            │
+│  [ssh.example.com_____________]   │
+│                                    │
+│  Port                              │
+│  [22]                              │
+│                                    │
+│  Username                          │
+│  [admin____________________]      │
+│                                    │
+│  SSH Key                           │
+│  [My Production Key       ▼]       │
+│                                    │
+│  Folder                            │
+│  [Production              ▼]       │
+│                                    │
+│  Team                              │
+│  [Engineering Team        ▼]       │
+│                                    │
+│        [← Back]  [Create]          │
+└────────────────────────────────────┘
 ```
 
 ---
@@ -939,4 +1349,28 @@ export function useDeleteFolder() {
 
 ## 17. Change Log
 
-- **2025-10-10** - Initial specification created based on backend analysis and existing UI components
+- **2025-10-10 (v1.3)** - Clarified **phased approach** for connection form fields
+  - Initial implementation: Basic connection entity fields only (name, description, folder, team)
+  - Protocol-specific fields deferred to Phase 3 (future enhancement)
+  - Added `ConnectionFormModal` component specification
+  - Added mockups for basic form and future protocol-specific form
+  - Updated implementation plan: Phase 1 (MVP) ~18.5 hours, Phase 3 (protocol fields) ~18-22 hours
+  - Clear separation of concerns: entity management first, protocol details later
+
+- **2025-10-10 (v1.2)** - Added **Connection Creation Flow** specification
+  - Added section 4.6: Create New Connection with two-step wizard
+  - First step: Resource Selection Modal (protocol picker)
+  - Permission requirement: `connection.manage`
+  - UI terminology: Use "Resources" instead of "Protocols" for user-friendliness
+  - Integration with existing `GET /api/protocols/available` endpoint
+  - Folder assignment during connection creation
+
+- **2025-10-10 (v1.1)** - Updated specification to default to **flat folder structure** (`maxDepth: 1`) with configurable hierarchical mode for future expansion. This simplifies the initial implementation and prevents UI over-complication.
+  - Added `FOLDER_CONFIG` configuration system
+  - Set default to single-level folders (no subfolders)
+  - Made hierarchical features (subfolder creation, moving folders) optional
+  - Updated all components, flows, and mockups to reflect flat vs hierarchical modes
+  - Reduced Phase 1 MVP scope to ~12.5 hours (from ~16 hours)
+  - Moved hierarchical features to Phase 2 (optional, ~9 hours)
+
+- **2025-10-10 (v1.0)** - Initial specification created based on backend analysis and existing UI components

@@ -39,6 +39,9 @@
 - [x] The UI should display only enabled connections.
 - [x] The UI should display only connections available to the user, based on their permissions.
 - [x] Permissions should be fetched based on the user's role; if the user is an admin, all connections should be fetched.
+- [x] Add connection folder management UI (create, edit, delete) with empty state and context menus.
+- [x] Implement guided connection creation flow (resource selection modal + basic connection form).
+- [x] Expose POST /connections backend endpoint to support basic connection creation.
 
 ### Phase 3: Dashboard & Layout (Week 3)
 

@@ -60,6 +60,36 @@ func (h *ConnectionHandler) List(c *gin.Context) {
 	response.SuccessWithMeta(c, http.StatusOK, result.Connections, meta)
 }
 
+// Create registers a new connection for the authenticated user.
+func (h *ConnectionHandler) Create(c *gin.Context) {
+	userID := c.GetString(middleware.CtxUserIDKey)
+	if userID == "" {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+
+	var payload createConnectionPayload
+	if !bindAndValidate(c, &payload) {
+		return
+	}
+
+	connection, err := h.svc.Create(requestContext(c), userID, services.CreateConnectionInput{
+		Name:        payload.Name,
+		Description: payload.Description,
+		ProtocolID:  payload.ProtocolID,
+		TeamID:      payload.TeamID,
+		FolderID:    payload.FolderID,
+		Metadata:    payload.Metadata,
+		Settings:    payload.Settings,
+	})
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, http.StatusCreated, connection)
+}
+
 // Summary returns connection counts grouped by protocol for the authenticated user.
 func (h *ConnectionHandler) Summary(c *gin.Context) {
 	userID := c.GetString(middleware.CtxUserIDKey)
@@ -143,4 +173,14 @@ func computeTotalPages(total, perPage int64) int {
 type protocolCount struct {
 	ProtocolID string `json:"protocol_id"`
 	Count      int64  `json:"count"`
+}
+
+type createConnectionPayload struct {
+	Name        string         `json:"name" binding:"required"`
+	Description string         `json:"description"`
+	ProtocolID  string         `json:"protocol_id" binding:"required"`
+	TeamID      *string        `json:"team_id"`
+	FolderID    *string        `json:"folder_id"`
+	Metadata    map[string]any `json:"metadata"`
+	Settings    map[string]any `json:"settings"`
 }

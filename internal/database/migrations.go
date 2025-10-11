@@ -96,7 +96,11 @@ func SeedData(db *gorm.DB) error {
 	if err := ensureRoleHasAllPermissions(db, "admin"); err != nil {
 		return err
 	}
-	if err := assignRolePermissions(db, "user", []string{"notification.view", "team.view"}); err != nil {
+	if err := assignRolePermissions(db, "user", []string{
+		"notification.view", "team.view",
+		"connection.folder.view",
+		"connection.view",
+	}); err != nil {
 		return err
 	}
 

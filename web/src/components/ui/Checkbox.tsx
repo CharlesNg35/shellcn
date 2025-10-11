@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes } from 'react'
+import { forwardRef, useCallback, type InputHTMLAttributes } from 'react'
 import { Check, Minus } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
@@ -9,15 +9,18 @@ export interface CheckboxProps extends Omit<InputHTMLAttributes<HTMLInputElement
 
 export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
   ({ className, indeterminate, onChange, onCheckedChange, checked, disabled, ...props }, ref) => {
-    const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      onChange?.(event)
-      onCheckedChange?.(event.target.checked)
-    }
+    const handleChange = useCallback(
+      (event: React.ChangeEvent<HTMLInputElement>) => {
+        onChange?.(event)
+        onCheckedChange?.(event.target.checked)
+      },
+      [onChange, onCheckedChange]
+    )
 
-    const handleClick = () => {
+    const handleClick = useCallback(() => {
       if (disabled) return
       onCheckedChange?.(!checked)
-    }
+    }, [checked, disabled, onCheckedChange])
 
     return (
       <div className="relative inline-flex cursor-pointer">

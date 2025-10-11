@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Folder as FolderIcon } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { Link, useInRouterContext } from 'react-router-dom'
 import type { ConnectionFolderNode } from '@/types/connections'
 import { cn } from '@/lib/utils/cn'
+import { resolveFolderIcon } from '@/constants/folders'
 
 interface FolderTreeProps {
   nodes?: ConnectionFolderNode[]
@@ -11,6 +12,7 @@ interface FolderTreeProps {
   basePath?: string
   className?: string
   disableNavigation?: boolean
+  renderActions?: (folder: ConnectionFolderNode) => React.ReactNode
 }
 
 export function FolderTree({
@@ -20,6 +22,7 @@ export function FolderTree({
   basePath = '/connections',
   className,
   disableNavigation = false,
+  renderActions,
 }: FolderTreeProps) {
   // Initialize all nodes as open by default
   const [openNodes, setOpenNodes] = useState<Record<string, boolean>>(() => {
@@ -80,6 +83,7 @@ export function FolderTree({
           depth={0}
           activeFolderId={activeFolderId}
           disableNavigation={disableNavigation}
+          renderActions={renderActions}
         />
       ))}
     </div>
@@ -95,6 +99,7 @@ interface FolderTreeNodeProps {
   depth: number
   activeFolderId?: string | null
   disableNavigation?: boolean
+  renderActions?: (folder: ConnectionFolderNode) => React.ReactNode
 }
 
 function FolderTreeNode({
@@ -106,6 +111,7 @@ function FolderTreeNode({
   depth,
   activeFolderId,
   disableNavigation,
+  renderActions,
 }: FolderTreeNodeProps) {
   const hasChildren = node.children && node.children.length > 0
   const isOpen = openNodes[node.folder.id] ?? true
@@ -115,6 +121,15 @@ function FolderTreeNode({
     node.folder.id === 'unassigned'
       ? `${basePath}?view=unassigned`
       : `${basePath}?folder=${node.folder.id}`
+  const Icon = resolveFolderIcon(node.folder.icon)
+  const iconColor =
+    node.folder.id === 'unassigned' || !node.folder.color ? undefined : node.folder.color
+
+  const connectionBadge = node.connection_count ? (
+    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      {node.connection_count}
+    </span>
+  ) : null
 
   return (
     <div>
@@ -137,38 +152,39 @@ function FolderTreeNode({
           <span className="mr-1 h-5 w-5" />
         )}
 
-        {useInRouterContext() && !disableNavigation ? (
-          <Link
-            to={href}
-            className="flex flex-1 items-center gap-2 text-muted-foreground hover:text-foreground"
-            onClick={() => onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)}
-          >
-            <FolderIcon className="h-4 w-4" />
-            <span className="truncate">{node.folder.name}</span>
-            {node.connection_count ? (
-              <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {node.connection_count}
+        <div className="flex flex-1 items-center gap-2">
+          {useInRouterContext() && !disableNavigation ? (
+            <Link
+              to={href}
+              className="flex flex-1 items-center gap-2 text-muted-foreground hover:text-foreground"
+              onClick={() => onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)}
+            >
+              <Icon className="h-4 w-4" style={{ color: iconColor }} />
+              <span className="truncate" style={{ color: iconColor }}>
+                {node.folder.name}
               </span>
-            ) : null}
-          </Link>
-        ) : (
-          <a
-            href={href}
-            className="flex flex-1 items-center gap-2 text-muted-foreground hover:text-foreground"
-            onClick={(e) => {
-              e.preventDefault()
-              onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)
-            }}
-          >
-            <FolderIcon className="h-4 w-4" />
-            <span className="truncate">{node.folder.name}</span>
-            {node.connection_count ? (
-              <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {node.connection_count}
+            </Link>
+          ) : (
+            <button
+              type="button"
+              className="flex flex-1 items-center gap-2 text-left text-muted-foreground hover:text-foreground"
+              onClick={() => onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)}
+            >
+              <Icon className="h-4 w-4" style={{ color: iconColor }} />
+              <span className="truncate" style={{ color: iconColor }}>
+                {node.folder.name}
               </span>
-            ) : null}
-          </a>
-        )}
+            </button>
+          )}
+
+          {connectionBadge}
+
+          {renderActions ? (
+            <div className="ml-1 opacity-0 transition-opacity group-hover:opacity-100">
+              {renderActions(node)}
+            </div>
+          ) : null}
+        </div>
       </div>
       {hasChildren && isOpen && (
         <div className="space-y-1">

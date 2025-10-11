@@ -1,19 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
-import {
-  Cloud,
-  Container,
-  Database,
-  Folder,
-  HardDrive,
-  Monitor,
-  Network,
-  Plus,
-  Search,
-  Server,
-  X,
-} from 'lucide-react'
+import { Plus, Search, Server, X } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -23,24 +11,16 @@ import { useConnectionFolders } from '@/hooks/useConnectionFolders'
 import { useTeams } from '@/hooks/useTeams'
 import { usePermissions } from '@/hooks/usePermissions'
 import type { Protocol } from '@/types/protocols'
+import type { ConnectionRecord } from '@/types/connections'
 import { ConnectionCard } from '@/components/connections/ConnectionCard'
 import { TeamFilterTabs } from '@/components/connections/TeamFilterTabs'
 import { FolderSidebar } from '@/components/connections/FolderSidebar'
+import { ResourceSelectionModal } from '@/components/connections/ResourceSelectionModal'
+import { ConnectionFormModal } from '@/components/connections/ConnectionFormModal'
 import { cn } from '@/lib/utils/cn'
 import { PERMISSIONS } from '@/constants/permissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
-
-const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
-  terminal: Server,
-  desktop: Monitor,
-  container: Container,
-  database: Database,
-  file_share: Folder,
-  vm: HardDrive,
-  network: Network,
-}
-
-const DEFAULT_PROTOCOL_ICON = Server
+import { resolveProtocolIcon } from '@/lib/utils/protocolIcons'
 
 interface ProtocolTab {
   id: string
@@ -52,8 +32,11 @@ interface ProtocolTab {
 
 export function Connections() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const [selectedProtocol, setSelectedProtocol] = useState<string | null>(null)
+  const [protocolFilter, setProtocolFilter] = useState<string | null>(null)
   const [search, setSearch] = useState(searchParams.get('search') ?? '')
+  const [resourceModalOpen, setResourceModalOpen] = useState(false)
+  const [connectionModalOpen, setConnectionModalOpen] = useState(false)
+  const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
   const activeFolder = searchParams.get('folder')
   const teamParam = searchParams.get('team') ?? 'all'
 
@@ -62,6 +45,8 @@ export function Connections() {
 
   const { hasPermission } = usePermissions()
   const canViewTeams = hasPermission(PERMISSIONS.TEAM.VIEW)
+  const canManageConnections = hasPermission(PERMISSIONS.CONNECTION.MANAGE)
+  const canManageTeams = hasPermission(PERMISSIONS.TEAM.MANAGE)
   const { data: teamsResult } = useTeams({
     enabled: canViewTeams,
     staleTime: 60_000,
@@ -105,12 +90,19 @@ export function Connections() {
     }, {})
   }, [protocols])
 
+  const selectedProtocol = useMemo(() => {
+    if (!selectedProtocolId) {
+      return null
+    }
+    return protocols.find((protocol) => protocol.id === selectedProtocolId) ?? null
+  }, [protocols, selectedProtocolId])
+
   const normalizedSearch = search.trim().toLowerCase()
 
   const filteredConnections = useMemo(() => {
     return connections.filter((connection) => {
       // Filter by protocol if one is selected
-      const matchesProtocol = !selectedProtocol || connection.protocol_id === selectedProtocol
+      const matchesProtocol = !protocolFilter || connection.protocol_id === protocolFilter
       if (!matchesProtocol) {
         return false
       }
@@ -145,7 +137,7 @@ export function Connections() {
         protocol?.name.toLowerCase().includes(normalizedSearch)
       )
     })
-  }, [connections, normalizedSearch, protocolLookup, selectedProtocol])
+  }, [connections, normalizedSearch, protocolLookup, protocolFilter])
 
   const tabs: ProtocolTab[] = useMemo(() => {
     const counts = connections.reduce<Record<string, number>>((acc, connection) => {
@@ -169,6 +161,35 @@ export function Connections() {
   const isLoading = protocolsLoading || connectionsLoading
   const hasError = protocolsError || connectionsError
 
+  const handleStartCreateConnection = () => {
+    setSelectedProtocolId(null)
+    setResourceModalOpen(true)
+  }
+
+  const handleProtocolSelected = (protocolId: string) => {
+    setSelectedProtocolId(protocolId)
+    setResourceModalOpen(false)
+    setConnectionModalOpen(true)
+  }
+
+  const handleCloseConnectionModal = () => {
+    setConnectionModalOpen(false)
+    setSelectedProtocolId(null)
+  }
+
+  const handleConnectionCreated = (connection: ConnectionRecord) => {
+    setConnectionModalOpen(false)
+    setSelectedProtocolId(null)
+    setProtocolFilter(connection.protocol_id)
+    const params = new URLSearchParams(searchParams)
+    if (connection.folder_id) {
+      params.set('folder', connection.folder_id)
+    } else {
+      params.delete('folder')
+    }
+    setSearchParams(params, { replace: true })
+  }
+
   return (
     <div className="flex h-full flex-col space-y-6 p-6">
       {/* Page Header */}
@@ -181,11 +202,9 @@ export function Connections() {
         </div>
 
         <PermissionGuard permission={PERMISSIONS.CONNECTION.MANAGE}>
-          <Button asChild size="default" className="shadow-sm">
-            <Link to="/connections/new">
-              <Plus className="mr-2 h-4 w-4" />
-              New Connection
-            </Link>
+          <Button size="default" className="shadow-sm" onClick={handleStartCreateConnection}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Connection
           </Button>
         </PermissionGuard>
       </header>
@@ -269,6 +288,8 @@ export function Connections() {
             }
             setSearchParams(params, { replace: true })
           }}
+          teamId={teamFilterValue ?? null}
+          teams={teams}
         />
 
         {/* Main Content */}
@@ -277,15 +298,20 @@ export function Connections() {
           <ProtocolTabs
             tabs={tabs}
             isLoading={protocolsLoading}
-            activeTab={selectedProtocol}
-            onTabChange={setSelectedProtocol}
+            activeTab={protocolFilter}
+            onTabChange={setProtocolFilter}
           />
 
           {/* Connections Grid or Empty/Loading State */}
           {isLoading ? (
             <LoadingState />
           ) : filteredConnections.length === 0 ? (
-            <EmptyState hasProtocols={protocols.length > 0} search={normalizedSearch} />
+            <EmptyState
+              hasProtocols={protocols.length > 0}
+              search={normalizedSearch}
+              canCreate={canManageConnections}
+              onCreateConnection={handleStartCreateConnection}
+            />
           ) : (
             <div className="grid gap-4 pb-6 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredConnections.map((connection) => (
@@ -301,6 +327,29 @@ export function Connections() {
           )}
         </div>
       </div>
+      <ResourceSelectionModal
+        open={resourceModalOpen}
+        onClose={() => {
+          setResourceModalOpen(false)
+          if (!connectionModalOpen) {
+            setSelectedProtocolId(null)
+          }
+        }}
+        protocols={protocols}
+        isLoading={protocolsLoading}
+        onSelectProtocol={handleProtocolSelected}
+      />
+
+      <ConnectionFormModal
+        open={connectionModalOpen && Boolean(selectedProtocol)}
+        onClose={handleCloseConnectionModal}
+        protocol={selectedProtocol}
+        folders={folderTree}
+        teamId={teamFilterValue ?? null}
+        teams={teams}
+        allowTeamAssignment={canManageTeams}
+        onSuccess={handleConnectionCreated}
+      />
     </div>
   )
 }
@@ -378,9 +427,11 @@ function ProtocolTabs({ tabs, isLoading, activeTab, onTabChange }: ProtocolTabsP
 interface EmptyStateProps {
   hasProtocols: boolean
   search: string
+  canCreate: boolean
+  onCreateConnection: () => void
 }
 
-function EmptyState({ hasProtocols, search }: EmptyStateProps) {
+function EmptyState({ hasProtocols, search, canCreate, onCreateConnection }: EmptyStateProps) {
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/30 py-20 text-center">
       <div className="mb-4 rounded-full bg-muted p-4 ring-2 ring-border/40">
@@ -396,12 +447,10 @@ function EmptyState({ hasProtocols, search }: EmptyStateProps) {
             ? 'Create a connection to reuse driver settings and shared identities.'
             : 'No protocol drivers are currently available. Check your permissions or driver health.'}
       </p>
-      {!search && hasProtocols && (
-        <Button asChild size="default">
-          <Link to="/connections/new">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Connection
-          </Link>
+      {!search && hasProtocols && canCreate && (
+        <Button size="default" onClick={onCreateConnection}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create Connection
         </Button>
       )}
     </div>
@@ -446,39 +495,4 @@ function LoadingState() {
       ))}
     </div>
   )
-}
-
-function resolveProtocolIcon(protocol?: Protocol): LucideIcon {
-  if (protocol?.icon) {
-    const iconKey = protocol.icon.toLowerCase()
-    switch (iconKey) {
-      case 'server':
-        return Server
-      case 'monitor':
-        return Monitor
-      case 'database':
-        return Database
-      case 'container':
-        return Container
-      case 'cloud':
-        return Cloud
-      case 'harddrive':
-      case 'hard_drive':
-        return HardDrive
-      case 'folder':
-      case 'files':
-        return Folder
-      default:
-        break
-    }
-  }
-
-  if (protocol?.category) {
-    const icon = CATEGORY_ICON_MAP[protocol.category.toLowerCase()]
-    if (icon) {
-      return icon
-    }
-  }
-
-  return DEFAULT_PROTOCOL_ICON
 }

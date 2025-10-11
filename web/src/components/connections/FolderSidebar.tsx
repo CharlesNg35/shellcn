@@ -1,14 +1,32 @@
-import { useState } from 'react'
-import { Folder, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { ChevronLeft, ChevronRight, Folder, Loader2, Plus } from 'lucide-react'
 import { FolderTree } from './FolderTree'
+import { EmptyFolderState } from './EmptyFolderState'
+import { FolderFormModal, type FolderFormMode } from './FolderFormModal'
+import { DeleteFolderConfirmModal } from './DeleteFolderConfirmModal'
+import { FolderContextMenu } from './FolderContextMenu'
 import { cn } from '@/lib/utils/cn'
-import type { ConnectionFolderNode } from '@/types/connections'
+import type { ConnectionFolderNode, ConnectionFolderSummary } from '@/types/connections'
+import type { TeamRecord } from '@/types/teams'
+import { usePermissions } from '@/hooks/usePermissions'
+import { PERMISSIONS } from '@/constants/permissions'
+import { useConnectionFolderMutations } from '@/hooks/useConnectionFolderMutations'
+import { resolveFolderIcon } from '@/constants/folders'
+import { Button } from '@/components/ui/Button'
 
 interface FolderSidebarProps {
   folders: ConnectionFolderNode[]
   activeFolderId: string | null
   isLoading?: boolean
   onFolderSelect: (folderId: string | null) => void
+  teamId?: string | null
+  teams?: TeamRecord[]
+}
+
+interface FolderFormState {
+  mode: FolderFormMode
+  folder?: ConnectionFolderSummary
+  parent?: ConnectionFolderSummary | null
 }
 
 export function FolderSidebar({
@@ -16,111 +34,248 @@ export function FolderSidebar({
   activeFolderId,
   isLoading,
   onFolderSelect,
+  teamId,
+  teams = [],
 }: FolderSidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const [formState, setFormState] = useState<FolderFormState | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<ConnectionFolderNode | null>(null)
 
-  if (folders.length === 0) {
-    return null
+  const { hasPermission } = usePermissions()
+  const canManageFolders = hasPermission(PERMISSIONS.CONNECTION_FOLDER.MANAGE)
+  const canAssignTeams = hasPermission(PERMISSIONS.TEAM.MANAGE)
+
+  const { remove } = useConnectionFolderMutations()
+
+  const userFolders = useMemo(
+    () => folders.filter((node) => node.folder.id !== 'unassigned'),
+    [folders]
+  )
+  const hasUserFolders = userFolders.length > 0
+
+  const handleOpenCreate = (parent?: ConnectionFolderSummary | null) => {
+    setFormState({
+      mode: 'create',
+      parent: parent ?? null,
+    })
+  }
+
+  const handleOpenEdit = (folder: ConnectionFolderSummary) => {
+    setFormState({
+      mode: 'edit',
+      folder,
+      parent: null,
+    })
+  }
+
+  const handleDelete = (node: ConnectionFolderNode) => {
+    setDeleteTarget(node)
+  }
+
+  const closeForm = () => setFormState(null)
+
+  const handleFormSuccess = (folder: ConnectionFolderSummary) => {
+    onFolderSelect(folder.id)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) {
+      return
+    }
+    try {
+      await remove.mutateAsync(deleteTarget.folder.id)
+      if (activeFolderId === deleteTarget.folder.id) {
+        onFolderSelect(null)
+      }
+      setDeleteTarget(null)
+    } catch {
+      // Errors surface via toast; keep modal open to retry.
+    }
   }
 
   return (
-    <div
-      className={cn(
-        'shrink-0 transition-all duration-300 ease-in-out',
-        collapsed ? 'w-16' : 'w-72'
-      )}
-    >
-      <div className="h-full overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm">
-        {/* Header */}
-        <div
-          className={cn(
-            'flex items-center justify-between border-b border-border/60 p-4 transition-all',
-            collapsed && 'flex-col gap-2 p-3'
-          )}
-        >
-          <div className={cn('flex items-center gap-2.5', collapsed && 'flex-col gap-1.5')}>
-            <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-            {!collapsed && (
-              <h2 className="text-sm font-semibold uppercase leading-none tracking-wide">
-                Folders
-              </h2>
+    <>
+      <div
+        className={cn(
+          'shrink-0 transition-all duration-300 ease-in-out',
+          collapsed ? 'w-16' : 'w-72'
+        )}
+      >
+        <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm">
+          {/* Header */}
+          <div
+            className={cn(
+              'flex items-center justify-between border-b border-border/60 p-4 transition-all',
+              collapsed && 'flex-col gap-2 p-3'
             )}
-          </div>
-          <div className="flex items-center gap-2">
-            {isLoading && (
-              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-            )}
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label={collapsed ? 'Expand folders' : 'Collapse folders'}
-            >
-              {collapsed ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
+          >
+            <div className={cn('flex items-center gap-2.5', collapsed && 'flex-col gap-1.5')}>
+              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {!collapsed && (
+                <h2 className="text-sm font-semibold uppercase leading-none tracking-wide">
+                  Folders
+                </h2>
               )}
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className={cn('overflow-y-auto', collapsed ? 'p-2' : 'p-3')}>
-          {collapsed ? (
-            // Collapsed: Show icon buttons
-            <div className="space-y-2">
-              <button
-                onClick={() => onFolderSelect(null)}
-                className={cn(
-                  'flex h-10 w-full items-center justify-center rounded-md transition-colors',
-                  !activeFolderId
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-muted'
-                )}
-                title="All Folders"
-              >
-                <Folder className="h-4 w-4" />
-              </button>
-              {folders.map((node) => (
-                <FolderIconButton
-                  key={node.folder.id}
-                  node={node}
-                  activeFolderId={activeFolderId}
-                  onSelect={onFolderSelect}
-                />
-              ))}
             </div>
-          ) : (
-            // Expanded: Show full tree
-            <>
-              {/* "All Folders" button */}
+            <div className="flex items-center gap-2">
+              {canManageFolders ? (
+                collapsed ? (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCreate(null)}
+                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="Create folder"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                ) : (
+                  <Button size="sm" onClick={() => handleOpenCreate(null)}>
+                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    New Folder
+                  </Button>
+                )
+              ) : null}
+              {isLoading && (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+              )}
               <button
-                onClick={() => onFolderSelect(null)}
-                className={cn(
-                  'mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                  !activeFolderId && !activeFolderId
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                )}
+                onClick={() => setCollapsed(!collapsed)}
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label={collapsed ? 'Expand folders' : 'Collapse folders'}
               >
-                <Folder className="h-4 w-4" />
-                <span>All Folders</span>
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
               </button>
-              <FolderTree
-                nodes={folders}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className={cn('flex-1 overflow-y-auto', collapsed ? 'p-2' : 'p-3')}>
+            {collapsed ? (
+              <CollapsedFolderList
+                folders={folders}
                 activeFolderId={activeFolderId}
                 onSelect={onFolderSelect}
               />
-            </>
-          )}
+            ) : hasUserFolders ? (
+              <>
+                <button
+                  onClick={() => onFolderSelect(null)}
+                  className={cn(
+                    'mb-2 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                    !activeFolderId
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )}
+                >
+                  <Folder className="h-4 w-4" />
+                  <span>All Folders</span>
+                </button>
+                <FolderTree
+                  nodes={folders}
+                  activeFolderId={activeFolderId}
+                  onSelect={onFolderSelect}
+                  renderActions={(node) => {
+                    if (!canManageFolders || node.folder.id === 'unassigned') {
+                      return null
+                    }
+                    return (
+                      <FolderContextMenu
+                        folder={node.folder}
+                        onEdit={handleOpenEdit}
+                        onDelete={() => handleDelete(node)}
+                      />
+                    )
+                  }}
+                />
+              </>
+            ) : (
+              <div className="space-y-3">
+                <EmptyFolderState
+                  canManageFolders={canManageFolders}
+                  onCreateFolder={handleOpenCreate}
+                />
+                {folders.length ? (
+                  <>
+                    <button
+                      onClick={() => onFolderSelect(null)}
+                      className={cn(
+                        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
+                        !activeFolderId
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      )}
+                    >
+                      <Folder className="h-4 w-4" />
+                      <span>Unassigned</span>
+                    </button>
+                    <FolderTree
+                      nodes={folders}
+                      activeFolderId={activeFolderId}
+                      onSelect={onFolderSelect}
+                    />
+                  </>
+                ) : null}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Folder form */}
+      {formState ? (
+        <FolderFormModal
+          open={Boolean(formState)}
+          mode={formState.mode}
+          folder={formState.folder}
+          parentFolder={formState.parent}
+          onClose={closeForm}
+          onSuccess={handleFormSuccess}
+          teamId={teamId ?? null}
+          teams={teams}
+          allowTeamAssignment={canAssignTeams}
+        />
+      ) : null}
+
+      {/* Delete confirmation */}
+      <DeleteFolderConfirmModal
+        open={Boolean(deleteTarget)}
+        folder={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+      />
+    </>
+  )
+}
+
+function CollapsedFolderList({
+  folders,
+  activeFolderId,
+  onSelect,
+}: {
+  folders: ConnectionFolderNode[]
+  activeFolderId: string | null
+  onSelect: (folderId: string | null) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <CollapsedFolderButton
+        label="All Folders"
+        isActive={!activeFolderId}
+        onClick={() => onSelect(null)}
+      />
+      {folders.map((node) => (
+        <CollapsedFolderNode
+          key={node.folder.id}
+          node={node}
+          activeFolderId={activeFolderId}
+          onSelect={onSelect}
+        />
+      ))}
     </div>
   )
 }
 
-// Recursive icon button for collapsed mode
-function FolderIconButton({
+function CollapsedFolderNode({
   node,
   activeFolderId,
   onSelect,
@@ -129,22 +284,19 @@ function FolderIconButton({
   activeFolderId: string | null
   onSelect: (folderId: string | null) => void
 }) {
+  const Icon = resolveFolderIcon(node.folder.icon)
   const isActive = activeFolderId === node.folder.id
 
   return (
     <>
-      <button
-        onClick={() => onSelect(node.folder.id)}
-        className={cn(
-          'flex h-10 w-full items-center justify-center rounded-md transition-colors',
-          isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
-        )}
-        title={node.folder.name}
-      >
-        <Folder className="h-4 w-4" />
-      </button>
+      <CollapsedFolderButton
+        label={node.folder.name}
+        isActive={isActive}
+        onClick={() => onSelect(node.folder.id === 'unassigned' ? null : node.folder.id)}
+        icon={<Icon className="h-4 w-4" style={{ color: node.folder.color || undefined }} />}
+      />
       {node.children?.map((child) => (
-        <FolderIconButton
+        <CollapsedFolderNode
           key={child.folder.id}
           node={child}
           activeFolderId={activeFolderId}
@@ -152,5 +304,30 @@ function FolderIconButton({
         />
       ))}
     </>
+  )
+}
+
+function CollapsedFolderButton({
+  label,
+  isActive,
+  onClick,
+  icon,
+}: {
+  label: string
+  isActive: boolean
+  onClick: () => void
+  icon?: ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex h-10 w-full items-center justify-center rounded-md transition-colors',
+        isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted'
+      )}
+      title={label}
+    >
+      {icon ?? <Folder className="h-4 w-4" />}
+    </button>
   )
 }
