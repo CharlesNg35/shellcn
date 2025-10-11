@@ -59,24 +59,11 @@ func (a *LDAPAuthenticator) Authenticate(ctx context.Context, input LDAPAuthenti
 		return nil, errors.New("ldap provider: identifier and password are required")
 	}
 
-	scheme := "ldap"
-	dialOpts := []ldap.DialOpt{ldap.DialWithDialer(&net.Dialer{Timeout: a.timeout})}
-	if a.cfg.UseTLS {
-		scheme = "ldaps"
-		dialOpts = append(dialOpts, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: a.cfg.SkipVerify}))
-	}
-
-	conn, err := ldap.DialURL(fmt.Sprintf("%s://%s:%d", scheme, a.cfg.Host, a.cfg.Port), dialOpts...)
+	conn, err := a.connect()
 	if err != nil {
-		return nil, fmt.Errorf("ldap provider: dial: %w", err)
+		return nil, err
 	}
 	defer conn.Close()
-
-	if strings.TrimSpace(a.cfg.BindDN) != "" {
-		if err := conn.Bind(a.cfg.BindDN, a.cfg.BindPassword); err != nil {
-			return nil, fmt.Errorf("ldap provider: bind service account: %w", err)
-		}
-	}
 
 	searchFilter := buildLDAPFilter(a.cfg.UserFilter, identifier)
 	attributes := buildAttributeList(a.cfg.AttributeMapping)
@@ -106,11 +93,78 @@ func (a *LDAPAuthenticator) Authenticate(ctx context.Context, input LDAPAuthenti
 		return nil, errors.New("ldap provider: invalid credentials")
 	}
 
-	attrs := entryAttributes(userEntry)
+	return a.identityFromEntry(userEntry), nil
+}
+
+// ListIdentities retrieves all directory entries matching the configured user filter.
+func (a *LDAPAuthenticator) ListIdentities(ctx context.Context) ([]*Identity, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	conn, err := a.connect()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	filter := buildLDAPWildcardFilter(a.cfg.UserFilter)
+	attributes := buildAttributeList(a.cfg.AttributeMapping)
+
+	searchRequest := ldap.NewSearchRequest(
+		a.cfg.BaseDN,
+		ldap.ScopeWholeSubtree,
+		ldap.NeverDerefAliases,
+		0,
+		0,
+		false,
+		filter,
+		attributes,
+		nil,
+	)
+
+	searchResult, err := conn.Search(searchRequest)
+	if err != nil {
+		return nil, fmt.Errorf("ldap provider: search: %w", err)
+	}
+
+	identities := make([]*Identity, 0, len(searchResult.Entries))
+	for _, entry := range searchResult.Entries {
+		identities = append(identities, a.identityFromEntry(entry))
+	}
+
+	return identities, nil
+}
+
+func (a *LDAPAuthenticator) connect() (*ldap.Conn, error) {
+	scheme := "ldap"
+	dialOpts := []ldap.DialOpt{ldap.DialWithDialer(&net.Dialer{Timeout: a.timeout})}
+	if a.cfg.UseTLS {
+		scheme = "ldaps"
+		dialOpts = append(dialOpts, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: a.cfg.SkipVerify}))
+	}
+
+	conn, err := ldap.DialURL(fmt.Sprintf("%s://%s:%d", scheme, a.cfg.Host, a.cfg.Port), dialOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("ldap provider: dial: %w", err)
+	}
+
+	if strings.TrimSpace(a.cfg.BindDN) != "" {
+		if err := conn.Bind(a.cfg.BindDN, a.cfg.BindPassword); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("ldap provider: bind service account: %w", err)
+		}
+	}
+
+	return conn, nil
+}
+
+func (a *LDAPAuthenticator) identityFromEntry(entry *ldap.Entry) *Identity {
+	attrs := entryAttributes(entry)
 
 	identity := &Identity{
 		Provider:      "ldap",
-		Subject:       userEntry.DN,
+		Subject:       entry.DN,
 		Email:         attributeLookup(attrs, a.cfg.AttributeMapping["email"]),
 		EmailVerified: true,
 		FirstName:     attributeLookup(attrs, a.cfg.AttributeMapping["first_name"]),
@@ -139,7 +193,7 @@ func (a *LDAPAuthenticator) Authenticate(ctx context.Context, input LDAPAuthenti
 		identity.RawClaims["username"] = attributeLookup(attrs, usernameAttr)
 	}
 
-	return identity, nil
+	return identity
 }
 
 func buildLDAPFilter(template string, identifier string) string {
@@ -150,6 +204,17 @@ func buildLDAPFilter(template string, identifier string) string {
 	filter := strings.ReplaceAll(template, "{identifier}", escaped)
 	filter = strings.ReplaceAll(filter, "{username}", escaped)
 	filter = strings.ReplaceAll(filter, "{email}", escaped)
+	return filter
+}
+
+func buildLDAPWildcardFilter(template string) string {
+	trimmed := strings.TrimSpace(template)
+	if trimmed == "" {
+		return "(uid=*)"
+	}
+	filter := strings.ReplaceAll(trimmed, "{identifier}", "*")
+	filter = strings.ReplaceAll(filter, "{username}", "*")
+	filter = strings.ReplaceAll(filter, "{email}", "*")
 	return filter
 }
 

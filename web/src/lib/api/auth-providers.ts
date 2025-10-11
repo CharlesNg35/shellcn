@@ -6,6 +6,7 @@ import {
   type AuthProviderRecord,
   type AuthProviderType,
   type LDAPProviderConfig,
+  type LDAPSyncSummary,
   type LocalAuthSettings,
   type OIDCProviderConfig,
   type SAMLProviderConfig,
@@ -75,6 +76,7 @@ interface LDAPConfigResponse {
   use_tls: boolean
   skip_verify: boolean
   attribute_mapping?: Record<string, string>
+  sync_groups?: boolean
 }
 
 interface AuthProviderDetailResponse<TConfig = unknown> {
@@ -163,6 +165,7 @@ function transformLDAPConfig(raw: LDAPConfigResponse | undefined): LDAPProviderC
     useTls: raw.use_tls,
     skipVerify: raw.skip_verify,
     attributeMapping: raw.attribute_mapping ?? {},
+    syncGroups: Boolean(raw.sync_groups),
   }
 }
 
@@ -301,10 +304,19 @@ export async function configureLDAPProvider(payload: {
         use_tls: payload.config.useTls,
         skip_verify: payload.config.skipVerify,
         attribute_mapping: payload.config.attributeMapping,
+        sync_groups: payload.config.syncGroups,
       },
     }
   )
   unwrapResponse(response)
+}
+
+export async function syncLDAPProvider(): Promise<LDAPSyncSummary> {
+  const response = await apiClient.post<ApiResponse<{ summary: LDAPSyncSummary }>>(
+    `${AUTH_PROVIDERS_BASE}/ldap/sync`
+  )
+  const data = unwrapResponse(response)
+  return data.summary
 }
 
 export async function setAuthProviderEnabled(
@@ -336,6 +348,7 @@ export const authProvidersApi = {
   configureOIDC: configureOIDCProvider,
   configureSAML: configureSAMLProvider,
   configureLDAP: configureLDAPProvider,
+  syncLDAP: syncLDAPProvider,
   setEnabled: setAuthProviderEnabled,
   testConnection: testAuthProviderConnection,
 }

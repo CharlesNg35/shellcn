@@ -129,10 +129,11 @@ func TestSSOHandlerFlow(t *testing.T) {
 	hashed, err := crypto.HashPassword("password")
 	require.NoError(t, err)
 	require.NoError(t, db.Create(&models.User{
-		Username: "user",
-		Email:    "user@example.com",
-		Password: hashed,
-		IsActive: true,
+		Username:     "user",
+		Email:        "user@example.com",
+		Password:     hashed,
+		IsActive:     true,
+		AuthProvider: "oidc",
 	}).Error)
 
 	// Callback request

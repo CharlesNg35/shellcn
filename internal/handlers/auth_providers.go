@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/charlesng35/shellcn/internal/auth/providers"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/pkg/errors"
@@ -13,11 +14,12 @@ import (
 )
 
 type AuthProviderHandler struct {
-	svc *services.AuthProviderService
+	svc      *services.AuthProviderService
+	ldapSync *services.LDAPSyncService
 }
 
-func NewAuthProviderHandler(svc *services.AuthProviderService) *AuthProviderHandler {
-	return &AuthProviderHandler{svc: svc}
+func NewAuthProviderHandler(svc *services.AuthProviderService, ldapSync *services.LDAPSyncService) *AuthProviderHandler {
+	return &AuthProviderHandler{svc: svc, ldapSync: ldapSync}
 }
 
 // GET /api/auth/providers/all
@@ -129,6 +131,41 @@ func (h *AuthProviderHandler) TestConnection(c *gin.Context) {
 		return
 	}
 	response.Success(c, http.StatusOK, gin.H{"ok": true})
+}
+
+// POST /api/auth/providers/ldap/sync
+func (h *AuthProviderHandler) SyncLDAP(c *gin.Context) {
+	if h.svc == nil || h.ldapSync == nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+
+	ctx := requestContext(c)
+
+	provider, cfg, err := h.svc.LoadLDAPConfig(ctx)
+	if err != nil {
+		switch {
+		case stdErrors.Is(err, services.ErrAuthProviderNotFound):
+			response.Error(c, errors.ErrNotFound)
+		default:
+			response.Error(c, errors.ErrInternalServer)
+		}
+		return
+	}
+
+	authenticator, err := providers.NewLDAPAuthenticator(*cfg, providers.LDAPAuthenticatorOptions{})
+	if err != nil {
+		response.Error(c, errors.ErrBadRequest)
+		return
+	}
+
+	summary, err := h.ldapSync.SyncAll(ctx, authenticator, *cfg, provider.AllowRegistration)
+	if err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{"summary": summary})
 }
 
 // GET /api/auth/providers/:type

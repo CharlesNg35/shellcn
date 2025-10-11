@@ -73,7 +73,12 @@ func (m *SSOManager) Resolve(ctx context.Context, identity providers.Identity, o
 		return TokenPair{}, nil, nil, ErrSSOEmailRequired
 	}
 
-	user, err := m.findOrProvisionUser(ctx, identity, strings.ToLower(email), opts.AutoProvision)
+	provider := normaliseProvider(identity.Provider)
+	if provider == "" {
+		provider = strings.TrimSpace(identity.Provider)
+	}
+
+	user, err := m.LinkIdentity(ctx, identity, opts.AutoProvision)
 	if err != nil {
 		return TokenPair{}, nil, nil, err
 	}
@@ -95,7 +100,7 @@ func (m *SSOManager) Resolve(ctx context.Context, identity providers.Identity, o
 
 	tokens, session, err := m.sessions.CreateForSubject(AuthSubject{
 		UserID:     user.ID,
-		Provider:   identity.Provider,
+		Provider:   provider,
 		ExternalID: identity.Subject,
 		Email:      email,
 		Claims:     subjectClaims,
@@ -118,27 +123,81 @@ func (m *SSOManager) Resolve(ctx context.Context, identity providers.Identity, o
 	return tokens, user, session, nil
 }
 
+// LinkIdentity associates an external identity with a user account, optionally provisioning new users.
+func (m *SSOManager) LinkIdentity(ctx context.Context, identity providers.Identity, autoProvision bool) (*models.User, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	email := strings.TrimSpace(identity.Email)
+	if email == "" {
+		return nil, ErrSSOEmailRequired
+	}
+
+	return m.findOrProvisionUser(ctx, identity, strings.ToLower(email), autoProvision)
+}
+
 func (m *SSOManager) findOrProvisionUser(ctx context.Context, identity providers.Identity, email string, autoProvision bool) (*models.User, error) {
+	incomingProvider := normaliseProvider(identity.Provider)
+	subject := strings.TrimSpace(identity.Subject)
+
 	var user models.User
 	err := m.db.WithContext(ctx).Where("LOWER(email) = ?", strings.ToLower(email)).Take(&user).Error
-	if err == nil {
+	switch {
+	case err == nil:
+		existingProvider := normaliseProvider(user.AuthProvider)
+		if existingProvider == "" {
+			existingProvider = "local"
+		}
+		if existingProvider != "" && existingProvider != incomingProvider {
+			return nil, ErrSSOUserNotFound
+		}
+
+		updates := map[string]any{}
+		if user.AuthProvider != incomingProvider {
+			updates["auth_provider"] = incomingProvider
+		}
+		if subject != "" && strings.TrimSpace(user.AuthSubject) != subject {
+			updates["auth_subject"] = subject
+		}
+
+		if firstName := strings.TrimSpace(identity.FirstName); firstName != "" && firstName != user.FirstName {
+			updates["first_name"] = firstName
+		}
+		if lastName := strings.TrimSpace(identity.LastName); lastName != "" && lastName != user.LastName {
+			updates["last_name"] = lastName
+		}
+
+		if len(updates) > 0 {
+			if err := m.db.WithContext(ctx).Model(&user).Updates(updates).Error; err != nil {
+				return nil, fmt.Errorf("sso manager: update user: %w", err)
+			}
+			if err := m.db.WithContext(ctx).Take(&user, "id = ?", user.ID).Error; err != nil {
+				return nil, fmt.Errorf("sso manager: reload user: %w", err)
+			}
+		}
+
 		return &user, nil
-	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		if !autoProvision {
+			return nil, ErrSSOUserNotFound
+		}
+		return m.provisionUser(ctx, identity, email)
+	default:
 		return nil, fmt.Errorf("sso manager: find user: %w", err)
 	}
-
-	if !autoProvision {
-		return nil, ErrSSOUserNotFound
-	}
-
-	return m.provisionUser(ctx, identity, email)
 }
 
 func (m *SSOManager) provisionUser(ctx context.Context, identity providers.Identity, email string) (*models.User, error) {
 	if strings.TrimSpace(email) == "" {
 		return nil, ErrSSOEmailRequired
 	}
+
+	provider := normaliseProvider(identity.Provider)
+	if provider == "" {
+		provider = "external"
+	}
+	subject := strings.TrimSpace(identity.Subject)
 
 	var created *models.User
 	err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -156,12 +215,14 @@ func (m *SSOManager) provisionUser(ctx context.Context, identity providers.Ident
 			}
 
 			user := &models.User{
-				Username:  username,
-				Email:     strings.ToLower(email),
-				Password:  hashedPassword,
-				FirstName: strings.TrimSpace(identity.FirstName),
-				LastName:  strings.TrimSpace(identity.LastName),
-				IsActive:  true,
+				Username:     username,
+				Email:        strings.ToLower(email),
+				Password:     hashedPassword,
+				FirstName:    strings.TrimSpace(identity.FirstName),
+				LastName:     strings.TrimSpace(identity.LastName),
+				IsActive:     true,
+				AuthProvider: provider,
+				AuthSubject:  subject,
 			}
 
 			if err := tx.Create(user).Error; err != nil {
@@ -186,6 +247,14 @@ func (m *SSOManager) provisionUser(ctx context.Context, identity providers.Ident
 }
 
 func (m *SSOManager) deriveUsername(identity providers.Identity, email string) string {
+	if raw, ok := identity.RawClaims["username"]; ok {
+		if candidate := claimFirstString(raw); candidate != "" {
+			if sanitised := sanitiseUsername(candidate); sanitised != "" {
+				return sanitised
+			}
+		}
+	}
+
 	parts := strings.Split(email, "@")
 	base := strings.TrimSpace(parts[0])
 	if base == "" {
@@ -196,6 +265,29 @@ func (m *SSOManager) deriveUsername(identity providers.Identity, email string) s
 		return "user"
 	}
 	return sanitised
+}
+
+func normaliseProvider(input string) string {
+	return strings.ToLower(strings.TrimSpace(input))
+}
+
+func claimFirstString(value any) string {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []string:
+		if len(v) == 0 {
+			return ""
+		}
+		return strings.TrimSpace(v[0])
+	case []any:
+		for _, item := range v {
+			if s := claimFirstString(item); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 func (m *SSOManager) generatePlaceholderPassword() (string, error) {

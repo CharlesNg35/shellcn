@@ -94,14 +94,15 @@ func (s *UserService) Create(ctx context.Context, input CreateUserInput) (*model
 	}
 
 	user := &models.User{
-		Username:  username,
-		Email:     email,
-		Password:  hashed,
-		FirstName: strings.TrimSpace(input.FirstName),
-		LastName:  strings.TrimSpace(input.LastName),
-		Avatar:    strings.TrimSpace(input.Avatar),
-		IsRoot:    input.IsRoot,
-		IsActive:  true,
+		Username:     username,
+		Email:        email,
+		Password:     hashed,
+		FirstName:    strings.TrimSpace(input.FirstName),
+		LastName:     strings.TrimSpace(input.LastName),
+		Avatar:       strings.TrimSpace(input.Avatar),
+		IsRoot:       input.IsRoot,
+		IsActive:     true,
+		AuthProvider: "local",
 	}
 
 	if input.IsActive != nil {

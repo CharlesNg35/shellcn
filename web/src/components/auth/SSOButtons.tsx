@@ -20,7 +20,9 @@ const providerIcons: Record<string, React.ComponentType<{ className?: string }>>
 
 export const SSOButtons = forwardRef<HTMLDivElement, SSOButtonsProps>(
   ({ providers, onSelect, className, disabled }, ref) => {
-    const enabledProviders = providers.filter((provider) => provider.enabled)
+    const enabledProviders = providers.filter(
+      (provider) => provider.enabled && (provider.flow ?? 'password') === 'redirect'
+    )
 
     if (enabledProviders.length === 0) {
       return null
@@ -30,6 +32,11 @@ export const SSOButtons = forwardRef<HTMLDivElement, SSOButtonsProps>(
       <div ref={ref} className={cn('grid gap-3 sm:grid-cols-2', className)}>
         {enabledProviders.map((provider) => {
           const Icon = providerIcons[provider.type] ?? Globe
+          const redirect = encodeURIComponent('/dashboard')
+          const errorRedirect = encodeURIComponent('/login?error=sso_failed')
+          const loginHref =
+            provider.login_url ??
+            `/api/auth/providers/${provider.type}/login?redirect=${redirect}&error_redirect=${errorRedirect}`
 
           const content = (
             <>
@@ -38,32 +45,21 @@ export const SSOButtons = forwardRef<HTMLDivElement, SSOButtonsProps>(
             </>
           )
 
-          if (provider.login_url) {
-            return (
-              <Button
-                key={provider.type}
-                asChild
-                variant="outline"
-                disabled={disabled}
-                className="justify-center"
-              >
-                <a href={provider.login_url} data-provider={provider.type}>
-                  {content}
-                </a>
-              </Button>
-            )
-          }
-
           return (
             <Button
               key={provider.type}
-              type="button"
+              asChild
               variant="outline"
-              className="justify-center"
-              onClick={() => onSelect?.(provider)}
               disabled={disabled}
+              className="justify-center"
             >
-              {content}
+              <a
+                href={loginHref}
+                data-provider={provider.type}
+                onClick={() => onSelect?.(provider)}
+              >
+                {content}
+              </a>
             </Button>
           )
         })}

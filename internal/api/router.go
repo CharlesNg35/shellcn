@@ -118,9 +118,14 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 
+	ldapSyncSvc, err := services.NewLDAPSyncService(db, ssoManager)
+	if err != nil {
+		return nil, err
+	}
+
 	ssoHandler := handlers.NewSSOHandler(providerRegistry, authProviderSvc, ssoManager, stateCodec)
-	authProviderHandler := handlers.NewAuthProviderHandler(authProviderSvc)
-	authHandler := handlers.NewAuthHandler(db, jwt, sessions, authProviderSvc, ssoManager)
+	authProviderHandler := handlers.NewAuthProviderHandler(authProviderSvc, ldapSyncSvc)
+	authHandler := handlers.NewAuthHandler(db, jwt, sessions, authProviderSvc, ssoManager, ldapSyncSvc)
 
 	userSvcForInvites, err := services.NewUserService(db, auditSvc)
 	if err != nil {

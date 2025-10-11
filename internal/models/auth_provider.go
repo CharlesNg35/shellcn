@@ -50,4 +50,5 @@ type LDAPConfig struct {
 	UseTLS           bool              `json:"use_tls"`
 	SkipVerify       bool              `json:"skip_verify"`
 	AttributeMapping map[string]string `json:"attribute_mapping"`
+	SyncGroups       bool              `json:"sync_groups"`
 }

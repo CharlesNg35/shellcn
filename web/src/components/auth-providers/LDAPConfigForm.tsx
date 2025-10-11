@@ -49,6 +49,7 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
       useTls: config?.useTls ?? false,
       skipVerify: config?.skipVerify ?? false,
       attributeMapping: serializeAttributeMapping(config?.attributeMapping) || 'email=mail',
+      syncGroups: config?.syncGroups ?? false,
       enabled: detail?.provider.enabled ?? provider?.enabled ?? false,
       allowRegistration: detail?.provider.allowRegistration ?? provider?.allowRegistration ?? false,
     }
@@ -117,6 +118,7 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
         useTls: values.useTls,
         skipVerify: values.skipVerify,
         attributeMapping,
+        syncGroups: values.syncGroups,
       },
     })
   })
@@ -208,6 +210,26 @@ export function LDAPConfigForm({ provider, onCancel, onSuccess }: LDAPConfigForm
                 <p className="text-sm font-medium text-foreground">Skip certificate verification</p>
                 <p className="text-sm text-muted-foreground">
                   Ignore TLS certificate validation (useful for lab environments).
+                </p>
+              </div>
+            </label>
+          )}
+        />
+
+        <Controller
+          control={control}
+          name="syncGroups"
+          render={({ field }) => (
+            <label className="flex items-start gap-3">
+              <Checkbox
+                checked={field.value}
+                onCheckedChange={(checked) => field.onChange(Boolean(checked))}
+              />
+              <div>
+                <p className="text-sm font-medium text-foreground">Sync groups to teams</p>
+                <p className="text-sm text-muted-foreground">
+                  When enabled, LDAP group memberships will be mirrored to ShellCN teams during
+                  login and manual syncs.
                 </p>
               </div>
             </label>

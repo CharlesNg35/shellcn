@@ -217,12 +217,13 @@ func (p *LocalProvider) Register(input RegisterInput) (*models.User, error) {
 		}
 
 		user = &models.User{
-			Username:  strings.TrimSpace(input.Username),
-			Email:     strings.ToLower(strings.TrimSpace(input.Email)),
-			Password:  hashed,
-			FirstName: strings.TrimSpace(input.FirstName),
-			LastName:  strings.TrimSpace(input.LastName),
-			IsActive:  !requiresVerification,
+			Username:     strings.TrimSpace(input.Username),
+			Email:        strings.ToLower(strings.TrimSpace(input.Email)),
+			Password:     hashed,
+			FirstName:    strings.TrimSpace(input.FirstName),
+			LastName:     strings.TrimSpace(input.LastName),
+			IsActive:     !requiresVerification,
+			AuthProvider: "local",
 		}
 
 		if err := tx.Create(user).Error; err != nil {

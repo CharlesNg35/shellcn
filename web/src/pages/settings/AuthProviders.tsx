@@ -69,6 +69,7 @@ export function AuthProviders() {
   const [activeModal, setActiveModal] = useState<AuthProviderType | null>(null)
   const [activeToggle, setActiveToggle] = useState<AuthProviderType | null>(null)
   const [activeTest, setActiveTest] = useState<AuthProviderType | null>(null)
+  const [activeSync, setActiveSync] = useState<AuthProviderType | null>(null)
 
   const providersQuery = useAuthProviders()
 
@@ -135,12 +136,41 @@ export function AuthProviders() {
     },
   })
 
+  const syncProviderMutation = useMutation({
+    mutationFn: async () => {
+      const summary = await authProvidersApi.syncLDAP()
+      return summary
+    },
+    onMutate: () => {
+      setActiveSync('ldap')
+    },
+    onSuccess: (summary) => {
+      const details = `Users: +${summary.users_created} created, ${summary.users_updated} updated, ${summary.users_skipped} skipped. Teams: +${summary.teams_created} created, ${summary.memberships_added} memberships added, ${summary.memberships_removed} removed.`
+      toast.success('LDAP sync completed', {
+        description: details,
+      })
+    },
+    onError: (error) => {
+      const apiError = toApiError(error)
+      toast.error('Failed to sync LDAP directory', {
+        description: apiError.message,
+      })
+    },
+    onSettled: () => {
+      setActiveSync(null)
+    },
+  })
+
   const handleToggle = (type: AuthProviderType, enabled: boolean) => {
     toggleProviderMutation.mutate({ type, enabled })
   }
 
   const handleTest = (type: AuthProviderType) => {
     testProviderMutation.mutate(type)
+  }
+
+  const handleSync = () => {
+    syncProviderMutation.mutate()
   }
 
   const loading = providersQuery.isLoading
@@ -169,6 +199,7 @@ export function AuthProviders() {
                 const provider = providerMap.get(definition.type)
                 const isToggleLoading = activeToggle === definition.type
                 const isTestLoading = activeTest === definition.type
+                const isSyncLoading = activeSync === definition.type
 
                 return (
                   <ProviderCard
@@ -191,6 +222,9 @@ export function AuthProviders() {
                     }
                     testDisabled={!definition.supportsTest || !provider}
                     testLoading={isTestLoading}
+                    onSync={definition.type === 'ldap' ? handleSync : undefined}
+                    syncDisabled={definition.type !== 'ldap' || !provider}
+                    syncLoading={isSyncLoading || syncProviderMutation.isPending}
                   />
                 )
               })}

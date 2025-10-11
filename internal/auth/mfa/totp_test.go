@@ -115,10 +115,11 @@ func createTestUser(t *testing.T, db *gorm.DB, username string) *models.User {
 	require.NoError(t, err)
 
 	user := &models.User{
-		Username: username,
-		Email:    username + "@example.com",
-		Password: hashed,
-		IsActive: true,
+		Username:     username,
+		Email:        username + "@example.com",
+		Password:     hashed,
+		IsActive:     true,
+		AuthProvider: "local",
 	}
 
 	require.NoError(t, db.Create(user).Error)

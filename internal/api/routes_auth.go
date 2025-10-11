@@ -36,6 +36,7 @@ func registerAuthRoutes(engine *gin.Engine, api *gin.RouterGroup, deps authRoute
 		providers.GET("/all", middleware.RequirePermission(deps.PermissionChecker, "permission.view"), deps.ProviderHandler.ListAll)
 		providers.GET("/enabled", middleware.RequirePermission(deps.PermissionChecker, "permission.view"), deps.ProviderHandler.GetEnabled)
 		providers.POST("/local/settings", middleware.RequirePermission(deps.PermissionChecker, "permission.manage"), deps.ProviderHandler.UpdateLocalSettings)
+		providers.POST("/ldap/sync", middleware.RequirePermission(deps.PermissionChecker, "permission.manage"), deps.ProviderHandler.SyncLDAP)
 		providers.GET("/:type", middleware.RequirePermission(deps.PermissionChecker, "permission.view"), deps.ProviderHandler.Get)
 		providers.POST("/:type/enable", middleware.RequirePermission(deps.PermissionChecker, "permission.manage"), deps.ProviderHandler.SetEnabled)
 		providers.POST("/:type/test", middleware.RequirePermission(deps.PermissionChecker, "permission.manage"), deps.ProviderHandler.TestConnection)

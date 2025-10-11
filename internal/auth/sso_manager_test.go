@@ -34,6 +34,9 @@ func TestSSOResolveExistingUser(t *testing.T) {
 	require.NoError(t, err)
 
 	user := createTestUser(t, db, "existing")
+	require.NoError(t, db.Model(user).Updates(map[string]any{
+		"auth_provider": "oidc",
+	}).Error)
 
 	identity := providers.Identity{
 		Provider: "oidc",
@@ -63,6 +66,8 @@ func TestSSOResolveExistingUser(t *testing.T) {
 	require.NotNil(t, stored.LastLoginAt)
 	require.WithinDuration(t, clock.Now(), stored.LastLoginAt.UTC(), time.Second)
 	require.Equal(t, "10.1.1.1", stored.LastLoginIP)
+	require.Equal(t, "oidc", stored.AuthProvider)
+	require.Equal(t, "user-123", stored.AuthSubject)
 }
 
 func TestSSOResolveAutoProvision(t *testing.T) {
@@ -115,6 +120,8 @@ func TestSSOResolveAutoProvision(t *testing.T) {
 	require.NoError(t, db.Take(&stored, "id = ?", resolvedUser.ID).Error)
 	require.NotNil(t, stored.LastLoginAt)
 	require.Equal(t, "203.0.113.42", stored.LastLoginIP)
+	require.Equal(t, "saml", stored.AuthProvider)
+	require.Equal(t, "abc-123", stored.AuthSubject)
 
 	var count int64
 	require.NoError(t, db.Model(&models.User{}).Count(&count).Error)

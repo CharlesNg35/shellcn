@@ -61,6 +61,7 @@ export interface LDAPProviderConfig {
   useTls: boolean
   skipVerify: boolean
   attributeMapping: Record<string, string>
+  syncGroups: boolean
 }
 
 export type AuthProviderConfigMap = {
@@ -72,4 +73,13 @@ export type AuthProviderConfigMap = {
 export interface AuthProviderDetails<TConfig = unknown> {
   provider: AuthProviderRecord
   config?: TConfig
+}
+
+export interface LDAPSyncSummary {
+  users_created: number
+  users_updated: number
+  users_skipped: number
+  teams_created: number
+  memberships_added: number
+  memberships_removed: number
 }

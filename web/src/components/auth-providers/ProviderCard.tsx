@@ -24,6 +24,9 @@ interface ProviderCardProps {
   onTestConnection?: () => void
   testDisabled?: boolean
   testLoading?: boolean
+  onSync?: () => void
+  syncDisabled?: boolean
+  syncLoading?: boolean
 }
 
 export function ProviderCard({
@@ -39,6 +42,9 @@ export function ProviderCard({
   onTestConnection,
   testDisabled,
   testLoading,
+  onSync,
+  syncDisabled,
+  syncLoading,
 }: ProviderCardProps) {
   const isConfigured = Boolean(provider)
   const isEnabled = provider?.enabled ?? false
@@ -87,6 +93,7 @@ export function ProviderCard({
 
   const canToggle = Boolean(onToggleEnabled) && isConfigured && !toggleDisabled
   const canTest = Boolean(onTestConnection) && isConfigured && !testDisabled
+  const canSync = Boolean(onSync) && isConfigured && !syncDisabled
 
   return (
     <Card>
@@ -126,6 +133,17 @@ export function ProviderCard({
               loading={testLoading}
             >
               Test Connection
+            </Button>
+          ) : null}
+          {onSync ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onSync}
+              disabled={!canSync}
+              loading={syncLoading}
+            >
+              Sync Now
             </Button>
           ) : null}
           {onToggleEnabled ? (

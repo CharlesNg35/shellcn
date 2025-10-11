@@ -22,6 +22,7 @@ export function Login() {
     fetchSetupStatus,
     status,
     providers,
+    loadProviders,
   } = useAuth()
   const {
     register,
@@ -38,6 +39,36 @@ export function Login() {
   })
 
   const [setupState, setSetupState] = useState<'checking' | 'pending' | 'complete'>('checking')
+  const [selectedProvider, setSelectedProvider] = useState<string>('local')
+
+  const passwordProviders = useMemo(
+    () =>
+      providers.filter(
+        (provider) => provider.enabled && (provider.flow ?? 'password') === 'password'
+      ),
+    [providers]
+  )
+
+  useEffect(() => {
+    if (providers.length === 0) {
+      void loadProviders()
+    }
+  }, [providers.length, loadProviders])
+
+  useEffect(() => {
+    if (passwordProviders.length === 0) {
+      setSelectedProvider('local')
+      return
+    }
+
+    setSelectedProvider((current) => {
+      if (passwordProviders.some((provider) => provider.type === current)) {
+        return current
+      }
+      const localProvider = passwordProviders.find((provider) => provider.type === 'local')
+      return localProvider?.type ?? passwordProviders[0].type
+    })
+  }, [passwordProviders])
 
   const canResetPassword = useMemo(() => {
     const localProvider = providers.find((provider) => provider.type === 'local')
@@ -94,6 +125,7 @@ export function Login() {
         identifier: data.identifier,
         password: data.password,
         remember_device: data.remember_device,
+        provider: selectedProvider,
       })
 
       if (!result.mfaRequired) {
@@ -120,6 +152,26 @@ export function Login() {
       <div className="space-y-2">
         <h2 className="text-2xl font-bold text-foreground">Sign in</h2>
         <p className="text-sm text-muted-foreground">Enter your credentials to access ShellCN</p>
+        {passwordProviders.length > 1 ? (
+          <div className="flex flex-wrap gap-2 pt-2">
+            {passwordProviders.map((provider) => (
+              <Button
+                key={provider.type}
+                type="button"
+                variant={selectedProvider === provider.type ? 'secondary' : 'outline'}
+                size="sm"
+                onClick={() => setSelectedProvider(provider.type)}
+              >
+                {provider.name}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+        {passwordProviders.length === 1 ? (
+          <p className="text-xs text-muted-foreground">
+            Signing in with {passwordProviders[0].name}
+          </p>
+        ) : null}
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

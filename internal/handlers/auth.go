@@ -25,10 +25,11 @@ type AuthHandler struct {
 	sessions  *iauth.SessionService
 	providers *services.AuthProviderService
 	sso       *iauth.SSOManager
+	ldapSync  *services.LDAPSyncService
 }
 
-func NewAuthHandler(db *gorm.DB, jwt *iauth.JWTService, sessions *iauth.SessionService, providers *services.AuthProviderService, sso *iauth.SSOManager) *AuthHandler {
-	return &AuthHandler{db: db, jwt: jwt, sessions: sessions, providers: providers, sso: sso}
+func NewAuthHandler(db *gorm.DB, jwt *iauth.JWTService, sessions *iauth.SessionService, providers *services.AuthProviderService, sso *iauth.SSOManager, ldapSync *services.LDAPSyncService) *AuthHandler {
+	return &AuthHandler{db: db, jwt: jwt, sessions: sessions, providers: providers, sso: sso, ldapSync: ldapSync}
 }
 
 type loginRequest struct {
@@ -139,14 +140,15 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	perms, _ := checker.GetUserPermissions(requestContext(c), user.ID)
 
 	payload := gin.H{
-		"id":          user.ID,
-		"username":    user.Username,
-		"email":       user.Email,
-		"is_root":     user.IsRoot,
-		"is_active":   user.IsActive,
-		"first_name":  user.FirstName,
-		"last_name":   user.LastName,
-		"permissions": perms,
+		"id":            user.ID,
+		"username":      user.Username,
+		"email":         user.Email,
+		"is_root":       user.IsRoot,
+		"is_active":     user.IsActive,
+		"first_name":    user.FirstName,
+		"last_name":     user.LastName,
+		"auth_provider": user.AuthProvider,
+		"permissions":   perms,
 	}
 
 	response.Success(c, http.StatusOK, payload)
@@ -216,7 +218,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 		return
 	}
 
-	tokens, user, _, err := h.sso.Resolve(requestContext(c), *identity, iauth.ResolveOptions{
+	tokens, user, session, err := h.sso.Resolve(requestContext(c), *identity, iauth.ResolveOptions{
 		AutoProvision: providerModel.AllowRegistration,
 		SessionMeta: iauth.SessionMetadata{
 			IPAddress: c.ClientIP(),
@@ -234,6 +236,17 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 			response.Error(c, errors.ErrUnauthorized)
 		}
 		return
+	}
+
+	if h.ldapSync != nil {
+		if _, syncErr := h.ldapSync.SyncGroups(requestContext(c), *cfg, user, identity.Groups); syncErr != nil {
+			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			if session != nil {
+				_ = h.sessions.RevokeSession(session.ID)
+			}
+			response.Error(c, errors.ErrInternalServer)
+			return
+		}
 	}
 
 	metrics.AuthAttempts.WithLabelValues("success").Inc()

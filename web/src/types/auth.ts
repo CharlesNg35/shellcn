@@ -38,6 +38,7 @@ export interface LoginCredentials {
   password: string
   mfa_token?: string
   remember_device?: boolean
+  provider?: string
 }
 
 export interface LoginResponsePayload {
@@ -105,6 +106,7 @@ export interface AuthProviderMetadata {
   allow_registration?: boolean
   require_email_verification?: boolean
   allow_password_reset?: boolean
+  flow?: 'password' | 'redirect' | (string & {})
 }
 
 export interface PasswordResetRequestPayload {

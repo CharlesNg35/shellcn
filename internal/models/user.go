@@ -10,6 +10,9 @@ type User struct {
 	Email    string `gorm:"uniqueIndex;not null" json:"email"`
 	Password string `gorm:"not null" json:"-"`
 
+	AuthProvider string `gorm:"size:64;index" json:"auth_provider,omitempty"`
+	AuthSubject  string `gorm:"size:512" json:"-"`
+
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	Avatar    string `json:"avatar"`

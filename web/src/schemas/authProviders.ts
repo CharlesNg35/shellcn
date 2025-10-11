@@ -46,6 +46,7 @@ export const ldapConfigSchema = z.object({
   useTls: z.boolean(),
   skipVerify: z.boolean(),
   attributeMapping: z.string().optional(),
+  syncGroups: z.boolean(),
   enabled: z.boolean(),
   allowRegistration: z.boolean(),
 })

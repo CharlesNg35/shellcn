@@ -75,12 +75,14 @@ func TestAuthProviderServiceConfigureAndTestConnection(t *testing.T) {
 		BindDN:       "cn=admin,dc=example,dc=com",
 		BindPassword: "bind-secret",
 		UserFilter:   "(uid={username})",
+		SyncGroups:   true,
 	}, true, false, "admin")
 	require.NoError(t, err)
 
 	err = svc.TestConnection(ctx, "ldap")
 	require.NoError(t, err)
 	require.Equal(t, "bind-secret", capturedLDAP.BindPassword)
+	require.True(t, capturedLDAP.SyncGroups)
 
 	list, err := svc.List(ctx)
 	require.NoError(t, err)
@@ -182,6 +184,7 @@ func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {
 		BindPassword: "secret",
 		UserFilter:   "(uid={username})",
 		UseTLS:       true,
+		SyncGroups:   true,
 	}, true, true, "admin-user")
 	require.NoError(t, err)
 
@@ -231,6 +234,7 @@ func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "ldap", ldapProvider.Type)
 	require.Equal(t, "secret", ldapCfg.BindPassword)
+	require.True(t, ldapCfg.SyncGroups)
 }
 
 func openAuthProviderServiceTestDB(t *testing.T) *gorm.DB {
