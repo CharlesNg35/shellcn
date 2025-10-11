@@ -13,6 +13,7 @@ import {
   createTeam,
   deleteTeam,
   fetchTeamById,
+  fetchTeamCapabilities,
   fetchTeamMembers,
   fetchTeams,
   removeTeamMember,
@@ -23,6 +24,7 @@ import type {
   TeamCreatePayload,
   TeamListResult,
   TeamMember,
+  TeamCapabilities,
   TeamRecord,
   TeamUpdatePayload,
 } from '@/types/teams'
@@ -45,6 +47,12 @@ export const TEAM_MEMBERS_QUERY_KEY = ['teams', 'members'] as const
 
 export function getTeamMembersQueryKey(teamId?: string) {
   return [...TEAM_MEMBERS_QUERY_KEY, teamId ?? ''] as const
+}
+
+export const TEAM_CAPABILITIES_QUERY_KEY = ['teams', 'capabilities'] as const
+
+export function getTeamCapabilitiesQueryKey(teamId?: string) {
+  return [...TEAM_CAPABILITIES_QUERY_KEY, teamId ?? ''] as const
 }
 
 type TeamsQueryOptions = Omit<
@@ -98,6 +106,26 @@ export function useTeamMembers(
   return useQuery<TeamMember[], ApiError, TeamMember[], readonly unknown[]>({
     queryKey,
     queryFn: () => fetchTeamMembers(teamId as string),
+    enabled: Boolean(teamId),
+    staleTime: 30_000,
+    ...(options ?? {}),
+  })
+}
+
+type TeamCapabilitiesQueryOptions = Omit<
+  UseQueryOptions<TeamCapabilities, ApiError, TeamCapabilities, readonly unknown[]>,
+  'queryKey' | 'queryFn'
+>
+
+export function useTeamCapabilities(
+  teamId: string | undefined,
+  options?: TeamCapabilitiesQueryOptions
+): UseQueryResult<TeamCapabilities, ApiError> {
+  const queryKey = useMemo(() => getTeamCapabilitiesQueryKey(teamId), [teamId])
+
+  return useQuery<TeamCapabilities, ApiError, TeamCapabilities, readonly unknown[]>({
+    queryKey,
+    queryFn: () => fetchTeamCapabilities(teamId as string),
     enabled: Boolean(teamId),
     staleTime: 30_000,
     ...(options ?? {}),

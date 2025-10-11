@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Plus, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -19,6 +20,7 @@ import { PERMISSIONS } from '@/constants/permissions'
 const DEFAULT_PER_PAGE = 20
 
 export function Users() {
+  const navigate = useNavigate()
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState<UserFilterState>({ status: 'all' })
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -107,6 +109,11 @@ export function Users() {
         description="Manage platform users, activation status, and administrative privileges. Create new accounts, assign roles, and control access to system resources."
         action={
           <div className="flex flex-wrap gap-2">
+            <PermissionGuard permission={PERMISSIONS.PERMISSION.MANAGE}>
+              <Button variant="ghost" onClick={() => navigate('/settings/permissions')}>
+                Manage Roles
+              </Button>
+            </PermissionGuard>
             <PermissionGuard permission={PERMISSIONS.USER.INVITE}>
               <Button variant="outline" onClick={() => setIsInviteModalOpen(true)}>
                 <UserPlus className="mr-2 h-4 w-4" />

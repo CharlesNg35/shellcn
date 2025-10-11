@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Loader2, ShieldCheck } from 'lucide-react'
 import type { UseMutationResult } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button'
@@ -106,8 +107,15 @@ export function TeamRolesManager({
           Loading roles…
         </div>
       ) : sortedRoles.length === 0 ? (
-        <div className="py-6 text-sm text-muted-foreground">
-          No roles available. Create roles in the Permissions section first.
+        <div className="space-y-2 py-6 text-sm text-muted-foreground">
+          <p>No roles available for assignment.</p>
+          {canManageRoles ? (
+            <Link to="/settings/permissions" className="text-primary underline">
+              Create or import roles in the Permissions area.
+            </Link>
+          ) : (
+            <p>Contact an administrator to create roles before assigning them to this team.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-4 pt-4">

@@ -8,6 +8,7 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { TeamMembersManager } from '@/components/teams/TeamMembersManager'
 import { TeamRolesManager } from '@/components/teams/TeamRolesManager'
+import { TeamCapabilitiesCard } from '@/components/teams/TeamCapabilitiesCard'
 import { useTeam, useTeamMembers, useTeamMutations } from '@/hooks/useTeams'
 import { useRoles } from '@/hooks/useRoles'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -245,6 +246,12 @@ export function TeamDetail() {
             </div>
           </CardContent>
         </Card>
+
+        <TeamCapabilitiesCard
+          teamId={teamDetail.id}
+          canManagePermissions={canManageRoles}
+          className="lg:col-span-2"
+        />
 
         {/* Team Roles & Members */}
         <div className="space-y-6 lg:col-span-2">

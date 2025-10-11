@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils/cn'
+import { humanizePermissionModule } from '@/lib/utils/permissionLabels'
 import {
   findPermissionDependents,
   groupPermissionsByModuleAndNamespace,
@@ -32,20 +33,6 @@ interface PermissionMatrixProps {
   selected: ReadonlySet<PermissionIdentifier>
   onChange: (next: PermissionIdentifier[]) => void
   disabled?: boolean
-}
-
-const HUMANIZED_MODULES: Record<string, string> = {
-  core: 'Core Platform',
-  k8s: 'Kubernetes',
-  docker: 'Docker',
-  vault: 'Vault',
-  connection: 'Connections',
-  user: 'User Management',
-  team: 'Team Management',
-  audit: 'Audit & Compliance',
-  security: 'Security',
-  org: 'Organization',
-  notification: 'Notifications',
 }
 
 function sortPermissions(permissions: PermissionDefinition[]): PermissionDefinition[] {
@@ -444,7 +431,7 @@ export function PermissionMatrix({
                   )}
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                      {HUMANIZED_MODULES[group.moduleId] ?? group.moduleId}
+                      {humanizePermissionModule(group.moduleId)}
                     </h3>
                     <p className="text-xs text-muted-foreground/80">
                       {permissionCount} permission{permissionCount === 1 ? '' : 's'}
