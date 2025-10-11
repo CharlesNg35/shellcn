@@ -163,7 +163,15 @@ export function getBreadcrumbItems(pathname: string): NavigationItem[] {
 /**
  * Filter navigation groups by enabled features
  */
-export function getFilteredNavigationGroups(): NavigationGroup[] {
+interface NavigationFilterOptions {
+  hasPermission?: (permission: PermissionId) => boolean
+}
+
+export function getFilteredNavigationGroups(
+  options: NavigationFilterOptions = {}
+): NavigationGroup[] {
+  const { hasPermission } = options
+
   return NAVIGATION_GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
@@ -171,6 +179,11 @@ export function getFilteredNavigationGroups(): NavigationGroup[] {
       if (item.featureId && !isFeatureEnabled(item.featureId)) {
         return false
       }
+
+      if (item.permission && hasPermission) {
+        return hasPermission(item.permission)
+      }
+
       return true
     }),
   })).filter((group) => group.items.length > 0) // Remove empty groups

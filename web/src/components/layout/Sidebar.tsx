@@ -54,7 +54,10 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  const navigationGroups = useMemo(() => getFilteredNavigationGroups(), [])
+  const navigationGroups = useMemo(
+    () => getFilteredNavigationGroups({ hasPermission }),
+    [hasPermission]
+  )
 
   const settingsGroup = useMemo(
     () => navigationGroups.find((group) => group.label === 'Settings'),
