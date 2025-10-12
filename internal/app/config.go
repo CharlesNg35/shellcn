@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
+	mapstructure "github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/viper"
 )
 
@@ -222,7 +222,7 @@ type LocalAuthSettings struct {
 
 // LoadConfig initialises application configuration using Viper with sensible defaults.
 func LoadConfig(paths ...string) (*Config, error) {
-	v := viper.New()
+	v := viper.NewWithOptions(viper.ExperimentalBindStruct())
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 
