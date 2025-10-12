@@ -40,6 +40,8 @@ interface AuthState {
   mfaChallenge?: MfaChallenge
   error: string | null
   errorCode: string | null
+  setupStatus: SetupStatusPayload | null
+  isSetupStatusLoading: boolean
 }
 
 interface AuthActions {
@@ -48,7 +50,7 @@ interface AuthActions {
   verifyMfa: (payload: VerifyMfaPayload) => AsyncResult<void>
   refreshUser: () => AsyncResult<AuthUser | null>
   loadProviders: () => AsyncResult<AuthProviderMetadata[]>
-  fetchSetupStatus: () => AsyncResult<SetupStatusPayload>
+  fetchSetupStatus: (options?: { force?: boolean }) => AsyncResult<SetupStatusPayload>
   completeSetup: (payload: SetupInitializePayload) => AsyncResult<SetupInitializeResponse>
   requestPasswordReset: (payload: PasswordResetRequestPayload) => AsyncResult<PasswordResetResponse>
   confirmPasswordReset: (payload: PasswordResetConfirmPayload) => AsyncResult<PasswordResetResponse>
@@ -62,6 +64,9 @@ export type AuthStore = AuthState & AuthActions
 const tokensFromStorage = getTokens()
 
 export const useAuthStore = create<AuthStore>((set, get) => {
+  let cachedSetupStatus: SetupStatusPayload | null = null
+  let setupStatusPromise: Promise<SetupStatusPayload> | null = null
+
   if (typeof window !== 'undefined') {
     subscribeTokens((tokens) => {
       set((state) => ({
@@ -82,6 +87,8 @@ export const useAuthStore = create<AuthStore>((set, get) => {
     mfaChallenge: undefined,
     error: null,
     errorCode: null,
+    setupStatus: null,
+    isSetupStatusLoading: false,
 
     initialize: async () => {
       const { tokens } = get()
@@ -187,7 +194,8 @@ export const useAuthStore = create<AuthStore>((set, get) => {
       } catch (error) {
         const apiError = toApiError(error)
         set({
-          status: 'mfa_required',
+          status: 'unauthenticated',
+          mfaChallenge: undefined,
           error: apiError.message,
           errorCode: apiError.code ?? null,
         })
@@ -231,13 +239,47 @@ export const useAuthStore = create<AuthStore>((set, get) => {
       }
     },
 
-    fetchSetupStatus: async () => {
-      const status = await fetchSetupStatusApi()
-      return status
+    fetchSetupStatus: async (options) => {
+      const force = options?.force ?? false
+
+      if (!force) {
+        const { setupStatus } = get()
+        if (setupStatus) {
+          return setupStatus
+        }
+      }
+
+      if (!force && cachedSetupStatus) {
+        set({ setupStatus: cachedSetupStatus })
+        return cachedSetupStatus
+      }
+
+      if (!force && setupStatusPromise) {
+        return setupStatusPromise
+      }
+
+      const request = fetchSetupStatusApi()
+        .then((status) => {
+          cachedSetupStatus = status
+          setupStatusPromise = null
+          set({ setupStatus: status, isSetupStatusLoading: false })
+          return status
+        })
+        .catch((error) => {
+          setupStatusPromise = null
+          set({ isSetupStatusLoading: false })
+          throw error
+        })
+
+      setupStatusPromise = request
+      set({ isSetupStatusLoading: true })
+      return request
     },
 
     completeSetup: async (payload) => {
       const result = await initializeSetupApi(payload)
+      cachedSetupStatus = { status: 'complete', message: result.message }
+      set({ setupStatus: cachedSetupStatus, isSetupStatusLoading: false })
       return result
     },
 
@@ -256,6 +298,8 @@ export const useAuthStore = create<AuthStore>((set, get) => {
         await apiLogout()
       } finally {
         clearTokens()
+        cachedSetupStatus = null
+        setupStatusPromise = null
         set({
           tokens: null,
           user: null,
@@ -264,6 +308,8 @@ export const useAuthStore = create<AuthStore>((set, get) => {
           mfaChallenge: undefined,
           error: null,
           errorCode: null,
+          setupStatus: null,
+          isSetupStatusLoading: false,
         })
       }
     },

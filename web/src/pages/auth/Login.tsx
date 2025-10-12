@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
 import type { z } from 'zod'
+import type { SetupStatusPayload } from '@/types/auth'
 import { loginSchema } from '@/schemas/auth'
 import { useAuth } from '@/hooks/useAuth'
 import { Input } from '@/components/ui/Input'
@@ -24,6 +25,8 @@ export function Login() {
     status,
     providers,
     loadProviders,
+    setupStatus,
+    mfaChallenge,
   } = useAuth()
   const {
     register,
@@ -39,9 +42,12 @@ export function Login() {
     },
   })
 
-  const [setupState, setSetupState] = useState<'checking' | 'pending' | 'complete'>('checking')
+  const [setupState, setSetupState] = useState<'checking' | 'pending' | 'complete'>(
+    setupStatus?.status ?? 'checking'
+  )
   const [selectedProvider, setSelectedProvider] = useState<string>('local')
   const [ssoError, setSsoError] = useState<string | null>(null)
+  const [mfaErrorMessage, setMfaErrorMessage] = useState<string | null>(null)
 
   const passwordProviders = useMemo(
     () =>
@@ -88,6 +94,7 @@ export function Login() {
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     const reason = params.get('error_reason')
+    const notice = params.get('notice')
     switch (reason) {
       case 'provider_mismatch':
         setSsoError(
@@ -112,44 +119,66 @@ export function Login() {
       default:
         setSsoError(null)
     }
+
+    if (notice === 'mfa_failed') {
+      setMfaErrorMessage('Verification code is invalid. Please try again.')
+    } else {
+      setMfaErrorMessage(null)
+    }
   }, [location.search])
 
   useEffect(() => {
-    let subscribed = true
+    let active = true
+
+    const applyStatus = (result: SetupStatusPayload | null | undefined) => {
+      if (!active) {
+        return
+      }
+      if (!result) {
+        setSetupState('complete')
+        return
+      }
+      setSetupState(result.status)
+      if (result.status === 'pending' && location.pathname !== '/setup') {
+        navigate('/setup', { replace: true })
+      }
+    }
+
+    if (setupStatus) {
+      applyStatus(setupStatus)
+      return () => {
+        active = false
+        clearError()
+      }
+    }
+
+    setSetupState('checking')
     fetchSetupStatus()
-      .then((setup) => {
-        if (!subscribed) {
-          return
-        }
-        if (!setup || setup.status === 'pending') {
-          setSetupState('pending')
-          navigate('/setup', { replace: true })
-        } else {
-          setSetupState('complete')
-        }
-      })
+      .then(applyStatus)
       .catch(() => {
-        if (subscribed) {
+        if (active) {
           setSetupState('complete')
         }
       })
 
     return () => {
-      subscribed = false
+      active = false
       clearError()
+      setMfaErrorMessage(null)
     }
-  }, [fetchSetupStatus, navigate, clearError])
+  }, [setupStatus, fetchSetupStatus, navigate, clearError, location.pathname])
 
   useEffect(() => {
     if (status === 'authenticated') {
       navigate('/dashboard', { replace: true })
-    } else if (isMfaRequired) {
+    } else if (isMfaRequired && mfaChallenge) {
       navigate('/mfa', { replace: true })
     }
-  }, [status, isMfaRequired, navigate])
+  }, [status, isMfaRequired, mfaChallenge, navigate])
 
   const onSubmit = async (data: LoginFormData) => {
     clearError()
+    setMfaErrorMessage(null)
 
     try {
       const result = await login({
@@ -231,9 +260,9 @@ export function Login() {
           </div>
         ) : null}
 
-        {error && (
+        {(error || mfaErrorMessage) && (
           <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-            <p className="font-medium">{error}</p>
+            <p className="font-medium">{error ?? mfaErrorMessage}</p>
           </div>
         )}
 

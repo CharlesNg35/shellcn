@@ -353,6 +353,11 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 
 	valid, verifyErr := h.totp.VerifyCode(userID, req.MFAToken)
 	if verifyErr != nil {
+		if stdErrors.Is(verifyErr, mfa.ErrSecretNotFound) {
+			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			response.Error(c, errors.ErrMFAInvalid)
+			return
+		}
 		metrics.AuthAttempts.WithLabelValues("failure").Inc()
 		response.Error(c, errors.ErrInternalServer)
 		return

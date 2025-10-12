@@ -11,9 +11,10 @@ type MfaFormData = z.infer<typeof mfaVerificationSchema>
 
 interface MfaVerificationFormProps {
   onSuccess?: () => void
+  onFailure?: (error: Error) => void
 }
 
-export function MfaVerificationForm({ onSuccess }: MfaVerificationFormProps) {
+export function MfaVerificationForm({ onSuccess, onFailure }: MfaVerificationFormProps) {
   const { mfaChallenge, verifyMfa, error, clearError, isLoading } = useAuth()
 
   const {
@@ -41,12 +42,20 @@ export function MfaVerificationForm({ onSuccess }: MfaVerificationFormProps) {
   }
 
   const onSubmit = async (data: MfaFormData) => {
-    await verifyMfa({
-      challenge_id: mfaChallenge.challenge_id,
-      mfa_token: data.code,
-    })
+    try {
+      await verifyMfa({
+        challenge_id: mfaChallenge.challenge_id,
+        mfa_token: data.code,
+      })
 
-    onSuccess?.()
+      onSuccess?.()
+    } catch (err) {
+      if (onFailure && err instanceof Error) {
+        onFailure(err)
+        return
+      }
+      throw err
+    }
   }
 
   return (

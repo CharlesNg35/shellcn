@@ -3,31 +3,48 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 
 export function SetupGuard() {
-  const { fetchSetupStatus } = useAuth({ autoInitialize: false })
+  const { fetchSetupStatus, setupStatus, isSetupStatusLoading } = useAuth({ autoInitialize: false })
   const location = useLocation()
-  const [setupStatus, setSetupStatus] = useState<'pending' | 'complete' | 'loading'>('loading')
+  const [localStatus, setLocalStatus] = useState<'pending' | 'complete' | 'loading'>(() =>
+    setupStatus ? setupStatus.status : 'loading'
+  )
 
   useEffect(() => {
     let active = true
 
+    if (setupStatus) {
+      setLocalStatus(setupStatus.status)
+      return () => {
+        active = false
+      }
+    }
+
+    if (isSetupStatusLoading) {
+      setLocalStatus('loading')
+      return () => {
+        active = false
+      }
+    }
+
+    setLocalStatus('loading')
     fetchSetupStatus()
       .then((status) => {
         if (active) {
-          setSetupStatus(status.status)
+          setLocalStatus(status.status)
         }
       })
       .catch(() => {
         if (active) {
-          setSetupStatus('complete') // Assume complete on error
+          setLocalStatus('complete')
         }
       })
 
     return () => {
       active = false
     }
-  }, [fetchSetupStatus])
+  }, [setupStatus, isSetupStatusLoading, fetchSetupStatus])
 
-  if (setupStatus === 'loading') {
+  if (localStatus === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -39,12 +56,12 @@ export function SetupGuard() {
   }
 
   // If setup is pending and we're not on the setup page, redirect to setup
-  if (setupStatus === 'pending' && location.pathname !== '/setup') {
+  if (localStatus === 'pending' && location.pathname !== '/setup') {
     return <Navigate to="/setup" replace />
   }
 
   // If setup is complete and we're on the setup page, redirect to login
-  if (setupStatus === 'complete' && location.pathname === '/setup') {
+  if (localStatus === 'complete' && location.pathname === '/setup') {
     return <Navigate to="/login" replace />
   }
 

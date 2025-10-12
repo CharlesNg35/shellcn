@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter'
 import { useAuth } from '@/hooks/useAuth'
+import { toast } from '@/lib/utils/toast'
 import {} from '@/lib/constants'
 
 type SetupFormData = z.infer<typeof setupSchema>
@@ -55,6 +56,9 @@ export function Setup() {
         last_name: data.lastName || undefined,
       })
 
+      toast.success('Administrator account created', {
+        description: 'You can now sign in with your new credentials.',
+      })
       navigate('/login', {
         replace: true,
       })

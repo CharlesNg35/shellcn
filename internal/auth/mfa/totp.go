@@ -25,6 +25,8 @@ const (
 	defaultQRCodeSize      = 256
 )
 
+var ErrSecretNotFound = errors.New("totp: secret not found")
+
 // Option allows customising the TOTP service.
 type Option func(*TOTPService)
 
@@ -276,7 +278,7 @@ func (s *TOTPService) loadSecret(userID string) (*models.MFASecret, error) {
 	var secret models.MFASecret
 	if err := s.db.Where("user_id = ?", userID).First(&secret).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("totp: secret not found for user %s", userID)
+			return nil, fmt.Errorf("%w for user %s", ErrSecretNotFound, userID)
 		}
 		return nil, fmt.Errorf("totp: load secret: %w", err)
 	}

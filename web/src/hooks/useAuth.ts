@@ -32,6 +32,8 @@ const selector = (state: AuthStore) => ({
   clearError: state.clearError,
   requestPasswordReset: state.requestPasswordReset,
   confirmPasswordReset: state.confirmPasswordReset,
+  setupStatus: state.setupStatus,
+  isSetupStatusLoading: state.isSetupStatusLoading,
   errorCode: state.errorCode,
 })
 
@@ -44,6 +46,8 @@ export function useAuth(options: UseAuthOptions = {}) {
     user,
     providers,
     mfaChallenge,
+    setupStatus,
+    isSetupStatusLoading,
     error,
     errorCode,
     initialize,
@@ -112,6 +116,8 @@ export function useAuth(options: UseAuthOptions = {}) {
       clearError,
       requestPasswordReset: requestReset,
       confirmPasswordReset: confirmReset,
+      setupStatus,
+      isSetupStatusLoading,
       isAuthenticated: status === 'authenticated' && Boolean(user),
       isLoading: status === 'loading',
       isMfaRequired: status === 'mfa_required',
@@ -136,6 +142,8 @@ export function useAuth(options: UseAuthOptions = {}) {
       clearError,
       requestReset,
       confirmReset,
+      setupStatus,
+      isSetupStatusLoading,
     ]
   )
 }

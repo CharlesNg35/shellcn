@@ -26,7 +26,10 @@ export function MfaVerification() {
         </div>
       </div>
 
-      <MfaVerificationForm onSuccess={() => navigate('/dashboard', { replace: true })} />
+      <MfaVerificationForm
+        onSuccess={() => navigate('/dashboard', { replace: true })}
+        onFailure={() => navigate('/login?notice=mfa_failed', { replace: true })}
+      />
 
       <div className="text-center text-sm text-muted-foreground">
         Having trouble?{' '}
