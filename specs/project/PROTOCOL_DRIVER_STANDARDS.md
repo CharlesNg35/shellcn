@@ -24,6 +24,7 @@ Each driver receives its own spec file under `specs/project/drivers/<driver-id>.
 ## 3. Driver Registration Pipeline
 
 1. Driver package implements the `Driver` interface in `internal/drivers/driver.go`:
+
    ```go
    type Driver interface {
        // Metadata methods (required)
@@ -40,7 +41,9 @@ Each driver receives its own spec file under `specs/project/drivers/<driver-id>.
        Capabilities(ctx context.Context) (Capabilities, error)
    }
    ```
+
    **Implementation Tip**: Use `drivers.BaseDriver` to automatically implement metadata methods:
+
    ```go
    type SSHDriver struct {
        drivers.BaseDriver  // Embed for automatic metadata
@@ -162,11 +165,13 @@ Notes:
 The protocol registry layer has been **removed** to simplify the architecture:
 
 **Old Flow (Deprecated)**:
+
 ```
 Driver → Driver Registry → Protocol Registry → Database → API
 ```
 
 **New Flow (Current)**:
+
 ```
 Driver → Driver Registry → Database → API
          ↓
@@ -174,6 +179,7 @@ Driver → Driver Registry → Database → API
 ```
 
 **Key Changes**:
+
 - ❌ **Removed**: `internal/protocols/Registry` and `internal/protocols/Protocol`
 - ✅ **Driver interface now includes metadata methods** (ID, Name, Category, Icon, etc.)
 - ✅ **`ProtocolCatalogService.Sync()`** reads directly from drivers
@@ -181,6 +187,7 @@ Driver → Driver Registry → Database → API
 - ✅ **Database cache** still used for fast API responses
 
 **For New Drivers**:
+
 - Implement the full `Driver` interface OR use `drivers.BaseDriver` helper
 - No need to interact with protocol registry
 - All metadata comes from driver methods

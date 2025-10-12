@@ -6,7 +6,7 @@ This plan delivers Phase 3 of the Core module ([ROADMAP.md:37-41](../../ROADMAP.
 
 - Canonical **Connection** entities scoped to teams and users.
 - A scalable **driver system** that supports native Go clients, Rust FFI modules, and future proxy adapters.
-- Deterministic **availability rules** that combine driver readiness, configuration, row-level visibility, and modular permissions.
+- Deterministic **availability rules** that combine driver readiness, configuration, ownership-based access control with ResourcePermission grants, and modular permissions.
 - Service + API layers to power the `Connections` UI (creation, filtering, launch preview, sharing).
 - Auditability and fine-grained permissions aligned with `specs/project/project_spec.md` (remote access, credential vault).
 
@@ -24,7 +24,7 @@ This plan delivers Phase 3 of the Core module ([ROADMAP.md:37-41](../../ROADMAP.
 
 - **Protocol Driver** – the executable implementation that knows how to initiate a connection. Earlier documents referenced these as _modules_; protocol driver is now the canonical term.
 - **Protocol Definition** – catalog metadata produced by the driver registry (id, labels, sort order, capabilities).
-- **Connection** – a persisted record that references a protocol definition plus team visibility and identity bindings.
+- **Connection** – a persisted record that references a protocol definition plus ownership (user or team) and optional ResourcePermission grants for sharing.
 - **Capabilities** – feature flags a driver exposes (terminal, desktop, recording, metrics, extras) which guide permissions and UI elements.
 
 Legacy references in specs that still mention “module” should be interpreted as “protocol driver.” Each driver spec must comply with the standards in `specs/project/PROTOCOL_DRIVER_STANDARDS.md`.
@@ -35,13 +35,14 @@ Legacy references in specs that still mention “module” should be interpreted
 
 ### Tables & Relationships
 
-| Table                     | Purpose                                                                    |
-| ------------------------- | -------------------------------------------------------------------------- |
-| `connection_protocols`    | Snapshot of driver metadata + config enable state (registry mirror).       |
-| `connections`             | Base connection definition (name, protocol, org/team ownership, settings). |
-| `connection_targets`      | One-to-many endpoints (primary + fallback hosts, labels).                  |
-| `connection_visibilities` | Row-level ACL for teams and direct-user grants.                            |
-| `connection_labels`       | (Optional) Tagging table for filters/search (future).                      |
+| Table                   | Purpose                                                                    |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `connection_protocols`  | Snapshot of driver metadata + config enable state (registry mirror).       |
+| `connections`           | Base connection definition (name, protocol, org/team ownership, settings). |
+| `connection_targets`    | One-to-many endpoints (primary + fallback hosts, labels).                  |
+| `resource_permissions`  | Generic resource-based ACL for connections (and other resources).          |
+| `connection_folders`    | Organizational folders for grouping connections (optional).                |
+| `connection_labels`     | (Optional) Tagging table for filters/search (future).                      |
 
 ### GORM Models
 
@@ -74,19 +75,20 @@ func (c *ConnectionProtocol) IsAvailable() bool {
 ```go
 type Connection struct {
     BaseModel
-    Name           string  `gorm:"not null;uniqueIndex:conn_team_name" json:"name"`
-    Description    string  `json:"description"`
-    ProtocolID     string  `gorm:"not null;index" json:"protocol_id"`
-    TeamID         *string `gorm:"type:uuid;index;uniqueIndex:conn_team_name" json:"team_id"`
-    OwnerUserID    string  `gorm:"type:uuid;index" json:"owner_user_id"`
-    Metadata       string  `gorm:"type:json" json:"metadata"`
-    Settings       string  `gorm:"type:json" json:"settings"`
-    SecretID       *string `gorm:"type:uuid" json:"secret_id"`
-    LastUsedAt     *time.Time `json:"last_used_at"`
+    Name        string         `gorm:"not null;index" json:"name"`
+    Description string         `json:"description"`
+    ProtocolID  string         `gorm:"not null;index" json:"protocol_id"`
+    TeamID      *string        `gorm:"type:uuid;index" json:"team_id"`
+    OwnerUserID string         `gorm:"type:uuid;index" json:"owner_user_id"`
+    FolderID    *string        `gorm:"type:uuid;index" json:"folder_id"`
+    Metadata    datatypes.JSON `json:"metadata"`
+    Settings    datatypes.JSON `json:"settings"`
+    SecretID    *string        `gorm:"type:uuid" json:"secret_id"`
+    LastUsedAt  *time.Time     `json:"last_used_at"`
 
-    Protocol    *ConnectionProtocol   `gorm:"foreignKey:ProtocolID" json:"protocol,omitempty"`
-    Targets     []ConnectionTarget    `gorm:"foreignKey:ConnectionID" json:"targets,omitempty"`
-    Visibility  []ConnectionVisibility `gorm:"foreignKey:ConnectionID" json:"visibility,omitempty"`
+    Targets        []ConnectionTarget   `gorm:"foreignKey:ConnectionID" json:"targets,omitempty"`
+    ResourceGrants []ResourcePermission `gorm:"polymorphic:Resource;polymorphicValue:connection" json:"resource_grants,omitempty"`
+    Folder         *ConnectionFolder    `gorm:"foreignKey:FolderID" json:"folder,omitempty"`
 }
 ```
 
@@ -103,23 +105,42 @@ type ConnectionTarget struct {
 }
 ```
 
-**`internal/models/connection_visibility.go`**
+**`internal/models/resource_permission.go`**
 
 ```go
-type ConnectionVisibility struct {
+type ResourcePermission struct {
     BaseModel
-    ConnectionID    string  `gorm:"type:uuid;index" json:"connection_id"`
-    TeamID          *string `gorm:"type:uuid;index" json:"team_id"`
-    UserID          *string `gorm:"type:uuid;index" json:"user_id"`
-    PermissionScope string  `gorm:"type:varchar(32)" json:"permission_scope"` // view|use|manage
+    ResourceID    string         `gorm:"type:uuid;not null;index" json:"resource_id"`
+    ResourceType  string         `gorm:"type:varchar(64);not null;index" json:"resource_type"` // "connection", "folder", etc.
+    PrincipalID   string         `gorm:"type:uuid;not null;index" json:"principal_id"`
+    PrincipalType string         `gorm:"type:varchar(16);not null;index" json:"principal_type"` // "user", "team", "role"
+    PermissionID  string         `gorm:"type:varchar(128);not null;index" json:"permission_id"` // e.g., "connection.view", "connection.manage"
+    GrantedByID   *string        `gorm:"type:uuid;index" json:"granted_by_id"`
+    ExpiresAt     *time.Time     `json:"expires_at"`
+    Metadata      datatypes.JSON `json:"metadata"`
+}
+```
+
+**`internal/models/connection_folder.go`**
+
+```go
+type ConnectionFolder struct {
+    BaseModel
+    Name        string  `gorm:"not null;index" json:"name"`
+    Description string  `json:"description"`
+    TeamID      *string `gorm:"type:uuid;index" json:"team_id"`
+    OwnerUserID string  `gorm:"type:uuid;index" json:"owner_user_id"`
+    ParentID    *string `gorm:"type:uuid;index" json:"parent_id"` // For nested folders
 }
 ```
 
 Key points:
 
+- `ResourcePermission` is a **generic** system for fine-grained access control on any resource (not just connections).
 - Team-level scoping allows curated sets for squads.
-- Visibility table enables sharing with explicit users (similar to vault shares).
+- Resource-based permissions enable sharing with explicit users/teams/roles (similar to vault shares).
 - Connections without a team are personal to the owner user.
+- Connection folders provide organizational hierarchy (optional).
 
 ---
 
@@ -238,15 +259,15 @@ Config modules.<protocol>.enabled == true
         AND
 permission.Check(user, "connection.view") && permission.Check(user, "{protocol}.connect")
         AND
-VisibilityService.Allowed(user, connectionID or protocol scope)
+ResourcePermission grants OR ownership (user/team)
 ```
 
 - Driver readiness toggles `connection_protocols.driver_enabled`.
 - Configuration toggles `connection_protocols.config_enabled` (per tenant; default seeded from config file).
 - Permissions drawn from the modular system (see next section).
-- Visibility: per-connection access lists and team scoping.
+- Access control: Connections are accessible through direct ownership (OwnerUserID or TeamID membership) or explicit `ResourcePermission` grants with "connection.view" permission.
 
-Root users bypass all gates except visibility (they can still manage shares) per `project_spec`.
+Root users bypass all gates except access control (they can still manage resource permissions) per `project_spec`.
 
 ---
 
@@ -316,11 +337,9 @@ type CreateConnectionInput struct {
     Description    string
     ProtocolID     string
     TeamID         *string
+    FolderID       *string
     Metadata       map[string]any
     Settings       map[string]any
-    SecretRef      *vault.SecretRef
-    Targets        []ConnectionTargetInput
-    Visibility     []ConnectionVisibilityInput
 }
 ```
 
@@ -329,17 +348,26 @@ Behaviors:
 - Validate driver exists and is available (DriverEnabled + ConfigEnabled) before create.
 - Call driver `ValidateConfig` using provided settings.
 - Serialize `Settings` and `Metadata` as JSON; encrypt secret payloads via Credential Vault service when inline.
-- Manage `ConnectionVisibility` rows (team/user scopes). Enforce at least one scope when connection is team-owned.
+- Access control managed via `ResourcePermission` model with polymorphic resource relationships.
+- Connections are accessible through ownership (user or team) and explicit `ResourcePermission` grants.
 - Record audit entries: `connection.create`, `connection.update`, `connection.delete`, `connection.share`, `connection.launch.preview`.
-- Provide `ListForUser(ctx, userID, filter)` combining team membership and explicit share rows.
+- Provide `ListVisible(ctx, opts)` combining ownership, team membership, and explicit permission grants.
 
-### Visibility & Permission Enforcement
+### Access Control & Permission Enforcement
 
-`ConnectionService` checks permissions before mutating:
+`ConnectionService` enforces access control through multiple layers:
 
+**Access Layer**: Users can access connections through:
+- Direct ownership via `OwnerUserID`
+- Team ownership via `TeamID` (if user is team member)
+- Explicit `ResourcePermission` grants (with valid permission like "connection.view")
+
+**Operation Permissions**: Service checks permissions before mutating:
 - Create/Update/Delete require `connection.manage` + `permissions.Check(user, protocolID+".manage")` for driver-specific settings.
-- Share updates require `connection.share`.
+- Share updates (creating ResourcePermission grants) require `connection.share`.
 - Launch preview/test requires `connection.launch` + `{protocol}.connect`.
+
+The `ConnectionShareService` manages ResourcePermission creation and revocation for connection sharing.
 
 ---
 
@@ -372,12 +400,7 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
 ### Handler Responsibilities
 
 - `ProtocolHandler` orchestrates ProtocolService methods and handles permission errors gracefully.
-- `ConnectionHandler` binds/validates payloads (`internal/handlers/validation.go`), calls ConnectionService, and serializes visibility records.
-
-### Handler Responsibilities
-
-- `ProtocolHandler` orchestrates ProtocolService methods and handles permission errors gracefully.
-- `ConnectionHandler` binds/validates payloads (`internal/handlers/validation.go`), calls ConnectionService, and serializes visibility records.
+- `ConnectionHandler` binds/validates payloads (`internal/handlers/validation.go`), calls ConnectionService, and returns connection DTOs with share summaries (showing ResourcePermission grants relevant to the requesting user).
 
 ---
 
@@ -406,7 +429,7 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
 ### Types & API wrappers
 
 - `web/src/types/protocols.ts` – matches `ProtocolInfo` (id, title, icon, availability, capabilities).
-- `web/src/types/connections.ts` – connection payload with targets + visibility summary.
+- `web/src/types/connections.ts` – connection payload with targets + share summary (ResourcePermission grants).
 - `web/src/lib/api/protocols.ts` – fetch list/detail/test endpoints.
 - `web/src/lib/api/connections.ts` – CRUD for connections + share + preview.
 - `web/src/types/identities.ts` (future) – aligns identity payloads with driver credential requirements from driver specs.
@@ -436,7 +459,8 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
        &models.ConnectionProtocol{},
        &models.Connection{},
        &models.ConnectionTarget{},
-       &models.ConnectionVisibility{},
+       &models.ResourcePermission{},
+       &models.ConnectionFolder{},
    )
    ```
 2. Update seeding to call `protocols.RegisterPermissions()`, `permissions.Sync`, and `protocols.Sync(ctx, db, cfg)`.
@@ -450,7 +474,8 @@ All routes attach `middleware.RequirePermission(checker, <perm>)`. For preview a
 - **drivers/registry_test.go** – registration, duplicates, descriptor snapshot.
 - **protocols/sync_test.go** – driver + config interplay, config toggles, capability JSON output.
 - **services/protocol_service_test.go** – root vs. regular user, availability gating.
-- **services/connection_service_test.go** – validation, visibility filtering, permission enforcement, audit entries.
+- **services/connection_service_test.go** – validation, ownership filtering, ResourcePermission grants, permission enforcement, audit entries.
+- **services/connection_share_service_test.go** – share creation, permission grant management, principal resolution (users/teams).
 - **handlers/protocols_test.go** – API responses, permission middleware integration.
 - **handlers/connections_test.go** – CRUD flows and share endpoint.
 - **frontend** – React testing library for `Connections` page (filtering, actions) and hooks.
@@ -471,11 +496,11 @@ Mock utilities: add `testutil.NewDriverRegistry()` to isolate driver behaviors.
 
 - ✅ Driver registry successfully initializes native + FFI drivers, surfacing capability metadata.
 - ✅ Config toggles and driver health status produce consistent availability flags in API responses.
-- ✅ Connection CRUD respects team visibility and modular permissions.
+- ✅ Connection CRUD respects ownership (user/team) and ResourcePermission-based access control with modular permissions.
 - ✅ Protocol and connection endpoints integrate with middleware.Auth + RequirePermission.
 - ✅ Audit log entries create traceability for all connection/driver operations.
 - ✅ Frontend auto-updates connection tabs and cards based on API results.
-- ✅ Root users see/manage everything; team-scoped users only see what they should.
+- ✅ Users can only access connections they own, belong to their teams, or have explicit ResourcePermission grants for.
 
 ---
 

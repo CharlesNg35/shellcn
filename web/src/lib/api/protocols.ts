@@ -128,7 +128,7 @@ function transformProtocolPermission(raw: ProtocolPermissionResponse): ProtocolP
   }
 }
 
-function withStringValue(value: any) {
+function withStringValue(value: string | undefined): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined
 }
 
