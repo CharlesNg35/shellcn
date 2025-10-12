@@ -11,6 +11,10 @@ export function AuthLayout() {
   const { providers, loadProviders } = useAuth()
   const location = useLocation()
 
+  const redirectProviders = providers.filter(
+    (provider) => provider.enabled && (provider.flow ?? 'password') === 'redirect'
+  )
+
   useEffect(() => {
     if (!providers.length) {
       void loadProviders().catch(() => {
@@ -107,7 +111,7 @@ export function AuthLayout() {
             <Outlet />
 
             {/* SSO providers */}
-            {providers.length > 0 && !location.pathname.includes('/setup') && (
+            {redirectProviders.length > 0 && !location.pathname.includes('/setup') && (
               <div className="space-y-4">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
@@ -119,7 +123,7 @@ export function AuthLayout() {
                     </span>
                   </div>
                 </div>
-                <SSOButtons providers={providers} />
+                <SSOButtons providers={redirectProviders} />
               </div>
             )}
           </div>
