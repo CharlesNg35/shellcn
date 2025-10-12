@@ -2016,82 +2016,91 @@ server:
   port: 8000
 
 database:
-  driver: sqlite # sqlite, postgres, mysql
-  sqlite:
-    path: ./data/database.sqlite
-  postgres: # Optional
-    enabled: false
-    host: localhost
+  driver: postgres
+  postgres:
+    enabled: true
+    host: db.example.com
     port: 5432
-    database: shellcn
-    username: postgres
-    password: ${DB_PASSWORD}
-  mysql: # Optional
-    enabled: false
-    host: localhost
-    port: 3306
-    database: shellcn
-    username: root
-    password: ${DB_PASSWORD}
-
+    database: shellcn_prod
+    username: shellcn
+    password: secret
 cache:
   redis:
-    enabled: false
-    address: 127.0.0.1:6379
-    username: ""
-    password: ""
-    db: 0
-    tls: false
-    timeout: 5s
+    enabled: true
+    address: redis.example.com:6379
+    username: shellcn
+    password: redis-secret
+    db: 2
+    tls: true
+    timeout: 4s
 
 vault:
-  encryption_key: ${VAULT_ENCRYPTION_KEY}
+  encryption_key: super-secret-key
   algorithm: aes-256-gcm
-  key_rotation_days: 90
+  key_rotation_days: 60
 
 monitoring:
   prometheus:
     enabled: true
-    endpoint: /metrics
+    endpoint: /custom-metrics
   health_check:
     enabled: true
 
 features:
   session_sharing:
     enabled: true
-    max_shared_users: 5
-  clipboard_sync:
-    enabled: true
-    max_size_kb: 1024
+    max_shared_users: 8
   notifications:
     enabled: true
 
 protocols:
   ssh:
     enabled: true
-    default_port: 22
-    ssh_v1_enabled: false # Disabled by default (security)
-    ssh_v2_enabled: true
-    auto_reconnect: true
-    max_reconnect_attempts: 3
-    keepalive_interval: 60
   telnet:
+    enabled: false
+  sftp:
     enabled: true
-    default_port: 23
-    auto_reconnect: true
   rdp:
     enabled: true
-    default_port: 3389
   vnc:
     enabled: true
-    default_port: 5900
   docker:
+    enabled: true
+  kubernetes:
     enabled: true
   database:
     enabled: true
     mysql: true
-    postgres: true
+    postgres: false
     redis: true
+    mongodb: true
+  proxmox:
+    enabled: false
+  object_storage:
+    enabled: true
+
+auth:
+  jwt:
+    secret: jwt-secret
+    issuer: shellcn.test
+    access_token_ttl: 30m
+  session:
+    refresh_token_ttl: 1440h
+    refresh_token_length: 64
+  local:
+    lockout_threshold: 7
+    lockout_duration: 20m
+
+email:
+  smtp:
+    enabled: true
+    host: smtp.example.com
+    port: 2525
+    username: smtp-user
+    password: smtp-pass
+    from: no-reply@example.com
+    use_tls: true
+    timeout: 15s
 ```
 
 ---

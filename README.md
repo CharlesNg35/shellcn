@@ -1,36 +1,87 @@
 # ShellCN
 
-ShellCN is a web-based remote access platform for teams that need to manage SSH, RDP, VNC, Docker, Kubernetes, Database and more targets from a single control plane. It combines audited session management with an encrypted credential vault powered by a Go backend and a modern React frontend.
+A web-based platform for managing remote infrastructure access. Connect to SSH servers, Docker hosts, Kubernetes clusters, databases, and object storage from a single interface. Features encrypted credential vault, team collaboration, session recording, and comprehensive audit logging.
 
-## Highlights
+- Web-based interface accessible from any browser
+- Single binary deployment with embedded frontend
+- Encrypted credential vault for passwords and SSH keys
+- Fine-grained permissions and role-based access control
+- Session recording and audit logs
+- Team collaboration with connection sharing
 
-- Unified access gateway for shell, desktop, container, and database protocols
-- Granular role-based permissions with dependency resolution and auditing
-- Secure credential storage backed by AES-256-GCM and team-aware sharing
+## Features
 
-## Requirements
+### Supported Protocols
 
-- Go 1.24 or newer (CGO enabled when building Rust FFI modules)
-- Node.js 20 or newer with `pnpm`
+- **Terminal**: SSH (v1/v2), Telnet
+- **Remote Desktop**: RDP, VNC
+- **Containers**: Docker, Kubernetes
+- **Databases**: MySQL, PostgreSQL, MongoDB, Redis
+- **Object Storage**: S3, MinIO, Google Cloud Storage, Azure Blob
+
+### Security
+
+- **Credential Vault**: Store and share credentials securely with AES-256-GCM encryption
+- **Reusable Identities**: Create credential profiles that work across multiple connections
+- **Multi-Factor Authentication**: TOTP support for additional security
+- **Enterprise Authentication**: OIDC, SAML, LDAP/Active Directory integration
+- **Audit Trail**: Every action is logged for compliance and security review
+- **Session Recording**: Record terminal and desktop sessions for audit purposes
+
+### Collaboration
+
+- **Team Management**: Organize users into teams with shared access to connections
+- **Connection Sharing**: Share specific connections with team members or individuals
+- **Session Sharing**: Collaborate in real-time by sharing live terminal or desktop sessions
+- **Notifications**: Real-time alerts for shared sessions, permission changes, and system events
 
 ## Quick Start
+
+### Prerequisites
+
+- **Go**: 1.24 or newer
+- **Node.js**: 20+ with pnpm
+- **Docker**: For containerized deployment (optional)
 
 ### Local Development
 
 ```bash
+# Clone the repository
 git clone https://github.com/charlesng35/shellcn.git
 cd shellcn
+
+# Install dependencies
 make install
+
+# Start development environment (backend + frontend)
 make dev
 ```
 
-`make install` tidies Go modules and installs the frontend dependencies with `pnpm`. `make dev` launches the full-stack development environment defined in `scripts/dev.mjs`, running the Go API and the Vite dev server together.
+Open `http://localhost:8000` in your browser. You'll be prompted to create the first administrator account.
 
-### Docker Compose
+### Production Build
+
+```bash
+# Build the complete application
+make build
+
+# Run the binary
+./bin/shellcn
+```
+
+The application will:
+
+- Create a `./data/` directory for the SQLite database
+- Start the server on `http://localhost:8000`
+- Prompt you to create the first admin user on first launch
+
+## Docker Deployment
+
+### Docker Compose (Recommended)
+
+Create a `docker-compose.yml`:
 
 ```yaml
-version: "3.9"
-
 services:
   shellcn:
     image: ghcr.io/charlesng35/shellcn:latest
@@ -39,37 +90,115 @@ services:
     volumes:
       - shellcn-data:/var/lib/shellcn
     environment:
-      SHELLCN_AUTH_JWT_SECRET: "replace-with-strong-secret"
+      # Required: JWT secret for token signing
+      SHELLCN_AUTH_JWT_SECRET: "change-this-to-a-strong-secret"
+
+      # Optional: Vault encryption key
+      SHELLCN_VAULT_ENCRYPTION_KEY: "change-this-to-a-strong-key"
+
+      # Optional: Use PostgreSQL instead of SQLite
+      # SHELLCN_DATABASE_DRIVER: postgres
+      # SHELLCN_DATABASE_POSTGRES_ENABLED: true
+      # SHELLCN_DATABASE_POSTGRES_HOST: postgres
+      # SHELLCN_DATABASE_POSTGRES_DATABASE: shellcn
+      # SHELLCN_DATABASE_POSTGRES_USERNAME: shellcn
+      # SHELLCN_DATABASE_POSTGRES_PASSWORD: your-password
 
 volumes:
   shellcn-data:
-    driver: local
 ```
 
-Set `SHELLCN_AUTH_JWT_SECRET` to a strong value so the API can issue and validate tokens.
+Start the application:
+
+```bash
+docker-compose up -d
+```
+
+### Standalone Docker
+
+```bash
+docker run -d \
+  --name shellcn \
+  -p 8000:8000 \
+  -v shellcn-data:/var/lib/shellcn \
+  -e SHELLCN_AUTH_JWT_SECRET="your-strong-secret-here" \
+  -e SHELLCN_VAULT_ENCRYPTION_KEY="your-vault-key-here" \
+  ghcr.io/charlesng35/shellcn:latest
+```
+
+### Access the Application
+
+1. Open `http://localhost:8000` in your browser
+2. Complete the first-time setup wizard to create your admin account
+3. Start adding connections and managing your infrastructure
 
 ## Configuration
 
-Configuration defaults to `config/config.yaml`, and every value can be overridden with environment variables prefixed with `SHELLCN_`.
+All configuration can be managed through environment variables with the `SHELLCN_` prefix:
 
 ```bash
-# Example overrides
-export SHELLCN_SERVER_PORT=9090
-export SHELLCN_DATABASE_DRIVER=postgres
-export SHELLCN_DATABASE_POSTGRES_ENABLED=true
-export SHELLCN_DATABASE_POSTGRES_PASSWORD="p@ssw0rd"
+# Server
+SHELLCN_SERVER_PORT=8000
+
+# Database (default: SQLite)
+SHELLCN_DATABASE_DRIVER=sqlite
+SHELLCN_DATABASE_SQLITE_PATH=./data/database.sqlite
+
+# Vault encryption
+SHELLCN_VAULT_ENCRYPTION_KEY=your-32-byte-encryption-key
+
+# Authentication
+SHELLCN_AUTH_JWT_SECRET=your-jwt-secret
+SHELLCN_AUTH_JWT_EXPIRY=24h
+
+# Protocol toggles
+SHELLCN_PROTOCOLS_SSH_ENABLED=true
+SHELLCN_PROTOCOLS_RDP_ENABLED=true
+SHELLCN_PROTOCOLS_VNC_ENABLED=true
+SHELLCN_PROTOCOLS_DOCKER_ENABLED=true
+SHELLCN_PROTOCOLS_DATABASE_ENABLED=true
+
+# Optional: Redis for caching
+SHELLCN_CACHE_REDIS_ENABLED=false
+SHELLCN_CACHE_REDIS_ADDRESS=localhost:6379
 ```
 
-For the complete list of supported environment variables and Docker deployment guidance, review `docs/dockers.md`.
+See `config/config.yaml` for all available options.
+
+## Development
+
+### Available Commands
+
+```bash
+# Development
+make dev            # Start full-stack development (hot reload)
+make dev-server     # Backend only
+make dev-web        # Frontend only
+
+# Building
+make build          # Build production binary
+make build-go       # Build backend only
+make build-web      # Build frontend only
+
+# Testing
+make test           # Run all tests
+make test-web       # Frontend tests only
+make test-cover     # Go tests with coverage
+
+# Code Quality
+make lint           # Run linters
+make fmt            # Format code
+make clean          # Remove build artifacts
+```
 
 ## Contributing
 
-We welcome pull requests. Before you start, make sure you have Go 1.24+, Node.js 20+, and `pnpm` installed locally.
-
-1. Clone the repository and run `make install` to prepare Go modules and frontend dependencies.
-2. Run `make dev` for the full-stack development loop, or `make dev-server` / `make dev-web` if you want to focus on a single service.
-3. Create a feature branch, commit your changes, and open a pull request against `main`.
+Contributions are welcome! Fork the repository, make your changes, and submit a pull request.
 
 ## License
 
-This project is licensed under the MIT License. See `LICENSE` for the full text.
+MIT License - see `LICENSE` file for details.
+
+---
+
+Built for teams that need secure, audited access to their infrastructure.
