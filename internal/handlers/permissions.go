@@ -17,8 +17,8 @@ type PermissionHandler struct {
 	svc *services.PermissionService
 }
 
-func NewPermissionHandler(db *gorm.DB) (*PermissionHandler, error) {
-	svc, err := services.NewPermissionService(db)
+func NewPermissionHandler(db *gorm.DB, audit *services.AuditService) (*PermissionHandler, error) {
+	svc, err := services.NewPermissionService(db, audit)
 	if err != nil {
 		return nil, err
 	}

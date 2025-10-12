@@ -96,7 +96,10 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		}
 	}
 
-	inviteSvc, err := services.NewInviteService(db, mailer, services.WithInviteBaseURL("/invite/accept"))
+	inviteSvc, err := services.NewInviteService(db, mailer,
+		services.WithInviteBaseURL("/invite/accept"),
+		services.WithInviteAuditService(auditSvc),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +177,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	registerProfileRoutes(api, profileHandler)
 
 	// Permissions
-	permHandler, err := handlers.NewPermissionHandler(db)
+	permHandler, err := handlers.NewPermissionHandler(db, auditSvc)
 	if err != nil {
 		return nil, err
 	}

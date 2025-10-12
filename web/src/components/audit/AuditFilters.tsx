@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarRange, Filter, RefreshCcw } from 'lucide-react'
+import { Filter, RefreshCcw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import type { AuditLogResult } from '@/types/audit'
@@ -84,83 +84,77 @@ export function AuditFilters({ filters, onChange }: AuditFiltersProps) {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="space-y-4">
         <Input
+          label="Search"
           aria-label="Search audit logs"
           placeholder="Search by actor, action, resource, or metadata…"
           value={searchValue}
           onChange={(event) => setSearchValue(event.target.value)}
         />
 
-        <Input
-          aria-label="Filter by action"
-          placeholder="Action (e.g. user.create)"
-          value={filters.action ?? ''}
-          onChange={(event) => onChange({ ...filters, action: normalizeValue(event.target.value) })}
-        />
-
-        <Input
-          aria-label="Filter by resource"
-          placeholder="Resource (e.g. user:usr_123)"
-          value={filters.resource ?? ''}
-          onChange={(event) =>
-            onChange({ ...filters, resource: normalizeValue(event.target.value) })
-          }
-        />
-
-        <Input
-          aria-label="Filter by actor"
-          placeholder="Actor username"
-          value={filters.actor ?? ''}
-          onChange={(event) => onChange({ ...filters, actor: normalizeValue(event.target.value) })}
-        />
-
-        <div className="flex flex-col gap-2">
-          <label
-            className="text-xs font-medium text-muted-foreground"
-            htmlFor="audit-result-filter"
-          >
-            Result
-          </label>
-          <select
-            id="audit-result-filter"
-            className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={activeResult}
-            onChange={(event) =>
-              onChange({
-                ...filters,
-                result: event.target.value as AuditFilterState['result'],
-              })
-            }
-          >
-            {RESULT_OPTIONS.map((option) => (
-              <option key={option.value ?? 'all'} value={option.value ?? 'all'}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <CalendarRange className="h-4 w-4" />
-            <span>From</span>
-          </label>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Input
+            label="Action"
+            placeholder="e.g. user.create"
+            value={filters.action ?? ''}
+            onChange={(event) =>
+              onChange({ ...filters, action: normalizeValue(event.target.value) })
+            }
+          />
+          <Input
+            label="Resource"
+            placeholder="e.g. user:usr_123"
+            value={filters.resource ?? ''}
+            onChange={(event) =>
+              onChange({ ...filters, resource: normalizeValue(event.target.value) })
+            }
+          />
+          <Input
+            label="Actor"
+            placeholder="Username or email"
+            value={filters.actor ?? ''}
+            onChange={(event) =>
+              onChange({ ...filters, actor: normalizeValue(event.target.value) })
+            }
+          />
+          <div className="flex flex-col gap-2">
+            <label
+              className="text-xs font-medium text-muted-foreground"
+              htmlFor="audit-result-filter"
+            >
+              Result
+            </label>
+            <select
+              id="audit-result-filter"
+              className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={activeResult}
+              onChange={(event) =>
+                onChange({
+                  ...filters,
+                  result: event.target.value as AuditFilterState['result'],
+                })
+              }
+            >
+              {RESULT_OPTIONS.map((option) => (
+                <option key={option.value ?? 'all'} value={option.value ?? 'all'}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Input
+            label="From date"
             type="date"
             value={filters.from ?? ''}
             onChange={(event) => onChange({ ...filters, from: event.target.value || undefined })}
             aria-label="Filter from date"
           />
-        </div>
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <CalendarRange className="h-4 w-4" />
-            <span>To</span>
-          </label>
           <Input
+            label="To date"
             type="date"
             value={filters.to ?? ''}
             onChange={(event) => onChange({ ...filters, to: event.target.value || undefined })}

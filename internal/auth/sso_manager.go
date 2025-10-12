@@ -90,6 +90,16 @@ func (m *SSOManager) Resolve(ctx context.Context, identity providers.Identity, o
 
 	meta := opts.SessionMeta
 
+	if meta.Claims == nil {
+		meta.Claims = make(map[string]any)
+	}
+	if _, exists := meta.Claims["username"]; !exists && strings.TrimSpace(user.Username) != "" {
+		meta.Claims["username"] = user.Username
+	}
+	if _, exists := meta.Claims["email"]; !exists && strings.TrimSpace(user.Email) != "" {
+		meta.Claims["email"] = strings.ToLower(strings.TrimSpace(user.Email))
+	}
+
 	subjectClaims := make(map[string]any)
 	for k, v := range identity.RawClaims {
 		if k != "" {

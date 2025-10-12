@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/charlesng35/shellcn/internal/auditctx"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/pkg/errors"
 	"github.com/charlesng35/shellcn/pkg/response"
@@ -42,6 +43,23 @@ func Auth(jwt *iauth.JWTService) gin.HandlerFunc {
 		if claims.SessionID != "" {
 			c.Set(CtxSessionIDKey, claims.SessionID)
 		}
+
+		actor := auditctx.Actor{
+			UserID:    claims.UserID,
+			IPAddress: c.ClientIP(),
+			UserAgent: c.Request.UserAgent(),
+		}
+		if claims.Metadata != nil {
+			if username, ok := claims.Metadata["username"].(string); ok {
+				actor.Username = strings.TrimSpace(username)
+			}
+		}
+		if actor.Username == "" {
+			actor.Username = claims.UserID
+		}
+
+		ctx := auditctx.WithActor(c.Request.Context(), actor)
+		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 	}

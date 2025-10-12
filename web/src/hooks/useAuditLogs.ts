@@ -26,7 +26,9 @@ export function useAuditLogs(
       return undefined
     }
     const { search: _search, ...rest } = params
-    void _search
+    if (typeof _search !== 'undefined') {
+      // search is applied client-side for now
+    }
     return rest
   }, [params])
 

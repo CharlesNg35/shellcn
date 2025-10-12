@@ -139,7 +139,7 @@ func setupPermissionServiceTest(t *testing.T) (*gorm.DB, *PermissionService) {
 	))
 	require.NoError(t, permissions.Sync(context.Background(), db))
 
-	svc, err := NewPermissionService(db)
+	svc, err := NewPermissionService(db, nil)
 	require.NoError(t, err)
 
 	sqlDB, err := db.DB()

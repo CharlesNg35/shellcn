@@ -32,6 +32,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 
 	var filters services.AuditFilters
 	filters.UserID = c.Query("user_id")
+	filters.Actor = c.Query("actor")
 	filters.Action = c.Query("action")
 	filters.Result = c.Query("result")
 	filters.Resource = c.Query("resource")
@@ -60,6 +61,7 @@ func (h *AuditHandler) List(c *gin.Context) {
 func (h *AuditHandler) Export(c *gin.Context) {
 	var filters services.AuditFilters
 	filters.UserID = c.Query("user_id")
+	filters.Actor = c.Query("actor")
 	filters.Action = c.Query("action")
 	filters.Result = c.Query("result")
 	filters.Resource = c.Query("resource")

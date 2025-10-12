@@ -24,15 +24,19 @@ var (
 
 // PermissionService provides role management and permission assignment helpers.
 type PermissionService struct {
-	db *gorm.DB
+	db           *gorm.DB
+	auditService *AuditService
 }
 
 // NewPermissionService constructs a PermissionService using the provided database handle.
-func NewPermissionService(db *gorm.DB) (*PermissionService, error) {
+func NewPermissionService(db *gorm.DB, audit *AuditService) (*PermissionService, error) {
 	if db == nil {
 		return nil, errors.New("permission service: db is required")
 	}
-	return &PermissionService{db: db}, nil
+	return &PermissionService{
+		db:           db,
+		auditService: audit,
+	}, nil
 }
 
 // CreateRoleInput describes the payload accepted by CreateRole.
@@ -69,6 +73,16 @@ func (s *PermissionService) CreateRole(ctx context.Context, input CreateRoleInpu
 		}
 		return nil, fmt.Errorf("permission service: create role: %w", err)
 	}
+
+	recordAudit(s.auditService, ctx, AuditEntry{
+		Action:   "role.create",
+		Resource: role.ID,
+		Result:   "success",
+		Metadata: map[string]any{
+			"name":      role.Name,
+			"is_system": role.IsSystem,
+		},
+	})
 
 	return role, nil
 }
@@ -114,6 +128,13 @@ func (s *PermissionService) UpdateRole(ctx context.Context, roleID string, input
 		return nil, fmt.Errorf("permission service: reload role: %w", err)
 	}
 
+	recordAudit(s.auditService, ctx, AuditEntry{
+		Action:   "role.update",
+		Resource: role.ID,
+		Result:   "success",
+		Metadata: updates,
+	})
+
 	return &role, nil
 }
 
@@ -144,6 +165,15 @@ func (s *PermissionService) DeleteRole(ctx context.Context, roleID string) error
 		return fmt.Errorf("permission service: delete role: %w", err)
 	}
 
+	recordAudit(s.auditService, ctx, AuditEntry{
+		Action:   "role.delete",
+		Resource: role.ID,
+		Result:   "success",
+		Metadata: map[string]any{
+			"name": role.Name,
+		},
+	})
+
 	return nil
 }
 
@@ -162,7 +192,9 @@ func (s *PermissionService) ListRoles(ctx context.Context) ([]models.Role, error
 func (s *PermissionService) SetRolePermissions(ctx context.Context, roleID string, permissionIDs []string) error {
 	ctx = ensureContext(ctx)
 
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	var applied []string
+
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var role models.Role
 		if err := tx.First(&role, "id = ?", roleID).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -181,6 +213,7 @@ func (s *PermissionService) SetRolePermissions(ctx context.Context, roleID strin
 		}
 
 		if len(finalSet) == 0 {
+			applied = []string{}
 			return tx.Model(&role).Association("Permissions").Clear()
 		}
 
@@ -189,6 +222,7 @@ func (s *PermissionService) SetRolePermissions(ctx context.Context, roleID strin
 			ids = append(ids, id)
 		}
 		sort.Strings(ids)
+		applied = ids
 
 		var perms []models.Permission
 		if err := tx.Where("id IN ?", ids).Find(&perms).Error; err != nil {
@@ -204,6 +238,20 @@ func (s *PermissionService) SetRolePermissions(ctx context.Context, roleID strin
 
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	recordAudit(s.auditService, ctx, AuditEntry{
+		Action:   "role.set_permissions",
+		Resource: roleID,
+		Result:   "success",
+		Metadata: map[string]any{
+			"permission_ids": applied,
+		},
+	})
+
+	return nil
 }
 
 func expandWithDependencies(permissionIDs []string) (map[string]struct{}, error) {

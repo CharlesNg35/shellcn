@@ -69,10 +69,18 @@ func WithInviteClock(clock func() time.Time) InviteOption {
 	}
 }
 
+// WithInviteAuditService attaches an AuditService used to record invite lifecycle events.
+func WithInviteAuditService(audit *AuditService) InviteOption {
+	return func(s *InviteService) {
+		s.audit = audit
+	}
+}
+
 // InviteService manages generation and consumption of user invite tokens.
 type InviteService struct {
 	db          *gorm.DB
 	mailer      mail.Mailer
+	audit       *AuditService
 	baseURL     string
 	expiry      time.Duration
 	tokenLength int
@@ -88,6 +96,7 @@ func NewInviteService(db *gorm.DB, mailer mail.Mailer, opts ...InviteOption) (*I
 	service := &InviteService{
 		db:          db,
 		mailer:      mailer,
+		audit:       nil,
 		expiry:      defaultInviteExpiry,
 		tokenLength: defaultInviteTokenBytes,
 		now:         time.Now,
@@ -137,6 +146,16 @@ func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy str
 	}
 
 	link = s.inviteLink(rawToken)
+
+	recordAudit(s.audit, ctx, AuditEntry{
+		Action:   "invite.create",
+		Resource: invite.ID,
+		Result:   "success",
+		Metadata: map[string]any{
+			"email":      invite.Email,
+			"invited_by": strings.TrimSpace(invitedBy),
+		},
+	})
 
 	if s.mailer != nil {
 		message := mail.Message{
@@ -236,6 +255,12 @@ func (s *InviteService) AcceptInvite(ctx context.Context, inviteID string) error
 		return ErrInviteNotFound
 	}
 
+	recordAudit(s.audit, ctx, AuditEntry{
+		Action:   "invite.accept",
+		Resource: inviteID,
+		Result:   "success",
+	})
+
 	return nil
 }
 
@@ -290,6 +315,15 @@ func (s *InviteService) Delete(ctx context.Context, inviteID string) error {
 	if err := s.db.WithContext(ctx).Delete(&models.UserInvite{}, "id = ?", inviteID).Error; err != nil {
 		return fmt.Errorf("invite service: delete invite: %w", err)
 	}
+
+	recordAudit(s.audit, ctx, AuditEntry{
+		Action:   "invite.delete",
+		Resource: invite.ID,
+		Result:   "success",
+		Metadata: map[string]any{
+			"email": invite.Email,
+		},
+	})
 
 	return nil
 }

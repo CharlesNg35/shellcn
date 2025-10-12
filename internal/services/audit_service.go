@@ -29,6 +29,7 @@ type AuditEntry struct {
 // AuditFilters encapsulates optional filters when querying audit logs.
 type AuditFilters struct {
 	UserID   string
+	Actor    string
 	Action   string
 	Result   string
 	Resource string
@@ -170,6 +171,10 @@ func (s *AuditService) CleanupOlderThan(ctx context.Context, retentionDays int) 
 func applyAuditFilters(query *gorm.DB, filters AuditFilters) *gorm.DB {
 	if filters.UserID != "" {
 		query = query.Where("user_id = ?", filters.UserID)
+	}
+	if filters.Actor != "" {
+		pattern := "%" + strings.ToLower(strings.TrimSpace(filters.Actor)) + "%"
+		query = query.Where("LOWER(username) LIKE ?", pattern)
 	}
 	if filters.Action != "" {
 		query = query.Where("action = ?", filters.Action)

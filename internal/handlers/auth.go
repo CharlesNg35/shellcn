@@ -276,6 +276,10 @@ func (h *AuthHandler) handleLocalLogin(c *gin.Context, req loginRequest) {
 		challengeID, ttl, err := h.sessions.CreateMFAChallenge(user.ID, iauth.SessionMetadata{
 			IPAddress: c.ClientIP(),
 			UserAgent: c.Request.UserAgent(),
+			Claims: map[string]any{
+				"username": user.Username,
+				"email":    user.Email,
+			},
 		})
 		if err != nil {
 			metrics.AuthAttempts.WithLabelValues("failure").Inc()
@@ -312,6 +316,10 @@ func (h *AuthHandler) handleLocalLogin(c *gin.Context, req loginRequest) {
 	pair, _, err := h.sessions.CreateSession(user.ID, iauth.SessionMetadata{
 		IPAddress: c.ClientIP(),
 		UserAgent: c.Request.UserAgent(),
+		Claims: map[string]any{
+			"username": user.Username,
+			"email":    user.Email,
+		},
 	})
 	if err != nil {
 		metrics.AuthAttempts.WithLabelValues("failure").Inc()
@@ -430,23 +438,25 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		return
 	}
 
+	var user models.User
+	if err := h.db.Take(&user, "id = ?", userID).Error; err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+
 	meta.IPAddress = c.ClientIP()
 	meta.UserAgent = c.Request.UserAgent()
+	if meta.Claims == nil {
+		meta.Claims = make(map[string]any)
+	}
+	meta.Claims["username"] = user.Username
+	meta.Claims["email"] = user.Email
 	if req.RememberDevice {
-		if meta.Claims == nil {
-			meta.Claims = make(map[string]any)
-		}
 		meta.Claims["mfa_remember"] = true
 	}
 
 	pair, _, err := h.sessions.CreateSession(userID, meta)
 	if err != nil {
-		response.Error(c, errors.ErrInternalServer)
-		return
-	}
-
-	var user models.User
-	if err := h.db.Take(&user, "id = ?", userID).Error; err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
