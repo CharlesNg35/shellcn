@@ -110,6 +110,40 @@ func (r *Registry) Capabilities(ctx context.Context, id string) (Capabilities, e
 	return caps, nil
 }
 
+// AllIDs returns a sorted slice of all registered driver IDs.
+func (r *Registry) AllIDs() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	ids := make([]string, 0, len(r.drivers))
+	for id := range r.drivers {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// All returns all registered drivers sorted by SortOrder then ID.
+func (r *Registry) All() []Driver {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	drivers := make([]Driver, 0, len(r.drivers))
+	for _, drv := range r.drivers {
+		drivers = append(drivers, drv)
+	}
+
+	sort.SliceStable(drivers, func(i, j int) bool {
+		si, sj := drivers[i].SortOrder(), drivers[j].SortOrder()
+		if si == sj {
+			return drivers[i].ID() < drivers[j].ID()
+		}
+		return si < sj
+	})
+
+	return drivers
+}
+
 // Reset clears the registry. Exported for testing only.
 func (r *Registry) Reset() {
 	r.mu.Lock()

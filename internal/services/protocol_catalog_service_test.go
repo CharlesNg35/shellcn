@@ -12,16 +12,21 @@ import (
 	"github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/protocols"
 )
 
 type mockDriver struct {
-	desc        drivers.Descriptor
+	drivers.BaseDriver
 	caps        drivers.Capabilities
 	healthError error
 }
 
-func (m *mockDriver) Descriptor() drivers.Descriptor { return m.desc }
+func newMockDriver(desc drivers.Descriptor, caps drivers.Capabilities, healthErr error) *mockDriver {
+	return &mockDriver{
+		BaseDriver:  drivers.NewBaseDriver(desc),
+		caps:        caps,
+		healthError: healthErr,
+	}
+}
 
 func (m *mockDriver) Capabilities(ctx context.Context) (drivers.Capabilities, error) {
 	if m.caps.Extras == nil {
@@ -36,18 +41,16 @@ func TestProtocolCatalogSyncPersistsRecords(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 
 	driverReg := drivers.NewRegistry()
-	driverReg.MustRegister(&mockDriver{
-		desc: drivers.Descriptor{ID: "ssh", Module: "ssh", Title: "Secure Shell", SortOrder: 1},
-		caps: drivers.Capabilities{Terminal: true, FileTransfer: true},
-	})
-	driverReg.MustRegister(&mockDriver{
-		desc:        drivers.Descriptor{ID: "rdp", Module: "rdp", Title: "Remote Desktop", SortOrder: 2},
-		caps:        drivers.Capabilities{Desktop: true},
-		healthError: errors.New("rdp driver offline"),
-	})
-
-	protoReg := protocols.NewRegistry()
-	require.NoError(t, protoReg.SyncFromDrivers(context.Background(), driverReg))
+	driverReg.MustRegister(newMockDriver(
+		drivers.Descriptor{ID: "ssh", Module: "ssh", Title: "Secure Shell", SortOrder: 1},
+		drivers.Capabilities{Terminal: true, FileTransfer: true},
+		nil,
+	))
+	driverReg.MustRegister(newMockDriver(
+		drivers.Descriptor{ID: "rdp", Module: "rdp", Title: "Remote Desktop", SortOrder: 2},
+		drivers.Capabilities{Desktop: true},
+		errors.New("rdp driver offline"),
+	))
 
 	cfg := &app.Config{}
 	cfg.Protocols.SSH.Enabled = true
@@ -55,7 +58,7 @@ func TestProtocolCatalogSyncPersistsRecords(t *testing.T) {
 
 	svc, err := NewProtocolCatalogService(db)
 	require.NoError(t, err)
-	require.NoError(t, svc.Sync(context.Background(), protoReg, driverReg, cfg))
+	require.NoError(t, svc.Sync(context.Background(), driverReg, cfg))
 
 	var records []models.ConnectionProtocol
 	require.NoError(t, db.Find(&records).Error)

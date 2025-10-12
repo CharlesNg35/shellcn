@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"gorm.io/datatypes"
@@ -14,7 +15,6 @@ import (
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/protocols"
 )
 
 // ProtocolCatalogService persists protocol metadata sourced from driver registries.
@@ -30,54 +30,66 @@ func NewProtocolCatalogService(db *gorm.DB) (*ProtocolCatalogService, error) {
 	return &ProtocolCatalogService{db: db}, nil
 }
 
-// Sync synchronises the protocol registry into the connection_protocols table.
-func (s *ProtocolCatalogService) Sync(ctx context.Context, protoReg *protocols.Registry, driverReg *drivers.Registry, cfg *app.Config) error {
-	if protoReg == nil {
-		return errors.New("protocol catalog service: protocol registry is required")
+// Sync synchronises driver metadata into the connection_protocols table.
+func (s *ProtocolCatalogService) Sync(ctx context.Context, driverReg *drivers.Registry, cfg *app.Config) error {
+	if driverReg == nil {
+		return errors.New("protocol catalog service: driver registry is required")
 	}
 
 	ctx = ensureContext(ctx)
-	records := protoReg.GetAll()
+	allDrivers := driverReg.All()
 	tx := s.db.WithContext(ctx)
 
-	for _, proto := range records {
+	for _, drv := range allDrivers {
+		// Check driver health
 		driverEnabled := true
-		if driverReg != nil {
-			if drv, ok := driverReg.Get(proto.DriverID); ok {
-				if reporter, ok := drv.(drivers.HealthReporter); ok {
-					if err := reporter.HealthCheck(ctx); err != nil {
-						driverEnabled = false
-					}
-				}
+		if reporter, ok := drv.(drivers.HealthReporter); ok {
+			if err := reporter.HealthCheck(ctx); err != nil {
+				driverEnabled = false
 			}
 		}
 
-		configEnabled := protocolEnabled(cfg, proto.Module, proto.ID)
+		// Get capabilities
+		caps, err := drv.Capabilities(ctx)
+		if err != nil {
+			return fmt.Errorf("protocol catalog service: get capabilities for %s: %w", drv.ID(), err)
+		}
+		if caps.Extras == nil {
+			caps.Extras = map[string]bool{}
+		}
 
-		featuresJSON, err := json.Marshal(proto.Features)
+		// Check config
+		configEnabled := protocolEnabled(cfg, drv.Module(), drv.ID())
+
+		// Map capabilities to features
+		features := mapCapabilitiesToFeatures(caps)
+		featuresJSON, err := json.Marshal(features)
 		if err != nil {
 			return fmt.Errorf("protocol catalog service: marshal features: %w", err)
 		}
-		capabilitiesJSON, err := json.Marshal(proto.Capabilities)
+		capabilitiesJSON, err := json.Marshal(caps)
 		if err != nil {
 			return fmt.Errorf("protocol catalog service: marshal capabilities: %w", err)
 		}
 
-		name := proto.Title
+		name := drv.Name()
 		if strings.TrimSpace(name) == "" {
-			name = strings.ToUpper(proto.ID)
+			name = strings.ToUpper(drv.ID())
 		}
+
+		description := drv.Description()
+		defaultPort := drv.DefaultPort()
 
 		record := models.ConnectionProtocol{
 			Name:          name,
-			ProtocolID:    proto.ID,
-			DriverID:      proto.DriverID,
-			Module:        proto.Module,
-			Icon:          proto.Icon,
-			Category:      proto.Category,
-			Description:   proto.Description,
-			DefaultPort:   proto.DefaultPort,
-			SortOrder:     proto.SortOrder,
+			ProtocolID:    drv.ID(),
+			DriverID:      drv.ID(),
+			Module:        drv.Module(),
+			Icon:          drv.Icon(),
+			Category:      drv.Category(),
+			Description:   description,
+			DefaultPort:   defaultPort,
+			SortOrder:     drv.SortOrder(),
 			Features:      datatypes.JSON(featuresJSON),
 			Capabilities:  datatypes.JSON(capabilitiesJSON),
 			DriverEnabled: driverEnabled,
@@ -88,7 +100,7 @@ func (s *ProtocolCatalogService) Sync(ctx context.Context, protoReg *protocols.R
 			Columns:   []clause.Column{{Name: "protocol_id"}},
 			DoUpdates: clause.AssignmentColumns([]string{"name", "driver_id", "module", "icon", "category", "description", "default_port", "sort_order", "features", "capabilities", "driver_enabled", "config_enabled"}),
 		}).Create(&record).Error; err != nil {
-			return fmt.Errorf("protocol catalog service: upsert protocol %s: %w", proto.ID, err)
+			return fmt.Errorf("protocol catalog service: upsert protocol %s: %w", drv.ID(), err)
 		}
 	}
 
@@ -138,4 +150,40 @@ func protocolEnabled(cfg *app.Config, module string, protocolID string) bool {
 	default:
 		return true
 	}
+}
+
+func mapCapabilitiesToFeatures(caps drivers.Capabilities) []string {
+	features := make([]string, 0, 8)
+	if caps.Terminal {
+		features = append(features, "terminal")
+	}
+	if caps.Desktop {
+		features = append(features, "desktop")
+	}
+	if caps.FileTransfer {
+		features = append(features, "file_transfer")
+	}
+	if caps.Clipboard {
+		features = append(features, "clipboard")
+	}
+	if caps.SessionRecording {
+		features = append(features, "session_recording")
+	}
+	if caps.Metrics {
+		features = append(features, "metrics")
+	}
+	if caps.Reconnect {
+		features = append(features, "reconnect")
+	}
+	if len(caps.Extras) > 0 {
+		keys := make([]string, 0, len(caps.Extras))
+		for key, enabled := range caps.Extras {
+			if enabled {
+				keys = append(keys, key)
+			}
+		}
+		sort.Strings(keys)
+		features = append(features, keys...)
+	}
+	return features
 }

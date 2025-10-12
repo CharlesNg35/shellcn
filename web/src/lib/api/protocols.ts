@@ -117,25 +117,19 @@ function transformProtocolPermission(raw: ProtocolPermissionResponse): ProtocolP
 
   return {
     id,
-    display_name:
-      typeof raw.display_name === 'string' && raw.display_name.trim().length > 0
-        ? raw.display_name
-        : undefined,
-    description:
-      typeof raw.description === 'string' && raw.description.trim().length > 0
-        ? raw.description
-        : undefined,
-    category:
-      typeof raw.category === 'string' && raw.category.trim().length > 0 ? raw.category : undefined,
-    default_scope:
-      typeof raw.default_scope === 'string' && raw.default_scope.trim().length > 0
-        ? raw.default_scope
-        : undefined,
-    module: typeof raw.module === 'string' && raw.module.trim().length > 0 ? raw.module : undefined,
+    display_name: withStringValue(raw.display_name),
+    description: withStringValue(raw.description),
+    category: withStringValue(raw.category),
+    default_scope: withStringValue(raw.default_scope),
+    module: withStringValue(raw.module),
     depends_on: normalizeStringArrayPayload(raw.depends_on),
     implies: normalizeStringArrayPayload(raw.implies),
     metadata,
   }
+}
+
+function withStringValue(value: any) {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined
 }
 
 function transformProtocol(raw: ProtocolResponse): Protocol {

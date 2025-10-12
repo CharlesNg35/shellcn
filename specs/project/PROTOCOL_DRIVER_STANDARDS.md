@@ -23,13 +23,52 @@ Each driver receives its own spec file under `specs/project/drivers/<driver-id>.
 
 ## 3. Driver Registration Pipeline
 
-1. Driver package implements interfaces in `internal/drivers/driver.go`.
+1. Driver package implements the `Driver` interface in `internal/drivers/driver.go`:
+   ```go
+   type Driver interface {
+       // Metadata methods (required)
+       ID() string
+       Name() string
+       Module() string
+       Category() string
+       Icon() string
+       Description() string
+       DefaultPort() int
+       SortOrder() int
+
+       // Capabilities (required)
+       Capabilities(ctx context.Context) (Capabilities, error)
+   }
+   ```
+   **Implementation Tip**: Use `drivers.BaseDriver` to automatically implement metadata methods:
+   ```go
+   type SSHDriver struct {
+       drivers.BaseDriver  // Embed for automatic metadata
+   }
+
+   func NewSSHDriver() *SSHDriver {
+       return &SSHDriver{
+           BaseDriver: drivers.NewBaseDriver(drivers.Descriptor{
+               ID:        "ssh",
+               Module:    "ssh",
+               Title:     "SSH",
+               Category:  "terminal",
+               Icon:      "terminal",
+               SortOrder: 1,
+           }),
+       }
+   }
+   ```
+
 2. Driver registers with `drivers.Registry` during bootstrap (`drivers.MustRegister`).
-3. `protocols.Registry.SyncFromDrivers` ingests descriptors & capabilities.
-4. `ProtocolCatalogService.Sync` persists metadata + enablement state.
-5. Driver packages declare launch support by implementing `drivers.Launcher`. Launchers must cooperate with the shared session lifecycle hooks described in §11 (register session on success, propagate heartbeats, unregister on close/error).
-6. Driver `init()` functions must register protocol-scoped permissions using `permissions.RegisterProtocolPermission` (see section 4) before `permissions.Sync` is invoked.
-7. Frontend fetches protocol catalog and driver schema from `/api/protocols`.
+
+3. `ProtocolCatalogService.Sync(ctx, driverRegistry, config)` reads metadata directly from drivers and persists to database with config enablement state.
+
+4. Driver packages declare launch support by implementing `drivers.Launcher`. Launchers must cooperate with the shared session lifecycle hooks described in §11 (register session on success, propagate heartbeats, unregister on close/error).
+
+5. Driver `init()` functions must register protocol-scoped permissions using `permissions.RegisterProtocolPermission` (see section 4) before `permissions.Sync` is invoked.
+
+6. Frontend fetches protocol catalog from `/api/protocols` (served from database cache).
 
 ## 4. Permission Model
 
@@ -116,11 +155,42 @@ Notes:
 
 (\*) Illustrative examples; drivers should define only the scopes they truly support.
 
-## 10. Migration Notes
+## 10. Architecture & Migration Notes
+
+### 10.1 Simplified Architecture (October 2025)
+
+The protocol registry layer has been **removed** to simplify the architecture:
+
+**Old Flow (Deprecated)**:
+```
+Driver → Driver Registry → Protocol Registry → Database → API
+```
+
+**New Flow (Current)**:
+```
+Driver → Driver Registry → Database → API
+         ↓
+    (metadata methods)
+```
+
+**Key Changes**:
+- ❌ **Removed**: `internal/protocols/Registry` and `internal/protocols/Protocol`
+- ✅ **Driver interface now includes metadata methods** (ID, Name, Category, Icon, etc.)
+- ✅ **`ProtocolCatalogService.Sync()`** reads directly from drivers
+- ✅ **Single source of truth**: Driver implementations define all metadata
+- ✅ **Database cache** still used for fast API responses
+
+**For New Drivers**:
+- Implement the full `Driver` interface OR use `drivers.BaseDriver` helper
+- No need to interact with protocol registry
+- All metadata comes from driver methods
+
+### 10.2 Legacy Migration Notes
 
 - Historical references to the "Core Module" now map to the "Core Protocol Driver Set". Where documentation still mentions modules, annotate them with the new term on sight to maintain clarity.
 - New drivers must include their spec document _before_ code merges.
 - Any config change that toggles driver availability must update the relevant spec sections (config schema + permission updates).
+- **`Descriptor()` method**: Still supported for backward compatibility but deprecated. Use direct metadata methods instead.
 
 ## 11. Session Lifecycle & Active Connection Tracking
 

@@ -7,13 +7,17 @@ import (
 )
 
 type stubDriver struct {
-	desc Descriptor
-	cap  Capabilities
-	err  error
+	BaseDriver
+	cap Capabilities
+	err error
 }
 
-func (s *stubDriver) Descriptor() Descriptor {
-	return s.desc
+func newStubDriver(desc Descriptor, cap Capabilities, err error) *stubDriver {
+	return &stubDriver{
+		BaseDriver: NewBaseDriver(desc),
+		cap:        cap,
+		err:        err,
+	}
 }
 
 func (s *stubDriver) Capabilities(ctx context.Context) (Capabilities, error) {
@@ -22,7 +26,7 @@ func (s *stubDriver) Capabilities(ctx context.Context) (Capabilities, error) {
 
 func TestRegisterAndFetchDriver(t *testing.T) {
 	repo := NewRegistry()
-	drv := &stubDriver{desc: Descriptor{ID: "ssh", Title: "SSH"}}
+	drv := newStubDriver(Descriptor{ID: "ssh", Title: "SSH"}, Capabilities{}, nil)
 	if err := repo.Register(drv); err != nil {
 		t.Fatalf("expected register success, got %v", err)
 	}
@@ -39,7 +43,7 @@ func TestRegisterValidatesID(t *testing.T) {
 		t.Fatalf("expected ErrNilDriver, got %v", err)
 	}
 
-	drv := &stubDriver{desc: Descriptor{ID: ""}}
+	drv := newStubDriver(Descriptor{ID: ""}, Capabilities{}, nil)
 	if err := repo.Register(drv); !errors.Is(err, ErrEmptyDriverID) {
 		t.Fatalf("expected ErrEmptyDriverID, got %v", err)
 	}
@@ -47,12 +51,12 @@ func TestRegisterValidatesID(t *testing.T) {
 
 func TestRegisterDuplicateID(t *testing.T) {
 	repo := NewRegistry()
-	drv := &stubDriver{desc: Descriptor{ID: "ssh"}}
+	drv := newStubDriver(Descriptor{ID: "ssh"}, Capabilities{}, nil)
 	if err := repo.Register(drv); err != nil {
 		t.Fatalf("expected register success, got %v", err)
 	}
 
-	dup := &stubDriver{desc: Descriptor{ID: "ssh"}}
+	dup := newStubDriver(Descriptor{ID: "ssh"}, Capabilities{}, nil)
 	if err := repo.Register(dup); !errors.Is(err, ErrDuplicateDriverID) {
 		t.Fatalf("expected duplicate error, got %v", err)
 	}
@@ -60,10 +64,10 @@ func TestRegisterDuplicateID(t *testing.T) {
 
 func TestDescribeSortsByOrderAndID(t *testing.T) {
 	repo := NewRegistry()
-	repo.MustRegister(&stubDriver{desc: Descriptor{ID: "kubernetes", SortOrder: 10}})
-	repo.MustRegister(&stubDriver{desc: Descriptor{ID: "ssh", SortOrder: 1}})
-	repo.MustRegister(&stubDriver{desc: Descriptor{ID: "docker", SortOrder: 10}})
-	repo.MustRegister(&stubDriver{desc: Descriptor{ID: "database", SortOrder: 5}})
+	repo.MustRegister(newStubDriver(Descriptor{ID: "kubernetes", SortOrder: 10}, Capabilities{}, nil))
+	repo.MustRegister(newStubDriver(Descriptor{ID: "ssh", SortOrder: 1}, Capabilities{}, nil))
+	repo.MustRegister(newStubDriver(Descriptor{ID: "docker", SortOrder: 10}, Capabilities{}, nil))
+	repo.MustRegister(newStubDriver(Descriptor{ID: "database", SortOrder: 5}, Capabilities{}, nil))
 
 	descriptors, err := repo.Describe(context.Background())
 	if err != nil {
@@ -83,10 +87,11 @@ func TestDescribeSortsByOrderAndID(t *testing.T) {
 
 func TestCapabilitiesFetch(t *testing.T) {
 	repo := NewRegistry()
-	repo.MustRegister(&stubDriver{
-		desc: Descriptor{ID: "ssh"},
-		cap:  Capabilities{Terminal: true},
-	})
+	repo.MustRegister(newStubDriver(
+		Descriptor{ID: "ssh"},
+		Capabilities{Terminal: true},
+		nil,
+	))
 
 	caps, err := repo.Capabilities(context.Background(), "ssh")
 	if err != nil {
@@ -109,10 +114,11 @@ func TestCapabilitiesMissingDriver(t *testing.T) {
 
 func TestCapabilitiesErrorPropagates(t *testing.T) {
 	repo := NewRegistry()
-	repo.MustRegister(&stubDriver{
-		desc: Descriptor{ID: "ssh"},
-		err:  errors.New("cap failure"),
-	})
+	repo.MustRegister(newStubDriver(
+		Descriptor{ID: "ssh"},
+		Capabilities{},
+		errors.New("cap failure"),
+	))
 
 	if _, err := repo.Capabilities(context.Background(), "ssh"); err == nil || err.Error() != "cap failure" {
 		t.Fatalf("expected wrapped capability error, got %v", err)
