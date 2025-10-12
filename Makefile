@@ -11,6 +11,7 @@ help:
 	@echo "ShellCN Platform"
 	@echo ""
 	@echo "Usage:"
+	@echo "  make install       Install project dependencies"
 	@echo "  make build         Build the entire project (Frontend + Rust FFI + Go binary)"
 	@echo "  make build-go      Build the Go backend binary"
 	@echo "  make build-rust    Build Rust FFI modules (if present)"
@@ -26,6 +27,12 @@ help:
 	@echo "  make dev-server    Start the Go backend"
 	@echo "  make dev-web       Start the frontend dev server"
 	@echo "  make clean         Remove build artifacts"
+
+install: tidy
+	@if [ ! -d "$(WEB_DIR)/node_modules" ]; then \
+		echo "Installing frontend dependencies..."; \
+		cd $(WEB_DIR) && pnpm install --frozen-lockfile; \
+	fi
 
 build: build-web build-rust build-go
 
