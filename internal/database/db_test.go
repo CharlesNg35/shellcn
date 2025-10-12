@@ -34,8 +34,8 @@ func TestAutoMigrateAndSeedData(t *testing.T) {
 	if err := db.Model(&models.AuthProvider{}).Count(&providerCount).Error; err != nil {
 		t.Fatalf("count providers: %v", err)
 	}
-	if providerCount < 2 {
-		t.Fatalf("expected at least 2 auth providers, got %d", providerCount)
+	if providerCount < 1 {
+		t.Fatalf("expected at least 1 auth provider, got %d", providerCount)
 	}
 
 	var permissionCount int64

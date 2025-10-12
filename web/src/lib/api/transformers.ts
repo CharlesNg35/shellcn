@@ -37,8 +37,11 @@ export function transformAuthUser(user?: AuthUser | null): AuthUser | null {
   if (!user) {
     return user ?? null
   }
+  const provider = normalizeAuthProvider(user.auth_provider)
+  const emailVerified = provider === 'local' ? (user.email_verified ?? true) : true
   return {
     ...user,
-    auth_provider: normalizeAuthProvider(user.auth_provider),
+    auth_provider: provider,
+    email_verified: emailVerified,
   }
 }

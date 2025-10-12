@@ -77,19 +77,6 @@ func SeedData(db *gorm.DB) error {
 		return err
 	}
 
-	inviteProvider := models.AuthProvider{
-		BaseModel:                models.BaseModel{ID: "invite"},
-		Type:                     "invite",
-		Name:                     "Email Invitation",
-		Enabled:                  false,
-		RequireEmailVerification: true,
-		Description:              "Invite users via email",
-		Icon:                     "mail",
-	}
-	if err := db.Where(models.AuthProvider{Type: inviteProvider.Type}).Attrs(inviteProvider).FirstOrCreate(&models.AuthProvider{}).Error; err != nil {
-		return err
-	}
-
 	if err := assignRolePermissions(db, "admin", []string{"notification.view", "notification.manage", "user.invite"}); err != nil {
 		return err
 	}
@@ -98,6 +85,7 @@ func SeedData(db *gorm.DB) error {
 	}
 	if err := assignRolePermissions(db, "user", []string{
 		"notification.view",
+		"notification.manage",
 		"team.view",
 		"connection.view",
 		"connection.launch",

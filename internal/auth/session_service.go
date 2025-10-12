@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
@@ -57,6 +58,10 @@ var (
 	ErrSessionExpired = errors.New("session: expired")
 	// ErrSessionInvalidToken is returned when the supplied refresh token is malformed.
 	ErrSessionInvalidToken = errors.New("session: invalid token")
+	// ErrMFAChallengeNotFound indicates the MFA challenge does not exist.
+	ErrMFAChallengeNotFound = errors.New("session: mfa challenge not found")
+	// ErrMFAChallengeExpired indicates the MFA challenge has expired.
+	ErrMFAChallengeExpired = errors.New("session: mfa challenge expired")
 )
 
 var errSessionCacheMiss = errors.New("session cache miss")
@@ -76,7 +81,18 @@ type SessionService struct {
 	tokenLen   int
 	now        func() time.Time
 	cache      SessionCache
+	mfaMu      sync.Mutex
+	mfaTTL     time.Duration
+	mfaCache   map[string]mfaChallenge
 }
+
+type mfaChallenge struct {
+	UserID    string
+	Meta      SessionMetadata
+	ExpiresAt time.Time
+}
+
+const defaultMFAChallengeTTL = 5 * time.Minute
 
 // NewSessionService constructs a session manager backed by the provided database and JWT service.
 func NewSessionService(db *gorm.DB, jwtService *JWTService, cfg SessionConfig) (*SessionService, error) {
@@ -109,6 +125,8 @@ func NewSessionService(db *gorm.DB, jwtService *JWTService, cfg SessionConfig) (
 		tokenLen:   length,
 		now:        clock,
 		cache:      cfg.Cache,
+		mfaTTL:     defaultMFAChallengeTTL,
+		mfaCache:   make(map[string]mfaChallenge),
 	}, nil
 }
 
@@ -365,6 +383,75 @@ func (s *SessionService) CleanupExpired(ctx context.Context) (int64, error) {
 	}
 
 	return result.RowsAffected, nil
+}
+
+// CreateMFAChallenge issues a single-use challenge token for MFA verification.
+func (s *SessionService) CreateMFAChallenge(userID string, meta SessionMetadata) (string, time.Duration, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return "", 0, errors.New("session service: user id is required for mfa challenge")
+	}
+
+	token, err := crypto.GenerateToken(s.tokenLen)
+	if err != nil {
+		return "", 0, fmt.Errorf("session service: generate mfa challenge token: %w", err)
+	}
+
+	ttl := s.mfaTTL
+	if ttl <= 0 {
+		ttl = defaultMFAChallengeTTL
+	}
+
+	challenge := mfaChallenge{
+		UserID: userID,
+		Meta: SessionMetadata{
+			IPAddress: strings.TrimSpace(meta.IPAddress),
+			UserAgent: strings.TrimSpace(meta.UserAgent),
+			Device:    strings.TrimSpace(meta.Device),
+			Claims:    cloneMetadata(meta.Claims),
+		},
+		ExpiresAt: s.now().Add(ttl),
+	}
+
+	s.mfaMu.Lock()
+	s.pruneExpiredChallengesLocked(s.now())
+	s.mfaCache[token] = challenge
+	s.mfaMu.Unlock()
+
+	return token, ttl, nil
+}
+
+// ConsumeMFAChallenge validates and removes an MFA challenge returning the associated user ID and metadata.
+func (s *SessionService) ConsumeMFAChallenge(challengeID string) (string, SessionMetadata, error) {
+	challengeID = strings.TrimSpace(challengeID)
+	if challengeID == "" {
+		return "", SessionMetadata{}, ErrMFAChallengeNotFound
+	}
+
+	s.mfaMu.Lock()
+	challenge, ok := s.mfaCache[challengeID]
+	if ok && s.now().After(challenge.ExpiresAt) {
+		delete(s.mfaCache, challengeID)
+		ok = false
+	}
+	if ok {
+		delete(s.mfaCache, challengeID)
+	}
+	s.mfaMu.Unlock()
+
+	if !ok {
+		return "", SessionMetadata{}, ErrMFAChallengeExpired
+	}
+
+	return challenge.UserID, challenge.Meta, nil
+}
+
+func (s *SessionService) pruneExpiredChallengesLocked(now time.Time) {
+	for id, challenge := range s.mfaCache {
+		if now.After(challenge.ExpiresAt) {
+			delete(s.mfaCache, id)
+		}
+	}
 }
 
 // RevokeUserSessions revokes every active session belonging to a user.

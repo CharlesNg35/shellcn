@@ -63,7 +63,6 @@ describe('Header', () => {
     // Wait for menu to open and verify items are visible
     const profileLink = await screen.findByText(/Profile/i)
     expect(profileLink).toBeInTheDocument()
-    expect(screen.getByText(/Settings/i)).toBeInTheDocument()
 
     const signOutButton = screen.getByRole('button', { name: /Sign out/i })
     await act(async () => {

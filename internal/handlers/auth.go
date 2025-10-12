@@ -1,14 +1,17 @@
 package handlers
 
 import (
+	"context"
 	stdErrors "errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	iauth "github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/auth/mfa"
 	"github.com/charlesng35/shellcn/internal/auth/providers"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/permissions"
@@ -26,16 +29,24 @@ type AuthHandler struct {
 	providers *services.AuthProviderService
 	sso       *iauth.SSOManager
 	ldapSync  *services.LDAPSyncService
+	totp      *mfa.TOTPService
+	verifier  *services.EmailVerificationService
 }
 
-func NewAuthHandler(db *gorm.DB, jwt *iauth.JWTService, sessions *iauth.SessionService, providers *services.AuthProviderService, sso *iauth.SSOManager, ldapSync *services.LDAPSyncService) *AuthHandler {
-	return &AuthHandler{db: db, jwt: jwt, sessions: sessions, providers: providers, sso: sso, ldapSync: ldapSync}
+func NewAuthHandler(db *gorm.DB, jwt *iauth.JWTService, sessions *iauth.SessionService, providers *services.AuthProviderService, sso *iauth.SSOManager, ldapSync *services.LDAPSyncService, totp *mfa.TOTPService, verifier *services.EmailVerificationService) *AuthHandler {
+	return &AuthHandler{db: db, jwt: jwt, sessions: sessions, providers: providers, sso: sso, ldapSync: ldapSync, totp: totp, verifier: verifier}
 }
 
 type loginRequest struct {
 	Identifier string `json:"identifier" validate:"required"`
 	Password   string `json:"password" validate:"required"`
 	Provider   string `json:"provider"`
+}
+
+type verifyMfaRequest struct {
+	ChallengeID    string `json:"challenge_id" validate:"required"`
+	MFAToken       string `json:"mfa_token" validate:"required"`
+	RememberDevice bool   `json:"remember_device"`
 }
 
 type tokenResponse struct {
@@ -136,21 +147,39 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
+	ctx := requestContext(c)
 	checker, _ := permissions.NewChecker(h.db)
-	perms, _ := checker.GetUserPermissions(requestContext(c), user.ID)
+	perms, _ := checker.GetUserPermissions(ctx, user.ID)
+
+	provider := normalizeProvider(user.AuthProvider)
+	emailVerified := true
+	if requires, err := h.requiresEmailVerification(ctx, provider); err == nil {
+		if requires {
+			if verified, verr := h.isEmailVerified(ctx, user.ID); verr == nil {
+				emailVerified = verified
+			} else {
+				response.Error(c, errors.ErrInternalServer)
+				return
+			}
+		}
+	} else {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
 
 	payload := gin.H{
-		"id":            user.ID,
-		"username":      user.Username,
-		"email":         user.Email,
-		"is_root":       user.IsRoot,
-		"is_active":     user.IsActive,
-		"first_name":    user.FirstName,
-		"last_name":     user.LastName,
-		"avatar":        strings.TrimSpace(user.Avatar),
-		"auth_provider": user.AuthProvider,
-		"mfa_enabled":   user.MFAEnabled,
-		"permissions":   perms,
+		"id":             user.ID,
+		"username":       user.Username,
+		"email":          user.Email,
+		"is_root":        user.IsRoot,
+		"is_active":      user.IsActive,
+		"first_name":     user.FirstName,
+		"last_name":      user.LastName,
+		"avatar":         strings.TrimSpace(user.Avatar),
+		"auth_provider":  provider,
+		"mfa_enabled":    user.MFAEnabled,
+		"email_verified": emailVerified,
+		"permissions":    perms,
 	}
 
 	response.Success(c, http.StatusOK, payload)
@@ -173,6 +202,48 @@ func (h *AuthHandler) handleLocalLogin(c *gin.Context, req loginRequest) {
 	if err != nil {
 		metrics.AuthAttempts.WithLabelValues("failure").Inc()
 		response.Error(c, errors.ErrInvalidCredentials)
+		return
+	}
+
+	if user.MFAEnabled {
+		if h.totp == nil {
+			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			response.Error(c, errors.ErrInternalServer)
+			return
+		}
+		challengeID, ttl, err := h.sessions.CreateMFAChallenge(user.ID, iauth.SessionMetadata{
+			IPAddress: c.ClientIP(),
+			UserAgent: c.Request.UserAgent(),
+		})
+		if err != nil {
+			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			response.Error(c, errors.ErrInternalServer)
+			return
+		}
+
+		expires := int(ttl.Seconds())
+		if expires < 0 {
+			expires = 0
+		}
+		expiresAt := time.Now().Add(ttl).UTC()
+
+		challenge := gin.H{
+			"id":         challengeID,
+			"method":     "totp",
+			"expires_in": expires,
+			"expires_at": expiresAt.Format(time.RFC3339),
+		}
+		c.JSON(http.StatusUnauthorized, response.Response{
+			Success: false,
+			Error: &response.ErrorInfo{
+				Code:    errors.ErrMFARequired.Code,
+				Message: errors.ErrMFARequired.Message,
+				Details: map[string]any{"challenge": challenge},
+			},
+			Data: gin.H{
+				"challenge": challenge,
+			},
+		})
 		return
 	}
 
@@ -256,6 +327,166 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 	h.respondWithTokens(c, user, tokens)
 }
 
+// POST /api/auth/mfa/verify
+func (h *AuthHandler) VerifyMFA(c *gin.Context) {
+	if h.sessions == nil || h.totp == nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+
+	var req verifyMfaRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+
+	userID, meta, err := h.sessions.ConsumeMFAChallenge(req.ChallengeID)
+	if err != nil {
+		switch {
+		case stdErrors.Is(err, iauth.ErrMFAChallengeExpired), stdErrors.Is(err, iauth.ErrMFAChallengeNotFound):
+			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			response.Error(c, errors.ErrMFAInvalid)
+		default:
+			response.Error(c, errors.ErrInternalServer)
+		}
+		return
+	}
+
+	valid, verifyErr := h.totp.VerifyCode(userID, req.MFAToken)
+	if verifyErr != nil {
+		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+	if !valid {
+		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		response.Error(c, errors.ErrMFAInvalid)
+		return
+	}
+
+	meta.IPAddress = c.ClientIP()
+	meta.UserAgent = c.Request.UserAgent()
+	if req.RememberDevice {
+		if meta.Claims == nil {
+			meta.Claims = make(map[string]any)
+		}
+		meta.Claims["mfa_remember"] = true
+	}
+
+	pair, _, err := h.sessions.CreateSession(userID, meta)
+	if err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+
+	var user models.User
+	if err := h.db.Take(&user, "id = ?", userID).Error; err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+
+	metrics.AuthAttempts.WithLabelValues("success").Inc()
+	h.respondWithTokens(c, &user, pair)
+}
+
+// POST /api/auth/email/resend
+func (h *AuthHandler) ResendVerification(c *gin.Context) {
+	if h.verifier == nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+
+	v, ok := c.Get("userID")
+	if !ok {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+	userID, _ := v.(string)
+
+	ctx := requestContext(c)
+
+	var user models.User
+	if err := h.db.Take(&user, "id = ?", userID).Error; err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+
+	provider := normalizeProvider(user.AuthProvider)
+	requires, err := h.requiresEmailVerification(ctx, provider)
+	if err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+	if !requires {
+		response.Success(c, http.StatusOK, gin.H{"sent": false})
+		return
+	}
+
+	verified, err := h.isEmailVerified(ctx, user.ID)
+	if err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+	if verified {
+		response.Success(c, http.StatusOK, gin.H{"sent": false})
+		return
+	}
+
+	if _, _, err := h.verifier.CreateToken(ctx, user.ID, user.Email); err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+
+	response.Success(c, http.StatusOK, gin.H{"sent": true})
+}
+
+func normalizeProvider(provider string) string {
+	value := strings.ToLower(strings.TrimSpace(provider))
+	if value == "" {
+		return "local"
+	}
+	return value
+}
+
+func (h *AuthHandler) requiresEmailVerification(ctx context.Context, provider string) (bool, error) {
+	if normalizeProvider(provider) != "local" {
+		return false, nil
+	}
+
+	var record models.AuthProvider
+	if err := h.db.WithContext(ctx).
+		Select("require_email_verification").
+		Where("type = ?", "local").
+		First(&record).Error; err != nil {
+		if stdErrors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		if strings.Contains(err.Error(), "no such table") {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return record.RequireEmailVerification, nil
+}
+
+func (h *AuthHandler) isEmailVerified(ctx context.Context, userID string) (bool, error) {
+	var verification models.EmailVerification
+	if err := h.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		First(&verification).Error; err != nil {
+		if stdErrors.Is(err, gorm.ErrRecordNotFound) {
+			return true, nil
+		}
+		if strings.Contains(err.Error(), "no such table") {
+			return true, nil
+		}
+		return false, err
+	}
+
+	return verification.VerifiedAt != nil, nil
+}
+
 func (h *AuthHandler) respondWithTokens(c *gin.Context, user *models.User, pair iauth.TokenPair) {
 	// Reload user to include associations required by the response payload.
 	var hydrated models.User
@@ -263,8 +494,27 @@ func (h *AuthHandler) respondWithTokens(c *gin.Context, user *models.User, pair 
 		user = &hydrated
 	}
 
+	ctx := requestContext(c)
+
 	checker, _ := permissions.NewChecker(h.db)
-	perms, _ := checker.GetUserPermissions(requestContext(c), user.ID)
+	perms, _ := checker.GetUserPermissions(ctx, user.ID)
+
+	provider := normalizeProvider(user.AuthProvider)
+
+	emailVerified := true
+	if requires, err := h.requiresEmailVerification(ctx, provider); err == nil {
+		if requires {
+			if verified, verr := h.isEmailVerified(ctx, user.ID); verr == nil {
+				emailVerified = verified
+			} else {
+				response.Error(c, errors.ErrInternalServer)
+				return
+			}
+		}
+	} else {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
 
 	roles := make([]gin.H, 0, len(user.Roles))
 	for _, role := range user.Roles {
@@ -285,15 +535,18 @@ func (h *AuthHandler) respondWithTokens(c *gin.Context, user *models.User, pair 
 		"refresh_token": pair.RefreshToken,
 		"expires_in":    expiresIn,
 		"user": gin.H{
-			"id":          user.ID,
-			"username":    user.Username,
-			"email":       user.Email,
-			"is_root":     user.IsRoot,
-			"is_active":   user.IsActive,
-			"first_name":  user.FirstName,
-			"last_name":   user.LastName,
-			"roles":       roles,
-			"permissions": perms,
+			"id":             user.ID,
+			"username":       user.Username,
+			"email":          user.Email,
+			"is_root":        user.IsRoot,
+			"is_active":      user.IsActive,
+			"first_name":     user.FirstName,
+			"last_name":      user.LastName,
+			"roles":          roles,
+			"permissions":    perms,
+			"auth_provider":  provider,
+			"mfa_enabled":    user.MFAEnabled,
+			"email_verified": emailVerified,
 		},
 	}
 

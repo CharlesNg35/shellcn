@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/charlesng35/shellcn/internal/handlers/testutil"
+	"github.com/charlesng35/shellcn/pkg/errors"
 )
 
 func TestAuthHandler_LoginRefreshLogout(t *testing.T) {
@@ -55,4 +56,25 @@ func TestAuthHandler_LoginValidation(t *testing.T) {
 	require.False(t, decoded.Success)
 	require.NotNil(t, decoded.Error)
 	require.Equal(t, "BAD_REQUEST", decoded.Error.Code)
+}
+
+func TestAuthHandler_LoginRequiresMFA(t *testing.T) {
+	env := testutil.NewEnv(t)
+	user := env.CreateRootUser("StrongPassw0rd!")
+
+	require.NoError(t, env.DB.Model(user).Update("mfa_enabled", true).Error)
+
+	payload := map[string]any{
+		"identifier": user.Username,
+		"password":   "StrongPassw0rd!",
+	}
+
+	resp := env.Request(http.MethodPost, "/api/auth/login", payload, "")
+	require.Equal(t, http.StatusUnauthorized, resp.Code)
+
+	body := testutil.DecodeResponse(t, resp)
+	require.False(t, body.Success)
+	require.NotNil(t, body.Error)
+	require.Equal(t, errors.ErrMFARequired.Code, body.Error.Code)
+	require.NotNil(t, body.Error.Details["challenge"])
 }

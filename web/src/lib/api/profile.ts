@@ -15,6 +15,7 @@ const PROFILE_PASSWORD_ENDPOINT = '/profile/password'
 const PROFILE_MFA_SETUP_ENDPOINT = '/profile/mfa/setup'
 const PROFILE_MFA_ENABLE_ENDPOINT = '/profile/mfa/enable'
 const PROFILE_MFA_DISABLE_ENDPOINT = '/profile/mfa/disable'
+const PROFILE_EMAIL_RESEND_ENDPOINT = '/auth/email/resend'
 
 export async function updateProfile(payload: ProfileUpdatePayload): Promise<AuthUser> {
   const response = await apiClient.patch<ApiResponse<AuthUser>>(PROFILE_ENDPOINT, payload)
@@ -37,4 +38,8 @@ export async function enableMfa(payload: TotpCodePayload): Promise<void> {
 
 export async function disableMfa(payload: TotpCodePayload): Promise<void> {
   await apiClient.post<ApiResponse<Record<string, unknown>>>(PROFILE_MFA_DISABLE_ENDPOINT, payload)
+}
+
+export async function resendEmailVerification(): Promise<void> {
+  await apiClient.post<ApiResponse<Record<string, unknown>>>(PROFILE_EMAIL_RESEND_ENDPOINT)
 }

@@ -172,6 +172,57 @@ func TestCheckerIncludesImpliedPermissions(t *testing.T) {
 	require.Contains(t, perms, parent)
 }
 
+func TestCheckerRequiresEmailVerification(t *testing.T) {
+	db := setupPermissionTestDB(t)
+
+	require.NoError(t, db.Create(&models.AuthProvider{
+		Type:                     "local",
+		Name:                     "Local",
+		Enabled:                  true,
+		RequireEmailVerification: true,
+	}).Error)
+
+	role := &models.Role{
+		BaseModel: models.BaseModel{ID: "role.verification"},
+		Name:      "Needs Verification",
+	}
+	require.NoError(t, db.Create(role).Error)
+
+	var viewPerm models.Permission
+	require.NoError(t, db.First(&viewPerm, "id = ?", "user.view").Error)
+	require.NoError(t, db.Model(role).Association("Permissions").Append(&viewPerm))
+
+	user := &models.User{
+		Username: "verify-me",
+		Email:    "verify@example.com",
+		Password: "secret",
+	}
+	require.NoError(t, db.Create(user).Error)
+	require.NoError(t, db.Model(user).Association("Roles").Append(role))
+
+	require.NoError(t, db.Create(&models.EmailVerification{
+		UserID:    user.ID,
+		TokenHash: "pending",
+		ExpiresAt: time.Now().Add(time.Hour),
+	}).Error)
+
+	checker, err := NewChecker(db)
+	require.NoError(t, err)
+
+	perms, err := checker.GetUserPermissions(context.Background(), user.ID)
+	require.NoError(t, err)
+	require.Empty(t, perms)
+
+	now := time.Now()
+	require.NoError(t, db.Model(&models.EmailVerification{}).
+		Where("user_id = ?", user.ID).
+		Update("verified_at", now).Error)
+
+	perms, err = checker.GetUserPermissions(context.Background(), user.ID)
+	require.NoError(t, err)
+	require.Contains(t, perms, "user.view")
+}
+
 func TestCheckerCheckResourceHonoursGrants(t *testing.T) {
 	db := setupPermissionTestDB(t)
 
@@ -290,6 +341,8 @@ func setupPermissionTestDB(t *testing.T) *gorm.DB {
 		&models.Team{},
 		&models.Permission{},
 		&models.ResourcePermission{},
+		&models.AuthProvider{},
+		&models.EmailVerification{},
 	))
 	require.NoError(t, Sync(context.Background(), db))
 

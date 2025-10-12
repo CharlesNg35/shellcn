@@ -52,6 +52,16 @@ var (
 		Message:    "Authentication required",
 		StatusCode: http.StatusUnauthorized,
 	}
+	ErrMFARequired = &AppError{
+		Code:       "auth.mfa_required",
+		Message:    "Multi-factor authentication required",
+		StatusCode: http.StatusUnauthorized,
+	}
+	ErrMFAInvalid = &AppError{
+		Code:       "auth.mfa_invalid",
+		Message:    "Invalid multi-factor authentication code",
+		StatusCode: http.StatusUnauthorized,
+	}
 
 	ErrInvalidCredentials = &AppError{
 		Code:       "INVALID_CREDENTIALS",

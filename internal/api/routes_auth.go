@@ -21,6 +21,7 @@ func registerAuthRoutes(engine *gin.Engine, api *gin.RouterGroup, deps authRoute
 	{
 		auth.POST("/login", deps.AuthHandler.Login)
 		auth.POST("/refresh", deps.AuthHandler.Refresh)
+		auth.POST("/mfa/verify", deps.AuthHandler.VerifyMFA)
 		auth.GET("/providers", deps.ProviderHandler.ListPublic)
 		auth.GET("/providers/:type/login", deps.SSOHandler.Begin)
 		auth.GET("/providers/:type/callback", deps.SSOHandler.Callback)
@@ -30,6 +31,7 @@ func registerAuthRoutes(engine *gin.Engine, api *gin.RouterGroup, deps authRoute
 
 	api.GET("/auth/me", deps.AuthHandler.Me)
 	api.POST("/auth/logout", deps.AuthHandler.Logout)
+	api.POST("/auth/email/resend", deps.AuthHandler.ResendVerification)
 
 	providers := api.Group("/auth/providers")
 	{

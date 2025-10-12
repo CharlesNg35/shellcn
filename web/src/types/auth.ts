@@ -26,6 +26,7 @@ export interface AuthUser {
   permissions?: import('@/constants/permissions').PermissionId[]
   mfa_enabled?: boolean
   mfa_enrolled?: boolean
+  email_verified?: boolean
   last_login_at?: string
 }
 

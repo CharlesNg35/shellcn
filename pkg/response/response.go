@@ -17,8 +17,9 @@ type Response struct {
 
 // ErrorInfo holds error details to send to clients.
 type ErrorInfo struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    string         `json:"code"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // Meta describes pagination metadata.

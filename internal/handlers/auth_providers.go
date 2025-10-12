@@ -70,32 +70,6 @@ func (h *AuthProviderHandler) UpdateLocalSettings(c *gin.Context) {
 	response.Success(c, http.StatusOK, gin.H{"updated": true})
 }
 
-// POST /api/auth/providers/invite/settings
-func (h *AuthProviderHandler) UpdateInviteSettings(c *gin.Context) {
-	var body struct {
-		Enabled                  bool `json:"enabled"`
-		RequireEmailVerification bool `json:"require_email_verification"`
-	}
-	if err := c.ShouldBindJSON(&body); err != nil {
-		response.Error(c, errors.ErrBadRequest)
-		return
-	}
-	if err := h.svc.UpdateInviteSettings(
-		requestContext(c),
-		body.Enabled,
-		body.RequireEmailVerification,
-	); err != nil {
-		switch {
-		case stdErrors.Is(err, services.ErrAuthProviderNotFound):
-			response.Error(c, errors.ErrNotFound)
-		default:
-			response.Error(c, errors.ErrInternalServer)
-		}
-		return
-	}
-	response.Success(c, http.StatusOK, gin.H{"updated": true})
-}
-
 // POST /api/auth/providers/:type/enable
 func (h *AuthProviderHandler) SetEnabled(c *gin.Context) {
 	var body struct {

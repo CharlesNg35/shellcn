@@ -31,10 +31,6 @@ func TestAuthProviderServiceConfigureAndTestConnection(t *testing.T) {
 		RequireEmailVerification: true,
 		AllowPasswordReset:       true,
 	}).Error)
-	require.NoError(t, db.Create(&models.AuthProvider{
-		Type: "invite",
-		Name: "Invite",
-	}).Error)
 
 	var capturedOIDC models.OIDCConfig
 	svc.SetOIDCTester(func(cfg models.OIDCConfig) error {
@@ -115,10 +111,6 @@ func TestAuthProviderServiceMutations(t *testing.T) {
 		Enabled:                  true,
 		RequireEmailVerification: true,
 	}).Error)
-	require.NoError(t, db.Create(&models.AuthProvider{
-		Type: "invite",
-		Name: "Invite",
-	}).Error)
 
 	err = svc.UpdateLocalSettings(ctx, false, false, false)
 	require.NoError(t, err)
@@ -129,15 +121,8 @@ func TestAuthProviderServiceMutations(t *testing.T) {
 	require.False(t, local.RequireEmailVerification)
 	require.False(t, local.AllowPasswordReset)
 
-	err = svc.UpdateInviteSettings(ctx, true, true)
-	require.NoError(t, err)
-
-	invite, err := svc.GetByType(ctx, "invite")
-	require.NoError(t, err)
-	require.True(t, invite.Enabled)
-
 	require.ErrorIs(t, svc.SetEnabled(ctx, "local", false), ErrAuthProviderImmutable)
-	require.ErrorIs(t, svc.Delete(ctx, "invite"), ErrAuthProviderImmutable)
+	require.ErrorIs(t, svc.Delete(ctx, "local"), ErrAuthProviderImmutable)
 }
 
 func TestAuthProviderServicePublicAndLoadConfig(t *testing.T) {

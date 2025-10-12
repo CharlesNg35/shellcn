@@ -142,9 +142,6 @@ func (s *AuthProviderService) GetEnabledPublic(ctx context.Context) ([]PublicPro
 
 	result := make([]PublicProvider, 0, len(providers))
 	for _, provider := range providers {
-		if provider.Type == "invite" {
-			continue
-		}
 		flow := "redirect"
 		switch provider.Type {
 		case "local", "ldap":
@@ -329,32 +326,6 @@ func (s *AuthProviderService) UpdateLocalSettings(ctx context.Context, allowRegi
 	return nil
 }
 
-// UpdateInviteSettings toggles the invite provider state.
-func (s *AuthProviderService) UpdateInviteSettings(ctx context.Context, enabled, requireEmailVerification bool) error {
-	ctx = ensureContext(ctx)
-
-	updates := map[string]any{
-		"enabled":                    enabled,
-		"require_email_verification": requireEmailVerification,
-	}
-
-	if err := s.db.WithContext(ctx).
-		Model(&models.AuthProvider{}).
-		Where("type = ?", "invite").
-		Updates(updates).Error; err != nil {
-		return fmt.Errorf("auth provider service: update invite settings: %w", err)
-	}
-
-	recordAudit(s.auditService, ctx, AuditEntry{
-		Action:   "auth_provider.update",
-		Resource: "invite",
-		Result:   "success",
-		Metadata: updates,
-	})
-
-	return nil
-}
-
 // SetEnabled toggles a provider's enabled state while protecting system providers.
 func (s *AuthProviderService) SetEnabled(ctx context.Context, providerType string, enabled bool) error {
 	ctx = ensureContext(ctx)
@@ -393,7 +364,7 @@ func (s *AuthProviderService) SetEnabled(ctx context.Context, providerType strin
 func (s *AuthProviderService) Delete(ctx context.Context, providerType string) error {
 	ctx = ensureContext(ctx)
 
-	if providerType == "local" || providerType == "invite" {
+	if providerType == "local" {
 		return ErrAuthProviderImmutable
 	}
 

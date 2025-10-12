@@ -16,11 +16,14 @@ func TestApplyRuntimeDefaultsGeneratesMissingSecrets(t *testing.T) {
 	if cfg.Auth.JWT.Secret == "" {
 		t.Fatal("expected JWT secret to be generated")
 	}
-	if cfg.Vault.EncryptionKey == "" {
-		t.Fatal("expected vault encryption key to be generated")
+	if cfg.Vault.EncryptionKey != "" {
+		t.Fatalf("expected vault encryption key to remain empty, got %q", cfg.Vault.EncryptionKey)
 	}
-	if !generated["auth.jwt.secret"] || !generated["vault.encryption_key"] {
-		t.Fatalf("expected generated map to include both keys: %#v", generated)
+	if !generated["auth.jwt.secret"] {
+		t.Fatalf("expected generated map to include jwt secret: %#v", generated)
+	}
+	if _, ok := generated["vault.encryption_key"]; ok {
+		t.Fatalf("did not expect vault key to be auto-generated: %#v", generated)
 	}
 }
 

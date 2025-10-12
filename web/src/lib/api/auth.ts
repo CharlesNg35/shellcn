@@ -74,7 +74,9 @@ export async function login(credentials: LoginCredentials): Promise<LoginResult>
     if (error instanceof ApiError && error.code === 'auth.mfa_required') {
       return {
         mfaRequired: true,
-        challenge: normalizeChallenge(error.details),
+        challenge: normalizeChallenge(
+          (error.details?.challenge as unknown) ?? (error.details as unknown)
+        ),
       }
     }
 

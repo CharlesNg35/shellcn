@@ -148,6 +148,25 @@ func (c *Checker) loadUserGrants(ctx context.Context, userID string) (*userGrant
 		teamIDs = append(teamIDs, team.ID)
 	}
 
+	requiresVerification, err := c.requiresEmailVerification(ctx, user.AuthProvider)
+	if err != nil {
+		return nil, err
+	}
+	if requiresVerification {
+		verified, verr := c.isEmailVerified(ctx, user.ID)
+		if verr != nil {
+			return nil, verr
+		}
+		if !verified {
+			return &userGrants{
+				ID:          user.ID,
+				IsRoot:      false,
+				TeamIDs:     teamIDs,
+				Permissions: map[string]struct{}{},
+			}, nil
+		}
+	}
+
 	if user.IsRoot {
 		return &userGrants{
 			ID:      user.ID,
@@ -200,6 +219,54 @@ func (c *Checker) loadResourcePermissions(ctx context.Context, grants *userGrant
 	}
 
 	return expandImplied(granted)
+}
+
+func (c *Checker) requiresEmailVerification(ctx context.Context, provider string) (bool, error) {
+	if normalizeAuthProvider(provider) != "local" {
+		return false, nil
+	}
+
+	var record models.AuthProvider
+	if err := c.db.WithContext(ctx).
+		Select("require_email_verification").
+		Where("type = ?", "local").
+		First(&record).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		if strings.Contains(err.Error(), "no such table") {
+			return false, nil
+		}
+		return false, fmt.Errorf("permission checker: load local provider: %w", err)
+	}
+
+	return record.RequireEmailVerification, nil
+}
+
+func (c *Checker) isEmailVerified(ctx context.Context, userID string) (bool, error) {
+	var verification models.EmailVerification
+	if err := c.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Order("created_at DESC").
+		First(&verification).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return true, nil
+		}
+		if strings.Contains(err.Error(), "no such table") {
+			return true, nil
+		}
+		return false, fmt.Errorf("permission checker: load email verification: %w", err)
+	}
+
+	return verification.VerifiedAt != nil, nil
+}
+
+func normalizeAuthProvider(provider string) string {
+	value := strings.ToLower(strings.TrimSpace(provider))
+	if value == "" {
+		return "local"
+	}
+	return value
 }
 
 func hasPermission(perms map[string]struct{}, permissionID string) (bool, error) {
