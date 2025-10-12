@@ -13,7 +13,7 @@ Each file in this directory documents a single protocol driver. Use the template
 ## Descriptor Metadata
 - `id`: <driver id>
 - `title`: <display name>
-- `category`: <terminal|desktop|container|database|file_share|vm|network>
+- `category`: <terminal|desktop|container|database|object_storage|vm|network>
 - `icon`: <Lucide icon name>
 - `sort_order`: <int>
 

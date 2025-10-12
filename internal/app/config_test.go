@@ -33,27 +33,12 @@ func TestLoadConfigFromFile(t *testing.T) {
 
 	require.True(t, cfg.Features.SessionSharing.Enabled)
 	require.Equal(t, 8, cfg.Features.SessionSharing.MaxSharedUsers)
-	require.False(t, cfg.Features.ClipboardSync.Enabled)
-	require.Equal(t, 2048, cfg.Features.ClipboardSync.MaxSizeKB)
 
 	require.True(t, cfg.Modules.SSH.Enabled)
-	require.Equal(t, 2222, cfg.Modules.SSH.DefaultPort)
-	require.True(t, cfg.Modules.SSH.SSHV1Enabled)
-	require.False(t, cfg.Modules.SSH.AutoReconnect)
-	require.Equal(t, 5, cfg.Modules.SSH.MaxReconnectAttempts)
-	require.Equal(t, 120, cfg.Modules.SSH.KeepaliveInterval)
-
 	require.False(t, cfg.Modules.Telnet.Enabled)
-	require.Equal(t, 2323, cfg.Modules.Telnet.DefaultPort)
-	require.False(t, cfg.Modules.Telnet.AutoReconnect)
-	require.Equal(t, 1, cfg.Modules.Telnet.ReconnectLimit)
-
 	require.True(t, cfg.Modules.SFTP.Enabled)
-	require.Equal(t, 10022, cfg.Modules.SFTP.DefaultPort)
-
-	require.Equal(t, 3390, cfg.Modules.RDP.DefaultPort)
-	require.Equal(t, 5901, cfg.Modules.VNC.DefaultPort)
-
+	require.True(t, cfg.Modules.RDP.Enabled)
+	require.True(t, cfg.Modules.VNC.Enabled)
 	require.True(t, cfg.Modules.Docker.Enabled)
 	require.True(t, cfg.Modules.Kubernetes.Enabled)
 
@@ -64,7 +49,7 @@ func TestLoadConfigFromFile(t *testing.T) {
 	require.True(t, cfg.Modules.Database.MongoDB)
 
 	require.False(t, cfg.Modules.Proxmox.Enabled)
-	require.True(t, cfg.Modules.FileShare.Enabled)
+	require.True(t, cfg.Modules.ObjectStorage.Enabled)
 
 	require.Equal(t, "jwt-secret", cfg.Auth.JWT.Secret)
 	require.Equal(t, 30*time.Minute, cfg.Auth.JWT.TTL)

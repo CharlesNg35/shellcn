@@ -97,7 +97,6 @@ type HealthConfig struct {
 // FeatureConfig toggles optional platform features.
 type FeatureConfig struct {
 	SessionSharing SessionSharingConfig `mapstructure:"session_sharing"`
-	ClipboardSync  ClipboardConfig      `mapstructure:"clipboard_sync"`
 	Notifications  NotificationConfig   `mapstructure:"notifications"`
 }
 
@@ -107,12 +106,6 @@ type SessionSharingConfig struct {
 	MaxSharedUsers int  `mapstructure:"max_shared_users"`
 }
 
-// ClipboardConfig controls clipboard synchronisation.
-type ClipboardConfig struct {
-	Enabled   bool `mapstructure:"enabled"`
-	MaxSizeKB int  `mapstructure:"max_size_kb"`
-}
-
 // NotificationConfig toggles notifications.
 type NotificationConfig struct {
 	Enabled bool `mapstructure:"enabled"`
@@ -120,47 +113,16 @@ type NotificationConfig struct {
 
 // ModuleConfig enables individual protocol modules.
 type ModuleConfig struct {
-	SSH        SSHModuleConfig      `mapstructure:"ssh"`
-	Telnet     TelnetModuleConfig   `mapstructure:"telnet"`
-	SFTP       SFTPModuleConfig     `mapstructure:"sftp"`
-	RDP        DesktopModuleConfig  `mapstructure:"rdp"`
-	VNC        DesktopModuleConfig  `mapstructure:"vnc"`
-	Docker     SimpleModuleConfig   `mapstructure:"docker"`
-	Kubernetes SimpleModuleConfig   `mapstructure:"kubernetes"`
-	Database   DatabaseModuleConfig `mapstructure:"database"`
-	Proxmox    SimpleModuleConfig   `mapstructure:"proxmox"`
-	FileShare  SimpleModuleConfig   `mapstructure:"file_share"`
-}
-
-// SSHModuleConfig configures SSH/SFTP capabilities.
-type SSHModuleConfig struct {
-	Enabled              bool `mapstructure:"enabled"`
-	DefaultPort          int  `mapstructure:"default_port"`
-	SSHV1Enabled         bool `mapstructure:"ssh_v1_enabled"`
-	SSHV2Enabled         bool `mapstructure:"ssh_v2_enabled"`
-	AutoReconnect        bool `mapstructure:"auto_reconnect"`
-	MaxReconnectAttempts int  `mapstructure:"max_reconnect_attempts"`
-	KeepaliveInterval    int  `mapstructure:"keepalive_interval"`
-}
-
-// TelnetModuleConfig configures the Telnet client.
-type TelnetModuleConfig struct {
-	Enabled        bool `mapstructure:"enabled"`
-	DefaultPort    int  `mapstructure:"default_port"`
-	AutoReconnect  bool `mapstructure:"auto_reconnect"`
-	ReconnectLimit int  `mapstructure:"max_reconnect_attempts"`
-}
-
-// SFTPModuleConfig controls the SFTP module.
-type SFTPModuleConfig struct {
-	Enabled     bool `mapstructure:"enabled"`
-	DefaultPort int  `mapstructure:"default_port"`
-}
-
-// DesktopModuleConfig is shared between RDP and VNC modules.
-type DesktopModuleConfig struct {
-	Enabled     bool `mapstructure:"enabled"`
-	DefaultPort int  `mapstructure:"default_port"`
+	SSH           SimpleModuleConfig   `mapstructure:"ssh"`
+	Telnet        SimpleModuleConfig   `mapstructure:"telnet"`
+	SFTP          SimpleModuleConfig   `mapstructure:"sftp"`
+	RDP           SimpleModuleConfig   `mapstructure:"rdp"`
+	VNC           SimpleModuleConfig   `mapstructure:"vnc"`
+	Docker        SimpleModuleConfig   `mapstructure:"docker"`
+	Kubernetes    SimpleModuleConfig   `mapstructure:"kubernetes"`
+	Database      DatabaseModuleConfig `mapstructure:"database"`
+	Proxmox       SimpleModuleConfig   `mapstructure:"proxmox"`
+	ObjectStorage SimpleModuleConfig   `mapstructure:"object_storage"`
 }
 
 // SimpleModuleConfig enables optional modules without extra settings.
@@ -277,32 +239,13 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("features.session_sharing.enabled", true)
 	v.SetDefault("features.session_sharing.max_shared_users", 5)
-	v.SetDefault("features.clipboard_sync.enabled", true)
-	v.SetDefault("features.clipboard_sync.max_size_kb", 1024)
 	v.SetDefault("features.notifications.enabled", true)
 
 	v.SetDefault("modules.ssh.enabled", true)
-	v.SetDefault("modules.ssh.default_port", 22)
-	v.SetDefault("modules.ssh.ssh_v1_enabled", false)
-	v.SetDefault("modules.ssh.ssh_v2_enabled", true)
-	v.SetDefault("modules.ssh.auto_reconnect", true)
-	v.SetDefault("modules.ssh.max_reconnect_attempts", 3)
-	v.SetDefault("modules.ssh.keepalive_interval", 60)
-
 	v.SetDefault("modules.telnet.enabled", true)
-	v.SetDefault("modules.telnet.default_port", 23)
-	v.SetDefault("modules.telnet.auto_reconnect", true)
-	v.SetDefault("modules.telnet.max_reconnect_attempts", 3)
-
 	v.SetDefault("modules.sftp.enabled", true)
-	v.SetDefault("modules.sftp.default_port", 22)
-
 	v.SetDefault("modules.rdp.enabled", true)
-	v.SetDefault("modules.rdp.default_port", 3389)
-
 	v.SetDefault("modules.vnc.enabled", true)
-	v.SetDefault("modules.vnc.default_port", 5900)
-
 	v.SetDefault("modules.docker.enabled", true)
 	v.SetDefault("modules.kubernetes.enabled", false)
 	v.SetDefault("modules.database.enabled", true)
@@ -311,7 +254,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("modules.database.redis", true)
 	v.SetDefault("modules.database.mongodb", true)
 	v.SetDefault("modules.proxmox.enabled", false)
-	v.SetDefault("modules.file_share.enabled", false)
+	v.SetDefault("modules.object_storage.enabled", false)
 
 	v.SetDefault("auth.jwt.access_token_ttl", "15m")
 	v.SetDefault("auth.session.refresh_token_ttl", "720h") // 30 days

@@ -133,8 +133,8 @@ func moduleEnabled(cfg *app.Config, module string, protocolID string) bool {
 		}
 	case "proxmox":
 		return cfg.Modules.Proxmox.Enabled
-	case "file_share":
-		return cfg.Modules.FileShare.Enabled
+	case "object_storage":
+		return cfg.Modules.ObjectStorage.Enabled
 	default:
 		return true
 	}

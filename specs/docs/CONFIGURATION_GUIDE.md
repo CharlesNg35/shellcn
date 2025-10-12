@@ -107,12 +107,8 @@ features:
 modules:
   ssh:
     enabled: true
-    default_port: 22
-    ssh_v1_enabled: false
-    ssh_v2_enabled: true
   rdp:
     enabled: true
-    default_port: 3389
   docker:
     enabled: true
   database:

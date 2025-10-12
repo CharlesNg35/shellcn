@@ -87,7 +87,7 @@ ShellCN can be configured entirely through environment variables when running un
 - `SHELLCN_MODULES_DATABASE_REDIS` (default `true`)
 - `SHELLCN_MODULES_DATABASE_MONGODB` (default `true`)
 - `SHELLCN_MODULES_PROXMOX_ENABLED` (default `false`)
-- `SHELLCN_MODULES_FILE_SHARE_ENABLED` (default `false`)
+- `SHELLCN_MODULES_OBJECT_STORAGE_ENABLED` (default `false`)
 
 ## Authentication
 

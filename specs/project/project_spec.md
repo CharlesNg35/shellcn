@@ -746,7 +746,7 @@ Users → ShellCN Platform → External Services
 **Optional modules (can be disabled):**
 - Kubernetes client
 - Proxmox client
-- Advanced file sharing (SMB, NFS, S3)
+- Object storage (S3, MinIO, GCS, Azure)
 - MongoDB client
 
 ### 5.2 SSH Module (Detailed Configuration)
@@ -2266,14 +2266,14 @@ modules:
 - Node selection
 - Realm (PAM, PVE, etc.)
 
-**File Share Connection Form:**
+**Object Storage Connection Form:**
 - Name, Icon
-- Protocol (SMB, NFS, FTP, S3, WebDAV)
-- Host, Port
+- Provider (S3, MinIO, GCS, Azure, DigitalOcean)
+- Endpoint URL
 - Identity Selector
-- Share/Bucket name
-- Mount options (NFS)
-- Encryption (if supported)
+- Bucket/Container name
+- Region
+- Encryption settings
 
 **2. Identity/Vault Management:**
 
