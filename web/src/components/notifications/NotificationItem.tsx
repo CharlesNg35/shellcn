@@ -2,6 +2,8 @@ import { formatDistanceToNow } from 'date-fns'
 import { CheckCircle2, CircleDot, ExternalLink, Trash2 } from 'lucide-react'
 import type { NotificationPayload } from '@/types/notifications'
 import { cn } from '@/lib/utils/cn'
+import { PermissionGuard } from '../permissions/PermissionGuard'
+import { PERMISSIONS } from '@/constants/permissions'
 
 interface NotificationItemProps {
   notification: NotificationPayload
@@ -59,16 +61,21 @@ export function NotificationItem({
             </div>
             <span className="text-xs text-muted-foreground">{relativeTime}</span>
           </div>
+
           {notification.message ? (
             <p className="text-sm text-muted-foreground">{notification.message}</p>
           ) : null}
+
           <div className="flex flex-wrap gap-2 pt-1">
-            <button
-              onClick={handleToggleRead}
-              className="text-xs font-medium text-primary hover:underline"
-            >
-              {notification.is_read ? 'Mark as unread' : 'Mark as read'}
-            </button>
+            <PermissionGuard permission={PERMISSIONS.NOTIFICATION.MANAGE}>
+              <button
+                onClick={handleToggleRead}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                {notification.is_read ? 'Mark as unread' : 'Mark as read'}
+              </button>
+            </PermissionGuard>
+
             {notification.action_url ? (
               <button
                 onClick={handleNavigate}
@@ -78,13 +85,16 @@ export function NotificationItem({
                 <ExternalLink className="h-3 w-3" />
               </button>
             ) : null}
-            <button
-              onClick={handleRemove}
-              className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 className="h-3 w-3" />
-              Remove
-            </button>
+
+            <PermissionGuard permission={PERMISSIONS.NOTIFICATION.MANAGE}>
+              <button
+                onClick={handleRemove}
+                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-3 w-3" />
+                Remove
+              </button>
+            </PermissionGuard>
           </div>
         </div>
       </div>

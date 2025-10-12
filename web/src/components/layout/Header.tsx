@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils/cn'
 import { ThemeToggle } from '@/components/theme/ThemeToggle'
 import { Breadcrumbs } from './Breadcrumbs'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
+import { PermissionGuard } from '../permissions/PermissionGuard'
+import { PERMISSIONS } from '@/constants/permissions'
 
 interface HeaderProps {
   onToggleSidebar?: () => void
@@ -68,8 +70,12 @@ export function Header({ onToggleSidebar }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2 -mr-3.5">
-        <NotificationBell />
+        <PermissionGuard permission={PERMISSIONS.NOTIFICATION.VIEW}>
+          <NotificationBell />
+        </PermissionGuard>
+
         <ThemeToggle />
+
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setUserMenuOpen(!userMenuOpen)}

@@ -1,6 +1,8 @@
 import type { NotificationPayload } from '@/types/notifications'
 import { NotificationItem } from './NotificationItem'
 import { cn } from '@/lib/utils/cn'
+import { PermissionGuard } from '../permissions/PermissionGuard'
+import { PERMISSIONS } from '@/constants/permissions'
 
 interface NotificationCenterProps {
   notifications: NotificationPayload[]
@@ -34,13 +36,15 @@ export function NotificationCenter({
             {isConnected ? 'Live updates enabled' : 'Offline – retrying connection'}
           </p>
         </div>
-        <button
-          className="text-xs font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-          onClick={onMarkAllRead}
-          disabled={unreadCount === 0 || isLoading}
-        >
-          Mark all read
-        </button>
+        <PermissionGuard permission={PERMISSIONS.NOTIFICATION.MANAGE}>
+          <button
+            className="text-xs font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={onMarkAllRead}
+            disabled={unreadCount === 0 || isLoading}
+          >
+            Mark all read
+          </button>
+        </PermissionGuard>
       </div>
 
       <div className="max-h-96 space-y-2 overflow-y-auto p-3">
