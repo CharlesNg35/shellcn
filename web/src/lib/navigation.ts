@@ -1,14 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import {
-  Activity,
-  FileText,
-  FolderKanban,
-  Key,
-  LayoutDashboard,
-  Settings,
-  Shield,
-  Users,
-} from 'lucide-react'
+import { FileText, FolderKanban, Key, LayoutDashboard, Settings, Shield, Users } from 'lucide-react'
 import { isFeatureEnabled } from './features'
 import { PERMISSIONS } from '@/constants/permissions'
 import type { PermissionId } from '@/constants/permissions'
@@ -75,7 +66,6 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         permission: PERMISSIONS.PERMISSION.MANAGE,
         featureId: 'authProviders',
       },
-      { label: 'Sessions', path: '/settings/sessions', icon: Activity, featureId: 'sessions' },
       {
         label: 'Audit Logs',
         path: '/settings/audit',

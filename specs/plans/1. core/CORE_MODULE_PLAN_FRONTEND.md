@@ -172,9 +172,11 @@ web/
 │   │   │   ├── PermissionGuard.tsx
 │   │   │   └── PermissionBadge.tsx
 │   │   │
-│   │   ├── sessions/                   # Session components
-│   │   │   ├── SessionTable.tsx
-│   │   │   └── SessionCard.tsx
+│   │   ├── settings/                   # Account & preference components
+│   │   │   ├── AccountSettingsPanel.tsx
+│   │   │   ├── SecuritySettingsPanel.tsx
+│   │   │   ├── AppearanceSettingsPanel.tsx
+│   │   │   └── ProfileSessionsPanel.tsx
 │   │   │
 │   │   ├── audit/                      # Audit components
 │   │   │   ├── AuditLogTable.tsx
@@ -202,7 +204,7 @@ web/
 │   │   ├── usePermissions.ts
 │   │   ├── useUsers.ts
 │   │   ├── useTeams.ts
-│   │   ├── useSessions.ts
+│   │   ├── useProfileSettings.ts      # Profile preferences, MFA, sessions
 │   │   ├── useAuditLogs.ts
 │   │   └── useAuthProviders.ts
 │   │
@@ -2726,14 +2728,13 @@ export const Disabled: Story = {
   - [ ] Auth Providers API
 
 - [ ] **Pages**
-  - [ ] Sessions page
+-  - [ ] Sessions settings tab
   - [ ] Audit logs page
   - [ ] Security settings page
   - [ ] Auth providers page
 
 - [ ] **Components**
-  - [ ] SessionTable
-  - [ ] SessionCard
+-  - [ ] ProfileSessionsPanel
   - [ ] AuditLogTable
   - [ ] AuditFilters
   - [ ] AuditExport
@@ -2745,7 +2746,7 @@ export const Disabled: Story = {
   - [ ] InviteSettingsForm
 
 - [ ] **Hooks**
-  - [ ] useSessions hook
+  - [ ] useProfileSessions hook
   - [ ] useAuditLogs hook
   - [ ] useAuthProviders hook
 
@@ -3149,13 +3150,13 @@ export default defineConfig({
 
 ### Phase 8: Session Management (Week 8)
 - [ ] Create Sessions page
-- [ ] Build SessionTable component
-- [ ] Implement SessionCard for mobile view
+- [ ] Build ProfileSessionsPanel component
+- [ ] Integrate sessions tab into profile settings
 - [ ] Add session revocation functionality
 - [ ] Create "Revoke All" feature
 - [ ] Build device/browser detection display
 - [ ] Implement session filtering
-- [ ] Create useSessions hook
+- [ ] Create useProfileSessions hook
 - [ ] Add session activity timeline
 - [ ] Write tests for session management
 

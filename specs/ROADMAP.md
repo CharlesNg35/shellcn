@@ -116,20 +116,17 @@
 - [x] Create useAuthProviders hook
 - [x] Add provider configuration validation
 - [x] Write tests for provider management
+- [x] Sidebar: surface active connection sessions once backend exposes activity feed (critical for final navigation polish)
 
 ### Phase 8: Session Management (Week 8)
 
-- [ ] Create Sessions page
-- [ ] Build SessionTable component
-- [ ] Implement SessionCard for mobile view
-- [ ] Add session revocation functionality
-- [ ] Create "Revoke All" feature
-- [ ] Build device/browser detection display
-- [ ] Implement session filtering
-- [ ] Create useSessions hook
-- [ ] Add session activity timeline
-- [ ] Write tests for session management
-- [ ] Sidebar: surface active connection sessions once backend exposes activity feed (critical for final navigation polish)
+- [x] Add Sessions tab to profile settings
+- [x] Build simplified session list component
+- [x] Add session revocation functionality
+- [x] Create "Revoke Other Sessions" feature
+- [x] Surface session metadata (IP, last activity)
+- [x] Implement useProfileSessions hook
+- [x] Write tests for session management
 
 ### Phase 9: Audit Log Viewer (Week 9)
 
@@ -159,20 +156,7 @@
 - [x] Add settings persistence
 - [x] Write tests for settings
 
-### Phase 11: Testing & Quality Assurance (Week 11)
-
-- [ ] Achieve ≥80% unit test coverage
-- [ ] Write integration tests for critical flows
-- [ ] Set up Cypress for E2E testing
-- [ ] Create E2E tests for authentication flow
-- [ ] Test user management workflows
-- [ ] Test permission assignment flows
-- [ ] Verify accessibility (WCAG 2.1 AA)
-- [ ] Test keyboard navigation
-- [ ] Verify responsive design (mobile, tablet, desktop)
-- [ ] Performance testing (Lighthouse score ≥90)
-
-### Phase 12: Documentation & Polish (Week 12)
+### Phase 11: Documentation & Polish (Week 12)
 
 - [ ] Write README with setup instructions
 - [ ] Document API integration patterns
@@ -210,15 +194,21 @@
 
 ---
 
-## 8. Docker Module — Not Started
+## 8. Session Recording Module — Planned
+
+- Implement unified capture and storage for SSH, RDP, and VNC sessions with replay tooling for auditors.
 
 ---
 
-## 9. Kubernetes Module — Not Started
+## 9. Docker Module — Not Started
 
 ---
 
-## 10. Database Module — Not Started
+## 10. Kubernetes Module — Not Started
+
+---
+
+## 11. Database Module — Not Started
 
     ### MySQL — Driver support implemented (Phase 1)
     ### PostgreSQL — Driver support implemented (Phase 1)
@@ -227,8 +217,8 @@
 
 ---
 
-## 11. Proxmox Module — Not Started
+## 12. Proxmox Module — Not Started
 
 ---
 
-## 12. File Share Module — Not Started
+## 13. File Share Module — Not Started

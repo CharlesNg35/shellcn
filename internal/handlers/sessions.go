@@ -56,7 +56,10 @@ func (h *SessionHandler) RevokeAll(c *gin.Context) {
 	}
 	userID := v.(string)
 
-	if err := h.sessions.RevokeUserSessions(userID); err != nil {
+	sv, _ := c.Get("sessionID")
+	sessionID, _ := sv.(string)
+
+	if err := h.sessions.RevokeUserSessions(userID, sessionID); err != nil {
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}

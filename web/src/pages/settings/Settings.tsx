@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { AccountSettingsPanel } from '@/components/settings/AccountSettingsPanel'
 import { SecuritySettingsPanel } from '@/components/settings/SecuritySettingsPanel'
 import { AppearanceSettingsPanel } from '@/components/settings/AppearanceSettingsPanel'
+import { ProfileSessionsPanel } from '@/components/settings/ProfileSessionsPanel'
 
 const SETTINGS_TABS = [
   {
@@ -15,6 +16,11 @@ const SETTINGS_TABS = [
     value: 'security',
     label: 'Security',
     description: 'Password management, MFA enrollment, and recovery options.',
+  },
+  {
+    value: 'sessions',
+    label: 'Sessions',
+    description: 'Review signed-in devices and revoke sessions that should no longer stay active.',
   },
   {
     value: 'appearance',
@@ -53,6 +59,10 @@ export function Settings() {
 
         <TabsContent value="security" className="space-y-6">
           <SecuritySettingsPanel />
+        </TabsContent>
+
+        <TabsContent value="sessions" className="space-y-6">
+          <ProfileSessionsPanel />
         </TabsContent>
 
         <TabsContent value="appearance" className="space-y-6">

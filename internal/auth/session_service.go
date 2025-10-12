@@ -454,26 +454,36 @@ func (s *SessionService) pruneExpiredChallengesLocked(now time.Time) {
 	}
 }
 
-// RevokeUserSessions revokes every active session belonging to a user.
-func (s *SessionService) RevokeUserSessions(userID string) error {
+// RevokeUserSessions revokes every active session belonging to a user, optionally excluding specific session IDs.
+func (s *SessionService) RevokeUserSessions(userID string, excludeSessionIDs ...string) error {
 	if strings.TrimSpace(userID) == "" {
 		return ErrSessionInvalidToken
+	}
+
+	filteredExclude := make([]string, 0, len(excludeSessionIDs))
+	for _, id := range excludeSessionIDs {
+		if trimmed := strings.TrimSpace(id); trimmed != "" {
+			filteredExclude = append(filteredExclude, trimmed)
+		}
+	}
+
+	filter := func(db *gorm.DB) *gorm.DB {
+		query := db.Where("user_id = ? AND revoked_at IS NULL", userID)
+		if len(filteredExclude) > 0 {
+			query = query.Where("id NOT IN ?", filteredExclude)
+		}
+		return query
 	}
 
 	now := s.now()
 	var tokens []string
 	if s.cache != nil {
-		if err := s.db.
-			Model(&models.Session{}).
-			Where("user_id = ? AND revoked_at IS NULL", userID).
-			Pluck("refresh_token", &tokens).Error; err != nil {
+		if err := filter(s.db.Model(&models.Session{})).Pluck("refresh_token", &tokens).Error; err != nil {
 			tokens = nil
 		}
 	}
 
-	result := s.db.Model(&models.Session{}).
-		Where("user_id = ? AND revoked_at IS NULL", userID).
-		Update("revoked_at", now)
+	result := filter(s.db.Model(&models.Session{})).Update("revoked_at", now)
 	if result.Error != nil {
 		return result.Error
 	}

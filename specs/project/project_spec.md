@@ -363,7 +363,7 @@ All user-facing settings (terminal appearance, UI themes, file manager preferenc
    - Default view (list, grid)
    - Sort order
 
-4. **Session Preferences** (`/settings/sessions`)
+4. **Session Preferences** (`Settings → Sessions tab`)
    - Auto-reconnect behavior
    - Clipboard sync defaults
    - Session recording preferences

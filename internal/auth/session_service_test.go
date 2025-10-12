@@ -100,6 +100,41 @@ func TestRevokeSessionPreventsRefresh(t *testing.T) {
 	require.True(t, stored.RevokedAt.After(clock.Now().Add(-time.Nanosecond)))
 }
 
+func TestRevokeUserSessionsExcludesCurrent(t *testing.T) {
+	db, svc, _, clock := setupSessionService(t)
+
+	user := createTestUser(t, db, "user-revoke-all")
+
+	_, currentSession, err := svc.CreateSession(user.ID, SessionMetadata{})
+	require.NoError(t, err)
+	_, otherSession, err := svc.CreateSession(user.ID, SessionMetadata{})
+	require.NoError(t, err)
+	_, anotherSession, err := svc.CreateSession(user.ID, SessionMetadata{})
+	require.NoError(t, err)
+
+	clock.Advance(time.Minute)
+
+	require.NoError(t, svc.RevokeUserSessions(user.ID, currentSession.ID))
+
+	var current models.Session
+	require.NoError(t, db.Take(&current, "id = ?", currentSession.ID).Error)
+	require.Nil(t, current.RevokedAt)
+
+	var revoked models.Session
+	require.NoError(t, db.Take(&revoked, "id = ?", otherSession.ID).Error)
+	require.NotNil(t, revoked.RevokedAt)
+	require.True(t, revoked.RevokedAt.After(clock.Now().Add(-time.Minute)))
+
+	var revokedAnother models.Session
+	require.NoError(t, db.Take(&revokedAnother, "id = ?", anotherSession.ID).Error)
+	require.NotNil(t, revokedAnother.RevokedAt)
+
+	// Invoking without exclusions should revoke the remaining sessions, including previously spared one.
+	require.NoError(t, svc.RevokeUserSessions(user.ID))
+	require.NoError(t, db.Take(&current, "id = ?", currentSession.ID).Error)
+	require.NotNil(t, current.RevokedAt)
+}
+
 func TestSessionServiceCleanupExpired(t *testing.T) {
 	db, svc, _, clock := setupSessionService(t)
 

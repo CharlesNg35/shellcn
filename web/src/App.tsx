@@ -21,7 +21,6 @@ import { Users } from '@/pages/settings/Users'
 import { Teams } from '@/pages/settings/Teams'
 import { TeamDetail } from '@/pages/settings/TeamDetail'
 import { Permissions } from '@/pages/settings/Permissions'
-import { Sessions } from '@/pages/settings/Sessions'
 import { AuditLogs } from '@/pages/settings/AuditLogs'
 import { AuthProviders } from '@/pages/settings/AuthProviders'
 import { Security } from '@/pages/settings/Security'
@@ -54,7 +53,6 @@ function AppRoutes() {
             <Route path="/settings/teams" element={<Teams />} />
             <Route path="/settings/teams/:teamId" element={<TeamDetail />} />
             <Route path="/settings/permissions" element={<Permissions />} />
-            <Route path="/settings/sessions" element={<Sessions />} />
             <Route path="/settings/audit" element={<AuditLogs />} />
             <Route path="/settings/auth-providers" element={<AuthProviders />} />
             <Route path="/settings/security" element={<Security />} />
