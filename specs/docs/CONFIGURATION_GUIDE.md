@@ -63,7 +63,6 @@ cache:
 vault:
   encryption_key: ${VAULT_ENCRYPTION_KEY} # 32 bytes hex
   algorithm: aes-256-gcm
-  key_rotation_days: 90
 
 auth:
   jwt:

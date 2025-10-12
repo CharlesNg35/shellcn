@@ -125,14 +125,33 @@ Notes:
 ## 6. Identity & Credential Vault Integration
 
 - Drivers declare required secret slots (e.g., `ssh.key`, `ssh.password`, `kubeconfig`, `docker.cert`).
-- Secrets either reference `vault.Credential` IDs or embed inline encrypted payloads.
+- Secrets always reference vault identities; drivers must never accept raw credential payloads from connection settings.
 - `Identity` feature (future) must map to driver requirements using the same key names to allow auto-binding.
+- Drivers must expose a `CredentialTemplate()` descriptor describing expected fields, validation rules, compatible protocol IDs, and version metadata (`TemplateVersion`, optional `DeprecatedAfter`). Templates are synced via `ProtocolCatalogService.Sync()` during startup and on-demand refresh. Each field should specify `type` (string, secret, file, enum, boolean, number), `required`, optional validation hints, and supported `input_modes` (e.g., `['text','file']` for kubeconfigs).
 - `ProtocolService` and UI should surface missing credential requirements so users can attach identities before launching.
-- Connection credentials follow a dual-source strategy:
-  - **Identity-backed** connections provide `secret_id`, pointing to a vault/identity record containing reusable credentials (shared SSH keys, kubeconfigs, database secrets).
-  - **Inline overrides** can still be stored directly in `Connection.Settings` for one-off credentials outside the identity scope. These are encrypted in the DB using the vault key to keep them safe, and driver specs must flag which settings accept inline secrets.
-  - When launching, the backend merges identity secrets and inline overrides: identity values populate defaults, inline settings override them for temporary needs. Drivers should be written defensively (e.g., prefer inline username only if provided, else fall back to identity value).
+
+**Credential Field Schema Example**
+
+```go
+type CredentialField struct {
+    Name        string   // e.g. "kubeconfig"
+    Type        string   // string, secret, file, enum, boolean, number
+    Required    bool
+    Description string
+    InputModes  []string // e.g. []string{"text", "file"}
+    Options     []string // for enums
+}
+```
+
+A Kubernetes driver can expose a field like `kubeconfig` with `Type: "secret"` and `InputModes: []string{"text", "file"}` so the UI offers either paste or upload flows, while an SSH driver may provide both `private_key` (file or text) and `password` (text) as optional secrets.
+
+For protocol families with multiple engines (e.g. MySQL, PostgreSQL, Redis), each driver/feature should register its own `CredentialTemplate` keyed by driver ID (for example `mysql`, `postgres`, `redis`). Shared code can leverage helper structs, but the registry must surface distinct templates so the frontend knows which fields to show for each connection type.
+
+- Connection credentials are always sourced from the vault:
+  - Connections store an `identity_id` referencing a vault identity (global, team, or connection-scoped).
+  - One-off credentials MUST be wrapped in a connection-scoped identity created by the backend/UI helpers; drivers never read secrets from `Connection.Settings` directly.
   - Driver specs must clearly state whether identities are mandatory (SSH, Kubernetes, database) or optional (Telnet, health probes) so UI flows can prompt users accordingly.
+- When template versions change, drivers must publish migration guidance (matching `TemplateVersion`, `DeprecatedAfter`) and a handler for rehydrating existing identities into the new schema.
 
 ## 7. Frontend Contract
 

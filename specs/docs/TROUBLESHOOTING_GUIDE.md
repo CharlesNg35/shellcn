@@ -103,7 +103,7 @@ This guide catalogues common operational issues, symptoms, diagnostic commands, 
 ## 8. Maintenance Tasks
 
 - **Expired sessions/tokens not clearing** – ensure maintenance cleaner is running; logs with `module=maintenance`. When shutting down, watch for `maintenance shutdown cleanup failed`.
-- **Audit log bloat** – configure `maintenance.WithAuditRetentionDays` or adjust `vault.key_rotation_days`. Export logs periodically via `/api/audit/export`.
+- **Audit log bloat** – configure `maintenance.WithAuditRetentionDays`.Export logs periodically via `/api/audit/export`.
 
 ---
 

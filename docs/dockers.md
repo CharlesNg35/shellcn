@@ -109,11 +109,10 @@ cache:
 
 ## Vault Configuration
 
-| Environment Variable              | YAML Path                 | Default       | Description                                                                 |
-| --------------------------------- | ------------------------- | ------------- | --------------------------------------------------------------------------- |
-| `SHELLCN_VAULT_ENCRYPTION_KEY`    | `vault.encryption_key`    | _(empty)_     | 32-byte key for encrypting stored credentials. **Required for production.** |
-| `SHELLCN_VAULT_ALGORITHM`         | `vault.algorithm`         | `aes-256-gcm` | Encryption algorithm                                                        |
-| `SHELLCN_VAULT_KEY_ROTATION_DAYS` | `vault.key_rotation_days` | `90`          | Key rotation interval in days                                               |
+| Environment Variable           | YAML Path              | Default       | Description                                                                 |
+| ------------------------------ | ---------------------- | ------------- | --------------------------------------------------------------------------- |
+| `SHELLCN_VAULT_ENCRYPTION_KEY` | `vault.encryption_key` | _(empty)_     | 32-byte key for encrypting stored credentials. **Required for production.** |
+| `SHELLCN_VAULT_ALGORITHM`      | `vault.algorithm`      | `aes-256-gcm` | Encryption algorithm                                                        |
 
 **YAML Example:**
 
@@ -121,7 +120,6 @@ cache:
 vault:
   encryption_key: replace-with-32-byte-key
   algorithm: aes-256-gcm
-  key_rotation_days: 90
 ```
 
 ---
@@ -318,7 +316,6 @@ cache:
 vault:
   encryption_key: replace-with-32-byte-key
   algorithm: aes-256-gcm
-  key_rotation_days: 90
 
 monitoring:
   prometheus:

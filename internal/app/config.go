@@ -72,9 +72,8 @@ type DBAuthConfig struct {
 
 // VaultConfig documents encryption requirements for stored secrets.
 type VaultConfig struct {
-	EncryptionKey   string `mapstructure:"encryption_key"`
-	Algorithm       string `mapstructure:"algorithm"`
-	KeyRotationDays int    `mapstructure:"key_rotation_days"`
+	EncryptionKey string `mapstructure:"encryption_key"`
+	Algorithm     string `mapstructure:"algorithm"`
 }
 
 // MonitoringConfig enables health checks and metrics.
@@ -231,7 +230,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("cache.redis.timeout", "5s")
 
 	v.SetDefault("vault.algorithm", "aes-256-gcm")
-	v.SetDefault("vault.key_rotation_days", 90)
 
 	v.SetDefault("monitoring.prometheus.enabled", true)
 	v.SetDefault("monitoring.prometheus.endpoint", "/metrics")

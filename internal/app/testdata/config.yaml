@@ -23,7 +23,6 @@ cache:
 vault:
   encryption_key: super-secret-key
   algorithm: aes-256-gcm
-  key_rotation_days: 60
 
 monitoring:
   prometheus:

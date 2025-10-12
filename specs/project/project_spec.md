@@ -960,7 +960,7 @@ type VaultService interface {
 1. **Manage Identities Page** (`/settings/identities`)
 
    - List all saved identities (own + shared)
-   - Create new identity
+   - Create new identity (form renders fields defined by protocol templates, supporting multiple input modes such as paste or file upload for the same secret)
    - Edit/Delete existing identities
    - Share identities with team members
    - Upload SSH keys
@@ -976,7 +976,7 @@ type VaultService interface {
      - Port (default based on protocol)
      - **Identity** (dropdown with saved identities + "Custom Identity")
        - When identity selected: credentials auto-filled
-       - When "Custom Identity" selected: show username/password fields
+       - When "Custom Identity" selected: render template-driven credential fields (supporting alternative input modes such as paste vs file upload)
        - Link: "(Manage)" → navigates to `/settings/identities`
      - Authentication (dropdown: Password, Public Key, Keyboard-Interactive)
      - Username (if custom identity)
@@ -1982,7 +1982,7 @@ CORE_PERMISSIONS = {
   - Optional admin scopes (e.g., `kubernetes.cluster.admin`, `docker.stack.deploy`, `database.cluster.manage`) always depend on `connection.manage` and may imply additional feature scopes.
 - Driver specs live under `specs/project/drivers/<driver>.md` and must capture:
   - Connection settings persisted in `connections.settings` (host, port, namespace, context, tls flags, etc.).
-  - Required credential or identity bindings (vault secret keys, inline fields).
+  - Required credential bindings (vault identities, including connection-scoped identities created by the UI/backend helpers).
   - Permission profile details plus the capability flags surfaced to the frontend.
   - Auditing hooks (what actions emit `AuditEntry` records).
 - Default driver scopes (non-exhaustive):
@@ -2037,7 +2037,6 @@ cache:
 vault:
   encryption_key: super-secret-key
   algorithm: aes-256-gcm
-  key_rotation_days: 60
 
 monitoring:
   prometheus:

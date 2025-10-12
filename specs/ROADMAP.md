@@ -164,6 +164,56 @@
 
 ## 2. Vault Module (Credentials, Encryption) — Not Started
 
+### Phase 1: Encryption & Data Foundation (Week 1)
+
+- [ ] Build vault crypto helper (Argon2id derivation + AES-GCM wrapper)
+- [ ] Define GORM models for identities, credential templates, identity shares, credential versions, and vault key metadata
+- [ ] Rename `connections.secret_id` → `identity_id`, update models/services/tests
+- [ ] Register new models with `internal/database/migrations.go` and seed baseline permissions/feature flags
+- [ ] Extend configuration validation for `VAULT_ENCRYPTION_KEY` (length, presence)
+- [ ] Add credential-template bootstrap process via `ProtocolCatalogService.Sync()` with version/deprecation metadata
+
+### Phase 2: Vault Service & API (Week 2)
+
+- [ ] Implement `internal/services/vault_service.go` covering identity CRUD (global/team/connection scopes), encryption, and auditing
+- [ ] Add repository helpers for owner/team/share filtering and connection-scoped provisioning
+- [ ] Create `internal/handlers/vault.go` with REST endpoints (`/api/vault/identities`, `/api/vault/credentials`, `/api/vault/templates`, `/api/vault/shares`)
+- [ ] Register vault routes in API router with auth + rate limiting
+- [ ] Add service/handler unit tests (success + failure branches, encrypted payload assertions)
+
+### Phase 3: Sharing & Usage Integration (Week 3)
+
+- [ ] Implement identity sharing service (user/team) with permission tiers and audit events
+- [ ] Track identity usage metadata (last used, connection count) for UI surfaces
+- [ ] Ensure connection flows validate access and auto-provision scoped identities
+- [ ] Auto-share referenced identities (or block share) when connections are shared to maintain launch capability
+- [ ] Expose identity usage stats endpoints for frontend
+- [ ] Add background cleanup job for orphaned identities and dangling shares
+
+### Phase 4: Frontend Data Layer (Week 4)
+
+- [ ] Define TypeScript types for identities, credential templates, and shares under `web/src/types`
+- [ ] Add API client modules (`web/src/lib/api/vault.ts`) aligned with backend contracts
+- [ ] Create React Query hooks (`useIdentities`, `useIdentityMutations`, `useCredentialTemplates`, `useIdentitySharing`)
+- [ ] Update permission constants and feature flags for vault capabilities
+- [ ] Cover hooks with unit tests (mocks for optimistic updates, error toasts)
+
+### Phase 5: Vault UI & Workflow Integration (Week 5)
+
+- [ ] Replace `/settings/identities` placeholder with full list (filters, sorting, scope indicators)
+- [ ] Build identity form modal (create/edit) with credential-type editors and share dialog
+- [ ] Introduce reusable `IdentitySelector` for connection forms and settings panels
+- [ ] Allow inline identity creation within connection flows when user holds `vault.create`
+- [ ] Add per-identity detail view (activity timeline, usage, share management)
+
+### Phase 6: Quality, Security, & Docs (Week 6)
+
+- [ ] Write service integration tests (share flows, permission enforcement, audit logging)
+- [ ] Add Cypress coverage for identity lifecycle and connection integration
+- [ ] Document vault operations (backup/restore procedures) in `docs/`
+- [ ] Add telemetry/metrics (vault ops counters, errors) to Prometheus registry
+- [ ] Perform security review (secret masking, rate limits, clipboard restrictions)
+
 ---
 
 ## 3. Monitoring Module (Metrics, Health) — Not Started

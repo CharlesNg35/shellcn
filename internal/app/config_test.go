@@ -21,7 +21,6 @@ func TestLoadConfigFromFile(t *testing.T) {
 	require.Equal(t, "postgres", cfg.Database.Driver)
 	require.True(t, cfg.Database.Postgres.Enabled)
 	require.Equal(t, "db.example.com", cfg.Database.Postgres.Host)
-	require.Equal(t, 60, cfg.Vault.KeyRotationDays)
 
 	require.True(t, cfg.Cache.Redis.Enabled)
 	require.Equal(t, "redis.example.com:6379", cfg.Cache.Redis.Address)
