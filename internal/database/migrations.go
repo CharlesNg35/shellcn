@@ -29,6 +29,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ConnectionTarget{},
 		&models.ResourcePermission{},
 		&models.Notification{},
+		&models.SystemSetting{},
 	)
 }
 

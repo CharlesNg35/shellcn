@@ -58,6 +58,12 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	if strings.TrimSpace(cfg.Vault.EncryptionKey) == "" {
+		if stored, err := loadVaultKeyFromSystemSettings(ctx, cfg); err == nil && strings.TrimSpace(stored) != "" {
+			cfg.Vault.EncryptionKey = stored
+		}
+	}
+
 	generated, err := app.ApplyRuntimeDefaults(cfg)
 	if err != nil {
 		return err
@@ -82,6 +88,10 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	defer closeDatabase(db, log)
+
+	if err := database.EnsureVaultEncryptionKey(ctx, db, cfg.Vault.EncryptionKey); err != nil {
+		return err
+	}
 
 	dbStore := cache.NewDatabaseStore(db)
 
@@ -282,6 +292,20 @@ func convertDatabaseConfig(cfg *app.Config) database.Config {
 	}
 
 	return dbCfg
+}
+
+func loadVaultKeyFromSystemSettings(ctx context.Context, cfg *app.Config) (string, error) {
+	preDB, err := database.Open(convertDatabaseConfig(cfg))
+	if err != nil {
+		return "", err
+	}
+
+	sqlDB, err := preDB.DB()
+	if err == nil {
+		defer sqlDB.Close()
+	}
+
+	return database.GetSystemSetting(ctx, preDB, database.VaultEncryptionKeySetting)
 }
 
 func closeDatabase(db *gorm.DB, log *zap.Logger) {

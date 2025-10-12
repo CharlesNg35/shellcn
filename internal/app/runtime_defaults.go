@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	jwtSecretBytes = 48
+	jwtSecretBytes   = 48
+	vaultSecretBytes = 32
 )
 
 // ApplyRuntimeDefaults ensures critical secrets are populated even when no configuration file is supplied.
@@ -29,6 +30,15 @@ func ApplyRuntimeDefaults(cfg *Config) (map[string]bool, error) {
 		}
 		cfg.Auth.JWT.Secret = secret
 		generated["auth.jwt.secret"] = true
+	}
+
+	if strings.TrimSpace(cfg.Vault.EncryptionKey) == "" {
+		secret, err := generateHexKey(vaultSecretBytes)
+		if err != nil {
+			return nil, fmt.Errorf("generate vault encryption key: %w", err)
+		}
+		cfg.Vault.EncryptionKey = secret
+		generated["vault.encryption_key"] = true
 	}
 
 	return generated, nil
