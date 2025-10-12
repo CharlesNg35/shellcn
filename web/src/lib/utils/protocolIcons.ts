@@ -16,7 +16,7 @@ const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
   desktop: Monitor,
   container: Container,
   database: Database,
-  file_share: Folder,
+  object_storage: Folder,
   vm: HardDrive,
   network: Network,
   cloud: Cloud,

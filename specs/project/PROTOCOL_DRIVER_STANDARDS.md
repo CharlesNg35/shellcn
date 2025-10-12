@@ -6,7 +6,7 @@ This document defines the contract that every protocol driver (formerly "module"
 
 - **Driver ID**: lower-case, hyphen-less identifier (e.g. `ssh`, `docker`, `kubernetes`). IDs become permission prefixes, connection protocol ids, and filesystem folder names under `specs/project/drivers/<driver-id>.md`.
 - **Title**: human readable string displayed in UI tab labels ("Kubernetes", "Docker Engine").
-- **Category**: standard categories `terminal`, `desktop`, `container`, `database`, `file_share`, `vm`, `network`. Custom categories must be documented and added to UI icon mapping.
+- **Category**: standard categories `terminal`, `desktop`, `container`, `database`, `object_storage`, `vm`, `network`. Custom categories must be documented and added to UI icon mapping.
 - **Module Field**: persisted value mirroring configuration namespace (current config keys under `Config.Modules`). Prefer the driver ID unless multiple sub-protocols share the same driver (database family).
 
 ## 2. Specification Layout

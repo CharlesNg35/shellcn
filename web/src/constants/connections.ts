@@ -61,7 +61,7 @@ const PROTOCOL_ICON_DEFAULTS: Record<string, string> = {
   docker: 'container',
   kubernetes: 'layers',
   proxmox: 'harddrive',
-  file_share: 'folder',
+  object_storage: 'folder',
 }
 
 const PROTOCOL_CATEGORY_ICON_SETS: Record<string, string[]> = {
@@ -72,7 +72,7 @@ const PROTOCOL_CATEGORY_ICON_SETS: Record<string, string[]> = {
   cloud: ['cloud', 'server', 'network'],
   vm: ['harddrive', 'layers', 'server'],
   network: ['network', 'server', 'terminal'],
-  file_share: ['folder', 'package', 'box'],
+  object_storage: ['folder', 'package', 'box'],
   default: CONNECTION_ICON_OPTIONS.map((option) => option.id),
 }
 
