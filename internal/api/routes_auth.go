@@ -20,6 +20,7 @@ func registerAuthRoutes(engine *gin.Engine, api *gin.RouterGroup, deps authRoute
 	auth := engine.Group("/api/auth")
 	{
 		auth.POST("/login", deps.AuthHandler.Login)
+		auth.POST("/register", deps.AuthHandler.Register)
 		auth.POST("/refresh", deps.AuthHandler.Refresh)
 		auth.POST("/mfa/verify", deps.AuthHandler.VerifyMFA)
 		auth.GET("/providers", deps.ProviderHandler.ListPublic)

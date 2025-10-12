@@ -12,6 +12,7 @@ import { PasswordResetRequest } from '@/pages/auth/PasswordResetRequest'
 import { PasswordResetConfirm } from '@/pages/auth/PasswordResetConfirm'
 import { MfaVerification } from '@/pages/auth/MfaVerification'
 import { InviteAccept } from '@/pages/auth/InviteAccept'
+import { Register } from '@/pages/auth/Register'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { Dashboard } from '@/pages/dashboard/Dashboard'
 import { Connections } from '@/pages/connections/Connections'
@@ -32,6 +33,7 @@ function AppRoutes() {
       <Route element={<SetupGuard />}>
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route path="/setup" element={<Setup />} />
           <Route path="/password-reset" element={<PasswordResetRequest />} />
           <Route path="/password-reset/confirm" element={<PasswordResetConfirm />} />

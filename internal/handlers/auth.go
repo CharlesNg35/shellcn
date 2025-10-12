@@ -49,6 +49,14 @@ type verifyMfaRequest struct {
 	RememberDevice bool   `json:"remember_device"`
 }
 
+type registerRequest struct {
+	Username  string `json:"username" validate:"required,min=3,max=64"`
+	Email     string `json:"email" validate:"required,email"`
+	Password  string `json:"password" validate:"required,min=8,max=128"`
+	FirstName string `json:"first_name" validate:"max=64"`
+	LastName  string `json:"last_name" validate:"max=64"`
+}
+
 type tokenResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -79,6 +87,60 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	default:
 		response.Error(c, errors.ErrBadRequest)
 	}
+}
+
+// POST /api/auth/register
+func (h *AuthHandler) Register(c *gin.Context) {
+	var req registerRequest
+	if !bindAndValidate(c, &req) {
+		return
+	}
+
+	lp, err := providers.NewLocalProvider(h.db, providers.LocalConfig{})
+	if err != nil {
+		response.Error(c, errors.ErrInternalServer)
+		return
+	}
+	if h.verifier != nil {
+		lp.SetEmailVerifier(h.verifier)
+	}
+
+	user, err := lp.Register(providers.RegisterInput{
+		Username:  req.Username,
+		Email:     req.Email,
+		Password:  req.Password,
+		FirstName: req.FirstName,
+		LastName:  req.LastName,
+	})
+	if err != nil {
+		switch {
+		case stdErrors.Is(err, providers.ErrRegistrationDisabled):
+			response.Error(c, errors.ErrForbidden)
+		case stdErrors.Is(err, providers.ErrVerificationUnavailable):
+			response.Error(c, errors.ErrInternalServer)
+		default:
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(strings.ToLower(err.Error()), "unique") {
+				response.Error(c, errors.NewBadRequest("username or email already exists"))
+			} else if strings.Contains(strings.ToLower(err.Error()), "not found") {
+				response.Error(c, errors.ErrBadRequest)
+			} else {
+				response.Error(c, errors.ErrInternalServer)
+			}
+		}
+		return
+	}
+
+	requiresVerification := !user.IsActive
+	message := "Account created. You can now sign in."
+	if requiresVerification {
+		message = "Account created. Check your email to verify your account before signing in."
+	}
+
+	response.Success(c, http.StatusCreated, gin.H{
+		"registered":            true,
+		"requires_verification": requiresVerification,
+		"message":               message,
+	})
 }
 
 type refreshRequest struct {

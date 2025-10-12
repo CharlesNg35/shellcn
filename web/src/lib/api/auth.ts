@@ -10,6 +10,8 @@ import type {
   PasswordResetConfirmPayload,
   PasswordResetRequestPayload,
   PasswordResetResponse,
+  RegistrationPayload,
+  RegistrationResponse,
   SetupInitializePayload,
   SetupInitializeResponse,
   SetupStatusPayload,
@@ -41,6 +43,7 @@ const AUTH_MFA_VERIFY_ENDPOINT = '/auth/mfa/verify'
 const AUTH_PROVIDERS_ENDPOINT = '/auth/providers'
 const AUTH_PASSWORD_RESET_REQUEST_ENDPOINT = '/auth/password-reset/request'
 const AUTH_PASSWORD_RESET_CONFIRM_ENDPOINT = '/auth/password-reset/confirm'
+const AUTH_REGISTER_ENDPOINT = '/auth/register'
 const SETUP_STATUS_ENDPOINT = '/setup/status'
 const SETUP_INITIALIZE_ENDPOINT = '/setup/initialize'
 
@@ -94,6 +97,14 @@ export async function verifyMfa(payload: VerifyMfaPayload): Promise<AuthTokens |
   const tokens = toAuthTokens(data)
 
   return tokens
+}
+
+export async function registerLocal(payload: RegistrationPayload): Promise<RegistrationResponse> {
+  const response = await apiClient.post<ApiResponse<RegistrationResponse>>(
+    AUTH_REGISTER_ENDPOINT,
+    payload
+  )
+  return unwrapResponse(response)
 }
 
 export async function fetchCurrentUser(): Promise<AuthUser> {

@@ -100,6 +100,20 @@ export interface SetupInitializeResponse {
   message?: string
 }
 
+export interface RegistrationPayload {
+  username: string
+  email: string
+  password: string
+  first_name?: string
+  last_name?: string
+}
+
+export interface RegistrationResponse {
+  registered: boolean
+  requires_verification: boolean
+  message?: string
+}
+
 export interface AuthProviderMetadata {
   type: 'oidc' | 'saml' | 'ldap' | 'local' | string
   name: string

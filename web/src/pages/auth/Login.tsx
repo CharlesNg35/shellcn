@@ -47,7 +47,7 @@ export function Login() {
   )
   const [selectedProvider, setSelectedProvider] = useState<string>('local')
   const [ssoError, setSsoError] = useState<string | null>(null)
-  const [mfaErrorMessage, setMfaErrorMessage] = useState<string | null>(null)
+  const [infoMessage, setInfoMessage] = useState<string | null>(null)
 
   const passwordProviders = useMemo(
     () =>
@@ -87,6 +87,11 @@ export function Login() {
     return flag === undefined ? true : Boolean(flag)
   }, [providers])
 
+  const canSelfRegister = useMemo(() => {
+    const localProvider = providers.find((provider) => provider.type === 'local')
+    return Boolean(localProvider?.allow_registration)
+  }, [providers])
+
   useEffect(() => {
     setFocus('identifier')
   }, [setFocus])
@@ -120,10 +125,14 @@ export function Login() {
         setSsoError(null)
     }
 
-    if (notice === 'mfa_failed') {
-      setMfaErrorMessage('Verification code is invalid. Please try again.')
+    if (notice === 'register_success') {
+      setInfoMessage('Account created. You can now sign in.')
+    } else if (notice === 'register_verify') {
+      setInfoMessage('Account created. Check your email to verify your account before signing in.')
+    } else if (notice === 'mfa_failed') {
+      setInfoMessage('Invalid multi-factor authentication code. Please try again.')
     } else {
-      setMfaErrorMessage(null)
+      setInfoMessage(null)
     }
   }, [location.search])
 
@@ -164,7 +173,6 @@ export function Login() {
     return () => {
       active = false
       clearError()
-      setMfaErrorMessage(null)
     }
   }, [setupStatus, fetchSetupStatus, navigate, clearError, location.pathname])
 
@@ -178,7 +186,6 @@ export function Login() {
 
   const onSubmit = async (data: LoginFormData) => {
     clearError()
-    setMfaErrorMessage(null)
 
     try {
       const result = await login({
@@ -260,11 +267,17 @@ export function Login() {
           </div>
         ) : null}
 
-        {(error || mfaErrorMessage) && (
+        {error ? (
           <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
-            <p className="font-medium">{error ?? mfaErrorMessage}</p>
+            <p className="font-medium">{error}</p>
           </div>
-        )}
+        ) : null}
+
+        {infoMessage ? (
+          <div className="rounded-lg border border-primary/20 bg-primary/10 p-3 text-sm text-primary">
+            <p className="font-medium">{infoMessage}</p>
+          </div>
+        ) : null}
 
         {ssoError && (
           <div className="rounded-lg border border-amber-300/60 bg-amber-50 p-3 text-sm text-amber-900">
@@ -282,6 +295,15 @@ export function Login() {
           First time here?{' '}
           <Link to="/setup" className="text-primary hover:underline">
             Complete initial setup
+          </Link>
+        </div>
+      )}
+
+      {canSelfRegister && setupState !== 'pending' && (
+        <div className="text-center text-sm text-muted-foreground">
+          Don't have an account?{' '}
+          <Link to="/register" className="text-primary hover:underline">
+            Create one
           </Link>
         </div>
       )}

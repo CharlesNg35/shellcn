@@ -68,9 +68,9 @@ func SeedData(db *gorm.DB) error {
 		Type:                     "local",
 		Name:                     "Local Authentication",
 		Enabled:                  true,
-		AllowRegistration:        false,
 		RequireEmailVerification: true,
-		AllowPasswordReset:       true,
+		AllowRegistration:        false,
+		AllowPasswordReset:       false,
 		Description:              "Username and password authentication",
 		Icon:                     "key",
 	}

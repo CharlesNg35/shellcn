@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/charlesng35/shellcn/internal/handlers/testutil"
+	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/pkg/errors"
 )
 
@@ -77,4 +78,48 @@ func TestAuthHandler_LoginRequiresMFA(t *testing.T) {
 	require.NotNil(t, body.Error)
 	require.Equal(t, errors.ErrMFARequired.Code, body.Error.Code)
 	require.NotNil(t, body.Error.Details["challenge"])
+}
+
+func TestAuthHandler_RegisterSuccess(t *testing.T) {
+	env := testutil.NewEnv(t)
+	require.NoError(t, env.DB.Model(&models.AuthProvider{}).
+		Where("type = ?", "local").
+		Update("allow_registration", true).Error)
+
+	payload := map[string]string{
+		"username": "newuser",
+		"email":    "newuser@example.com",
+		"password": "RegTest123!",
+	}
+
+	resp := env.Request(http.MethodPost, "/api/auth/register", payload, "")
+	require.Equal(t, http.StatusCreated, resp.Code, resp.Body.String())
+
+	decoded := testutil.DecodeResponse(t, resp)
+	require.True(t, decoded.Success)
+
+	var data map[string]any
+	testutil.DecodeInto(t, decoded.Data, &data)
+	require.Equal(t, true, data["registered"])
+	require.Equal(t, true, data["requires_verification"])
+
+	var user models.User
+	require.NoError(t, env.DB.Take(&user, "username = ?", "newuser").Error)
+	require.False(t, user.IsActive)
+}
+
+func TestAuthHandler_RegisterDisabled(t *testing.T) {
+	env := testutil.NewEnv(t)
+	require.NoError(t, env.DB.Model(&models.AuthProvider{}).
+		Where("type = ?", "local").
+		Update("allow_registration", false).Error)
+
+	payload := map[string]string{
+		"username": "newuser2",
+		"email":    "newuser2@example.com",
+		"password": "RegTest123!",
+	}
+
+	resp := env.Request(http.MethodPost, "/api/auth/register", payload, "")
+	require.Equal(t, http.StatusForbidden, resp.Code)
 }
