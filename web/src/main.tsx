@@ -26,7 +26,7 @@ interface ReactQueryDevtoolsProps {
   [key: string]: unknown
 }
 
-function Devtools() {
+export function Devtools() {
   const [DevtoolsComponent, setDevtoolsComponent] =
     useState<ComponentType<ReactQueryDevtoolsProps> | null>(null)
 
