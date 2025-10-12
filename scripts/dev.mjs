@@ -12,7 +12,7 @@ const projectRoot = path.resolve(__dirname, "..");
 const DEFAULT_JWT_SECRET =
   "dev_jwt_secret_9b1d3f4e5a6c7d8e9f0123456789abcdef0123456789abcdef";
 const DEFAULT_VAULT_KEY =
-  "dev_vault_key_9f8e7d6c5b4a392817160f0e0d0c0b0a99887766554433221100";
+  "9f8e7d6c5b4a392817160f0e0d0c0b0a99887766554433221100ffeeddccbbaa";
 
 const env = { ...process.env };
 
