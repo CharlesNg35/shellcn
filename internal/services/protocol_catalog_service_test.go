@@ -50,8 +50,8 @@ func TestProtocolCatalogSyncPersistsRecords(t *testing.T) {
 	require.NoError(t, protoReg.SyncFromDrivers(context.Background(), driverReg))
 
 	cfg := &app.Config{}
-	cfg.Modules.SSH.Enabled = true
-	cfg.Modules.RDP.Enabled = false
+	cfg.Protocols.SSH.Enabled = true
+	cfg.Protocols.RDP.Enabled = false
 
 	svc, err := NewProtocolCatalogService(db)
 	require.NoError(t, err)

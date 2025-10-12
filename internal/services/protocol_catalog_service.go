@@ -52,7 +52,7 @@ func (s *ProtocolCatalogService) Sync(ctx context.Context, protoReg *protocols.R
 			}
 		}
 
-		configEnabled := moduleEnabled(cfg, proto.Module, proto.ID)
+		configEnabled := protocolEnabled(cfg, proto.Module, proto.ID)
 
 		featuresJSON, err := json.Marshal(proto.Features)
 		if err != nil {
@@ -95,46 +95,46 @@ func (s *ProtocolCatalogService) Sync(ctx context.Context, protoReg *protocols.R
 	return nil
 }
 
-func moduleEnabled(cfg *app.Config, module string, protocolID string) bool {
+func protocolEnabled(cfg *app.Config, module string, protocolID string) bool {
 	if cfg == nil {
 		return true
 	}
 
 	switch strings.TrimSpace(module) {
 	case "ssh":
-		return cfg.Modules.SSH.Enabled
+		return cfg.Protocols.SSH.Enabled
 	case "telnet":
-		return cfg.Modules.Telnet.Enabled
+		return cfg.Protocols.Telnet.Enabled
 	case "sftp":
-		return cfg.Modules.SFTP.Enabled
+		return cfg.Protocols.SFTP.Enabled
 	case "rdp":
-		return cfg.Modules.RDP.Enabled
+		return cfg.Protocols.RDP.Enabled
 	case "vnc":
-		return cfg.Modules.VNC.Enabled
+		return cfg.Protocols.VNC.Enabled
 	case "docker":
-		return cfg.Modules.Docker.Enabled
+		return cfg.Protocols.Docker.Enabled
 	case "kubernetes":
-		return cfg.Modules.Kubernetes.Enabled
+		return cfg.Protocols.Kubernetes.Enabled
 	case "database":
-		if !cfg.Modules.Database.Enabled {
+		if !cfg.Protocols.Database.Enabled {
 			return false
 		}
 		switch protocolID {
 		case "mysql":
-			return cfg.Modules.Database.MySQL
+			return cfg.Protocols.Database.MySQL
 		case "postgres":
-			return cfg.Modules.Database.Postgres
+			return cfg.Protocols.Database.Postgres
 		case "redis":
-			return cfg.Modules.Database.Redis
+			return cfg.Protocols.Database.Redis
 		case "mongodb":
-			return cfg.Modules.Database.MongoDB
+			return cfg.Protocols.Database.MongoDB
 		default:
 			return true
 		}
 	case "proxmox":
-		return cfg.Modules.Proxmox.Enabled
+		return cfg.Protocols.Proxmox.Enabled
 	case "object_storage":
-		return cfg.Modules.ObjectStorage.Enabled
+		return cfg.Protocols.ObjectStorage.Enabled
 	default:
 		return true
 	}

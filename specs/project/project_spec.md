@@ -6,7 +6,7 @@
 2. [Technology Stack](#technology-stack)
 3. [Project Structure](#project-structure)
 4. [Architecture](#architecture)
-5. [Module Specifications](#module-specifications)
+5. [Protocol Specifications](#protocol-specifications)
 6. [Database Schema](#database-schema)
 7. [Permission System](#permission-system)
 8. [Configuration](#configuration)
@@ -23,6 +23,7 @@ A comprehensive web-based **remote client platform** for managing enterprise inf
 ### 1.2 Key Features
 
 **Remote Client Capabilities:**
+
 - Multi-protocol terminal clients (SSH, Telnet, Serial)
 - Remote desktop clients (RDP, VNC)
 - File transfer clients (SFTP, FTP, SMB, NFS, WebDAV, Cloud Storage)
@@ -31,6 +32,7 @@ A comprehensive web-based **remote client platform** for managing enterprise inf
 - Database clients (MySQL, PostgreSQL, MongoDB, Redis)
 
 **Enterprise Features:**
+
 - Fine-grained permission system with dependencies
 - Team-based multi-user collaboration
 - **Enterprise authentication (OIDC, SAML, LDAP, Local)** - All providers configured via UI by admins
@@ -60,11 +62,13 @@ A comprehensive web-based **remote client platform** for managing enterprise inf
 ### 2.1 Backend
 
 #### Core Framework
+
 - **Language**: Go 1.21+
 - **Web Framework**: Gin (github.com/gin-gonic/gin)
 - **WebSocket**: gorilla/websocket
 
 #### Rust FFI Modules (Static Linking via C-bindings)
+
 - **Language**: Rust 1.75+
 - **RDP**: IronRDP
 - **VNC**: vnc-rs
@@ -73,11 +77,13 @@ A comprehensive web-based **remote client platform** for managing enterprise inf
 - **Integration**: CGO with static linking (no dynamic libraries)
 
 **IMPORTANT: Always check for latest library versions before implementation!**
+
 - Check crates.io for latest Rust crate versions
 - Check Go package documentation for latest versions
 - Verify compatibility between library versions
 
 #### Database
+
 - **Primary ORM**: GORM (gorm.io/gorm)
 - **Embedded Database**: SQLite 3.x (default, stored in ./data/)
 - **Enterprise Databases**: PostgreSQL 14+, MySQL 8.0+ (optional)
@@ -86,6 +92,7 @@ A comprehensive web-based **remote client platform** for managing enterprise inf
 - **Secret Storage**: Encrypted credentials in database (AES-256-GCM)
 
 #### Authentication & Authorization
+
 ```go
 // Core Auth
 "github.com/golang-jwt/jwt/v5"           // JWT
@@ -110,6 +117,7 @@ A comprehensive web-based **remote client platform** for managing enterprise inf
 #### Protocol Libraries
 
 **Pure Go (Excellent Libraries)**
+
 ```go
 // SSH & SFTP
 "golang.org/x/crypto/ssh"                // Official SSH
@@ -297,6 +305,7 @@ func (s *RDPSession) Close() {
 ```
 
 #### Monitoring & Observability
+
 ```go
 // Prometheus
 "github.com/prometheus/client_golang/prometheus"
@@ -307,6 +316,7 @@ func (s *RDPSession) Close() {
 ```
 
 #### Secret Management & Encryption
+
 ```go
 "golang.org/x/crypto/chacha20poly1305"   // Encryption for secrets
 "golang.org/x/crypto/argon2"             // Key derivation
@@ -314,6 +324,7 @@ func (s *RDPSession) Close() {
 ```
 
 #### Utilities
+
 ```go
 "github.com/spf13/viper"                 // Configuration
 "golang.org/x/sync/errgroup"             // Concurrent operations
@@ -323,6 +334,7 @@ func (s *RDPSession) Close() {
 ### 2.2 Frontend
 
 #### Core Framework (Latest Versions - 2025)
+
 ```json
 {
   "react": "^19.0.0",
@@ -337,6 +349,7 @@ func (s *RDPSession) Close() {
 All user-facing settings (terminal appearance, UI themes, file manager preferences, etc.) must be configurable through the Settings page. **Never hardcode user preferences** like terminal font family, font size, cursor style, themes, or other visual/behavioral settings in components.
 
 **Key Principles:**
+
 - ✅ All terminal settings (font, theme, cursor, etc.) stored in user preferences
 - ✅ Settings persisted using Zustand with localStorage
 - ✅ Components read from settings store, never use hardcoded values
@@ -345,7 +358,9 @@ All user-facing settings (terminal appearance, UI themes, file manager preferenc
 - ✅ Settings accessible via `/settings` page
 
 **User Preference Categories:**
+
 1. **Terminal Preferences** (`/settings/terminal`)
+
    - Font family (user-selectable, not hardcoded)
    - Font size (adjustable)
    - Cursor style (block, underline, bar)
@@ -354,11 +369,13 @@ All user-facing settings (terminal appearance, UI themes, file manager preferenc
    - Custom color schemes
 
 2. **UI Preferences** (`/settings/appearance`)
+
    - Application theme (dark, light, system)
    - Sidebar behavior (collapsed by default, etc.)
    - Language/locale
 
 3. **File Manager Preferences** (`/settings/file-manager`)
+
    - Show hidden files
    - Default view (list, grid)
    - Sort order
@@ -369,12 +386,13 @@ All user-facing settings (terminal appearance, UI themes, file manager preferenc
    - Session recording preferences
 
 **Implementation Pattern:**
+
 ```typescript
 // ❌ BAD: Hardcoded terminal settings
 const terminal = new Terminal({
   fontSize: 14,
-  fontFamily: 'Menlo, Monaco',
-  cursorStyle: 'block'
+  fontFamily: "Menlo, Monaco",
+  cursorStyle: "block",
 });
 
 // ✅ GOOD: Use user preferences
@@ -383,58 +401,63 @@ const terminal = new Terminal({
   fontSize: preferences.terminal.fontSize,
   fontFamily: preferences.terminal.fontFamily,
   cursorStyle: preferences.terminal.cursorStyle,
-  theme: getTerminalTheme(preferences.terminal.theme)
+  theme: getTerminalTheme(preferences.terminal.theme),
 });
 ```
 
 #### UI Framework (Tailwind CSS 4)
+
 ```json
 {
-  "@radix-ui/react-*": "latest",         // Headless UI primitives
-  "tailwindcss": "^4.1.0",               // Utility CSS (v4)
-  "class-variance-authority": "^0.7.0",  // Component variants
-  "clsx": "^2.1.0",                      // Conditional classes
-  "lucide-react": "^0.460.0"             // Icons
+  "@radix-ui/react-*": "latest", // Headless UI primitives
+  "tailwindcss": "^4.1.0", // Utility CSS (v4)
+  "class-variance-authority": "^0.7.0", // Component variants
+  "clsx": "^2.1.0", // Conditional classes
+  "lucide-react": "^0.460.0" // Icons
 }
 ```
 
 #### Terminal & Remote Desktop
+
 ```json
 {
-  "xterm": "^5.5.0",                     // Terminal emulator
-  "xterm-addon-fit": "^0.10.0",          // Terminal fit
-  "xterm-addon-web-links": "^0.11.0",    // Clickable links
-  "xterm-addon-search": "^0.15.0",       // Search in terminal
-  "react-dropzone": "^14.3.0",           // File upload
-  "@tanstack/react-table": "^8.20.0"     // File browser table
+  "xterm": "^5.5.0", // Terminal emulator
+  "xterm-addon-fit": "^0.10.0", // Terminal fit
+  "xterm-addon-web-links": "^0.11.0", // Clickable links
+  "xterm-addon-search": "^0.15.0", // Search in terminal
+  "react-dropzone": "^14.3.0", // File upload
+  "@tanstack/react-table": "^8.20.0" // File browser table
 }
 ```
 
 #### State Management & API
+
 ```json
 {
-  "@tanstack/react-query": "^5.59.0",    // Server state
-  "zustand": "^5.0.0",                   // Client state
-  "axios": "^1.7.0",                     // HTTP client
-  "socket.io-client": "^4.8.0"           // WebSocket (for notifications)
+  "@tanstack/react-query": "^5.59.0", // Server state
+  "zustand": "^5.0.0", // Client state
+  "axios": "^1.7.0", // HTTP client
+  "socket.io-client": "^4.8.0" // WebSocket (for notifications)
 }
 ```
 
 #### Forms & Validation
+
 ```json
 {
-  "react-hook-form": "^7.53.0",          // Form handling
-  "zod": "^3.23.0",                      // Schema validation
-  "@hookform/resolvers": "^3.9.0"        // Form + Zod integration
+  "react-hook-form": "^7.53.0", // Form handling
+  "zod": "^3.23.0", // Schema validation
+  "@hookform/resolvers": "^3.9.0" // Form + Zod integration
 }
 ```
 
 #### Routing & Utils
+
 ```json
 {
-  "react-router": "^7.6.2",              // Routing (v7)
-  "date-fns": "^4.1.0",                  // Date utilities
-  "sonner": "^1.7.0"                     // Toast notifications (modern)
+  "react-router": "^7.6.2", // Routing (v7)
+  "date-fns": "^4.1.0", // Date utilities
+  "sonner": "^1.7.0" // Toast notifications (modern)
 }
 ```
 
@@ -447,8 +470,8 @@ const terminal = new Terminal({
   "eslint": "^9.15.0",
   "@typescript-eslint/parser": "^8.15.0",
   "prettier": "^3.3.0",
-  "vitest": "^2.1.0",                    // Unit testing
-  "@testing-library/react": "^16.0.0"    // Component testing (React 19)
+  "vitest": "^2.1.0", // Unit testing
+  "@testing-library/react": "^16.0.0" // Component testing (React 19)
 }
 ```
 
@@ -730,11 +753,11 @@ Users → ShellCN Platform → External Services
 
 ---
 
-## 5. Module Specifications
+## 5. Protocol Specifications
 
-### 5.1 Core Modules (Minimum Default Enabled)
+### 5.1 Core Protocols (Minimum Default Enabled)
 
-**Default enabled modules:**
+**Default enabled protocols:**
 
 1. **SSH/SFTP** - Essential remote server access (SSH v1 & v2 support)
 2. **Telnet** - Legacy device management
@@ -743,15 +766,17 @@ Users → ShellCN Platform → External Services
 5. **Docker** - Container management client
 6. **Database Clients** - MySQL, PostgreSQL, Redis
 
-**Optional modules (can be disabled):**
+**Optional protocols (can be disabled):**
+
 - Kubernetes client
 - Proxmox client
 - Object storage (S3, MinIO, GCS, Azure)
 - MongoDB client
 
-### 5.2 SSH Module (Detailed Configuration)
+### 5.2 SSH Protocol (Detailed Configuration)
 
 #### SSH Protocol Support
+
 - **SSH v1** - Legacy protocol support (disabled by default for security)
 - **SSH v2** - Primary protocol (enabled by default)
 - **Auto-detection** - Detect protocol version during handshake
@@ -759,6 +784,7 @@ Users → ShellCN Platform → External Services
 #### SSH Connection Settings
 
 **Basic Configuration:**
+
 ```go
 type SSHConnectionConfig struct {
     // Basic
@@ -813,6 +839,7 @@ type SSHConnectionConfig struct {
 ```
 
 **Connection Profiles (Reusable Identities):**
+
 ```go
 type Identity struct {
     ID          string
@@ -834,6 +861,7 @@ type Identity struct {
 ```
 
 **Auto-Reconnection Logic:**
+
 ```go
 type ReconnectionManager struct {
     Enabled         bool
@@ -853,16 +881,19 @@ type ReconnectionManager struct {
 #### SSH Authentication Methods
 
 1. **Password Authentication**
+
    - Plain password (encrypted in vault)
    - TOTP/MFA support
 
 2. **Public Key Authentication**
+
    - RSA, ECDSA, Ed25519 keys
    - Encrypted private key storage
    - Passphrase-protected keys
    - Multiple keys per identity
 
 3. **Keyboard-Interactive**
+
    - Challenge-response authentication
    - PAM support
 
@@ -870,9 +901,10 @@ type ReconnectionManager struct {
    - SSH agent support
    - Key forwarding to remote hosts
 
-### 5.3 Telnet Module (Configuration)
+### 5.3 Telnet Protocol (Configuration)
 
 **Telnet Connection Settings:**
+
 ```go
 type TelnetConnectionConfig struct {
     Name        string
@@ -901,6 +933,7 @@ type TelnetConnectionConfig struct {
 The vault is a dedicated page for managing all credentials used across connections. Users can create reusable identities (credentials) and reference them when creating SSH, database, or other protocol connections.
 
 **Vault Architecture:**
+
 ```go
 // Encrypted storage for sensitive credentials
 type VaultService interface {
@@ -925,6 +958,7 @@ type VaultService interface {
 **Vault UI Flow:**
 
 1. **Manage Identities Page** (`/settings/identities`)
+
    - List all saved identities (own + shared)
    - Create new identity
    - Edit/Delete existing identities
@@ -932,7 +966,9 @@ type VaultService interface {
    - Upload SSH keys
 
 2. **Creating Connection** (SSH/Database/etc.)
+
    - **Basic Tab:**
+
      - Name (e.g., "Production Server")
      - Protocol (dropdown: SSH v2, SSH v1, Telnet, etc.)
      - Icon (select from icon library)
@@ -954,6 +990,7 @@ type VaultService interface {
      - Connection behavior (reconnect, timeout, keepalive)
 
 **UI Component: Identity Selector**
+
 ```tsx
 // components/vault/IdentitySelector.tsx
 <div className="form-group">
@@ -989,22 +1026,26 @@ type VaultService interface {
 **All credentials are encrypted before storage:**
 
 1. **User Passwords**:
+
    - Hashed with bcrypt (cost factor 10+)
    - NEVER stored as plaintext
    - One-way encryption (cannot be reversed)
 
 2. **Vault Credentials** (SSH passwords, DB passwords, etc.):
+
    - Encrypted with AES-256-GCM
    - Master key derived from `VAULT_ENCRYPTION_KEY` env var using Argon2
    - Unique nonce per credential
    - Encrypted at rest in database
 
 3. **SSH Private Keys**:
+
    - Encrypted with AES-256-GCM before storage
    - Passphrases encrypted separately
    - Decrypted only when needed for connection
 
 4. **Key Derivation**:
+
    - Argon2id (memory-hard, GPU-resistant)
    - Salt stored per credential
    - Key rotation supported (with re-encryption)
@@ -1016,11 +1057,13 @@ type VaultService interface {
    - Higher security, user must remember passphrase
 
 **Credential Sharing:**
+
 - Share identities with team members
 - Role-based access to shared credentials
 - Audit trail for credential access
 
 **Vault Permissions (Core Module):**
+
 ```go
 // internal/vault/permissions.go
 VAULT_PERMISSIONS = {
@@ -1065,6 +1108,7 @@ VAULT_PERMISSIONS = {
 ### 5.5 Monitoring Integration (Prometheus)
 
 #### Exposed Metrics
+
 ```go
 // Connection metrics
 connection_total{protocol="ssh|rdp|vnc|docker|k8s"}
@@ -1099,11 +1143,12 @@ GET /health/ready   // Ready to serve traffic
 GET /health/live    // Liveness probe
 ```
 
-### 5.7 Docker Module
+### 5.7 Docker Protocol
 
 **Comprehensive Container Management Client**
 
 #### Docker Host Connection
+
 - Connect to Docker daemon (TCP, Unix socket, SSH tunnel)
 - TLS authentication with client certificates
 - Docker context support
@@ -1112,27 +1157,32 @@ GET /health/live    // Liveness probe
 #### Container Management
 
 **Container Operations:**
+
 - List containers (all, running, stopped, paused)
 - Create, start, stop, restart, pause/unpause, kill containers
 - Rename, delete, prune stopped containers
 - Update container configuration (resource limits)
 
 **Container Inspection:**
+
 - View container details, logs (real-time, follow, tail, timestamps)
 - Container stats (CPU, memory, network, disk I/O)
 - Container processes (top), file system changes
 - Port mappings, environment variables, labels
 
 **Container Interaction:**
+
 - Execute commands (docker exec), attach to container
 - Interactive terminal shell, copy files to/from container
 - Export container filesystem, commit container to image
 
 **Container Networking:**
+
 - View/manage container networks
 - Connect/disconnect containers to/from networks
 
 #### Image Management
+
 - List, pull, push, build, tag, delete images
 - Prune unused images
 - Save/load images to/from tar
@@ -1141,17 +1191,20 @@ GET /health/live    // Liveness probe
 - Private registry support
 
 #### Volume Management
+
 - List, create, delete, prune volumes
 - View volume details, mount points, size
 - Volume driver support and options
 
 #### Network Management
+
 - List, create, delete networks (bridge, host, overlay, macvlan)
 - Prune unused networks
 - View network driver, subnet/gateway, connected containers
 - IPAM configuration
 
 #### System & Administration
+
 - Docker version, system info (OS, architecture, CPU, memory)
 - Disk usage, storage/logging driver
 - Docker events (real-time monitoring)
@@ -1159,22 +1212,25 @@ GET /health/live    // Liveness probe
 - Container resource limits and restart policies
 
 #### Docker Compose (Optional)
+
 - List compose projects
 - Deploy, stop, remove compose stacks
 - Scale, restart services
 - View compose logs
 
 #### Docker Swarm (Optional)
+
 - Initialize, join, leave swarm
 - View, promote/demote nodes
 - Manage services (list, create, scale, update, delete)
 - View service logs and tasks/replicas
 
-### 5.8 Kubernetes Module
+### 5.8 Kubernetes Protocol
 
 **Comprehensive Cluster Management Client**
 
 #### Cluster Connection
+
 - kubeconfig support (upload or paste)
 - Token, certificate, service account authentication
 - Multiple context management, namespace selection
@@ -1183,6 +1239,7 @@ GET /health/live    // Liveness probe
 #### Workload Resources
 
 **Pod Management:**
+
 - List pods (all namespaces or specific)
 - View pod details, logs (real-time, follow, tail, timestamps)
 - Execute in pod (kubectl exec), pod terminal (multi-container)
@@ -1191,6 +1248,7 @@ GET /health/live    // Liveness probe
 - Restart pod, port forward, copy files to/from pod
 
 **Deployment Management:**
+
 - List, create (YAML editor), edit deployments
 - Scale (manual or autoscale), update, delete
 - Rollback (revision history), pause/resume, restart
@@ -1198,72 +1256,86 @@ GET /health/live    // Liveness probe
 - Replica set management
 
 **StatefulSet, DaemonSet, Job & CronJob Management:**
+
 - List, create, edit, scale, delete
 - View status, rolling update management
 - Node selector, schedule management
 - Suspend/resume, trigger CronJob manually
 
 **ReplicaSet Management:**
+
 - List, view details, scale, delete
 
 #### Service & Networking
 
 **Service Management:**
+
 - List, create (ClusterIP, NodePort, LoadBalancer), edit, delete
 - Service inspection (endpoints, selectors), port mapping
 - Service type conversion, external name services
 
 **Ingress Management:**
+
 - List, create, edit rules, delete Ingresses
 - TLS certificate management, ingress class selection
 - Path-based and host-based routing
 
 **NetworkPolicy Management:**
+
 - List, create, edit, delete NetworkPolicies
 - Ingress/Egress rules, pod selector configuration
 
 **Endpoints Management:**
+
 - List, view details, endpoint subset inspection
 
 #### Configuration & Storage
 
 **ConfigMap Management:**
+
 - List, create (from file, literal, YAML), edit, delete
 - View ConfigMap data, versioning
 - Use as environment variables, mount as volumes
 
 **Secret Management:**
+
 - List, create (generic, docker-registry, TLS), edit, delete
 - View secret data (base64 decoded)
 - Secret types (Opaque, TLS, Docker config)
 
 **PersistentVolume & PersistentVolumeClaim:**
+
 - List, create, edit, delete PV/PVC
 - View status, capacity, resize PVC, bind status
 - Storage class association, reclaim policy
 
 **StorageClass Management:**
+
 - List, create, edit, delete StorageClasses
 - Provisioner configuration, volume binding mode
 
 #### Cluster Resources
 
 **Node Management:**
+
 - List nodes, view details, metrics (CPU, Memory, Disk)
 - Node conditions, labels, taints
 - Cordon/uncordon, drain node
 - Node capacity, allocatable resources, events
 
 **Namespace Management:**
+
 - List, create, delete namespaces
 - Set resource quotas, limit ranges, labels
 
 **ServiceAccount, ResourceQuota, LimitRange:**
+
 - List, create, delete ServiceAccounts
 - Token management, RBAC binding
 - Manage quotas and limits
 
 #### RBAC (Role-Based Access Control)
+
 - List, create, edit, delete Roles/ClusterRoles
 - List, create, edit, delete RoleBindings/ClusterRoleBindings
 - View role permissions
@@ -1271,44 +1343,53 @@ GET /health/live    // Liveness probe
 #### Advanced Features
 
 **HorizontalPodAutoscaler (HPA):**
+
 - List, create, edit, delete HPAs
 - Configure metrics, min/max replicas
 - View HPA status and metrics
 
 **VerticalPodAutoscaler (VPA):**
+
 - List, create, edit, delete VPAs
 
 **PodDisruptionBudget:**
+
 - List, create, edit, delete PodDisruptionBudgets
 
 **Custom Resource Definitions (CRD):**
+
 - List CRDs, view details
 - Create, edit, delete custom resources
 
 **Events:**
+
 - View cluster events
 - Filter by namespace/resource
 - Event streaming (real-time)
 
 **Port Forwarding:**
+
 - Forward pod/service ports to local
 - Multiple port forwards, auto-reconnect
 
 **Resource Metrics:**
+
 - Cluster-wide, node, pod, container metrics
 - Integration with Metrics Server
 
 **YAML/JSON Editor:**
+
 - Edit any resource as YAML/JSON
 - Syntax validation, apply changes, dry-run mode
 
-### 5.9 Database Module
+### 5.9 Database Protocol
 
 **Multi-Database Client Platform**
 
 #### MySQL Features
 
 **Connection & Query:**
+
 - Connect with vault identities, SSL/TLS, SSH tunnel
 - SQL query editor with syntax highlighting
 - Execute SELECT, INSERT/UPDATE/DELETE, DDL
@@ -1316,6 +1397,7 @@ GET /health/live    // Liveness probe
 - Explain query execution plan, query profiling
 
 **Database & Table Management:**
+
 - List, create, drop databases
 - View database size, character set, collation
 - List, create, alter, drop, rename, truncate tables
@@ -1323,21 +1405,25 @@ GET /health/live    // Liveness probe
 - Table statistics, size
 
 **Data Browser:**
+
 - Browse table data with pagination
 - Filter rows (WHERE), sort columns, search
 - Edit rows inline, insert, delete rows
 - Bulk operations
 
 **Schema Tools:**
+
 - View/manage indexes, foreign keys, triggers
 - View stored procedures, functions, views, events
 
 **Import/Export:**
+
 - Export to CSV, JSON, Excel, SQL
 - Import from CSV
 - SQL dump export/import
 
 **User & Server Management:**
+
 - List users, create, grant/revoke privileges
 - View server status, variables, processlist
 - View slow query log, binary logs
@@ -1346,6 +1432,7 @@ GET /health/live    // Liveness probe
 #### PostgreSQL Features
 
 **Connection & Query:**
+
 - Connect with SSL/TLS modes, SSH tunnel
 - SQL editor with PostgreSQL syntax
 - Transaction management (BEGIN, COMMIT, ROLLBACK)
@@ -1353,18 +1440,21 @@ GET /health/live    // Liveness probe
 - Query explain/analyze, planner visualization
 
 **Database & Schema:**
+
 - List, create, drop databases
 - Database templates, encoding, statistics
 - List, create, drop schemas
 - Set search path, schema permissions
 
 **Table Management:**
+
 - List tables (public and all schemas)
 - Create table with constraints, alter, drop
 - Table inheritance, partitioned tables
 - Table statistics, analyze
 
 **Data Types & Advanced Features:**
+
 - PostgreSQL-specific types (ARRAY, JSON, JSONB, HSTORE, UUID)
 - Custom types/domains, enum, range types
 - Sequences (create, alter, drop, currval, nextval)
@@ -1373,10 +1463,12 @@ GET /health/live    // Liveness probe
 - Triggers, rules, constraints
 
 **Extensions:**
+
 - List installed/available extensions
 - Install extensions, PostGIS support
 
 **User & Server:**
+
 - List roles/users, create, grant/revoke
 - Role membership, row-level security policies
 - View server settings, active connections
@@ -1384,6 +1476,7 @@ GET /health/live    // Liveness probe
 - Vacuum/Analyze, Reindex
 
 **Import/Export:**
+
 - Export to CSV/JSON/Excel
 - pg_dump/pg_restore integration
 - COPY command support
@@ -1391,11 +1484,13 @@ GET /health/live    // Liveness probe
 #### MongoDB Features
 
 **Connection:**
+
 - Connect with replica set, sharded cluster
 - SSL/TLS, SSH tunnel
 - Authentication (SCRAM, X.509, LDAP)
 
 **Database & Collections:**
+
 - List, create, drop databases
 - Database statistics, storage engine
 - List, create, drop, rename collections
@@ -1403,6 +1498,7 @@ GET /health/live    // Liveness probe
 - Create/drop indexes (single, compound, text, geospatial)
 
 **Document Operations:**
+
 - Browse documents with pagination
 - Insert (JSON editor), update, delete documents
 - Bulk operations
@@ -1410,6 +1506,7 @@ GET /health/live    // Liveness probe
 - Sort/Limit/Skip, projection
 
 **Query & Aggregation:**
+
 - MongoDB query editor
 - Aggregation pipeline builder (visual)
 - Stage-by-stage execution, pipeline templates
@@ -1417,36 +1514,43 @@ GET /health/live    // Liveness probe
 - Count, distinct, map-reduce, text search
 
 **Schema Tools:**
+
 - Schema analyzer (infer from documents)
 - Schema validation rules, JSON schema
 
 **User & Server:**
+
 - List users, create, update roles, drop users
 - Built-in and custom roles
 - Server status, current operations
 - Kill operations, profiler, server logs
 
 **Import/Export:**
+
 - Export/import JSON, CSV
 - mongodump/mongorestore support
 
 #### Redis Features
 
 **Connection:**
+
 - Connect with Sentinel, Cluster support
 - SSL/TLS, SSH tunnel, connection pooling
 
 **Key Browser:**
+
 - List keys (pattern matching), search (SCAN)
 - Key count, type detection, TTL, memory usage
 - Database selector (DB 0-15)
 
 **Key Operations:**
+
 - Get, set, delete, rename keys
 - Set TTL/Expire, persist key
 - Type-specific operations
 
 **Data Type Support:**
+
 - String (GET, SET, APPEND, INCR, DECR)
 - Hash (HGET, HSET, HDEL, HGETALL, HINCRBY)
 - List (LPUSH, RPUSH, LPOP, RPOP, LRANGE, LINDEX)
@@ -1455,25 +1559,30 @@ GET /health/live    // Liveness probe
 - Bitmap, HyperLogLog, Geospatial, Stream
 
 **Command Execution:**
+
 - Redis CLI (execute any command)
 - Command history, auto-complete, documentation
 
 **Pub/Sub:**
+
 - Subscribe to channels, publish messages
 - Pattern subscriptions, monitor activity
 
 **Server Management:**
+
 - Server info, memory/CPU stats
 - Keyspace statistics, replication info
 - Client list, kill connections
 - Config get/set, slow log, monitor
 
 **Persistence:**
+
 - View RDB/AOF status
 - Trigger BGSAVE, BGREWRITEAOF
 - View last save time
 
 **Import/Export:**
+
 - Export/import keys to/from JSON
 - RDB file download/upload
 
@@ -1662,6 +1771,7 @@ CREATE INDEX idx_identity_shares_identity ON identity_shares(identity_id);
 Permissions are organized by module, with core permissions available globally and module-specific permissions only when that module is enabled.
 
 **Permission Structure:**
+
 ```go
 type Permission struct {
     ID          string
@@ -1780,6 +1890,7 @@ func (h *SetupHandler) CreateFirstUser(c *gin.Context) {
 8. Redirected to dashboard
 
 **Root User Capabilities:**
+
 - ✅ Access to ALL permissions (no explicit grants needed)
 - ✅ Access to future permissions (when new modules added)
 - ✅ Bypass all permission dependency checks
@@ -1790,6 +1901,7 @@ func (h *SetupHandler) CreateFirstUser(c *gin.Context) {
 - ✅ Can manage all teams and users
 
 **Non-Root Users:**
+
 - ❌ Must have explicit permission grants
 - ❌ Subject to permission dependency validation
 - ❌ Cannot access admin-only features without grants
@@ -1862,7 +1974,7 @@ CORE_PERMISSIONS = {
 
 ### 7.4 Protocol Driver Permissions (Modules → Drivers)
 
-- The product now standardizes on the term **protocol driver** (earlier documents may still say *module*).
+- The product now standardizes on the term **protocol driver** (earlier documents may still say _module_).
 - Every driver contributes a permission profile that hangs from the `connection.*` core permissions:
   - `{driver}.connect` → depends on `connection.launch`; grants runtime usage (SSH terminal, Docker attach, Kubernetes exec).
   - `{driver}.manage` → depends on `connection.manage`; grants configuration updates and advanced driver tuning.
@@ -1875,12 +1987,12 @@ CORE_PERMISSIONS = {
   - Auditing hooks (what actions emit `AuditEntry` records).
 - Default driver scopes (non-exhaustive):
 
-| Driver | Base Permission | Manage Permission | Feature Scopes | Admin Scopes |
-|--------|-----------------|-------------------|----------------|--------------|
-| SSH | `ssh.connect` | `ssh.manage` | `ssh.sftp`, `ssh.port_forward`, `ssh.clipboard` | `ssh.global.manage` |
-| Docker | `docker.connect` | `docker.manage` | `docker.logs`, `docker.exec` | `docker.stack.deploy` |
+| Driver     | Base Permission      | Manage Permission   | Feature Scopes                                                      | Admin Scopes               |
+| ---------- | -------------------- | ------------------- | ------------------------------------------------------------------- | -------------------------- |
+| SSH        | `ssh.connect`        | `ssh.manage`        | `ssh.sftp`, `ssh.port_forward`, `ssh.clipboard`                     | `ssh.global.manage`        |
+| Docker     | `docker.connect`     | `docker.manage`     | `docker.logs`, `docker.exec`                                        | `docker.stack.deploy`      |
 | Kubernetes | `kubernetes.connect` | `kubernetes.manage` | `kubernetes.exec`, `kubernetes.port_forward`, `kubernetes.terminal` | `kubernetes.cluster.admin` |
-| Database | `database.connect` | `database.manage` | `database.query.read`, `database.query.write` | `database.cluster.manage` |
+| Database   | `database.connect`   | `database.manage`   | `database.query.read`, `database.query.write`                       | `database.cluster.manage`  |
 
 All feature/admin scopes must still be registered through the standard permission registry and synced to the database so they appear in role editors.
 
@@ -1904,17 +2016,17 @@ server:
   port: 8000
 
 database:
-  driver: sqlite  # sqlite, postgres, mysql
+  driver: sqlite # sqlite, postgres, mysql
   sqlite:
     path: ./data/database.sqlite
-  postgres:  # Optional
+  postgres: # Optional
     enabled: false
     host: localhost
     port: 5432
     database: shellcn
     username: postgres
     password: ${DB_PASSWORD}
-  mysql:  # Optional
+  mysql: # Optional
     enabled: false
     host: localhost
     port: 3306
@@ -1954,11 +2066,11 @@ features:
   notifications:
     enabled: true
 
-modules:
+protocols:
   ssh:
     enabled: true
     default_port: 22
-    ssh_v1_enabled: false  # Disabled by default (security)
+    ssh_v1_enabled: false # Disabled by default (security)
     ssh_v2_enabled: true
     auto_reconnect: true
     max_reconnect_attempts: 3
@@ -1991,12 +2103,14 @@ modules:
 **Build Process:**
 
 **Prerequisites:**
+
 - ⚠️ **IMPORTANT**: Check for latest library versions before building!
   - Rust crates: https://crates.io
   - Go packages: https://pkg.go.dev
   - pnpm packages: https://npmjs.com
 
 1. **Build Rust FFI modules** → Static libraries (.a files)
+
    ```bash
    cd rust-modules/rdp
    cargo build --release  # Generates rdp_ffi.h + librdp_ffi.a
@@ -2006,6 +2120,7 @@ modules:
    ```
 
 2. **Build frontend** (Vite 7 + React 19 + Tailwind 4) → Static assets
+
    ```bash
    cd web
    pnpm install
@@ -2013,12 +2128,14 @@ modules:
    ```
 
 3. **Embed frontend in Go binary**
+
    ```go
    //go:embed web/dist/*
    var staticFiles embed.FS
    ```
 
 4. **Link Rust static libraries with Go (CGO)**
+
    ```bash
    CGO_ENABLED=1 go build -o shellcn ./cmd/server
    ```
@@ -2026,6 +2143,7 @@ modules:
 5. **Output**: Single executable (shellcn)
 
 **First Run:**
+
 ```bash
 ./shellcn
 
@@ -2042,6 +2160,7 @@ modules:
 ```
 
 **First Access (Browser):**
+
 1. Navigate to `http://localhost:8000`
 2. Auto-redirected to `/setup` (no users exist)
 3. Fill out first admin user form:
@@ -2054,6 +2173,7 @@ modules:
 7. Auto-login and redirect to dashboard
 
 **Directory Structure:**
+
 ```
 ./shellcn                 # Single binary
 ./data/                   # Auto-created
@@ -2204,6 +2324,7 @@ modules:
 **1. Connection Creation Forms (Protocol-Specific):**
 
 **SSH Connection Form:**
+
 - Name, Icon
 - Protocol (SSH v1, SSH v2, Auto)
 - Address, Port
@@ -2216,12 +2337,14 @@ modules:
 - Notes (rich text)
 
 **Telnet Connection Form:**
+
 - Name, Icon, Address, Port
 - Identity Selector (optional)
 - Encoding settings
 - Advanced settings (keyboard, scrolling, reconnection)
 
 **RDP Connection Form:**
+
 - Name, Icon, Address, Port
 - Identity Selector
 - Domain (optional)
@@ -2231,12 +2354,14 @@ modules:
 - Clipboard sharing
 
 **VNC Connection Form:**
+
 - Name, Icon, Address, Port
 - Password (VNC password)
 - Color quality
 - Compression settings
 
 **Docker Host Form:**
+
 - Name, Icon
 - Connection type (TCP, Unix Socket, SSH tunnel)
 - Host address (if TCP)
@@ -2244,6 +2369,7 @@ modules:
 - Identity (if SSH tunnel)
 
 **Kubernetes Cluster Form:**
+
 - Name, Icon
 - API Server URL
 - Authentication (kubeconfig, token, certificate)
@@ -2251,6 +2377,7 @@ modules:
 - Context selection
 
 **Database Connection Form:**
+
 - Name, Icon
 - Database type (MySQL, PostgreSQL, MongoDB, Redis)
 - Host, Port
@@ -2260,6 +2387,7 @@ modules:
 - Connection pool settings
 
 **Proxmox Host Form:**
+
 - Name, Icon
 - Host URL
 - Identity (username/password or API token)
@@ -2267,6 +2395,7 @@ modules:
 - Realm (PAM, PVE, etc.)
 
 **Object Storage Connection Form:**
+
 - Name, Icon
 - Provider (S3, MinIO, GCS, Azure, DigitalOcean)
 - Endpoint URL
@@ -2278,12 +2407,14 @@ modules:
 **2. Identity/Vault Management:**
 
 **Identity List Table:**
+
 - Columns: Name, Type, Shared With, Created, Actions
 - Filter: Own / Shared / All
 - Actions: Edit, Delete, Share, View Usage
 - Bulk actions: Delete selected, Share selected
 
 **Create/Edit Identity Form:**
+
 - Name
 - Type (SSH, Database, Generic)
 - Username
@@ -2294,6 +2425,7 @@ modules:
 - Share with users/teams
 
 **SSH Key Manager:**
+
 - List of uploaded SSH keys
 - Key type, Fingerprint
 - Upload new key
@@ -2304,6 +2436,7 @@ modules:
 **3. Session Components:**
 
 **Terminal Emulator (xterm.js):**
+
 - Terminal window with xterm.js
 - Toolbar: Font size, Search, Clear, Download logs
 - Status bar: Connection status, Latency
@@ -2311,12 +2444,14 @@ modules:
 - Clipboard sync toggle
 
 **RDP/VNC Viewer:**
+
 - Canvas-based remote desktop viewer
 - Toolbar: Fullscreen, Ctrl+Alt+Del, Screenshot
 - Keyboard/Mouse input handling
 - Clipboard sync
 
 **File Manager (SFTP/File Share):**
+
 - Dual-pane file browser (local/remote)
 - Upload/Download with progress
 - File operations: Copy, Move, Delete, Rename
@@ -2324,6 +2459,7 @@ modules:
 - Breadcrumb navigation
 
 **4. Session Sharing Dialog:**
+
 - User/Team selector
 - Permission level: Read-only / Interactive
 - Expiry time
@@ -2331,6 +2467,7 @@ modules:
 - Revoke access button
 
 **5. Database Query Editor:**
+
 - SQL editor with syntax highlighting
 - Execute button
 - Result table viewer
@@ -2341,16 +2478,19 @@ modules:
 **6. Docker/Kubernetes Management:**
 
 **Container List:**
+
 - Table: Name, Image, Status, Ports, CPU, Memory
 - Actions: Start, Stop, Restart, Delete, Exec, Logs
 - Filters: Running, Stopped, All
 
 **Pod List (K8s):**
+
 - Table: Name, Namespace, Status, Restarts, Age
 - Actions: Exec, Logs, Port Forward, Delete
 - Namespace selector
 
 **7. Permission-Based UI:**
+
 - UI elements hidden/disabled based on user permissions
 - Real-time permission validation
 - Tooltip explanations for disabled features
@@ -2358,6 +2498,7 @@ modules:
 - Permission requirement indicators
 
 **8. Notification Center:**
+
 - Notification bell icon with badge
 - Dropdown list of recent notifications
 - Mark as read/unread

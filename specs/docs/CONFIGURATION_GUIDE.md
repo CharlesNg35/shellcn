@@ -104,7 +104,7 @@ features:
   notifications:
     enabled: true
 
-modules:
+protocols:
   ssh:
     enabled: true
   rdp:

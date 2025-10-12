@@ -18,7 +18,7 @@ type Config struct {
 	Vault      VaultConfig      `mapstructure:"vault"`
 	Monitoring MonitoringConfig `mapstructure:"monitoring"`
 	Features   FeatureConfig    `mapstructure:"features"`
-	Modules    ModuleConfig     `mapstructure:"modules"`
+	Protocols  ProtocolConfig   `mapstructure:"protocols"`
 	Auth       AuthConfig       `mapstructure:"auth"`
 	Email      EmailConfig      `mapstructure:"email"`
 }
@@ -111,27 +111,27 @@ type NotificationConfig struct {
 	Enabled bool `mapstructure:"enabled"`
 }
 
-// ModuleConfig enables individual protocol modules.
-type ModuleConfig struct {
-	SSH           SimpleModuleConfig   `mapstructure:"ssh"`
-	Telnet        SimpleModuleConfig   `mapstructure:"telnet"`
-	SFTP          SimpleModuleConfig   `mapstructure:"sftp"`
-	RDP           SimpleModuleConfig   `mapstructure:"rdp"`
-	VNC           SimpleModuleConfig   `mapstructure:"vnc"`
-	Docker        SimpleModuleConfig   `mapstructure:"docker"`
-	Kubernetes    SimpleModuleConfig   `mapstructure:"kubernetes"`
-	Database      DatabaseModuleConfig `mapstructure:"database"`
-	Proxmox       SimpleModuleConfig   `mapstructure:"proxmox"`
-	ObjectStorage SimpleModuleConfig   `mapstructure:"object_storage"`
+// ProtocolConfig enables individual protocol drivers.
+type ProtocolConfig struct {
+	SSH           SimpleProtocolConfig   `mapstructure:"ssh"`
+	Telnet        SimpleProtocolConfig   `mapstructure:"telnet"`
+	SFTP          SimpleProtocolConfig   `mapstructure:"sftp"`
+	RDP           SimpleProtocolConfig   `mapstructure:"rdp"`
+	VNC           SimpleProtocolConfig   `mapstructure:"vnc"`
+	Docker        SimpleProtocolConfig   `mapstructure:"docker"`
+	Kubernetes    SimpleProtocolConfig   `mapstructure:"kubernetes"`
+	Database      DatabaseProtocolConfig `mapstructure:"database"`
+	Proxmox       SimpleProtocolConfig   `mapstructure:"proxmox"`
+	ObjectStorage SimpleProtocolConfig   `mapstructure:"object_storage"`
 }
 
-// SimpleModuleConfig enables optional modules without extra settings.
-type SimpleModuleConfig struct {
+// SimpleProtocolConfig enables optional protocols without extra settings.
+type SimpleProtocolConfig struct {
 	Enabled bool `mapstructure:"enabled"`
 }
 
-// DatabaseModuleConfig toggles database client support.
-type DatabaseModuleConfig struct {
+// DatabaseProtocolConfig toggles database client support.
+type DatabaseProtocolConfig struct {
 	Enabled  bool `mapstructure:"enabled"`
 	MySQL    bool `mapstructure:"mysql"`
 	Postgres bool `mapstructure:"postgres"`
@@ -241,20 +241,20 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("features.session_sharing.max_shared_users", 5)
 	v.SetDefault("features.notifications.enabled", true)
 
-	v.SetDefault("modules.ssh.enabled", true)
-	v.SetDefault("modules.telnet.enabled", true)
-	v.SetDefault("modules.sftp.enabled", true)
-	v.SetDefault("modules.rdp.enabled", true)
-	v.SetDefault("modules.vnc.enabled", true)
-	v.SetDefault("modules.docker.enabled", true)
-	v.SetDefault("modules.kubernetes.enabled", false)
-	v.SetDefault("modules.database.enabled", true)
-	v.SetDefault("modules.database.mysql", true)
-	v.SetDefault("modules.database.postgres", true)
-	v.SetDefault("modules.database.redis", true)
-	v.SetDefault("modules.database.mongodb", true)
-	v.SetDefault("modules.proxmox.enabled", false)
-	v.SetDefault("modules.object_storage.enabled", false)
+	v.SetDefault("protocols.ssh.enabled", true)
+	v.SetDefault("protocols.telnet.enabled", true)
+	v.SetDefault("protocols.sftp.enabled", true)
+	v.SetDefault("protocols.rdp.enabled", true)
+	v.SetDefault("protocols.vnc.enabled", true)
+	v.SetDefault("protocols.docker.enabled", true)
+	v.SetDefault("protocols.kubernetes.enabled", false)
+	v.SetDefault("protocols.database.enabled", true)
+	v.SetDefault("protocols.database.mysql", true)
+	v.SetDefault("protocols.database.postgres", true)
+	v.SetDefault("protocols.database.redis", true)
+	v.SetDefault("protocols.database.mongodb", true)
+	v.SetDefault("protocols.proxmox.enabled", false)
+	v.SetDefault("protocols.object_storage.enabled", false)
 
 	v.SetDefault("auth.jwt.access_token_ttl", "15m")
 	v.SetDefault("auth.session.refresh_token_ttl", "720h") // 30 days
