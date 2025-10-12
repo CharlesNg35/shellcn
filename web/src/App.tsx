@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/errors/ErrorBoundary'
 import { ThemeProvider } from '@/components/theme/ThemeProvider'
@@ -6,62 +7,104 @@ import { Toaster } from '@/components/ui/Toaster'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { SetupGuard } from '@/components/auth/SetupGuard'
-import { Login } from '@/pages/auth/Login'
-import { Setup } from '@/pages/auth/Setup'
-import { PasswordResetRequest } from '@/pages/auth/PasswordResetRequest'
-import { PasswordResetConfirm } from '@/pages/auth/PasswordResetConfirm'
-import { MfaVerification } from '@/pages/auth/MfaVerification'
-import { InviteAccept } from '@/pages/auth/InviteAccept'
-import { Register } from '@/pages/auth/Register'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
-import { Dashboard } from '@/pages/dashboard/Dashboard'
-import { Connections } from '@/pages/connections/Connections'
-import { Identities } from '@/pages/settings/Identities'
-import { Users } from '@/pages/settings/Users'
-import { Teams } from '@/pages/settings/Teams'
-import { TeamDetail } from '@/pages/settings/TeamDetail'
-import { Permissions } from '@/pages/settings/Permissions'
-import { AuditLogs } from '@/pages/settings/AuditLogs'
-import { AuthProviders } from '@/pages/settings/AuthProviders'
-import { Security } from '@/pages/settings/Security'
-import { Settings } from '@/pages/settings/Settings'
+import { RouteLoader } from '@/components/layout/RouteLoader'
+
+const Login = lazy(() => import('@/pages/auth/Login').then((module) => ({ default: module.Login })))
+const Register = lazy(() =>
+  import('@/pages/auth/Register').then((module) => ({ default: module.Register }))
+)
+const Setup = lazy(() => import('@/pages/auth/Setup').then((module) => ({ default: module.Setup })))
+const PasswordResetRequest = lazy(() =>
+  import('@/pages/auth/PasswordResetRequest').then((module) => ({
+    default: module.PasswordResetRequest,
+  }))
+)
+const PasswordResetConfirm = lazy(() =>
+  import('@/pages/auth/PasswordResetConfirm').then((module) => ({
+    default: module.PasswordResetConfirm,
+  }))
+)
+const MfaVerification = lazy(() =>
+  import('@/pages/auth/MfaVerification').then((module) => ({
+    default: module.MfaVerification,
+  }))
+)
+const InviteAccept = lazy(() =>
+  import('@/pages/auth/InviteAccept').then((module) => ({ default: module.InviteAccept }))
+)
+const Dashboard = lazy(() =>
+  import('@/pages/dashboard/Dashboard').then((module) => ({ default: module.Dashboard }))
+)
+const Connections = lazy(() =>
+  import('@/pages/connections/Connections').then((module) => ({ default: module.Connections }))
+)
+const Settings = lazy(() =>
+  import('@/pages/settings/Settings').then((module) => ({ default: module.Settings }))
+)
+const Identities = lazy(() =>
+  import('@/pages/settings/Identities').then((module) => ({ default: module.Identities }))
+)
+const Users = lazy(() =>
+  import('@/pages/settings/Users').then((module) => ({ default: module.Users }))
+)
+const Teams = lazy(() =>
+  import('@/pages/settings/Teams').then((module) => ({ default: module.Teams }))
+)
+const TeamDetail = lazy(() =>
+  import('@/pages/settings/TeamDetail').then((module) => ({ default: module.TeamDetail }))
+)
+const Permissions = lazy(() =>
+  import('@/pages/settings/Permissions').then((module) => ({ default: module.Permissions }))
+)
+const AuditLogs = lazy(() =>
+  import('@/pages/settings/AuditLogs').then((module) => ({ default: module.AuditLogs }))
+)
+const AuthProviders = lazy(() =>
+  import('@/pages/settings/AuthProviders').then((module) => ({ default: module.AuthProviders }))
+)
+const Security = lazy(() =>
+  import('@/pages/settings/Security').then((module) => ({ default: module.Security }))
+)
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route element={<SetupGuard />}>
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/setup" element={<Setup />} />
-          <Route path="/password-reset" element={<PasswordResetRequest />} />
-          <Route path="/password-reset/confirm" element={<PasswordResetConfirm />} />
-          <Route path="/mfa" element={<MfaVerification />} />
-          <Route path="/invite/accept" element={<InviteAccept />} />
-        </Route>
+    <Suspense fallback={<RouteLoader />}>
+      <Routes>
+        <Route element={<SetupGuard />}>
+          <Route element={<AuthLayout />}>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/setup" element={<Setup />} />
+            <Route path="/password-reset" element={<PasswordResetRequest />} />
+            <Route path="/password-reset/confirm" element={<PasswordResetConfirm />} />
+            <Route path="/mfa" element={<MfaVerification />} />
+            <Route path="/invite/accept" element={<InviteAccept />} />
+          </Route>
 
-        <Route element={<ProtectedRoute />}>
-          <Route element={<DashboardLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/connections" element={<Connections />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<DashboardLayout />}>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/connections" element={<Connections />} />
 
-            {/* Settings */}
-            <Route path="/settings/identities" element={<Identities />} />
-            <Route path="/settings/users" element={<Users />} />
-            <Route path="/settings/teams" element={<Teams />} />
-            <Route path="/settings/teams/:teamId" element={<TeamDetail />} />
-            <Route path="/settings/permissions" element={<Permissions />} />
-            <Route path="/settings/audit" element={<AuditLogs />} />
-            <Route path="/settings/auth-providers" element={<AuthProviders />} />
-            <Route path="/settings/security" element={<Security />} />
+              {/* Settings */}
+              <Route path="/settings/identities" element={<Identities />} />
+              <Route path="/settings/users" element={<Users />} />
+              <Route path="/settings/teams" element={<Teams />} />
+              <Route path="/settings/teams/:teamId" element={<TeamDetail />} />
+              <Route path="/settings/permissions" element={<Permissions />} />
+              <Route path="/settings/audit" element={<AuditLogs />} />
+              <Route path="/settings/auth-providers" element={<AuthProviders />} />
+              <Route path="/settings/security" element={<Security />} />
+            </Route>
           </Route>
         </Route>
-      </Route>
 
-      <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </Suspense>
   )
 }
 
