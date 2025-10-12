@@ -3,6 +3,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import * as useAuthModule from '@/hooks/useAuth'
 import * as useNotificationsModule from '@/hooks/useNotifications'
+import * as usePermissionsModule from '@/hooks/usePermissions'
 import { Header } from '../Header'
 import { BreadcrumbProvider } from '@/contexts/BreadcrumbContext'
 
@@ -12,6 +13,10 @@ vi.mock('@/hooks/useAuth', () => ({
 
 vi.mock('@/hooks/useNotifications', () => ({
   useNotifications: vi.fn(),
+}))
+
+vi.mock('@/hooks/usePermissions', () => ({
+  usePermissions: vi.fn(),
 }))
 
 describe('Header', () => {
@@ -43,6 +48,15 @@ describe('Header', () => {
       removeNotification: vi.fn(),
       markAllAsRead: vi.fn(),
     } as unknown as ReturnType<typeof useNotificationsModule.useNotifications>)
+
+    vi.spyOn(usePermissionsModule, 'usePermissions').mockReturnValue({
+      permissions: [],
+      hasPermission: () => true,
+      hasAnyPermission: () => true,
+      hasAllPermissions: () => true,
+      isLoading: false,
+      refetch: vi.fn(),
+    })
 
     await act(async () => {
       render(

@@ -138,8 +138,8 @@
 - [ ] Implement date range picker
 - [ ] Create useAuditLogs hook
 - [ ] Add audit log search
-- [ ] Build security audit view
-- [ ] Write tests for audit viewer
+  - [x] Build security audit view
+  - [x] Write tests for audit viewer
 
 ### Phase 10: Settings & Preferences (Week 10)
 

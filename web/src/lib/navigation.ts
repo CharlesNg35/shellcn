@@ -73,7 +73,13 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         permission: PERMISSIONS.AUDIT.VIEW,
         featureId: 'auditLogs',
       },
-      { label: 'Security', path: '/settings/security', icon: Settings, featureId: 'security' },
+      {
+        label: 'Security',
+        path: '/settings/security',
+        icon: Settings,
+        featureId: 'security',
+        permission: PERMISSIONS.SECURITY.AUDIT,
+      },
     ],
   },
 ]
