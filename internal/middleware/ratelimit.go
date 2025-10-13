@@ -25,7 +25,11 @@ func RateLimit(store RateStore, maxRequests int, window time.Duration) gin.Handl
 			return
 		}
 
-		key := c.ClientIP() + "|" + c.FullPath()
+		path := c.FullPath()
+		if path == "" && c.Request != nil {
+			path = c.Request.URL.Path
+		}
+		key := c.ClientIP() + "|" + path
 		ctx := c.Request.Context()
 		if ctx == nil {
 			ctx = context.Background()

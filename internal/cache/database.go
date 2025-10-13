@@ -41,21 +41,23 @@ func (s *DatabaseStore) IncrementWithTTL(ctx context.Context, key string, window
 	expiry := now.Add(window)
 
 	var (
-		count int64
-		err   error
+		count     int64
+		windowEnd time.Time
+		err       error
 	)
 
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var entry models.CacheEntry
-		// Acquire row-level lock
+		// Acquire row-level lock so concurrent increments serialize.
 		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Take(&entry, "key = ?", key).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			count = 1
+			windowEnd = expiry
 			entry = models.CacheEntry{
 				Key:       key,
 				Value:     []byte(strconv.FormatInt(count, 10)),
-				ExpiresAt: expiry,
+				ExpiresAt: windowEnd,
 			}
 			return tx.Create(&entry).Error
 		}
@@ -65,13 +67,14 @@ func (s *DatabaseStore) IncrementWithTTL(ctx context.Context, key string, window
 
 		if entry.ExpiresAt.Before(now) {
 			count = 1
+			windowEnd = now.Add(window)
 			entry.Value = []byte("1")
-			entry.ExpiresAt = expiry
+			entry.ExpiresAt = windowEnd
 		} else {
 			current, _ := strconv.ParseInt(string(entry.Value), 10, 64)
 			count = current + 1
+			windowEnd = entry.ExpiresAt
 			entry.Value = []byte(strconv.FormatInt(count, 10))
-			entry.ExpiresAt = expiry
 		}
 
 		return tx.Save(&entry).Error
@@ -80,7 +83,12 @@ func (s *DatabaseStore) IncrementWithTTL(ctx context.Context, key string, window
 		return 0, 0, err
 	}
 
-	return count, expiry.Sub(now), nil
+	ttl := time.Until(windowEnd)
+	if ttl < 0 {
+		ttl = 0
+	}
+
+	return count, ttl, nil
 }
 
 // Set upserts the value for a given key with expiry.
