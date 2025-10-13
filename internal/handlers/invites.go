@@ -74,6 +74,14 @@ type redeemInviteResponse struct {
 	Created bool          `json:"created_user"`
 }
 
+type inviteInfoResponse struct {
+	Email      string `json:"email"`
+	TeamID     string `json:"team_id,omitempty"`
+	TeamName   string `json:"team_name,omitempty"`
+	HasAccount bool   `json:"has_account"`
+	Provider   string `json:"provider,omitempty"`
+}
+
 type inviteUserDTO struct {
 	ID        string `json:"id"`
 	Username  string `json:"username"`
@@ -426,6 +434,63 @@ func (h *InviteHandler) Redeem(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusCreated, payload)
+}
+
+// GET /api/auth/invite?token=...
+func (h *InviteHandler) Info(c *gin.Context) {
+	if h.invites == nil || h.users == nil {
+		response.Error(c, appErrors.ErrInternalServer)
+		return
+	}
+
+	token := strings.TrimSpace(c.Query("token"))
+	if token == "" {
+		response.Error(c, appErrors.NewBadRequest("Invite token is required"))
+		return
+	}
+
+	ctx := requestContext(c)
+	invite, err := h.invites.ValidateToken(ctx, token)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrInviteNotFound):
+			response.Error(c, appErrors.NewBadRequest("Invite token is invalid"))
+		case errors.Is(err, services.ErrInviteExpired):
+			response.Error(c, appErrors.NewBadRequest("Invite token has expired"))
+		case errors.Is(err, services.ErrInviteAlreadyUsed):
+			response.Error(c, appErrors.NewBadRequest("Invite has already been used"))
+		default:
+			response.Error(c, appErrors.ErrInternalServer)
+		}
+		return
+	}
+
+	info := inviteInfoResponse{
+		Email: invite.Email,
+	}
+	if invite.TeamID != nil {
+		info.TeamID = *invite.TeamID
+	}
+	if invite.Team != nil {
+		info.TeamName = invite.Team.Name
+	}
+
+	user, err := h.users.FindByEmail(ctx, invite.Email)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	if user != nil {
+		info.HasAccount = true
+		info.Provider = user.AuthProvider
+		if info.TeamName == "" && invite.TeamID != nil {
+			if team, teamErr := h.teams.GetByID(ctx, *invite.TeamID, user.ID); teamErr == nil && team != nil {
+				info.TeamName = team.Name
+			}
+		}
+	}
+
+	response.Success(c, http.StatusOK, info)
 }
 
 func toInviteDTO(invite *models.UserInvite, now time.Time) inviteDTO {

@@ -245,6 +245,7 @@ func (s *InviteService) ValidateToken(ctx context.Context, token string) (*model
 
 	var invite models.UserInvite
 	if err := s.db.WithContext(ctx).
+		Preload("Team").
 		Where("token_hash = ?", tokenHash(token)).
 		First(&invite).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

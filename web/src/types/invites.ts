@@ -36,3 +36,11 @@ export interface InviteRedeemResponse {
   message: string
   created_user: boolean
 }
+
+export interface InviteInfoResponse {
+  email: string
+  team_id?: string
+  team_name?: string
+  has_account: boolean
+  provider?: string
+}

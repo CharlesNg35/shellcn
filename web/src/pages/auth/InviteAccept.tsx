@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,6 +7,7 @@ import type { z } from 'zod'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { invitesApi } from '@/lib/api/invites'
+import type { InviteInfoResponse } from '@/types/invites'
 import { toApiError } from '@/lib/api/http'
 import { toast } from '@/lib/utils/toast'
 import { useAuth } from '@/hooks/useAuth'
@@ -21,6 +22,9 @@ export function InviteAccept() {
   const { login, clearError, providers, loadProviders, user, isAuthenticated } = useAuth({
     autoInitialize: false,
   })
+  const [inviteInfo, setInviteInfo] = useState<InviteInfoResponse | null>(null)
+  const [isLoadingInfo, setIsLoadingInfo] = useState(false)
+  const [infoError, setInfoError] = useState<string | null>(null)
 
   const {
     register,
@@ -44,6 +48,7 @@ export function InviteAccept() {
   })
 
   const existingAccount = watch('existingAccount')
+  const effectiveExistingAccount = inviteInfo?.has_account ? true : existingAccount
 
   useEffect(() => {
     const token = params.get('token')
@@ -57,13 +62,13 @@ export function InviteAccept() {
   }, [params, setValue, clearError])
 
   useEffect(() => {
-    if (existingAccount) {
+    if (effectiveExistingAccount) {
       setValue('username', '')
       setValue('password', '')
       setValue('confirmPassword', '')
       clearErrors(['username', 'password', 'confirmPassword'])
     }
-  }, [existingAccount, setValue, clearErrors])
+  }, [effectiveExistingAccount, setValue, clearErrors])
 
   useEffect(() => {
     if (providers.length === 0) {
@@ -72,6 +77,30 @@ export function InviteAccept() {
       })
     }
   }, [providers.length, loadProviders])
+
+  useEffect(() => {
+    const token = params.get('token')
+    if (!token) {
+      return
+    }
+    setIsLoadingInfo(true)
+    setInfoError(null)
+    invitesApi
+      .info(token)
+      .then((info) => {
+        setInviteInfo(info)
+        if (info.has_account) {
+          setValue('existingAccount', true, { shouldDirty: false, shouldValidate: false })
+        }
+      })
+      .catch((error) => {
+        const apiError = toApiError(error)
+        setInfoError(apiError.message)
+      })
+      .finally(() => {
+        setIsLoadingInfo(false)
+      })
+  }, [params, setValue])
 
   const localPasswordProvider = useMemo(
     () =>
@@ -89,10 +118,10 @@ export function InviteAccept() {
   )
 
   useEffect(() => {
-    if ((isAuthenticated || !allowLocalRegistration) && !existingAccount) {
-      setValue('existingAccount', true)
+    if (isAuthenticated && !effectiveExistingAccount) {
+      setValue('existingAccount', true, { shouldDirty: false, shouldValidate: false })
     }
-  }, [isAuthenticated, allowLocalRegistration, existingAccount, setValue])
+  }, [isAuthenticated, effectiveExistingAccount, setValue])
 
   useEffect(() => {
     if (params.get('notice') === 'sso_failed') {
@@ -112,6 +141,8 @@ export function InviteAccept() {
   }, [providers])
 
   const authenticatedEmail = user?.email ?? ''
+  const inviteTeamName = inviteInfo?.team_name
+  const inviteProvider = inviteInfo?.provider
 
   const currentInvitePath = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -132,8 +163,8 @@ export function InviteAccept() {
         token: values.token,
         first_name: firstName ? firstName : undefined,
         last_name: lastName ? lastName : undefined,
-        username: existingAccount ? undefined : values.username,
-        password: existingAccount ? undefined : values.password,
+        username: effectiveExistingAccount ? undefined : values.username,
+        password: effectiveExistingAccount ? undefined : values.password,
       }
 
       const result = await invitesApi.redeem(payload)
@@ -142,10 +173,19 @@ export function InviteAccept() {
       const providerMeta = providers.find((provider) => provider.type === providerType)
 
       toast.success('Invitation complete', {
-        description: result.message ?? 'You can now access ShellCN.',
+        description:
+          result.message ??
+          (inviteTeamName
+            ? `You now have access to ${inviteTeamName}.`
+            : 'You can now access ShellCN.'),
       })
 
-      if (result.created_user && !existingAccount && providerType === 'local' && canAutoLogin) {
+      if (
+        result.created_user &&
+        !effectiveExistingAccount &&
+        providerType === 'local' &&
+        canAutoLogin
+      ) {
         try {
           await login({
             identifier: values.username ?? '',
@@ -160,11 +200,10 @@ export function InviteAccept() {
           navigate(`/login?notice=team-invite&provider=${providerType}`, { replace: true })
         }
       } else if (!result.created_user && providerMeta && providerMeta.flow === 'redirect') {
-        if (providerMeta.login_url) {
-          window.location.href = providerMeta.login_url
-        } else {
-          window.location.href = `/api/auth/providers/${providerType}/login?redirect=${encodeURIComponent(currentInvitePath)}&error_redirect=${encodeURIComponent(ssoErrorRedirect)}`
-        }
+        const ssoLogin =
+          providerMeta.login_url ||
+          `/api/auth/providers/${providerType}/login?redirect=${encodeURIComponent(currentInvitePath)}&error_redirect=${encodeURIComponent(ssoErrorRedirect)}`
+        window.location.href = ssoLogin
       } else {
         navigate(`/login?notice=team-invite&provider=${providerType}`, { replace: true })
       }
@@ -181,8 +220,16 @@ export function InviteAccept() {
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold text-foreground">Complete Your Invitation</h1>
         <p className="text-sm text-muted-foreground">
-          Create a new ShellCN account or link this invitation to an existing user profile.
+          {inviteInfo?.has_account
+            ? 'This email already has a ShellCN account. Join the team using your existing credentials.'
+            : 'Create a new ShellCN account or link this invitation to an existing user profile.'}
         </p>
+        {inviteTeamName ? (
+          <p className="text-sm text-muted-foreground">
+            Team: <span className="font-medium">{inviteTeamName}</span>
+          </p>
+        ) : null}
+        {infoError ? <p className="text-sm text-destructive">{infoError}</p> : null}
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
@@ -193,7 +240,7 @@ export function InviteAccept() {
           readOnly={Boolean(params.get('token'))}
         />
 
-        {allowLocalRegistration && !isAuthenticated ? (
+        {allowLocalRegistration && !isAuthenticated && !inviteInfo?.has_account ? (
           <Controller
             name="existingAccount"
             control={control}
@@ -212,7 +259,7 @@ export function InviteAccept() {
           />
         ) : null}
 
-        {existingAccount ? (
+        {effectiveExistingAccount ? (
           <div className="space-y-3">
             {isAuthenticated ? (
               <div className="rounded-md border border-green-300/60 bg-green-50 p-3 text-sm text-green-900">
@@ -222,15 +269,18 @@ export function InviteAccept() {
             ) : (
               <div className="space-y-3">
                 <p className="text-sm text-muted-foreground">
-                  Sign in with the provider linked to your ShellCN account, then return to this page
-                  to finish joining the team.
+                  {inviteProvider
+                    ? `Sign in with the ${inviteProvider} provider linked to your ShellCN account, then return to this page to finish joining the team.`
+                    : 'Sign in with the provider linked to your ShellCN account, then return to this page to finish the process.'}
                 </p>
-                <SSOButtons
-                  providers={providers}
-                  successRedirect={currentInvitePath}
-                  errorRedirect={ssoErrorRedirect}
-                  disabled={isSubmitting}
-                />
+                {providers.some((provider) => (provider.flow ?? 'password') === 'redirect') ? (
+                  <SSOButtons
+                    providers={providers}
+                    successRedirect={currentInvitePath}
+                    errorRedirect={ssoErrorRedirect}
+                    disabled={isSubmitting || isLoadingInfo}
+                  />
+                ) : null}
                 <div className="text-sm text-muted-foreground">
                   Prefer password sign-in?{' '}
                   <Link to="/login" className="text-primary hover:underline">
@@ -284,8 +334,13 @@ export function InviteAccept() {
           </>
         )}
 
-        <Button type="submit" className="w-full" loading={isSubmitting}>
-          {existingAccount ? 'Join Team' : 'Activate Account'}
+        <Button
+          type="submit"
+          className="w-full"
+          loading={isSubmitting}
+          disabled={isSubmitting || isLoadingInfo}
+        >
+          {effectiveExistingAccount ? 'Join Team' : 'Activate Account'}
         </Button>
       </form>
     </div>

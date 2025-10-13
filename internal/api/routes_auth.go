@@ -29,6 +29,7 @@ func registerAuthRoutes(engine *gin.Engine, api *gin.RouterGroup, deps authRoute
 		auth.GET("/providers/:type/login", deps.SSOHandler.Begin)
 		auth.GET("/providers/:type/callback", deps.SSOHandler.Callback)
 		auth.GET("/providers/:type/metadata", deps.SSOHandler.Metadata)
+		auth.GET("/invite", deps.InviteHandler.Info)
 		auth.POST("/invite/redeem", middleware.OptionalAuth(deps.JWT), deps.InviteHandler.Redeem)
 	}
 

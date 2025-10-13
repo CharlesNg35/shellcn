@@ -521,6 +521,21 @@ func TestInviteHandler_Flow(t *testing.T) {
 	require.Equal(t, "Onboarding", createData.Invite["team_name"])
 	inviteID := createData.Invite["id"].(string)
 
+	infoResp := env.Request(http.MethodGet, "/api/auth/invite?token="+createData.Token, nil, "")
+	require.Equal(t, http.StatusOK, infoResp.Code, infoResp.Body.String())
+	var inviteInfo struct {
+		Email      string `json:"email"`
+		TeamID     string `json:"team_id"`
+		TeamName   string `json:"team_name"`
+		HasAccount bool   `json:"has_account"`
+		Provider   string `json:"provider"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, infoResp).Data, &inviteInfo)
+	require.Equal(t, "invitee@example.com", inviteInfo.Email)
+	require.Equal(t, teamID, inviteInfo.TeamID)
+	require.Equal(t, "Onboarding", inviteInfo.TeamName)
+	require.False(t, inviteInfo.HasAccount)
+
 	linkResp := env.Request(http.MethodPost, "/api/invites/"+inviteID+"/link", nil, token)
 	require.Equal(t, http.StatusOK, linkResp.Code, linkResp.Body.String())
 	var linkData struct {
@@ -648,6 +663,17 @@ func TestInviteHandler_TeamInviteExistingUser(t *testing.T) {
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, createResp).Data, &createData)
 	require.NotEmpty(t, createData.Token)
 	require.Equal(t, existingEmail, createData.Invite["email"])
+
+	infoResp := env.Request(http.MethodGet, "/api/auth/invite?token="+createData.Token, nil, "")
+	require.Equal(t, http.StatusOK, infoResp.Code, infoResp.Body.String())
+	var inviteInfo struct {
+		Email      string `json:"email"`
+		HasAccount bool   `json:"has_account"`
+		Provider   string `json:"provider"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, infoResp).Data, &inviteInfo)
+	require.True(t, inviteInfo.HasAccount)
+	require.Equal(t, "oidc", inviteInfo.Provider)
 
 	redeemPayload := map[string]any{
 		"token":      createData.Token,

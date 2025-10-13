@@ -4,6 +4,7 @@ import type { ApiResponse } from '@/types/api'
 import type {
   InviteCreatePayload,
   InviteCreateResponse,
+  InviteInfoResponse,
   InviteRecord,
   InviteRedeemResponse,
 } from '@/types/invites'
@@ -51,6 +52,13 @@ export async function deleteInvite(inviteId: string): Promise<void> {
   unwrapResponse(response)
 }
 
+export async function fetchInviteInfo(token: string): Promise<InviteInfoResponse> {
+  const response = await apiClient.get<ApiResponse<InviteInfoResponse>>(`/auth/invite`, {
+    params: { token },
+  })
+  return unwrapResponse(response)
+}
+
 export interface RedeemInvitePayload {
   token: string
   username?: string
@@ -73,5 +81,6 @@ export const invitesApi = {
   issueLink: issueInviteLink,
   list: fetchInvites,
   delete: deleteInvite,
+  info: fetchInviteInfo,
   redeem: redeemInvite,
 }
