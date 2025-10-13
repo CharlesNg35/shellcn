@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   flexRender,
   getCoreRowModel,
@@ -73,6 +73,11 @@ export function AuditLogTable({
   onSelectLog,
 }: AuditLogTableProps) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
+  const onSelectLogRef = useRef(onSelectLog)
+
+  useEffect(() => {
+    onSelectLogRef.current = onSelectLog
+  }, [onSelectLog])
 
   const columns = useMemo<ColumnDef<AuditLogEntry>[]>(() => {
     return [
@@ -160,10 +165,10 @@ export function AuditLogTable({
         cell: ({ row }) => (
           <Button
             type="button"
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="gap-2 hover:bg-muted"
-            onClick={() => onSelectLog?.(row.original)}
+            className="gap-2 transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => onSelectLogRef.current?.(row.original)}
           >
             <Eye className="h-4 w-4" />
             Details
@@ -173,7 +178,7 @@ export function AuditLogTable({
         size: 120,
       },
     ]
-  }, [onSelectLog])
+  }, [])
 
   const table = useReactTable({
     data: logs,
