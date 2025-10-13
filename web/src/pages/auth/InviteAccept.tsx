@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { inviteAcceptSchema } from '@/schemas/auth'
 import type { z } from 'zod'
@@ -10,6 +10,7 @@ import { invitesApi } from '@/lib/api/invites'
 import { toApiError } from '@/lib/api/http'
 import { toast } from '@/lib/utils/toast'
 import { useAuth } from '@/hooks/useAuth'
+import { Checkbox } from '@/components/ui/Checkbox'
 
 type InviteAcceptFormValues = z.infer<typeof inviteAcceptSchema>
 
@@ -22,6 +23,9 @@ export function InviteAccept() {
     register,
     handleSubmit,
     setValue,
+    watch,
+    control,
+    clearErrors,
     formState: { errors, isSubmitting },
   } = useForm<InviteAcceptFormValues>({
     resolver: zodResolver(inviteAcceptSchema),
@@ -32,8 +36,11 @@ export function InviteAccept() {
       confirmPassword: '',
       firstName: '',
       lastName: '',
+      existingAccount: false,
     },
   })
+
+  const existingAccount = watch('existingAccount')
 
   useEffect(() => {
     const token = params.get('token')
@@ -46,29 +53,51 @@ export function InviteAccept() {
     }
   }, [params, setValue, clearError])
 
+  useEffect(() => {
+    if (existingAccount) {
+      setValue('username', '')
+      setValue('password', '')
+      setValue('confirmPassword', '')
+      clearErrors(['username', 'password', 'confirmPassword'])
+    }
+  }, [existingAccount, setValue, clearErrors])
+
   const onSubmit = handleSubmit(async (values) => {
     try {
       const firstName = values.firstName?.trim()
       const lastName = values.lastName?.trim()
 
-      await invitesApi.redeem({
+      const payload = {
         token: values.token,
-        username: values.username,
-        password: values.password,
         first_name: firstName ? firstName : undefined,
         last_name: lastName ? lastName : undefined,
+        username: existingAccount ? undefined : values.username,
+        password: existingAccount ? undefined : values.password,
+      }
+
+      const result = await invitesApi.redeem(payload)
+
+      toast.success('Invitation complete', {
+        description: result.message ?? 'You can now access ShellCN.',
       })
 
-      toast.success('Account ready', {
-        description: 'Welcome! Redirecting to your dashboard...',
-      })
-
-      await login({
-        identifier: values.username,
-        password: values.password,
-      })
-
-      navigate('/dashboard', { replace: true })
+      if (result.created_user) {
+        try {
+          await login({
+            identifier: values.username ?? '',
+            password: values.password ?? '',
+          })
+          navigate('/dashboard', { replace: true })
+        } catch (authError) {
+          const authIssue = toApiError(authError)
+          toast.info('Account created', {
+            description: authIssue.message || 'Sign in with your new credentials to continue.',
+          })
+          navigate('/login', { replace: true })
+        }
+      } else {
+        navigate('/login', { replace: true })
+      }
     } catch (error) {
       const apiError = toApiError(error)
       toast.error('Unable to complete invitation', {
@@ -82,7 +111,7 @@ export function InviteAccept() {
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold text-foreground">Complete Your Invitation</h1>
         <p className="text-sm text-muted-foreground">
-          Choose your username and password to finish setting up your ShellCN account.
+          Create a new ShellCN account or link this invitation to an existing user profile.
         </p>
       </div>
 
@@ -94,13 +123,32 @@ export function InviteAccept() {
           readOnly={Boolean(params.get('token'))}
         />
 
-        <Input
-          label="Username"
-          placeholder="your.username"
-          autoComplete="username"
-          {...register('username')}
-          error={errors.username?.message}
+        <Controller
+          name="existingAccount"
+          control={control}
+          render={({ field }) => (
+            <div className="flex items-center space-x-3 rounded-md border border-border/60 bg-muted/30 p-3">
+              <Checkbox
+                id="existing-account"
+                checked={field.value ?? false}
+                onCheckedChange={(checked) => field.onChange(Boolean(checked))}
+              />
+              <label htmlFor="existing-account" className="text-sm text-foreground">
+                I already have a ShellCN account
+              </label>
+            </div>
+          )}
         />
+
+        {!existingAccount ? (
+          <Input
+            label="Username"
+            placeholder="your.username"
+            autoComplete="username"
+            {...register('username')}
+            error={errors.username?.message}
+          />
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2">
           <Input
@@ -117,24 +165,28 @@ export function InviteAccept() {
           />
         </div>
 
-        <Input
-          label="Password"
-          type="password"
-          autoComplete="new-password"
-          {...register('password')}
-          error={errors.password?.message}
-        />
+        {!existingAccount ? (
+          <>
+            <Input
+              label="Password"
+              type="password"
+              autoComplete="new-password"
+              {...register('password')}
+              error={errors.password?.message}
+            />
 
-        <Input
-          label="Confirm Password"
-          type="password"
-          autoComplete="new-password"
-          {...register('confirmPassword')}
-          error={errors.confirmPassword?.message}
-        />
+            <Input
+              label="Confirm Password"
+              type="password"
+              autoComplete="new-password"
+              {...register('confirmPassword')}
+              error={errors.confirmPassword?.message}
+            />
+          </>
+        ) : null}
 
         <Button type="submit" className="w-full" loading={isSubmitting}>
-          Activate Account
+          {existingAccount ? 'Join Team' : 'Activate Account'}
         </Button>
       </form>
     </div>

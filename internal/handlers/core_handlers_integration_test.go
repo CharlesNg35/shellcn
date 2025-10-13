@@ -566,6 +566,14 @@ func TestInviteHandler_Flow(t *testing.T) {
 	redeemResp := env.Request(http.MethodPost, "/api/auth/invite/redeem", redeemPayload, "")
 	require.Equal(t, http.StatusCreated, redeemResp.Code, redeemResp.Body.String())
 
+	var redeemDataNew struct {
+		User    map[string]any `json:"user"`
+		Message string         `json:"message"`
+		Created bool           `json:"created_user"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, redeemResp).Data, &redeemDataNew)
+	require.True(t, redeemDataNew.Created)
+
 	// New user should be able to authenticate immediately.
 	loginResult := env.Login("invited-user", "InviteePassword123!")
 	require.NotEmpty(t, loginResult.AccessToken)
@@ -651,8 +659,10 @@ func TestInviteHandler_TeamInviteExistingUser(t *testing.T) {
 	var redeemData struct {
 		User    map[string]any `json:"user"`
 		Message string         `json:"message"`
+		Created bool           `json:"created_user"`
 	}
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, redeemResp).Data, &redeemData)
+	require.False(t, redeemData.Created)
 	require.Equal(t, strings.ToLower(existingEmail), strings.ToLower(redeemData.User["email"].(string)))
 	require.Contains(t, strings.ToLower(redeemData.Message), "team access granted")
 

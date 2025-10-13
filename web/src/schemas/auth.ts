@@ -50,13 +50,59 @@ export const mfaVerificationSchema = z.object({
 export const inviteAcceptSchema = z
   .object({
     token: z.string().min(1, 'Invite token is required'),
-    username: z.string().min(3, 'Username must be at least 3 characters').max(64),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
-    confirmPassword: z.string().min(8, 'Confirm password is required'),
+    existingAccount: z.boolean().optional(),
+    username: z.string().max(64).optional(),
+    password: z.string().optional(),
+    confirmPassword: z.string().optional(),
     firstName: z.string().trim().max(128).optional(),
     lastName: z.string().trim().max(128).optional(),
   })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
+  .superRefine((data, ctx) => {
+    const isExisting = Boolean(data.existingAccount)
+
+    if (isExisting) {
+      return
+    }
+
+    const username = data.username?.trim() ?? ''
+    if (username.length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Username must be at least 3 characters',
+        path: ['username'],
+      })
+    }
+
+    if (username.length > 64) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Username must be at most 64 characters',
+        path: ['username'],
+      })
+    }
+
+    if (!data.password || data.password.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Password must be at least 8 characters',
+        path: ['password'],
+      })
+    }
+
+    if (!data.confirmPassword || data.confirmPassword.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Confirm password is required',
+        path: ['confirmPassword'],
+      })
+      return
+    }
+
+    if (data.password !== data.confirmPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Passwords don't match",
+        path: ['confirmPassword'],
+      })
+    }
   })

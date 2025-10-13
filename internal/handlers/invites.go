@@ -44,8 +44,8 @@ type createInviteRequest struct {
 
 type redeemInviteRequest struct {
 	Token     string `json:"token" validate:"required"`
-	Username  string `json:"username" validate:"required,min=3,max=64"`
-	Password  string `json:"password" validate:"required,min=8"`
+	Username  string `json:"username" validate:"omitempty,min=3,max=64"`
+	Password  string `json:"password" validate:"omitempty,min=8"`
 	FirstName string `json:"first_name" validate:"omitempty,max=128"`
 	LastName  string `json:"last_name" validate:"omitempty,max=128"`
 }
@@ -71,6 +71,7 @@ type inviteCreatedResponse struct {
 type redeemInviteResponse struct {
 	User    inviteUserDTO `json:"user"`
 	Message string        `json:"message"`
+	Created bool          `json:"created_user"`
 }
 
 type inviteUserDTO struct {
@@ -311,12 +312,25 @@ func (h *InviteHandler) Redeem(c *gin.Context) {
 	createdUser := false
 	user := existingUser
 	isActive := !requiresVerification
+	username := strings.TrimSpace(req.Username)
+	password := req.Password
+
+	if user == nil {
+		if len(username) < 3 || len(username) > 64 {
+			response.Error(c, appErrors.NewBadRequest("Username must be between 3 and 64 characters"))
+			return
+		}
+		if len(password) < 8 {
+			response.Error(c, appErrors.NewBadRequest("Password must be at least 8 characters"))
+			return
+		}
+	}
 
 	if user == nil {
 		userInput := services.CreateUserInput{
-			Username:  strings.TrimSpace(req.Username),
+			Username:  username,
 			Email:     strings.ToLower(strings.TrimSpace(invite.Email)),
-			Password:  req.Password,
+			Password:  password,
 			FirstName: strings.TrimSpace(req.FirstName),
 			LastName:  strings.TrimSpace(req.LastName),
 			IsActive:  &isActive,
@@ -394,6 +408,7 @@ func (h *InviteHandler) Redeem(c *gin.Context) {
 			IsActive:  user.IsActive,
 		},
 		Message: message,
+		Created: createdUser,
 	}
 
 	response.Success(c, http.StatusCreated, payload)

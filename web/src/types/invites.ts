@@ -22,3 +22,16 @@ export interface InviteCreateResponse {
   token: string
   link?: string
 }
+
+export interface InviteRedeemResponse {
+  user: {
+    id: string
+    username: string
+    email: string
+    first_name?: string
+    last_name?: string
+    is_active: boolean
+  }
+  message: string
+  created_user: boolean
+}
