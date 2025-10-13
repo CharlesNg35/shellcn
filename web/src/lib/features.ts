@@ -43,6 +43,7 @@ export const FEATURE_MODULES: Record<string, FeatureModule> = {
     name: 'Identities',
     enabled: true,
     category: 'core',
+    permission: PERMISSIONS.VAULT.VIEW,
     description: 'Credential vault and identity management',
   },
 

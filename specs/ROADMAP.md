@@ -192,11 +192,11 @@
 
 ### Phase 4: Frontend Data Layer (Week 4)
 
-- [ ] Define TypeScript types for identities, credential templates, and shares under `web/src/types`
-- [ ] Add API client modules (`web/src/lib/api/vault.ts`) aligned with backend contracts
-- [ ] Create React Query hooks (`useIdentities`, `useIdentityMutations`, `useCredentialTemplates`, `useIdentitySharing`)
-- [ ] Update permission constants and feature flags for vault capabilities
-- [ ] Cover hooks with unit tests (mocks for optimistic updates, error toasts)
+- [x] Define TypeScript types for identities, credential templates, and shares under `web/src/types`
+- [x] Add API client modules (`web/src/lib/api/vault.ts`) aligned with backend contracts
+- [x] Create React Query hooks (`useIdentities`, `useIdentityMutations`, `useCredentialTemplates`, `useIdentitySharing`)
+- [x] Update permission constants and feature flags for vault capabilities
+- [x] Cover hooks with unit tests (mocks for optimistic updates, error toasts)
 
 ### Phase 5: Vault UI & Workflow Integration (Week 5)
 

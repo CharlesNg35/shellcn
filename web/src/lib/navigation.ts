@@ -37,7 +37,13 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
   {
     label: 'Settings',
     items: [
-      { label: 'Identities', path: '/settings/identities', icon: Key, featureId: 'identities' },
+      {
+        label: 'Identities',
+        path: '/settings/identities',
+        icon: Key,
+        featureId: 'identities',
+        permission: PERMISSIONS.VAULT.VIEW,
+      },
       {
         label: 'Users',
         path: '/settings/users',
