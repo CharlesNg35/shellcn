@@ -23,7 +23,7 @@ func TestInviteServiceGenerateAndRedeem(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	invite, token, link, err := svc.GenerateInvite(context.Background(), "user@example.com", "admin")
+	invite, token, link, err := svc.GenerateInvite(context.Background(), "user@example.com", "admin", "")
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 	require.NotEmpty(t, link)
@@ -40,6 +40,25 @@ func TestInviteServiceGenerateAndRedeem(t *testing.T) {
 	require.ErrorIs(t, err, ErrInviteAlreadyUsed)
 }
 
+func TestInviteServiceGenerateWithTeam(t *testing.T) {
+	db := openInviteTestDB(t)
+
+	team := &models.Team{Name: "Operations"}
+	require.NoError(t, db.Create(team).Error)
+
+	svc, err := NewInviteService(db, nil)
+	require.NoError(t, err)
+
+	invite, token, link, err := svc.GenerateInvite(context.Background(), "teamuser@example.com", "admin", team.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, token)
+	require.NotEmpty(t, link)
+	require.NotNil(t, invite.TeamID)
+	require.Equal(t, team.ID, *invite.TeamID)
+	require.NotNil(t, invite.Team)
+	require.Equal(t, team.Name, invite.Team.Name)
+}
+
 func TestInviteServiceExpiry(t *testing.T) {
 	db := openInviteTestDB(t)
 	current := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -50,7 +69,7 @@ func TestInviteServiceExpiry(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, token, _, err := svc.GenerateInvite(context.Background(), "late@example.com", "admin")
+	_, token, _, err := svc.GenerateInvite(context.Background(), "late@example.com", "admin", "")
 	require.NoError(t, err)
 
 	current = current.Add(2 * time.Hour)
@@ -64,7 +83,7 @@ func TestInviteServiceSMTPDisabled(t *testing.T) {
 	svc, err := NewInviteService(db, &disabledMailer{})
 	require.NoError(t, err)
 
-	_, token, link, err := svc.GenerateInvite(context.Background(), "disabled@example.com", "admin")
+	_, token, link, err := svc.GenerateInvite(context.Background(), "disabled@example.com", "admin", "")
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 	require.NotEmpty(t, link)
@@ -80,15 +99,15 @@ func TestInviteServiceDuplicatePrevention(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, _, _, err = svc.GenerateInvite(context.Background(), "dup@example.com", "admin")
+	_, _, _, err = svc.GenerateInvite(context.Background(), "dup@example.com", "admin", "")
 	require.NoError(t, err)
 
-	_, _, _, err = svc.GenerateInvite(context.Background(), "dup@example.com", "admin")
+	_, _, _, err = svc.GenerateInvite(context.Background(), "dup@example.com", "admin", "")
 	require.ErrorIs(t, err, ErrInviteAlreadyPending)
 
 	// Advance past expiry; should allow invite again.
 	current = current.Add(48 * time.Hour)
-	_, _, _, err = svc.GenerateInvite(context.Background(), "dup@example.com", "admin")
+	_, _, _, err = svc.GenerateInvite(context.Background(), "dup@example.com", "admin", "")
 	require.NoError(t, err)
 }
 
@@ -102,7 +121,7 @@ func TestInviteServiceListAndDelete(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	inv1, token1, _, err := svc.GenerateInvite(context.Background(), "pending@example.com", "admin")
+	inv1, token1, _, err := svc.GenerateInvite(context.Background(), "pending@example.com", "admin", "")
 	require.NoError(t, err)
 
 	// Redeem first invite immediately (marking as accepted)
@@ -110,7 +129,7 @@ func TestInviteServiceListAndDelete(t *testing.T) {
 	require.NoError(t, err)
 
 	current = current.Add(48 * time.Hour)
-	inv2, _, _, err := svc.GenerateInvite(context.Background(), "new@example.com", "admin")
+	inv2, _, _, err := svc.GenerateInvite(context.Background(), "new@example.com", "admin", "")
 	require.NoError(t, err)
 
 	// pending list should only contain second invite
@@ -139,7 +158,7 @@ func openInviteTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 
-	require.NoError(t, db.AutoMigrate(&models.UserInvite{}))
+	require.NoError(t, db.AutoMigrate(&models.Team{}, &models.UserInvite{}))
 
 	sqlDB, err := db.DB()
 	require.NoError(t, err)

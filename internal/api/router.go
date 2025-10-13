@@ -70,6 +70,11 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 
+	checker, err := permissions.NewChecker(db)
+	if err != nil {
+		return nil, err
+	}
+
 	authProviderSvc, err := services.NewAuthProviderService(db, auditSvc, encryptionKey)
 	if err != nil {
 		return nil, err
@@ -142,15 +147,16 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 
-	inviteHandler := handlers.NewInviteHandler(inviteSvc, userSvcForInvites, verificationSvc)
+	teamSvcForInvites, err := services.NewTeamService(db, auditSvc, checker)
+	if err != nil {
+		return nil, err
+	}
+
+	inviteHandler := handlers.NewInviteHandler(inviteSvc, userSvcForInvites, teamSvcForInvites, verificationSvc)
 
 	// Auth routes
 
 	// ----- Protected API Group --------------------------------------------------
-	checker, err := permissions.NewChecker(db)
-	if err != nil {
-		return nil, err
-	}
 	requireAuth := middleware.Auth(jwt)
 
 	api := r.Group("/api")

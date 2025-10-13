@@ -490,8 +490,19 @@ func TestInviteHandler_Flow(t *testing.T) {
 	login := env.Login(root.Username, "InviteFlowPassw0rd!")
 	token := login.AccessToken
 
+	teamPayload := map[string]any{
+		"name":        "Onboarding",
+		"description": "handles new hires",
+	}
+	teamResp := env.Request(http.MethodPost, "/api/teams", teamPayload, token)
+	require.Equal(t, http.StatusCreated, teamResp.Code, teamResp.Body.String())
+	var team map[string]any
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, teamResp).Data, &team)
+	teamID := team["id"].(string)
+
 	createPayload := map[string]any{
-		"email": "invitee@example.com",
+		"email":   "invitee@example.com",
+		"team_id": teamID,
 	}
 	createResp := env.Request(http.MethodPost, "/api/invites", createPayload, token)
 	require.Equal(t, http.StatusCreated, createResp.Code, createResp.Body.String())
@@ -504,6 +515,8 @@ func TestInviteHandler_Flow(t *testing.T) {
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, createResp).Data, &createData)
 	require.NotEmpty(t, createData.Token)
 	require.Equal(t, "invitee@example.com", createData.Invite["email"])
+	require.Equal(t, teamID, createData.Invite["team_id"])
+	require.Equal(t, "Onboarding", createData.Invite["team_name"])
 
 	listResp := env.Request(http.MethodGet, "/api/invites", nil, token)
 	require.Equal(t, http.StatusOK, listResp.Code)
@@ -512,6 +525,7 @@ func TestInviteHandler_Flow(t *testing.T) {
 	}
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, listResp).Data, &listPayload)
 	require.NotEmpty(t, listPayload.Invites)
+	require.Equal(t, teamID, listPayload.Invites[0]["team_id"])
 
 	redeemPayload := map[string]any{
 		"token":      createData.Token,
@@ -532,6 +546,20 @@ func TestInviteHandler_Flow(t *testing.T) {
 	require.Equal(t, http.StatusOK, listResp.Code)
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, listResp).Data, &listPayload)
 	require.NotEmpty(t, listPayload.Invites)
+	require.Equal(t, "accepted", listPayload.Invites[0]["status"])
+
+	memberList := env.Request(http.MethodGet, "/api/teams/"+teamID+"/members", nil, token)
+	require.Equal(t, http.StatusOK, memberList.Code, memberList.Body.String())
+	var members []map[string]any
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, memberList).Data, &members)
+	found := false
+	for _, member := range members {
+		if member["username"] == "invited-user" {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "invited user should be added to the team")
 }
 
 func TestSecurityHandler_Audit(t *testing.T) {

@@ -25,6 +25,7 @@ export function UserInviteList({ invites, isLoading, onRevoke, isRevoking }: Use
         <thead className="bg-muted/40">
           <tr>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Email</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground">Team</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Expires</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actions</th>
@@ -39,6 +40,9 @@ export function UserInviteList({ invites, isLoading, onRevoke, isRevoking }: Use
             return (
               <tr key={invite.id}>
                 <td className="px-4 py-3 font-medium text-foreground">{invite.email}</td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  {invite.team_name ?? invite.team_id ?? '—'}
+                </td>
                 <td className="px-4 py-3 capitalize text-muted-foreground">{invite.status}</td>
                 <td className="px-4 py-3 text-muted-foreground">{expiresIn}</td>
                 <td className="px-4 py-3">

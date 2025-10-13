@@ -19,23 +19,27 @@ import (
 type InviteHandler struct {
 	invites  *services.InviteService
 	users    *services.UserService
+	teams    *services.TeamService
 	verifier *services.EmailVerificationService
 }
 
 func NewInviteHandler(
 	invites *services.InviteService,
 	users *services.UserService,
+	teams *services.TeamService,
 	verifier *services.EmailVerificationService,
 ) *InviteHandler {
 	return &InviteHandler{
 		invites:  invites,
 		users:    users,
+		teams:    teams,
 		verifier: verifier,
 	}
 }
 
 type createInviteRequest struct {
-	Email string `json:"email" validate:"required,email"`
+	Email  string `json:"email" validate:"required,email"`
+	TeamID string `json:"team_id" validate:"omitempty,uuid4"`
 }
 
 type redeemInviteRequest struct {
@@ -54,6 +58,8 @@ type inviteDTO struct {
 	ExpiresAt  time.Time  `json:"expires_at"`
 	AcceptedAt *time.Time `json:"accepted_at,omitempty"`
 	Status     string     `json:"status"`
+	TeamID     string     `json:"team_id,omitempty"`
+	TeamName   string     `json:"team_name,omitempty"`
 }
 
 type inviteCreatedResponse struct {
@@ -82,7 +88,6 @@ func (h *InviteHandler) Create(c *gin.Context) {
 		response.Error(c, appErrors.ErrInternalServer)
 		return
 	}
-
 	userID := c.GetString(middleware.CtxUserIDKey)
 	if userID == "" {
 		response.Error(c, appErrors.ErrUnauthorized)
@@ -94,15 +99,38 @@ func (h *InviteHandler) Create(c *gin.Context) {
 		return
 	}
 
-	invite, token, link, err := h.invites.GenerateInvite(requestContext(c), req.Email, userID)
+	ctx := requestContext(c)
+
+	teamID := strings.TrimSpace(req.TeamID)
+	var team *models.Team
+	if teamID != "" {
+		if h.teams == nil {
+			response.Error(c, appErrors.ErrInternalServer)
+			return
+		}
+		var err error
+		team, err = h.teams.GetByID(ctx, teamID, userID)
+		if err != nil {
+			response.Error(c, err)
+			return
+		}
+	}
+
+	invite, token, link, err := h.invites.GenerateInvite(ctx, req.Email, userID, teamID)
 	if err != nil {
 		switch {
 		case errors.Is(err, services.ErrInviteAlreadyPending):
 			response.Error(c, appErrors.NewBadRequest("An active invite already exists for this email"))
+		case errors.Is(err, services.ErrTeamNotFound):
+			response.Error(c, appErrors.NewBadRequest("Selected team could not be found"))
 		default:
 			response.Error(c, appErrors.ErrInternalServer)
 		}
 		return
+	}
+
+	if team != nil {
+		invite.Team = team
 	}
 
 	if strings.TrimSpace(link) == "" {
@@ -240,6 +268,23 @@ func (h *InviteHandler) Redeem(c *gin.Context) {
 		return
 	}
 
+	if invite.TeamID != nil && h.teams != nil {
+		if err := h.teams.AddMember(ctx, *invite.TeamID, user.ID); err != nil {
+			if errors.Is(err, services.ErrTeamMemberAlreadyExists) {
+				// No action needed; user already belongs to the team.
+			} else {
+				_ = h.users.Delete(ctx, user.ID)
+				switch {
+				case errors.Is(err, services.ErrTeamNotFound):
+					response.Error(c, appErrors.NewBadRequest("Assigned team no longer exists"))
+				default:
+					response.Error(c, err)
+				}
+				return
+			}
+		}
+	}
+
 	payload := redeemInviteResponse{
 		User: inviteUserDTO{
 			ID:        user.ID,
@@ -272,6 +317,16 @@ func toInviteDTO(invite *models.UserInvite, now time.Time) inviteDTO {
 		status = "pending"
 	}
 
+	var teamID string
+	if invite != nil && invite.TeamID != nil {
+		teamID = *invite.TeamID
+	}
+
+	var teamName string
+	if invite != nil && invite.Team != nil {
+		teamName = invite.Team.Name
+	}
+
 	return inviteDTO{
 		ID:         invite.ID,
 		Email:      invite.Email,
@@ -280,5 +335,7 @@ func toInviteDTO(invite *models.UserInvite, now time.Time) inviteDTO {
 		ExpiresAt:  invite.ExpiresAt,
 		AcceptedAt: invite.AcceptedAt,
 		Status:     status,
+		TeamID:     teamID,
+		TeamName:   teamName,
 	}
 }

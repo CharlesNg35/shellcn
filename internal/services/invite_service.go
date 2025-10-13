@@ -110,13 +110,14 @@ func NewInviteService(db *gorm.DB, mailer mail.Mailer, opts ...InviteOption) (*I
 }
 
 // GenerateInvite creates a new invite token for the provided email address and optionally dispatches an email.
-func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy string) (invite *models.UserInvite, token, link string, err error) {
+func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy, teamID string) (invite *models.UserInvite, token, link string, err error) {
 	ctx = ensureContext(ctx)
 
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
 		return nil, "", "", errors.New("invite service: email is required")
 	}
+	teamID = strings.TrimSpace(teamID)
 
 	now := s.now()
 
@@ -134,27 +135,51 @@ func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy str
 		return nil, "", "", fmt.Errorf("invite service: generate token: %w", err)
 	}
 
+	var team *models.Team
+	if teamID != "" {
+		var teamModel models.Team
+		if err := s.db.WithContext(ctx).First(&teamModel, "id = ?", teamID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, "", "", ErrTeamNotFound
+			}
+			return nil, "", "", fmt.Errorf("invite service: verify team: %w", err)
+		}
+		team = &teamModel
+	}
+
 	invite = &models.UserInvite{
 		Email:     email,
 		TokenHash: tokenHash(rawToken),
 		InvitedBy: strings.TrimSpace(invitedBy),
 		ExpiresAt: now.Add(s.expiry),
 	}
+	if team != nil {
+		invite.TeamID = &team.ID
+	}
 
 	if err := s.db.WithContext(ctx).Create(invite).Error; err != nil {
 		return nil, "", "", fmt.Errorf("invite service: create invite: %w", err)
 	}
 
+	if team != nil {
+		invite.Team = team
+	}
+
 	link = s.inviteLink(rawToken)
+
+	metadata := map[string]any{
+		"email":      invite.Email,
+		"invited_by": strings.TrimSpace(invitedBy),
+	}
+	if invite.TeamID != nil {
+		metadata["team_id"] = *invite.TeamID
+	}
 
 	recordAudit(s.audit, ctx, AuditEntry{
 		Action:   "invite.create",
 		Resource: invite.ID,
 		Result:   "success",
-		Metadata: map[string]any{
-			"email":      invite.Email,
-			"invited_by": strings.TrimSpace(invitedBy),
-		},
+		Metadata: metadata,
 	})
 
 	if s.mailer != nil {
@@ -286,7 +311,10 @@ func (s *InviteService) List(ctx context.Context, status, search string) ([]mode
 	}
 
 	var invites []models.UserInvite
-	if err := query.Order("created_at DESC").Find(&invites).Error; err != nil {
+	if err := query.
+		Preload("Team").
+		Order("created_at DESC").
+		Find(&invites).Error; err != nil {
 		return nil, fmt.Errorf("invite service: list invites: %w", err)
 	}
 

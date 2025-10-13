@@ -1,15 +1,16 @@
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
 import type { ApiResponse } from '@/types/api'
-import type { InviteCreateResponse, InviteRecord } from '@/types/invites'
+import type { InviteCreatePayload, InviteCreateResponse, InviteRecord } from '@/types/invites'
 
 const INVITES_ENDPOINT = '/invites'
 const AUTH_INVITE_ACCEPT_ENDPOINT = '/auth/invite/redeem'
 
-export async function createInvite(email: string): Promise<InviteCreateResponse> {
-  const response = await apiClient.post<ApiResponse<InviteCreateResponse>>(INVITES_ENDPOINT, {
-    email,
-  })
+export async function createInvite(payload: InviteCreatePayload): Promise<InviteCreateResponse> {
+  const response = await apiClient.post<ApiResponse<InviteCreateResponse>>(
+    INVITES_ENDPOINT,
+    payload
+  )
   return unwrapResponse(response)
 }
 

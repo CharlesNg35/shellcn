@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { invitesApi } from '@/lib/api/invites'
 import { toApiError, type ApiError } from '@/lib/api/http'
-import type { InviteRecord } from '@/types/invites'
+import type { InviteCreatePayload, InviteRecord } from '@/types/invites'
 import { toast } from '@/lib/utils/toast'
 
 export const INVITES_QUERY_KEY = ['invites'] as const
@@ -22,10 +22,14 @@ export function useInviteMutations() {
   }
 
   const create = useMutation({
-    mutationFn: (email: string) => invitesApi.create(email),
-    onSuccess: async () => {
+    mutationFn: (payload: InviteCreatePayload) => invitesApi.create(payload),
+    onSuccess: async (_, variables) => {
       await invalidate()
-      toast.success('Invitation created')
+      toast.success('Invitation created', {
+        description: variables.team_id
+          ? 'User will be added to the selected team on acceptance'
+          : undefined,
+      })
     },
     onError: (error) => {
       const apiError = toApiError(error)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Input } from '@/components/ui/Input'
@@ -9,10 +9,19 @@ import { INVITES_QUERY_KEY } from '@/hooks/useInvites'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/utils/toast'
 import { toApiError } from '@/lib/api/http'
-import type { InviteCreateResponse } from '@/types/invites'
+import type { InviteCreatePayload, InviteCreateResponse } from '@/types/invites'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select'
+import { useTeams } from '@/hooks/useTeams'
 
 const inviteSchema = z.object({
   email: z.string().email('A valid email is required').trim(),
+  team_id: z.union([z.string().uuid('Select a valid team'), z.literal('')]).optional(),
 })
 
 type InviteFormValues = z.infer<typeof inviteSchema>
@@ -27,9 +36,14 @@ export function UserInviteForm({ onClose, onCreated }: UserInviteFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [fallbackLink, setFallbackLink] = useState<string | null>(null)
+  const { data: teamsData, isLoading: isTeamsLoading } = useTeams({
+    staleTime: 60_000,
+  })
+  const teams = teamsData?.data ?? []
 
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
     reset,
@@ -37,6 +51,7 @@ export function UserInviteForm({ onClose, onCreated }: UserInviteFormProps) {
     resolver: zodResolver(inviteSchema),
     defaultValues: {
       email: '',
+      team_id: '',
     },
   })
 
@@ -53,7 +68,15 @@ export function UserInviteForm({ onClose, onCreated }: UserInviteFormProps) {
     setFallbackLink(null)
     setIsSubmitting(true)
     try {
-      const result = await invitesApi.create(values.email)
+      const payload: InviteCreatePayload = {
+        email: values.email.trim(),
+      }
+      const teamId = values.team_id?.trim()
+      if (teamId) {
+        payload.team_id = teamId
+      }
+
+      const result = await invitesApi.create(payload)
       await queryClient.invalidateQueries({ queryKey: INVITES_QUERY_KEY })
 
       const inviteLink = buildInviteLink(result)
@@ -88,6 +111,56 @@ export function UserInviteForm({ onClose, onCreated }: UserInviteFormProps) {
         placeholder="user@example.com"
         {...register('email')}
         error={errors.email?.message}
+      />
+
+      <Controller
+        name="team_id"
+        control={control}
+        render={({ field }) => {
+          const value = field.value ?? ''
+          const hasTeams = teams.length > 0
+
+          return (
+            <div className="space-y-2">
+              <label htmlFor="invite-team" className="text-sm font-medium text-foreground">
+                Team (optional)
+              </label>
+              <Select value={value} onValueChange={field.onChange} disabled={isTeamsLoading}>
+                <SelectTrigger
+                  id="invite-team"
+                  className="w-full justify-between"
+                  aria-invalid={Boolean(errors.team_id?.message)}
+                >
+                  <SelectValue
+                    placeholder={
+                      isTeamsLoading
+                        ? 'Loading teams…'
+                        : hasTeams
+                          ? 'No team selected'
+                          : 'No teams available'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectItem value="">No team (default access)</SelectItem>
+                  {hasTeams ? null : (
+                    <SelectItem value="__no_teams__" disabled>
+                      No teams available
+                    </SelectItem>
+                  )}
+                  {teams.map((team) => (
+                    <SelectItem key={team.id} value={team.id}>
+                      {team.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.team_id?.message ? (
+                <p className="text-sm text-destructive">{errors.team_id.message}</p>
+              ) : null}
+            </div>
+          )
+        }}
       />
 
       {errorMessage ? (
