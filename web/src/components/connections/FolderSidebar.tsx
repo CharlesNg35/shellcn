@@ -133,7 +133,11 @@ export function FolderSidebar({
             )}
           >
             <div className={cn('flex items-center gap-2.5', collapsed && 'flex-col gap-1.5')}>
-              <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+              ) : (
+                <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+              )}
               {!collapsed && (
                 <h2 className="text-sm font-semibold uppercase leading-none tracking-wide">
                   Folders
@@ -153,26 +157,23 @@ export function FolderSidebar({
                   </button>
                 ) : (
                   <Button size="sm" onClick={() => handleOpenCreate()}>
-                    <Plus className="mr-1.5 h-3.5 w-3.5" />
+                    <Plus className="h-3.5 w-3.5" />
                     New Folder
                   </Button>
                 )
               ) : null}
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
-              ) : (
-                <button
-                  onClick={() => setCollapsed(!collapsed)}
-                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  aria-label={collapsed ? 'Expand folders' : 'Collapse folders'}
-                >
-                  {collapsed ? (
-                    <ChevronRight className="h-4 w-4" />
-                  ) : (
-                    <ChevronLeft className="h-4 w-4" />
-                  )}
-                </button>
-              )}
+
+              <button
+                onClick={() => setCollapsed(!collapsed)}
+                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label={collapsed ? 'Expand folders' : 'Collapse folders'}
+              >
+                {collapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" />
+                )}
+              </button>
             </div>
           </div>
 
