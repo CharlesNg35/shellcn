@@ -97,17 +97,19 @@ export function ProviderCard({
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between space-y-0">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+      <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-start gap-3 sm:items-center">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted">
             <Icon className="h-5 w-5 text-muted-foreground" />
           </div>
-          <div>
+          <div className="min-w-0">
             <CardTitle className="text-lg">{name}</CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
         </div>
-        <Badge variant={statusVariant}>{statusLabel}</Badge>
+        <Badge variant={statusVariant} className="w-fit">
+          {statusLabel}
+        </Badge>
       </CardHeader>
       <CardContent className="space-y-3">
         <ul className="space-y-2 text-sm">
