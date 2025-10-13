@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -17,7 +17,6 @@ import { humanizePermissionModule } from '@/lib/utils/permissionLabels'
 import {
   findPermissionDependents,
   groupPermissionsByModuleAndNamespace,
-  resolvePermissionDependencies,
   type PermissionNamespace,
   type PermissionModuleGroup,
 } from '@/lib/utils/permissions'
@@ -35,15 +34,87 @@ interface PermissionMatrixProps {
   disabled?: boolean
 }
 
+function collectRequiredPermissions(
+  registry: PermissionRegistry | undefined,
+  permissionId: PermissionIdentifier,
+  cache: Map<PermissionIdentifier, Set<PermissionIdentifier>>
+): Set<PermissionIdentifier> {
+  if (cache.has(permissionId)) {
+    return cache.get(permissionId)!
+  }
+
+  const result = new Set<PermissionIdentifier>()
+  const visit = (id: PermissionIdentifier) => {
+    if (result.has(id)) {
+      return
+    }
+    result.add(id)
+    const definition = registry?.[id]
+    if (!definition) {
+      return
+    }
+    definition.depends_on?.forEach((dep) => visit(dep as PermissionIdentifier))
+    definition.implies?.forEach((imp) => visit(imp as PermissionIdentifier))
+  }
+
+  visit(permissionId)
+  cache.set(permissionId, result)
+  return result
+}
+
+function deriveExplicitSelections(
+  selected: ReadonlySet<PermissionIdentifier>,
+  registry: PermissionRegistry | undefined
+): Set<PermissionIdentifier> {
+  const explicit = new Set<PermissionIdentifier>(selected)
+  if (!registry) {
+    return explicit
+  }
+
+  const cache = new Map<PermissionIdentifier, Set<PermissionIdentifier>>()
+  const ids = Array.from(selected)
+
+  for (const candidate of ids) {
+    for (const other of ids) {
+      if (candidate === other) {
+        continue
+      }
+      const closure = collectRequiredPermissions(registry, other as PermissionIdentifier, cache)
+      if (closure.has(candidate)) {
+        explicit.delete(candidate)
+        break
+      }
+    }
+  }
+
+  return explicit
+}
+
+function areSetsEqual<T>(a: Set<T>, b: Set<T>): boolean {
+  if (a.size !== b.size) {
+    return false
+  }
+  for (const value of a) {
+    if (!b.has(value)) {
+      return false
+    }
+  }
+  return true
+}
+
+function getPermissionName(permission: PermissionDefinition): string {
+  return permission.display_name?.trim() || permission.id
+}
+
 function sortPermissions(permissions: PermissionDefinition[]): PermissionDefinition[] {
-  return [...permissions].sort((a, b) => a.id.localeCompare(b.id))
+  return [...permissions].sort((a, b) => getPermissionName(a).localeCompare(getPermissionName(b)))
 }
 
 function matchesSearch(permission: PermissionDefinition, search: string): boolean {
   if (!search) {
     return true
   }
-  const haystack = `${permission.id} ${permission.description ?? ''} ${permission.module}`
+  const haystack = `${permission.id} ${permission.display_name ?? ''} ${permission.description ?? ''} ${permission.module}`
   return haystack.toLowerCase().includes(search)
 }
 
@@ -81,6 +152,31 @@ function filterPermissionTree(
   }
 }
 
+function Collapsible({
+  isOpen,
+  children,
+  className,
+}: {
+  isOpen: boolean
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <div
+      className={cn(
+        'overflow-hidden transition-all duration-200 ease-in-out',
+        isOpen ? 'max-h-[4000px] opacity-100' : 'max-h-0 opacity-0',
+        className
+      )}
+      aria-hidden={!isOpen}
+    >
+      <div className={cn('transition-opacity duration-200', isOpen ? 'opacity-100' : 'opacity-0')}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export function PermissionMatrix({
   registry,
   loading,
@@ -88,11 +184,41 @@ export function PermissionMatrix({
   onChange,
   disabled,
 }: PermissionMatrixProps) {
+  const [explicitSelections, setExplicitSelections] = useState<Set<PermissionIdentifier>>(() =>
+    deriveExplicitSelections(selected, registry)
+  )
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedModules, setExpandedModules] = useState<Set<string>>(() => new Set())
   const [expandedNamespaces, setExpandedNamespaces] = useState<Set<string>>(() => new Set())
 
   const normalisedSearch = searchTerm.trim().toLowerCase()
+
+  useEffect(() => {
+    const derived = deriveExplicitSelections(selected, registry)
+    setExplicitSelections((prev) => (areSetsEqual(prev, derived) ? prev : derived))
+  }, [selected, registry])
+
+  const closureCacheRef = useRef<Map<PermissionIdentifier, Set<PermissionIdentifier>>>(new Map())
+
+  useEffect(() => {
+    closureCacheRef.current = new Map()
+  }, [registry])
+
+  const getClosure = (id: PermissionIdentifier) =>
+    collectRequiredPermissions(registry, id, closureCacheRef.current)
+
+  const computeFinalSelections = (
+    explicitSet: Set<PermissionIdentifier>
+  ): Set<PermissionIdentifier> => {
+    if (!registry) {
+      return new Set(explicitSet)
+    }
+    const final = new Set<PermissionIdentifier>()
+    explicitSet.forEach((perm) => {
+      getClosure(perm).forEach((id) => final.add(id))
+    })
+    return final
+  }
 
   const moduleGroups = useMemo<PermissionModuleGroup[]>(() => {
     if (!registry) {
@@ -130,12 +256,41 @@ export function PermissionMatrix({
     }, {})
   }, [registry])
 
+  const impliedByIndex = useMemo(() => {
+    if (!registry) {
+      return {}
+    }
+    const map = Object.entries(registry).reduce<Record<string, PermissionIdentifier[]>>(
+      (acc, [id, definition]) => {
+        if (!definition.implies?.length) {
+          return acc
+        }
+        definition.implies.forEach((implied) => {
+          if (!acc[implied]) {
+            acc[implied] = []
+          }
+          acc[implied].push(id as PermissionIdentifier)
+        })
+        return acc
+      },
+      {}
+    )
+    return map
+  }, [registry])
+
   const totalPermissions = useMemo(() => {
     if (!registry) {
       return 0
     }
     return Object.keys(registry).length
   }, [registry])
+
+  const getPermissionLabel = (permissionId: PermissionIdentifier): string => {
+    if (!registry) {
+      return permissionId
+    }
+    return registry[permissionId]?.display_name?.trim() || permissionId
+  }
 
   const toggleModule = (moduleId: string) => {
     setExpandedModules((prev) => {
@@ -187,23 +342,34 @@ export function PermissionMatrix({
   }
 
   const handleToggle = (permissionId: PermissionIdentifier, enable: boolean) => {
-    if (!registry) {
-      return
-    }
-
-    const next = new Set<PermissionIdentifier>(selected)
+    const nextExplicit = new Set<PermissionIdentifier>(explicitSelections)
 
     if (enable) {
-      next.add(permissionId)
-      const required = resolvePermissionDependencies(registry, permissionId)
-      required.forEach((dep) => next.add(dep))
+      nextExplicit.add(permissionId)
     } else {
-      next.delete(permissionId)
-      const dependents = findPermissionDependents(registry, permissionId)
-      dependents.forEach((dep) => next.delete(dep))
+      const removed = new Set<PermissionIdentifier>([permissionId])
+      nextExplicit.delete(permissionId)
+
+      if (registry) {
+        let changed = true
+        while (changed) {
+          changed = false
+          for (const explicit of Array.from(nextExplicit)) {
+            const closure = getClosure(explicit)
+            const intersects = Array.from(removed).some((removedId) => closure.has(removedId))
+            if (intersects) {
+              nextExplicit.delete(explicit)
+              removed.add(explicit)
+              changed = true
+            }
+          }
+        }
+      }
     }
 
-    onChange(Array.from(next))
+    const finalSelections = computeFinalSelections(nextExplicit)
+    setExplicitSelections(nextExplicit)
+    onChange(Array.from(finalSelections))
   }
 
   if (loading) {
@@ -246,72 +412,131 @@ export function PermissionMatrix({
     const isChecked = selected.has(permission.id)
     const dependents = dependentIndex[permission.id] ?? []
     const blockingDependents = dependents.filter((dep) => selected.has(dep))
-    const isLocked = !disabled && isChecked && blockingDependents.length > 0
+    const impliedBySelected = (impliedByIndex[permission.id] ?? []).filter((id) => selected.has(id))
+    const lockedBy = new Set<PermissionIdentifier>([...blockingDependents, ...impliedBySelected])
+    const isLocked = isChecked && lockedBy.size > 0
+    const displayName = getPermissionLabel(permission.id)
+    const checkboxId = `permission-${permission.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+    const indentation = depth > 0 ? `${depth * 1.5}rem` : undefined
+
+    const handleLabelClick = () => {
+      if (disabled) {
+        return
+      }
+      handleToggle(permission.id, !isChecked)
+    }
 
     return (
       <div
         key={permission.id}
-        className={cn(
-          'flex flex-col gap-2 px-5 py-3 md:flex-row md:items-start md:justify-between',
-          isChecked ? 'bg-primary/5' : 'hover:bg-muted/40'
-        )}
-        style={{ paddingLeft: `${depth * 1.5 + 1.25}rem` }}
+        className="py-1"
+        style={indentation ? { marginLeft: indentation } : undefined}
       >
-        <div className="flex flex-1 gap-3">
-          <div className="pt-0.5">
+        <div
+          className={cn(
+            'flex flex-col gap-3 rounded-lg border border-border/70 bg-card/80 p-4 shadow-sm transition-colors duration-200',
+            isChecked
+              ? 'border-primary/70 bg-primary/5 shadow-inner'
+              : 'hover:border-primary/40 hover:bg-muted/20'
+          )}
+        >
+          <div className="flex items-center gap-3">
             <Checkbox
+              id={checkboxId}
               checked={isChecked}
               onCheckedChange={(checked) => handleToggle(permission.id, Boolean(checked))}
-              disabled={disabled || (isChecked && isLocked)}
-              aria-label={permission.id}
+              disabled={disabled}
+              aria-label={displayName}
               aria-describedby={`${permission.id}-details`}
             />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-foreground">{permission.id}</span>
-              {isLocked ? (
-                <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                  <ShieldAlert className="h-3 w-3" />
-                  Required by {blockingDependents.length}
-                </Badge>
-              ) : null}
-            </div>
-            {permission.description ? (
-              <p className="mt-1 text-sm text-muted-foreground">{permission.description}</p>
-            ) : null}
-            <div className="mt-2 space-y-2 text-xs text-muted-foreground">
-              {permission.depends_on?.length ? (
-                <div className="flex flex-wrap items-center gap-1" id={`${permission.id}-details`}>
-                  <span className="mr-1 font-medium">Depends on:</span>
-                  {permission.depends_on.map((dep) => (
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={handleLabelClick}
+                  disabled={disabled}
+                  className={cn(
+                    'text-left transition-colors duration-150',
+                    disabled ? 'cursor-not-allowed opacity-70' : 'hover:text-primary'
+                  )}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-foreground">{displayName}</span>
                     <Badge
-                      key={dep}
-                      variant={selected.has(dep) ? 'outline' : 'secondary'}
-                      className={cn(
-                        'text-[11px] uppercase tracking-wide',
-                        selected.has(dep) ? 'border-primary text-primary' : ''
-                      )}
-                    >
-                      {dep}
-                    </Badge>
-                  ))}
-                </div>
-              ) : null}
-              {permission.implies?.length ? (
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className="mr-1 font-medium">Implies:</span>
-                  {permission.implies.map((dep) => (
-                    <Badge
-                      key={dep}
                       variant="outline"
-                      className="text-[11px] uppercase tracking-wide"
+                      className="text-[11px] font-normal uppercase tracking-wide text-muted-foreground"
                     >
-                      {dep}
+                      {permission.id}
                     </Badge>
-                  ))}
-                </div>
+                  </div>
+                </button>
+                {isLocked ? (
+                  <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                    <ShieldAlert className="h-3 w-3" />
+                    In use by {lockedBy.size}
+                  </Badge>
+                ) : null}
+              </div>
+
+              {permission.description ? (
+                <p className="text-sm text-muted-foreground">{permission.description}</p>
               ) : null}
+
+              <div
+                id={`${permission.id}-details`}
+                className={cn(
+                  'space-y-2 text-xs text-muted-foreground',
+                  !(
+                    impliedBySelected.length ||
+                    (permission.implies && permission.implies.length > 0) ||
+                    (permission.depends_on && permission.depends_on.length > 0)
+                  ) && 'hidden'
+                )}
+              >
+                {impliedBySelected.length ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="mr-1 font-medium uppercase tracking-wide">Implied by:</span>
+                    {impliedBySelected.map((id) => (
+                      <Badge
+                        key={id}
+                        variant="secondary"
+                        className="text-[11px] uppercase tracking-wide"
+                      >
+                        {getPermissionLabel(id)}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : permission.implies?.length ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="mr-1 font-medium uppercase tracking-wide">Grants:</span>
+                    {permission.implies.map((dep) => (
+                      <Badge
+                        key={dep}
+                        variant="outline"
+                        className="text-[11px] uppercase tracking-wide"
+                      >
+                        {getPermissionLabel(dep)}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : permission.depends_on?.length ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="mr-1 font-medium uppercase tracking-wide">Depends on:</span>
+                    {permission.depends_on.map((dep) => (
+                      <Badge
+                        key={dep}
+                        variant={selected.has(dep) ? 'outline' : 'secondary'}
+                        className={cn(
+                          'text-[11px] uppercase tracking-wide',
+                          selected.has(dep) ? 'border-primary text-primary' : ''
+                        )}
+                      >
+                        {getPermissionLabel(dep)}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>
@@ -338,38 +563,42 @@ export function PermissionMatrix({
     const hasChildren = namespace.children.size > 0
     const permissionCount = countPermissionsInTree(namespace)
 
+    const indentation = `${depth * 1.5 + 1.25}rem`
+
     return (
-      <div key={namespace.fullPath}>
+      <div key={namespace.fullPath} className="border-t border-border/60">
         {/* Namespace header */}
         <button
           onClick={() => toggleNamespace(namespace.fullPath)}
-          className="flex w-full items-center gap-2 border-t border-border/50 bg-muted/30 px-5 py-2.5 text-left hover:bg-muted/50"
-          style={{ paddingLeft: `${depth * 1.5 + 1.25}rem` }}
+          className="flex w-full items-center gap-2 px-5 py-2.5 text-left hover:bg-muted/50"
+          style={{ paddingLeft: indentation }}
+          aria-expanded={isExpanded}
         >
           {hasChildren || namespace.permissions.length > 0 ? (
-            isExpanded ? (
-              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-            )
+            <span className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground transition-transform duration-200">
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </span>
           ) : (
             <div className="h-4 w-4 shrink-0" />
           )}
-          <span className="font-medium text-sm text-foreground capitalize">{namespace.name}</span>
-          <Badge variant="secondary" className="text-xs">
+          <span className="text-sm font-semibold text-foreground capitalize">{namespace.name}</span>
+          <Badge variant="secondary" className="ml-auto text-xs">
             {permissionCount}
           </Badge>
         </button>
 
-        {/* Namespace content */}
-        {isExpanded && (
-          <>
+        <Collapsible isOpen={isExpanded}>
+          <div className="space-y-1 pb-2">
             {sortPermissions(namespace.permissions).map((p) => renderPermission(p, depth + 1))}
             {Array.from(namespace.children.values())
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((child) => renderNamespace(child, depth + 1))}
-          </>
-        )}
+          </div>
+        </Collapsible>
       </div>
     )
   }
@@ -417,18 +646,24 @@ export function PermissionMatrix({
           const permissionCount = countPermissionsInTree(group.namespaces)
 
           return (
-            <div key={group.moduleId} className="rounded-lg border border-border bg-card shadow-sm">
+            <div
+              key={group.moduleId}
+              className="rounded-lg border border-border bg-card shadow-sm transition-colors"
+            >
               {/* Module header */}
               <button
                 onClick={() => toggleModule(group.moduleId)}
                 className="flex w-full items-center justify-between border-b border-border/80 px-5 py-3 text-left hover:bg-muted/30"
+                aria-expanded={isModuleExpanded}
               >
                 <div className="flex items-center gap-3">
-                  {isModuleExpanded ? (
-                    <ChevronDown className="h-5 w-5 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-                  )}
+                  <span className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground transition-transform duration-200">
+                    {isModuleExpanded ? (
+                      <ChevronDown className="h-5 w-5" />
+                    ) : (
+                      <ChevronRight className="h-5 w-5" />
+                    )}
+                  </span>
                   <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                       {humanizePermissionModule(group.moduleId)}
@@ -441,11 +676,11 @@ export function PermissionMatrix({
               </button>
 
               {/* Module content */}
-              {isModuleExpanded && (
+              <Collapsible isOpen={isModuleExpanded}>
                 <div className="divide-y divide-border/70">
                   {renderNamespace(group.namespaces, 0)}
                 </div>
-              )}
+              </Collapsible>
             </div>
           )
         })}

@@ -9,15 +9,15 @@ import (
 
 // Permission describes a permission definition registered by modules.
 type Permission struct {
-	ID           string
-	Module       string
-	DependsOn    []string
-	Implies      []string
-	Description  string
-	DisplayName  string
-	Category     string
-	DefaultScope string
-	Metadata     map[string]any
+	ID           string         `json:"id"`
+	Module       string         `json:"module"`
+	DependsOn    []string       `json:"depends_on,omitempty"`
+	Implies      []string       `json:"implies,omitempty"`
+	Description  string         `json:"description,omitempty"`
+	DisplayName  string         `json:"display_name,omitempty"`
+	Category     string         `json:"category,omitempty"`
+	DefaultScope string         `json:"default_scope,omitempty"`
+	Metadata     map[string]any `json:"metadata,omitempty"`
 }
 
 type permissionRegistry struct {

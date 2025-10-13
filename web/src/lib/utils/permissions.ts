@@ -165,6 +165,29 @@ export function resolvePermissionDependencies(
   return Array.from(visited)
 }
 
+export function resolvePermissionImplications(
+  registry: PermissionRegistry,
+  permissionId: PermissionIdentifier
+): PermissionIdentifier[] {
+  const visited = new Set<PermissionIdentifier>()
+
+  const walk = (currentId: PermissionIdentifier) => {
+    const definition = registry[currentId]
+    if (!definition) {
+      return
+    }
+    for (const implied of definition.implies ?? []) {
+      if (!visited.has(implied)) {
+        visited.add(implied)
+        walk(implied as PermissionIdentifier)
+      }
+    }
+  }
+
+  walk(permissionId)
+  return Array.from(visited)
+}
+
 export function findPermissionDependents(
   registry: PermissionRegistry,
   permissionId: PermissionIdentifier

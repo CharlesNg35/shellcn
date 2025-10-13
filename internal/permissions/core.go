@@ -357,7 +357,8 @@ func init() {
 		{
 			ID:           "vault.manage_all",
 			Module:       "core",
-			DependsOn:    []string{"vault.view", "vault.edit", "vault.delete"},
+			DependsOn:    []string{"vault.view", "vault.edit", "vault.delete", "vault.create", "vault.share"},
+			Implies:      []string{"vault.view", "vault.create", "vault.edit", "vault.delete", "vault.share", "vault.use_shared"},
 			Category:     "vault",
 			DisplayName:  "Manage All Vault Entries",
 			Description:  "Manage all credential vault entries",

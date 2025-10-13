@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { useState } from 'react'
+import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PermissionMatrix } from '@/components/permissions/PermissionMatrix'
@@ -11,6 +12,7 @@ const registry: PermissionRegistry = {
     description: 'View users',
     depends_on: [],
     implies: [],
+    display_name: 'View Users',
   },
   'user.update': {
     id: 'user.update',
@@ -18,6 +20,7 @@ const registry: PermissionRegistry = {
     description: 'Update users',
     depends_on: ['user.view'],
     implies: [],
+    display_name: 'Update Users',
   },
   'user.delete': {
     id: 'user.delete',
@@ -25,48 +28,67 @@ const registry: PermissionRegistry = {
     description: 'Delete users',
     depends_on: ['user.view', 'user.update'],
     implies: [],
+    display_name: 'Delete Users',
   },
 }
 
 describe('<PermissionMatrix />', () => {
-  it('expands dependencies when enabling a permission', async () => {
+  function renderWithState(initialSelected: string[] = []) {
+    const Wrapper = () => {
+      const [selected, setSelected] = useState<Set<string>>(new Set(initialSelected))
+      const handleChange = (next: string[]) => {
+        setSelected(new Set(next))
+      }
+
+      return (
+        <PermissionMatrix
+          registry={registry}
+          selected={selected}
+          onChange={handleChange}
+          disabled={false}
+        />
+      )
+    }
+
+    render(<Wrapper />)
+  }
+
+  it('automatically selects dependencies when enabling a permission', async () => {
     const user = userEvent.setup()
-    const onChange = vi.fn()
+    renderWithState()
 
-    render(<PermissionMatrix registry={registry} selected={new Set()} onChange={onChange} />)
-
-    // First, expand the module to reveal permissions
     const moduleButton = screen.getByRole('button', { name: /Core Platform/i })
     await user.click(moduleButton)
 
-    // Then expand the "user" namespace
     const userNamespaceButton = screen.getByRole('button', { name: /^User/i })
     await user.click(userNamespaceButton)
 
-    // Now we can access the checkbox
-    const deleteCheckbox = screen.getByRole('checkbox', { name: 'user.delete' })
+    const deleteCheckbox = screen.getByRole('checkbox', { name: /Delete Users/i })
     await user.click(deleteCheckbox)
 
-    expect(onChange).toHaveBeenCalledTimes(1)
-    const nextSelection = onChange.mock.calls[0][0] as string[]
-    expect(nextSelection.sort()).toEqual(['user.delete', 'user.update', 'user.view'].sort())
+    const updateCheckbox = screen.getByRole('checkbox', { name: /Update Users/i })
+    const viewCheckbox = screen.getByRole('checkbox', { name: /View Users/i })
+
+    expect(deleteCheckbox).toBeChecked()
+    expect(updateCheckbox).toBeChecked()
+    expect(viewCheckbox).toBeChecked()
   })
 
-  it('locks dependencies when they are required by selected permissions', async () => {
+  it('deselects dependent permissions when a dependency is removed', async () => {
     const user = userEvent.setup()
-    const selected = new Set(['user.view', 'user.update', 'user.delete'])
-    render(<PermissionMatrix registry={registry} selected={selected} onChange={vi.fn()} />)
+    renderWithState(['user.view', 'user.update', 'user.delete'])
 
-    // Expand the module to reveal permissions
     const moduleButton = screen.getByRole('button', { name: /Core Platform/i })
     await user.click(moduleButton)
 
-    // Then expand the "user" namespace
     const userNamespaceButton = screen.getByRole('button', { name: /^User/i })
     await user.click(userNamespaceButton)
 
-    // Now check if the checkbox is disabled
-    const updateCheckbox = screen.getByRole('checkbox', { name: 'user.update' })
-    expect(updateCheckbox).toBeDisabled()
+    const updateCheckbox = screen.getByRole('checkbox', { name: /Update Users/i })
+    await user.click(updateCheckbox)
+
+    const deleteCheckbox = screen.getByRole('checkbox', { name: /Delete Users/i })
+    expect(updateCheckbox).not.toBeChecked()
+    expect(deleteCheckbox).not.toBeChecked()
   })
 })
