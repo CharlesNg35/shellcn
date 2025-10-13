@@ -1,0 +1,28 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background with gradient -->
+  <defs>
+    <linearGradient id="bg-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#a855f7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="200" height="200" rx="40" fill="url(#bg-gradient)"/>
+
+  <!-- Shell/Terminal Symbol - Stylized "S" with terminal prompt -->
+  <g transform="translate(100, 100)">
+    <!-- Main "S" shape -->
+    <path d="M 20 -40 Q 40 -40 40 -20 Q 40 0 20 0 L -20 0 Q -40 0 -40 20 Q -40 40 -20 40 L 20 40"
+          stroke="#ffffff"
+          stroke-width="12"
+          stroke-linecap="round"
+          fill="none"/>
+
+    <!-- Terminal prompt chevron integrated -->
+    <path d="M -35 -35 L -25 -25 L -35 -15"
+          stroke="#86efac"
+          stroke-width="6"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"/>
+  </g>
+</svg>

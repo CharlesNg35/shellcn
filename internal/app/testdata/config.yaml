@@ -1,0 +1,88 @@
+server:
+  port: 8000
+
+database:
+  driver: postgres
+  postgres:
+    enabled: true
+    host: db.example.com
+    port: 5432
+    database: shellcn_prod
+    username: shellcn
+    password: secret
+cache:
+  redis:
+    enabled: true
+    address: redis.example.com:6379
+    username: shellcn
+    password: redis-secret
+    db: 2
+    tls: true
+    timeout: 4s
+
+vault:
+  encryption_key: super-secret-key
+  algorithm: aes-256-gcm
+
+monitoring:
+  prometheus:
+    enabled: true
+    endpoint: /custom-metrics
+  health_check:
+    enabled: true
+
+features:
+  session_sharing:
+    enabled: true
+    max_shared_users: 8
+  notifications:
+    enabled: true
+
+protocols:
+  ssh:
+    enabled: true
+  telnet:
+    enabled: false
+  sftp:
+    enabled: true
+  rdp:
+    enabled: true
+  vnc:
+    enabled: true
+  docker:
+    enabled: true
+  kubernetes:
+    enabled: true
+  database:
+    enabled: true
+    mysql: true
+    postgres: false
+    redis: true
+    mongodb: true
+  proxmox:
+    enabled: false
+  object_storage:
+    enabled: true
+
+auth:
+  jwt:
+    secret: jwt-secret
+    issuer: shellcn.test
+    access_token_ttl: 30m
+  session:
+    refresh_token_ttl: 1440h
+    refresh_token_length: 64
+  local:
+    lockout_threshold: 7
+    lockout_duration: 20m
+
+email:
+  smtp:
+    enabled: true
+    host: smtp.example.com
+    port: 2525
+    username: smtp-user
+    password: smtp-pass
+    from: no-reply@example.com
+    use_tls: true
+    timeout: 15s

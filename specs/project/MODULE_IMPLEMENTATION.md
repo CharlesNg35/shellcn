@@ -2,6 +2,8 @@
 
 This document provides a detailed breakdown of all modules, their features, implementation requirements, and dependencies.
 
+> **Terminology update:** The platform now refers to these runtime components as **protocol drivers** (formerly “modules”). Existing section titles retain the historical naming for continuity, but new specs and code should prefer the driver terminology described in `specs/project/PROTOCOL_DRIVER_STANDARDS.md`.
+
 ---
 
 ## Table of Contents
@@ -21,7 +23,7 @@ This document provides a detailed breakdown of all modules, their features, impl
 10. [Kubernetes Module](#9-kubernetes-module)
 11. [Database Module](#10-database-module)
 12. [Proxmox Module](#11-proxmox-module)
-13. [File Share Module](#12-file-share-module)
+13. [Object Storage Module](#12-object-storage-module)
 14. [Monitoring Module](#13-monitoring-module)
 15. [Notification Module](#14-notification-module)
 16. [Module Dependency Graph](#module-dependency-graph)
@@ -187,12 +189,12 @@ func init() {
         Description: "Delete users",
     })
 
-    // Organization Management
+    // Team Management
     Register(&Permission{
-        ID:          "org.view",
+        ID:          "team.view",
         Module:      "core",
         DependsOn:   []string{},
-        Description: "View organizations",
+        Description: "View teams",
     })
 
     // Permission Management
@@ -537,11 +539,9 @@ export function UserManagement() {
   - First user created as superuser/root
   - Password encryption with bcrypt
 
-#### 1.4 Organization & Team Management
-- Create organizations
-- Create teams within organizations
+#### 1.4 Team Management
+- Create teams
 - Assign users to teams
-- Organization-level settings
 - Team-based access control
 
 #### 1.5 Permission System
@@ -593,7 +593,6 @@ internal/
 │       ├── auth.go         # Login, logout, refresh
 │       ├── setup.go        # First user setup
 │       ├── users.go        # User CRUD
-│       ├── organizations.go
 │       ├── teams.go
 │       ├── permissions.go
 │       ├── sessions.go
@@ -620,7 +619,6 @@ internal/
 │
 ├── models/
 │   ├── user.go
-│   ├── organization.go
 │   ├── team.go
 │   ├── role.go
 │   ├── permission.go
@@ -658,7 +656,6 @@ web/src/
 │   └── settings/
 │       ├── Profile.tsx
 │       ├── Security.tsx
-│       ├── Organizations.tsx
 │       ├── Teams.tsx
 │       └── Users.tsx       # Admin only
 │
@@ -678,13 +675,13 @@ web/src/
 │   ├── useAuth.ts
 │   ├── usePermissions.ts
 │   ├── useCurrentUser.ts
-│   └── useOrganization.ts
+│   └── useTeams.ts
 │
 └── lib/
     └── api/
         ├── auth.ts
         ├── users.ts
-        ├── organizations.ts
+        ├── teams.ts
         └── permissions.ts
 ```
 
@@ -714,21 +711,21 @@ CORE_PERMISSIONS = {
         "description": "Delete users",
     },
 
-    // Organization Management
-    "org.view": {
+    // Team Management
+    "team.view": {
         "module": "core",
         "depends_on": [],
-        "description": "View organizations",
+        "description": "View teams",
     },
-    "org.create": {
+    "team.create": {
         "module": "core",
-        "depends_on": ["org.view"],
-        "description": "Create organizations",
+        "depends_on": ["team.view"],
+        "description": "Create teams",
     },
-    "org.manage": {
+    "team.manage": {
         "module": "core",
-        "depends_on": ["org.view"],
-        "description": "Manage organizations",
+        "depends_on": ["team.view"],
+        "description": "Manage teams",
     },
 
     // Permission Management
@@ -3229,61 +3226,57 @@ web/src/pages/proxmox/
 
 ---
 
-## 12. File Share Module
+## 12. Object Storage Module
 
 **Status:** Optional
 
 ### Features
 
 #### 12.1 Supported Protocols
-- SMB/CIFS
-- NFS
-- FTP/FTPS
 - AWS S3
-- Google Drive
-- WebDAV
+- MinIO
+- Google Cloud Storage
+- Azure Blob Storage
+- DigitalOcean Spaces
 
-#### 12.2 File Operations
-- Browse files/folders
-- Upload files
-- Download files
-- Create folders
-- Delete files/folders
-- Rename
-- Copy/Move
-- File search
+#### 12.2 Object Operations
+- Browse buckets/containers
+- Upload objects
+- Download objects
+- Create buckets
+- Delete objects/buckets
+- Object metadata management
+- Object search
 
-#### 12.3 Cloud Storage
-- S3 bucket browser
-- Google Drive integration
-- Multi-cloud support
+#### 12.3 Multi-Cloud Support
+- S3-compatible storage
+- Cloud provider integration
+- Unified object browser
 
 ### Backend Implementation
 
-**Location:** `internal/modules/fileshare/`
+**Location:** `internal/modules/objectstorage/`
 
 ```
-internal/modules/fileshare/
-├── smb.go
-├── nfs.go
-├── ftp.go
+internal/modules/objectstorage/
 ├── s3.go
-├── gdrive.go
-├── webdav.go
+├── gcs.go
+├── azure.go
+├── minio.go
 ├── permissions.go
 └── handler.go
 ```
 
 ### Frontend Implementation
 
-**Location:** `web/src/pages/fileshare/`
+**Location:** `web/src/pages/objectstorage/`
 
 ```
-web/src/pages/fileshare/
+web/src/pages/objectstorage/
 ├── ConnectionList.tsx
-├── SMBBrowser.tsx
 ├── S3Browser.tsx
-└── FileManager.tsx
+├── ObjectBrowser.tsx
+└── ObjectManager.tsx
 ```
 
 ---
@@ -3409,13 +3402,12 @@ Core Module (Required)
 │
 ├── Proxmox Module
 │
-├── File Share Module
-│   ├── SMB
-│   ├── NFS
-│   ├── FTP
+├── Object Storage Module
 │   ├── S3
-│   ├── Google Drive
-│   └── WebDAV
+│   ├── MinIO
+│   ├── Google Cloud Storage
+│   ├── Azure Blob Storage
+│   └── DigitalOcean Spaces
 │
 ├── Monitoring Module (Required)
 │
@@ -3427,7 +3419,7 @@ Core Module (Required)
 ## Implementation Checklist
 
 ### Phase 1: Core Foundation
-- [ ] Core module (auth, users, organizations, permissions)
+- [ ] Core module (auth, users, teams, permissions)
 - [ ] Vault module (identities, SSH keys, encryption)
 - [ ] First-time setup UI
 - [ ] Database schema (SQLite)
@@ -3460,7 +3452,7 @@ Core Module (Required)
 
 ### Phase 5: Advanced Features
 - [ ] Proxmox module
-- [ ] File share module (SMB, NFS, FTP, S3)
+- [ ] Object storage module (S3, MinIO, GCS, Azure)
 - [ ] Session sharing
 - [ ] Clipboard synchronization
 - [ ] Advanced monitoring dashboard

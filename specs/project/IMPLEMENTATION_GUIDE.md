@@ -95,7 +95,6 @@ Phase 7: Advanced (Weeks 15+)
 2. **Database Layer**
    - Database connection (SQLite/PostgreSQL/MySQL)
    - User model
-   - Organization model
    - Permission model
    - Auto-migration setup
 
@@ -517,7 +516,6 @@ Phase 7: Advanced (Weeks 15+)
 **Morning:**
 - `internal/database/db.go` - Database connection
 - `internal/models/user.go` - User model
-- `internal/models/organization.go` - Organization model
 - `internal/models/permission.go` - Permission model
 
 **Afternoon:**
@@ -626,7 +624,7 @@ Phase 7: Advanced (Weeks 15+)
 7. **Audit everything** - Log all sensitive operations
 8. **Encrypt credentials** - Use AES-256-GCM for vault storage
 
-### Code Organization:
+### Code Practices:
 9. **Module isolation** - Each module in separate directory
 10. **Permission registration** - Each module has `permissions.go` with `init()`
 11. **Consistent patterns** - Follow SSH module patterns for other protocols
