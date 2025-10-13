@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { inviteAcceptSchema } from '@/schemas/auth'
@@ -11,13 +11,16 @@ import { toApiError } from '@/lib/api/http'
 import { toast } from '@/lib/utils/toast'
 import { useAuth } from '@/hooks/useAuth'
 import { Checkbox } from '@/components/ui/Checkbox'
+import { SSOButtons } from '@/components/auth/SSOButtons'
 
 type InviteAcceptFormValues = z.infer<typeof inviteAcceptSchema>
 
 export function InviteAccept() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { login, clearError, providers, loadProviders } = useAuth({ autoInitialize: false })
+  const { login, clearError, providers, loadProviders, user, isAuthenticated } = useAuth({
+    autoInitialize: false,
+  })
 
   const {
     register,
@@ -70,6 +73,35 @@ export function InviteAccept() {
     }
   }, [providers.length, loadProviders])
 
+  const localPasswordProvider = useMemo(
+    () =>
+      providers.find(
+        (provider) =>
+          provider.type === 'local' &&
+          provider.enabled &&
+          (provider.flow ?? 'password') === 'password'
+      ),
+    [providers]
+  )
+
+  const allowLocalRegistration = Boolean(
+    localPasswordProvider && (localPasswordProvider.allow_registration ?? true)
+  )
+
+  useEffect(() => {
+    if ((isAuthenticated || !allowLocalRegistration) && !existingAccount) {
+      setValue('existingAccount', true)
+    }
+  }, [isAuthenticated, allowLocalRegistration, existingAccount, setValue])
+
+  useEffect(() => {
+    if (params.get('notice') === 'sso_failed') {
+      toast.error('Single sign-on failed', {
+        description: 'Please try again or contact your administrator.',
+      })
+    }
+  }, [params])
+
   const canAutoLogin = useMemo(() => {
     return providers.some(
       (provider) =>
@@ -78,6 +110,18 @@ export function InviteAccept() {
         provider.type === 'local'
     )
   }, [providers])
+
+  const authenticatedEmail = user?.email ?? ''
+
+  const currentInvitePath = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return '/invite/accept'
+    }
+    return window.location.pathname + window.location.search
+  }, [])
+
+  const inviteToken = params.get('token') ?? ''
+  const ssoErrorRedirect = `/invite/accept?token=${encodeURIComponent(inviteToken)}&notice=sso_failed`
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -94,11 +138,14 @@ export function InviteAccept() {
 
       const result = await invitesApi.redeem(payload)
 
+      const providerType = (result.user.provider || 'local').toLowerCase()
+      const providerMeta = providers.find((provider) => provider.type === providerType)
+
       toast.success('Invitation complete', {
         description: result.message ?? 'You can now access ShellCN.',
       })
 
-      if (result.created_user && !existingAccount && canAutoLogin) {
+      if (result.created_user && !existingAccount && providerType === 'local' && canAutoLogin) {
         try {
           await login({
             identifier: values.username ?? '',
@@ -110,10 +157,16 @@ export function InviteAccept() {
           toast.info('Account created', {
             description: authIssue.message || 'Sign in with your new credentials to continue.',
           })
-          navigate('/login', { replace: true })
+          navigate(`/login?notice=team-invite&provider=${providerType}`, { replace: true })
+        }
+      } else if (!result.created_user && providerMeta && providerMeta.flow === 'redirect') {
+        if (providerMeta.login_url) {
+          window.location.href = providerMeta.login_url
+        } else {
+          window.location.href = `/api/auth/providers/${providerType}/login?redirect=${encodeURIComponent(currentInvitePath)}&error_redirect=${encodeURIComponent(ssoErrorRedirect)}`
         }
       } else {
-        navigate('/login', { replace: true })
+        navigate(`/login?notice=team-invite&provider=${providerType}`, { replace: true })
       }
     } catch (error) {
       const apiError = toApiError(error)
@@ -140,50 +193,79 @@ export function InviteAccept() {
           readOnly={Boolean(params.get('token'))}
         />
 
-        <Controller
-          name="existingAccount"
-          control={control}
-          render={({ field }) => (
-            <div className="flex items-center space-x-3 rounded-md border border-border/60 bg-muted/30 p-3">
-              <Checkbox
-                id="existing-account"
-                checked={field.value ?? false}
-                onCheckedChange={(checked) => field.onChange(Boolean(checked))}
-              />
-              <label htmlFor="existing-account" className="text-sm text-foreground">
-                I already have a ShellCN account
-              </label>
-            </div>
-          )}
-        />
-
-        {!existingAccount ? (
-          <Input
-            label="Username"
-            placeholder="your.username"
-            autoComplete="username"
-            {...register('username')}
-            error={errors.username?.message}
+        {allowLocalRegistration && !isAuthenticated ? (
+          <Controller
+            name="existingAccount"
+            control={control}
+            render={({ field }) => (
+              <div className="flex items-center space-x-3 rounded-md border border-border/60 bg-muted/30 p-3">
+                <Checkbox
+                  id="existing-account"
+                  checked={field.value ?? false}
+                  onCheckedChange={(checked) => field.onChange(Boolean(checked))}
+                />
+                <label htmlFor="existing-account" className="text-sm text-foreground">
+                  I already have a ShellCN account
+                </label>
+              </div>
+            )}
           />
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <Input
-            label="First Name"
-            autoComplete="given-name"
-            {...register('firstName')}
-            error={errors.firstName?.message}
-          />
-          <Input
-            label="Last Name"
-            autoComplete="family-name"
-            {...register('lastName')}
-            error={errors.lastName?.message}
-          />
-        </div>
-
-        {!existingAccount ? (
+        {existingAccount ? (
+          <div className="space-y-3">
+            {isAuthenticated ? (
+              <div className="rounded-md border border-green-300/60 bg-green-50 p-3 text-sm text-green-900">
+                Signed in as <span className="font-semibold">{authenticatedEmail}</span>. Submit to
+                join the team linked to this invitation.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Sign in with the provider linked to your ShellCN account, then return to this page
+                  to finish joining the team.
+                </p>
+                <SSOButtons
+                  providers={providers}
+                  successRedirect={currentInvitePath}
+                  errorRedirect={ssoErrorRedirect}
+                  disabled={isSubmitting}
+                />
+                <div className="text-sm text-muted-foreground">
+                  Prefer password sign-in?{' '}
+                  <Link to="/login" className="text-primary hover:underline">
+                    Go to the login page
+                  </Link>
+                  .
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
           <>
+            <Input
+              label="Username"
+              placeholder="your.username"
+              autoComplete="username"
+              {...register('username')}
+              error={errors.username?.message}
+            />
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Input
+                label="First Name"
+                autoComplete="given-name"
+                {...register('firstName')}
+                error={errors.firstName?.message}
+              />
+              <Input
+                label="Last Name"
+                autoComplete="family-name"
+                {...register('lastName')}
+                error={errors.lastName?.message}
+              />
+            </div>
+
             <Input
               label="Password"
               type="password"
@@ -200,7 +282,7 @@ export function InviteAccept() {
               error={errors.confirmPassword?.message}
             />
           </>
-        ) : null}
+        )}
 
         <Button type="submit" className="w-full" loading={isSubmitting}>
           {existingAccount ? 'Join Team' : 'Activate Account'}

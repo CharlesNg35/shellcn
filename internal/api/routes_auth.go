@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/gin-gonic/gin"
 
+	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/handlers"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/permissions"
@@ -14,6 +15,7 @@ type authRouteDeps struct {
 	SSOHandler        *handlers.SSOHandler
 	InviteHandler     *handlers.InviteHandler
 	PermissionChecker *permissions.Checker
+	JWT               *iauth.JWTService
 }
 
 func registerAuthRoutes(engine *gin.Engine, api *gin.RouterGroup, deps authRouteDeps) {
@@ -27,7 +29,7 @@ func registerAuthRoutes(engine *gin.Engine, api *gin.RouterGroup, deps authRoute
 		auth.GET("/providers/:type/login", deps.SSOHandler.Begin)
 		auth.GET("/providers/:type/callback", deps.SSOHandler.Callback)
 		auth.GET("/providers/:type/metadata", deps.SSOHandler.Metadata)
-		auth.POST("/invite/redeem", deps.InviteHandler.Redeem)
+		auth.POST("/invite/redeem", middleware.OptionalAuth(deps.JWT), deps.InviteHandler.Redeem)
 	}
 
 	api.GET("/auth/me", deps.AuthHandler.Me)

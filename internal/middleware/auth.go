@@ -64,3 +64,51 @@ func Auth(jwt *iauth.JWTService) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// OptionalAuth attaches user context when a valid JWT is supplied but does not enforce authentication.
+func OptionalAuth(jwt *iauth.JWTService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if jwt == nil {
+			c.Next()
+			return
+		}
+
+		authz := c.GetHeader("Authorization")
+		if len(authz) < 8 || !strings.EqualFold(authz[:7], "Bearer ") {
+			c.Next()
+			return
+		}
+
+		token := strings.TrimSpace(authz[7:])
+		claims, err := jwt.ValidateAccessToken(token)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		c.Set(CtxClaimsKey, claims)
+		c.Set(CtxUserIDKey, claims.UserID)
+		if claims.SessionID != "" {
+			c.Set(CtxSessionIDKey, claims.SessionID)
+		}
+
+		actor := auditctx.Actor{
+			UserID:    claims.UserID,
+			IPAddress: c.ClientIP(),
+			UserAgent: c.Request.UserAgent(),
+		}
+		if claims.Metadata != nil {
+			if username, ok := claims.Metadata["username"].(string); ok {
+				actor.Username = strings.TrimSpace(username)
+			}
+		}
+		if actor.Username == "" {
+			actor.Username = claims.UserID
+		}
+
+		ctx := auditctx.WithActor(c.Request.Context(), actor)
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
+	}
+}

@@ -31,6 +31,7 @@ export interface InviteRedeemResponse {
     first_name?: string
     last_name?: string
     is_active: boolean
+    provider?: string
   }
   message: string
   created_user: boolean

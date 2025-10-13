@@ -100,6 +100,7 @@ export function Login() {
     const params = new URLSearchParams(location.search)
     const reason = params.get('error_reason')
     const notice = params.get('notice')
+    const providerHint = params.get('provider')
     switch (reason) {
       case 'provider_mismatch':
         setSsoError(
@@ -131,10 +132,15 @@ export function Login() {
       setInfoMessage('Account created. Check your email to verify your account before signing in.')
     } else if (notice === 'mfa_failed') {
       setInfoMessage('Invalid multi-factor authentication code. Please try again.')
+    } else if (notice === 'team-invite') {
+      const providerName = providerHint
+        ? (providers.find((provider) => provider.type === providerHint)?.name ?? providerHint)
+        : 'your sign-in provider'
+      setInfoMessage(`Invitation accepted. Sign in with ${providerName} to continue.`)
     } else {
       setInfoMessage(null)
     }
-  }, [location.search])
+  }, [location.search, providers])
 
   useEffect(() => {
     let active = true

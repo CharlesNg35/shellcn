@@ -573,6 +573,7 @@ func TestInviteHandler_Flow(t *testing.T) {
 	}
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, redeemResp).Data, &redeemDataNew)
 	require.True(t, redeemDataNew.Created)
+	require.Equal(t, "local", redeemDataNew.User["provider"])
 
 	// New user should be able to authenticate immediately.
 	loginResult := env.Login("invited-user", "InviteePassword123!")
@@ -629,6 +630,8 @@ func TestInviteHandler_TeamInviteExistingUser(t *testing.T) {
 		Password: "ExistingPass123!",
 	})
 	require.NoError(t, err)
+	require.NoError(t, env.DB.Model(existingUser).Update("auth_provider", "oidc").Error)
+	require.NoError(t, env.DB.First(existingUser, "id = ?", existingUser.ID).Error)
 
 	createPayload := map[string]any{
 		"email":   existingEmail,
@@ -664,6 +667,7 @@ func TestInviteHandler_TeamInviteExistingUser(t *testing.T) {
 	testutil.DecodeInto(t, testutil.DecodeResponse(t, redeemResp).Data, &redeemData)
 	require.False(t, redeemData.Created)
 	require.Equal(t, strings.ToLower(existingEmail), strings.ToLower(redeemData.User["email"].(string)))
+	require.Equal(t, "oidc", redeemData.User["provider"])
 	require.Contains(t, strings.ToLower(redeemData.Message), "team access granted")
 
 	memberList := env.Request(http.MethodGet, "/api/teams/"+teamID+"/members", nil, token)
@@ -685,6 +689,73 @@ func TestInviteHandler_TeamInviteExistingUser(t *testing.T) {
 		Where("LOWER(email) = ?", strings.ToLower(existingEmail)).
 		Count(&count).Error)
 	require.Equal(t, int64(1), count)
+}
+
+func TestInviteHandler_TeamInviteMismatchSignedInUser(t *testing.T) {
+	env := testutil.NewEnv(t)
+	root := env.CreateRootUser("MismatchPassw0rd!")
+	rootLogin := env.Login(root.Username, "MismatchPassw0rd!")
+	adminToken := rootLogin.AccessToken
+
+	teamResp := env.Request(http.MethodPost, "/api/teams", map[string]any{"name": "Infra"}, adminToken)
+	require.Equal(t, http.StatusCreated, teamResp.Code)
+	var team map[string]any
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, teamResp).Data, &team)
+	teamID := team["id"].(string)
+
+	auditSvc, err := services.NewAuditService(env.DB)
+	require.NoError(t, err)
+	userSvc, err := services.NewUserService(env.DB, auditSvc)
+	require.NoError(t, err)
+
+	invitedUser, err := userSvc.Create(context.Background(), services.CreateUserInput{
+		Username: "invitee-" + uuid.NewString(),
+		Email:    "invitee." + uuid.NewString() + "@example.com",
+		Password: "InviteUserPass123!",
+	})
+	require.NoError(t, err)
+
+	otherUser, err := userSvc.Create(context.Background(), services.CreateUserInput{
+		Username: "other-" + uuid.NewString(),
+		Email:    "other." + uuid.NewString() + "@example.com",
+		Password: "OtherUserPass123!",
+	})
+	require.NoError(t, err)
+
+	invitePayload := map[string]any{
+		"email":   invitedUser.Email,
+		"team_id": teamID,
+	}
+	createResp := env.Request(http.MethodPost, "/api/invites", invitePayload, adminToken)
+	require.Equal(t, http.StatusCreated, createResp.Code, createResp.Body.String())
+
+	var createData struct {
+		Invite map[string]any `json:"invite"`
+		Token  string         `json:"token"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, createResp).Data, &createData)
+	inviteToken := createData.Token
+
+	otherLogin := env.Login(otherUser.Username, "OtherUserPass123!")
+
+	redeemResp := env.Request(http.MethodPost, "/api/auth/invite/redeem", map[string]any{
+		"token": inviteToken,
+	}, otherLogin.AccessToken)
+	require.Equal(t, http.StatusBadRequest, redeemResp.Code)
+
+	decoded := testutil.DecodeResponse(t, redeemResp)
+	require.False(t, decoded.Success)
+	require.NotNil(t, decoded.Error)
+	require.Equal(t, "Signed in account does not match invitation email", decoded.Error.Message)
+
+	members := env.Request(http.MethodGet, "/api/teams/"+teamID+"/members", nil, adminToken)
+	require.Equal(t, http.StatusOK, members.Code)
+	var memberList []map[string]any
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, members).Data, &memberList)
+
+	for _, member := range memberList {
+		require.NotEqual(t, otherUser.ID, member["id"])
+	}
 }
 
 func TestSecurityHandler_Audit(t *testing.T) {

@@ -169,6 +169,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		SSOHandler:        ssoHandler,
 		PermissionChecker: checker,
 		InviteHandler:     inviteHandler,
+		JWT:               jwt,
 	})
 
 	userHandler, err := handlers.NewUserHandler(db)

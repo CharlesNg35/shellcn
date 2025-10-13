@@ -81,6 +81,7 @@ type inviteUserDTO struct {
 	FirstName string `json:"first_name,omitempty"`
 	LastName  string `json:"last_name,omitempty"`
 	IsActive  bool   `json:"is_active"`
+	Provider  string `json:"provider,omitempty"`
 }
 
 // POST /api/invites
@@ -309,6 +310,18 @@ func (h *InviteHandler) Redeem(c *gin.Context) {
 		return
 	}
 
+	currentUserID := c.GetString(middleware.CtxUserIDKey)
+	if currentUserID != "" {
+		if existingUser == nil {
+			response.Error(c, appErrors.NewBadRequest("Signed in account does not match invitation email"))
+			return
+		}
+		if existingUser.ID != currentUserID {
+			response.Error(c, appErrors.NewBadRequest("Signed in account does not match invitation email"))
+			return
+		}
+	}
+
 	createdUser := false
 	user := existingUser
 	isActive := !requiresVerification
@@ -406,6 +419,7 @@ func (h *InviteHandler) Redeem(c *gin.Context) {
 			FirstName: user.FirstName,
 			LastName:  user.LastName,
 			IsActive:  user.IsActive,
+			Provider:  user.AuthProvider,
 		},
 		Message: message,
 		Created: createdUser,
