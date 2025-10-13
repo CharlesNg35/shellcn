@@ -82,23 +82,24 @@ type IdentityShareInput struct {
 
 // IdentityDTO represents an identity record returned to API consumers.
 type IdentityDTO struct {
-	ID            string               `json:"id"`
-	Name          string               `json:"name"`
-	Description   string               `json:"description,omitempty"`
-	Scope         models.IdentityScope `json:"scope"`
-	OwnerUserID   string               `json:"owner_user_id"`
-	TeamID        *string              `json:"team_id,omitempty"`
-	ConnectionID  *string              `json:"connection_id,omitempty"`
-	TemplateID    *string              `json:"template_id,omitempty"`
-	Version       int                  `json:"version"`
-	Metadata      map[string]any       `json:"metadata,omitempty"`
-	UsageCount    int                  `json:"usage_count"`
-	LastUsedAt    *time.Time           `json:"last_used_at,omitempty"`
-	LastRotatedAt *time.Time           `json:"last_rotated_at,omitempty"`
-	CreatedAt     time.Time            `json:"created_at"`
-	UpdatedAt     time.Time            `json:"updated_at"`
-	Payload       map[string]any       `json:"payload,omitempty"`
-	Shares        []IdentityShareDTO   `json:"shares,omitempty"`
+	ID              string               `json:"id"`
+	Name            string               `json:"name"`
+	Description     string               `json:"description,omitempty"`
+	Scope           models.IdentityScope `json:"scope"`
+	OwnerUserID     string               `json:"owner_user_id"`
+	TeamID          *string              `json:"team_id,omitempty"`
+	ConnectionID    *string              `json:"connection_id,omitempty"`
+	TemplateID      *string              `json:"template_id,omitempty"`
+	Version         int                  `json:"version"`
+	Metadata        map[string]any       `json:"metadata,omitempty"`
+	UsageCount      int                  `json:"usage_count"`
+	LastUsedAt      *time.Time           `json:"last_used_at,omitempty"`
+	LastRotatedAt   *time.Time           `json:"last_rotated_at,omitempty"`
+	CreatedAt       time.Time            `json:"created_at"`
+	UpdatedAt       time.Time            `json:"updated_at"`
+	Payload         map[string]any       `json:"payload,omitempty"`
+	Shares          []IdentityShareDTO   `json:"shares,omitempty"`
+	ConnectionCount int                  `json:"connection_count"`
 }
 
 // IdentityShareDTO represents a share entry associated with an identity.
@@ -127,6 +128,12 @@ type TemplateDTO struct {
 	DeprecatedAfter     *time.Time       `json:"deprecated_after,omitempty"`
 	Metadata            map[string]any   `json:"metadata,omitempty"`
 	Hash                string           `json:"hash"`
+}
+
+// VaultCleanupResult summarises maintenance outcomes.
+type VaultCleanupResult struct {
+	OrphanedIdentities int
+	ExpiredShares      int
 }
 
 // NewVaultService constructs a VaultService instance using the supplied dependencies.
@@ -216,9 +223,14 @@ func (s *VaultService) ListIdentities(ctx context.Context, viewer ViewerContext,
 		return nil, fmt.Errorf("vault service: list identities: %w", err)
 	}
 
+	counts, err := s.connectionCounts(ctx, rows)
+	if err != nil {
+		return nil, err
+	}
+
 	results := make([]IdentityDTO, 0, len(rows))
 	for _, row := range rows {
-		dto := mapIdentity(row, nil, true)
+		dto := mapIdentity(row, nil, true, counts[row.ID])
 		results = append(results, dto)
 	}
 
@@ -275,10 +287,67 @@ func (s *VaultService) GetIdentity(ctx context.Context, viewer ViewerContext, id
 			return IdentityDTO{}, err
 		}
 		payload = secret
+
+		now := time.Now().UTC()
+		update := map[string]any{
+			"usage_count":  gorm.Expr("usage_count + ?", 1),
+			"last_used_at": now,
+			"updated_at":   now,
+		}
+		if err := s.db.WithContext(ctx).Model(&models.Identity{}).
+			Where("id = ?", identity.ID).
+			UpdateColumns(update).Error; err != nil {
+			return IdentityDTO{}, fmt.Errorf("vault service: update usage stats: %w", err)
+		}
+		identity.UsageCount++
+		identity.LastUsedAt = &now
 	}
 
-	dto := mapIdentity(identity, payload, true)
+	count, err := s.connectionCount(ctx, identity.ID)
+	if err != nil {
+		return IdentityDTO{}, err
+	}
+
+	dto := mapIdentity(identity, payload, true, count)
 	return dto, nil
+}
+
+// AuthorizeIdentityUse verifies the viewer can access the requested identity and returns the raw model.
+func (s *VaultService) AuthorizeIdentityUse(ctx context.Context, viewer ViewerContext, identityID string) (models.Identity, error) {
+	ctx = ensureContext(ctx)
+
+	id := strings.TrimSpace(identityID)
+	if id == "" {
+		return models.Identity{}, apperrors.NewBadRequest("identity id is required")
+	}
+
+	query := s.db.WithContext(ctx).Model(&models.Identity{})
+	if !viewer.IsRoot {
+		now := time.Now().UTC()
+		query = query.Joins("LEFT JOIN identity_shares ON identity_shares.identity_id = identities.id AND identity_shares.revoked_at IS NULL").
+			Where("identities.id = ?", id).
+			Where(
+				"(identities.owner_user_id = ?) OR "+
+					"(identity_shares.principal_type = ? AND identity_shares.principal_id = ? AND (identity_shares.expires_at IS NULL OR identity_shares.expires_at > ?)) OR "+
+					"(identity_shares.principal_type = ? AND identity_shares.principal_id IN ? AND (identity_shares.expires_at IS NULL OR identity_shares.expires_at > ?)) OR "+
+					"(identities.scope = ? AND identities.team_id IN ?)",
+				viewer.UserID,
+				models.IdentitySharePrincipalUser, viewer.UserID, now,
+				models.IdentitySharePrincipalTeam, viewer.TeamIDs, now,
+				models.IdentityScopeTeam, viewer.TeamIDs,
+			)
+	} else {
+		query = query.Where("identities.id = ?", id)
+	}
+
+	var identity models.Identity
+	if err := query.First(&identity).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return models.Identity{}, ErrIdentityNotFound
+		}
+		return models.Identity{}, fmt.Errorf("vault service: authorize identity: %w", err)
+	}
+	return identity, nil
 }
 
 // CreateIdentity stores a new encrypted identity and returns the persisted record.
@@ -362,8 +431,33 @@ func (s *VaultService) CreateIdentity(ctx context.Context, viewer ViewerContext,
 		},
 	})
 
-	dto := mapIdentity(identity, nil, false)
+	dto := mapIdentity(identity, nil, false, 0)
 	return dto, nil
+}
+
+// BindIdentityToConnection associates a connection-scoped identity with a connection record.
+func (s *VaultService) BindIdentityToConnection(ctx context.Context, identityID, connectionID string) error {
+	ctx = ensureContext(ctx)
+	identityID = strings.TrimSpace(identityID)
+	connectionID = strings.TrimSpace(connectionID)
+	if identityID == "" || connectionID == "" {
+		return apperrors.NewBadRequest("identity id and connection id are required")
+	}
+
+	result := s.db.WithContext(ctx).Model(&models.Identity{}).
+		Where("id = ? AND scope = ?", identityID, models.IdentityScopeConnection).
+		Updates(map[string]any{
+			"connection_id": connectionID,
+			"updated_at":    time.Now().UTC(),
+		})
+
+	if result.Error != nil {
+		return fmt.Errorf("vault service: bind identity: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrIdentityNotFound
+	}
+	return nil
 }
 
 // UpdateIdentity mutates an existing identity metadata or payload.
@@ -454,7 +548,7 @@ func (s *VaultService) UpdateIdentity(ctx context.Context, viewer ViewerContext,
 		}
 
 		if len(changes) == 0 {
-			updated = mapIdentity(identity, payload, true)
+			updated = mapIdentity(identity, payload, true, 0)
 			return nil
 		}
 
@@ -469,12 +563,18 @@ func (s *VaultService) UpdateIdentity(ctx context.Context, viewer ViewerContext,
 		}
 
 		payload = nil
-		updated = mapIdentity(identity, payload, true)
+		updated = mapIdentity(identity, payload, true, 0)
 		return nil
 	})
 	if err != nil {
 		return IdentityDTO{}, err
 	}
+
+	count, err := s.connectionCount(ctx, updated.ID)
+	if err != nil {
+		return IdentityDTO{}, err
+	}
+	updated.ConnectionCount = count
 
 	recordAudit(s.audit, ctx, AuditEntry{
 		Action:   "vault.identity.updated",
@@ -664,6 +764,71 @@ func (s *VaultService) DeleteShare(ctx context.Context, viewer ViewerContext, sh
 	})
 }
 
+// RevokeShareForPrincipal removes an identity share for the supplied principal if present.
+func (s *VaultService) RevokeShareForPrincipal(ctx context.Context, viewer ViewerContext, identityID string, principalType models.IdentitySharePrincipal, principalID string) error {
+	ctx = ensureContext(ctx)
+
+	identityID = strings.TrimSpace(identityID)
+	if identityID == "" {
+		return apperrors.NewBadRequest("identity id is required")
+	}
+
+	var share models.IdentityShare
+	if err := s.db.WithContext(ctx).
+		First(&share, "identity_id = ? AND principal_type = ? AND principal_id = ?", identityID, principalType, principalID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return fmt.Errorf("vault service: load share for revoke: %w", err)
+	}
+
+	return s.DeleteShare(ctx, viewer, share.ID)
+}
+
+// CleanupOrphans removes expired shares and connection-scoped identities without backing connections.
+func (s *VaultService) CleanupOrphans(ctx context.Context) (VaultCleanupResult, error) {
+	ctx = ensureContext(ctx)
+
+	result := VaultCleanupResult{}
+
+	now := time.Now().UTC()
+	expired := s.db.WithContext(ctx).
+		Where("expires_at IS NOT NULL AND expires_at <= ?", now).
+		Delete(&models.IdentityShare{})
+	if expired.Error != nil {
+		return result, fmt.Errorf("vault service: delete expired shares: %w", expired.Error)
+	}
+	result.ExpiredShares = int(expired.RowsAffected)
+
+	var orphanIDs []string
+	if err := s.db.WithContext(ctx).
+		Table("identities").
+		Select("identities.id").
+		Joins("LEFT JOIN connections ON connections.identity_id = identities.id").
+		Where("identities.scope = ?", models.IdentityScopeConnection).
+		Where("connections.id IS NULL OR identities.connection_id IS NULL").
+		Pluck("identities.id", &orphanIDs).Error; err != nil {
+		return result, fmt.Errorf("vault service: locate orphan identities: %w", err)
+	}
+
+	if len(orphanIDs) == 0 {
+		return result, nil
+	}
+
+	if err := s.db.WithContext(ctx).Where("identity_id IN ?", orphanIDs).Delete(&models.IdentityShare{}).Error; err != nil {
+		return result, fmt.Errorf("vault service: delete orphan shares: %w", err)
+	}
+	if err := s.db.WithContext(ctx).Where("identity_id IN ?", orphanIDs).Delete(&models.CredentialVersion{}).Error; err != nil {
+		return result, fmt.Errorf("vault service: delete credential versions: %w", err)
+	}
+	identities := s.db.WithContext(ctx).Where("id IN ?", orphanIDs).Delete(&models.Identity{})
+	if identities.Error != nil {
+		return result, fmt.Errorf("vault service: delete orphan identities: %w", identities.Error)
+	}
+	result.OrphanedIdentities = int(identities.RowsAffected)
+	return result, nil
+}
+
 // ListTemplates returns all credential templates stored in the catalog.
 func (s *VaultService) ListTemplates(ctx context.Context) ([]TemplateDTO, error) {
 	ctx = ensureContext(ctx)
@@ -766,24 +931,74 @@ func (s *VaultService) checkPermission(ctx context.Context, userID, permission s
 	return s.checker.Check(ctx, strings.TrimSpace(userID), permission)
 }
 
-func mapIdentity(identity models.Identity, payload map[string]any, includeShares bool) IdentityDTO {
+func (s *VaultService) connectionCounts(ctx context.Context, identities []models.Identity) (map[string]int, error) {
+	counts := make(map[string]int, len(identities))
+	if len(identities) == 0 {
+		return counts, nil
+	}
+
+	ids := make([]string, 0, len(identities))
+	for _, identity := range identities {
+		counts[identity.ID] = 0
+		ids = append(ids, identity.ID)
+	}
+
+	var rows []struct {
+		IdentityID string
+		Count      int64
+	}
+
+	if err := s.db.WithContext(ctx).
+		Table("connections").
+		Select("identity_id, COUNT(*) AS count").
+		Where("identity_id IN ?", ids).
+		Group("identity_id").
+		Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("vault service: load connection counts: %w", err)
+	}
+
+	for _, row := range rows {
+		counts[row.IdentityID] = int(row.Count)
+	}
+
+	return counts, nil
+}
+
+func (s *VaultService) connectionCount(ctx context.Context, identityID string) (int, error) {
+	identityID = strings.TrimSpace(identityID)
+	if identityID == "" {
+		return 0, nil
+	}
+
+	var total int64
+	if err := s.db.WithContext(ctx).
+		Model(&models.Connection{}).
+		Where("identity_id = ?", identityID).
+		Count(&total).Error; err != nil {
+		return 0, fmt.Errorf("vault service: count identity connections: %w", err)
+	}
+	return int(total), nil
+}
+
+func mapIdentity(identity models.Identity, payload map[string]any, includeShares bool, connectionCount int) IdentityDTO {
 	dto := IdentityDTO{
-		ID:            identity.ID,
-		Name:          identity.Name,
-		Description:   identity.Description,
-		Scope:         identity.Scope,
-		OwnerUserID:   identity.OwnerUserID,
-		TeamID:        identity.TeamID,
-		ConnectionID:  identity.ConnectionID,
-		TemplateID:    identity.TemplateID,
-		Version:       identity.Version,
-		Metadata:      decodeJSONMap(identity.Metadata),
-		UsageCount:    identity.UsageCount,
-		LastUsedAt:    identity.LastUsedAt,
-		LastRotatedAt: identity.LastRotatedAt,
-		CreatedAt:     identity.CreatedAt,
-		UpdatedAt:     identity.UpdatedAt,
-		Payload:       payload,
+		ID:              identity.ID,
+		Name:            identity.Name,
+		Description:     identity.Description,
+		Scope:           identity.Scope,
+		OwnerUserID:     identity.OwnerUserID,
+		TeamID:          identity.TeamID,
+		ConnectionID:    identity.ConnectionID,
+		TemplateID:      identity.TemplateID,
+		Version:         identity.Version,
+		Metadata:        decodeJSONMap(identity.Metadata),
+		UsageCount:      identity.UsageCount,
+		LastUsedAt:      identity.LastUsedAt,
+		LastRotatedAt:   identity.LastRotatedAt,
+		CreatedAt:       identity.CreatedAt,
+		UpdatedAt:       identity.UpdatedAt,
+		Payload:         payload,
+		ConnectionCount: connectionCount,
 	}
 
 	if includeShares && len(identity.Shares) > 0 {

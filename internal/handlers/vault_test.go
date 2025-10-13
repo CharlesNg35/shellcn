@@ -53,6 +53,7 @@ func TestVaultHandlerIdentityLifecycle(t *testing.T) {
 	require.Equal(t, "Production SSH", fetched.Name)
 	require.NotNil(t, fetched.Payload)
 	require.Equal(t, "alice", fetched.Payload["username"])
+	require.Equal(t, 0, fetched.ConnectionCount)
 
 	updatePayload := map[string]any{
 		"description": "Updated description",

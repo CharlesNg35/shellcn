@@ -46,13 +46,15 @@ func TestVaultServiceCreateAndGetIdentity(t *testing.T) {
 	require.Equal(t, 1, fetched.Version)
 	require.NotNil(t, fetched.Payload)
 	require.Equal(t, "alice", fetched.Payload["username"])
-	require.Equal(t, 0, fetched.UsageCount)
+	require.Equal(t, 1, fetched.UsageCount)
+	require.Equal(t, 0, fetched.ConnectionCount)
 
 	updated, err := svc.UpdateIdentity(ctx, viewer, created.ID, UpdateIdentityInput{
 		Description: stringPtr("rotated"),
 	})
 	require.NoError(t, err)
 	require.Equal(t, "rotated", updated.Description)
+	require.Equal(t, 0, updated.ConnectionCount)
 }
 
 func TestVaultServiceCreateShare(t *testing.T) {

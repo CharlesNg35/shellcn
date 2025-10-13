@@ -44,17 +44,34 @@ type ConnectionShareDTO struct {
 type ConnectionShareService struct {
 	db      *gorm.DB
 	checker PermissionChecker
+	vault   *VaultService
+}
+
+// ConnectionShareOption customises the share service.
+type ConnectionShareOption func(*ConnectionShareService)
+
+// WithConnectionShareVault wires the vault service for identity auto-sharing.
+func WithConnectionShareVault(vault *VaultService) ConnectionShareOption {
+	return func(s *ConnectionShareService) {
+		s.vault = vault
+	}
 }
 
 // NewConnectionShareService constructs a share service.
-func NewConnectionShareService(db *gorm.DB, checker PermissionChecker) (*ConnectionShareService, error) {
+func NewConnectionShareService(db *gorm.DB, checker PermissionChecker, opts ...ConnectionShareOption) (*ConnectionShareService, error) {
 	if db == nil {
 		return nil, errors.New("connection share service: db is required")
 	}
 	if checker == nil {
 		return nil, errors.New("connection share service: permission checker is required")
 	}
-	return &ConnectionShareService{db: db, checker: checker}, nil
+	svc := &ConnectionShareService{db: db, checker: checker}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(svc)
+		}
+	}
+	return svc, nil
 }
 
 // CreateShareInput describes the payload for creating or replacing a share.
@@ -70,7 +87,7 @@ type CreateShareInput struct {
 func (s *ConnectionShareService) ListShares(ctx context.Context, requesterID, connectionID string) ([]ConnectionShareDTO, error) {
 	ctx = ensureContext(ctx)
 
-	if err := s.ensureShareAccess(ctx, requesterID, connectionID); err != nil {
+	if _, err := s.ensureShareAccess(ctx, requesterID, connectionID); err != nil {
 		return nil, err
 	}
 
@@ -88,7 +105,8 @@ func (s *ConnectionShareService) ListShares(ctx context.Context, requesterID, co
 func (s *ConnectionShareService) CreateShare(ctx context.Context, requesterID, connectionID string, input CreateShareInput) (*ConnectionShareDTO, error) {
 	ctx = ensureContext(ctx)
 
-	if err := s.ensureShareAccess(ctx, requesterID, connectionID); err != nil {
+	connection, err := s.ensureShareAccess(ctx, requesterID, connectionID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -222,6 +240,11 @@ func (s *ConnectionShareService) CreateShare(ctx context.Context, requesterID, c
 	if len(dtos) == 0 {
 		return nil, apperrors.ErrNotFound
 	}
+
+	if syncErr := s.syncIdentityShare(ctx, connection, principalType, principalID, permissionIDs, expiresAt); syncErr != nil {
+		return nil, syncErr
+	}
+
 	return &dtos[0], nil
 }
 
@@ -229,7 +252,8 @@ func (s *ConnectionShareService) CreateShare(ctx context.Context, requesterID, c
 func (s *ConnectionShareService) DeleteShare(ctx context.Context, requesterID, connectionID, shareID string) error {
 	ctx = ensureContext(ctx)
 
-	if err := s.ensureShareAccess(ctx, requesterID, connectionID); err != nil {
+	connection, err := s.ensureShareAccess(ctx, requesterID, connectionID)
+	if err != nil {
 		return err
 	}
 
@@ -254,43 +278,81 @@ func (s *ConnectionShareService) DeleteShare(ctx context.Context, requesterID, c
 	if err := query.Delete(&models.ResourcePermission{}).Error; err != nil {
 		return fmt.Errorf("connection share service: delete grants: %w", err)
 	}
-	return nil
+
+	return s.syncIdentityShare(ctx, connection, principalType, principalID, map[string]bool{}, nil)
 }
 
-func (s *ConnectionShareService) ensureShareAccess(ctx context.Context, userID, connectionID string) error {
+func (s *ConnectionShareService) ensureShareAccess(ctx context.Context, userID, connectionID string) (models.Connection, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		return apperrors.ErrUnauthorized
+		return models.Connection{}, apperrors.ErrUnauthorized
 	}
 	connectionID = strings.TrimSpace(connectionID)
 	if connectionID == "" {
-		return apperrors.NewBadRequest("connection id is required")
+		return models.Connection{}, apperrors.NewBadRequest("connection id is required")
 	}
 
 	var connection models.Connection
 	if err := s.db.WithContext(ctx).
-		Select("id", "owner_user_id", "team_id").
+		Select("id", "owner_user_id", "team_id", "identity_id").
 		First(&connection, "id = ?", connectionID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return apperrors.ErrNotFound
+			return models.Connection{}, apperrors.ErrNotFound
 		}
-		return fmt.Errorf("connection share service: load connection: %w", err)
+		return models.Connection{}, fmt.Errorf("connection share service: load connection: %w", err)
 	}
 
 	if ok, err := s.checker.CheckResource(ctx, userID, connectionResourceType, connectionID, "connection.share"); err != nil {
-		return err
+		return models.Connection{}, err
 	} else if ok {
-		return nil
+		return connection, nil
 	}
 
 	ok, err := s.checker.Check(ctx, userID, "connection.share")
 	if err != nil {
-		return err
+		return models.Connection{}, err
 	}
 	if !ok {
-		return apperrors.ErrForbidden
+		return models.Connection{}, apperrors.ErrForbidden
 	}
-	return nil
+	return connection, nil
+}
+
+func (s *ConnectionShareService) syncIdentityShare(ctx context.Context, connection models.Connection, principalType string, principalID string, permissionIDs map[string]bool, expiresAt *time.Time) error {
+	if s.vault == nil || connection.IdentityID == nil {
+		return nil
+	}
+
+	principal := strings.ToLower(strings.TrimSpace(principalType))
+	var identityPrincipal models.IdentitySharePrincipal
+	switch principal {
+	case PrincipalTypeUser:
+		identityPrincipal = models.IdentitySharePrincipalUser
+	case PrincipalTypeTeam:
+		identityPrincipal = models.IdentitySharePrincipalTeam
+	default:
+		return apperrors.NewBadRequest("unsupported principal type")
+	}
+
+	viewer := ViewerContext{UserID: connection.OwnerUserID, IsRoot: true}
+
+	if permissionIDs != nil && permissionIDs["connection.launch"] {
+		metadata := map[string]any{
+			"source":        "connection_share",
+			"connection_id": connection.ID,
+		}
+		_, err := s.vault.CreateShare(ctx, viewer, *connection.IdentityID, IdentityShareInput{
+			PrincipalType: identityPrincipal,
+			PrincipalID:   principalID,
+			Permission:    models.IdentitySharePermissionUse,
+			ExpiresAt:     expiresAt,
+			Metadata:      metadata,
+			CreatedBy:     viewer.UserID,
+		})
+		return err
+	}
+
+	return s.vault.RevokeShareForPrincipal(ctx, viewer, *connection.IdentityID, identityPrincipal, principalID)
 }
 
 func (s *ConnectionShareService) ensurePrincipalExists(ctx context.Context, principalType, principalID string) error {

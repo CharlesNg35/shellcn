@@ -22,6 +22,7 @@ const (
 	defaultSessionSpec        = "@hourly"
 	defaultAuditSpec          = "@daily"
 	defaultTokenSpec          = "@daily"
+	defaultVaultSpec          = "@weekly"
 )
 
 // Cleaner coordinates background maintenance tasks such as purging expired sessions,
@@ -39,6 +40,8 @@ type Cleaner struct {
 	sessionSchedule string
 	auditSchedule   string
 	tokenSchedule   string
+	vaultSchedule   string
+	vault           *services.VaultService
 }
 
 // Option customises the Cleaner.
@@ -98,6 +101,18 @@ func WithTokenSchedule(spec string) Option {
 	}
 }
 
+// WithVaultService wires the vault service for orphan cleanup.
+func WithVaultService(vault *services.VaultService, spec ...string) Option {
+	return func(cleaner *Cleaner) {
+		if vault != nil {
+			cleaner.vault = vault
+		}
+		if len(spec) > 0 && spec[0] != "" {
+			cleaner.vaultSchedule = spec[0]
+		}
+	}
+}
+
 // NewCleaner constructs a Cleaner with sensible defaults. Any nil dependency results in
 // the corresponding cleanup job being skipped.
 func NewCleaner(db *gorm.DB, sessions *iauth.SessionService, audit *services.AuditService, opts ...Option) *Cleaner {
@@ -110,6 +125,7 @@ func NewCleaner(db *gorm.DB, sessions *iauth.SessionService, audit *services.Aud
 		sessionSchedule: defaultSessionSpec,
 		auditSchedule:   defaultAuditSpec,
 		tokenSchedule:   defaultTokenSpec,
+		vaultSchedule:   defaultVaultSpec,
 		log:             logger.WithModule("maintenance"),
 	}
 
@@ -122,7 +138,7 @@ func NewCleaner(db *gorm.DB, sessions *iauth.SessionService, audit *services.Aud
 	}
 
 	// Determine whether any job is enabled.
-	cleaner.enabled = cleaner.sessions != nil || cleaner.audit != nil || cleaner.db != nil
+	cleaner.enabled = cleaner.sessions != nil || cleaner.audit != nil || cleaner.db != nil || cleaner.vault != nil
 
 	return cleaner
 }
@@ -166,6 +182,17 @@ func (c *Cleaner) Start() error {
 		}
 	}
 
+	if c.vault != nil {
+		if _, err := c.cron.AddFunc(c.vaultSchedule, func() {
+			ctx := context.Background()
+			if _, err := c.vault.CleanupOrphans(ctx); err != nil {
+				c.log.Warn("vault cleanup failed", zap.Error(err))
+			}
+		}); err != nil {
+			return err
+		}
+	}
+
 	c.cron.Start()
 	return nil
 }
@@ -201,6 +228,12 @@ func (c *Cleaner) RunOnce(ctx context.Context) error {
 
 	if c.db != nil {
 		if _, err := CleanupTokens(ctx, c.db, c.now()); err != nil {
+			errs = multierr.Append(errs, err)
+		}
+	}
+
+	if c.vault != nil {
+		if _, err := c.vault.CleanupOrphans(ctx); err != nil {
 			errs = multierr.Append(errs, err)
 		}
 	}

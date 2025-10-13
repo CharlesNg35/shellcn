@@ -24,6 +24,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/database"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/services"
+	"github.com/charlesng35/shellcn/internal/vault"
 	"github.com/charlesng35/shellcn/pkg/logger"
 )
 
@@ -135,7 +136,20 @@ func run(ctx context.Context, args []string) error {
 		return fmt.Errorf("initialise audit service: %w", err)
 	}
 
-	cleaner := maintenance.NewCleaner(db, sessionSvc, auditSvc)
+	encryptionKey, err := app.DecodeKey(cfg.Vault.EncryptionKey)
+	if err != nil {
+		return fmt.Errorf("decode vault encryption key: %w", err)
+	}
+	vaultCrypto, err := vault.NewCrypto(encryptionKey)
+	if err != nil {
+		return fmt.Errorf("initialise vault crypto: %w", err)
+	}
+	vaultSvc, err := services.NewVaultService(db, auditSvc, nil, vaultCrypto)
+	if err != nil {
+		return fmt.Errorf("initialise vault service: %w", err)
+	}
+
+	cleaner := maintenance.NewCleaner(db, sessionSvc, auditSvc, maintenance.WithVaultService(vaultSvc))
 	if err := cleaner.Start(); err != nil {
 		return fmt.Errorf("start maintenance jobs: %w", err)
 	}

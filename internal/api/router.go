@@ -202,12 +202,22 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	r.GET("/ws", realtimeHandler.Stream)
 	r.GET("/ws/:stream", realtimeHandler.Stream)
 
+	vaultCrypto, err := vault.NewCrypto(encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("initialise vault crypto: %w", err)
+	}
+	vaultSvc, err := services.NewVaultService(db, auditSvc, checker, vaultCrypto)
+	if err != nil {
+		return nil, fmt.Errorf("initialise vault service: %w", err)
+	}
+	vaultHandler := handlers.NewVaultHandler(vaultSvc)
+
 	// Connections and folders
-	connectionSvc, err := services.NewConnectionService(db, checker)
+	connectionSvc, err := services.NewConnectionService(db, checker, services.WithConnectionVault(vaultSvc))
 	if err != nil {
 		return nil, err
 	}
-	shareSvc, err := services.NewConnectionShareService(db, checker)
+	shareSvc, err := services.NewConnectionShareService(db, checker, services.WithConnectionShareVault(vaultSvc))
 	if err != nil {
 		return nil, err
 	}
@@ -223,6 +233,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	// Connection Share
 	shareHandler := handlers.NewConnectionShareHandler(shareSvc)
 	registerConnectionShareRoutes(api, shareHandler, checker)
+	registerVaultRoutes(api, vaultHandler, checker)
 
 	folderSvc, err := services.NewConnectionFolderService(db, checker, connectionSvc)
 	if err != nil {
@@ -244,17 +255,6 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	protocolHandler := handlers.NewProtocolHandler(protocolSvc)
 	registerProtocolRoutes(api, protocolHandler, checker)
-
-	vaultCrypto, err := vault.NewCrypto(encryptionKey)
-	if err != nil {
-		return nil, fmt.Errorf("initialise vault crypto: %w", err)
-	}
-	vaultSvc, err := services.NewVaultService(db, auditSvc, checker, vaultCrypto)
-	if err != nil {
-		return nil, fmt.Errorf("initialise vault service: %w", err)
-	}
-	vaultHandler := handlers.NewVaultHandler(vaultSvc)
-	registerVaultRoutes(api, vaultHandler, checker)
 
 	// Sessions
 	sessionHandler := handlers.NewSessionHandler(db, sessions)

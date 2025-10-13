@@ -74,16 +74,32 @@ func (h *ConnectionHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if payload.IdentityID != nil && payload.InlineIdentity != nil {
+		response.Error(c, errors.NewBadRequest("provide either identity_id or inline_identity"))
+		return
+	}
+
 	ctx := requestContext(c)
 
+	var inlineIdentity *services.InlineIdentityInput
+	if payload.InlineIdentity != nil {
+		inlineIdentity = &services.InlineIdentityInput{
+			TemplateID: payload.InlineIdentity.TemplateID,
+			Metadata:   payload.InlineIdentity.Metadata,
+			Payload:    payload.InlineIdentity.Payload,
+		}
+	}
+
 	connection, err := h.svc.Create(ctx, userID, services.CreateConnectionInput{
-		Name:        payload.Name,
-		Description: payload.Description,
-		ProtocolID:  payload.ProtocolID,
-		TeamID:      payload.TeamID,
-		FolderID:    payload.FolderID,
-		Metadata:    payload.Metadata,
-		Settings:    payload.Settings,
+		Name:           payload.Name,
+		Description:    payload.Description,
+		ProtocolID:     payload.ProtocolID,
+		TeamID:         payload.TeamID,
+		FolderID:       payload.FolderID,
+		Metadata:       payload.Metadata,
+		Settings:       payload.Settings,
+		IdentityID:     payload.IdentityID,
+		InlineIdentity: inlineIdentity,
 	})
 	if err != nil {
 		response.Error(c, err)
@@ -193,14 +209,22 @@ type protocolCount struct {
 }
 
 type createConnectionPayload struct {
-	Name                 string         `json:"name" binding:"required"`
-	Description          string         `json:"description"`
-	ProtocolID           string         `json:"protocol_id" binding:"required"`
-	TeamID               *string        `json:"team_id"`
-	FolderID             *string        `json:"folder_id"`
-	Metadata             map[string]any `json:"metadata"`
-	Settings             map[string]any `json:"settings"`
-	GrantTeamPermissions []string       `json:"grant_team_permissions"`
+	Name                 string                 `json:"name" binding:"required"`
+	Description          string                 `json:"description"`
+	ProtocolID           string                 `json:"protocol_id" binding:"required"`
+	TeamID               *string                `json:"team_id"`
+	FolderID             *string                `json:"folder_id"`
+	Metadata             map[string]any         `json:"metadata"`
+	Settings             map[string]any         `json:"settings"`
+	GrantTeamPermissions []string               `json:"grant_team_permissions"`
+	IdentityID           *string                `json:"identity_id"`
+	InlineIdentity       *inlineIdentityPayload `json:"inline_identity"`
+}
+
+type inlineIdentityPayload struct {
+	TemplateID *string        `json:"template_id"`
+	Metadata   map[string]any `json:"metadata"`
+	Payload    map[string]any `json:"payload"`
 }
 
 func dedupePermissions(ids []string) []string {

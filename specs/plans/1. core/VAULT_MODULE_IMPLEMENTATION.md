@@ -152,6 +152,7 @@ Connection.identity_id → Identity (scope: global|team|connection)
 ### Data Contracts & Client Layer
 
 - Mirror backend models in TypeScript (`Identity`, `IdentityShare`, `CredentialTemplate`, `CredentialField`) including scope, ownership, version, deprecation metadata, and `inputModes` hints so fields can render as text, file upload, etc.
+- Surface usage analytics (`usageCount`, `lastUsedAt`, `connectionCount`) so UI components can visualise identity utilisation.
 - Expose typed API helpers in `web/src/lib/api/vault.ts` for identity CRUD, template fetch, and share management.
 - Provide React Query hooks (`useIdentities`, `useIdentity`, `useIdentityMutations`, `useCredentialTemplates`, `useIdentitySharing`) that handle caching, optimistic updates, and toast notifications via existing utilities.
 
@@ -161,12 +162,14 @@ Connection.identity_id → Identity (scope: global|team|connection)
 - Identity selector: filters by protocol compatibility, shows scope badges, offers inline creation when the viewer has `vault.create`.
 - Connection forms: radio toggle between saved identity and ad-hoc credentials; credential fields render dynamically based on template metadata (e.g., allow paste or file upload for the same secret), and submitting inline credentials triggers backend creation of a connection-scoped identity.
 - Identity detail: display metadata, usage history, associated connections, and share management UI.
+- Sensitive credential fields must never be rendered back to the browser—even with full permissions. Forms should only allow overwriting secrets; non-sensitive metadata may be shown when permitted.
 - Global integration: display identity labels in connection cards, show "shared via identity" badges, and ensure breadcrumbs/sidebar highlight vault entry points.
 
 ### Integration Touchpoints
 
 - Fetch templates dynamically per protocol and render credential fields accordingly.
 - Auto-provision connection-scoped identities when inline credentials are submitted (backend handles persistence, frontend resets form state).
+- Auto-share relevant identities when connections grant launch permissions so recipients can launch without manual credential duplication.
 - Invalidate relevant queries after identity or share mutations to keep UI consistent.
 
 ## Permissions & Access Control
@@ -221,6 +224,7 @@ Connection.identity_id → Identity (scope: global|team|connection)
 - ✅ Rate limiting on vault endpoints (100 req/min)
 - ✅ CSRF protection enabled
 - ✅ Frontend never caches decrypted secrets
+- ✅ UI never renders decrypted secrets; write flows allow overwrite without exposing existing values
 - ✅ Copy/download restricted to explicit user gestures
 
 ### Audit Logging

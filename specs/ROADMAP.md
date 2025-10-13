@@ -183,12 +183,12 @@
 
 ### Phase 3: Sharing & Usage Integration (Week 3)
 
-- [ ] Implement identity sharing service (user/team) with permission tiers and audit events
-- [ ] Track identity usage metadata (last used, connection count) for UI surfaces
-- [ ] Ensure connection flows validate access and auto-provision scoped identities
-- [ ] Auto-share referenced identities (or block share) when connections are shared to maintain launch capability
-- [ ] Expose identity usage stats endpoints for frontend
-- [ ] Add background cleanup job for orphaned identities and dangling shares
+- [x] Implement identity sharing service (user/team) with permission tiers and audit events
+- [x] Track identity usage metadata (last used, connection count) for UI surfaces
+- [x] Ensure connection flows validate access and auto-provision scoped identities
+- [x] Auto-share referenced identities (or block share) when connections are shared to maintain launch capability
+- [x] Expose identity usage stats endpoints for frontend
+- [x] Add background cleanup job for orphaned identities and dangling shares
 
 ### Phase 4: Frontend Data Layer (Week 4)
 

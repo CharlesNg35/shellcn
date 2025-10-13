@@ -117,25 +117,56 @@ type ListConnectionsResult struct {
 type ConnectionService struct {
 	db      *gorm.DB
 	checker PermissionChecker
+	vault   *VaultService
+}
+
+// ConnectionServiceOption configures optional behaviours for the connection service.
+type ConnectionServiceOption func(*ConnectionService)
+
+// WithConnectionVault attaches a vault service for identity coordination.
+func WithConnectionVault(vault *VaultService) ConnectionServiceOption {
+	return func(s *ConnectionService) {
+		s.vault = vault
+	}
 }
 
 // CreateConnectionInput describes the fields needed to create a connection.
 type CreateConnectionInput struct {
-	Name        string
-	Description string
-	ProtocolID  string
-	TeamID      *string
-	FolderID    *string
-	Metadata    map[string]any
-	Settings    map[string]any
+	Name           string
+	Description    string
+	ProtocolID     string
+	TeamID         *string
+	FolderID       *string
+	Metadata       map[string]any
+	Settings       map[string]any
+	IdentityID     *string
+	InlineIdentity *InlineIdentityInput
+}
+
+// InlineIdentityInput captures inline credential data submitted during connection creation.
+type InlineIdentityInput struct {
+	TemplateID *string
+	Metadata   map[string]any
+	Payload    map[string]any
+}
+
+type connectionIdentityPlan struct {
+	identityID *string
+	after      func(ctx context.Context, tx *gorm.DB, connectionID string) error
 }
 
 // NewConnectionService constructs a ConnectionService.
-func NewConnectionService(db *gorm.DB, checker PermissionChecker) (*ConnectionService, error) {
+func NewConnectionService(db *gorm.DB, checker PermissionChecker, opts ...ConnectionServiceOption) (*ConnectionService, error) {
 	if db == nil {
 		return nil, errors.New("connection service: db is required")
 	}
-	return &ConnectionService{db: db, checker: checker}, nil
+	svc := &ConnectionService{db: db, checker: checker}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(svc)
+		}
+	}
+	return svc, nil
 }
 
 // Create registers a new connection owned by the supplied user.
@@ -149,6 +180,11 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 		return nil, apperrors.ErrForbidden
 	}
 
+	userCtx, err := s.userContext(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return nil, apperrors.NewBadRequest("connection name is required")
@@ -157,6 +193,18 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 	protocolID := strings.TrimSpace(input.ProtocolID)
 	if protocolID == "" {
 		return nil, apperrors.NewBadRequest("protocol id is required")
+	}
+
+	var plan *connectionIdentityPlan
+	if s.vault != nil {
+		plan, err = s.prepareIdentityPlan(ctx, userCtx, name, input)
+		if err != nil {
+			return nil, err
+		}
+	} else if input.IdentityID != nil && strings.TrimSpace(*input.IdentityID) != "" {
+		return nil, apperrors.NewBadRequest("vault integration is required when specifying an identity")
+	} else if input.InlineIdentity != nil {
+		return nil, apperrors.NewBadRequest("vault integration is required for inline identities")
 	}
 
 	connection := models.Connection{
@@ -171,6 +219,9 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 	}
 	if folderID := normalizeOptionalID(input.FolderID); folderID != nil {
 		connection.FolderID = folderID
+	}
+	if plan != nil && plan.identityID != nil {
+		connection.IdentityID = plan.identityID
 	}
 
 	if input.Metadata != nil {
@@ -189,14 +240,23 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 		connection.Settings = datatypes.JSON(data)
 	}
 
-	if err := s.db.WithContext(ctx).Create(&connection).Error; err != nil {
-		return nil, fmt.Errorf("connection service: create connection: %w", err)
-	}
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&connection).Error; err != nil {
+			return fmt.Errorf("connection service: create connection: %w", err)
+		}
 
-	if err := s.db.WithContext(ctx).
-		Preload("Folder").
-		First(&connection, "id = ?", connection.ID).Error; err != nil {
-		return nil, fmt.Errorf("connection service: reload connection: %w", err)
+		if plan != nil && plan.after != nil {
+			if err := plan.after(ctx, tx, connection.ID); err != nil {
+				return err
+			}
+		}
+
+		if err := tx.Preload("Folder").First(&connection, "id = ?", connection.ID).Error; err != nil {
+			return fmt.Errorf("connection service: reload connection: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
 	dto, err := mapConnection(ctx, s.db, connection, false, false)
@@ -526,6 +586,79 @@ func normalizeOptionalID(value *string) *string {
 	}
 	result := trimmed
 	return &result
+}
+
+func (s *ConnectionService) prepareIdentityPlan(ctx context.Context, userCtx userContext, connectionName string, input CreateConnectionInput) (*connectionIdentityPlan, error) {
+	hasExisting := input.IdentityID != nil && strings.TrimSpace(*input.IdentityID) != ""
+	hasInline := input.InlineIdentity != nil && input.InlineIdentity.Payload != nil
+
+	if hasExisting && hasInline {
+		return nil, apperrors.NewBadRequest("provide either identity_id or inline_identity, not both")
+	}
+	if !hasExisting && !hasInline {
+		return nil, nil
+	}
+	if s.vault == nil {
+		return nil, apperrors.NewBadRequest("vault integration is required for identity assignments")
+	}
+
+	viewer, err := s.vault.ResolveViewer(ctx, userCtx.ID, userCtx.IsRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	plan := &connectionIdentityPlan{}
+
+	if hasExisting {
+		identityID := strings.TrimSpace(*input.IdentityID)
+		identity, err := s.vault.AuthorizeIdentityUse(ctx, viewer, identityID)
+		if err != nil {
+			return nil, err
+		}
+
+		switch identity.Scope {
+		case models.IdentityScopeTeam:
+			if input.TeamID == nil || identity.TeamID == nil || strings.TrimSpace(*input.TeamID) == "" || *identity.TeamID != *input.TeamID {
+				return nil, apperrors.NewBadRequest("team-scoped identity must match the connection team")
+			}
+		case models.IdentityScopeConnection:
+			return nil, apperrors.NewBadRequest("connection-scoped identities cannot be reused")
+		}
+
+		plan.identityID = &identityID
+		return plan, nil
+	}
+
+	inline := input.InlineIdentity
+	if inline.Payload == nil {
+		return nil, apperrors.NewBadRequest("inline identity payload is required")
+	}
+
+	name := fmt.Sprintf("%s (auto)", connectionName)
+	if len(name) > 120 {
+		name = name[:120]
+	}
+
+	identityInput := CreateIdentityInput{
+		Name:        name,
+		Scope:       models.IdentityScopeConnection,
+		OwnerUserID: userCtx.ID,
+		TemplateID:  inline.TemplateID,
+		Metadata:    inline.Metadata,
+		Payload:     inline.Payload,
+		CreatedBy:   userCtx.ID,
+	}
+
+	dto, err := s.vault.CreateIdentity(ctx, viewer, identityInput)
+	if err != nil {
+		return nil, err
+	}
+	id := dto.ID
+	plan.identityID = &id
+	plan.after = func(ctx context.Context, tx *gorm.DB, connectionID string) error {
+		return s.vault.BindIdentityToConnection(ctx, id, connectionID)
+	}
+	return plan, nil
 }
 
 func mapConnections(ctx context.Context, db *gorm.DB, rows []models.Connection, includeTargets, includeShares bool, summaries map[string]*ConnectionShareSummary) ([]ConnectionDTO, error) {
