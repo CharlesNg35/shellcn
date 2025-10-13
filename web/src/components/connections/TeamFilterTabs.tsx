@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { Filter } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils/cn'
 import type { ConnectionRecord } from '@/types/connections'
