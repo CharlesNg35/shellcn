@@ -12,6 +12,7 @@ import { APP_NAME } from '@/lib/constants'
 import { Logo } from '@/components/ui/Logo'
 import { Badge } from '@/components/ui/Badge'
 import { getFilteredNavigationGroups, type NavigationItem } from '@/lib/navigation'
+import { Collapsible } from '@/components/ui/Collapsible'
 import { cn } from '@/lib/utils/cn'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
@@ -25,7 +26,7 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const location = useLocation()
-  const { hasPermission, hasAnyPermission } = usePermissions()
+  const { hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions()
 
   const canViewConnections = hasAnyPermission([
     PERMISSIONS.CONNECTION.VIEW,
@@ -120,6 +121,23 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     () => navigationGroups.filter((group) => group.label !== 'Settings'),
     [navigationGroups]
   )
+  const visibleSettingsItems = useMemo(() => {
+    if (!settingsGroup) {
+      return []
+    }
+    return settingsGroup.items.filter((item) => {
+      if (item.permission && !hasPermission(item.permission)) {
+        return false
+      }
+      if (item.allPermissions?.length && !hasAllPermissions(item.allPermissions)) {
+        return false
+      }
+      if (item.anyPermissions?.length && !hasAnyPermission(item.anyPermissions)) {
+        return false
+      }
+      return true
+    })
+  }, [settingsGroup, hasPermission, hasAllPermissions, hasAnyPermission])
 
   const navContent = (
     <div className="flex h-full flex-col">
@@ -222,7 +240,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           </div>
         ) : null}
 
-        {settingsGroup ? (
+        {settingsGroup && visibleSettingsItems.length ? (
           <div>
             <button
               type="button"
@@ -239,11 +257,12 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                 <ChevronRight className="h-4 w-4" />
               )}
             </button>
-            {settingsOpen ? (
-              <div className="mt-2 space-y-1">
-                <NavItems items={settingsGroup.items} activePath={location.pathname} />
+
+            <Collapsible isOpen={settingsOpen} className="mt-2">
+              <div className="space-y-1">
+                <NavItems items={visibleSettingsItems} activePath={location.pathname} />
               </div>
-            ) : null}
+            </Collapsible>
           </div>
         ) : null}
       </nav>
@@ -307,7 +326,7 @@ interface NavItemsProps {
 }
 
 function NavItems({ items, activePath }: NavItemsProps) {
-  const { hasPermission } = usePermissions()
+  const { hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions()
 
   return (
     <>
@@ -315,9 +334,20 @@ function NavItems({ items, activePath }: NavItemsProps) {
         if (item.permission && !hasPermission(item.permission)) {
           return null
         }
+        if (item.allPermissions?.length && !hasAllPermissions(item.allPermissions)) {
+          return null
+        }
+        if (item.anyPermissions?.length && !hasAnyPermission(item.anyPermissions)) {
+          return null
+        }
 
         return (
-          <PermissionGuard key={item.path} permission={item.permission}>
+          <PermissionGuard
+            key={item.path}
+            permission={item.permission}
+            anyOf={item.anyPermissions}
+            allOf={item.allPermissions}
+          >
             <NavLink
               to={item.path}
               className={({ isActive }) =>
