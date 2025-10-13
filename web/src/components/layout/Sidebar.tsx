@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   ChevronDown,
@@ -106,8 +106,6 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
     return items
   }, [activeSessions])
 
-  const [settingsOpen, setSettingsOpen] = useState(false)
-
   const navigationGroups = useMemo(
     () => getFilteredNavigationGroups({ hasPermission }),
     [hasPermission]
@@ -138,6 +136,32 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       return true
     })
   }, [settingsGroup, hasPermission, hasAllPermissions, hasAnyPermission])
+
+  const isSettingsRouteActive = useMemo(() => {
+    const currentPath = location.pathname
+
+    return visibleSettingsItems.some((item) => {
+      if (item.exact) {
+        return currentPath === item.path
+      }
+
+      const normalized = item.path.endsWith('/') ? item.path : `${item.path}/`
+      return currentPath === item.path || currentPath.startsWith(normalized)
+    })
+  }, [visibleSettingsItems, location.pathname])
+
+  const wasSettingsRouteActiveRef = useRef(isSettingsRouteActive)
+  const [settingsOpen, setSettingsOpen] = useState(isSettingsRouteActive)
+
+  useEffect(() => {
+    if (isSettingsRouteActive) {
+      setSettingsOpen(true)
+    } else if (wasSettingsRouteActiveRef.current) {
+      setSettingsOpen(false)
+    }
+
+    wasSettingsRouteActiveRef.current = isSettingsRouteActive
+  }, [isSettingsRouteActive])
 
   const navContent = (
     <div className="flex h-full flex-col">
@@ -244,7 +268,12 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           <div>
             <button
               type="button"
-              onClick={() => setSettingsOpen((open) => !open)}
+              onClick={() => {
+                if (isSettingsRouteActive) {
+                  return
+                }
+                setSettingsOpen((open) => !open)
+              }}
               className="flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/60"
             >
               <span className="inline-flex items-center gap-2">

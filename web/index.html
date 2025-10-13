@@ -1,15 +1,73 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="ShellCN - Enterprise Remote Access Platform" />
-    <meta name="theme-color" content="#8b5cf6" />
-    <title>ShellCN - Enterprise Remote Access Platform</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="ShellCN - Enterprise Remote Access Platform" />
+  <meta name="theme-color" content="#8b5cf6" />
+  <title>ShellCN - Enterprise Remote Access Platform</title>
+  <script>
+    ; (() => {
+      const root = document.documentElement
+      const themeMeta = document.querySelector('meta[name="theme-color"]')
+      const faviconLink = document.querySelector('link[rel="icon"][type="image/svg+xml"]')
+
+      if (!themeMeta && !faviconLink) {
+        return
+      }
+
+      const serializeSvg = (svg) =>
+        `data:image/svg+xml,${encodeURIComponent(svg).replace(/%0A/g, '').replace(/%20/g, ' ')}`
+
+      const updateThemeArtifacts = () => {
+        const styles = window.getComputedStyle(root)
+        const primary = styles.getPropertyValue('--primary').trim() || '#8b5cf6'
+        const gradientEnd = styles.getPropertyValue('--chart-4').trim() || primary
+        // const foreground = styles.getPropertyValue('--primary-foreground').trim() || '#ffffff'
+        // const accent = styles.getPropertyValue('--chart-2').trim() || '#86efac'
+        const foreground = "#ffffff"
+        const accent = "#ffffff"
+
+        if (themeMeta) {
+          themeMeta.setAttribute('content', primary)
+        }
+
+        if (faviconLink) {
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none"><defs><linearGradient id="favicon-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="${primary}"/><stop offset="100%" stop-color="${gradientEnd}"/></linearGradient></defs><rect width="32" height="32" rx="6" fill="url(#favicon-gradient)"/><g transform="translate(16,16)"><path d="M 3 -6 Q 6 -6 6 -3 Q 6 0 3 0 L -3 0 Q -6 0 -6 3 Q -6 6 -3 6 L 3 6" stroke="${foreground}" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M -5 -5 L -3.5 -3.5 L -5 -2" stroke="${accent}" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g></svg>`
+          faviconLink.setAttribute('href', serializeSvg(svg))
+        }
+      }
+
+      const scheduleUpdate = () => {
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', updateThemeArtifacts, { once: true })
+        } else {
+          updateThemeArtifacts()
+        }
+      }
+
+      const observer = new MutationObserver((mutations) => {
+        if (
+          mutations.some((mutation) =>
+            mutation.attributeName && ['class', 'data-theme'].includes(mutation.attributeName)
+          )
+        ) {
+          updateThemeArtifacts()
+        }
+      })
+
+      observer.observe(root, { attributes: true, attributeFilter: ['class', 'data-theme'] })
+      scheduleUpdate()
+      window.addEventListener('load', updateThemeArtifacts)
+    })()
+  </script>
+</head>
+
+<body class="bg-background">
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

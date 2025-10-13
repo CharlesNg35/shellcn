@@ -29,8 +29,8 @@ export function Logo({ className, size = 'md' }: LogoProps) {
     >
       <defs>
         <linearGradient id="logo-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style={{ stopColor: '#8b5cf6', stopOpacity: 1 }} />
-          <stop offset="100%" style={{ stopColor: '#a855f7', stopOpacity: 1 }} />
+          <stop offset="0%" style={{ stopColor: 'var(--primary)', stopOpacity: 1 }} />
+          <stop offset="100%" style={{ stopColor: 'var(--chart-4)', stopOpacity: 1 }} />
         </linearGradient>
       </defs>
       <rect width="200" height="200" rx="40" fill="url(#logo-gradient)" />
@@ -40,6 +40,7 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         {/* Main "S" shape */}
         <path
           d="M 20 -40 Q 40 -40 40 -20 Q 40 0 20 0 L -20 0 Q -40 0 -40 20 Q -40 40 -20 40 L 20 40"
+          // stroke="var(--primary-foreground)"
           stroke="#ffffff"
           strokeWidth="12"
           strokeLinecap="round"
@@ -49,7 +50,8 @@ export function Logo({ className, size = 'md' }: LogoProps) {
         {/* Terminal prompt chevron integrated */}
         <path
           d="M -35 -35 L -25 -25 L -35 -15"
-          stroke="#86efac"
+          // stroke="var(--chart-2)"
+          stroke="#ffffff"
           strokeWidth="6"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -74,8 +76,8 @@ export function LogoIcon({ className }: { className?: string }) {
     >
       <defs>
         <linearGradient id="favicon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style={{ stopColor: '#8b5cf6', stopOpacity: 1 }} />
-          <stop offset="100%" style={{ stopColor: '#a855f7', stopOpacity: 1 }} />
+          <stop offset="0%" style={{ stopColor: 'var(--primary)', stopOpacity: 1 }} />
+          <stop offset="100%" style={{ stopColor: 'var(--chart-4)', stopOpacity: 1 }} />
         </linearGradient>
       </defs>
       <rect width="32" height="32" rx="6" fill="url(#favicon-gradient)" />
@@ -85,6 +87,7 @@ export function LogoIcon({ className }: { className?: string }) {
         {/* Main "S" shape */}
         <path
           d="M 3 -6 Q 6 -6 6 -3 Q 6 0 3 0 L -3 0 Q -6 0 -6 3 Q -6 6 -3 6 L 3 6"
+          // stroke="var(--primary-foreground)"
           stroke="#ffffff"
           strokeWidth="2"
           strokeLinecap="round"
@@ -94,7 +97,8 @@ export function LogoIcon({ className }: { className?: string }) {
         {/* Terminal prompt chevron */}
         <path
           d="M -5 -5 L -3.5 -3.5 L -5 -2"
-          stroke="#86efac"
+          // stroke="var(--chart-2)"
+          stroke="#ffffff"
           strokeWidth="1"
           strokeLinecap="round"
           strokeLinejoin="round"
