@@ -14,6 +14,20 @@ export async function createInvite(payload: InviteCreatePayload): Promise<Invite
   return unwrapResponse(response)
 }
 
+export async function resendInvite(inviteId: string): Promise<InviteCreateResponse> {
+  const response = await apiClient.post<ApiResponse<InviteCreateResponse>>(
+    `${INVITES_ENDPOINT}/${inviteId}/resend`
+  )
+  return unwrapResponse(response)
+}
+
+export async function issueInviteLink(inviteId: string): Promise<InviteCreateResponse> {
+  const response = await apiClient.post<ApiResponse<InviteCreateResponse>>(
+    `${INVITES_ENDPOINT}/${inviteId}/link`
+  )
+  return unwrapResponse(response)
+}
+
 export async function fetchInvites(params?: {
   status?: string
   search?: string
@@ -47,6 +61,8 @@ export async function redeemInvite(payload: RedeemInvitePayload): Promise<void> 
 
 export const invitesApi = {
   create: createInvite,
+  resend: resendInvite,
+  issueLink: issueInviteLink,
   list: fetchInvites,
   delete: deleteInvite,
   redeem: redeemInvite,

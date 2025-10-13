@@ -517,6 +517,33 @@ func TestInviteHandler_Flow(t *testing.T) {
 	require.Equal(t, "invitee@example.com", createData.Invite["email"])
 	require.Equal(t, teamID, createData.Invite["team_id"])
 	require.Equal(t, "Onboarding", createData.Invite["team_name"])
+	inviteID := createData.Invite["id"].(string)
+
+	linkResp := env.Request(http.MethodPost, "/api/invites/"+inviteID+"/link", nil, token)
+	require.Equal(t, http.StatusOK, linkResp.Code, linkResp.Body.String())
+	var linkData struct {
+		Invite map[string]any `json:"invite"`
+		Token  string         `json:"token"`
+		Link   string         `json:"link"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, linkResp).Data, &linkData)
+	require.NotEmpty(t, linkData.Token)
+	require.NotEmpty(t, linkData.Link)
+	require.Equal(t, inviteID, linkData.Invite["id"])
+	require.NotEqual(t, createData.Token, linkData.Token)
+
+	resendResp := env.Request(http.MethodPost, "/api/invites/"+inviteID+"/resend", nil, token)
+	require.Equal(t, http.StatusOK, resendResp.Code, resendResp.Body.String())
+	var resendData struct {
+		Invite map[string]any `json:"invite"`
+		Token  string         `json:"token"`
+		Link   string         `json:"link"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, resendResp).Data, &resendData)
+	require.NotEmpty(t, resendData.Token)
+	require.NotEmpty(t, resendData.Link)
+	require.Equal(t, inviteID, resendData.Invite["id"])
+	require.NotEqual(t, linkData.Token, resendData.Token)
 
 	listResp := env.Request(http.MethodGet, "/api/invites", nil, token)
 	require.Equal(t, http.StatusOK, listResp.Code)
@@ -528,7 +555,7 @@ func TestInviteHandler_Flow(t *testing.T) {
 	require.Equal(t, teamID, listPayload.Invites[0]["team_id"])
 
 	redeemPayload := map[string]any{
-		"token":      createData.Token,
+		"token":      resendData.Token,
 		"username":   "invited-user",
 		"password":   "InviteePassword123!",
 		"first_name": "Invited",

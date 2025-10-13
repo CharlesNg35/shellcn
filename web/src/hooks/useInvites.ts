@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { invitesApi } from '@/lib/api/invites'
 import { toApiError, type ApiError } from '@/lib/api/http'
-import type { InviteCreatePayload, InviteRecord } from '@/types/invites'
+import type { InviteCreatePayload, InviteCreateResponse, InviteRecord } from '@/types/invites'
 import { toast } from '@/lib/utils/toast'
 
 export const INVITES_QUERY_KEY = ['invites'] as const
@@ -21,7 +21,7 @@ export function useInviteMutations() {
     await queryClient.invalidateQueries({ queryKey: INVITES_QUERY_KEY })
   }
 
-  const create = useMutation({
+  const create = useMutation<InviteCreateResponse, ApiError, InviteCreatePayload>({
     mutationFn: (payload: InviteCreatePayload) => invitesApi.create(payload),
     onSuccess: async (_, variables) => {
       await invalidate()
@@ -39,7 +39,7 @@ export function useInviteMutations() {
     },
   })
 
-  const remove = useMutation({
+  const remove = useMutation<void, ApiError, string>({
     mutationFn: (inviteId: string) => invitesApi.delete(inviteId),
     onSuccess: async () => {
       await invalidate()
@@ -53,5 +53,34 @@ export function useInviteMutations() {
     },
   })
 
-  return { create, remove, invalidate }
+  const resend = useMutation<InviteCreateResponse, ApiError, string>({
+    mutationFn: (inviteId: string) => invitesApi.resend(inviteId),
+    onSuccess: async () => {
+      await invalidate()
+      toast.success('Invitation resent', {
+        description: 'We sent a fresh invite email to the recipient',
+      })
+    },
+    onError: (error) => {
+      const apiError = toApiError(error)
+      toast.error('Failed to resend invitation', {
+        description: apiError.message,
+      })
+    },
+  })
+
+  const issueLink = useMutation<InviteCreateResponse, ApiError, string>({
+    mutationFn: (inviteId: string) => invitesApi.issueLink(inviteId),
+    onSuccess: async () => {
+      await invalidate()
+    },
+    onError: (error) => {
+      const apiError = toApiError(error)
+      toast.error('Failed to generate invite link', {
+        description: apiError.message,
+      })
+    },
+  })
+
+  return { create, remove, resend, issueLink, invalidate }
 }

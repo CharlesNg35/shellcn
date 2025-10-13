@@ -8,9 +8,22 @@ interface UserInviteListProps {
   isLoading: boolean
   onRevoke: (inviteId: string) => void
   isRevoking: (inviteId: string) => boolean
+  onResend: (inviteId: string) => void
+  isResending: (inviteId: string) => boolean
+  onCopyLink: (inviteId: string) => void | Promise<void>
+  isCopying: (inviteId: string) => boolean
 }
 
-export function UserInviteList({ invites, isLoading, onRevoke, isRevoking }: UserInviteListProps) {
+export function UserInviteList({
+  invites,
+  isLoading,
+  onRevoke,
+  isRevoking,
+  onResend,
+  isResending,
+  onCopyLink,
+  isCopying,
+}: UserInviteListProps) {
   if (isLoading) {
     return <Skeleton className="h-32 w-full" />
   }
@@ -36,6 +49,7 @@ export function UserInviteList({ invites, isLoading, onRevoke, isRevoking }: Use
             const expiresIn = invite.expires_at
               ? formatDistanceToNow(new Date(invite.expires_at), { addSuffix: true })
               : '—'
+            const isAccepted = invite.status === 'accepted'
 
             return (
               <tr key={invite.id}>
@@ -46,17 +60,39 @@ export function UserInviteList({ invites, isLoading, onRevoke, isRevoking }: Use
                 <td className="px-4 py-3 capitalize text-muted-foreground">{invite.status}</td>
                 <td className="px-4 py-3 text-muted-foreground">{expiresIn}</td>
                 <td className="px-4 py-3">
-                  {invite.status === 'pending' ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onRevoke(invite.id)}
-                      loading={isRevoking(invite.id)}
-                    >
-                      Revoke
-                    </Button>
-                  ) : (
+                  {isAccepted ? (
                     <span className="text-xs text-muted-foreground">—</span>
+                  ) : (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          void onCopyLink(invite.id)
+                        }}
+                        loading={isCopying(invite.id)}
+                      >
+                        Copy link
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onResend(invite.id)}
+                        loading={isResending(invite.id)}
+                      >
+                        Resend
+                      </Button>
+                      {invite.status === 'pending' ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onRevoke(invite.id)}
+                          loading={isRevoking(invite.id)}
+                        >
+                          Revoke
+                        </Button>
+                      ) : null}
+                    </div>
                   )}
                 </td>
               </tr>

@@ -30,6 +30,8 @@ var (
 	ErrInviteAlreadyUsed = errors.New("invite: already accepted")
 	// ErrInviteAlreadyPending indicates an invite already exists for the email.
 	ErrInviteAlreadyPending = errors.New("invite: already pending")
+	// ErrInviteEmailInUse indicates an existing user account already uses the email.
+	ErrInviteEmailInUse = errors.New("invite: email already registered")
 )
 
 // InviteOption customises InviteService behaviour.
@@ -128,6 +130,10 @@ func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy, te
 		return nil, "", "", fmt.Errorf("invite service: check existing invites: %w", err)
 	} else if err == nil {
 		return nil, "", "", ErrInviteAlreadyPending
+	}
+
+	if err := s.ensureEmailAvailable(ctx, email); err != nil {
+		return nil, "", "", err
 	}
 
 	rawToken, err := crypto.GenerateToken(s.tokenLength)
@@ -319,6 +325,97 @@ func (s *InviteService) List(ctx context.Context, status, search string) ([]mode
 	}
 
 	return invites, nil
+}
+
+// ResendInvite refreshes the invite token, optionally extends expiry, and dispatches an email notification.
+func (s *InviteService) ResendInvite(ctx context.Context, inviteID string) (*models.UserInvite, string, string, error) {
+	return s.refreshInvite(ctx, inviteID, true)
+}
+
+// IssueInviteLink refreshes the invite token and returns the new link without sending an email.
+func (s *InviteService) IssueInviteLink(ctx context.Context, inviteID string) (*models.UserInvite, string, string, error) {
+	return s.refreshInvite(ctx, inviteID, false)
+}
+
+func (s *InviteService) refreshInvite(ctx context.Context, inviteID string, sendEmail bool) (*models.UserInvite, string, string, error) {
+	ctx = ensureContext(ctx)
+
+	if strings.TrimSpace(inviteID) == "" {
+		return nil, "", "", errors.New("invite service: invite id is required")
+	}
+
+	var invite models.UserInvite
+	if err := s.db.WithContext(ctx).
+		Preload("Team").
+		First(&invite, "id = ?", inviteID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, "", "", ErrInviteNotFound
+		}
+		return nil, "", "", fmt.Errorf("invite service: load invite: %w", err)
+	}
+
+	if invite.AcceptedAt != nil {
+		return nil, "", "", ErrInviteAlreadyUsed
+	}
+
+	rawToken, err := crypto.GenerateToken(s.tokenLength)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("invite service: generate token: %w", err)
+	}
+
+	now := s.now()
+	newHash := tokenHash(rawToken)
+	newExpiry := now.Add(s.expiry)
+
+	if err := s.db.WithContext(ctx).Model(&invite).Updates(map[string]any{
+		"token_hash": newHash,
+		"expires_at": newExpiry,
+	}).Error; err != nil {
+		return nil, "", "", fmt.Errorf("invite service: refresh token: %w", err)
+	}
+
+	invite.TokenHash = newHash
+	invite.ExpiresAt = newExpiry
+
+	link := s.inviteLink(rawToken)
+
+	action := "invite.link"
+	if sendEmail && s.mailer != nil {
+		message := mail.Message{
+			To:      []string{invite.Email},
+			Subject: "Your ShellCN invitation",
+			Body:    s.inviteBody(link, invite.Email),
+		}
+		if mailErr := s.mailer.Send(ctx, message); mailErr != nil && !errors.Is(mailErr, mail.ErrSMTPDisabled) {
+			return nil, "", "", fmt.Errorf("invite service: resend email: %w", mailErr)
+		}
+		action = "invite.resend"
+	}
+
+	recordAudit(s.audit, ctx, AuditEntry{
+		Action:   action,
+		Resource: invite.ID,
+		Result:   "success",
+		Metadata: map[string]any{
+			"send_email": sendEmail && s.mailer != nil,
+		},
+	})
+
+	return &invite, rawToken, link, nil
+}
+
+func (s *InviteService) ensureEmailAvailable(ctx context.Context, email string) error {
+	var count int64
+	if err := s.db.WithContext(ctx).
+		Model(&models.User{}).
+		Where("LOWER(email) = ?", email).
+		Count(&count).Error; err != nil {
+		return fmt.Errorf("invite service: check email availability: %w", err)
+	}
+	if count > 0 {
+		return ErrInviteEmailInUse
+	}
+	return nil
 }
 
 // Delete removes an invite if it has not been accepted already.

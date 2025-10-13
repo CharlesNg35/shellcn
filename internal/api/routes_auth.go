@@ -51,6 +51,8 @@ func registerAuthRoutes(engine *gin.Engine, api *gin.RouterGroup, deps authRoute
 	{
 		invites.GET("", deps.InviteHandler.List)
 		invites.POST("", deps.InviteHandler.Create)
+		invites.POST("/:id/resend", deps.InviteHandler.Resend)
+		invites.POST("/:id/link", deps.InviteHandler.IssueLink)
 		invites.DELETE("/:id", deps.InviteHandler.Delete)
 	}
 }

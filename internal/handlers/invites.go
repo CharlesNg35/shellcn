@@ -121,6 +121,8 @@ func (h *InviteHandler) Create(c *gin.Context) {
 		switch {
 		case errors.Is(err, services.ErrInviteAlreadyPending):
 			response.Error(c, appErrors.NewBadRequest("An active invite already exists for this email"))
+		case errors.Is(err, services.ErrInviteEmailInUse):
+			response.Error(c, appErrors.NewBadRequest("An account already exists for this email address"))
 		case errors.Is(err, services.ErrTeamNotFound):
 			response.Error(c, appErrors.NewBadRequest("Selected team could not be found"))
 		default:
@@ -197,6 +199,74 @@ func (h *InviteHandler) Delete(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, gin.H{"deleted": true})
+}
+
+// POST /api/invites/:id/resend
+func (h *InviteHandler) Resend(c *gin.Context) {
+	if h.invites == nil {
+		response.Error(c, appErrors.ErrInternalServer)
+		return
+	}
+
+	inviteID := strings.TrimSpace(c.Param("id"))
+	if inviteID == "" {
+		response.Error(c, appErrors.NewBadRequest("Invite ID is required"))
+		return
+	}
+
+	invite, token, link, err := h.invites.ResendInvite(requestContext(c), inviteID)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrInviteNotFound):
+			response.Error(c, appErrors.ErrNotFound)
+		case errors.Is(err, services.ErrInviteAlreadyUsed):
+			response.Error(c, appErrors.NewBadRequest("Invite has already been accepted"))
+		default:
+			response.Error(c, appErrors.ErrInternalServer)
+		}
+		return
+	}
+
+	payload := inviteCreatedResponse{
+		Invite: toInviteDTO(invite, time.Now()),
+		Token:  token,
+		Link:   link,
+	}
+	response.Success(c, http.StatusOK, payload)
+}
+
+// POST /api/invites/:id/link
+func (h *InviteHandler) IssueLink(c *gin.Context) {
+	if h.invites == nil {
+		response.Error(c, appErrors.ErrInternalServer)
+		return
+	}
+
+	inviteID := strings.TrimSpace(c.Param("id"))
+	if inviteID == "" {
+		response.Error(c, appErrors.NewBadRequest("Invite ID is required"))
+		return
+	}
+
+	invite, token, link, err := h.invites.IssueInviteLink(requestContext(c), inviteID)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrInviteNotFound):
+			response.Error(c, appErrors.ErrNotFound)
+		case errors.Is(err, services.ErrInviteAlreadyUsed):
+			response.Error(c, appErrors.NewBadRequest("Invite has already been accepted"))
+		default:
+			response.Error(c, appErrors.ErrInternalServer)
+		}
+		return
+	}
+
+	payload := inviteCreatedResponse{
+		Invite: toInviteDTO(invite, time.Now()),
+		Token:  token,
+		Link:   link,
+	}
+	response.Success(c, http.StatusOK, payload)
 }
 
 // POST /api/auth/invites/redeem

@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/Select'
 import { useTeams } from '@/hooks/useTeams'
+import { buildInviteLink } from '@/lib/utils/invites'
 
 const inviteSchema = z.object({
   email: z.string().email('A valid email is required').trim(),
@@ -54,14 +55,6 @@ export function UserInviteForm({ onClose, onCreated }: UserInviteFormProps) {
       team_id: '',
     },
   })
-
-  const buildInviteLink = (result: InviteCreateResponse) => {
-    const base =
-      result.link && result.link.startsWith('http')
-        ? result.link
-        : `${window.location.origin}${result.link ?? `/invite/accept?token=${encodeURIComponent(result.token)}`}`
-    return base
-  }
 
   const onSubmit = handleSubmit(async (values) => {
     setErrorMessage(null)

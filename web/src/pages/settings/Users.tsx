@@ -19,6 +19,7 @@ import type { UserRecord } from '@/types/users'
 import { PERMISSIONS } from '@/constants/permissions'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
 import { toast } from '@/lib/utils/toast'
+import { buildInviteLink } from '@/lib/utils/invites'
 
 const DEFAULT_PER_PAGE = 20
 
@@ -44,11 +45,49 @@ export function Users() {
   const { data, isLoading, refetch } = useUsers(queryParams)
   const { bulkActivate, bulkDeactivate, bulkDelete } = useUserMutations()
   const invitesQuery = useInvites()
-  const { remove: revokeInvite } = useInviteMutations()
+  const {
+    remove: revokeInvite,
+    resend: resendInvite,
+    issueLink: issueInviteLink,
+  } = useInviteMutations()
   const isRevokingInvite = useCallback(
     (inviteId: string) =>
       revokeInvite.isPending && (revokeInvite.variables as string | undefined) === inviteId,
     [revokeInvite.isPending, revokeInvite.variables]
+  )
+
+  const isResendingInvite = useCallback(
+    (inviteId: string) =>
+      resendInvite.isPending && (resendInvite.variables as string | undefined) === inviteId,
+    [resendInvite.isPending, resendInvite.variables]
+  )
+
+  const isGeneratingInviteLink = useCallback(
+    (inviteId: string) =>
+      issueInviteLink.isPending && (issueInviteLink.variables as string | undefined) === inviteId,
+    [issueInviteLink.isPending, issueInviteLink.variables]
+  )
+
+  const handleCopyInviteLink = useCallback(
+    async (inviteId: string) => {
+      try {
+        const result = await issueInviteLink.mutateAsync(inviteId)
+        const inviteLink = buildInviteLink(result)
+        try {
+          await navigator.clipboard.writeText(inviteLink)
+          toast.success('Invite link copied', {
+            description: 'Share it with the recipient to let them join immediately',
+          })
+        } catch {
+          toast.info('Invite link ready', {
+            description: inviteLink,
+          })
+        }
+      } catch {
+        // Errors are surfaced via mutation toast handler.
+      }
+    },
+    [issueInviteLink]
   )
 
   useEffect(() => {
@@ -236,6 +275,10 @@ export function Users() {
               isLoading={invitesQuery.isLoading}
               onRevoke={(inviteId) => revokeInvite.mutate(inviteId)}
               isRevoking={isRevokingInvite}
+              onResend={(inviteId) => resendInvite.mutate(inviteId)}
+              isResending={isResendingInvite}
+              onCopyLink={handleCopyInviteLink}
+              isCopying={isGeneratingInviteLink}
             />
           </TabsContent>
         </div>

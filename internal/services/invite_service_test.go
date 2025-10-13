@@ -59,6 +59,51 @@ func TestInviteServiceGenerateWithTeam(t *testing.T) {
 	require.Equal(t, team.Name, invite.Team.Name)
 }
 
+func TestInviteServiceRejectsExistingUserEmail(t *testing.T) {
+	db := openInviteTestDB(t)
+
+	user := &models.User{
+		Username: "existing-user",
+		Email:    "existing@example.com",
+		Password: "hashed",
+	}
+	require.NoError(t, db.Create(user).Error)
+
+	svc, err := NewInviteService(db, nil)
+	require.NoError(t, err)
+
+	_, _, _, err = svc.GenerateInvite(context.Background(), "Existing@example.com", "admin", "")
+	require.ErrorIs(t, err, ErrInviteEmailInUse)
+}
+
+func TestInviteServiceResendAndIssueLink(t *testing.T) {
+	db := openInviteTestDB(t)
+	current := time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC)
+
+	svc, err := NewInviteService(db, nil,
+		WithInviteClock(func() time.Time { return current }),
+		WithInviteExpiry(6*time.Hour),
+	)
+	require.NoError(t, err)
+
+	invite, _, _, err := svc.GenerateInvite(context.Background(), "resend@example.com", "admin", "")
+	require.NoError(t, err)
+
+	resendInvite, resendToken, resendLink, err := svc.ResendInvite(context.Background(), invite.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, resendToken)
+	require.NotEmpty(t, resendLink)
+	require.Equal(t, invite.ID, resendInvite.ID)
+	require.True(t, resendInvite.ExpiresAt.After(current))
+
+	issueInvite, issueToken, issueLink, err := svc.IssueInviteLink(context.Background(), invite.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, issueToken)
+	require.NotEmpty(t, issueLink)
+	require.Equal(t, invite.ID, issueInvite.ID)
+	require.NotEqual(t, resendToken, issueToken)
+}
+
 func TestInviteServiceExpiry(t *testing.T) {
 	db := openInviteTestDB(t)
 	current := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -158,7 +203,7 @@ func openInviteTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 
-	require.NoError(t, db.AutoMigrate(&models.Team{}, &models.UserInvite{}))
+	require.NoError(t, db.AutoMigrate(&models.Team{}, &models.User{}, &models.UserInvite{}))
 
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
