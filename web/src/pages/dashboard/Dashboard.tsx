@@ -54,7 +54,7 @@ export function Dashboard() {
                 </Link>
               </Button>
             </PermissionGuard>
-            <PermissionGuard permission={PERMISSIONS.CONNECTION.MANAGE}>
+            <PermissionGuard anyOf={[PERMISSIONS.CONNECTION.CREATE, PERMISSIONS.CONNECTION.MANAGE]}>
               <Button asChild size="sm">
                 <Link to="/connections/new">
                   <Plus className="mr-2 h-4 w-4" />
@@ -125,7 +125,9 @@ export function Dashboard() {
                 <p className="mt-1 text-sm text-muted-foreground">
                   Create your first connection to get started
                 </p>
-                <PermissionGuard permission={PERMISSIONS.CONNECTION.MANAGE}>
+                <PermissionGuard
+                  anyOf={[PERMISSIONS.CONNECTION.CREATE, PERMISSIONS.CONNECTION.MANAGE]}
+                >
                   <Button asChild size="sm" className="mt-4">
                     <Link to="/connections/new">
                       <Plus className="mr-2 h-4 w-4" />

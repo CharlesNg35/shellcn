@@ -6,34 +6,53 @@ import { cn } from '@/lib/utils/cn'
 interface FolderContextMenuProps {
   folder: ConnectionFolderSummary
   disabled?: boolean
+  canEdit?: boolean
+  canDelete?: boolean
   onEdit: (folder: ConnectionFolderSummary) => void
   onDelete: () => void
 }
 
-export function FolderContextMenu({ folder, disabled, onEdit, onDelete }: FolderContextMenuProps) {
+export function FolderContextMenu({
+  folder,
+  disabled,
+  canEdit,
+  canDelete,
+  onEdit,
+  onDelete,
+}: FolderContextMenuProps) {
   const [open, setOpen] = useState(false)
 
   const close = useCallback(() => setOpen(false), [])
 
+  const allowEdit = canEdit ?? true
+  const allowDelete = canDelete ?? true
+  const disableToggle = disabled ?? (!allowEdit && !allowDelete)
+
   const handleEdit = useCallback(() => {
+    if (!allowEdit) {
+      return
+    }
     onEdit(folder)
     close()
-  }, [folder, onEdit, close])
+  }, [allowEdit, folder, onEdit, close])
 
   const handleDelete = useCallback(() => {
+    if (!allowDelete) {
+      return
+    }
     onDelete()
     close()
-  }, [onDelete, close])
+  }, [allowDelete, onDelete, close])
 
   return (
     <div className="relative">
       <button
         type="button"
-        disabled={disabled}
+        disabled={disableToggle}
         onClick={() => setOpen((value) => !value)}
         className={cn(
           'rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
-          disabled && 'opacity-50'
+          disableToggle && 'opacity-50'
         )}
         aria-haspopup="menu"
         aria-expanded={open}
@@ -48,8 +67,13 @@ export function FolderContextMenu({ folder, disabled, onEdit, onDelete }: Folder
           <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-border bg-popover p-1 shadow-lg">
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-foreground hover:bg-accent"
+              className={cn(
+                'flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-foreground hover:bg-accent',
+                !allowEdit && 'cursor-not-allowed opacity-60 hover:bg-transparent'
+              )}
               onClick={handleEdit}
+              disabled={!allowEdit}
+              aria-disabled={!allowEdit}
             >
               <Pencil className="h-4 w-4" />
               Edit
@@ -57,8 +81,13 @@ export function FolderContextMenu({ folder, disabled, onEdit, onDelete }: Folder
 
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+              className={cn(
+                'flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-destructive hover:bg-destructive/10',
+                !allowDelete && 'cursor-not-allowed opacity-60 hover:bg-transparent'
+              )}
               onClick={handleDelete}
+              disabled={!allowDelete}
+              aria-disabled={!allowDelete}
             >
               <Trash2 className="h-4 w-4" />
               Delete

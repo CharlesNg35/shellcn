@@ -9,6 +9,8 @@ export interface NavigationItem {
   path: string
   icon?: LucideIcon
   permission?: PermissionId
+  anyPermissions?: ReadonlyArray<PermissionId>
+  allPermissions?: ReadonlyArray<PermissionId>
   children?: NavigationItem[]
   exact?: boolean
   group?: string
@@ -29,7 +31,7 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         label: 'Connections',
         path: '/connections',
         icon: FolderKanban,
-        permission: PERMISSIONS.CONNECTION.VIEW,
+        anyPermissions: [PERMISSIONS.CONNECTION.VIEW, PERMISSIONS.CONNECTION.VIEW_ALL],
         featureId: 'connections',
       },
     ],
@@ -56,7 +58,12 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         path: '/settings/teams',
         icon: Users,
         featureId: 'teams',
-        permission: PERMISSIONS.TEAM.VIEW,
+        anyPermissions: [
+          PERMISSIONS.TEAM.VIEW,
+          PERMISSIONS.TEAM.VIEW_ALL,
+          PERMISSIONS.TEAM.CREATE,
+          PERMISSIONS.TEAM.MANAGE,
+        ],
       },
       {
         label: 'Permissions',
@@ -182,8 +189,22 @@ export function getFilteredNavigationGroups(
         return false
       }
 
-      if (item.permission && hasPermission) {
-        return hasPermission(item.permission)
+      if (hasPermission) {
+        if (item.permission && !hasPermission(item.permission)) {
+          return false
+        }
+        if (
+          item.allPermissions?.length &&
+          !item.allPermissions.every((perm) => hasPermission(perm))
+        ) {
+          return false
+        }
+        if (
+          item.anyPermissions?.length &&
+          !item.anyPermissions.some((perm) => hasPermission(perm))
+        ) {
+          return false
+        }
       }
 
       return true

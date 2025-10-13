@@ -39,9 +39,27 @@ export function FolderSidebar({
   const [formState, setFormState] = useState<FolderFormState | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ConnectionFolderNode | null>(null)
 
-  const { hasPermission } = usePermissions()
-  const canManageFolders = hasPermission(PERMISSIONS.CONNECTION_FOLDER.MANAGE)
-  const canAssignTeams = hasPermission(PERMISSIONS.TEAM.MANAGE)
+  const { hasAnyPermission } = usePermissions()
+  const canCreateFolders = hasAnyPermission([
+    PERMISSIONS.CONNECTION_FOLDER.CREATE,
+    PERMISSIONS.CONNECTION_FOLDER.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
+  const canUpdateFolders = hasAnyPermission([
+    PERMISSIONS.CONNECTION_FOLDER.UPDATE,
+    PERMISSIONS.CONNECTION_FOLDER.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
+  const canDeleteFolders = hasAnyPermission([
+    PERMISSIONS.CONNECTION_FOLDER.DELETE,
+    PERMISSIONS.CONNECTION_FOLDER.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
+  const canAssignTeams = hasAnyPermission([
+    PERMISSIONS.TEAM.VIEW_ALL,
+    PERMISSIONS.TEAM.MANAGE,
+    PERMISSIONS.TEAM.UPDATE,
+  ])
 
   const { remove } = useConnectionFolderMutations()
 
@@ -52,7 +70,7 @@ export function FolderSidebar({
   const hasUserFolders = userFolders.length > 0
 
   const handleOpenCreate = () => {
-    if (!canManageFolders) {
+    if (!canCreateFolders) {
       return
     }
     setFormState({
@@ -61,7 +79,7 @@ export function FolderSidebar({
   }
 
   const handleOpenEdit = (folder: ConnectionFolderSummary) => {
-    if (!canManageFolders) {
+    if (!canUpdateFolders) {
       return
     }
     setFormState({
@@ -71,7 +89,7 @@ export function FolderSidebar({
   }
 
   const handleDelete = (node: ConnectionFolderNode) => {
-    if (!canManageFolders) {
+    if (!canDeleteFolders) {
       return
     }
     setDeleteTarget(node)
@@ -123,7 +141,7 @@ export function FolderSidebar({
               )}
             </div>
             <div className="flex items-center gap-2">
-              {canManageFolders ? (
+              {canCreateFolders ? (
                 collapsed ? (
                   <button
                     type="button"
@@ -184,12 +202,18 @@ export function FolderSidebar({
                   activeFolderId={activeFolderId}
                   onSelect={onFolderSelect}
                   renderActions={(node) => {
-                    if (!canManageFolders || node.folder.id === 'unassigned') {
+                    const isUnassigned = node.folder.id === 'unassigned'
+                    const allowEdit = canUpdateFolders && !isUnassigned
+                    const allowDelete = canDeleteFolders && !isUnassigned
+                    if (!allowEdit && !allowDelete) {
                       return null
                     }
                     return (
                       <FolderContextMenu
                         folder={node.folder}
+                        canEdit={allowEdit}
+                        canDelete={allowDelete}
+                        disabled={!allowEdit && !allowDelete}
                         onEdit={handleOpenEdit}
                         onDelete={() => handleDelete(node)}
                       />
@@ -200,7 +224,7 @@ export function FolderSidebar({
             ) : (
               <div className="space-y-3">
                 <EmptyFolderState
-                  canManageFolders={canManageFolders}
+                  canCreateFolders={canCreateFolders}
                   onCreateFolder={handleOpenCreate}
                 />
                 {folders.length ? (

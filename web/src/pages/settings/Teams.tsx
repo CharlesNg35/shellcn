@@ -112,7 +112,7 @@ export function Teams() {
         title="Teams"
         description="Organize users into teams to streamline permission assignment and access control. Teams can be nested by using slash-separated names (for example, Security/Incident Response)."
         action={
-          <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
+          <PermissionGuard anyOf={[PERMISSIONS.TEAM.CREATE, PERMISSIONS.TEAM.MANAGE]}>
             <Button onClick={handleOpenCreateModal}>
               <Plus className="mr-2 h-4 w-4" />
               Create Team
@@ -130,7 +130,7 @@ export function Teams() {
         onDeleteTeam={handleDeleteTeam}
         onManageResources={handleManageTeamResources}
         emptyAction={
-          <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
+          <PermissionGuard anyOf={[PERMISSIONS.TEAM.CREATE, PERMISSIONS.TEAM.MANAGE]}>
             <Button onClick={handleOpenCreateModal}>
               <Plus className="mr-2 h-4 w-4" />
               Create Team

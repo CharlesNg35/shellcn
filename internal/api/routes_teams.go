@@ -17,12 +17,12 @@ func registerTeamRoutes(api *gin.RouterGroup, teamHandler *handlers.TeamHandler,
 		teams.GET("/:id/connections", middleware.RequirePermission(checker, "team.view"), teamHandler.ListConnections)
 		teams.GET("/:id/capabilities", middleware.RequirePermission(checker, "team.view"), teamHandler.Capabilities)
 		teams.GET("/:id/folders", middleware.RequirePermission(checker, "team.view"), teamHandler.ListConnectionFolders)
-		teams.POST("", middleware.RequirePermission(checker, "team.manage"), teamHandler.Create)
-		teams.PATCH("/:id", middleware.RequirePermission(checker, "team.manage"), teamHandler.Update)
-		teams.DELETE("/:id", middleware.RequirePermission(checker, "team.manage"), teamHandler.Delete)
+		teams.POST("", middleware.RequirePermission(checker, "team.create"), teamHandler.Create)
+		teams.PATCH("/:id", middleware.RequirePermission(checker, "team.update"), teamHandler.Update)
+		teams.DELETE("/:id", middleware.RequirePermission(checker, "team.delete"), teamHandler.Delete)
 		teams.PUT("/:id/roles", middleware.RequirePermission(checker, "permission.manage"), teamHandler.SetRoles)
-		teams.POST("/:id/members", middleware.RequirePermission(checker, "team.manage"), teamHandler.AddMember)
-		teams.DELETE("/:id/members/:userID", middleware.RequirePermission(checker, "team.manage"), teamHandler.RemoveMember)
+		teams.POST("/:id/members", middleware.RequirePermission(checker, "team.member.add"), teamHandler.AddMember)
+		teams.DELETE("/:id/members/:userID", middleware.RequirePermission(checker, "team.member.remove"), teamHandler.RemoveMember)
 		teams.GET("/:id/members", middleware.RequirePermission(checker, "team.view"), teamHandler.ListMembers)
 	}
 }

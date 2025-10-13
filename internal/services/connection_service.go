@@ -172,11 +172,11 @@ func NewConnectionService(db *gorm.DB, checker PermissionChecker, opts ...Connec
 // Create registers a new connection owned by the supplied user.
 func (s *ConnectionService) Create(ctx context.Context, userID string, input CreateConnectionInput) (*ConnectionDTO, error) {
 	ctx = ensureContext(ctx)
-	canManage, err := s.canManageConnections(ctx, userID)
+	canCreate, err := s.canCreateConnections(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if !canManage {
+	if !canCreate {
 		return nil, apperrors.ErrForbidden
 	}
 
@@ -274,7 +274,7 @@ func (s *ConnectionService) ListVisible(ctx context.Context, opts ListConnection
 		return nil, err
 	}
 
-	manageAll, err := s.canManageConnections(ctx, opts.UserID)
+	allowAll, err := s.canViewAllConnections(ctx, opts.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +285,7 @@ func (s *ConnectionService) ListVisible(ctx context.Context, opts ListConnection
 	}
 
 	base := s.db.WithContext(ctx).Model(&models.Connection{}).Distinct("connections.id")
-	filtered := s.applyFilters(base, opts, userCtx, manageAll, globalView)
+	filtered := s.applyFilters(base, opts, userCtx, allowAll, globalView)
 
 	var total int64
 	if err := filtered.Count(&total).Error; err != nil {
@@ -296,7 +296,7 @@ func (s *ConnectionService) ListVisible(ctx context.Context, opts ListConnection
 	page := sanitizePage(opts.Page)
 	offset := (page - 1) * perPage
 
-	dataQuery := s.applyFilters(s.preloadScopes(ctx, opts), opts, userCtx, manageAll, globalView).
+	dataQuery := s.applyFilters(s.preloadScopes(ctx, opts), opts, userCtx, allowAll, globalView).
 		Order("LOWER(connections.name) ASC, connections.created_at DESC, connections.id ASC").
 		Limit(perPage).
 		Offset(offset)
@@ -332,7 +332,7 @@ func (s *ConnectionService) GetVisible(ctx context.Context, userID, connectionID
 		return nil, err
 	}
 
-	manageAll, err := s.canManageConnections(ctx, userID)
+	allowAll, err := s.canViewAllConnections(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +347,7 @@ func (s *ConnectionService) GetVisible(ctx context.Context, userID, connectionID
 		IncludeGrants:  includeGrants,
 	})
 	query = query.Where("connections.id = ?", connectionID)
-	query = s.applyFilters(query, ListConnectionsOptions{}, userCtx, manageAll, globalView)
+	query = s.applyFilters(query, ListConnectionsOptions{}, userCtx, allowAll, globalView)
 
 	var connection models.Connection
 	if err := query.First(&connection).Error; err != nil {
@@ -380,7 +380,7 @@ func (s *ConnectionService) CountByFolder(ctx context.Context, opts ListConnecti
 		return nil, err
 	}
 
-	manageAll, err := s.canManageConnections(ctx, opts.UserID)
+	allowAll, err := s.canViewAllConnections(ctx, opts.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +394,7 @@ func (s *ConnectionService) CountByFolder(ctx context.Context, opts ListConnecti
 		s.db.WithContext(ctx).Model(&models.Connection{}),
 		opts,
 		userCtx,
-		manageAll,
+		allowAll,
 		globalView,
 	)
 
@@ -427,7 +427,7 @@ func (s *ConnectionService) CountByProtocol(ctx context.Context, opts ListConnec
 		return nil, err
 	}
 
-	manageAll, err := s.canManageConnections(ctx, opts.UserID)
+	allowAll, err := s.canViewAllConnections(ctx, opts.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -442,7 +442,7 @@ func (s *ConnectionService) CountByProtocol(ctx context.Context, opts ListConnec
 		Select("connections.protocol_id, COUNT(DISTINCT connections.id) AS total").
 		Group("connections.protocol_id")
 
-	query = s.applyFilters(query, opts, userCtx, manageAll, globalView)
+	query = s.applyFilters(query, opts, userCtx, allowAll, globalView)
 
 	var rows []struct {
 		ProtocolID string
@@ -569,11 +569,42 @@ func (s *ConnectionService) canViewConnections(ctx context.Context, userID strin
 	return s.checker.Check(ctx, userID, "connection.view")
 }
 
-func (s *ConnectionService) canManageConnections(ctx context.Context, userID string) (bool, error) {
-	if s.checker == nil {
-		return false, nil
+func (s *ConnectionService) canViewAllConnections(ctx context.Context, userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return true, nil
 	}
-	return s.checker.Check(ctx, userID, "connection.manage")
+	if s.checker == nil {
+		return true, nil
+	}
+	for _, id := range []string{"connection.view_all", "connection.manage", "permission.manage"} {
+		ok, err := s.checker.Check(ctx, userID, id)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *ConnectionService) canCreateConnections(ctx context.Context, userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return true, nil
+	}
+	if s.checker == nil {
+		return true, nil
+	}
+	for _, id := range []string{"connection.create", "connection.manage", "permission.manage"} {
+		ok, err := s.checker.Check(ctx, userID, id)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func normalizeOptionalID(value *string) *string {

@@ -12,8 +12,8 @@ func registerConnectionFolderRoutes(api *gin.RouterGroup, handler *handlers.Conn
 	group := api.Group("/connection-folders")
 	{
 		group.GET("/tree", middleware.RequirePermission(checker, "connection.folder.view"), handler.ListTree)
-		group.POST("", middleware.RequirePermission(checker, "connection.folder.manage"), handler.Create)
-		group.PATCH("/:id", middleware.RequirePermission(checker, "connection.folder.manage"), handler.Update)
-		group.DELETE("/:id", middleware.RequirePermission(checker, "connection.folder.manage"), handler.Delete)
+		group.POST("", middleware.RequirePermission(checker, "connection.folder.create"), handler.Create)
+		group.PATCH("/:id", middleware.RequirePermission(checker, "connection.folder.update"), handler.Update)
+		group.DELETE("/:id", middleware.RequirePermission(checker, "connection.folder.delete"), handler.Delete)
 	}
 }

@@ -46,6 +46,14 @@ export function TeamMembersManager({
   removeMemberMutation,
   teamRoles,
 }: TeamMembersManagerProps) {
+  const addMemberPermissions = useMemo(
+    () => [PERMISSIONS.TEAM.MEMBER.ADD, PERMISSIONS.TEAM.MEMBER.MANAGE, PERMISSIONS.TEAM.MANAGE],
+    []
+  )
+  const removeMemberPermissions = useMemo(
+    () => [PERMISSIONS.TEAM.MEMBER.REMOVE, PERMISSIONS.TEAM.MEMBER.MANAGE, PERMISSIONS.TEAM.MANAGE],
+    []
+  )
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null)
@@ -141,7 +149,7 @@ export function TeamMembersManager({
       </div>
 
       <div className="mt-4 space-y-4">
-        <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
+        <PermissionGuard anyOf={addMemberPermissions}>
           <form
             className="flex flex-col gap-3 rounded-lg border border-dashed border-border/80 bg-muted/30 p-3"
             onSubmit={handleAddMember}
@@ -149,7 +157,7 @@ export function TeamMembersManager({
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">Add member</span>
               <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-                Requires {PERMISSIONS.TEAM.MANAGE}
+                Requires {PERMISSIONS.TEAM.MEMBER.ADD} or {PERMISSIONS.TEAM.MEMBER.MANAGE}
               </Badge>
             </div>
 
@@ -274,7 +282,7 @@ export function TeamMembersManager({
                   >
                     {member.is_active ? 'Active' : 'Inactive'}
                   </Badge>
-                  <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
+                  <PermissionGuard anyOf={removeMemberPermissions}>
                     <Button
                       type="button"
                       variant="ghost"

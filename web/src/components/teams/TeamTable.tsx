@@ -159,7 +159,7 @@ export function TeamTable({
                 <Share2 className="h-4 w-4" />
               </Button>
             </PermissionGuard>
-            <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
+            <PermissionGuard anyOf={[PERMISSIONS.TEAM.UPDATE, PERMISSIONS.TEAM.MANAGE]}>
               <Button
                 type="button"
                 variant="ghost"
@@ -179,7 +179,7 @@ export function TeamTable({
                 <PencilLine className="h-4 w-4" />
               </Button>
             </PermissionGuard>
-            <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
+            <PermissionGuard anyOf={[PERMISSIONS.TEAM.DELETE, PERMISSIONS.TEAM.MANAGE]}>
               <Button
                 type="button"
                 variant="ghost"

@@ -55,14 +55,30 @@ export function Connections() {
           ? undefined
           : teamParam
 
-  const { hasPermission } = usePermissions()
+  const { hasPermission, hasAnyPermission } = usePermissions()
   const canViewTeams = hasPermission(PERMISSIONS.TEAM.VIEW)
-  const canManageConnections = hasPermission(PERMISSIONS.CONNECTION.MANAGE)
-  const canManageTeams = hasPermission(PERMISSIONS.TEAM.MANAGE)
+  const canAssignTeams = hasAnyPermission([
+    PERMISSIONS.TEAM.VIEW_ALL,
+    PERMISSIONS.TEAM.MANAGE,
+    PERMISSIONS.TEAM.UPDATE,
+  ])
+  const canCreateConnections = hasAnyPermission([
+    PERMISSIONS.CONNECTION.CREATE,
+    PERMISSIONS.CONNECTION.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
   const canShareConnections = hasPermission(PERMISSIONS.CONNECTION.SHARE)
-  const canViewConnections = hasPermission(PERMISSIONS.CONNECTION.VIEW)
-  const isAdmin =
-    hasPermission(PERMISSIONS.PERMISSION.MANAGE) || hasPermission(PERMISSIONS.CONNECTION.MANAGE)
+  const canViewConnections = hasAnyPermission([
+    PERMISSIONS.CONNECTION.VIEW,
+    PERMISSIONS.CONNECTION.VIEW_ALL,
+    PERMISSIONS.CONNECTION.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
+  const isAdmin = hasAnyPermission([
+    PERMISSIONS.PERMISSION.MANAGE,
+    PERMISSIONS.CONNECTION.VIEW_ALL,
+    PERMISSIONS.CONNECTION.MANAGE,
+  ])
   const { data: teamsResult } = useTeams({
     enabled: canViewTeams,
     staleTime: 60_000,
@@ -295,7 +311,13 @@ export function Connections() {
           </p>
         </div>
 
-        <PermissionGuard permission={PERMISSIONS.CONNECTION.MANAGE}>
+        <PermissionGuard
+          anyOf={[
+            PERMISSIONS.CONNECTION.CREATE,
+            PERMISSIONS.CONNECTION.MANAGE,
+            PERMISSIONS.PERMISSION.MANAGE,
+          ]}
+        >
           <Button size="default" className="shadow-sm" onClick={handleStartCreateConnection}>
             <Plus className="mr-2 h-4 w-4" />
             New Connection
@@ -427,7 +449,7 @@ export function Connections() {
             <EmptyState
               hasProtocols={protocols.length > 0}
               search={normalizedSearch}
-              canCreate={canManageConnections}
+              canCreate={canCreateConnections}
               onCreateConnection={handleStartCreateConnection}
               showingActiveOnly={showActiveOnly}
             />
@@ -469,7 +491,7 @@ export function Connections() {
         folders={folderTree}
         teamId={teamFilterValue ?? null}
         teams={teams}
-        allowTeamAssignment={canManageTeams}
+        allowTeamAssignment={canAssignTeams}
         onSuccess={handleConnectionCreated}
       />
 

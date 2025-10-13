@@ -160,7 +160,7 @@ func (s *ConnectionFolderService) ListTree(ctx context.Context, userID string, t
 // Create registers a new folder.
 func (s *ConnectionFolderService) Create(ctx context.Context, userID string, input ConnectionFolderInput) (*ConnectionFolderDTO, error) {
 	ctx = ensureContext(ctx)
-	if err := s.requireManagePermission(ctx, userID); err != nil {
+	if err := s.requireFolderPermission(ctx, userID, "connection.folder.create"); err != nil {
 		return nil, err
 	}
 
@@ -200,7 +200,7 @@ func (s *ConnectionFolderService) Create(ctx context.Context, userID string, inp
 // Update modifies folder metadata.
 func (s *ConnectionFolderService) Update(ctx context.Context, userID, folderID string, input ConnectionFolderInput) (*ConnectionFolderDTO, error) {
 	ctx = ensureContext(ctx)
-	if err := s.requireManagePermission(ctx, userID); err != nil {
+	if err := s.requireFolderPermission(ctx, userID, "connection.folder.update"); err != nil {
 		return nil, err
 	}
 
@@ -251,7 +251,7 @@ func (s *ConnectionFolderService) Update(ctx context.Context, userID, folderID s
 // Delete removes a folder (and optionally reassigns child folders to parent).
 func (s *ConnectionFolderService) Delete(ctx context.Context, userID, folderID string) error {
 	ctx = ensureContext(ctx)
-	if err := s.requireManagePermission(ctx, userID); err != nil {
+	if err := s.requireFolderPermission(ctx, userID, "connection.folder.delete"); err != nil {
 		return err
 	}
 
@@ -302,18 +302,26 @@ func (s *ConnectionFolderService) resolveUserContext(ctx context.Context, userID
 	return s.connectionSvc.userContext(ctx, userID)
 }
 
-func (s *ConnectionFolderService) requireManagePermission(ctx context.Context, userID string) error {
+func (s *ConnectionFolderService) requireFolderPermission(ctx context.Context, userID, permissionID string) error {
 	if s.checker == nil {
 		return nil
 	}
-	ok, err := s.checker.Check(ctx, userID, "connection.folder.manage")
-	if err != nil {
-		return err
+	candidates := []string{
+		permissionID,
+		"connection.folder.manage",
+		"connection.manage",
+		"permission.manage",
 	}
-	if !ok {
-		return apperrors.ErrForbidden
+	for _, id := range candidates {
+		ok, err := s.checker.Check(ctx, userID, id)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return nil
+		}
 	}
-	return nil
+	return apperrors.ErrForbidden
 }
 
 func slugify(value string) string {

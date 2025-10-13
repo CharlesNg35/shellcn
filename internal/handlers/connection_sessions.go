@@ -43,8 +43,9 @@ func (h *ActiveConnectionHandler) ListActive(c *gin.Context) {
 	ctx := requestContext(c)
 
 	const (
-		permissionManage = "permission.manage"
-		connectionManage = "connection.manage"
+		permissionManage  = "permission.manage"
+		connectionViewAll = "connection.view_all"
+		connectionManage  = "connection.manage"
 	)
 
 	isAdmin := false
@@ -53,6 +54,11 @@ func (h *ActiveConnectionHandler) ListActive(c *gin.Context) {
 			response.Error(c, err)
 			return
 		} else if hasAdmin {
+			isAdmin = true
+		} else if hasConnViewAll, err := h.checker.Check(ctx, userID, connectionViewAll); err != nil {
+			response.Error(c, err)
+			return
+		} else if hasConnViewAll {
 			isAdmin = true
 		} else if hasConnManage, err := h.checker.Check(ctx, userID, connectionManage); err != nil {
 			response.Error(c, err)

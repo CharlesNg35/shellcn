@@ -182,11 +182,11 @@ func (s *TeamService) GetByID(ctx context.Context, id, requesterID string) (*mod
 		return &team, nil
 	}
 
-	canManage, err := s.canManageTeams(ctx, requesterID)
+	canViewAll, err := s.canViewAllTeams(ctx, requesterID)
 	if err != nil {
 		return nil, err
 	}
-	if canManage {
+	if canViewAll {
 		return &team, nil
 	}
 
@@ -219,13 +219,13 @@ func (s *TeamService) List(ctx context.Context, requesterID string) ([]models.Te
 		}
 	}
 
-	canManage := false
+	canViewAll := false
 	if requesterID == "" {
-		canManage = true
+		canViewAll = true
 	} else if userCtx.IsRoot {
-		canManage = true
+		canViewAll = true
 	} else {
-		canManage, err = s.canManageTeams(ctx, requesterID)
+		canViewAll, err = s.canViewAllTeams(ctx, requesterID)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +236,7 @@ func (s *TeamService) List(ctx context.Context, requesterID string) ([]models.Te
 		Preload("Roles").
 		Order("created_at ASC")
 
-	if !canManage {
+	if !canViewAll {
 		if len(userCtx.TeamIDs) == 0 {
 			return []models.Team{}, nil
 		}
@@ -543,11 +543,16 @@ func (s *TeamService) canViewTeams(ctx context.Context, userID string) (bool, er
 	return s.checker.Check(ctx, userID, "team.view")
 }
 
-func (s *TeamService) canManageTeams(ctx context.Context, userID string) (bool, error) {
+func (s *TeamService) canViewAllTeams(ctx context.Context, userID string) (bool, error) {
 	if strings.TrimSpace(userID) == "" {
 		return true, nil
 	}
 	if s.checker == nil {
+		return true, nil
+	}
+	if ok, err := s.checker.Check(ctx, userID, "team.view_all"); err != nil {
+		return false, err
+	} else if ok {
 		return true, nil
 	}
 	if ok, err := s.checker.Check(ctx, userID, "team.manage"); err != nil {

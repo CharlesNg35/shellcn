@@ -32,8 +32,17 @@ func TestConnectionFolderServiceLifecycle(t *testing.T) {
 	folderSvc, err := NewConnectionFolderService(db, &mockPermissionChecker{
 		grants: map[string]bool{
 			"connection.folder.view":   true,
+			"connection.folder.create": true,
+			"connection.folder.update": true,
+			"connection.folder.delete": true,
 			"connection.folder.manage": true,
 			"connection.view":          true,
+			"connection.view_all":      true,
+			"connection.manage":        true,
+			"permission.manage":        true,
+			"connection.create":        true,
+			"connection.update":        true,
+			"connection.delete":        true,
 		},
 	}, connectionSvc)
 	require.NoError(t, err)

@@ -25,11 +25,19 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const location = useLocation()
-  const { hasPermission } = usePermissions()
+  const { hasPermission, hasAnyPermission } = usePermissions()
 
-  const canViewConnections = hasPermission(PERMISSIONS.CONNECTION.VIEW)
-  const isAdmin =
-    hasPermission(PERMISSIONS.PERMISSION.MANAGE) || hasPermission(PERMISSIONS.CONNECTION.MANAGE)
+  const canViewConnections = hasAnyPermission([
+    PERMISSIONS.CONNECTION.VIEW,
+    PERMISSIONS.CONNECTION.VIEW_ALL,
+    PERMISSIONS.CONNECTION.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
+  const isAdmin = hasAnyPermission([
+    PERMISSIONS.PERMISSION.MANAGE,
+    PERMISSIONS.CONNECTION.VIEW_ALL,
+    PERMISSIONS.CONNECTION.MANAGE,
+  ])
 
   const { data: activeSessions = [], isLoading: activeSessionsLoading } = useActiveConnections({
     enabled: canViewConnections,

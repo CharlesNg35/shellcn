@@ -182,13 +182,15 @@ export function TeamDetail() {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Teams
             </Button>
-            <PermissionGuard permission={PERMISSIONS.TEAM.MANAGE}>
-              {canEditTeam ? (
+            {canEditTeam ? (
+              <PermissionGuard anyOf={[PERMISSIONS.TEAM.UPDATE, PERMISSIONS.TEAM.MANAGE]}>
                 <Button type="button" variant="outline" onClick={handleEdit}>
                   <PencilLine className="mr-2 h-4 w-4" />
                   Edit
                 </Button>
-              ) : null}
+              </PermissionGuard>
+            ) : null}
+            <PermissionGuard anyOf={[PERMISSIONS.TEAM.DELETE, PERMISSIONS.TEAM.MANAGE]}>
               <Button
                 type="button"
                 variant="outline"
