@@ -162,7 +162,7 @@
 - [x] Implement code splitting
 - [x] Final UI/UX polish
 
-## 2. Vault Module (Credentials, Encryption) — In Progress
+## 2. Vault Module (Credentials, Encryption)
 
 ### Phase 1: Encryption & Data Foundation (Week 1)
 
@@ -215,7 +215,37 @@
 
 ---
 
-## 3. Monitoring Module (Metrics, Health) — Not Started
+## 3. Monitoring Module (Metrics, Health) — In Progress
+
+### Phase 1: Backend Monitoring Foundation
+
+- [x] Create `internal/monitoring` package with Prometheus registry, metric definitions, and helper APIs.
+- [x] Migrate existing counters/gauges from `pkg/metrics` and update auth, permission, vault, and session services to use the new helpers.
+- [x] Gate `/metrics` route behind `monitoring.prometheus` config and respect custom endpoint paths.
+
+### Phase 2: Health & Readiness Endpoints
+
+- [x] Implement liveness/readiness manager with dependency checks (database, redis, realtime hub, maintenance jobs).
+- [x] Expose `/health`, `/health/live`, `/health/ready` with structured JSON payloads and failure status codes.
+- [x] Add unit/integration tests covering healthy vs degraded scenarios.
+
+### Phase 3: Telemetry Coverage
+
+- [x] Instrument realtime hub for connection counts, subscribe/unsubscribe, and broadcast errors.
+- [ ] Track protocol launch metrics and session durations across services.
+- [x] Add maintenance job duration/failure metrics and ensure background jobs update health status.
+
+### Phase 4: Frontend Monitoring Dashboard
+
+- [x] Add admin-only monitoring tab within `web/src/pages/settings/Security.tsx` with health summaries and key metric stats.
+- [x] Implement React Query hooks/API client for health endpoints and metrics snapshot.
+- [x] Update navigation/permissions to surface monitoring link when feature enabled.
+
+### Phase 5: Documentation & Ops Enablement
+
+- [ ] Document configuration flags, Prometheus scrape examples, and alerting guidance.
+- [ ] Update deployment docs and samples to include health endpoints and monitoring dashboard.
+- [ ] Provide migration notes for moving from legacy `pkg/metrics` usage.
 
 ---
 

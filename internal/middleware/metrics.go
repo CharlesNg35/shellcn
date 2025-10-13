@@ -6,7 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/charlesng35/shellcn/pkg/metrics"
+	"github.com/charlesng35/shellcn/internal/monitoring"
 )
 
 // Metrics records request latency metrics for each HTTP request.
@@ -15,13 +15,13 @@ func Metrics() gin.HandlerFunc {
 		start := time.Now()
 		c.Next()
 
-		duration := time.Since(start).Seconds()
+		duration := time.Since(start)
 		path := c.FullPath()
 		if path == "" {
 			path = c.Request.URL.Path
 		}
 
 		status := strconv.Itoa(c.Writer.Status())
-		metrics.APILatency.WithLabelValues(c.Request.Method, path, status).Observe(duration)
+		monitoring.ObserveAPILatency(c.Request.Method, path, status, duration)
 	}
 }

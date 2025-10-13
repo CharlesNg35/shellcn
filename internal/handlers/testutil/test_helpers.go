@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/api"
@@ -19,6 +20,7 @@ import (
 	sharedtestutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/monitoring"
 	"github.com/charlesng35/shellcn/pkg/crypto"
 	"github.com/charlesng35/shellcn/pkg/response"
 )
@@ -42,6 +44,7 @@ func NewEnv(t *testing.T) *Env {
 	gin.SetMode(gin.TestMode)
 
 	db := sharedtestutil.MustOpenTestDB(t, sharedtestutil.WithSeedData())
+	require.NoError(t, ensureProtocolSeed(db))
 
 	jwtSecret := "test-suite-super-secret-key-32-bytes!!"
 	jwtSvc, err := iauth.NewJWTService(iauth.JWTConfig{
@@ -66,12 +69,20 @@ func NewEnv(t *testing.T) *Env {
 				RefreshLength: 48,
 			},
 		},
+		Monitoring: app.MonitoringConfig{
+			Prometheus: app.PrometheusConfig{Enabled: true, Endpoint: "/metrics"},
+			Health:     app.HealthConfig{Enabled: true},
+		},
 	}
 
 	sessionSvc, err := iauth.NewSessionService(db, jwtSvc, cfg.Auth.SessionServiceConfig())
 	require.NoError(t, err)
 
-	router, err := api.NewRouter(db, jwtSvc, cfg, sessionSvc, middleware.NewMemoryRateStore())
+	mon, err := monitoring.NewModule(monitoring.Options{})
+	require.NoError(t, err)
+	monitoring.SetModule(mon)
+
+	router, err := api.NewRouter(db, jwtSvc, cfg, sessionSvc, middleware.NewMemoryRateStore(), mon)
 	require.NoError(t, err)
 
 	return &Env{
@@ -285,4 +296,32 @@ func requiresCSRFAttestation(method string) bool {
 	default:
 		return false
 	}
+}
+
+func ensureProtocolSeed(db *gorm.DB) error {
+	var count int64
+	if err := db.Model(&models.ConnectionProtocol{}).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	entry := models.ConnectionProtocol{
+		Name:          "SSH",
+		ProtocolID:    "ssh",
+		DriverID:      "ssh",
+		Module:        "ssh",
+		Icon:          "terminal",
+		Category:      "terminal",
+		Description:   "Seed protocol",
+		DefaultPort:   22,
+		SortOrder:     1,
+		DriverEnabled: true,
+		ConfigEnabled: true,
+	}
+	entry.Features = datatypes.JSON([]byte("[]"))
+	entry.Capabilities = datatypes.JSON([]byte(`{"terminal":true}`))
+
+	return db.Create(&entry).Error
 }

@@ -408,6 +408,14 @@ func init() {
 			DefaultScope: "global",
 		},
 		{
+			ID:           "monitoring.view",
+			Module:       "core",
+			Category:     "monitoring",
+			DisplayName:  "View Monitoring Dashboard",
+			Description:  "Access system monitoring summaries",
+			DefaultScope: "global",
+		},
+		{
 			ID:           "notification.view",
 			Module:       "core",
 			Category:     "notifications",

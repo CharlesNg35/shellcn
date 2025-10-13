@@ -11,8 +11,8 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/monitoring"
 	"github.com/charlesng35/shellcn/pkg/crypto"
-	"github.com/charlesng35/shellcn/pkg/metrics"
 )
 
 // DefaultRefreshTokenTTL is the fallback refresh token lifetime.
@@ -157,7 +157,7 @@ func (s *SessionService) CreateSession(userID string, meta SessionMetadata) (Tok
 		return TokenPair{}, nil, fmt.Errorf("session service: create session: %w", err)
 	}
 
-	metrics.ActiveSessions.Inc()
+	monitoring.AdjustActiveSessions(1)
 
 	accessToken, err := s.jwt.GenerateAccessToken(AccessTokenInput{
 		UserID:    userID,
@@ -301,39 +301,38 @@ func (s *SessionService) RefreshSession(refreshToken string) (TokenPair, *models
 
 // RevokeSession marks a session as revoked, preventing further refresh operations.
 func (s *SessionService) RevokeSession(sessionID string) error {
-	if strings.TrimSpace(sessionID) == "" {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
 		return ErrSessionInvalidToken
 	}
 
 	now := s.now()
 
-	var tokenToDelete string
-	if s.cache != nil {
-		var session models.Session
-		if err := s.db.Select("refresh_token").Take(&session, "id = ?", sessionID).Error; err == nil {
-			tokenToDelete = session.RefreshToken
+	var session models.Session
+	if err := s.db.
+		Where("id = ? AND revoked_at IS NULL", sessionID).
+		Take(&session).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrSessionNotFound
 		}
+		return fmt.Errorf("session service: load session for revoke: %w", err)
 	}
 
 	result := s.db.Model(&models.Session{}).
 		Where("id = ? AND revoked_at IS NULL", sessionID).
-		Updates(map[string]any{
-			"revoked_at": now,
-		})
-
+		Update("revoked_at", now)
 	if result.Error != nil {
 		return fmt.Errorf("session service: revoke session: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return ErrSessionNotFound
+	if s.cache != nil && strings.TrimSpace(session.RefreshToken) != "" {
+		_ = s.cache.Delete(context.Background(), session.RefreshToken)
 	}
 
-	if s.cache != nil && tokenToDelete != "" {
-		_ = s.cache.Delete(context.Background(), tokenToDelete)
+	monitoring.AdjustActiveSessions(-1)
+	if !session.CreatedAt.IsZero() {
+		monitoring.RecordSessionClosed(now.Sub(session.CreatedAt))
 	}
-
-	metrics.ActiveSessions.Sub(float64(result.RowsAffected))
 
 	return nil
 }
@@ -352,6 +351,21 @@ func (s *SessionService) CleanupExpired(ctx context.Context) (int64, error) {
 		Where("expires_at < ? AND revoked_at IS NULL", now).
 		Count(&activeExpired).Error; err != nil {
 		return 0, fmt.Errorf("session service: count expired sessions: %w", err)
+	}
+
+	if activeExpired > 0 {
+		var createdAt []time.Time
+		if err := s.db.WithContext(ctx).
+			Model(&models.Session{}).
+			Where("expires_at < ? AND revoked_at IS NULL", now).
+			Pluck("created_at", &createdAt).Error; err == nil {
+			for _, created := range createdAt {
+				if created.IsZero() {
+					continue
+				}
+				monitoring.RecordSessionClosed(now.Sub(created))
+			}
+		}
 	}
 
 	result := s.db.WithContext(ctx).
@@ -379,7 +393,7 @@ func (s *SessionService) CleanupExpired(ctx context.Context) (int64, error) {
 	}
 
 	if activeExpired > 0 {
-		metrics.ActiveSessions.Sub(float64(activeExpired))
+		monitoring.AdjustActiveSessions(-activeExpired)
 	}
 
 	return result.RowsAffected, nil
@@ -483,13 +497,24 @@ func (s *SessionService) RevokeUserSessions(userID string, excludeSessionIDs ...
 		}
 	}
 
+	var createdAt []time.Time
+	if err := filter(s.db.Model(&models.Session{})).Pluck("created_at", &createdAt).Error; err != nil {
+		createdAt = nil
+	}
+
 	result := filter(s.db.Model(&models.Session{})).Update("revoked_at", now)
 	if result.Error != nil {
 		return result.Error
 	}
 
 	if result.RowsAffected > 0 {
-		metrics.ActiveSessions.Sub(float64(result.RowsAffected))
+		monitoring.AdjustActiveSessions(-int64(result.RowsAffected))
+		for _, created := range createdAt {
+			if created.IsZero() {
+				continue
+			}
+			monitoring.RecordSessionClosed(now.Sub(created))
+		}
 	}
 
 	if s.cache != nil {

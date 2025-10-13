@@ -13,6 +13,7 @@ import (
 
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/monitoring"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/pkg/logger"
 )
@@ -23,7 +24,22 @@ const (
 	defaultAuditSpec          = "@daily"
 	defaultTokenSpec          = "@daily"
 	defaultVaultSpec          = "@weekly"
+
+	jobSessionCleanup = "session_cleanup"
+	jobAuditCleanup   = "audit_cleanup"
+	jobTokenCleanup   = "token_cleanup"
+	jobVaultCleanup   = "vault_cleanup"
 )
+
+func recordMaintenance(job string, start time.Time, err error) {
+	result := "success"
+	message := ""
+	if err != nil {
+		result = "failure"
+		message = err.Error()
+	}
+	monitoring.RecordMaintenanceRun(job, result, message, time.Since(start))
+}
 
 // Cleaner coordinates background maintenance tasks such as purging expired sessions,
 // pruning stale audit logs, and removing obsolete tokens.
@@ -152,8 +168,11 @@ func (c *Cleaner) Start() error {
 	if c.sessions != nil {
 		if _, err := c.cron.AddFunc(c.sessionSchedule, func() {
 			ctx := context.Background()
-			if _, err := c.sessions.CleanupExpired(ctx); err != nil {
-				c.log.Warn("session cleanup failed", zap.Error(err))
+			start := time.Now()
+			_, runErr := c.sessions.CleanupExpired(ctx)
+			recordMaintenance(jobSessionCleanup, start, runErr)
+			if runErr != nil {
+				c.log.Warn("session cleanup failed", zap.Error(runErr))
 			}
 		}); err != nil {
 			return err
@@ -163,8 +182,11 @@ func (c *Cleaner) Start() error {
 	if c.audit != nil && c.retention > 0 {
 		if _, err := c.cron.AddFunc(c.auditSchedule, func() {
 			ctx := context.Background()
-			if _, err := c.audit.CleanupOlderThan(ctx, c.retention); err != nil {
-				c.log.Warn("audit cleanup failed", zap.Error(err))
+			start := time.Now()
+			_, runErr := c.audit.CleanupOlderThan(ctx, c.retention)
+			recordMaintenance(jobAuditCleanup, start, runErr)
+			if runErr != nil {
+				c.log.Warn("audit cleanup failed", zap.Error(runErr))
 			}
 		}); err != nil {
 			return err
@@ -174,8 +196,11 @@ func (c *Cleaner) Start() error {
 	if c.db != nil {
 		if _, err := c.cron.AddFunc(c.tokenSchedule, func() {
 			ctx := context.Background()
-			if _, err := CleanupTokens(ctx, c.db, c.now()); err != nil {
-				c.log.Warn("token cleanup failed", zap.Error(err))
+			start := time.Now()
+			_, runErr := CleanupTokens(ctx, c.db, c.now())
+			recordMaintenance(jobTokenCleanup, start, runErr)
+			if runErr != nil {
+				c.log.Warn("token cleanup failed", zap.Error(runErr))
 			}
 		}); err != nil {
 			return err
@@ -185,8 +210,11 @@ func (c *Cleaner) Start() error {
 	if c.vault != nil {
 		if _, err := c.cron.AddFunc(c.vaultSchedule, func() {
 			ctx := context.Background()
-			if _, err := c.vault.CleanupOrphans(ctx); err != nil {
-				c.log.Warn("vault cleanup failed", zap.Error(err))
+			start := time.Now()
+			_, runErr := c.vault.CleanupOrphans(ctx)
+			recordMaintenance(jobVaultCleanup, start, runErr)
+			if runErr != nil {
+				c.log.Warn("vault cleanup failed", zap.Error(runErr))
 			}
 		}); err != nil {
 			return err
@@ -215,25 +243,37 @@ func (c *Cleaner) RunOnce(ctx context.Context) error {
 	var errs error
 
 	if c.sessions != nil {
-		if _, err := c.sessions.CleanupExpired(ctx); err != nil {
+		start := time.Now()
+		_, err := c.sessions.CleanupExpired(ctx)
+		recordMaintenance(jobSessionCleanup, start, err)
+		if err != nil {
 			errs = multierr.Append(errs, err)
 		}
 	}
 
 	if c.audit != nil && c.retention > 0 {
-		if _, err := c.audit.CleanupOlderThan(ctx, c.retention); err != nil {
+		start := time.Now()
+		_, err := c.audit.CleanupOlderThan(ctx, c.retention)
+		recordMaintenance(jobAuditCleanup, start, err)
+		if err != nil {
 			errs = multierr.Append(errs, err)
 		}
 	}
 
 	if c.db != nil {
-		if _, err := CleanupTokens(ctx, c.db, c.now()); err != nil {
+		start := time.Now()
+		_, err := CleanupTokens(ctx, c.db, c.now())
+		recordMaintenance(jobTokenCleanup, start, err)
+		if err != nil {
 			errs = multierr.Append(errs, err)
 		}
 	}
 
 	if c.vault != nil {
-		if _, err := c.vault.CleanupOrphans(ctx); err != nil {
+		start := time.Now()
+		_, err := c.vault.CleanupOrphans(ctx)
+		recordMaintenance(jobVaultCleanup, start, err)
+		if err != nil {
 			errs = multierr.Append(errs, err)
 		}
 	}

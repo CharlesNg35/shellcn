@@ -205,6 +205,12 @@ func (c *RedisClient) do(ctx context.Context, args ...string) (interface{}, erro
 	return resp, nil
 }
 
+// Ping verifies the redis connection is healthy.
+func (c *RedisClient) Ping(ctx context.Context) error {
+	_, err := c.doSimple(ctx, "PING")
+	return err
+}
+
 func (c *RedisClient) ensureConnection(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

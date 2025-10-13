@@ -7,9 +7,12 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/charlesng35/shellcn/internal/monitoring"
 )
 
 const (
@@ -36,9 +39,10 @@ type controlMessage struct {
 
 // Hub coordinates multiplexed realtime streams for connected clients.
 type Hub struct {
-	mu            sync.RWMutex
-	subscriptions map[string]map[string]map[*connection]struct{}
-	upgrader      websocket.Upgrader
+	mu                sync.RWMutex
+	subscriptions     map[string]map[string]map[*connection]struct{}
+	upgrader          websocket.Upgrader
+	activeConnections atomic.Int64
 }
 
 // NewHub constructs a realtime hub.
@@ -68,10 +72,13 @@ func (h *Hub) Serve(userID string, streams []string, allowed map[string]struct{}
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("realtime: upgrade failed: %v", err)
+		monitoring.RecordRealtimeFailure("upgrade", "upgrade_failed", err.Error())
 		return
 	}
 
 	client := newConnection(h, conn, userID, allowed)
+	h.activeConnections.Add(1)
+	monitoring.RecordRealtimeConnection(1)
 	h.subscribe(client, streams)
 
 	go client.writeLoop()
@@ -84,6 +91,8 @@ func (h *Hub) BroadcastToUser(stream, userID string, message Message) {
 	if stream == "" || userID == "" {
 		return
 	}
+
+	monitoring.RecordRealtimeBroadcast(stream)
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -111,12 +120,19 @@ func (h *Hub) BroadcastToUsers(stream string, userIDs []string, message Message)
 	}
 }
 
+// ActiveConnections returns the number of live websocket sessions managed by the hub.
+func (h *Hub) ActiveConnections() int64 {
+	return h.activeConnections.Load()
+}
+
 // BroadcastStream delivers a message to every subscriber listening on the provided stream.
 func (h *Hub) BroadcastStream(stream string, message Message) {
 	stream = normalizeStream(stream)
 	if stream == "" {
 		return
 	}
+
+	monitoring.RecordRealtimeBroadcast(stream)
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -148,6 +164,7 @@ func (h *Hub) subscribe(client *connection, streams []string) {
 		}
 		if !client.isAllowed(stream) {
 			log.Printf("realtime: ignoring unauthorized stream '%s' for user=%s", stream, client.userID)
+			monitoring.RecordRealtimeFailure(stream, "unauthorized", "subscription denied")
 			continue
 		}
 		if client.streams == nil {
@@ -166,6 +183,7 @@ func (h *Hub) subscribe(client *connection, streams []string) {
 
 		client.streams[stream] = struct{}{}
 		h.subscriptions[stream][client.userID][client] = struct{}{}
+		monitoring.RecordRealtimeSubscription(stream, "subscribe")
 	}
 }
 
@@ -181,7 +199,9 @@ func (h *Hub) unsubscribe(client *connection, streams []string) {
 		if stream == "" {
 			continue
 		}
-		h.removeSubscriptionLocked(client, stream, false)
+		if h.removeSubscriptionLocked(client, stream, false) {
+			monitoring.RecordRealtimeSubscription(stream, "unsubscribe")
+		}
 	}
 }
 
@@ -190,24 +210,30 @@ func (h *Hub) unregister(client *connection) {
 	defer h.mu.Unlock()
 
 	for stream := range client.streams {
-		h.removeSubscriptionLocked(client, stream, true)
+		if h.removeSubscriptionLocked(client, stream, true) {
+			monitoring.RecordRealtimeSubscription(stream, "unsubscribe")
+		}
 	}
 }
 
-func (h *Hub) removeSubscriptionLocked(client *connection, stream string, removeAll bool) {
+func (h *Hub) removeSubscriptionLocked(client *connection, stream string, removeAll bool) bool {
 	stream = normalizeStream(stream)
 	if stream == "" {
-		return
+		return false
 	}
 
 	clientsByUser, ok := h.subscriptions[stream]
 	if !ok {
-		return
+		return false
 	}
 
 	userClients := clientsByUser[client.userID]
 	if len(userClients) == 0 {
-		return
+		return false
+	}
+
+	if _, exists := userClients[client]; !exists {
+		return false
 	}
 
 	delete(userClients, client)
@@ -221,6 +247,8 @@ func (h *Hub) removeSubscriptionLocked(client *connection, stream string, remove
 	if removeAll {
 		delete(client.streams, stream)
 	}
+
+	return true
 }
 
 func (h *Hub) enqueue(client *connection, message Message) {
@@ -228,6 +256,7 @@ func (h *Hub) enqueue(client *connection, message Message) {
 	case client.send <- message:
 	default:
 		log.Printf("realtime: dropping backpressure client (user=%s)", client.userID)
+		monitoring.RecordRealtimeFailure(message.Stream, "backpressure", "send buffer full")
 		client.close()
 	}
 }
@@ -324,6 +353,8 @@ func (c *connection) writeLoop() {
 func (c *connection) close() {
 	c.once.Do(func() {
 		c.hub.unregister(c)
+		c.hub.activeConnections.Add(-1)
+		monitoring.RecordRealtimeConnection(-1)
 		close(c.send)
 		_ = c.socket.Close()
 	})

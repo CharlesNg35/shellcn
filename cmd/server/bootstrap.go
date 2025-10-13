@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -18,6 +19,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/cache"
 	"github.com/charlesng35/shellcn/internal/database"
 	"github.com/charlesng35/shellcn/internal/middleware"
+	"github.com/charlesng35/shellcn/internal/monitoring"
+	"github.com/charlesng35/shellcn/internal/monitoring/checks"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/internal/vault"
 	"github.com/charlesng35/shellcn/pkg/logger"
@@ -25,14 +28,15 @@ import (
 
 // runtimeStack bundles long-lived services used by the HTTP server.
 type runtimeStack struct {
-	DB         *gorm.DB
-	Redis      cache.Store
-	SessionSvc *iauth.SessionService
-	AuditSvc   *services.AuditService
-	VaultSvc   *services.VaultService
-	Cleaner    *maintenance.Cleaner
-	RateStore  middleware.RateStore
-	Router     *gin.Engine
+	DB          *gorm.DB
+	Redis       cache.Store
+	RedisClient *cache.RedisClient
+	SessionSvc  *iauth.SessionService
+	AuditSvc    *services.AuditService
+	VaultSvc    *services.VaultService
+	Cleaner     *maintenance.Cleaner
+	RateStore   middleware.RateStore
+	Router      *gin.Engine
 }
 
 // bootstrapRuntime initialises databases, caches, services, and the HTTP router.
@@ -47,6 +51,12 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		}
 	}()
 
+	mon, err := monitoring.NewModule(monitoring.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("initialise monitoring module: %w", err)
+	}
+	monitoring.SetModule(mon)
+
 	// enable gin debug mod
 	if debug, _ := os.LookupEnv("GIN_DEBUG"); debug != "true" {
 		fmt.Print("GIN is in RELEASE MODE; export GIN_DEBUG=true to enable Gin debug.")
@@ -57,6 +67,12 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 	if err != nil {
 		return nil, err
 	}
+	if health := mon.Health(); health != nil {
+		health.RegisterReadiness(checks.Database(stack.DB, 2*time.Second))
+		health.RegisterLiveness(monitoring.NewCheck("uptime", func(ctx context.Context) monitoring.ProbeResult {
+			return monitoring.ProbeResult{Status: monitoring.StatusUp}
+		}))
+	}
 
 	if err := database.EnsureVaultEncryptionKey(ctx, stack.DB, cfg.Vault.EncryptionKey); err != nil {
 		return nil, err
@@ -65,10 +81,20 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 	dbStore := cache.NewDatabaseStore(stack.DB)
 
 	if cfg.Cache.Redis.Enabled {
-		if stack.Redis, err = cache.NewRedisClient(cfg.Cache.RedisClientConfig()); err != nil {
-			log.Warn("redis unavailable; falling back to database-backed operations", zap.Error(err))
+		redisClient, redisErr := cache.NewRedisClient(cfg.Cache.RedisClientConfig())
+		if redisErr != nil {
+			log.Warn("redis unavailable; falling back to database-backed operations", zap.Error(redisErr))
 		} else {
+			stack.Redis = redisClient
+			stack.RedisClient = redisClient
 			log.Info("redis connected", zap.String("addr", cfg.Cache.Redis.Address))
+			if health := mon.Health(); health != nil {
+				health.RegisterReadiness(checks.Redis(redisClient, true, 2*time.Second))
+			}
+		}
+	} else {
+		if health := mon.Health(); health != nil {
+			health.RegisterReadiness(checks.Redis(nil, false, 0))
 		}
 	}
 
@@ -114,6 +140,9 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 	if err := stack.Cleaner.Start(); err != nil {
 		return nil, fmt.Errorf("start maintenance jobs: %w", err)
 	}
+	if health := mon.Health(); health != nil {
+		health.RegisterReadiness(checks.Maintenance(0))
+	}
 
 	switch {
 	case stack.Redis != nil:
@@ -122,7 +151,7 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		stack.RateStore = middleware.NewDatabaseRateStore(dbStore)
 	}
 
-	stack.Router, err = api.NewRouter(stack.DB, jwtSvc, cfg, stack.SessionSvc, stack.RateStore)
+	stack.Router, err = api.NewRouter(stack.DB, jwtSvc, cfg, stack.SessionSvc, stack.RateStore, mon)
 	if err != nil {
 		return nil, fmt.Errorf("build api router: %w", err)
 	}
@@ -147,7 +176,11 @@ func (s *runtimeStack) Shutdown(ctx context.Context, log *zap.Logger) {
 		}
 	}
 
-	if rc, ok := s.Redis.(*cache.RedisClient); ok && rc != nil {
+	if s.RedisClient != nil {
+		if err := s.RedisClient.Close(); err != nil {
+			log.Warn("redis shutdown", zap.Error(err))
+		}
+	} else if rc, ok := s.Redis.(*cache.RedisClient); ok && rc != nil {
 		if err := rc.Close(); err != nil {
 			log.Warn("redis shutdown", zap.Error(err))
 		}

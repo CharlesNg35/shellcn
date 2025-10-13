@@ -13,9 +13,9 @@ import (
 	"gorm.io/gorm/clause"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/monitoring"
 	"github.com/charlesng35/shellcn/internal/vault"
 	apperrors "github.com/charlesng35/shellcn/pkg/errors"
-	"github.com/charlesng35/shellcn/pkg/metrics"
 )
 
 // ErrIdentityNotFound indicates the requested identity does not exist or is inaccessible.
@@ -285,7 +285,7 @@ func (s *VaultService) GetIdentity(ctx context.Context, viewer ViewerContext, id
 	if includePayload {
 		resultLabel := "denied"
 		defer func() {
-			metrics.VaultPayloadRequests.WithLabelValues(resultLabel).Inc()
+			monitoring.RecordVaultPayloadRequest(resultLabel)
 		}()
 
 		perm, ok := s.sharePermissionForViewer(viewer, identity)
@@ -380,7 +380,7 @@ func (s *VaultService) CreateIdentity(ctx context.Context, viewer ViewerContext,
 	ctx = ensureContext(ctx)
 
 	defer func() {
-		metrics.VaultOperations.WithLabelValues("identity_create", operationResult(err)).Inc()
+		monitoring.RecordVaultOperation("identity_create", operationResult(err))
 	}()
 
 	if !viewer.IsRoot {
@@ -499,7 +499,7 @@ func (s *VaultService) UpdateIdentity(ctx context.Context, viewer ViewerContext,
 	ctx = ensureContext(ctx)
 
 	defer func() {
-		metrics.VaultOperations.WithLabelValues("identity_update", operationResult(err)).Inc()
+		monitoring.RecordVaultOperation("identity_update", operationResult(err))
 	}()
 
 	id := strings.TrimSpace(identityID)
@@ -631,7 +631,7 @@ func (s *VaultService) DeleteIdentity(ctx context.Context, viewer ViewerContext,
 	ctx = ensureContext(ctx)
 
 	defer func() {
-		metrics.VaultOperations.WithLabelValues("identity_delete", operationResult(err)).Inc()
+		monitoring.RecordVaultOperation("identity_delete", operationResult(err))
 	}()
 
 	id := strings.TrimSpace(identityID)
@@ -682,7 +682,7 @@ func (s *VaultService) CreateShare(ctx context.Context, viewer ViewerContext, id
 	ctx = ensureContext(ctx)
 
 	defer func() {
-		metrics.VaultOperations.WithLabelValues("identity_share_grant", operationResult(err)).Inc()
+		monitoring.RecordVaultOperation("identity_share_grant", operationResult(err))
 	}()
 
 	if !viewer.IsRoot {
@@ -773,7 +773,7 @@ func (s *VaultService) DeleteShare(ctx context.Context, viewer ViewerContext, sh
 	ctx = ensureContext(ctx)
 
 	defer func() {
-		metrics.VaultOperations.WithLabelValues("identity_share_revoke", operationResult(err)).Inc()
+		monitoring.RecordVaultOperation("identity_share_revoke", operationResult(err))
 	}()
 
 	id := strings.TrimSpace(shareID)

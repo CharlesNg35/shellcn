@@ -14,10 +14,10 @@ import (
 	"github.com/charlesng35/shellcn/internal/auth/mfa"
 	"github.com/charlesng35/shellcn/internal/auth/providers"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/monitoring"
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/pkg/errors"
-	"github.com/charlesng35/shellcn/pkg/metrics"
 	"github.com/charlesng35/shellcn/pkg/response"
 )
 
@@ -250,7 +250,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 func (h *AuthHandler) handleLocalLogin(c *gin.Context, req loginRequest) {
 	lp, err := providers.NewLocalProvider(h.db, providers.LocalConfig{})
 	if err != nil {
-		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		monitoring.RecordAuthAttempt("failure")
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
@@ -262,14 +262,14 @@ func (h *AuthHandler) handleLocalLogin(c *gin.Context, req loginRequest) {
 		UserAgent:  c.Request.UserAgent(),
 	})
 	if err != nil {
-		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		monitoring.RecordAuthAttempt("failure")
 		response.Error(c, errors.ErrInvalidCredentials)
 		return
 	}
 
 	if user.MFAEnabled {
 		if h.totp == nil {
-			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			monitoring.RecordAuthAttempt("failure")
 			response.Error(c, errors.ErrInternalServer)
 			return
 		}
@@ -282,7 +282,7 @@ func (h *AuthHandler) handleLocalLogin(c *gin.Context, req loginRequest) {
 			},
 		})
 		if err != nil {
-			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			monitoring.RecordAuthAttempt("failure")
 			response.Error(c, errors.ErrInternalServer)
 			return
 		}
@@ -322,12 +322,12 @@ func (h *AuthHandler) handleLocalLogin(c *gin.Context, req loginRequest) {
 		},
 	})
 	if err != nil {
-		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		monitoring.RecordAuthAttempt("failure")
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
 
-	metrics.AuthAttempts.WithLabelValues("success").Inc()
+	monitoring.RecordAuthAttempt("success")
 	h.respondWithTokens(c, user, pair)
 }
 
@@ -339,14 +339,14 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 
 	providerModel, cfg, err := h.providers.LoadLDAPConfig(requestContext(c))
 	if err != nil || !providerModel.Enabled {
-		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		monitoring.RecordAuthAttempt("failure")
 		response.Error(c, errors.ErrUnauthorized)
 		return
 	}
 
 	authenticator, err := providers.NewLDAPAuthenticator(*cfg, providers.LDAPAuthenticatorOptions{})
 	if err != nil {
-		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		monitoring.RecordAuthAttempt("failure")
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
@@ -356,7 +356,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 		Password:   req.Password,
 	})
 	if err != nil {
-		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		monitoring.RecordAuthAttempt("failure")
 		response.Error(c, errors.ErrInvalidCredentials)
 		return
 	}
@@ -369,7 +369,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 		},
 	})
 	if err != nil {
-		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		monitoring.RecordAuthAttempt("failure")
 		switch {
 		case stdErrors.Is(err, iauth.ErrSSOUserNotFound),
 			stdErrors.Is(err, iauth.ErrSSOProviderMismatch),
@@ -384,7 +384,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 
 	if h.ldapSync != nil && cfg.SyncGroups {
 		if _, syncErr := h.ldapSync.SyncGroups(requestContext(c), *cfg, user, identity.Groups); syncErr != nil {
-			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			monitoring.RecordAuthAttempt("failure")
 			if session != nil {
 				_ = h.sessions.RevokeSession(session.ID)
 			}
@@ -393,7 +393,7 @@ func (h *AuthHandler) handleLDAPLogin(c *gin.Context, req loginRequest) {
 		}
 	}
 
-	metrics.AuthAttempts.WithLabelValues("success").Inc()
+	monitoring.RecordAuthAttempt("success")
 	h.respondWithTokens(c, user, tokens)
 }
 
@@ -413,7 +413,7 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 	if err != nil {
 		switch {
 		case stdErrors.Is(err, iauth.ErrMFAChallengeExpired), stdErrors.Is(err, iauth.ErrMFAChallengeNotFound):
-			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			monitoring.RecordAuthAttempt("failure")
 			response.Error(c, errors.ErrMFAInvalid)
 		default:
 			response.Error(c, errors.ErrInternalServer)
@@ -424,16 +424,16 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 	valid, verifyErr := h.totp.VerifyCode(userID, req.MFAToken)
 	if verifyErr != nil {
 		if stdErrors.Is(verifyErr, mfa.ErrSecretNotFound) {
-			metrics.AuthAttempts.WithLabelValues("failure").Inc()
+			monitoring.RecordAuthAttempt("failure")
 			response.Error(c, errors.ErrMFAInvalid)
 			return
 		}
-		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		monitoring.RecordAuthAttempt("failure")
 		response.Error(c, errors.ErrInternalServer)
 		return
 	}
 	if !valid {
-		metrics.AuthAttempts.WithLabelValues("failure").Inc()
+		monitoring.RecordAuthAttempt("failure")
 		response.Error(c, errors.ErrMFAInvalid)
 		return
 	}
@@ -461,7 +461,7 @@ func (h *AuthHandler) VerifyMFA(c *gin.Context) {
 		return
 	}
 
-	metrics.AuthAttempts.WithLabelValues("success").Inc()
+	monitoring.RecordAuthAttempt("success")
 	h.respondWithTokens(c, &user, pair)
 }
 

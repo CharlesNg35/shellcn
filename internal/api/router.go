@@ -1,13 +1,14 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/app"
@@ -16,6 +17,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/auth/providers"
 	"github.com/charlesng35/shellcn/internal/handlers"
 	"github.com/charlesng35/shellcn/internal/middleware"
+	"github.com/charlesng35/shellcn/internal/monitoring"
+	"github.com/charlesng35/shellcn/internal/monitoring/checks"
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/realtime"
 	"github.com/charlesng35/shellcn/internal/services"
@@ -26,7 +29,7 @@ import (
 
 // NewRouter builds the Gin engine, wires middleware and registers core routes.
 // Additional module routers can mount under /api in later phases.
-func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *iauth.SessionService, rateStore middleware.RateStore) (*gin.Engine, error) {
+func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *iauth.SessionService, rateStore middleware.RateStore, mon *monitoring.Module) (*gin.Engine, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database handle must be provided")
 	}
@@ -54,7 +57,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	// Basic rate limiting: 300 requests/minute per IP+path
 	r.Use(middleware.RateLimit(rateStore, 300, time.Minute))
 
-	registerHealthRoutes(r, db)
+	registerHealthRoutes(r, cfg, mon)
 
 	// Decode the vault encryption key from hex/base64 to raw bytes
 	encryptionKey, err := app.DecodeKey(cfg.Vault.EncryptionKey)
@@ -74,6 +77,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err != nil {
 		return nil, err
 	}
+	monitoringHandler := handlers.NewMonitoringHandler(mon, cfg)
 
 	authProviderSvc, err := services.NewAuthProviderService(db, auditSvc, encryptionKey)
 	if err != nil {
@@ -199,6 +203,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 
 	// Realtime hub + notifications
 	realtimeHub := realtime.NewHub()
+	if mon != nil && mon.Health() != nil {
+		mon.Health().RegisterReadiness(checks.Realtime(realtimeHub))
+	}
 
 	notificationHandler, err := handlers.NewNotificationHandler(db, realtimeHub)
 	if err != nil {
@@ -206,6 +213,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	// ----- Realtime & Notification Routes -------------------------------------
 	registerNotificationRoutes(api, notificationHandler, checker)
+	registerMonitoringRoutes(api, monitoringHandler, checker)
 
 	realtimeHandler := handlers.NewRealtimeHandler(
 		realtimeHub,
@@ -269,6 +277,23 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err != nil {
 		return nil, err
 	}
+	if mon != nil && mon.Health() != nil {
+		mon.Health().RegisterReadiness(monitoring.NewCheck("protocol_catalog", func(ctx context.Context) monitoring.ProbeResult {
+			start := time.Now()
+			protocols, err := protocolSvc.ListAll(ctx)
+			if err != nil {
+				return monitoring.ResultFromError("protocol_catalog", err, time.Since(start))
+			}
+			if len(protocols) == 0 {
+				return monitoring.ProbeResult{
+					Status:   monitoring.StatusUp,
+					Details:  "no protocols available",
+					Duration: time.Since(start),
+				}
+			}
+			return monitoring.ProbeResult{Status: monitoring.StatusUp, Duration: time.Since(start)}
+		}))
+	}
 	protocolHandler := handlers.NewProtocolHandler(protocolSvc)
 	registerProtocolRoutes(api, protocolHandler, checker)
 	// ----- End Protocol Routes -------------------------------------------------
@@ -293,8 +318,17 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	// ----- End Setup Routes ----------------------------------------------------
 	// ----- End Protected API Group --------------------------------------------
 
-	// Metrics endpoint
-	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	metricsEndpoint := strings.TrimSpace(cfg.Monitoring.Prometheus.Endpoint)
+	if metricsEndpoint == "" {
+		metricsEndpoint = "/metrics"
+	}
+	if !strings.HasPrefix(metricsEndpoint, "/") {
+		metricsEndpoint = "/" + metricsEndpoint
+	}
+
+	if mon != nil && cfg.Monitoring.Prometheus.Enabled {
+		r.GET(metricsEndpoint, gin.WrapH(mon.Handler()))
+	}
 
 	// Serve frontend static files
 	staticFiles, err := web.FS()
@@ -305,6 +339,14 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 
 	// NotFound fallback (SPA - serve index.html for client-side routing)
 	r.NoRoute(func(c *gin.Context) {
+		if !cfg.Monitoring.Prometheus.Enabled && c.Request.URL.Path == metricsEndpoint {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		if c.Request.URL.Path == "/metrics" && metricsEndpoint != "/metrics" {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
 		// If the request is for an API endpoint, return 404
 		if len(c.Request.URL.Path) >= 4 && c.Request.URL.Path[:4] == "/api" {
 			middleware.NotFoundHandler(c)
