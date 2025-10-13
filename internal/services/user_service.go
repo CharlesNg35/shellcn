@@ -181,6 +181,31 @@ func (s *UserService) GetByID(ctx context.Context, id string) (*models.User, err
 	return &user, nil
 }
 
+// FindByEmail returns a user matching the provided email, or nil if none exists.
+func (s *UserService) FindByEmail(ctx context.Context, email string) (*models.User, error) {
+	ctx = ensureContext(ctx)
+
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return nil, nil
+	}
+
+	var user models.User
+	err := s.db.WithContext(ctx).
+		Preload("Teams").
+		Preload("Roles.Permissions").
+		Where("LOWER(email) = ?", email).
+		First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("user service: find by email: %w", err)
+	}
+
+	return &user, nil
+}
+
 // List retrieves users matching the supplied filters with pagination.
 func (s *UserService) List(ctx context.Context, opts ListUsersOptions) ([]models.User, int64, error) {
 	ctx = ensureContext(ctx)

@@ -48,6 +48,40 @@ func TestUserServiceSetRoles(t *testing.T) {
 	require.Len(t, updated.Roles, 0)
 }
 
+func TestUserServiceFindByEmail(t *testing.T) {
+	db := openUserServiceTestDB(t)
+	auditSvc, err := NewAuditService(db)
+	require.NoError(t, err)
+
+	userSvc, err := NewUserService(db, auditSvc)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	hashed, err := crypto.HashPassword("strongPassword123!")
+	require.NoError(t, err)
+
+	user := &models.User{
+		Username: "lookup-user",
+		Email:    "lookup@example.com",
+		Password: hashed,
+	}
+	require.NoError(t, db.Create(user).Error)
+
+	found, err := userSvc.FindByEmail(ctx, "Lookup@example.com")
+	require.NoError(t, err)
+	require.NotNil(t, found)
+	require.Equal(t, user.ID, found.ID)
+
+	missing, err := userSvc.FindByEmail(ctx, "missing@example.com")
+	require.NoError(t, err)
+	require.Nil(t, missing)
+
+	empty, err := userSvc.FindByEmail(ctx, "   ")
+	require.NoError(t, err)
+	require.Nil(t, empty)
+}
+
 func openUserServiceTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 

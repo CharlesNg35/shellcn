@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/pkg/crypto"
 	"github.com/charlesng35/shellcn/pkg/mail"
 )
 
@@ -57,6 +58,57 @@ func TestInviteServiceGenerateWithTeam(t *testing.T) {
 	require.Equal(t, team.ID, *invite.TeamID)
 	require.NotNil(t, invite.Team)
 	require.Equal(t, team.Name, invite.Team.Name)
+}
+
+func TestInviteServiceTeamInviteAllowsExistingUser(t *testing.T) {
+	db := openInviteTestDB(t)
+
+	team := &models.Team{Name: "Platform"}
+	require.NoError(t, db.Create(team).Error)
+
+	hashed, err := crypto.HashPassword("ExistingPass123!")
+	require.NoError(t, err)
+
+	user := &models.User{
+		Username: "existing",
+		Email:    "existing@example.com",
+		Password: hashed,
+	}
+	require.NoError(t, db.Create(user).Error)
+
+	svc, err := NewInviteService(db, nil)
+	require.NoError(t, err)
+
+	invite, token, link, err := svc.GenerateInvite(context.Background(), user.Email, "admin", team.ID)
+	require.NoError(t, err)
+	require.NotEmpty(t, token)
+	require.NotEmpty(t, link)
+	require.NotNil(t, invite.TeamID)
+	require.Equal(t, team.ID, *invite.TeamID)
+}
+
+func TestInviteServiceTeamInviteRejectsExistingMember(t *testing.T) {
+	db := openInviteTestDB(t)
+
+	team := &models.Team{Name: "Security"}
+	require.NoError(t, db.Create(team).Error)
+
+	hashed, err := crypto.HashPassword("MemberPass123!")
+	require.NoError(t, err)
+
+	user := &models.User{
+		Username: "member",
+		Email:    "member@example.com",
+		Password: hashed,
+	}
+	require.NoError(t, db.Create(user).Error)
+	require.NoError(t, db.Model(team).Association("Users").Append(user))
+
+	svc, err := NewInviteService(db, nil)
+	require.NoError(t, err)
+
+	_, _, _, err = svc.GenerateInvite(context.Background(), user.Email, "admin", team.ID)
+	require.ErrorIs(t, err, ErrInviteUserAlreadyInTeam)
 }
 
 func TestInviteServiceRejectsExistingUserEmail(t *testing.T) {

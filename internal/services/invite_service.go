@@ -32,6 +32,8 @@ var (
 	ErrInviteAlreadyPending = errors.New("invite: already pending")
 	// ErrInviteEmailInUse indicates an existing user account already uses the email.
 	ErrInviteEmailInUse = errors.New("invite: email already registered")
+	// ErrInviteUserAlreadyInTeam indicates the user is already a member of the target team.
+	ErrInviteUserAlreadyInTeam = errors.New("invite: user already in team")
 )
 
 // InviteOption customises InviteService behaviour.
@@ -132,13 +134,9 @@ func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy, te
 		return nil, "", "", ErrInviteAlreadyPending
 	}
 
-	if err := s.ensureEmailAvailable(ctx, email); err != nil {
-		return nil, "", "", err
-	}
-
-	rawToken, err := crypto.GenerateToken(s.tokenLength)
+	existingUser, err := s.findUserByEmail(ctx, email)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("invite service: generate token: %w", err)
+		return nil, "", "", err
 	}
 
 	var team *models.Team
@@ -151,6 +149,23 @@ func (s *InviteService) GenerateInvite(ctx context.Context, email, invitedBy, te
 			return nil, "", "", fmt.Errorf("invite service: verify team: %w", err)
 		}
 		team = &teamModel
+
+		if existingUser != nil {
+			inTeam, err := s.userAlreadyInTeam(ctx, existingUser.ID, team.ID)
+			if err != nil {
+				return nil, "", "", err
+			}
+			if inTeam {
+				return nil, "", "", ErrInviteUserAlreadyInTeam
+			}
+		}
+	} else if existingUser != nil {
+		return nil, "", "", ErrInviteEmailInUse
+	}
+
+	rawToken, err := crypto.GenerateToken(s.tokenLength)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("invite service: generate token: %w", err)
 	}
 
 	invite = &models.UserInvite{
@@ -404,18 +419,39 @@ func (s *InviteService) refreshInvite(ctx context.Context, inviteID string, send
 	return &invite, rawToken, link, nil
 }
 
-func (s *InviteService) ensureEmailAvailable(ctx context.Context, email string) error {
+func (s *InviteService) findUserByEmail(ctx context.Context, email string) (*models.User, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return nil, nil
+	}
+
+	var user models.User
+	err := s.db.WithContext(ctx).
+		Preload("Teams").
+		Where("LOWER(email) = ?", email).
+		First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("invite service: find user by email: %w", err)
+	}
+	return &user, nil
+}
+
+func (s *InviteService) userAlreadyInTeam(ctx context.Context, userID, teamID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" || strings.TrimSpace(teamID) == "" {
+		return false, nil
+	}
+
 	var count int64
 	if err := s.db.WithContext(ctx).
-		Model(&models.User{}).
-		Where("LOWER(email) = ?", email).
+		Table("user_teams").
+		Where("user_id = ? AND team_id = ?", userID, teamID).
 		Count(&count).Error; err != nil {
-		return fmt.Errorf("invite service: check email availability: %w", err)
+		return false, fmt.Errorf("invite service: check team membership: %w", err)
 	}
-	if count > 0 {
-		return ErrInviteEmailInUse
-	}
-	return nil
+	return count > 0, nil
 }
 
 // Delete removes an invite if it has not been accepted already.

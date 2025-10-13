@@ -123,6 +123,8 @@ func (h *InviteHandler) Create(c *gin.Context) {
 			response.Error(c, appErrors.NewBadRequest("An active invite already exists for this email"))
 		case errors.Is(err, services.ErrInviteEmailInUse):
 			response.Error(c, appErrors.NewBadRequest("An account already exists for this email address"))
+		case errors.Is(err, services.ErrInviteUserAlreadyInTeam):
+			response.Error(c, appErrors.NewBadRequest("User is already a member of the selected team"))
 		case errors.Is(err, services.ErrTeamNotFound):
 			response.Error(c, appErrors.NewBadRequest("Selected team could not be found"))
 		default:
@@ -300,33 +302,69 @@ func (h *InviteHandler) Redeem(c *gin.Context) {
 
 	requiresVerification := false
 
-	isActive := !requiresVerification
-
-	userInput := services.CreateUserInput{
-		Username:  strings.TrimSpace(req.Username),
-		Email:     strings.ToLower(strings.TrimSpace(invite.Email)),
-		Password:  req.Password,
-		FirstName: strings.TrimSpace(req.FirstName),
-		LastName:  strings.TrimSpace(req.LastName),
-		IsActive:  &isActive,
-	}
-
-	user, err := h.users.Create(ctx, userInput)
+	existingUser, err := h.users.FindByEmail(ctx, invite.Email)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
 
-	if requiresVerification && h.verifier != nil {
-		if _, _, err := h.verifier.CreateToken(ctx, user.ID, user.Email); err != nil {
-			_ = h.users.Delete(ctx, user.ID)
-			response.Error(c, appErrors.ErrInternalServer)
+	createdUser := false
+	user := existingUser
+	isActive := !requiresVerification
+
+	if user == nil {
+		userInput := services.CreateUserInput{
+			Username:  strings.TrimSpace(req.Username),
+			Email:     strings.ToLower(strings.TrimSpace(invite.Email)),
+			Password:  req.Password,
+			FirstName: strings.TrimSpace(req.FirstName),
+			LastName:  strings.TrimSpace(req.LastName),
+			IsActive:  &isActive,
+		}
+
+		user, err = h.users.Create(ctx, userInput)
+		if err != nil {
+			response.Error(c, err)
 			return
+		}
+		createdUser = true
+
+		if requiresVerification && h.verifier != nil {
+			if _, _, err := h.verifier.CreateToken(ctx, user.ID, user.Email); err != nil {
+				_ = h.users.Delete(ctx, user.ID)
+				response.Error(c, appErrors.ErrInternalServer)
+				return
+			}
+		}
+	}
+
+	addedToTeam := false
+	if invite.TeamID != nil && h.teams != nil {
+		err := h.teams.AddMember(ctx, *invite.TeamID, user.ID)
+		if err != nil && !errors.Is(err, services.ErrTeamMemberAlreadyExists) {
+			if createdUser {
+				_ = h.users.Delete(ctx, user.ID)
+			}
+			switch {
+			case errors.Is(err, services.ErrTeamNotFound):
+				response.Error(c, appErrors.NewBadRequest("Assigned team no longer exists"))
+			default:
+				response.Error(c, err)
+			}
+			return
+		}
+		if err == nil {
+			addedToTeam = true
 		}
 	}
 
 	if err := h.invites.AcceptInvite(ctx, invite.ID); err != nil {
-		_ = h.users.Delete(ctx, user.ID)
+		if invite.TeamID != nil && h.teams != nil && addedToTeam {
+			_ = h.teams.RemoveMember(ctx, *invite.TeamID, user.ID)
+		}
+		if createdUser {
+			_ = h.users.Delete(ctx, user.ID)
+		}
 		switch {
 		case errors.Is(err, services.ErrInviteAlreadyUsed):
 			response.Error(c, appErrors.NewBadRequest("Invite has already been used"))
@@ -338,21 +376,12 @@ func (h *InviteHandler) Redeem(c *gin.Context) {
 		return
 	}
 
-	if invite.TeamID != nil && h.teams != nil {
-		if err := h.teams.AddMember(ctx, *invite.TeamID, user.ID); err != nil {
-			if errors.Is(err, services.ErrTeamMemberAlreadyExists) {
-				// No action needed; user already belongs to the team.
-			} else {
-				_ = h.users.Delete(ctx, user.ID)
-				switch {
-				case errors.Is(err, services.ErrTeamNotFound):
-					response.Error(c, appErrors.NewBadRequest("Assigned team no longer exists"))
-				default:
-					response.Error(c, err)
-				}
-				return
-			}
-		}
+	message := "Account created successfully. You can now sign in."
+	if !createdUser {
+		message = "Team access granted successfully. You can now sign in."
+	}
+	if requiresVerification {
+		message = "Account created. Please check your email to verify and activate your account."
 	}
 
 	payload := redeemInviteResponse{
@@ -364,11 +393,7 @@ func (h *InviteHandler) Redeem(c *gin.Context) {
 			LastName:  user.LastName,
 			IsActive:  user.IsActive,
 		},
-		Message: "Account created successfully. You can now sign in.",
-	}
-
-	if requiresVerification {
-		payload.Message = "Account created. Please check your email to verify and activate your account."
+		Message: message,
 	}
 
 	response.Success(c, http.StatusCreated, payload)

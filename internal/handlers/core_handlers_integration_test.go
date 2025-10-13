@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/charlesng35/shellcn/internal/handlers/testutil"
+	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/services"
 )
 
@@ -587,6 +589,92 @@ func TestInviteHandler_Flow(t *testing.T) {
 		}
 	}
 	require.True(t, found, "invited user should be added to the team")
+}
+
+func TestInviteHandler_TeamInviteExistingUser(t *testing.T) {
+	env := testutil.NewEnv(t)
+	root := env.CreateRootUser("ExistingInvitePassw0rd!")
+	login := env.Login(root.Username, "ExistingInvitePassw0rd!")
+	token := login.AccessToken
+
+	teamPayload := map[string]any{
+		"name":        "Customer Success",
+		"description": "supports customers",
+	}
+	teamResp := env.Request(http.MethodPost, "/api/teams", teamPayload, token)
+	require.Equal(t, http.StatusCreated, teamResp.Code, teamResp.Body.String())
+
+	var team map[string]any
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, teamResp).Data, &team)
+	teamID := team["id"].(string)
+
+	auditSvc, err := services.NewAuditService(env.DB)
+	require.NoError(t, err)
+	userSvc, err := services.NewUserService(env.DB, auditSvc)
+	require.NoError(t, err)
+
+	existingEmail := "team-existing-" + uuid.NewString() + "@example.com"
+	existingUsername := "team-existing-" + uuid.NewString()
+	existingUser, err := userSvc.Create(context.Background(), services.CreateUserInput{
+		Username: existingUsername,
+		Email:    existingEmail,
+		Password: "ExistingPass123!",
+	})
+	require.NoError(t, err)
+
+	createPayload := map[string]any{
+		"email":   existingEmail,
+		"team_id": teamID,
+	}
+	createResp := env.Request(http.MethodPost, "/api/invites", createPayload, token)
+	require.Equal(t, http.StatusCreated, createResp.Code, createResp.Body.String())
+
+	var createData struct {
+		Invite map[string]any `json:"invite"`
+		Token  string         `json:"token"`
+		Link   string         `json:"link"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, createResp).Data, &createData)
+	require.NotEmpty(t, createData.Token)
+	require.Equal(t, existingEmail, createData.Invite["email"])
+
+	redeemPayload := map[string]any{
+		"token":      createData.Token,
+		"username":   existingUser.Username,
+		"password":   "DoesNotMatter123!",
+		"first_name": existingUser.FirstName,
+		"last_name":  existingUser.LastName,
+	}
+	redeemResp := env.Request(http.MethodPost, "/api/auth/invite/redeem", redeemPayload, "")
+	require.Equal(t, http.StatusCreated, redeemResp.Code, redeemResp.Body.String())
+
+	var redeemData struct {
+		User    map[string]any `json:"user"`
+		Message string         `json:"message"`
+	}
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, redeemResp).Data, &redeemData)
+	require.Equal(t, strings.ToLower(existingEmail), strings.ToLower(redeemData.User["email"].(string)))
+	require.Contains(t, strings.ToLower(redeemData.Message), "team access granted")
+
+	memberList := env.Request(http.MethodGet, "/api/teams/"+teamID+"/members", nil, token)
+	require.Equal(t, http.StatusOK, memberList.Code, memberList.Body.String())
+	var members []map[string]any
+	testutil.DecodeInto(t, testutil.DecodeResponse(t, memberList).Data, &members)
+
+	found := false
+	for _, member := range members {
+		if member["id"] == existingUser.ID {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "existing user should be added to the team")
+
+	var count int64
+	require.NoError(t, env.DB.Model(&models.User{}).
+		Where("LOWER(email) = ?", strings.ToLower(existingEmail)).
+		Count(&count).Error)
+	require.Equal(t, int64(1), count)
 }
 
 func TestSecurityHandler_Audit(t *testing.T) {
