@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"go.uber.org/zap"
@@ -45,6 +46,11 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 			stack.Shutdown(context.Background(), log)
 		}
 	}()
+
+	// enable gin debug mod
+	if debug, _ := os.LookupEnv("GIN_DEBUG"); debug != "true" {
+		gin.SetMode(gin.ReleaseMode)
+	}
 
 	stack.DB, err = initialiseDatabase(cfg)
 	if err != nil {
