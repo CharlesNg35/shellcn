@@ -15,6 +15,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/vault"
 	apperrors "github.com/charlesng35/shellcn/pkg/errors"
+	"github.com/charlesng35/shellcn/pkg/metrics"
 )
 
 // ErrIdentityNotFound indicates the requested identity does not exist or is inaccessible.
@@ -282,8 +283,19 @@ func (s *VaultService) GetIdentity(ctx context.Context, viewer ViewerContext, id
 
 	var payload map[string]any
 	if includePayload {
+		resultLabel := "denied"
+		defer func() {
+			metrics.VaultPayloadRequests.WithLabelValues(resultLabel).Inc()
+		}()
+
+		perm, ok := s.sharePermissionForViewer(viewer, identity)
+		if !ok || perm != models.IdentitySharePermissionEdit {
+			return IdentityDTO{}, apperrors.ErrForbidden
+		}
+
 		secret, err := s.decryptPayload(identity.EncryptedPayload)
 		if err != nil {
+			resultLabel = "error"
 			return IdentityDTO{}, err
 		}
 		payload = secret
@@ -297,10 +309,12 @@ func (s *VaultService) GetIdentity(ctx context.Context, viewer ViewerContext, id
 		if err := s.db.WithContext(ctx).Model(&models.Identity{}).
 			Where("id = ?", identity.ID).
 			UpdateColumns(update).Error; err != nil {
+			resultLabel = "error"
 			return IdentityDTO{}, fmt.Errorf("vault service: update usage stats: %w", err)
 		}
 		identity.UsageCount++
 		identity.LastUsedAt = &now
+		resultLabel = "allowed"
 	}
 
 	count, err := s.connectionCount(ctx, identity.ID)
@@ -321,7 +335,9 @@ func (s *VaultService) AuthorizeIdentityUse(ctx context.Context, viewer ViewerCo
 		return models.Identity{}, apperrors.NewBadRequest("identity id is required")
 	}
 
-	query := s.db.WithContext(ctx).Model(&models.Identity{})
+	query := s.db.WithContext(ctx).
+		Model(&models.Identity{}).
+		Preload("Shares", "revoked_at IS NULL")
 	if !viewer.IsRoot {
 		now := time.Now().UTC()
 		query = query.Joins("LEFT JOIN identity_shares ON identity_shares.identity_id = identities.id AND identity_shares.revoked_at IS NULL").
@@ -347,40 +363,59 @@ func (s *VaultService) AuthorizeIdentityUse(ctx context.Context, viewer ViewerCo
 		}
 		return models.Identity{}, fmt.Errorf("vault service: authorize identity: %w", err)
 	}
+
+	perm, ok := s.sharePermissionForViewer(viewer, identity)
+	if !ok {
+		return models.Identity{}, ErrIdentityNotFound
+	}
+	if perm != models.IdentitySharePermissionUse && perm != models.IdentitySharePermissionEdit {
+		return models.Identity{}, apperrors.ErrForbidden
+	}
+
 	return identity, nil
 }
 
 // CreateIdentity stores a new encrypted identity and returns the persisted record.
-func (s *VaultService) CreateIdentity(ctx context.Context, viewer ViewerContext, input CreateIdentityInput) (IdentityDTO, error) {
+func (s *VaultService) CreateIdentity(ctx context.Context, viewer ViewerContext, input CreateIdentityInput) (dto IdentityDTO, err error) {
 	ctx = ensureContext(ctx)
 
+	defer func() {
+		metrics.VaultOperations.WithLabelValues("identity_create", operationResult(err)).Inc()
+	}()
+
 	if !viewer.IsRoot {
-		if ok, err := s.checkPermission(ctx, viewer.UserID, "vault.create"); err != nil {
+		var ok bool
+		if ok, err = s.checkPermission(ctx, viewer.UserID, "vault.create"); err != nil {
 			return IdentityDTO{}, err
 		} else if !ok {
-			return IdentityDTO{}, apperrors.ErrForbidden
+			err = apperrors.ErrForbidden
+			return IdentityDTO{}, err
 		}
 	}
 
-	if err := validateIdentityInput(input); err != nil {
-		return IdentityDTO{}, apperrors.NewBadRequest(err.Error())
+	if validationErr := validateIdentityInput(input); validationErr != nil {
+		err = apperrors.NewBadRequest(validationErr.Error())
+		return IdentityDTO{}, err
 	}
 
-	payloadBytes, err := json.Marshal(input.Payload)
-	if err != nil {
-		return IdentityDTO{}, apperrors.NewBadRequest("invalid credential payload")
+	var payloadBytes []byte
+	if payloadBytes, err = json.Marshal(input.Payload); err != nil {
+		err = apperrors.NewBadRequest("invalid credential payload")
+		return IdentityDTO{}, err
 	}
 
-	ciphertext, err := s.crypto.Encrypt(payloadBytes)
-	if err != nil {
-		return IdentityDTO{}, fmt.Errorf("vault service: encrypt payload: %w", err)
+	var ciphertext string
+	if ciphertext, err = s.crypto.Encrypt(payloadBytes); err != nil {
+		err = fmt.Errorf("vault service: encrypt payload: %w", err)
+		return IdentityDTO{}, err
 	}
 
 	var metadataJSON datatypes.JSON
 	if input.Metadata != nil {
-		encoded, err := json.Marshal(input.Metadata)
-		if err != nil {
-			return IdentityDTO{}, apperrors.NewBadRequest("invalid metadata payload")
+		var encoded []byte
+		if encoded, err = json.Marshal(input.Metadata); err != nil {
+			err = apperrors.NewBadRequest("invalid metadata payload")
+			return IdentityDTO{}, err
 		}
 		metadataJSON = datatypes.JSON(encoded)
 	}
@@ -398,7 +433,7 @@ func (s *VaultService) CreateIdentity(ctx context.Context, viewer ViewerContext,
 		Metadata:         metadataJSON,
 	}
 
-	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&identity).Error; err != nil {
 			return fmt.Errorf("vault service: create identity: %w", err)
 		}
@@ -414,8 +449,7 @@ func (s *VaultService) CreateIdentity(ctx context.Context, viewer ViewerContext,
 			return fmt.Errorf("vault service: create credential version: %w", err)
 		}
 		return nil
-	})
-	if err != nil {
+	}); err != nil {
 		return IdentityDTO{}, err
 	}
 
@@ -431,7 +465,7 @@ func (s *VaultService) CreateIdentity(ctx context.Context, viewer ViewerContext,
 		},
 	})
 
-	dto := mapIdentity(identity, nil, false, 0)
+	dto = mapIdentity(identity, nil, false, 0)
 	return dto, nil
 }
 
@@ -461,16 +495,20 @@ func (s *VaultService) BindIdentityToConnection(ctx context.Context, identityID,
 }
 
 // UpdateIdentity mutates an existing identity metadata or payload.
-func (s *VaultService) UpdateIdentity(ctx context.Context, viewer ViewerContext, identityID string, input UpdateIdentityInput) (IdentityDTO, error) {
+func (s *VaultService) UpdateIdentity(ctx context.Context, viewer ViewerContext, identityID string, input UpdateIdentityInput) (updated IdentityDTO, err error) {
 	ctx = ensureContext(ctx)
+
+	defer func() {
+		metrics.VaultOperations.WithLabelValues("identity_update", operationResult(err)).Inc()
+	}()
 
 	id := strings.TrimSpace(identityID)
 	if id == "" {
-		return IdentityDTO{}, apperrors.NewBadRequest("identity id is required")
+		err = apperrors.NewBadRequest("identity id is required")
+		return IdentityDTO{}, err
 	}
 
-	var updated IdentityDTO
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		query := tx.Model(&models.Identity{}).Where("id = ?", id).Preload("Shares", "revoked_at IS NULL")
 
 		if !viewer.IsRoot {
@@ -570,8 +608,8 @@ func (s *VaultService) UpdateIdentity(ctx context.Context, viewer ViewerContext,
 		return IdentityDTO{}, err
 	}
 
-	count, err := s.connectionCount(ctx, updated.ID)
-	if err != nil {
+	var count int
+	if count, err = s.connectionCount(ctx, updated.ID); err != nil {
 		return IdentityDTO{}, err
 	}
 	updated.ConnectionCount = count
@@ -589,15 +627,20 @@ func (s *VaultService) UpdateIdentity(ctx context.Context, viewer ViewerContext,
 }
 
 // DeleteIdentity removes an identity and associated shares/versions.
-func (s *VaultService) DeleteIdentity(ctx context.Context, viewer ViewerContext, identityID string) error {
+func (s *VaultService) DeleteIdentity(ctx context.Context, viewer ViewerContext, identityID string) (err error) {
 	ctx = ensureContext(ctx)
+
+	defer func() {
+		metrics.VaultOperations.WithLabelValues("identity_delete", operationResult(err)).Inc()
+	}()
 
 	id := strings.TrimSpace(identityID)
 	if id == "" {
-		return apperrors.NewBadRequest("identity id is required")
+		err = apperrors.NewBadRequest("identity id is required")
+		return err
 	}
 
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		query := tx.Model(&models.Identity{}).Where("id = ?", id)
 		if !viewer.IsRoot {
 			query = query.Where("owner_user_id = ?", viewer.UserID)
@@ -631,31 +674,39 @@ func (s *VaultService) DeleteIdentity(ctx context.Context, viewer ViewerContext,
 		})
 		return nil
 	})
+	return err
 }
 
 // CreateShare grants access to an identity for the specified principal.
-func (s *VaultService) CreateShare(ctx context.Context, viewer ViewerContext, identityID string, input IdentityShareInput) (IdentityShareDTO, error) {
+func (s *VaultService) CreateShare(ctx context.Context, viewer ViewerContext, identityID string, input IdentityShareInput) (dto IdentityShareDTO, err error) {
 	ctx = ensureContext(ctx)
 
+	defer func() {
+		metrics.VaultOperations.WithLabelValues("identity_share_grant", operationResult(err)).Inc()
+	}()
+
 	if !viewer.IsRoot {
-		if ok, err := s.checkPermission(ctx, viewer.UserID, "vault.share"); err != nil {
+		var ok bool
+		if ok, err = s.checkPermission(ctx, viewer.UserID, "vault.share"); err != nil {
 			return IdentityShareDTO{}, err
 		} else if !ok {
-			return IdentityShareDTO{}, apperrors.ErrForbidden
+			err = apperrors.ErrForbidden
+			return IdentityShareDTO{}, err
 		}
 	}
 
 	id := strings.TrimSpace(identityID)
 	if id == "" {
-		return IdentityShareDTO{}, apperrors.NewBadRequest("identity id is required")
+		err = apperrors.NewBadRequest("identity id is required")
+		return IdentityShareDTO{}, err
 	}
 
-	if err := validateShareInput(input); err != nil {
-		return IdentityShareDTO{}, apperrors.NewBadRequest(err.Error())
+	if validationErr := validateShareInput(input); validationErr != nil {
+		err = apperrors.NewBadRequest(validationErr.Error())
+		return IdentityShareDTO{}, err
 	}
 
-	var dto IdentityShareDTO
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var identity models.Identity
 		query := tx.Where("id = ?", id)
 		if !viewer.IsRoot {
@@ -718,15 +769,20 @@ func (s *VaultService) CreateShare(ctx context.Context, viewer ViewerContext, id
 }
 
 // DeleteShare revokes an identity share by ID.
-func (s *VaultService) DeleteShare(ctx context.Context, viewer ViewerContext, shareID string) error {
+func (s *VaultService) DeleteShare(ctx context.Context, viewer ViewerContext, shareID string) (err error) {
 	ctx = ensureContext(ctx)
+
+	defer func() {
+		metrics.VaultOperations.WithLabelValues("identity_share_revoke", operationResult(err)).Inc()
+	}()
 
 	id := strings.TrimSpace(shareID)
 	if id == "" {
-		return apperrors.NewBadRequest("share id is required")
+		err = apperrors.NewBadRequest("share id is required")
+		return err
 	}
 
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var share models.IdentityShare
 		if err := tx.First(&share, "id = ?", id).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -762,6 +818,7 @@ func (s *VaultService) DeleteShare(ctx context.Context, viewer ViewerContext, sh
 		})
 		return nil
 	})
+	return err
 }
 
 // RevokeShareForPrincipal removes an identity share for the supplied principal if present.
@@ -978,6 +1035,65 @@ func (s *VaultService) connectionCount(ctx context.Context, identityID string) (
 		return 0, fmt.Errorf("vault service: count identity connections: %w", err)
 	}
 	return int(total), nil
+}
+
+var sharePermissionPriority = map[models.IdentitySharePermission]int{
+	models.IdentitySharePermissionUse:          1,
+	models.IdentitySharePermissionViewMetadata: 2,
+	models.IdentitySharePermissionEdit:         3,
+}
+
+func (s *VaultService) sharePermissionForViewer(viewer ViewerContext, identity models.Identity) (models.IdentitySharePermission, bool) {
+	if viewer.IsRoot || strings.TrimSpace(identity.OwnerUserID) == strings.TrimSpace(viewer.UserID) {
+		return models.IdentitySharePermissionEdit, true
+	}
+
+	if len(identity.Shares) == 0 {
+		return "", false
+	}
+
+	now := time.Now().UTC()
+	highest := 0
+	var resolved models.IdentitySharePermission
+
+	for _, share := range identity.Shares {
+		if share.RevokedAt != nil {
+			continue
+		}
+		if share.ExpiresAt != nil && now.After(*share.ExpiresAt) {
+			continue
+		}
+
+		switch share.PrincipalType {
+		case models.IdentitySharePrincipalUser:
+			if strings.TrimSpace(share.PrincipalID) != strings.TrimSpace(viewer.UserID) {
+				continue
+			}
+		case models.IdentitySharePrincipalTeam:
+			if !containsString(viewer.TeamIDs, share.PrincipalID) {
+				continue
+			}
+		default:
+			continue
+		}
+
+		if rank, ok := sharePermissionPriority[share.Permission]; ok && rank > highest {
+			highest = rank
+			resolved = share.Permission
+		}
+	}
+
+	if highest == 0 {
+		return "", false
+	}
+	return resolved, true
+}
+
+func operationResult(err error) string {
+	if err == nil {
+		return "success"
+	}
+	return "error"
 }
 
 func mapIdentity(identity models.Identity, payload map[string]any, includeShares bool, connectionCount int) IdentityDTO {

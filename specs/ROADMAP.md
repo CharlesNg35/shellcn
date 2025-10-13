@@ -208,11 +208,10 @@
 
 ### Phase 6: Quality, Security, & Docs (Week 6)
 
-- [ ] Write service integration tests (share flows, permission enforcement, audit logging)
-- [ ] Add Cypress coverage for identity lifecycle and connection integration
-- [ ] Document vault operations (backup/restore procedures) in `docs/`
-- [ ] Add telemetry/metrics (vault ops counters, errors) to Prometheus registry
-- [ ] Perform security review (secret masking, rate limits, clipboard restrictions)
+- [x] Write service integration tests (share flows, permission enforcement, audit logging)
+- [x] Document vault operations (backup/restore procedures) in `docs/`
+- [x] Add telemetry/metrics (vault ops counters, errors) to Prometheus registry
+- [x] Perform security review (secret masking, rate limits, clipboard restrictions)
 
 ---
 

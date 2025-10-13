@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type ClipboardEvent } from 'react'
 import { Controller, type Control, useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -17,6 +17,7 @@ import type {
   IdentityScope,
 } from '@/types/vault'
 import { cn } from '@/lib/utils/cn'
+import { toast } from '@/lib/utils/toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select'
 
 const identityFormSchema = z.object({
@@ -39,6 +40,8 @@ const identityFormSchema = z.object({
   customPayload: z.string().optional().or(z.literal('')),
   payload: z.record(z.string(), z.any()).optional(),
 })
+
+const MASKED_SECRET_PLACEHOLDER = '••••••••'
 
 type IdentityFormValues = z.infer<typeof identityFormSchema>
 
@@ -90,7 +93,8 @@ function stringifyMetadata(value?: Record<string, unknown> | null): string {
 
 function buildTemplateDefaults(
   template: CredentialTemplateRecord | undefined,
-  existing?: Record<string, unknown>
+  existing?: Record<string, unknown>,
+  options?: { maskSecrets?: boolean }
 ): Record<string, unknown> {
   if (!template) {
     return existing ?? {}
@@ -98,7 +102,18 @@ function buildTemplateDefaults(
   const defaults: Record<string, unknown> = {}
   template.fields.forEach((field) => {
     if (existing && field.name in existing) {
-      defaults[field.name] = existing[field.name]
+      const existingValue = existing[field.name]
+      if (
+        options?.maskSecrets &&
+        field.type === 'secret' &&
+        existingValue !== undefined &&
+        existingValue !== null &&
+        String(existingValue).length > 0
+      ) {
+        defaults[field.name] = MASKED_SECRET_PLACEHOLDER
+        return
+      }
+      defaults[field.name] = existingValue
       return
     }
     if (field.default_value !== undefined) {
@@ -151,7 +166,7 @@ export function IdentityFormModal({
         metadata: stringifyMetadata(identity.metadata ?? undefined),
         rotate_payload: false,
         customPayload: '',
-        payload: buildTemplateDefaults(template, identity.payload ?? {}),
+        payload: buildTemplateDefaults(template, identity.payload ?? {}, { maskSecrets: true }),
       }
     }
     return {
@@ -204,6 +219,28 @@ export function IdentityFormModal({
       setValue('payload', buildTemplateDefaults(template))
     }
   }, [selectedTemplateId, setValue, templates])
+
+  useEffect(() => {
+    if (!open || mode !== 'edit' || !selectedTemplate) {
+      return
+    }
+    if (rotatePayload) {
+      selectedTemplate.fields
+        .filter((field) => field.type === 'secret')
+        .forEach((field) => setValue(`payload.${field.name}` as const, ''))
+      return
+    }
+    if (!identityQuery.data?.payload) {
+      return
+    }
+    selectedTemplate.fields
+      .filter((field) => field.type === 'secret')
+      .forEach((field) => {
+        if (identityQuery.data?.payload && field.name in identityQuery.data.payload) {
+          setValue(`payload.${field.name}` as const, MASKED_SECRET_PLACEHOLDER)
+        }
+      })
+  }, [identityQuery.data, mode, open, rotatePayload, selectedTemplate, setValue])
 
   const handleModalClose = () => {
     if (create.isPending || update.isPending) {
@@ -528,6 +565,13 @@ interface CredentialFieldInputProps {
 function CredentialFieldInput({ field, control, disabled }: CredentialFieldInputProps) {
   const fieldName = `payload.${field.name}` as const
 
+  const handleClipboardBlock = (event: ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    event.preventDefault()
+    toast.warning('Copy disabled', {
+      description: 'Secret values cannot be copied from the vault form.',
+    })
+  }
+
   if (field.type === 'boolean') {
     return (
       <Controller
@@ -634,12 +678,20 @@ function CredentialFieldInput({ field, control, disabled }: CredentialFieldInput
             onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
               controllerField.onChange(event.target.value)
             }
+            autoComplete={isSecret ? 'off' : undefined}
+            onCopy={isSecret ? handleClipboardBlock : undefined}
+            onCut={isSecret ? handleClipboardBlock : undefined}
             {...inputProps}
           />
         )}
       />
       {field.description ? (
         <p className="text-xs text-muted-foreground">{field.description}</p>
+      ) : null}
+      {isSecret && disabled ? (
+        <p className="text-xs text-muted-foreground">
+          Hidden for security. Enable rotation to update this secret.
+        </p>
       ) : null}
     </div>
   )

@@ -225,7 +225,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err != nil {
 		return nil, fmt.Errorf("initialise vault service: %w", err)
 	}
-	vaultHandler := handlers.NewVaultHandler(vaultSvc)
+	vaultHandler := handlers.NewVaultHandler(vaultSvc, rateStore)
 
 	// ----- Connection, Share & Folder Routes -----------------------------------
 	connectionSvc, err := services.NewConnectionService(db, checker, services.WithConnectionVault(vaultSvc))

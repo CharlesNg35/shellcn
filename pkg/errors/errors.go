@@ -93,6 +93,12 @@ var (
 		StatusCode: http.StatusInternalServerError,
 	}
 
+	ErrRateLimit = &AppError{
+		Code:       "RATE_LIMIT_EXCEEDED",
+		Message:    "Too many requests, please slow down",
+		StatusCode: http.StatusTooManyRequests,
+	}
+
 	ErrCSRFInvalid = &AppError{
 		Code:       "CSRF_TOKEN_INVALID",
 		Message:    "Invalid CSRF token",

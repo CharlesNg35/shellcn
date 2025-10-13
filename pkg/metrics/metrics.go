@@ -41,4 +41,22 @@ var (
 		},
 		[]string{"method", "path", "status"},
 	)
+
+	// VaultOperations tracks vault service operations by action and result.
+	VaultOperations = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "shellcn_vault_operations_total",
+			Help: "Vault operations (create, update, share) by result",
+		},
+		[]string{"operation", "result"},
+	)
+
+	// VaultPayloadRequests counts payload retrieval attempts by outcome.
+	VaultPayloadRequests = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "shellcn_vault_payload_requests_total",
+			Help: "Vault payload retrieval attempts by outcome",
+		},
+		[]string{"result"},
+	)
 )

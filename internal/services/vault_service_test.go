@@ -10,7 +10,9 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/vault"
+	apperrors "github.com/charlesng35/shellcn/pkg/errors"
 )
 
 func TestVaultServiceCreateAndGetIdentity(t *testing.T) {
@@ -136,4 +138,128 @@ func TestVaultServiceListTemplates(t *testing.T) {
 
 func stringPtr(v string) *string {
 	return &v
+}
+
+func TestVaultServiceCreateIdentityRequiresPermission(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
+
+	auditSvc, err := NewAuditService(db)
+	require.NoError(t, err)
+
+	crypto, err := vault.NewCrypto([]byte("0123456789abcdef0123456789abcdef"))
+	require.NoError(t, err)
+
+	checker, err := permissions.NewChecker(db)
+	require.NoError(t, err)
+
+	svc, err := NewVaultService(db, auditSvc, checker, crypto)
+	require.NoError(t, err)
+
+	user := models.User{
+		Username: "noperm",
+		Email:    "noperm@example.com",
+		Password: "hashed-password",
+	}
+	require.NoError(t, db.Create(&user).Error)
+
+	viewer := ViewerContext{UserID: user.ID}
+	_, err = svc.CreateIdentity(context.Background(), viewer, CreateIdentityInput{
+		Name:        "Restricted credential",
+		Scope:       models.IdentityScopeGlobal,
+		Payload:     map[string]any{"secret": "value"},
+		OwnerUserID: user.ID,
+		CreatedBy:   user.ID,
+	})
+	require.ErrorIs(t, err, apperrors.ErrForbidden)
+}
+
+func TestVaultServiceShareFlows(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
+
+	auditSvc, err := NewAuditService(db)
+	require.NoError(t, err)
+
+	crypto, err := vault.NewCrypto([]byte("0123456789abcdef0123456789abcdef"))
+	require.NoError(t, err)
+
+	checker, err := permissions.NewChecker(db)
+	require.NoError(t, err)
+
+	svc, err := NewVaultService(db, auditSvc, checker, crypto)
+	require.NoError(t, err)
+
+	owner := models.User{
+		Username: "vault-owner",
+		Email:    "owner@example.com",
+		Password: "hashed-password",
+	}
+	require.NoError(t, db.Create(&owner).Error)
+
+	var adminRole models.Role
+	require.NoError(t, db.First(&adminRole, "id = ?", "admin").Error)
+	require.NoError(t, db.Model(&owner).Association("Roles").Append(&adminRole))
+
+	recip := models.User{
+		Username: "recipient",
+		Email:    "recipient@example.com",
+		Password: "hashed-password",
+	}
+	require.NoError(t, db.Create(&recip).Error)
+
+	var userRole models.Role
+	require.NoError(t, db.First(&userRole, "id = ?", "user").Error)
+	require.NoError(t, db.Model(&recip).Association("Roles").Append(&userRole))
+
+	ctx := context.Background()
+
+	ownerViewer, err := svc.ResolveViewer(ctx, owner.ID, false)
+	require.NoError(t, err)
+
+	recipViewer, err := svc.ResolveViewer(ctx, recip.ID, false)
+	require.NoError(t, err)
+
+	identity, err := svc.CreateIdentity(ctx, ownerViewer, CreateIdentityInput{
+		Name:        "Production API Token",
+		Scope:       models.IdentityScopeGlobal,
+		Payload:     map[string]any{"token": "super-secret-token"},
+		OwnerUserID: owner.ID,
+		CreatedBy:   owner.ID,
+	})
+	require.NoError(t, err)
+
+	_, err = svc.CreateShare(ctx, ownerViewer, identity.ID, IdentityShareInput{
+		PrincipalType: models.IdentitySharePrincipalUser,
+		PrincipalID:   recip.ID,
+		Permission:    models.IdentitySharePermissionUse,
+		CreatedBy:     owner.ID,
+	})
+	require.NoError(t, err)
+
+	_, err = svc.AuthorizeIdentityUse(ctx, recipViewer, identity.ID)
+	require.NoError(t, err)
+
+	snapshot, err := svc.GetIdentity(ctx, recipViewer, identity.ID, false)
+	require.NoError(t, err)
+	require.Equal(t, identity.ID, snapshot.ID)
+
+	_, err = svc.GetIdentity(ctx, recipViewer, identity.ID, true)
+	require.ErrorIs(t, err, apperrors.ErrForbidden)
+
+	_, err = svc.CreateShare(ctx, ownerViewer, identity.ID, IdentityShareInput{
+		PrincipalType: models.IdentitySharePrincipalUser,
+		PrincipalID:   recip.ID,
+		Permission:    models.IdentitySharePermissionEdit,
+		CreatedBy:     owner.ID,
+	})
+	require.NoError(t, err)
+
+	withPayload, err := svc.GetIdentity(ctx, recipViewer, identity.ID, true)
+	require.NoError(t, err)
+	require.Equal(t, "super-secret-token", withPayload.Payload["token"])
+
+	var auditCount int64
+	require.NoError(t, db.Model(&models.AuditLog{}).
+		Where("action = ?", "vault.identity.shared").
+		Count(&auditCount).Error)
+	require.GreaterOrEqual(t, auditCount, int64(2))
 }

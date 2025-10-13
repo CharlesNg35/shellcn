@@ -9,6 +9,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/handlers/testutil"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/services"
+	"github.com/charlesng35/shellcn/pkg/crypto"
 )
 
 func TestVaultHandlerIdentityLifecycle(t *testing.T) {
@@ -97,4 +98,65 @@ func TestVaultHandlerTemplates(t *testing.T) {
 	testutil.DecodeInto(t, resp.Data, &templates)
 	require.Len(t, templates, 1)
 	require.Equal(t, "ssh", templates[0].DriverID)
+}
+
+func TestVaultHandlerPayloadRateLimit(t *testing.T) {
+	env := testutil.NewEnv(t)
+
+	root := env.CreateRootUser("Password123!")
+	rootLogin := env.Login(root.Username, "Password123!")
+
+	createPayload := map[string]any{
+		"name":        "Sensitive SSH",
+		"scope":       "global",
+		"payload":     map[string]any{"username": "admin", "private_key": "-----BEGIN-----"},
+		"description": "Root credentials",
+	}
+
+	createRes := env.Request(http.MethodPost, "/api/vault/identities", createPayload, rootLogin.AccessToken)
+	require.Equal(t, http.StatusCreated, createRes.Code, createRes.Body.String())
+
+	createResp := testutil.DecodeResponse(t, createRes)
+	var identity services.IdentityDTO
+	testutil.DecodeInto(t, createResp.Data, &identity)
+	require.NotEmpty(t, identity.ID)
+
+	hashed, err := crypto.HashPassword("SecurePass123!")
+	require.NoError(t, err)
+
+	adminUser := models.User{
+		Username: "vault-admin",
+		Email:    "vault-admin@example.com",
+		Password: hashed,
+		IsActive: true,
+	}
+	require.NoError(t, env.DB.Create(&adminUser).Error)
+
+	var adminRole models.Role
+	require.NoError(t, env.DB.First(&adminRole, "id = ?", "admin").Error)
+	require.NoError(t, env.DB.Model(&adminUser).Association("Roles").Append(&adminRole))
+
+	adminLogin := env.Login(adminUser.Username, "SecurePass123!")
+
+	sharePayload := map[string]any{
+		"principal_type": "user",
+		"principal_id":   adminUser.ID,
+		"permission":     "edit",
+	}
+	shareRes := env.Request(
+		http.MethodPost,
+		"/api/vault/identities/"+identity.ID+"/shares",
+		sharePayload,
+		rootLogin.AccessToken,
+	)
+	require.Equal(t, http.StatusCreated, shareRes.Code, shareRes.Body.String())
+
+	path := "/api/vault/identities/" + identity.ID + "?include=payload"
+	for i := 0; i < 5; i++ {
+		resp := env.Request(http.MethodGet, path, nil, adminLogin.AccessToken)
+		require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+	}
+
+	limited := env.Request(http.MethodGet, path, nil, adminLogin.AccessToken)
+	require.Equal(t, http.StatusTooManyRequests, limited.Code)
 }

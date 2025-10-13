@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -15,14 +17,58 @@ import (
 	"github.com/charlesng35/shellcn/pkg/response"
 )
 
+const (
+	payloadAccessLimit  = 5
+	payloadAccessWindow = time.Minute
+)
+
 // VaultHandler exposes vault related APIs.
 type VaultHandler struct {
-	service *services.VaultService
+	service   *services.VaultService
+	rateStore middleware.RateStore
 }
 
 // NewVaultHandler constructs a handler for the vault service.
-func NewVaultHandler(svc *services.VaultService) *VaultHandler {
-	return &VaultHandler{service: svc}
+func NewVaultHandler(svc *services.VaultService, store middleware.RateStore) *VaultHandler {
+	if store == nil {
+		store = middleware.NewMemoryRateStore()
+	}
+	return &VaultHandler{service: svc, rateStore: store}
+}
+
+func (h *VaultHandler) enforcePayloadRateLimit(c *gin.Context, userID, identityID string) bool {
+	if payloadAccessLimit <= 0 || h.rateStore == nil {
+		return true
+	}
+
+	userID = strings.TrimSpace(userID)
+	identityID = strings.TrimSpace(identityID)
+	if userID == "" || identityID == "" {
+		return true
+	}
+
+	ctx := c.Request.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	key := fmt.Sprintf("vault:payload:%s:%s", userID, identityID)
+	count, ttl, err := h.rateStore.Increment(ctx, key, payloadAccessWindow)
+	if err != nil {
+		return true
+	}
+
+	reset := int(ttl.Round(time.Second) / time.Second)
+	if count > payloadAccessLimit {
+		if reset < 0 {
+			reset = 0
+		}
+		c.Header("Retry-After", fmt.Sprintf("%d", reset))
+		response.Error(c, appErrors.ErrRateLimit)
+		return false
+	}
+
+	return true
 }
 
 type createIdentityPayload struct {
@@ -151,7 +197,14 @@ func (h *VaultHandler) GetIdentity(c *gin.Context) {
 		return
 	}
 
-	identity, err := h.service.GetIdentity(ctx, viewer, c.Param("id"), includePayload)
+	identityID := c.Param("id")
+	if includePayload && !viewer.IsRoot {
+		if ok := h.enforcePayloadRateLimit(c, userID, identityID); !ok {
+			return
+		}
+	}
+
+	identity, err := h.service.GetIdentity(ctx, viewer, identityID, includePayload)
 	if err != nil {
 		response.Error(c, err)
 		return

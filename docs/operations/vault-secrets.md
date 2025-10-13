@@ -61,6 +61,16 @@ generate, store, and rotate that key safely.
 - During recovery: restore the database, restore the key to the environment, restart the
   application, and verify identity access.
 
+## 6. Observability & Guardrails
+
+- Prometheus exposes vault counters to confirm healthy operation:
+  - `shellcn_vault_operations_total{operation="identity_create"}` – API/Service calls.
+  - `shellcn_vault_payload_requests_total{result}` – payload access success/denials.
+- The API enforces payload read limits (HTTP 429) to reduce brute-force attempts. Tune
+  the rate limiter via gateway policy if required.
+- UI forms mask existing secret fields and block clipboard access. Users must rotate a
+  credential before viewing or updating a secret.
+
 ## 6. Security Checklist
 
 - [ ] `SHELLCN_VAULT_ENCRYPTION_KEY` has 32 bytes of entropy.
