@@ -255,14 +255,22 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r border-border bg-background lg:flex">
         {navContent}
       </aside>
-      <div
-        className={cn(
-          'lg:hidden',
-          isOpen ? 'fixed inset-0 z-50 flex' : 'pointer-events-none fixed inset-0 z-50 hidden'
-        )}
-      >
-        <div className="fixed inset-0 bg-background/70 backdrop-blur-sm" onClick={onClose} />
-        <aside className="relative h-full w-64 border-r border-border bg-background shadow-xl">
+      <div className="lg:hidden">
+        <div
+          className={cn(
+            'fixed inset-0 z-40 bg-background/70 backdrop-blur-sm transition-opacity duration-200',
+            isOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+          )}
+          onClick={isOpen ? onClose : undefined}
+          aria-hidden={!isOpen}
+        />
+        <aside
+          className={cn(
+            'fixed inset-y-0 left-0 z-50 h-full w-64 border-r border-border bg-background shadow-xl transition-transform duration-200 ease-out will-change-transform',
+            isOpen ? 'translate-x-0' : '-translate-x-full'
+          )}
+          aria-hidden={!isOpen}
+        >
           {navContent}
         </aside>
       </div>
