@@ -19,6 +19,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/realtime"
 	"github.com/charlesng35/shellcn/internal/services"
+	"github.com/charlesng35/shellcn/internal/vault"
 	"github.com/charlesng35/shellcn/pkg/mail"
 	"github.com/charlesng35/shellcn/web"
 )
@@ -60,8 +61,8 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err != nil {
 		return nil, fmt.Errorf("decode vault encryption key: %w", err)
 	}
-	if length := len(encryptionKey); length != 16 && length != 24 && length != 32 {
-		return nil, fmt.Errorf("invalid vault encryption key length: expected 16, 24, or 32 bytes, got %d", length)
+	if length := len(encryptionKey); length != 32 {
+		return nil, fmt.Errorf("invalid vault encryption key length: expected 32 bytes, got %d", length)
 	}
 
 	auditSvc, err := services.NewAuditService(db)
@@ -243,6 +244,17 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	protocolHandler := handlers.NewProtocolHandler(protocolSvc)
 	registerProtocolRoutes(api, protocolHandler, checker)
+
+	vaultCrypto, err := vault.NewCrypto(encryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("initialise vault crypto: %w", err)
+	}
+	vaultSvc, err := services.NewVaultService(db, auditSvc, checker, vaultCrypto)
+	if err != nil {
+		return nil, fmt.Errorf("initialise vault service: %w", err)
+	}
+	vaultHandler := handlers.NewVaultHandler(vaultSvc)
+	registerVaultRoutes(api, vaultHandler, checker)
 
 	// Sessions
 	sessionHandler := handlers.NewSessionHandler(db, sessions)

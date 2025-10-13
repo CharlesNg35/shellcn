@@ -15,6 +15,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/middleware"
 )
 
+const testVaultKeyHex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 func TestRouter_PublicAndProtectedRoutes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -28,7 +30,7 @@ func TestRouter_PublicAndProtectedRoutes(t *testing.T) {
 
 	cfg := &app.Config{
 		Vault: app.VaultConfig{
-			EncryptionKey: "0123456789abcdef0123456789abcdef",
+			EncryptionKey: testVaultKeyHex,
 		},
 		Auth: app.AuthConfig{
 			JWT: app.JWTSettings{
@@ -88,7 +90,7 @@ func TestRouter_MetricsEndpoint(t *testing.T) {
 
 	cfg := &app.Config{
 		Vault: app.VaultConfig{
-			EncryptionKey: "0123456789abcdef0123456789abcdef",
+			EncryptionKey: testVaultKeyHex,
 		},
 		Auth: app.AuthConfig{
 			JWT: app.JWTSettings{

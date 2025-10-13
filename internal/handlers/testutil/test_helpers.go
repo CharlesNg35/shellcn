@@ -23,6 +23,8 @@ import (
 	"github.com/charlesng35/shellcn/pkg/response"
 )
 
+const testVaultKeyHex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 // Env encapsulates a fully-wired API instance backed by an in-memory database for handler tests.
 type Env struct {
 	T          *testing.T
@@ -51,7 +53,7 @@ func NewEnv(t *testing.T) *Env {
 
 	cfg := &app.Config{
 		Vault: app.VaultConfig{
-			EncryptionKey: "0123456789abcdef0123456789abcdef",
+			EncryptionKey: testVaultKeyHex,
 		},
 		Auth: app.AuthConfig{
 			JWT: app.JWTSettings{

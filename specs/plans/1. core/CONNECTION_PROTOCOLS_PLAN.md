@@ -83,7 +83,7 @@ type Connection struct {
     FolderID    *string        `gorm:"type:uuid;index" json:"folder_id"`
     Metadata    datatypes.JSON `json:"metadata"`
     Settings    datatypes.JSON `json:"settings"`
-    SecretID    *string        `gorm:"type:uuid" json:"secret_id"`
+    IdentityID  *string        `gorm:"type:uuid" json:"identity_id"`
     LastUsedAt  *time.Time     `json:"last_used_at"`
 
     Targets        []ConnectionTarget   `gorm:"foreignKey:ConnectionID" json:"targets,omitempty"`

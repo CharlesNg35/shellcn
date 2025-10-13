@@ -75,7 +75,7 @@ export interface ConnectionRecord {
   folder_id?: string | null
   metadata?: ConnectionMetadata
   settings?: ConnectionSettings
-  secret_id?: string | null
+  identity_id?: string | null
   last_used_at?: string | null
   targets?: ConnectionTarget[]
   shares?: ConnectionShare[]

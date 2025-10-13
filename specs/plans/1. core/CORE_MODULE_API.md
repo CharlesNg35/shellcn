@@ -971,7 +971,7 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
     "namespace": "platform",
     "api_server": "https://k8s.acme.io:6443"
   },
-  "secret_id": "vault_secret_admin",
+  "identity_id": "vault_identity_admin",
   "last_used_at": "2025-10-09T14:22:00Z",
   "share_summary": {
     "shared": true,
@@ -1013,7 +1013,7 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 }
 ```
 
-> **Identity integration:** Drivers declare credential requirements (SSH key, kubeconfig, database DSN). The Identity service satisfies these bindings via `secret_id` or settings. Resource-specific grants are surfaced through `share_summary`.
+> **Identity integration:** Drivers declare credential requirements (SSH key, kubeconfig, database DSN). The Identity service satisfies these bindings via `identity_id` or settings. Resource-specific grants are surfaced through `share_summary`.
 
 ### 8.3 Connection Shares API
 
@@ -1038,6 +1038,50 @@ Content-Type: application/json
 ```
 
 The service automatically expands dependency permissions (e.g., `connection.view`) and ensures the grantor already holds each scope. Responses mirror `ConnectionShareDTO`, which aligns with `share_summary.entries`.
+
+### 8.4 Vault API
+
+| Method | Path                               | Description                                                                   | Permission     | Handler                       |
+| ------ | ---------------------------------- | ----------------------------------------------------------------------------- | -------------- | ----------------------------- |
+| GET    | `/api/vault/identities`            | List identities accessible to the caller (supports protocol/scope filters).   | `vault.view`   | `VaultHandler.ListIdentities` |
+| POST   | `/api/vault/identities`            | Create a new identity and persist encrypted payload + metadata.               | `vault.create` | `VaultHandler.CreateIdentity` |
+| GET    | `/api/vault/identities/:id`        | Retrieve identity metadata; append `?include=payload` to decrypt credentials. | `vault.view`   | `VaultHandler.GetIdentity`    |
+| PATCH  | `/api/vault/identities/:id`        | Update identity metadata and optionally rotate the credential payload.        | `vault.edit`   | `VaultHandler.UpdateIdentity` |
+| DELETE | `/api/vault/identities/:id`        | Delete an identity (shares and historical versions cascade).                  | `vault.delete` | `VaultHandler.DeleteIdentity` |
+| POST   | `/api/vault/identities/:id/shares` | Grant a user or team access to an identity.                                   | `vault.share`  | `VaultHandler.CreateShare`    |
+| DELETE | `/api/vault/shares/:shareId`       | Revoke a share by identifier.                                                 | `vault.share`  | `VaultHandler.DeleteShare`    |
+| GET    | `/api/vault/templates`             | Return credential templates synced from protocol drivers.                     | `vault.view`   | `VaultHandler.ListTemplates`  |
+
+**Supported query parameters for `GET /api/vault/identities`:**
+
+- `scope`: optional filter – `global`, `team`, or `connection`.
+- `protocol_id`: restricts results to identities compatible with the given protocol (based on template metadata).
+- `include_connection_scoped`: set to `true` to surface ad-hoc identities attached to connections. These remain hidden by default.
+
+**Identity creation payload**
+
+```http
+POST /api/vault/identities
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "name": "Production SSH",
+  "description": "Jump host credentials",
+  "scope": "global",
+  "template_id": "tpl_ssh_latest",
+  "payload": {
+    "username": "ops",
+    "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----..."
+  },
+  "metadata": {
+    "tags": ["prod", "ssh"],
+    "rotation": "manual"
+  }
+}
+```
+
+Responses mirror `IdentityDTO`. Secrets are only included when `include=payload` is requested on the GET endpoint immediately after creation. Subsequent list operations return metadata only, ensuring vault contents remain encrypted unless explicitly requested.
 
 ### 8.4 Notifications
 

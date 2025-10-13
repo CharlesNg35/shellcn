@@ -53,6 +53,26 @@ func TestEmbeddedModelsUseBaseBeforeCreate(t *testing.T) {
 			a := &AuthProvider{}
 			return &a.BaseModel
 		}},
+		{"identity", func() *BaseModel {
+			i := &Identity{}
+			return &i.BaseModel
+		}},
+		{"identity_share", func() *BaseModel {
+			s := &IdentityShare{}
+			return &s.BaseModel
+		}},
+		{"credential_template", func() *BaseModel {
+			tpl := &CredentialTemplate{}
+			return &tpl.BaseModel
+		}},
+		{"credential_version", func() *BaseModel {
+			v := &CredentialVersion{}
+			return &v.BaseModel
+		}},
+		{"vault_key_metadata", func() *BaseModel {
+			meta := &VaultKeyMetadata{}
+			return &meta.BaseModel
+		}},
 	}
 
 	for _, tc := range cases {

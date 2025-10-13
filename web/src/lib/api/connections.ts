@@ -85,7 +85,7 @@ interface ConnectionResponse {
   folder_id?: string | null
   metadata?: Record<string, unknown> | string | null
   settings?: Record<string, unknown> | string | null
-  secret_id?: string | null
+  identity_id?: string | null
   last_used_at?: string | null
   targets?: ConnectionTargetResponse[]
   shares?: ConnectionShareResponse[] | null
@@ -256,7 +256,7 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
     folder_id: raw.folder_id ?? null,
     metadata: coerceObject(raw.metadata),
     settings: coerceObject(raw.settings),
-    secret_id: raw.secret_id ?? null,
+    identity_id: raw.identity_id ?? null,
     last_used_at: raw.last_used_at ?? null,
     targets: transformTargets(raw.targets),
     shares: transformShares(raw.shares),

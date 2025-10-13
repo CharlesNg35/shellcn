@@ -68,7 +68,7 @@ Connection.identity_id → Identity (scope: global|team|connection)
 - `pkg/crypto/crypto.go` already exposes AES-256-GCM helpers but lacks Argon2 key derivation.
 - `internal/api/router.go` decodes `VAULT_ENCRYPTION_KEY` and wires services during startup.
 - `internal/database/migrations.go` controls AutoMigrate registration for all models.
-- `internal/services/connection_service.go` has `SecretID *string` field ready for vault integration.
+- `internal/services/connection_service.go` exposes `IdentityID *string` ready for vault integration.
 - `internal/services/auth_provider_service.go` demonstrates encryption pattern (OIDC/SAML/LDAP secrets).
 - `web/src/lib/api/client.ts`, `web/src/hooks/useUsers.ts`, and related modules show React Query and toast patterns to mirror.
 - `web/src/lib/navigation.ts` reserves `/settings/identities` route.
@@ -270,4 +270,3 @@ Connection.identity_id → Identity (scope: global|team|connection)
 - ✅ Sharing works for users and teams
 - ✅ Audit logs capture all vault access
 - ✅ Zero secrets logged in plaintext
-

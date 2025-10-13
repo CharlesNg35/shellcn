@@ -181,7 +181,7 @@ If SMTP is disabled, features like password resets and invite e-mails remain una
 ```bash
 export SHELLCN_SERVER_LOG_LEVEL=debug
 export SHELLCN_AUTH_JWT_SECRET="dev-secret"
-export SHELLCN_VAULT_ENCRYPTION_KEY="0123456789abcdef0123456789abcdef"
+export SHELLCN_VAULT_ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 go run ./cmd/server --config /path/to/dev/config
 ```
 

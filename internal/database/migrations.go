@@ -30,6 +30,11 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ResourcePermission{},
 		&models.Notification{},
 		&models.SystemSetting{},
+		&models.Identity{},
+		&models.IdentityShare{},
+		&models.CredentialTemplate{},
+		&models.CredentialVersion{},
+		&models.VaultKeyMetadata{},
 	)
 }
 

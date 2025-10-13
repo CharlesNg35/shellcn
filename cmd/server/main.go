@@ -236,12 +236,15 @@ func ensureSecretsPresent(cfg *app.Config) error {
 	}
 
 	cfg.Vault.EncryptionKey = strings.TrimSpace(cfg.Vault.EncryptionKey)
+	if cfg.Vault.EncryptionKey == "" {
+		return errors.New("vault.encryption_key must be configured")
+	}
 	length, err := app.KeyByteLength(cfg.Vault.EncryptionKey)
 	if err != nil {
 		return fmt.Errorf("vault.encryption_key: %w", err)
 	}
-	if length != 16 && length != 24 && length != 32 {
-		return fmt.Errorf("vault.encryption_key must decode to 16, 24, or 32 bytes (current: %d)", length)
+	if length != 32 {
+		return fmt.Errorf("vault.encryption_key must decode to exactly 32 bytes (current: %d)", length)
 	}
 
 	return nil

@@ -162,24 +162,24 @@
 - [x] Implement code splitting
 - [x] Final UI/UX polish
 
-## 2. Vault Module (Credentials, Encryption) — Not Started
+## 2. Vault Module (Credentials, Encryption) — In Progress
 
 ### Phase 1: Encryption & Data Foundation (Week 1)
 
-- [ ] Build vault crypto helper (Argon2id derivation + AES-GCM wrapper)
-- [ ] Define GORM models for identities, credential templates, identity shares, credential versions, and vault key metadata
-- [ ] Rename `connections.secret_id` → `identity_id`, update models/services/tests
-- [ ] Register new models with `internal/database/migrations.go` and seed baseline permissions/feature flags
-- [ ] Extend configuration validation for `VAULT_ENCRYPTION_KEY` (length, presence)
-- [ ] Add credential-template bootstrap process via `ProtocolCatalogService.Sync()` with version/deprecation metadata
+- [x] Build vault crypto helper (Argon2id derivation + AES-GCM wrapper)
+- [x] Define GORM models for identities, credential templates, identity shares, credential versions, and vault key metadata
+- [x] Rename `connections.secret_id` → `identity_id`, update models/services/tests
+- [x] Register new models with `internal/database/migrations.go` and seed baseline permissions/feature flags
+- [x] Extend configuration validation for `VAULT_ENCRYPTION_KEY` (length, presence)
+- [x] Add credential-template bootstrap process via `ProtocolCatalogService.Sync()` with version/deprecation metadata
 
 ### Phase 2: Vault Service & API (Week 2)
 
-- [ ] Implement `internal/services/vault_service.go` covering identity CRUD (global/team/connection scopes), encryption, and auditing
-- [ ] Add repository helpers for owner/team/share filtering and connection-scoped provisioning
-- [ ] Create `internal/handlers/vault.go` with REST endpoints (`/api/vault/identities`, `/api/vault/credentials`, `/api/vault/templates`, `/api/vault/shares`)
-- [ ] Register vault routes in API router with auth + rate limiting
-- [ ] Add service/handler unit tests (success + failure branches, encrypted payload assertions)
+- [x] Implement `internal/services/vault_service.go` covering identity CRUD (global/team/connection scopes), encryption, and auditing
+- [x] Add repository helpers for owner/team/share filtering and connection-scoped provisioning
+- [x] Create `internal/handlers/vault.go` with REST endpoints (`/api/vault/identities`, `/api/vault/credentials`, `/api/vault/templates`, `/api/vault/shares`)
+- [x] Register vault routes in API router with auth + rate limiting
+- [x] Add service/handler unit tests (success + failure branches, encrypted payload assertions)
 
 ### Phase 3: Sharing & Usage Integration (Week 3)
 

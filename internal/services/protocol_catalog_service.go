@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -102,6 +104,93 @@ func (s *ProtocolCatalogService) Sync(ctx context.Context, driverReg *drivers.Re
 		}).Create(&record).Error; err != nil {
 			return fmt.Errorf("protocol catalog service: upsert protocol %s: %w", drv.ID(), err)
 		}
+
+		if templater, ok := drv.(drivers.CredentialTemplater); ok {
+			if err := s.persistCredentialTemplate(ctx, tx, drv.ID(), templater); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *ProtocolCatalogService) persistCredentialTemplate(ctx context.Context, tx *gorm.DB, fallbackDriverID string, templater drivers.CredentialTemplater) error {
+	template, err := templater.CredentialTemplate()
+	if err != nil {
+		return fmt.Errorf("protocol catalog service: credential template: %w", err)
+	}
+	if template == nil {
+		return nil
+	}
+
+	driverID := strings.TrimSpace(template.DriverID)
+	if driverID == "" {
+		driverID = fallbackDriverID
+	}
+	version := strings.TrimSpace(template.Version)
+	if version == "" {
+		return fmt.Errorf("protocol catalog service: credential template for %s missing version", driverID)
+	}
+	if len(template.Fields) == 0 {
+		return fmt.Errorf("protocol catalog service: credential template for %s has no fields", driverID)
+	}
+	if len(template.CompatibleProtocols) == 0 {
+		return fmt.Errorf("protocol catalog service: credential template for %s has no compatible protocols", driverID)
+	}
+
+	fieldsJSON, err := json.Marshal(template.Fields)
+	if err != nil {
+		return fmt.Errorf("protocol catalog service: marshal credential fields for %s: %w", driverID, err)
+	}
+	compatJSON, err := json.Marshal(template.CompatibleProtocols)
+	if err != nil {
+		return fmt.Errorf("protocol catalog service: marshal credential protocols for %s: %w", driverID, err)
+	}
+
+	var metadataJSON datatypes.JSON
+	if template.Metadata != nil {
+		metadataBytes, err := json.Marshal(template.Metadata)
+		if err != nil {
+			return fmt.Errorf("protocol catalog service: marshal credential metadata for %s: %w", driverID, err)
+		}
+		metadataJSON = metadataBytes
+	}
+
+	payload := map[string]any{
+		"driver_id":            driverID,
+		"version":              version,
+		"display_name":         strings.TrimSpace(template.DisplayName),
+		"description":          strings.TrimSpace(template.Description),
+		"fields":               template.Fields,
+		"compatible_protocols": template.CompatibleProtocols,
+		"deprecated_after":     template.DeprecatedAfter,
+		"metadata":             template.Metadata,
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("protocol catalog service: marshal credential template payload for %s: %w", driverID, err)
+	}
+	sum := sha256.Sum256(encoded)
+	hash := hex.EncodeToString(sum[:])
+
+	record := models.CredentialTemplate{
+		DriverID:            driverID,
+		Version:             version,
+		DisplayName:         strings.TrimSpace(template.DisplayName),
+		Description:         strings.TrimSpace(template.Description),
+		Fields:              fieldsJSON,
+		CompatibleProtocols: compatJSON,
+		DeprecatedAfter:     template.DeprecatedAfter,
+		Metadata:            metadataJSON,
+		Hash:                hash,
+	}
+
+	if err := tx.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "driver_id"}, {Name: "version"}},
+		DoUpdates: clause.AssignmentColumns([]string{"display_name", "description", "fields", "compatible_protocols", "deprecated_after", "metadata", "hash"}),
+	}).Create(&record).Error; err != nil {
+		return fmt.Errorf("protocol catalog service: upsert credential template for %s: %w", driverID, err)
 	}
 
 	return nil

@@ -195,7 +195,7 @@ func (s *AuditService) checkVaultKey() Check {
 			ID:          "vault_encryption_key",
 			Status:      StatusFail,
 			Message:     "Vault encryption key is not configured.",
-			Remediation: "Set SHELLCN_VAULT_ENCRYPTION_KEY to a 32+ byte random value.",
+			Remediation: "Set SHELLCN_VAULT_ENCRYPTION_KEY to a 32-byte random value.",
 		}
 	}
 
@@ -210,13 +210,13 @@ func (s *AuditService) checkVaultKey() Check {
 		}
 	}
 
-	// AES requires 16, 24, or 32 bytes for AES-128, AES-192, or AES-256
-	if decodedLength != 16 && decodedLength != 24 && decodedLength != 32 {
+	// Vault encryption now derives keys via Argon2id and requires a 32-byte master key.
+	if decodedLength != 32 {
 		return Check{
 			ID:          "vault_encryption_key",
 			Status:      StatusFail,
 			Message:     fmt.Sprintf("Vault encryption key has invalid length (%d bytes decoded).", decodedLength),
-			Remediation: "Use an encryption key that decodes to 16, 24, or 32 bytes for AES-GCM.",
+			Remediation: "Provide a 32-byte encryption key (hex or base64 encoded) for AES-256-GCM.",
 		}
 	}
 

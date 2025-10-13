@@ -32,7 +32,7 @@ type ConnectionDTO struct {
 	FolderID     *string                 `json:"folder_id"`
 	Metadata     map[string]any          `json:"metadata,omitempty"`
 	Settings     map[string]any          `json:"settings,omitempty"`
-	SecretID     *string                 `json:"secret_id"`
+	IdentityID   *string                 `json:"identity_id"`
 	LastUsedAt   *time.Time              `json:"last_used_at,omitempty"`
 	Targets      []ConnectionTargetDTO   `json:"targets,omitempty"`
 	Shares       []ConnectionShareDTO    `json:"shares,omitempty"`
@@ -556,8 +556,8 @@ func mapConnection(ctx context.Context, db *gorm.DB, row models.Connection, incl
 		Metadata:    decodeJSONMap(row.Metadata),
 		Settings:    decodeJSONMap(row.Settings),
 	}
-	if row.SecretID != nil {
-		dto.SecretID = row.SecretID
+	if row.IdentityID != nil {
+		dto.IdentityID = row.IdentityID
 	}
 	if row.LastUsedAt != nil {
 		timestamp := *row.LastUsedAt
