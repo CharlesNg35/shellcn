@@ -24,6 +24,7 @@ type RedisConfig struct {
 }
 
 const defaultRedisTimeout = 5 * time.Second
+const redisKeyPrefix = "shellcn:"
 
 // RedisClient implements a small subset of the Redis protocol required by the ShellCN backend.
 // It supports AUTH, SELECT, INCR, PEXPIRE, PTTL, GET, SET (with PX) and DEL commands.
@@ -70,18 +71,19 @@ func (c *RedisClient) Close() error {
 // IncrementWithTTL increments the supplied key and ensures the TTL is set to the requested window.
 // It returns the current count and the remaining time-to-live.
 func (c *RedisClient) IncrementWithTTL(ctx context.Context, key string, window time.Duration) (int64, time.Duration, error) {
-	count, err := c.doInt(ctx, "INCR", key)
+	prefixedKey := c.prefixed(key)
+	count, err := c.doInt(ctx, "INCR", prefixedKey)
 	if err != nil {
 		return 0, 0, err
 	}
 
 	if count == 1 {
-		if _, err := c.doInt(ctx, "PEXPIRE", key, formatMillis(window)); err != nil {
+		if _, err := c.doInt(ctx, "PEXPIRE", prefixedKey, formatMillis(window)); err != nil {
 			return 0, 0, err
 		}
 	}
 
-	ttlMillis, err := c.doInt(ctx, "PTTL", key)
+	ttlMillis, err := c.doInt(ctx, "PTTL", prefixedKey)
 	if err != nil {
 		return count, window, nil
 	}
@@ -94,13 +96,15 @@ func (c *RedisClient) IncrementWithTTL(ctx context.Context, key string, window t
 
 // Set stores a value with PX expiry semantics.
 func (c *RedisClient) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
-	_, err := c.doSimple(ctx, "SET", key, string(value), "PX", formatMillis(ttl))
+	prefixedKey := c.prefixed(key)
+	_, err := c.doSimple(ctx, "SET", prefixedKey, string(value), "PX", formatMillis(ttl))
 	return err
 }
 
 // Get retrieves the value associated with a key.
 func (c *RedisClient) Get(ctx context.Context, key string) ([]byte, bool, error) {
-	resp, err := c.do(ctx, "GET", key)
+	prefixedKey := c.prefixed(key)
+	resp, err := c.do(ctx, "GET", prefixedKey)
 	if err != nil {
 		return nil, false, err
 	}
@@ -122,9 +126,19 @@ func (c *RedisClient) Delete(ctx context.Context, keys ...string) error {
 	}
 	args := make([]string, 0, len(keys)+1)
 	args = append(args, "DEL")
-	args = append(args, keys...)
+	for _, key := range keys {
+		args = append(args, c.prefixed(key))
+	}
 	_, err := c.do(ctx, args...)
 	return err
+}
+
+func (c *RedisClient) prefixed(key string) string {
+	normalized := normalizeKey(key)
+	if strings.HasPrefix(normalized, redisKeyPrefix) {
+		return normalized
+	}
+	return normalizeKey(redisKeyPrefix + normalized)
 }
 
 func (c *RedisClient) doSimple(ctx context.Context, command string, args ...string) (string, error) {
@@ -400,6 +414,28 @@ func consumeCRLF(r *bufio.Reader) error {
 		return errors.New("redis: expected CRLF")
 	}
 	return nil
+}
+
+func normalizeKey(key string) string {
+	if key == "" {
+		return key
+	}
+	var builder strings.Builder
+	builder.Grow(len(key))
+	prevColon := false
+	for i := 0; i < len(key); i++ {
+		ch := key[i]
+		if ch == ':' {
+			if prevColon {
+				continue
+			}
+			prevColon = true
+		} else {
+			prevColon = false
+		}
+		builder.WriteByte(ch)
+	}
+	return builder.String()
 }
 
 func formatMillis(duration time.Duration) string {
