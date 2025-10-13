@@ -158,20 +158,21 @@ export function FolderSidebar({
                   </Button>
                 )
               ) : null}
-              {isLoading && (
+              {isLoading ? (
                 <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />
+              ) : (
+                <button
+                  onClick={() => setCollapsed(!collapsed)}
+                  className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  aria-label={collapsed ? 'Expand folders' : 'Collapse folders'}
+                >
+                  {collapsed ? (
+                    <ChevronRight className="h-4 w-4" />
+                  ) : (
+                    <ChevronLeft className="h-4 w-4" />
+                  )}
+                </button>
               )}
-              <button
-                onClick={() => setCollapsed(!collapsed)}
-                className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                aria-label={collapsed ? 'Expand folders' : 'Collapse folders'}
-              >
-                {collapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
-              </button>
             </div>
           </div>
 
