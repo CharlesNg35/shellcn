@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -17,7 +17,7 @@ type InviteAcceptFormValues = z.infer<typeof inviteAcceptSchema>
 export function InviteAccept() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
-  const { login, clearError } = useAuth({ autoInitialize: false })
+  const { login, clearError, providers, loadProviders } = useAuth({ autoInitialize: false })
 
   const {
     register,
@@ -62,6 +62,23 @@ export function InviteAccept() {
     }
   }, [existingAccount, setValue, clearErrors])
 
+  useEffect(() => {
+    if (providers.length === 0) {
+      void loadProviders().catch(() => {
+        /* handled globally */
+      })
+    }
+  }, [providers.length, loadProviders])
+
+  const canAutoLogin = useMemo(() => {
+    return providers.some(
+      (provider) =>
+        provider.enabled &&
+        (provider.flow ?? 'password') === 'password' &&
+        provider.type === 'local'
+    )
+  }, [providers])
+
   const onSubmit = handleSubmit(async (values) => {
     try {
       const firstName = values.firstName?.trim()
@@ -81,7 +98,7 @@ export function InviteAccept() {
         description: result.message ?? 'You can now access ShellCN.',
       })
 
-      if (result.created_user) {
+      if (result.created_user && !existingAccount && canAutoLogin) {
         try {
           await login({
             identifier: values.username ?? '',
