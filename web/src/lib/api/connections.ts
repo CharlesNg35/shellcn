@@ -25,6 +25,7 @@ export interface ConnectionCreatePayload {
   metadata?: Record<string, unknown>
   settings?: Record<string, unknown>
   grant_team_permissions?: string[]
+  identity_id?: string | null
 }
 
 interface ConnectionTargetResponse {

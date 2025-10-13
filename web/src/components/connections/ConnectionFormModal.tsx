@@ -9,15 +9,17 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { Badge } from '@/components/ui/Badge'
+import { IdentitySelector } from '@/components/vault/IdentitySelector'
+import { IdentityFormModal } from '@/components/vault/IdentityFormModal'
 import type { Protocol } from '@/types/protocols'
 import type { ConnectionFolderNode, ConnectionRecord } from '@/types/connections'
 import type { TeamRecord } from '@/types/teams'
 import { resolveProtocolIcon } from '@/lib/utils/protocolIcons'
 import { useConnectionMutations } from '@/hooks/useConnectionMutations'
-import type { ApiError } from '@/lib/api/http'
-import { toApiError } from '@/lib/api/http'
+import { ApiError, toApiError } from '@/lib/api/http'
 import { teamsApi } from '@/lib/api/teams'
 import type { ConnectionCreatePayload } from '@/lib/api/connections'
+import { usePermissions } from '@/hooks/usePermissions'
 import {
   CONNECTION_COLOR_OPTIONS,
   CONNECTION_ICON_OPTIONS,
@@ -25,6 +27,7 @@ import {
   getDefaultIconForProtocol,
   getIconOptionsForProtocol,
 } from '@/constants/connections'
+import { PERMISSIONS } from '@/constants/permissions'
 import { cn } from '@/lib/utils/cn'
 
 const connectionSchema = z.object({
@@ -72,6 +75,10 @@ export function ConnectionFormModal({
   const [formError, setFormError] = useState<ApiError | null>(null)
   const grantToggleInteractedRef = useRef(false)
   const [autoGrantTeamPermissions, setAutoGrantTeamPermissions] = useState(false)
+  const { hasPermission } = usePermissions()
+  const canCreateIdentity = hasPermission(PERMISSIONS.VAULT.CREATE)
+  const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null)
+  const [identityModalOpen, setIdentityModalOpen] = useState(false)
 
   const iconOptions = useMemo(() => {
     return getIconOptionsForProtocol(protocol?.id, protocol?.category)
@@ -110,6 +117,7 @@ export function ConnectionFormModal({
       setFormError(null)
       grantToggleInteractedRef.current = false
       setAutoGrantTeamPermissions(false)
+      setSelectedIdentityId(null)
     }
   }, [defaultValues, open, reset])
 
@@ -213,6 +221,16 @@ export function ConnectionFormModal({
     if (!protocol) {
       return
     }
+    if (!selectedIdentityId) {
+      setFormError(
+        new ApiError({
+          code: 'validation.identity_required',
+          message: 'Select or create a vault identity to continue.',
+        })
+      )
+      return
+    }
+
     try {
       const metadata: Record<string, unknown> = {}
       const iconValue = values.icon?.trim()
@@ -231,6 +249,7 @@ export function ConnectionFormModal({
         folder_id: sanitizeId(values.folder_id),
         team_id: denormalizeTeamValue(values.team_id),
         metadata: Object.keys(metadata).length ? metadata : undefined,
+        identity_id: selectedIdentityId,
       }
 
       if (effectiveTeamId && autoGrantTeamPermissions && missingTeamPermissionIds.length > 0) {
@@ -259,207 +278,235 @@ export function ConnectionFormModal({
   const Icon = resolveProtocolIcon(protocol)
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={`Configure ${protocol.name}`}
-      description="Provide a name and optional folder to keep things organized."
-      size="lg"
-    >
-      <div className="flex flex-col gap-6">
-        <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-muted/20 p-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Icon className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">{protocol.name}</p>
-            <p className="text-xs text-muted-foreground">
-              {protocol.description ?? 'No description provided.'}
-            </p>
-          </div>
-        </div>
-
-        <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} autoComplete="off">
-          <Input
-            label="Connection name"
-            placeholder="Production SSH"
-            {...register('name')}
-            error={errors.name?.message}
-          />
-
-          <Textarea
-            label="Description"
-            placeholder="Optional - share context for teammates."
-            rows={3}
-            {...register('description')}
-            error={errors.description?.message}
-          />
-
-          <div className="grid gap-3">
-            <label className="text-sm font-medium text-foreground">Icon</label>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-              {(iconOptions.length ? iconOptions : CONNECTION_ICON_OPTIONS).map(
-                ({ id, label, icon: OptionIcon }) => {
-                  const isActive = (selectedIcon || DEFAULT_CONNECTION_ICON_ID) === id
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => setValue('icon', id, { shouldValidate: true })}
-                      className={cn(
-                        'flex h-12 items-center justify-center gap-2 rounded-lg border text-sm transition-colors',
-                        isActive
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border text-muted-foreground hover:border-border/80 hover:bg-muted/40'
-                      )}
-                      aria-pressed={isActive}
-                    >
-                      <OptionIcon className="h-4 w-4" />
-                      <span className="truncate">{label}</span>
-                    </button>
-                  )
-                }
-              )}
+    <>
+      <Modal
+        open={open}
+        onClose={onClose}
+        title={`Configure ${protocol.name}`}
+        description="Provide a name and optional folder to keep things organized."
+        size="lg"
+      >
+        <div className="flex flex-col gap-6">
+          <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Icon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">{protocol.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {protocol.description ?? 'No description provided.'}
+              </p>
             </div>
           </div>
 
-          <div className="grid gap-3">
-            <label className="text-sm font-medium text-foreground">Accent color</label>
-            <div className="flex flex-wrap gap-2">
-              <ColorSwatch
-                key="none"
-                label="Default"
-                color=""
-                isActive={!selectedColor}
-                onSelect={() => setValue('color', '', { shouldValidate: true })}
-              />
-              {CONNECTION_COLOR_OPTIONS.map((option) => (
+          <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} autoComplete="off">
+            <Input
+              label="Connection name"
+              placeholder="Production SSH"
+              {...register('name')}
+              error={errors.name?.message}
+            />
+
+            <Textarea
+              label="Description"
+              placeholder="Optional - share context for teammates."
+              rows={3}
+              {...register('description')}
+              error={errors.description?.message}
+            />
+
+            <div className="grid gap-3">
+              <label className="text-sm font-medium text-foreground">Icon</label>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {(iconOptions.length ? iconOptions : CONNECTION_ICON_OPTIONS).map(
+                  ({ id, label, icon: OptionIcon }) => {
+                    const isActive = (selectedIcon || DEFAULT_CONNECTION_ICON_ID) === id
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => setValue('icon', id, { shouldValidate: true })}
+                        className={cn(
+                          'flex h-12 items-center justify-center gap-2 rounded-lg border text-sm transition-colors',
+                          isActive
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border text-muted-foreground hover:border-border/80 hover:bg-muted/40'
+                        )}
+                        aria-pressed={isActive}
+                      >
+                        <OptionIcon className="h-4 w-4" />
+                        <span className="truncate">{label}</span>
+                      </button>
+                    )
+                  }
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              <label className="text-sm font-medium text-foreground">Accent color</label>
+              <div className="flex flex-wrap gap-2">
                 <ColorSwatch
-                  key={option.id}
-                  label={option.label}
-                  color={option.value}
-                  isActive={selectedColor === option.value}
-                  onSelect={() => setValue('color', option.value, { shouldValidate: true })}
+                  key="none"
+                  label="Default"
+                  color=""
+                  isActive={!selectedColor}
+                  onSelect={() => setValue('color', '', { shouldValidate: true })}
                 />
-              ))}
+                {CONNECTION_COLOR_OPTIONS.map((option) => (
+                  <ColorSwatch
+                    key={option.id}
+                    label={option.label}
+                    color={option.value}
+                    isActive={selectedColor === option.value}
+                    onSelect={() => setValue('color', option.value, { shouldValidate: true })}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-foreground" htmlFor="connection-folder">
-              Folder
-            </label>
-            <select
-              id="connection-folder"
-              className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              defaultValue=""
-              {...register('folder_id')}
-            >
-              <option value="">Unassigned</option>
-              {folderOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground">
-              Optional. Connections without a folder appear in the Unassigned view.
-            </p>
-          </div>
-
-          {allowTeamAssignment && teams.length ? (
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-foreground" htmlFor="connection-team">
-                Team
+              <label className="text-sm font-medium text-foreground" htmlFor="connection-folder">
+                Folder
               </label>
               <select
-                id="connection-team"
+                id="connection-folder"
                 className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                defaultValue={normalizeTeamValue(teamId)}
-                {...register('team_id')}
+                defaultValue=""
+                {...register('folder_id')}
               >
-                <option value="">Personal workspace</option>
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
+                <option value="">Unassigned</option>
+                {folderOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
                   </option>
                 ))}
               </select>
-              {effectiveTeamId ? (
-                <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                  {teamCapabilitiesQuery.isLoading ? (
-                    'Checking team capabilities…'
-                  ) : teamCapabilityWarnings.length === 0 ? (
-                    'Team currently has the required permissions to launch this connection.'
-                  ) : (
-                    <div className="space-y-2">
-                      <ul className="list-disc space-y-1 pl-4">
-                        {teamCapabilityWarnings.map((warning) => (
-                          <li key={warning}>{warning}</li>
-                        ))}
-                      </ul>
-                      {missingTeamPermissionIds.length > 0 ? (
-                        <label
-                          htmlFor="auto-grant-team-permissions"
-                          className="flex items-start gap-3 rounded-md border border-dashed border-border/60 bg-background px-3 py-2 text-foreground"
-                        >
-                          <Checkbox
-                            id="auto-grant-team-permissions"
-                            checked={autoGrantTeamPermissions}
-                            onCheckedChange={(value) => handleAutoGrantToggle(value === true)}
-                            className="mt-1"
-                          />
-                          <div className="space-y-1 text-xs text-muted-foreground">
-                            <p className="font-medium text-foreground">
-                              Grant missing permissions to{' '}
-                              {selectedTeam?.name ?? 'the selected team'} for this connection.
-                            </p>
-                            <p>The team will receive:</p>
-                            <div className="mt-1 flex flex-wrap gap-1.5">
-                              {missingTeamPermissionIds.map((permissionId) => (
-                                <Badge
-                                  key={permissionId}
-                                  variant="secondary"
-                                  className="text-[10px] uppercase tracking-wide"
-                                >
-                                  {permissionId}
-                                </Badge>
-                              ))}
+              <p className="text-xs text-muted-foreground">
+                Optional. Connections without a folder appear in the Unassigned view.
+              </p>
+            </div>
+
+            {allowTeamAssignment && teams.length ? (
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-foreground" htmlFor="connection-team">
+                  Team
+                </label>
+                <select
+                  id="connection-team"
+                  className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  defaultValue={normalizeTeamValue(teamId)}
+                  {...register('team_id')}
+                >
+                  <option value="">Personal workspace</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+                {effectiveTeamId ? (
+                  <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                    {teamCapabilitiesQuery.isLoading ? (
+                      'Checking team capabilities…'
+                    ) : teamCapabilityWarnings.length === 0 ? (
+                      'Team currently has the required permissions to launch this connection.'
+                    ) : (
+                      <div className="space-y-2">
+                        <ul className="list-disc space-y-1 pl-4">
+                          {teamCapabilityWarnings.map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                        </ul>
+                        {missingTeamPermissionIds.length > 0 ? (
+                          <label
+                            htmlFor="auto-grant-team-permissions"
+                            className="flex items-start gap-3 rounded-md border border-dashed border-border/60 bg-background px-3 py-2 text-foreground"
+                          >
+                            <Checkbox
+                              id="auto-grant-team-permissions"
+                              checked={autoGrantTeamPermissions}
+                              onCheckedChange={(value) => handleAutoGrantToggle(value === true)}
+                              className="mt-1"
+                            />
+                            <div className="space-y-1 text-xs text-muted-foreground">
+                              <p className="font-medium text-foreground">
+                                Grant missing permissions to{' '}
+                                {selectedTeam?.name ?? 'the selected team'} for this connection.
+                              </p>
+                              <p>The team will receive:</p>
+                              <div className="mt-1 flex flex-wrap gap-1.5">
+                                {missingTeamPermissionIds.map((permissionId) => (
+                                  <Badge
+                                    key={permissionId}
+                                    variant="secondary"
+                                    className="text-[10px] uppercase tracking-wide"
+                                  >
+                                    {permissionId}
+                                  </Badge>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        </label>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-              ) : null}
+                          </label>
+                        ) : null}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">Credential identity</label>
+              <IdentitySelector
+                value={selectedIdentityId}
+                onChange={setSelectedIdentityId}
+                protocolId={protocol.id}
+                allowInlineCreate={canCreateIdentity}
+                onCreateIdentity={() => setIdentityModalOpen(true)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Connections reference vault identities to securely access remote resources. Select
+                an existing credential or create a connection-scoped identity.
+              </p>
             </div>
-          ) : null}
 
-          <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-3 py-2">
-            <p className="text-xs text-muted-foreground">
-              Additional protocol-specific fields are coming soon. You can revisit this connection
-              later to add advanced settings.
-            </p>
-          </div>
-
-          {formError ? (
-            <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {formError.message}
+            <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-3 py-2">
+              <p className="text-xs text-muted-foreground">
+                Additional protocol-specific fields are coming soon. You can revisit this connection
+                later to add advanced settings.
+              </p>
             </div>
-          ) : null}
 
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={isLoading}>
-              Create Connection
-            </Button>
-          </div>
-        </form>
-      </div>
-    </Modal>
+            {formError ? (
+              <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {formError.message}
+              </div>
+            ) : null}
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={isLoading}>
+                Create Connection
+              </Button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+      <IdentityFormModal
+        open={identityModalOpen}
+        onClose={() => setIdentityModalOpen(false)}
+        mode="create"
+        defaultScope="connection"
+        connectionId={null}
+        onSuccess={(identity) => {
+          setSelectedIdentityId(identity.id)
+          setIdentityModalOpen(false)
+        }}
+      />
+    </>
   )
 }
 

@@ -200,11 +200,11 @@
 
 ### Phase 5: Vault UI & Workflow Integration (Week 5)
 
-- [ ] Replace `/settings/identities` placeholder with full list (filters, sorting, scope indicators)
-- [ ] Build identity form modal (create/edit) with credential-type editors and share dialog
-- [ ] Introduce reusable `IdentitySelector` for connection forms and settings panels
-- [ ] Allow inline identity creation within connection flows when user holds `vault.create`
-- [ ] Add per-identity detail view (activity timeline, usage, share management)
+- [x] Replace `/settings/identities` placeholder with full list (filters, sorting, scope indicators)
+- [x] Build identity form modal (create/edit) with credential-type editors and share dialog
+- [x] Introduce reusable `IdentitySelector` for connection forms and settings panels
+- [x] Allow inline identity creation within connection flows when user holds `vault.create`
+- [x] Add per-identity detail view (activity timeline, usage, share management)
 
 ### Phase 6: Quality, Security, & Docs (Week 6)
 
