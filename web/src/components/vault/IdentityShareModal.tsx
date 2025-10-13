@@ -2,6 +2,13 @@ import { useMemo, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select'
 import { useIdentitySharing } from '@/hooks/useIdentities'
 import { useUsers } from '@/hooks/useUsers'
 import { useTeams } from '@/hooks/useTeams'
@@ -126,37 +133,59 @@ export function IdentityShareModal({ identityId, open, onClose }: IdentityShareM
           <label className="text-sm font-medium" htmlFor="share-principal">
             {principalType === 'user' ? 'User' : 'Team'}
           </label>
-          <select
-            id="share-principal"
-            className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+          <Select
             value={principalId}
-            onChange={(event) => setPrincipalId(event.target.value)}
+            onValueChange={setPrincipalId}
+            disabled={!principalOptions.length}
           >
-            <option value="">Select {principalType === 'user' ? 'user' : 'team'}</option>
-            {principalOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger
+              id="share-principal"
+              className="h-10 w-full justify-between"
+              aria-label={principalType === 'user' ? 'Select user' : 'Select team'}
+            >
+              <SelectValue
+                placeholder={
+                  principalOptions.length
+                    ? `Select ${principalType === 'user' ? 'user' : 'team'}`
+                    : `No ${principalType === 'user' ? 'users' : 'teams'} available`
+                }
+              />
+            </SelectTrigger>
+            <SelectContent align="start">
+              {principalOptions.length === 0 ? (
+                <SelectItem value="" disabled>
+                  {principalType === 'user' ? 'No users available' : 'No teams available'}
+                </SelectItem>
+              ) : (
+                principalOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">
           <label className="text-sm font-medium" htmlFor="share-permission">
             Permission
           </label>
-          <select
-            id="share-permission"
-            className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+          <Select
             value={permission}
-            onChange={(event) => setPermission(event.target.value as IdentitySharePermission)}
+            onValueChange={(value) => setPermission(value as IdentitySharePermission)}
           >
-            {PERMISSION_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="share-permission" className="h-10 w-full justify-between">
+              <SelectValue placeholder="Select permission" />
+            </SelectTrigger>
+            <SelectContent align="start">
+              {PERMISSION_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p className="text-xs text-muted-foreground">
             “Use” permits launching connections with this credential, “Edit” grants full management.
           </p>

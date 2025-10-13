@@ -17,6 +17,7 @@ import type {
   IdentityScope,
 } from '@/types/vault'
 import { cn } from '@/lib/utils/cn'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select'
 
 const identityFormSchema = z.object({
   name: z
@@ -324,16 +325,26 @@ export function IdentityFormModal({
               <label htmlFor="identity-scope" className="text-sm font-medium">
                 Scope
               </label>
-              <select
-                id="identity-scope"
-                className="h-10 rounded-md border border-border bg-background px-3 text-sm"
-                {...register('scope')}
-                disabled={mode === 'edit'}
-              >
-                <option value="global">Global</option>
-                <option value="team">Team</option>
-                <option value="connection">Connection</option>
-              </select>
+              <Controller
+                name="scope"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    disabled={mode === 'edit'}
+                    value={(field.value as IdentityScope) ?? defaultScope}
+                    onValueChange={(value) => field.onChange(value as IdentityScope)}
+                  >
+                    <SelectTrigger id="identity-scope" className="h-10 w-full justify-between">
+                      <SelectValue placeholder="Select scope" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="global">Global</SelectItem>
+                      <SelectItem value="team">Team</SelectItem>
+                      <SelectItem value="connection">Connection</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
           </div>
 
@@ -357,39 +368,62 @@ export function IdentityFormModal({
               <label htmlFor="identity-template" className="text-sm font-medium">
                 Credential template
               </label>
-              <select
-                id="identity-template"
-                className="h-10 rounded-md border border-border bg-background px-3 text-sm"
-                {...register('template_id')}
-              >
-                <option value="">Custom (JSON)</option>
-                {templates.map((tpl) => (
-                  <option key={tpl.id} value={tpl.id}>
-                    {tpl.display_name} · {tpl.driver_id}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="template_id"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={(value) => field.onChange(value)}
+                  >
+                    <SelectTrigger id="identity-template" className="h-10 w-full justify-between">
+                      <SelectValue placeholder="Custom (JSON)" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="">Custom (JSON)</SelectItem>
+                      {templates.map((tpl) => (
+                        <SelectItem key={tpl.id} value={tpl.id}>
+                          {tpl.display_name} · {tpl.driver_id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
             <div className="space-y-2">
               <label htmlFor="identity-team" className="text-sm font-medium">
                 Team (team scope)
               </label>
-              <select
-                id="identity-team"
-                className={cn(
-                  'h-10 rounded-md border border-border bg-background px-3 text-sm',
-                  disableTeamSelect ? 'bg-muted text-muted-foreground' : ''
+              <Controller
+                name="team_id"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    disabled={disableTeamSelect}
+                    value={field.value ?? ''}
+                    onValueChange={(value) => field.onChange(value)}
+                  >
+                    <SelectTrigger
+                      id="identity-team"
+                      className={cn(
+                        'h-10 w-full justify-between',
+                        disableTeamSelect && 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      <SelectValue placeholder="No team" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="">No team</SelectItem>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
-                {...register('team_id')}
-                disabled={disableTeamSelect}
-              >
-                <option value="">No team</option>
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
+              />
               {disableTeamSelect ? (
                 <p className="text-xs text-muted-foreground">
                   Switch to the Team scope to select a default team.
@@ -536,33 +570,42 @@ function CredentialFieldInput({ field, control, disabled }: CredentialFieldInput
         <Controller
           name={fieldName}
           control={control}
-          defaultValue={field.options[0] ?? ''}
+          defaultValue={
+            typeof field.options[0] === 'string'
+              ? field.options[0]
+              : field.options[0] && 'value' in field.options[0]
+                ? String(field.options[0].value ?? '')
+                : ''
+          }
           render={({ field: controllerField }) => (
-            <select
-              id={`field-${field.name}`}
-              className="h-10 rounded-md border border-border bg-background px-3 text-sm"
-              value={(controllerField.value as string) ?? ''}
-              onChange={(event) => controllerField.onChange(event.target.value)}
+            <Select
               disabled={disabled}
+              value={(controllerField.value as string) ?? ''}
+              onValueChange={(value) => controllerField.onChange(value)}
             >
-              {field.options?.map((option) => {
-                if (typeof option === 'string') {
+              <SelectTrigger id={`field-${field.name}`} className="h-10 w-full justify-between">
+                <SelectValue placeholder="Select option" />
+              </SelectTrigger>
+              <SelectContent align="start">
+                {field.options?.map((option) => {
+                  if (typeof option === 'string') {
+                    return (
+                      <SelectItem key={option} value={option}>
+                        {option}
+                      </SelectItem>
+                    )
+                  }
+                  const rawValue = option.value
+                  const label =
+                    typeof option.label === 'string' ? option.label : String(option.value ?? '')
                   return (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
+                    <SelectItem key={String(rawValue)} value={String(rawValue)}>
+                      {label}
+                    </SelectItem>
                   )
-                }
-                const rawValue = option.value
-                const label =
-                  typeof option.label === 'string' ? option.label : String(option.value ?? '')
-                return (
-                  <option key={String(rawValue)} value={String(rawValue)}>
-                    {label}
-                  </option>
-                )
-              })}
-            </select>
+                })}
+              </SelectContent>
+            </Select>
           )}
         />
         {field.description ? (

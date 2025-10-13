@@ -10,6 +10,13 @@ import type { UseMutationResult } from '@tanstack/react-query'
 import { PERMISSIONS } from '@/constants/permissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import type { UserRoleSummary } from '@/types/users'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select'
 
 type AddMemberMutation = UseMutationResult<boolean, unknown, { teamId: string; userId: string }>
 type RemoveMemberMutation = UseMutationResult<boolean, unknown, { teamId: string; userId: string }>
@@ -174,24 +181,40 @@ export function TeamMembersManager({
                 >
                   Select user
                 </label>
-                <select
-                  id="member-select"
+                <Select
                   value={selectedUserId}
-                  onChange={(event) => setSelectedUserId(event.target.value)}
-                  className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  onValueChange={setSelectedUserId}
                   disabled={!availableUsers.length || isUsersLoading}
                 >
-                  {!availableUsers.length ? (
-                    <option value="" disabled>
-                      {isUsersLoading ? 'Loading users…' : 'No matching users available'}
-                    </option>
-                  ) : null}
-                  {availableUsers.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.username} — {user.email}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    id="member-select"
+                    className="h-10 w-full justify-between"
+                    aria-label="Select user"
+                  >
+                    <SelectValue
+                      placeholder={
+                        isUsersLoading
+                          ? 'Loading users…'
+                          : !availableUsers.length
+                            ? 'No matching users available'
+                            : 'Choose a user'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {availableUsers.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        {isUsersLoading ? 'Loading users…' : 'No matching users available'}
+                      </SelectItem>
+                    ) : (
+                      availableUsers.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.username} — {user.email}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

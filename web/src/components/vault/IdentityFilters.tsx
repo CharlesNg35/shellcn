@@ -2,6 +2,13 @@ import { Search as SearchIcon, SlidersHorizontal } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Checkbox } from '@/components/ui/Checkbox'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select'
 import type { IdentityScope } from '@/types/vault'
 import { cn } from '@/lib/utils/cn'
 
@@ -61,24 +68,28 @@ export function IdentityFilters({
           </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-none lg:items-center lg:gap-3">
-          <div className="flex items-center gap-3">
-            <label htmlFor="identity-protocol-filter" className="text-xs font-medium uppercase">
-              Protocol
-            </label>
-            <select
-              id="identity-protocol-filter"
-              className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+          <fieldset className="flex items-center gap-3">
+            <legend className="text-xs font-medium uppercase">Protocol</legend>
+            <Select
               value={protocolId}
-              onChange={(event) => onProtocolChange(event.target.value as string | 'all')}
+              onValueChange={(value) => onProtocolChange(value as string | 'all')}
             >
-              <option value="all">All protocols</option>
-              {protocolOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-          </div>
+              <SelectTrigger
+                id="identity-protocol-filter"
+                className="h-9 min-w-[10rem] justify-between"
+              >
+                <SelectValue placeholder="All protocols" />
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectItem value="all">All protocols</SelectItem>
+                {protocolOptions.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </fieldset>
           <label className="flex items-center gap-2 text-sm text-foreground">
             <Checkbox
               checked={includeConnectionScoped}

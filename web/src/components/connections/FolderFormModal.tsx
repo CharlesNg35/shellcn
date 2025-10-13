@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useForm, type SubmitHandler } from 'react-hook-form'
+import { Controller, useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Button } from '@/components/ui/Button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select'
 import type { ConnectionFolderSummary } from '@/types/connections'
 import type { TeamRecord } from '@/types/teams'
 import { useConnectionFolderMutations } from '@/hooks/useConnectionFolderMutations'
@@ -74,6 +81,7 @@ export function FolderFormModal({
     handleSubmit,
     register,
     reset,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<FolderFormValues>({
     resolver: zodResolver(folderSchema),
@@ -152,19 +160,28 @@ export function FolderFormModal({
               <label className="text-sm font-medium text-foreground" htmlFor="folder-team">
                 Assign to team
               </label>
-              <select
-                id="folder-team"
-                className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                defaultValue={defaultValues.team_id ?? ''}
-                {...register('team_id')}
-              >
-                <option value="">Personal workspace</option>
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="team_id"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={(value) => field.onChange(value)}
+                  >
+                    <SelectTrigger id="folder-team" className="h-10 w-full justify-between">
+                      <SelectValue placeholder="Personal workspace" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="">Personal workspace</SelectItem>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
             </div>
           ) : null}
         </div>

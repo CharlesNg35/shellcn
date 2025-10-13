@@ -6,6 +6,13 @@ import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select'
 import { useUsers } from '@/hooks/useUsers'
 import { usePermissionRegistry } from '@/hooks/usePermissionRegistry'
 import {
@@ -352,51 +359,70 @@ export function ShareConnectionModal({
                   value={userSearch}
                   onChange={(event) => setUserSearch(event.target.value)}
                 />
-                <select
-                  id="share-user"
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                <Select
                   value={selectedUserId}
-                  onChange={(event) => setSelectedUserId(event.target.value)}
+                  onValueChange={setSelectedUserId}
                   disabled={usersQuery.isLoading || users.length === 0}
                 >
-                  {usersQuery.isLoading ? (
-                    <option value="" disabled>
-                      Loading users…
-                    </option>
-                  ) : users.length === 0 ? (
-                    <option value="" disabled>
-                      No users found
-                    </option>
-                  ) : null}
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.username} — {user.email}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    id="share-user"
+                    className="h-10 w-full justify-between"
+                    aria-label="Select user"
+                  >
+                    <SelectValue
+                      placeholder={
+                        usersQuery.isLoading
+                          ? 'Loading users…'
+                          : users.length === 0
+                          ? 'No users found'
+                          : 'Choose a user'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {users.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        {usersQuery.isLoading ? 'Loading users…' : 'No users found'}
+                      </SelectItem>
+                    ) : (
+                      users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.username} — {user.email}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             ) : (
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="share-team">
                   Select team
                 </label>
-                <select
-                  id="share-team"
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  value={selectedTeamId}
-                  onChange={(event) => setSelectedTeamId(event.target.value)}
-                >
-                  {teams.length === 0 ? (
-                    <option value="" disabled>
-                      No teams available
-                    </option>
-                  ) : null}
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
+                <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                  <SelectTrigger
+                    id="share-team"
+                    className="h-10 w-full justify-between"
+                    aria-label="Select team"
+                  >
+                    <SelectValue
+                      placeholder={teams.length === 0 ? 'No teams available' : 'Choose a team'}
+                    />
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {teams.length === 0 ? (
+                      <SelectItem value="" disabled>
+                        No teams available
+                      </SelectItem>
+                    ) : (
+                      teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
               </div>
             )}
 

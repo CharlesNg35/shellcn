@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
-import { useForm, type SubmitHandler } from 'react-hook-form'
+import { Controller, useForm, type SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
 import { Modal } from '@/components/ui/Modal'
@@ -11,6 +11,13 @@ import { Checkbox } from '@/components/ui/Checkbox'
 import { Badge } from '@/components/ui/Badge'
 import { IdentitySelector } from '@/components/vault/IdentitySelector'
 import { IdentityFormModal } from '@/components/vault/IdentityFormModal'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select'
 import type { Protocol } from '@/types/protocols'
 import type { ConnectionFolderNode, ConnectionRecord } from '@/types/connections'
 import type { TeamRecord } from '@/types/teams'
@@ -101,6 +108,7 @@ export function ConnectionFormModal({
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     watch,
@@ -369,19 +377,33 @@ export function ConnectionFormModal({
               <label className="text-sm font-medium text-foreground" htmlFor="connection-folder">
                 Folder
               </label>
-              <select
-                id="connection-folder"
-                className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                defaultValue=""
-                {...register('folder_id')}
-              >
-                <option value="">Unassigned</option>
-                {folderOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <Controller
+                name="folder_id"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={(field.value && field.value.length ? field.value : '__unassigned__') as string}
+                    onValueChange={(value) =>
+                      field.onChange(value === '__unassigned__' ? '' : value)
+                    }
+                  >
+                    <SelectTrigger
+                      id="connection-folder"
+                      className="h-10 w-full justify-between"
+                    >
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                      {folderOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               <p className="text-xs text-muted-foreground">
                 Optional. Connections without a folder appear in the Unassigned view.
               </p>
@@ -392,19 +414,33 @@ export function ConnectionFormModal({
                 <label className="text-sm font-medium text-foreground" htmlFor="connection-team">
                   Team
                 </label>
-                <select
-                  id="connection-team"
-                  className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  defaultValue={normalizeTeamValue(teamId)}
-                  {...register('team_id')}
-                >
-                  <option value="">Personal workspace</option>
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
+                <Controller
+                  name="team_id"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={(field.value && field.value.length ? field.value : '__personal__') as string}
+                      onValueChange={(value) =>
+                        field.onChange(value === '__personal__' ? '' : value)
+                      }
+                    >
+                      <SelectTrigger
+                        id="connection-team"
+                        className="h-10 w-full justify-between"
+                      >
+                        <SelectValue placeholder="Personal workspace" />
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        <SelectItem value="__personal__">Personal workspace</SelectItem>
+                        {teams.map((team) => (
+                          <SelectItem key={team.id} value={team.id}>
+                            {team.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 {effectiveTeamId ? (
                   <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
                     {teamCapabilitiesQuery.isLoading ? (

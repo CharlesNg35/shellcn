@@ -2,6 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Filter, RefreshCcw } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select'
 import type { AuditLogResult } from '@/types/audit'
 
 export interface AuditFilterState {
@@ -125,23 +132,30 @@ export function AuditFilters({ filters, onChange }: AuditFiltersProps) {
             >
               Result
             </label>
-            <select
-              id="audit-result-filter"
-              className="h-10 rounded-lg border border-input bg-background px-3 text-sm text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <Select
               value={activeResult}
-              onChange={(event) =>
+              onValueChange={(value) =>
                 onChange({
                   ...filters,
-                  result: event.target.value as AuditFilterState['result'],
+                  result: value === 'all' ? 'all' : (value as AuditFilterState['result']),
                 })
               }
             >
-              {RESULT_OPTIONS.map((option) => (
-                <option key={option.value ?? 'all'} value={option.value ?? 'all'}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                id="audit-result-filter"
+                className="h-10 w-full justify-between"
+                aria-label="Filter by result"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="start">
+                {RESULT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value ?? 'all'} value={option.value ?? 'all'}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
