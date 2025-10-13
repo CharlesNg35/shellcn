@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import * as React from 'react'
 import { vi } from 'vitest'
 import { ConnectionFormModal } from '@/components/connections/ConnectionFormModal'
 import type { Protocol } from '@/types/protocols'
@@ -19,6 +20,82 @@ vi.mock('@/hooks/useConnectionMutations', () => ({
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({ hasPermission: () => true }),
 }))
+
+vi.mock('@/components/ui/Select', () => {
+  const SelectContent = Object.assign(
+    ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    { displayName: 'MockSelectContent' }
+  )
+
+  const SelectItem = Object.assign(
+    ({
+      value,
+      children,
+      disabled,
+    }: {
+      value: string
+      children: React.ReactNode
+      disabled?: boolean
+    }) => (
+      <option value={value} disabled={disabled}>
+        {children}
+      </option>
+    ),
+    { displayName: 'MockSelectItem' }
+  )
+
+  const SelectTrigger = Object.assign(
+    ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    { displayName: 'MockSelectTrigger' }
+  )
+
+  const SelectValue = () => null
+
+  const Select = ({
+    value,
+    onValueChange,
+    children,
+    ...rest
+  }: {
+    value: string
+    onValueChange?: (next: string) => void
+    children: React.ReactNode
+    [key: string]: unknown
+  }) => {
+    const options: React.ReactNode[] = []
+    React.Children.forEach(children, (child) => {
+      if (!child) {
+        return
+      }
+      if ((child as React.ReactElement).type?.displayName === 'MockSelectContent') {
+        React.Children.forEach((child as React.ReactElement).props.children, (optionChild) => {
+          if (optionChild) {
+            options.push(optionChild)
+          }
+        })
+      }
+    })
+
+    return (
+      <select
+        data-testid="mock-select"
+        value={value}
+        onChange={(event) => onValueChange?.(event.target.value)}
+        {...rest}
+      >
+        {options}
+      </select>
+    )
+  }
+
+  return {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  }
+})
 
 vi.mock('@/components/vault/IdentitySelector', () => ({
   IdentitySelector: ({ onChange }: { onChange: (value: string | null) => void }) => (

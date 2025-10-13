@@ -381,20 +381,17 @@ export function ConnectionFormModal({
                 name="folder_id"
                 control={control}
                 render={({ field }) => (
-                  <Select
-                    value={(field.value && field.value.length ? field.value : '__unassigned__') as string}
-                    onValueChange={(value) =>
-                      field.onChange(value === '__unassigned__' ? '' : value)
-                    }
-                  >
-                    <SelectTrigger
-                      id="connection-folder"
-                      className="h-10 w-full justify-between"
-                    >
+                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                    <SelectTrigger id="connection-folder" className="h-10 w-full justify-between">
                       <SelectValue placeholder="Unassigned" />
                     </SelectTrigger>
                     <SelectContent align="start">
-                      <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                      <SelectItem value="">Unassigned</SelectItem>
+                      {folderOptions.length === 0 ? (
+                        <SelectItem value="__no_folders__" disabled>
+                          Create a folder to organize connections
+                        </SelectItem>
+                      ) : null}
                       {folderOptions.map((option) => (
                         <SelectItem key={option.id} value={option.id}>
                           {option.label}
@@ -419,19 +416,19 @@ export function ConnectionFormModal({
                   control={control}
                   render={({ field }) => (
                     <Select
-                      value={(field.value && field.value.length ? field.value : '__personal__') as string}
-                      onValueChange={(value) =>
-                        field.onChange(value === '__personal__' ? '' : value)
-                      }
+                      value={field.value && field.value.length ? field.value : ''}
+                      onValueChange={field.onChange}
                     >
-                      <SelectTrigger
-                        id="connection-team"
-                        className="h-10 w-full justify-between"
-                      >
+                      <SelectTrigger id="connection-team" className="h-10 w-full justify-between">
                         <SelectValue placeholder="Personal workspace" />
                       </SelectTrigger>
                       <SelectContent align="start">
-                        <SelectItem value="__personal__">Personal workspace</SelectItem>
+                        <SelectItem value="">Personal workspace</SelectItem>
+                        {teams.length === 0 ? (
+                          <SelectItem value="__no_teams__" disabled>
+                            Create a team to share this connection
+                          </SelectItem>
+                        ) : null}
                         {teams.map((team) => (
                           <SelectItem key={team.id} value={team.id}>
                             {team.name}

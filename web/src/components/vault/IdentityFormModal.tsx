@@ -372,10 +372,7 @@ export function IdentityFormModal({
                 name="template_id"
                 control={control}
                 render={({ field }) => (
-                  <Select
-                    value={field.value ?? ''}
-                    onValueChange={(value) => field.onChange(value)}
-                  >
+                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
                     <SelectTrigger id="identity-template" className="h-10 w-full justify-between">
                       <SelectValue placeholder="Custom (JSON)" />
                     </SelectTrigger>
@@ -402,7 +399,7 @@ export function IdentityFormModal({
                   <Select
                     disabled={disableTeamSelect}
                     value={field.value ?? ''}
-                    onValueChange={(value) => field.onChange(value)}
+                    onValueChange={field.onChange}
                   >
                     <SelectTrigger
                       id="identity-team"

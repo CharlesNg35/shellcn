@@ -182,7 +182,7 @@ export function TeamMembersManager({
                   Select user
                 </label>
                 <Select
-                  value={selectedUserId}
+                  value={selectedUserId || ''}
                   onValueChange={setSelectedUserId}
                   disabled={!availableUsers.length || isUsersLoading}
                 >
@@ -202,17 +202,23 @@ export function TeamMembersManager({
                     />
                   </SelectTrigger>
                   <SelectContent align="start">
+                    <SelectItem value="" disabled>
+                      {availableUsers.length === 0
+                        ? isUsersLoading
+                          ? 'Loading users…'
+                          : 'No matching users available'
+                        : 'Select user'}
+                    </SelectItem>
                     {availableUsers.length === 0 ? (
-                      <SelectItem value="" disabled>
-                        {isUsersLoading ? 'Loading users…' : 'No matching users available'}
+                      <SelectItem value="__no_users__" disabled>
+                        Invite users to join this workspace first
                       </SelectItem>
-                    ) : (
-                      availableUsers.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.username} — {user.email}
-                        </SelectItem>
-                      ))
-                    )}
+                    ) : null}
+                    {availableUsers.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.username} — {user.email}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

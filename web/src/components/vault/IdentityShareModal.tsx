@@ -134,8 +134,8 @@ export function IdentityShareModal({ identityId, open, onClose }: IdentityShareM
             {principalType === 'user' ? 'User' : 'Team'}
           </label>
           <Select
-            value={principalId}
-            onValueChange={setPrincipalId}
+            value={principalId || ''}
+            onValueChange={(value) => setPrincipalId(value)}
             disabled={!principalOptions.length}
           >
             <SelectTrigger
@@ -152,17 +152,27 @@ export function IdentityShareModal({ identityId, open, onClose }: IdentityShareM
               />
             </SelectTrigger>
             <SelectContent align="start">
-              {principalOptions.length === 0 ? (
-                <SelectItem value="" disabled>
-                  {principalType === 'user' ? 'No users available' : 'No teams available'}
+              <SelectItem value="" disabled>
+                {principalOptions.length === 0
+                  ? principalType === 'user'
+                    ? 'No users available'
+                    : 'No teams available'
+                  : principalType === 'user'
+                    ? 'Select user'
+                    : 'Select team'}
+              </SelectItem>
+              {!principalOptions.length ? (
+                <SelectItem value="__share_no_options__" disabled>
+                  {principalType === 'user'
+                    ? 'Invite users to assign shares'
+                    : 'Create a team first'}
                 </SelectItem>
-              ) : (
-                principalOptions.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
-                ))
-              )}
+              ) : null}
+              {principalOptions.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

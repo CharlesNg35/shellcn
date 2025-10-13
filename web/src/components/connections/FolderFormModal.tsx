@@ -164,15 +164,17 @@ export function FolderFormModal({
                 name="team_id"
                 control={control}
                 render={({ field }) => (
-                  <Select
-                    value={field.value ?? ''}
-                    onValueChange={(value) => field.onChange(value)}
-                  >
+                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
                     <SelectTrigger id="folder-team" className="h-10 w-full justify-between">
                       <SelectValue placeholder="Personal workspace" />
                     </SelectTrigger>
                     <SelectContent align="start">
                       <SelectItem value="">Personal workspace</SelectItem>
+                      {teams.length === 0 ? (
+                        <SelectItem value="__no_team__" disabled>
+                          Create a team to share this folder
+                        </SelectItem>
+                      ) : null}
                       {teams.map((team) => (
                         <SelectItem key={team.id} value={team.id}>
                           {team.name}

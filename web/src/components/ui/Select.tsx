@@ -4,8 +4,53 @@ import * as SelectPrimitive from '@radix-ui/react-select'
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import { cn } from '@/lib/utils/cn'
 
-function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />
+/**
+ * Internal placeholder value used to represent empty strings in Select components.
+ * Radix UI doesn't allow empty string values for SelectItem, so we use this placeholder
+ * and automatically convert between empty strings and the placeholder value.
+ */
+const EMPTY_VALUE_PLACEHOLDER = '__select_empty__'
+
+/**
+ * Select component that automatically handles empty string values.
+ *
+ * You can safely use empty strings ("") as values for both Select and SelectItem:
+ * - Empty string values are automatically converted to a placeholder internally
+ * - The placeholder is converted back to empty string in onChange callbacks
+ * - This means you never have to worry about Radix UI's empty string restriction
+ *
+ * @example
+ * ```tsx
+ * <Select value={field.value ?? ''} onValueChange={field.onChange}>
+ *   <SelectTrigger><SelectValue placeholder="Choose..." /></SelectTrigger>
+ *   <SelectContent>
+ *     <SelectItem value="">None</SelectItem>
+ *     <SelectItem value="option1">Option 1</SelectItem>
+ *   </SelectContent>
+ * </Select>
+ * ```
+ */
+function Select({
+  value,
+  onValueChange,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Root>) {
+  // Convert empty string to placeholder for Radix UI
+  const internalValue = !value || value === '' ? EMPTY_VALUE_PLACEHOLDER : value
+
+  // Convert placeholder back to empty string on change
+  const handleValueChange = (newValue: string) => {
+    onValueChange?.(newValue === EMPTY_VALUE_PLACEHOLDER ? '' : newValue)
+  }
+
+  return (
+    <SelectPrimitive.Root
+      data-slot="select"
+      value={internalValue}
+      onValueChange={handleValueChange}
+      {...props}
+    />
+  )
 }
 
 function SelectGroup(props: React.ComponentProps<typeof SelectPrimitive.Group>) {
@@ -92,11 +137,16 @@ function SelectLabel(props: React.ComponentProps<typeof SelectPrimitive.Label>) 
 function SelectItem({
   className,
   children,
+  value,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Item>) {
+  // Convert empty string value to placeholder for Radix UI
+  const internalValue = !value || value === '' ? EMPTY_VALUE_PLACEHOLDER : value
+
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
+      value={internalValue}
       className={cn(
         'focus:bg-accent focus:text-accent-foreground [&_svg:not([class*="text-"])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2',
         className

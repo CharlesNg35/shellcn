@@ -374,8 +374,8 @@ export function ShareConnectionModal({
                         usersQuery.isLoading
                           ? 'Loading users…'
                           : users.length === 0
-                          ? 'No users found'
-                          : 'Choose a user'
+                            ? 'No users found'
+                            : 'Choose a user'
                       }
                     />
                   </SelectTrigger>

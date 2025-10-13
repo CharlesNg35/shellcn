@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import * as React from 'react'
 import { vi } from 'vitest'
 import { IdentityShareModal } from '@/components/vault/IdentityShareModal'
 
@@ -25,6 +26,82 @@ vi.mock('@/hooks/useTeams', () => ({
   useTeams: (options: unknown) => mockUseTeams(options),
 }))
 
+vi.mock('@/components/ui/Select', () => {
+  const SelectContent = Object.assign(
+    ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    { displayName: 'MockSelectContent' }
+  )
+
+  const SelectItem = Object.assign(
+    ({
+      value,
+      children,
+      disabled,
+    }: {
+      value: string
+      children: React.ReactNode
+      disabled?: boolean
+    }) => (
+      <option value={value} disabled={disabled}>
+        {children}
+      </option>
+    ),
+    { displayName: 'MockSelectItem' }
+  )
+
+  const SelectTrigger = Object.assign(
+    ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    { displayName: 'MockSelectTrigger' }
+  )
+
+  const SelectValue = () => null
+
+  const Select = ({
+    value,
+    onValueChange,
+    children,
+    ...rest
+  }: {
+    value: string
+    onValueChange?: (next: string) => void
+    children: React.ReactNode
+    [key: string]: unknown
+  }) => {
+    const options: React.ReactNode[] = []
+    React.Children.forEach(children, (child) => {
+      if (!child) {
+        return
+      }
+      if ((child as React.ReactElement).type?.displayName === 'MockSelectContent') {
+        React.Children.forEach((child as React.ReactElement).props.children, (optionChild) => {
+          if (optionChild) {
+            options.push(optionChild)
+          }
+        })
+      }
+    })
+
+    return (
+      <select
+        data-testid="mock-select"
+        value={value}
+        onChange={(event) => onValueChange?.(event.target.value)}
+        {...rest}
+      >
+        {options}
+      </select>
+    )
+  }
+
+  return {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  }
+})
+
 describe('IdentityShareModal', () => {
   beforeEach(() => {
     grantMock.mockReset()
@@ -38,7 +115,7 @@ describe('IdentityShareModal', () => {
   it('submits share request for selected user', async () => {
     render(<IdentityShareModal identityId="id-1" open onClose={vi.fn()} />)
 
-    const select = screen.getByLabelText(/User/i)
+    const select = screen.getAllByTestId('mock-select')[0]
     fireEvent.change(select, { target: { value: 'usr-1' } })
 
     fireEvent.click(screen.getByRole('button', { name: /Share identity/i }))
