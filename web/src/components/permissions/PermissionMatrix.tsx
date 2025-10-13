@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
-  ChevronDown,
-  ChevronRight,
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Search,
-  ShieldAlert,
-} from 'lucide-react'
+  Children,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Search } from 'lucide-react'
 import { Input } from '@/components/ui/Input'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { Badge } from '@/components/ui/Badge'
@@ -15,7 +16,6 @@ import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils/cn'
 import { humanizePermissionModule } from '@/lib/utils/permissionLabels'
 import {
-  findPermissionDependents,
   groupPermissionsByModuleAndNamespace,
   type PermissionNamespace,
   type PermissionModuleGroup,
@@ -152,6 +152,8 @@ function filterPermissionTree(
   }
 }
 
+const COLLAPSE_DURATION = 220
+
 function Collapsible({
   isOpen,
   children,
@@ -161,14 +163,41 @@ function Collapsible({
   children: ReactNode
   className?: string
 }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState<string>(isOpen ? 'auto' : '0px')
+  const childCount = useMemo(() => Children.count(children), [children])
+
+  useLayoutEffect(() => {
+    const el = containerRef.current
+    if (!el) {
+      return
+    }
+
+    const contentHeight = el.scrollHeight
+
+    if (isOpen) {
+      setHeight(`${contentHeight}px`)
+      const timer = window.setTimeout(() => setHeight('auto'), COLLAPSE_DURATION)
+      return () => window.clearTimeout(timer)
+    }
+
+    setHeight(`${contentHeight}px`)
+    const raf = window.requestAnimationFrame(() => setHeight('0px'))
+    return () => window.cancelAnimationFrame(raf)
+  }, [isOpen, childCount])
+
   return (
     <div
-      className={cn(
-        'overflow-hidden transition-all duration-200 ease-in-out',
-        isOpen ? 'max-h-[4000px] opacity-100' : 'max-h-0 opacity-0',
-        className
-      )}
-      aria-hidden={!isOpen}
+      ref={containerRef}
+      className={cn('overflow-hidden', className)}
+      style={{
+        height: height === 'auto' ? 'auto' : height,
+        transition:
+          height === 'auto'
+            ? 'none'
+            : `height ${COLLAPSE_DURATION}ms cubic-bezier(0.33, 1, 0.68, 1)`,
+      }}
+      aria-hidden={!isOpen && height === '0px'}
     >
       <div className={cn('transition-opacity duration-200', isOpen ? 'opacity-100' : 'opacity-0')}>
         {children}
@@ -245,16 +274,6 @@ export function PermissionMatrix({
 
     return groups
   }, [registry, normalisedSearch])
-
-  const dependentIndex = useMemo(() => {
-    if (!registry) {
-      return {}
-    }
-    return Object.keys(registry).reduce<Record<string, PermissionIdentifier[]>>((acc, id) => {
-      acc[id] = findPermissionDependents(registry, id)
-      return acc
-    }, {})
-  }, [registry])
 
   const impliedByIndex = useMemo(() => {
     if (!registry) {
@@ -410,11 +429,7 @@ export function PermissionMatrix({
   // Render helper for permissions
   const renderPermission = (permission: PermissionDefinition, depth: number) => {
     const isChecked = selected.has(permission.id)
-    const dependents = dependentIndex[permission.id] ?? []
-    const blockingDependents = dependents.filter((dep) => selected.has(dep))
     const impliedBySelected = (impliedByIndex[permission.id] ?? []).filter((id) => selected.has(id))
-    const lockedBy = new Set<PermissionIdentifier>([...blockingDependents, ...impliedBySelected])
-    const isLocked = isChecked && lockedBy.size > 0
     const displayName = getPermissionLabel(permission.id)
     const checkboxId = `permission-${permission.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`
     const indentation = depth > 0 ? `${depth * 1.5}rem` : undefined
@@ -470,12 +485,6 @@ export function PermissionMatrix({
                     </Badge>
                   </div>
                 </button>
-                {isLocked ? (
-                  <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                    <ShieldAlert className="h-3 w-3" />
-                    In use by {lockedBy.size}
-                  </Badge>
-                ) : null}
               </div>
 
               {permission.description ? (
