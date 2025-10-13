@@ -3,8 +3,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
-import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { useUserMutations, useUser } from '@/hooks/useUsers'
+import { usePermissions } from '@/hooks/usePermissions'
 import type { UserRecord } from '@/types/users'
 import { cn } from '@/lib/utils/cn'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -20,8 +20,30 @@ interface UserDetailModalProps {
 export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailModalProps) {
   const { data: user, isLoading } = useUser(userId ?? '', { enabled: open && Boolean(userId) })
   const { activate, deactivate, changePassword } = useUserMutations()
+  const { hasAnyPermission } = usePermissions()
   const [passwordValue, setPasswordValue] = useState('')
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
+
+  const canUpdateUser = hasAnyPermission([
+    PERMISSIONS.USER.UPDATE,
+    PERMISSIONS.USER.EDIT,
+    PERMISSIONS.USER.MANAGE,
+  ])
+  const canActivateUser = hasAnyPermission([
+    PERMISSIONS.USER.ACTIVATE,
+    PERMISSIONS.USER.EDIT,
+    PERMISSIONS.USER.MANAGE,
+  ])
+  const canDeactivateUser = hasAnyPermission([
+    PERMISSIONS.USER.DEACTIVATE,
+    PERMISSIONS.USER.EDIT,
+    PERMISSIONS.USER.MANAGE,
+  ])
+  const canResetPassword = hasAnyPermission([
+    PERMISSIONS.USER.RESET_PASSWORD,
+    PERMISSIONS.USER.EDIT,
+    PERMISSIONS.USER.MANAGE,
+  ])
 
   const fullName = useMemo(() => {
     if (!user) {
@@ -40,8 +62,16 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
       return
     }
     if (user.is_active) {
+      if (!canDeactivateUser) {
+        toast.error('You do not have permission to deactivate users.')
+        return
+      }
       await deactivate.mutateAsync(user.id)
     } else {
+      if (!canActivateUser) {
+        toast.error('You do not have permission to activate users.')
+        return
+      }
       await activate.mutateAsync(user.id)
     }
   }
@@ -115,30 +145,33 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
             ) : null}
           </div>
 
-          <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
-            {isRootUser ? (
+          {(canUpdateUser || canActivateUser || canDeactivateUser) &&
+            (isRootUser ? (
               <div className="rounded-md border border-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
                 The root account cannot be edited or disabled from the Users page. Manage it from
                 your Profile instead.
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => onEdit?.(user)}>
-                  {isExternal ? 'Manage access' : 'Edit user'}
-                </Button>
-                <Button
-                  variant={user.is_active ? 'secondary' : 'default'}
-                  onClick={handleToggleActive}
-                  loading={activate.isPending || deactivate.isPending}
-                >
-                  {user.is_active ? 'Deactivate' : 'Activate'}
-                </Button>
+                {canUpdateUser ? (
+                  <Button variant="outline" onClick={() => onEdit?.(user)}>
+                    {isExternal ? 'Manage access' : 'Edit user'}
+                  </Button>
+                ) : null}
+                {(user.is_active ? canDeactivateUser : canActivateUser) ? (
+                  <Button
+                    variant={user.is_active ? 'secondary' : 'default'}
+                    onClick={handleToggleActive}
+                    loading={activate.isPending || deactivate.isPending}
+                  >
+                    {user.is_active ? 'Deactivate' : 'Activate'}
+                  </Button>
+                ) : null}
               </div>
-            )}
-          </PermissionGuard>
+            ))}
 
-          <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
-            {isRootUser ? (
+          {canResetPassword &&
+            (isRootUser ? (
               <div className="rounded-md border border-border/70 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
                 Password updates for the root account are restricted to the Profile page.
               </div>
@@ -178,8 +211,7 @@ export function UserDetailModal({ userId, open, onClose, onEdit }: UserDetailMod
                   </Button>
                 </div>
               </form>
-            )}
-          </PermissionGuard>
+            ))}
         </div>
       ) : (
         <div className="py-6 text-sm text-muted-foreground">User not found.</div>

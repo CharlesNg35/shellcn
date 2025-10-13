@@ -179,7 +179,9 @@ export function UserTable({
             >
               <Eye className="h-4 w-4" />
             </Button>
-            <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
+            <PermissionGuard
+              anyOf={[PERMISSIONS.USER.UPDATE, PERMISSIONS.USER.EDIT, PERMISSIONS.USER.MANAGE]}
+            >
               <Button
                 type="button"
                 variant="ghost"

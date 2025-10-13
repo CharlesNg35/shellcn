@@ -28,10 +28,16 @@ export function UserBulkActionsBar({
         {selectedCount} user{selectedCount === 1 ? '' : 's'} selected
       </div>
       <div className="flex flex-wrap gap-2">
-        <PermissionGuard permission={PERMISSIONS.USER.EDIT}>
+        <PermissionGuard
+          anyOf={[PERMISSIONS.USER.ACTIVATE, PERMISSIONS.USER.EDIT, PERMISSIONS.USER.MANAGE]}
+        >
           <Button size="sm" variant="secondary" onClick={onActivate} disabled={isProcessing}>
             <ShieldCheck className="mr-2 h-4 w-4" /> Activate
           </Button>
+        </PermissionGuard>
+        <PermissionGuard
+          anyOf={[PERMISSIONS.USER.DEACTIVATE, PERMISSIONS.USER.EDIT, PERMISSIONS.USER.MANAGE]}
+        >
           <Button size="sm" variant="outline" onClick={onDeactivate} disabled={isProcessing}>
             <ShieldOff className="mr-2 h-4 w-4" /> Deactivate
           </Button>

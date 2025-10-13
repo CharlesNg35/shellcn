@@ -1,10 +1,16 @@
 export const PERMISSIONS = {
   USER: {
     VIEW: 'user.view',
+    VIEW_ALL: 'user.view_all',
     CREATE: 'user.create',
+    UPDATE: 'user.update',
+    ACTIVATE: 'user.activate',
+    DEACTIVATE: 'user.deactivate',
+    RESET_PASSWORD: 'user.password.reset',
     EDIT: 'user.edit',
     DELETE: 'user.delete',
     INVITE: 'user.invite',
+    MANAGE: 'user.manage',
   },
   TEAM: {
     VIEW: 'team.view',
@@ -71,10 +77,16 @@ export type PermissionId = PermissionValues<PermissionTree>
 
 export const PERMISSION_IDS = [
   PERMISSIONS.USER.VIEW,
+  PERMISSIONS.USER.VIEW_ALL,
   PERMISSIONS.USER.CREATE,
+  PERMISSIONS.USER.UPDATE,
+  PERMISSIONS.USER.ACTIVATE,
+  PERMISSIONS.USER.DEACTIVATE,
+  PERMISSIONS.USER.RESET_PASSWORD,
   PERMISSIONS.USER.EDIT,
   PERMISSIONS.USER.DELETE,
   PERMISSIONS.USER.INVITE,
+  PERMISSIONS.USER.MANAGE,
   PERMISSIONS.TEAM.VIEW,
   PERMISSIONS.TEAM.VIEW_ALL,
   PERMISSIONS.TEAM.CREATE,

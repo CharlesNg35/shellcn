@@ -10,10 +10,10 @@ const registry: PermissionRegistry = {
     depends_on: [],
     implies: [],
   },
-  'user.edit': {
-    id: 'user.edit',
+  'user.update': {
+    id: 'user.update',
     module: 'core',
-    description: 'Edit users',
+    description: 'Update users',
     depends_on: ['user.view'],
     implies: [],
   },
@@ -21,7 +21,7 @@ const registry: PermissionRegistry = {
     id: 'user.delete',
     module: 'core',
     description: 'Delete users',
-    depends_on: ['user.view', 'user.edit'],
+    depends_on: ['user.view', 'user.update'],
     implies: [],
   },
 }
@@ -29,11 +29,11 @@ const registry: PermissionRegistry = {
 describe('permission utilities', () => {
   it('resolves dependency chain for a permission', () => {
     const dependencies = resolvePermissionDependencies(registry, 'user.delete')
-    expect(dependencies).toEqual(['user.view', 'user.edit'])
+    expect(dependencies).toEqual(['user.view', 'user.update'])
   })
 
   it('finds dependents recursively', () => {
     const dependents = findPermissionDependents(registry, 'user.view')
-    expect(dependents).toEqual(['user.edit', 'user.delete'])
+    expect(dependents).toEqual(['user.update', 'user.delete'])
   })
 })

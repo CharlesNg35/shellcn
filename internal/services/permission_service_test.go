@@ -63,7 +63,7 @@ func TestPermissionService_SetRolePermissionsIncludesDependencies(t *testing.T) 
 	for _, perm := range stored.Permissions {
 		ids = append(ids, perm.ID)
 	}
-	require.ElementsMatch(t, []string{"user.delete", "user.edit", "user.view"}, ids)
+	require.ElementsMatch(t, []string{"user.delete", "user.update", "user.view"}, ids)
 }
 
 func TestPermissionService_SetRolePermissionsRejectsUnknown(t *testing.T) {

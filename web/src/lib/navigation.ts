@@ -50,8 +50,8 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         label: 'Users',
         path: '/settings/users',
         icon: Users,
-        permission: PERMISSIONS.USER.VIEW,
         featureId: 'users',
+        anyPermissions: [PERMISSIONS.USER.VIEW, PERMISSIONS.USER.VIEW_ALL, PERMISSIONS.USER.MANAGE],
       },
       {
         label: 'Teams',

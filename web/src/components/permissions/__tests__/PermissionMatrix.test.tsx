@@ -12,10 +12,10 @@ const registry: PermissionRegistry = {
     depends_on: [],
     implies: [],
   },
-  'user.edit': {
-    id: 'user.edit',
+  'user.update': {
+    id: 'user.update',
     module: 'core',
-    description: 'Edit users',
+    description: 'Update users',
     depends_on: ['user.view'],
     implies: [],
   },
@@ -23,7 +23,7 @@ const registry: PermissionRegistry = {
     id: 'user.delete',
     module: 'core',
     description: 'Delete users',
-    depends_on: ['user.view', 'user.edit'],
+    depends_on: ['user.view', 'user.update'],
     implies: [],
   },
 }
@@ -49,12 +49,12 @@ describe('<PermissionMatrix />', () => {
 
     expect(onChange).toHaveBeenCalledTimes(1)
     const nextSelection = onChange.mock.calls[0][0] as string[]
-    expect(nextSelection.sort()).toEqual(['user.delete', 'user.edit', 'user.view'].sort())
+    expect(nextSelection.sort()).toEqual(['user.delete', 'user.update', 'user.view'].sort())
   })
 
   it('locks dependencies when they are required by selected permissions', async () => {
     const user = userEvent.setup()
-    const selected = new Set(['user.view', 'user.edit', 'user.delete'])
+    const selected = new Set(['user.view', 'user.update', 'user.delete'])
     render(<PermissionMatrix registry={registry} selected={selected} onChange={vi.fn()} />)
 
     // Expand the module to reveal permissions
@@ -66,7 +66,7 @@ describe('<PermissionMatrix />', () => {
     await user.click(userNamespaceButton)
 
     // Now check if the checkbox is disabled
-    const editCheckbox = screen.getByRole('checkbox', { name: 'user.edit' })
-    expect(editCheckbox).toBeDisabled()
+    const updateCheckbox = screen.getByRole('checkbox', { name: 'user.update' })
+    expect(updateCheckbox).toBeDisabled()
   })
 })
