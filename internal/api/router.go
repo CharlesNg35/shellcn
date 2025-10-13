@@ -146,7 +146,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 
 	// Auth routes
 
-	// Protected routes
+	// ----- Protected API Group --------------------------------------------------
 	checker, err := permissions.NewChecker(db)
 	if err != nil {
 		return nil, err
@@ -156,6 +156,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	api := r.Group("/api")
 	api.Use(requireAuth)
 
+	// ----- Authentication & Invite Routes --------------------------------------
 	registerAuthRoutes(r, api, authRouteDeps{
 		AuthHandler:       authHandler,
 		ProviderHandler:   authProviderHandler,
@@ -168,21 +169,26 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err != nil {
 		return nil, err
 	}
+	// ----- User Routes ---------------------------------------------------------
 	registerUserRoutes(api, userHandler, checker)
+	// ----- End User Routes -----------------------------------------------------
 
 	profileUserSvc, err := services.NewUserService(db, auditSvc)
 	if err != nil {
 		return nil, err
 	}
 	profileHandler := handlers.NewProfileHandler(profileUserSvc, totpSvc)
+	// ----- Profile Routes ------------------------------------------------------
 	registerProfileRoutes(api, profileHandler)
+	// ----- End Profile Routes --------------------------------------------------
 
-	// Permissions
 	permHandler, err := handlers.NewPermissionHandler(db, auditSvc)
 	if err != nil {
 		return nil, err
 	}
+	// ----- Permission Routes ---------------------------------------------------
 	registerPermissionRoutes(api, permHandler, checker)
+	// ----- End Permission Routes ----------------------------------------------
 
 	// Realtime hub + notifications
 	realtimeHub := realtime.NewHub()
@@ -191,6 +197,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if err != nil {
 		return nil, err
 	}
+	// ----- Realtime & Notification Routes -------------------------------------
 	registerNotificationRoutes(api, notificationHandler, checker)
 
 	realtimeHandler := handlers.NewRealtimeHandler(
@@ -201,6 +208,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	)
 	r.GET("/ws", realtimeHandler.Stream)
 	r.GET("/ws/:stream", realtimeHandler.Stream)
+	// ----- End Realtime Routes -------------------------------------------------
 
 	vaultCrypto, err := vault.NewCrypto(encryptionKey)
 	if err != nil {
@@ -212,7 +220,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	vaultHandler := handlers.NewVaultHandler(vaultSvc)
 
-	// Connections and folders
+	// ----- Connection, Share & Folder Routes -----------------------------------
 	connectionSvc, err := services.NewConnectionService(db, checker, services.WithConnectionVault(vaultSvc))
 	if err != nil {
 		return nil, err
@@ -247,23 +255,27 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 	registerTeamRoutes(api, teamHandler, checker)
+	// ----- End Connection, Share & Folder Routes ------------------------------
 
-	// Protocols
+	// ----- Protocol Routes -----------------------------------------------------
 	protocolSvc, err := services.NewProtocolService(db, checker)
 	if err != nil {
 		return nil, err
 	}
 	protocolHandler := handlers.NewProtocolHandler(protocolSvc)
 	registerProtocolRoutes(api, protocolHandler, checker)
+	// ----- End Protocol Routes -------------------------------------------------
 
-	// Sessions
+	// ----- Session Routes ------------------------------------------------------
 	sessionHandler := handlers.NewSessionHandler(db, sessions)
 	registerSessionRoutes(api, sessionHandler)
+	// ----- End Session Routes --------------------------------------------------
 
 	// Audit
 	if err := registerAuditRoutes(api, db, jwt, cfg, checker); err != nil {
 		return nil, err
 	}
+	// ----- End Audit Routes ----------------------------------------------------
 
 	// Setup (public)
 	setupHandler, err := handlers.NewSetupHandler(db)
@@ -271,6 +283,8 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 	registerSetupRoutes(r, setupHandler)
+	// ----- End Setup Routes ----------------------------------------------------
+	// ----- End Protected API Group --------------------------------------------
 
 	// Metrics endpoint
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))

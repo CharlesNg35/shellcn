@@ -14,17 +14,9 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 
-	"github.com/charlesng35/shellcn/internal/api"
 	"github.com/charlesng35/shellcn/internal/app"
-	"github.com/charlesng35/shellcn/internal/app/maintenance"
-	iauth "github.com/charlesng35/shellcn/internal/auth"
-	"github.com/charlesng35/shellcn/internal/cache"
 	"github.com/charlesng35/shellcn/internal/database"
-	"github.com/charlesng35/shellcn/internal/middleware"
-	"github.com/charlesng35/shellcn/internal/services"
-	"github.com/charlesng35/shellcn/internal/vault"
 	"github.com/charlesng35/shellcn/pkg/logger"
 )
 
@@ -54,6 +46,7 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 
+	// Load configuration from disk/environment.
 	cfg, err := loadApplicationConfig(configPath)
 	if err != nil {
 		return err
@@ -65,11 +58,13 @@ func run(ctx context.Context, args []string) error {
 		}
 	}
 
+	// Fill in runtime defaults (JWT secrets, vault key, etc.).
 	generated, err := app.ApplyRuntimeDefaults(cfg)
 	if err != nil {
 		return err
 	}
 
+	// Configure structured logging.
 	if err := app.ConfigureLogging(cfg.Server.LogLevel); err != nil {
 		return fmt.Errorf("configure logging: %w", err)
 	}
@@ -80,99 +75,25 @@ func run(ctx context.Context, args []string) error {
 		log.Info("generated runtime secret", zap.String("key", key))
 	}
 
+	// Ensure required secrets are available before bootstrapping services.
 	if err := ensureSecretsPresent(cfg); err != nil {
 		return err
 	}
 
-	db, err := initialiseDatabase(cfg)
+	// Spin up databases, caches, background jobs, and the HTTP router.
+	stack, err := bootstrapRuntime(ctx, cfg, log)
 	if err != nil {
 		return err
 	}
-	defer closeDatabase(db, log)
-
-	if err := database.EnsureVaultEncryptionKey(ctx, db, cfg.Vault.EncryptionKey); err != nil {
-		return err
-	}
-
-	dbStore := cache.NewDatabaseStore(db)
-
-	var redisClient cache.Store
-	if cfg.Cache.Redis.Enabled {
-		client, redisErr := cache.NewRedisClient(cfg.Cache.RedisClientConfig())
-		if redisErr != nil {
-			log.Warn("redis unavailable; falling back to database-backed operations", zap.Error(redisErr))
-		} else {
-			redisClient = client
-			log.Info("redis connected", zap.String("addr", cfg.Cache.Redis.Address))
-		}
-	}
-
 	defer func() {
-		if rc, ok := redisClient.(*cache.RedisClient); ok && rc != nil {
-			_ = rc.Close()
+		if stack != nil {
+			stack.Shutdown(context.Background(), log)
 		}
 	}()
 
-	jwtService, err := iauth.NewJWTService(cfg.Auth.JWTServiceConfig())
-	if err != nil {
-		return fmt.Errorf("initialise jwt service: %w", err)
-	}
+	router := stack.Router
 
-	sessionCfg := cfg.Auth.SessionServiceConfig()
-	switch {
-	case redisClient != nil:
-		sessionCfg.Cache = iauth.NewRedisSessionCache(redisClient)
-	case dbStore != nil:
-		sessionCfg.Cache = iauth.NewDatabaseSessionCache(dbStore)
-	}
-
-	sessionSvc, err := iauth.NewSessionService(db, jwtService, sessionCfg)
-	if err != nil {
-		return fmt.Errorf("initialise session service: %w", err)
-	}
-
-	auditSvc, err := services.NewAuditService(db)
-	if err != nil {
-		return fmt.Errorf("initialise audit service: %w", err)
-	}
-
-	encryptionKey, err := app.DecodeKey(cfg.Vault.EncryptionKey)
-	if err != nil {
-		return fmt.Errorf("decode vault encryption key: %w", err)
-	}
-	vaultCrypto, err := vault.NewCrypto(encryptionKey)
-	if err != nil {
-		return fmt.Errorf("initialise vault crypto: %w", err)
-	}
-	vaultSvc, err := services.NewVaultService(db, auditSvc, nil, vaultCrypto)
-	if err != nil {
-		return fmt.Errorf("initialise vault service: %w", err)
-	}
-
-	cleaner := maintenance.NewCleaner(db, sessionSvc, auditSvc, maintenance.WithVaultService(vaultSvc))
-	if err := cleaner.Start(); err != nil {
-		return fmt.Errorf("start maintenance jobs: %w", err)
-	}
-	defer func() {
-		stopCtx := cleaner.Stop()
-		if err := cleaner.RunOnce(stopCtx); err != nil {
-			log.Warn("maintenance shutdown cleanup failed", zap.Error(err))
-		}
-	}()
-
-	var rateStore middleware.RateStore
-	switch {
-	case redisClient != nil:
-		rateStore = middleware.NewRedisRateStore(redisClient)
-	case dbStore != nil:
-		rateStore = middleware.NewDatabaseRateStore(dbStore)
-	}
-
-	router, err := api.NewRouter(db, jwtService, cfg, sessionSvc, rateStore)
-	if err != nil {
-		return fmt.Errorf("build api router: %w", err)
-	}
-
+	// Launch the HTTP server and block until shutdown.
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
 		Handler: router,
@@ -203,6 +124,9 @@ func run(ctx context.Context, args []string) error {
 	if err := server.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("graceful shutdown: %w", err)
 	}
+
+	stack.Shutdown(shutdownCtx, log)
+	stack = nil
 
 	if err, ok := <-serverErr; ok && err != nil {
 		return fmt.Errorf("server error: %w", err)
@@ -264,53 +188,6 @@ func ensureSecretsPresent(cfg *app.Config) error {
 	return nil
 }
 
-func initialiseDatabase(cfg *app.Config) (*gorm.DB, error) {
-	dbCfg := convertDatabaseConfig(cfg)
-	db, err := database.Open(dbCfg)
-	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
-	}
-
-	if err := database.AutoMigrateAndSeed(db); err != nil {
-		return nil, fmt.Errorf("auto-migrate database: %w", err)
-	}
-
-	log := logger.WithModule("database")
-	log.Info("database connected", zap.String("driver", strings.ToLower(strings.TrimSpace(dbCfg.Driver))))
-
-	return db, nil
-}
-
-func convertDatabaseConfig(cfg *app.Config) database.Config {
-	dbCfg := database.Config{
-		Driver: strings.ToLower(strings.TrimSpace(cfg.Database.Driver)),
-		Path:   strings.TrimSpace(cfg.Database.Path),
-		DSN:    strings.TrimSpace(cfg.Database.DSN),
-	}
-
-	switch dbCfg.Driver {
-	case "", "sqlite":
-		dbCfg.Driver = "sqlite"
-	case "postgres", "postgresql":
-		dbCfg.Driver = "postgres"
-		dbCfg.Host = strings.TrimSpace(cfg.Database.Postgres.Host)
-		dbCfg.Port = cfg.Database.Postgres.Port
-		dbCfg.Name = strings.TrimSpace(cfg.Database.Postgres.Database)
-		dbCfg.User = strings.TrimSpace(cfg.Database.Postgres.Username)
-		dbCfg.Password = strings.TrimSpace(cfg.Database.Postgres.Password)
-	case "mysql":
-		dbCfg.Host = strings.TrimSpace(cfg.Database.MySQL.Host)
-		dbCfg.Port = cfg.Database.MySQL.Port
-		dbCfg.Name = strings.TrimSpace(cfg.Database.MySQL.Database)
-		dbCfg.User = strings.TrimSpace(cfg.Database.MySQL.Username)
-		dbCfg.Password = strings.TrimSpace(cfg.Database.MySQL.Password)
-	default:
-		// Leave driver as-is to surface unsupported driver error during open.
-	}
-
-	return dbCfg
-}
-
 func loadVaultKeyFromSystemSettings(ctx context.Context, cfg *app.Config) (string, error) {
 	preDB, err := database.Open(convertDatabaseConfig(cfg))
 	if err != nil {
@@ -323,20 +200,4 @@ func loadVaultKeyFromSystemSettings(ctx context.Context, cfg *app.Config) (strin
 	}
 
 	return database.GetSystemSetting(ctx, preDB, database.VaultEncryptionKeySetting)
-}
-
-func closeDatabase(db *gorm.DB, log *zap.Logger) {
-	if db == nil {
-		return
-	}
-
-	sqlDB, err := db.DB()
-	if err != nil {
-		log.Warn("failed to obtain underlying sql DB for closing", zap.Error(err))
-		return
-	}
-
-	if err := sqlDB.Close(); err != nil {
-		log.Warn("failed to close database", zap.Error(err))
-	}
 }
