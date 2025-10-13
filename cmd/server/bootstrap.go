@@ -49,6 +49,7 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 
 	// enable gin debug mod
 	if debug, _ := os.LookupEnv("GIN_DEBUG"); debug != "true" {
+		fmt.Print("GIN is in RELEASE MODE; export GIN_DEBUG=true to enable Gin debug.")
 		gin.SetMode(gin.ReleaseMode)
 	}
 
