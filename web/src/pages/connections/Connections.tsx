@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import { Loader2, Plus, Search, Server, X } from 'lucide-react'
@@ -177,6 +177,25 @@ export function Connections() {
   )
 
   const normalizedSearch = search.trim().toLowerCase()
+  const createParam = searchParams.get('create')
+
+  useEffect(() => {
+    if (!canCreateConnections) {
+      return
+    }
+    if (!createParam) {
+      return
+    }
+    if (createParam.toLowerCase() !== 'true') {
+      return
+    }
+
+    setSelectedProtocolId(null)
+    setResourceModalOpen(true)
+    const params = new URLSearchParams(searchParams)
+    params.delete('create')
+    setSearchParams(params, { replace: true })
+  }, [canCreateConnections, createParam, searchParams, setSearchParams])
 
   const filteredConnections = useMemo(() => {
     const activeIdSet = showActiveOnly ? new Set(activeConnectionIds) : null
@@ -319,7 +338,7 @@ export function Connections() {
           ]}
         >
           <Button size="default" className="shadow-sm" onClick={handleStartCreateConnection}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="mr-1 h-4 w-4" />
             New Connection
           </Button>
         </PermissionGuard>
@@ -619,7 +638,7 @@ function EmptyState({
       <p className="mb-6 max-w-md text-sm text-muted-foreground">{description}</p>
       {!search && hasProtocols && canCreate && (
         <Button size="default" onClick={onCreateConnection}>
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="mr-1 h-4 w-4" />
           Create Connection
         </Button>
       )}

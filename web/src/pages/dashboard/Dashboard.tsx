@@ -56,8 +56,8 @@ export function Dashboard() {
             </PermissionGuard>
             <PermissionGuard anyOf={[PERMISSIONS.CONNECTION.CREATE, PERMISSIONS.CONNECTION.MANAGE]}>
               <Button asChild size="sm">
-                <Link to="/connections/new">
-                  <Plus className="mr-2 h-4 w-4" />
+                <Link to="/connections?create=true">
+                  <Plus className="mr-1 h-4 w-4" />
                   New Connection
                 </Link>
               </Button>
@@ -129,8 +129,8 @@ export function Dashboard() {
                   anyOf={[PERMISSIONS.CONNECTION.CREATE, PERMISSIONS.CONNECTION.MANAGE]}
                 >
                   <Button asChild size="sm" className="mt-4">
-                    <Link to="/connections/new">
-                      <Plus className="mr-2 h-4 w-4" />
+                    <Link to="/connections?create=true">
+                      <Plus className="mr-1 h-4 w-4" />
                       Create Connection
                     </Link>
                   </Button>

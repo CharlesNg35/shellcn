@@ -1391,8 +1391,8 @@ export function ConnectionList() {
                 description="Get started by creating your first connection profile"
                 action={
                     <Button asChild>
-                        <Link to="/connections/new">
-                            <Plus className="mr-2 h-4 w-4" />
+                        <Link to="/connections?create=true">
+                            <Plus className="mr-1 h-4 w-4" />
                             Create Connection
                         </Link>
                     </Button>

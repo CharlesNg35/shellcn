@@ -70,7 +70,7 @@ export function ProfileSessionsPanel() {
           disabled={revokeOthersDisabled}
           loading={revokeOtherSessions.isPending}
         >
-          <ShieldOff className="mr-2 h-4 w-4" />
+          <ShieldOff className="mr-1 h-4 w-4" />
           Revoke Other Sessions
         </Button>
       </CardHeader>

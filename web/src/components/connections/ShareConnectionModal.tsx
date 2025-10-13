@@ -503,7 +503,7 @@ export function ShareConnectionModal({
               </Button>
               <Button type="submit" disabled={createShareMutation.isPending}>
                 {createShareMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                 ) : null}
                 Share connection
               </Button>

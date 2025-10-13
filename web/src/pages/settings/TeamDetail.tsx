@@ -110,7 +110,7 @@ export function TeamDetail() {
           description="The requested team could not be found."
           action={
             <Button onClick={handleBack} variant="outline">
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-1 h-4 w-4" />
               Back to Teams
             </Button>
           }
@@ -127,7 +127,7 @@ export function TeamDetail() {
           description="Please wait while we load the team details."
           action={
             <Button onClick={handleBack} variant="outline">
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-1 h-4 w-4" />
               Back to Teams
             </Button>
           }
@@ -152,7 +152,7 @@ export function TeamDetail() {
           description="The requested team could not be found."
           action={
             <Button onClick={handleBack} variant="outline">
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-1 h-4 w-4" />
               Back to Teams
             </Button>
           }
@@ -179,13 +179,13 @@ export function TeamDetail() {
         action={
           <div className="flex flex-wrap gap-2">
             <Button onClick={handleBack} variant="outline">
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="mr-1 h-4 w-4" />
               Back to Teams
             </Button>
             {canEditTeam ? (
               <PermissionGuard anyOf={[PERMISSIONS.TEAM.UPDATE, PERMISSIONS.TEAM.MANAGE]}>
                 <Button type="button" variant="outline" onClick={handleEdit}>
-                  <PencilLine className="mr-2 h-4 w-4" />
+                  <PencilLine className="mr-1 h-4 w-4" />
                   Edit
                 </Button>
               </PermissionGuard>
@@ -199,9 +199,9 @@ export function TeamDetail() {
                 disabled={teamMutations.remove.isPending}
               >
                 {teamMutations.remove.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                 ) : (
-                  <Trash2 className="mr-2 h-4 w-4" />
+                  <Trash2 className="mr-1 h-4 w-4" />
                 )}
                 Delete
               </Button>

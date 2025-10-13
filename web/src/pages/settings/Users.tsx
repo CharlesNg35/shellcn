@@ -198,13 +198,13 @@ export function Users() {
             </PermissionGuard>
             <PermissionGuard permission={PERMISSIONS.USER.INVITE}>
               <Button variant="outline" onClick={() => setIsInviteModalOpen(true)}>
-                <UserPlus className="mr-2 h-4 w-4" />
+                <UserPlus className="mr-1 h-4 w-4" />
                 Invite User
               </Button>
             </PermissionGuard>
             <PermissionGuard permission={PERMISSIONS.USER.CREATE}>
               <Button onClick={() => setIsCreateModalOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="mr-1 h-4 w-4" />
                 Create User
               </Button>
             </PermissionGuard>

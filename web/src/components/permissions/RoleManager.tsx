@@ -80,7 +80,7 @@ export function RoleManager({
           </div>
           <PermissionGuard permission={PERMISSIONS.PERMISSION.MANAGE}>
             <Button size="sm" onClick={onCreateRole}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-1 h-4 w-4" />
               New Role
             </Button>
           </PermissionGuard>
@@ -138,7 +138,7 @@ export function RoleManager({
               action={
                 <PermissionGuard permission={PERMISSIONS.PERMISSION.MANAGE}>
                   <Button onClick={onCreateRole}>
-                    <Plus className="mr-2 h-4 w-4" />
+                    <Plus className="mr-1 h-4 w-4" />
                     Create Role
                   </Button>
                 </PermissionGuard>

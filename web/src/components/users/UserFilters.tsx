@@ -72,7 +72,7 @@ export function UserFilters({ filters, onChange }: UserFiltersProps) {
           disabled={resetDisabled}
           onClick={() => onChange({ search: undefined, status: 'all' })}
         >
-          <RefreshCcw className="mr-2 h-4 w-4" />
+          <RefreshCcw className="mr-1 h-4 w-4" />
           Reset
         </Button>
       </div>

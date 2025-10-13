@@ -114,7 +114,7 @@ export function Teams() {
         action={
           <PermissionGuard anyOf={[PERMISSIONS.TEAM.CREATE, PERMISSIONS.TEAM.MANAGE]}>
             <Button onClick={handleOpenCreateModal}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-1 h-4 w-4" />
               Create Team
             </Button>
           </PermissionGuard>
@@ -132,7 +132,7 @@ export function Teams() {
         emptyAction={
           <PermissionGuard anyOf={[PERMISSIONS.TEAM.CREATE, PERMISSIONS.TEAM.MANAGE]}>
             <Button onClick={handleOpenCreateModal}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-1 h-4 w-4" />
               Create Team
             </Button>
           </PermissionGuard>

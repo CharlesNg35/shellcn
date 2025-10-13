@@ -105,7 +105,7 @@ export function Identities() {
         action={
           <PermissionGuard permission={PERMISSIONS.VAULT.CREATE}>
             <Button onClick={() => setFormState({ mode: 'create' })}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="mr-1 h-4 w-4" />
               New identity
             </Button>
           </PermissionGuard>

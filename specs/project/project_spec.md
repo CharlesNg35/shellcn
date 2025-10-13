@@ -2210,24 +2210,24 @@ email:
 # Terminal Protocols (SSH, Telnet)
 /ssh
   /connections                  # SSH connection list
-  /connections/new              # New SSH connection
+  /connections?create=true              # New SSH connection
   /connections/:id/terminal     # SSH terminal session
   /connections/:id/sftp         # SFTP file manager
 
 /telnet
   /connections                  # Telnet connection list
-  /connections/new              # New Telnet connection
+  /connections?create=true              # New Telnet connection
   /connections/:id/terminal     # Telnet terminal session
 
 # Remote Desktop (RDP, VNC)
 /rdp
   /connections                  # RDP connection list
-  /connections/new              # New RDP connection
+  /connections?create=true              # New RDP connection
   /connections/:id/desktop      # RDP remote desktop session
 
 /vnc
   /connections                  # VNC connection list
-  /connections/new              # New VNC connection
+  /connections?create=true              # New VNC connection
   /connections/:id/desktop      # VNC remote desktop session
 
 # Container Management
@@ -2268,7 +2268,7 @@ email:
 # Databases
 /databases
   /connections                  # Database connection list
-  /connections/new              # New database connection (with identity)
+  /connections?create=true              # New database connection (with identity)
   /connections/:id
     /query                      # Query editor
     /tables                     # Table browser
@@ -2285,7 +2285,7 @@ email:
 # File Sharing
 /fileshare
   /connections                  # File share connection list
-  /connections/new              # New file share connection
+  /connections?create=true              # New file share connection
   /smb
     /connections/:id/browser    # SMB file browser
   /nfs

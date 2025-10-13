@@ -32,19 +32,19 @@ export function UserBulkActionsBar({
           anyOf={[PERMISSIONS.USER.ACTIVATE, PERMISSIONS.USER.EDIT, PERMISSIONS.USER.MANAGE]}
         >
           <Button size="sm" variant="secondary" onClick={onActivate} disabled={isProcessing}>
-            <ShieldCheck className="mr-2 h-4 w-4" /> Activate
+            <ShieldCheck className="mr-1 h-4 w-4" /> Activate
           </Button>
         </PermissionGuard>
         <PermissionGuard
           anyOf={[PERMISSIONS.USER.DEACTIVATE, PERMISSIONS.USER.EDIT, PERMISSIONS.USER.MANAGE]}
         >
           <Button size="sm" variant="outline" onClick={onDeactivate} disabled={isProcessing}>
-            <ShieldOff className="mr-2 h-4 w-4" /> Deactivate
+            <ShieldOff className="mr-1 h-4 w-4" /> Deactivate
           </Button>
         </PermissionGuard>
         <PermissionGuard permission={PERMISSIONS.USER.DELETE}>
           <Button size="sm" variant="destructive" onClick={onDelete} disabled={isProcessing}>
-            <Trash2 className="mr-2 h-4 w-4" /> Delete
+            <Trash2 className="mr-1 h-4 w-4" /> Delete
           </Button>
         </PermissionGuard>
       </div>

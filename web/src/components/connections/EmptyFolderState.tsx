@@ -20,7 +20,7 @@ export function EmptyFolderState({ canCreateFolders, onCreateFolder }: EmptyFold
       </div>
       {canCreateFolders ? (
         <Button onClick={onCreateFolder} size="sm" className="shadow-sm">
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="mr-1 h-4 w-4" />
           Create Folder
         </Button>
       ) : null}
