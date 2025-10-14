@@ -56,6 +56,10 @@
   - `sftp.go`: instantiate SFTP client on demand, cached per active session, closed when final tab closes.
   - `snippets.go`: placeholder to call Snippet service (existing or to implement).
 - Provide driver-specific validator for concurrency limit and sftp toggle on connection create/update.
+- Register both protocol descriptors through the same driver:
+  - `ssh`: terminal-first experience (capabilities: terminal, file_transfer, session_recording, shareable) with optional SFTP tab.
+  - `sftp`: file-manager-only shortcut (capability: file_transfer) that reuses the SSH launcher with terminal suppressed; defaults to same port/identity.
+  - Ensure `ProtocolCatalogService` persists both entries so connection creation shows “SSH” and “SFTP (File Manager)” while sharing code paths.
 
 ### 3.4 SFTP Backend Interfaces
 
@@ -253,6 +257,7 @@
 **Admin Protocol Settings** (`/settings/protocols`):
 
 - **New page** under Settings nav (admin permission required)
+- **Single source of truth** for SSH defaults: concurrency, idle timeout, SFTP availability, recording policy, and appearance are configured here (no static config toggles beyond master enable/disable).
 - **Layout**:
   - Protocol selector sidebar (mirrors existing Security tab pattern)
   - Detail panel for selected protocol (SSH)
