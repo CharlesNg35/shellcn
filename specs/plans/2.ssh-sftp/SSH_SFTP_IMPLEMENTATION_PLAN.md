@@ -187,7 +187,7 @@
     - Center: editable path input showing current directory; supports copy/paste, history dropdown, and validation feedback.
     - Right-aligned quick filters (e.g., show hidden files toggle) and transfer queue toggle.
   - **Main body split view**:
-    - Left pane: directory table (TanStack Table) with columns `Name`, `Size`, `Modified`, `Perm.`, `Actions`; rows include folder/file icons matching reference styling.
+    - Left pane: directory table (TanStack Table + virtualization) with columns `Name`, `Size`, `Modified`, `Perm.`, `Actions`; rows include folder/file icons matching reference styling while keeping DOM footprint minimal.
     - Right pane: transfer queue manager with list of uploads/downloads, progress bars, pause/resume/clear buttons, and dropzone helper text matching example.
     - Split sash draggable to resize panes; persisted per session.
   - **Dropzone overlay**: global drag state shows border + icon (“Drop files to upload”) across entire workspace, using Tailwind v4 utilities.
@@ -286,6 +286,7 @@
 - **Internationalization**: wrap UI strings in translation helper where available.
 - **Accessibility**: respect ARIA roles for toolbar buttons, chat input; maintain keyboard navigation.
 - **Logging**: structured logs for session events with session_id, connection_id, user_id; mask sensitive data.
+- **Performance**: enforce lazy-loaded bundles, memoized selectors, virtualized lists, and requestAnimationFrame batching for terminal writes; monitor with Web Vitals in dev builds.
 
 ## 6. Phased Delivery
 
@@ -314,3 +315,23 @@
 - Should chat history persist beyond session lifetime for auditing? (Currently cleared on close per requirements; confirm with stakeholders).
 - Do we need per-team default concurrency overrides? (Connection-level planned, but team policy may be requested).
 - Preferred lifecycle for orphaned recording files if DB record missing? (Consider background reconciliation job).
+
+### 4.9 Optional Enhancements & Optimizations
+
+- Per-user SSH session caps: allow admins to define maximum concurrent SSH sessions per user or team; ActiveSessionService enforces limit and surfaces alert toast + audit event when hit.
+- Adaptive session recording: monitor bandwidth/latency; auto-throttle recording frame rate or pause capture when terminal latency exceeds threshold to favor interactivity.
+- Terminal diff batching: coalesce outbound terminal writes (e.g., 50ms frames) to reduce DOM churn, improve battery use, and shrink recording size.
+- Split-pane skeletons: render lightweight placeholders while xterm/SFTP bundles lazy-load so multi-column layouts remain visually stable.
+- SFTP inline previews: provide quick preview pane for small text/images without launching editor/download; supports tabbed preview panel inside file manager.
+- Collaboration cues: color-code read/write pills and terminal border; optional chat banner reminding owners they are sole write delegates.
+- Chat quick actions: embed contextual buttons (e.g., “Grant write”, “Open SFTP”) inside chat messages for owners/admins to act faster.
+- Connection escape hatch: from shared session UI provide “View Connection Details” link opening connection drawer/page for share or settings adjustments.
+
+### 4.10 Performance Guardrails
+
+- Budget terminal frame throughput to ≤120 fps by batching write events and deferring non-critical UI work with `requestIdleCallback`.
+- Use TanStack Query `staleTime`/`gcTime` to avoid refetch storms; prefetch next probable SFTP directories but cap memory via LRU cache.
+- Memoize expensive React components (terminal panes, transfer lists) and leverage `React.useTransition` for low-priority updates (chat, badges).
+- Run bundle analyzer each release; target <300 KB initial SSH workspace chunk by pushing Monaco/xterm addons/file previews behind dynamic imports.
+- Ship WebSocket message compression (permessage-deflate) where available to reduce network usage on chat/transfer updates.
+- Monitor runtime via Web Vitals + custom metrics (render time, memory) in non-prod environments; fail build if thresholds regress.
