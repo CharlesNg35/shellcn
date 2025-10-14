@@ -44,7 +44,7 @@
 
 ### 3.3 SSH Driver Implementation
 
-- Package layout `internal/drivers/ssh`:
+- Package layout `internal/drivers/ssh` (new driver package registered via `drivers.MustRegister` during init):
   - `driver.go`: implements metadata, capabilities, default port (22), description, health check (ensure `golang.org/x/crypto/ssh` config OK).
   - `launcher.go`: handles `drivers.Launcher` interface. Steps:
     1. Validate connection settings (host, port, keepalive, preferred auth).

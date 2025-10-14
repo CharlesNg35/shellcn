@@ -261,6 +261,8 @@
 - [ ] Add protocol-scoped permissions (`protocol:ssh.connect`, `protocol:ssh.share`, `protocol:ssh.record`, etc.) with tests
 - [ ] Seed connection defaults (font, theme, enable_sftp flag) via migrations and config
 - [ ] Cover driver unit tests and integration smoke test against mock SSH server
+- [ ] Replace simple `protocols.ssh` config with enriched struct (concurrency, idle timeout, sftp auto-enable, recording, sharing)
+- [ ] Document new config keys and defaults (`config.example.yaml`, env prefix `SHELLCN_PROTOCOLS_SSH_*`)
 
 ### Session Lifecycle Foundations
 
