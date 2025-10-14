@@ -20,7 +20,7 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-k0s-shellcn
 
     steps:
       - name: Checkout repository
