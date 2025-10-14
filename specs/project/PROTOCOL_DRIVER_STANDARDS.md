@@ -282,7 +282,52 @@ Shared sessions allow multiple users to attach to the same live connection. All 
 7. **Extensibility**
    - These rules apply to all terminal/desktop drivers that plan to support collaboration (SSH, Telnet, Kubernetes exec, RDP shadowing, etc.). Drivers that cannot technically enforce read-only mode should not expose the feature flag.
 
-## 13. Session Recording Standard
+## 14. Multi-Protocol Workspace State Persistence
+
+When users work across multiple protocol types (SSH, K8s, Docker, etc.), the frontend must preserve component state when switching between protocols.
+
+**Requirements**:
+1. **Component Lifecycle**
+   - Keep up to 3 protocol workspace components mounted simultaneously
+   - Use CSS `display: none` for inactive protocols (not unmount)
+   - Evict least-recently-used protocol when mounting 4th type
+
+2. **State Preservation**
+   - Terminal buffers (xterm instances) remain in memory when switching away
+   - SFTP navigation history and open tabs persist
+   - WebSocket connections stay alive in background
+   - Split pane layouts saved per active session
+
+3. **Workspace Store Contract**
+   ```typescript
+   interface ProtocolWorkspace {
+     protocolType: string
+     sessions: Map<string, SessionState>  // sessionId → state
+     layout: SplitLayout
+     lastActiveAt: number
+   }
+
+   // Global store
+   workspaces: Map<ProtocolType, ProtocolWorkspace>
+   ```
+
+4. **Routing Strategy**
+   - Route pattern: `/active-sessions/:sessionId`
+   - Protocol inferred from session metadata
+   - Clicking sidebar entry focuses existing tab or creates new one
+   - URL sync: navigating to session URL rehydrates workspace state
+
+5. **Memory Management**
+   - Enforce max scrollback (1000 lines) per terminal
+   - Clear buffers on explicit session close
+   - Warn user if >3 protocols mounted (memory usage banner)
+
+6. **Testing Expectations**
+   - Verify state persists across protocol switches (integration test)
+   - Confirm WebSocket reconnection on tab focus
+   - Assert LRU eviction purges oldest workspace
+
+## 15. Session Recording Standard
 
 Recording provides audit playback for supported protocols (SSH terminal, RDP, VNC, etc.). Drivers opting into recording must implement:
 

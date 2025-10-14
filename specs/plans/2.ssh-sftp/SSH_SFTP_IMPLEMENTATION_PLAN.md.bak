@@ -250,49 +250,42 @@
 
 ### 4.7 Settings & Preferences
 
-**Admin Protocol Settings** (`/settings/protocols`):
+- **Admin Protocol Settings** (`/settings/protocols`, new page component):
 
-- **New page** under Settings nav (admin permission required)
-- **Layout**:
-  - Protocol selector sidebar (mirrors existing Security tab pattern)
-  - Detail panel for selected protocol (SSH)
-- **Form Sections** (React Hook Form + Zod):
-  1. **Session Defaults**
-     - Concurrent limit (number input, `0` = unlimited)
-     - Idle timeout minutes (number input)
-     - Enable SFTP by default (checkbox)
-  2. **Terminal Appearance**
-     - Theme mode (Select: Auto/Force Dark/Force Light)
-     - Font family (Combobox with presets)
-     - Font size (Slider 8–96px + preview)
-     - Scrollback limit (number input)
-     - WebGL renderer (checkbox)
-  3. **Recording**
-     - Mode (Select: Disabled/Optional/Forced)
-     - Storage (Select: filesystem/s3)
-     - Retention days (number input)
-     - Require consent (checkbox)
-  4. **Collaboration**
-     - Allow sharing by default (checkbox)
-     - Restrict write to admins (checkbox)
-- **Data Flow**:
-  - `useProtocolSettings('ssh')` hook fetches from `/api/settings/protocols/ssh`
-  - Submit calls `PUT /api/settings/protocols/ssh` with bulk updates
-  - Backend persists to `system_settings` table via `UpsertSystemSetting`
-  - Emits audit event: `protocol_settings.updated`
-- **UI Pattern**: Reuse SecuritySettingsPanel layout pattern
+  - Navigation: left sidebar lists enabled protocols (SSH, RDP, etc.) using `ProtocolCatalog` data; selecting SSH opens detail panel.
+  - Detail layout:
+    - Header with protocol icon, description, enable/disable toggle (mirrors backend config flag).
+    - Form sections:
+      1. **Session Defaults**
+         - Default concurrency limit (numeric input, `0` = unlimited).
+         - Default idle timeout (minutes) applied to new connections.
+         - Checkbox to auto-enable SFTP channel on new connections.
+      2. **Terminal Appearance**
+         - Theme mode select (`Auto`, `Force Dark`, `Force Light`).
+         - Font family dropdown (pre-populated, supports custom entry).
+         - Font size slider (8–96 px) with live preview sample.
+         - Scrollback limit numeric input.
+         - Toggle for enabling WebGL renderer by default.
+      3. **Recording Policy**
+         - Global toggle (`Disabled`, `Optional`, `Forced`) with explanatory copy.
+         - Retention period (days) and storage target (`filesystem`, `s3`) selectors.
+         - Checkbox to require participant consent banner.
+      4. **Security & Permissions**
+         - Toggle to allow shared sessions by default.
+         - Option to restrict write delegation to admins.
+    - Save/Reset buttons pinned to footer; dirty state warning on navigation away.
+  - Data flow: uses React Hook Form + Zod; on submit calls `/api/settings/protocols/ssh` (new REST handler) which persists into `system_settings` table under keys `protocol.ssh.*`.
+  - Audit log entry emitted when admin changes settings.
 
-**Connection Form Integration**:
-- Forms fetch admin defaults via `GET /api/settings/protocols/ssh`
-- Pre-fill fields with defaults
-- User can override any setting (stored in `connections.settings` JSON)
-- Show badge "Using admin default" when not overridden
+- **Connection Form Integration**
 
-**User Preferences** (`/settings/account` or `/settings/preferences`):
-- Extend existing preferences panel with SSH section
-- Terminal preferences: font, cursor style, copy behavior
-- SFTP preferences: hidden files toggle, auto-open queue
-- Stored in `users.preferences` JSON column
+  - Connection create/edit forms read admin defaults and pre-fill SSH-specific fields; overrides stored in connection settings but can fall back to global when omitted.
+  - When admin toggles defaults, background job recalculates caches or signals clients via realtime config update event.
+
+- **User Preferences** (`/settings/preferences`)
+  - Terminal appearance overrides (font, colors, cursor style, key bindings) saved per user; applied to sessions unless connection forces admin policy.
+  - SFTP preferences: default view mode (list/grid, future), whether to auto-open queue, remember hidden-files toggle.
+  - Personal snippet collections accessible via same preferences panel (ties into snippets permissions).
 
 ### 4.8 Testing Strategy (Frontend)
 
@@ -409,58 +402,55 @@ type SSHConnectionPool struct {
 - Reduces memory footprint, enables faster playback start
 - Final chunk uploaded on session close with metadata update
 
-### 4.9 Protocol Settings Configuration
+### 4.9 Configuration Schema
 
-**Admin Settings Storage** (`system_settings` table):
-Protocol defaults managed via Admin UI, not config files. Settings stored as key-value pairs:
-
-```go
-// Backend: Protocol settings keys
-const (
-    "protocol.ssh.concurrent_limit_default"     → "0"  // 0 = unlimited
-    "protocol.ssh.idle_timeout_minutes"         → "30"
-    "protocol.ssh.enable_sftp_default"          → "true"
-    "protocol.ssh.recording.mode"               → "optional"  // disabled|optional|forced
-    "protocol.ssh.recording.storage"            → "filesystem"  // filesystem|s3
-    "protocol.ssh.recording.retention_days"     → "90"
-    "protocol.ssh.recording.require_consent"    → "true"
-    "protocol.ssh.terminal.theme_mode"          → "auto"  // auto|force_dark|force_light
-    "protocol.ssh.terminal.font_family"         → "monospace"
-    "protocol.ssh.terminal.font_size"           → "14"
-    "protocol.ssh.terminal.scrollback_limit"    → "1000"
-    "protocol.ssh.terminal.enable_webgl"        → "true"
-    "protocol.ssh.shared_sessions.allow_default" → "true"
-    "protocol.ssh.shared_sessions.restrict_write_to_admins" → "false"
-)
+**Backend Config** (`config/config.yaml`):
+```yaml
+protocols:
+  ssh:
+    enabled: true
+    concurrent_limit_default: 0  # 0 = unlimited
+    idle_timeout_minutes: 30
+    enable_sftp_default: true
+    recording:
+      mode: "optional"  # disabled | optional | forced
+      storage: "filesystem"  # filesystem | s3
+      retention_days: 90
+      require_consent: true
+    terminal:
+      theme_mode: "auto"  # auto | force_dark | force_light
+      font_family: "monospace"
+      font_size: 14
+      scrollback_limit: 1000
+      enable_webgl: true
+    shared_sessions:
+      allow_default: true
+      restrict_write_to_admins: false
 ```
 
-**API Endpoints**:
-```
-GET    /api/settings/protocols/ssh      → fetch current settings
-PUT    /api/settings/protocols/ssh      → bulk update (audit logged)
-PATCH  /api/settings/protocols/ssh/:key → update single setting
-```
-
-**Connection Settings** (JSON in `connections.settings`):
-Per-connection overrides inherit from admin defaults when omitted:
+**Connection Settings** (JSON, extends base):
 ```json
 {
-  "host": "192.168.1.100",
-  "port": 22,
-  "concurrent_limit": 5,         // overrides admin default
-  "enable_sftp": true,           // overrides admin default
-  "terminal_config_override": {  // optional overrides
-    "font_size": 16
+  "ssh": {
+    "host": "192.168.1.100",
+    "port": 22,
+    "concurrent_limit": 5,
+    "enable_sftp": true,
+    "terminal_config_override": {
+      "font_size": 16,
+      "theme_mode": "force_dark"
+    }
   }
 }
 ```
 
-**User Preferences** (`users.preferences` JSON):
+**User Preferences** (stored per user):
 ```json
 {
   "ssh": {
     "terminal": {
       "font_family": "Fira Code",
+      "font_size": 12,
       "cursor_style": "block",
       "copy_on_select": true
     },
@@ -471,12 +461,6 @@ Per-connection overrides inherit from admin defaults when omitted:
   }
 }
 ```
-
-**Resolution Hierarchy**:
-1. User preference (if exists)
-2. Connection override (if exists)
-3. Admin default (from `system_settings`)
-4. Hardcoded fallback
 
 ### 4.10 Snippet Management System
 
@@ -559,37 +543,11 @@ interface WorkspaceStore {
 - Chat quick actions: embed contextual buttons (e.g., “Grant write”, “Open SFTP”) inside chat messages for owners/admins to act faster.
 - Connection escape hatch: from shared session UI provide “View Connection Details” link opening connection drawer/page for share or settings adjustments.
 
+### 4.10 Performance Guardrails
 
-### 4.13 Performance Guardrails
-
-**Rendering**:
-- Terminal writes: batch to ≤120 fps, defer non-critical DOM with `requestIdleCallback`
-- Memoize terminal panes, chat, transfer lists with `React.memo`
-- Use `React.useTransition` for badge updates and low-priority UI
-
-**Network**:
-- Enable WebSocket compression (`permessage-deflate`)
-- Prefetch SFTP directories (top-level only), LRU cache (max 100 entries)
-- TanStack Query: `staleTime: 30s`, `gcTime: 5min`
-
-**Bundle Size**:
-- Initial SSH chunk: <300 KB (lazy-load Monaco, xterm addons, SFTP)
-- Dynamic imports for: terminal WebGL addon, file editor, image preview
-- Run Vite bundle analyzer; fail CI if baseline regresses >10%
-
-**Memory**:
-- Limit terminal scrollback: 1000 lines default (configurable)
-- Max 3 mounted protocol workspaces (LRU eviction)
-- Clear xterm buffers on session close
-
-**Monitoring**:
-- Track Web Vitals (LCP, FID, CLS) in dev builds
-- Custom metrics: `terminal_render_ms`, `sftp_list_latency`, `websocket_reconnects`
-- Alert on: >500ms SFTP response, >5 reconnects/session
-
-## 10. Open Questions
-
-- **Chat Persistence**: Should chat history persist beyond session lifetime for auditing? (Currently cleared on close; consider opt-in archival for compliance teams)
-- **Team Concurrency Overrides**: Do we need per-team default limits in addition to per-connection? (Could simplify admin workflows)
-- **Orphaned Recordings**: If DB record missing but file exists, reconcile or purge? (Suggest background job: match by filename pattern, log + delete after 7 days)
-- **SFTP Resume Protocol**: Use TUS protocol for chunked uploads or custom implementation? (TUS adds complexity but industry standard)
+- Budget terminal frame throughput to ≤120 fps by batching write events and deferring non-critical UI work with `requestIdleCallback`.
+- Use TanStack Query `staleTime`/`gcTime` to avoid refetch storms; prefetch next probable SFTP directories but cap memory via LRU cache.
+- Memoize expensive React components (terminal panes, transfer lists) and leverage `React.useTransition` for low-priority updates (chat, badges).
+- Run bundle analyzer each release; target <300 KB initial SSH workspace chunk by pushing Monaco/xterm addons/file previews behind dynamic imports.
+- Ship WebSocket message compression (permessage-deflate) where available to reduce network usage on chat/transfer updates.
+- Monitor runtime via Web Vitals + custom metrics (render time, memory) in non-prod environments; fail build if thresholds regress.
