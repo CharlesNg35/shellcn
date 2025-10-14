@@ -251,7 +251,44 @@
 
 ## 4. SSH Module — Not Started
 
+### SSH Driver & Terminal Foundations
+- [ ] Finalize SSH/SFTP implementation plan (`specs/plans/2.ssh-sftp/SSH_SFTP_IMPLEMENTATION_PLAN.md`)
+- [ ] Ship Go SSH driver (`internal/drivers/ssh`) with launcher + health check
+- [ ] Enforce per-connection concurrent session limits at launch time
+- [ ] Wire ActiveSessionService lifecycle updates (register, heartbeat, unregister) for SSH
+- [ ] Expose SSH launch websocket endpoint and terminal streaming pipeline
+- [ ] Add protocol-scoped permissions (`protocol:ssh.connect`, `protocol:ssh.share`, `protocol:ssh.record`, etc.) with tests
+- [ ] Seed connection defaults (font, theme, enable_sftp flag) via migrations and config
+- [ ] Cover driver unit tests and integration smoke test against mock SSH server
+
+### SFTP File Manager
+- [ ] Implement SFTP channel management inside SSH driver (lazy init, pooled reuse)
+- [ ] Build REST handlers for file browse, download, upload, edit, delete, and metadata
+- [ ] Stream large downloads/uploads efficiently with resumable support and realtime transfer events
+- [ ] Create frontend SFTP workspace (tabs, toolbar, queue panel, editor integration)
+- [ ] Wire Zustand/React Query stores for cached directory navigation and live transfer updates
+- [ ] Add drag/drop upload pipeline with resumable progress events
+- [ ] Implement permission guard for SFTP interactions (`protocol:ssh.sftp`)
+- [ ] Write frontend + backend tests for file operations and path sanitization
+
 ### SFTP Module — Not Started
+
+### Shared Session Collaboration (Protocol-Wide)
+- [ ] Extend session data model to support participants, access modes, and chat
+- [ ] Deliver API for inviting/removing participants and toggling write access
+- [ ] Broadcast realtime events for participant list, ownership changes, and chat
+- [ ] Implement frontend participant panel, badges, and write-access UX
+- [ ] Add audit logging + metrics for share lifecycle events
+- [ ] Validate permission enforcement across owner, participant, and admin roles
+
+### Session Recording (SSH-first)
+- [ ] Introduce recorder service + storage abstraction (filesystem + S3)
+- [ ] Stream SSH terminal output into recorder when enabled
+- [ ] Persist recording metadata and retention policy rows
+- [ ] Build admin toggles (global + per-connection) for recording enablement
+- [ ] Surface recording status indicator + playback UI in frontend
+- [ ] Implement cleanup job honoring retention settings
+- [ ] Write integration test covering start/stop/download flows
 
 ---
 

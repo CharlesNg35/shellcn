@@ -253,3 +253,64 @@ Active connection visibility is powered by `services.ActiveSessionService`. Ever
 
 **Status**: Draft ready for implementation guidance.
 **Maintainer**: Core platform architecture team.
+
+## 12. Shared Session Collaboration Standard
+
+Shared sessions allow multiple users to attach to the same live connection. All drivers that enable shared access must follow these rules:
+
+1. **Eligibility & Permissions**
+   - Drivers expose capability flag `shareable` when they support multi-user viewing.
+   - Sharing requires the base `connection.launch` permission plus the protocol-scoped permission `protocol:<driver-id>.share`.
+   - Participants must already have launch access to the underlying connection (enforced via resource permissions).
+2. **Active Session Ownership**
+   - The launcher creates a **session owner** (first user) who implicitly has `write` access.
+   - Owners may invite additional participants individually or scoped to a team. Invitations are scoped per active session, not globally.
+3. **Access Modes**
+   - Access modes are `read` (default) and `write`.
+   - Only one participant may hold `write` access at a time. Owners can transfer or revoke write access; participants may voluntarily drop it.
+   - Drivers must treat non-writers as view-only: terminal keystrokes, mouse events, uploads, and clipboard actions are ignored server-side.
+4. **Lifecycle API**
+   - REST endpoints under `/api/active-sessions/:id` handle share management (invite, list participants, update access, revoke).
+   - WebSocket control frames (`share.*` events) inform clients about participant joins, leaves, and access changes.
+   - When a participant disconnects, the backend cleans up their association automatically.
+5. **Chat Channel**
+   - Each shared session exposes a per-session chat stream. Messages are ephemeral unless the protocol driver opts into persistent logging.
+   - Chat history must be cleared when the active session closes and should honour organization profanity/security filters.
+6. **Audit & Metrics**
+   - Every grant/revoke action emits an audit log entry and updates Prometheus counters (`protocol_<id>_shared_sessions_total`).
+   - UI should surface when a session is shared (badge) and who currently has write control.
+7. **Extensibility**
+   - These rules apply to all terminal/desktop drivers that plan to support collaboration (SSH, Telnet, Kubernetes exec, RDP shadowing, etc.). Drivers that cannot technically enforce read-only mode should not expose the feature flag.
+
+## 13. Session Recording Standard
+
+Recording provides audit playback for supported protocols (SSH terminal, RDP, VNC, etc.). Drivers opting into recording must implement:
+
+1. **Capability Flag & Permission**
+   - Advertise `SessionRecording: true` in driver capabilities.
+   - Require `protocol:<driver-id>.record` permission in addition to `connection.launch`.
+   - Obey global or per-connection configuration toggles that enable/disable recording.
+2. **Recorder Interface**
+   - Drivers stream raw session data into the shared `RecorderService` which handles buffering, compression, and persistence.
+   - Supported codecs start with Asciinema v2 for terminal streams; binary protocols (desktop) may adopt video or image-diff codecs later.
+3. **Storage Abstraction**
+   - Recordings are stored through `RecorderStore` implementations. Default is filesystem (`./data/records/<protocol>/<year>/<month>/<session>.cast.gz`); S3-compatible storage must use configurable bucket/prefix.
+   - Metadata row (`connection_session_records`) tracks storage kind, key/path, size, duration, checksum, and retention policy.
+4. **Privacy & Controls**
+   - Admins can enforce always-on recording, opt-in, or disallow per protocol.
+   - Owners can see recording status and stop/resume when policy permits. Participants cannot disable recordings started by admins.
+   - UI must inform participants when recording is active.
+5. **Playback & Access**
+   - REST endpoints provide metadata listing, secure download, and playback token generation. Access requires either session ownership or elevated auditing permissions.
+   - Playback consumers should stream data rather than load entire file when possible.
+6. **Retention & Cleanup**
+   - Each recording honours configurable retention (days) with background jobs purging expired files and metadata.
+   - Deletions are audited and require `protocol:<driver-id>.record` plus `connection.manage` or a dedicated `session_record.manage` permission.
+7. **Testing**
+   - Integration tests must cover start/stop flows, storage failures, and playback retrieval.
+   - Simulate large sessions to ensure chunking and resource cleanup works as expected.
+
+---
+
+**Status**: Draft ready for implementation guidance.
+**Maintainer**: Core platform architecture team.
