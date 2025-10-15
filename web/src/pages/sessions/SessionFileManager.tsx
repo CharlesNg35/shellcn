@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { FileManager } from '@/components/file-manager/FileManager'
 import { useActiveConnections } from '@/hooks/useActiveConnections'
 import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { formatDistanceToNow } from 'date-fns'
 
 export function SessionFileManager() {
@@ -25,6 +26,41 @@ export function SessionFileManager() {
   const session = useMemo(() => {
     return activeSessions?.find((record) => record.id === sessionId)
   }, [activeSessions, sessionId])
+
+  const currentUserQuery = useCurrentUser()
+  const currentUser = currentUserQuery.data
+
+  const currentUserId = currentUser?.id
+  const currentUserDisplayName = useMemo(() => {
+    if (!currentUser) {
+      return undefined
+    }
+    const fullName = [currentUser.first_name, currentUser.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+    return fullName || currentUser.username || currentUser.email || currentUser.id
+  }, [currentUser])
+
+  const canWrite = useMemo(() => {
+    if (!session || !currentUserId) {
+      return false
+    }
+    if (session.write_holder && session.write_holder === currentUserId) {
+      return true
+    }
+    if (session.owner_user_id && session.owner_user_id === currentUserId) {
+      return true
+    }
+    if (session.user_id === currentUserId) {
+      return true
+    }
+    const participant = session.participants?.[currentUserId]
+    if (participant && participant.access_mode?.toLowerCase() === 'write') {
+      return true
+    }
+    return false
+  }, [currentUserId, session])
 
   useEffect(() => {
     const label = session?.connection_name ?? session?.connection_id
@@ -105,7 +141,13 @@ export function SessionFileManager() {
       </Card>
 
       <div className="flex-1 overflow-hidden">
-        <FileManager sessionId={sessionId} canWrite />
+        <FileManager
+          sessionId={sessionId}
+          canWrite={canWrite}
+          currentUserId={currentUserId}
+          currentUserName={currentUserDisplayName}
+          participants={session.participants}
+        />
       </div>
     </div>
   )

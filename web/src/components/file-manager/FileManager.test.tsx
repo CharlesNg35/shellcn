@@ -1,21 +1,31 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { webcrypto } from 'node:crypto'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileManager } from '@/components/file-manager/FileManager'
-import type { SftpEntry } from '@/types/sftp'
+import type { SftpEntry, SftpTransferRealtimeEvent } from '@/types/sftp'
 
 const mockUseSftpDirectory = vi.fn()
 const mockUseSftpUpload = vi.fn()
 const mockUseSftpDeleteFile = vi.fn()
 const mockUseSftpDeleteDirectory = vi.fn()
+const mockUseSftpTransfersStream = vi.fn()
+
+let realtimeHandler: ((event: unknown) => void) | undefined
 
 vi.mock('@/hooks/useSftp', () => ({
   useSftpDirectory: (...args: unknown[]) => mockUseSftpDirectory(...args),
   useSftpUpload: (...args: unknown[]) => mockUseSftpUpload(...args),
   useSftpDeleteFile: (...args: unknown[]) => mockUseSftpDeleteFile(...args),
   useSftpDeleteDirectory: (...args: unknown[]) => mockUseSftpDeleteDirectory(...args),
+}))
+
+vi.mock('@/hooks/useSftpTransfersStream', () => ({
+  useSftpTransfersStream: (options: { onEvent?: (event: unknown) => void }) => {
+    realtimeHandler = options?.onEvent
+    return mockUseSftpTransfersStream(options)
+  },
 }))
 
 vi.mock('@/hooks/usePermissions', () => ({
@@ -102,6 +112,8 @@ describe('FileManager component', () => {
     mockUseSftpUpload.mockReset()
     mockUseSftpDeleteFile.mockReset()
     mockUseSftpDeleteDirectory.mockReset()
+    mockUseSftpTransfersStream.mockReset()
+    realtimeHandler = undefined
 
     mockUseSftpDirectory.mockReturnValue({
       data: { path: '.', entries: baseEntries },
@@ -132,6 +144,10 @@ describe('FileManager component', () => {
       isPending: false,
       status: 'idle',
       reset: vi.fn(),
+    })
+
+    mockUseSftpTransfersStream.mockReturnValue({
+      isConnected: true,
     })
   })
 
@@ -175,5 +191,40 @@ describe('FileManager component', () => {
         onChunk: expect.any(Function),
       },
     })
+  })
+
+  it('updates transfers when realtime events arrive', async () => {
+    renderWithClient(<FileManager sessionId="sess-1" />)
+
+    expect(realtimeHandler).toBeTypeOf('function')
+
+    const event: SftpTransferRealtimeEvent = {
+      event: 'sftp.transfer.started',
+      status: 'started',
+      payload: {
+        sessionId: 'sess-1',
+        connectionId: 'conn-42',
+        userId: 'usr-2',
+        path: 'remote/example.txt',
+        direction: 'upload',
+        transferId: 'transfer-1',
+        status: 'started',
+        bytesTransferred: 256,
+        totalBytes: 1024,
+        error: undefined,
+      },
+    }
+
+    act(() => {
+      realtimeHandler?.(event)
+    })
+
+    const fileCell = await screen.findByText('example.txt')
+    const transferItem = fileCell.closest('li') as HTMLElement
+    expect(transferItem).toBeTruthy()
+
+    const scope = within(transferItem)
+    expect(scope.getByText('Upload')).toBeInTheDocument()
+    expect(scope.getByText('· usr-2')).toBeInTheDocument()
   })
 })

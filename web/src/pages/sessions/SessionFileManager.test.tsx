@@ -4,11 +4,16 @@ import { describe, expect, it, vi } from 'vitest'
 import SessionFileManager from '@/pages/sessions/SessionFileManager'
 
 const mockUseActiveConnections = vi.fn()
+const mockUseCurrentUser = vi.fn()
 const mockSetOverride = vi.fn()
 const mockClearOverride = vi.fn()
 
 vi.mock('@/hooks/useActiveConnections', () => ({
   useActiveConnections: (...args: unknown[]) => mockUseActiveConnections(...args),
+}))
+
+vi.mock('@/hooks/useCurrentUser', () => ({
+  useCurrentUser: () => mockUseCurrentUser(),
 }))
 
 const fileManagerMock = vi.fn(() => <div data-testid="file-manager-mock" />)
@@ -29,9 +34,21 @@ vi.mock('@/contexts/BreadcrumbContext', () => ({
 describe('SessionFileManager page', () => {
   beforeEach(() => {
     mockUseActiveConnections.mockReset()
+    mockUseCurrentUser.mockReset()
     mockSetOverride.mockReset()
     mockClearOverride.mockReset()
     fileManagerMock.mockClear()
+    mockUseCurrentUser.mockReturnValue({
+      data: {
+        id: 'usr-1',
+        username: 'alice',
+        email: 'alice@example.com',
+        first_name: 'Alice',
+        last_name: 'Doe',
+        is_root: false,
+        is_active: true,
+      },
+    })
   })
 
   it('renders session details when data is available', () => {
@@ -47,6 +64,17 @@ describe('SessionFileManager page', () => {
           started_at: '2024-01-01T00:00:00Z',
           last_seen_at: '2024-01-01T01:00:00Z',
           metadata: {},
+          participants: {
+            'usr-1': {
+              session_id: 'sess-1',
+              user_id: 'usr-1',
+              user_name: 'Alice',
+              role: 'owner',
+              access_mode: 'write',
+              joined_at: '2024-01-01T00:00:00Z',
+            },
+          },
+          write_holder: 'usr-1',
         },
       ],
       isLoading: false,
@@ -64,10 +92,15 @@ describe('SessionFileManager page', () => {
     expect(screen.getByText('Primary Server')).toBeInTheDocument()
     expect(screen.getByTestId('file-manager-mock')).toBeInTheDocument()
     expect(fileManagerMock).toHaveBeenCalled()
+    const props = fileManagerMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(props?.sessionId).toBe('sess-1')
+    expect(props?.canWrite).toBe(true)
+    expect(props?.currentUserId).toBe('usr-1')
   })
 
   it('renders empty state when session is missing', () => {
     mockUseActiveConnections.mockReturnValue({ data: [], isLoading: false, isError: false })
+    mockUseCurrentUser.mockReturnValue({ data: null })
 
     render(
       <MemoryRouter initialEntries={['/active-sessions/unknown/sftp']}>

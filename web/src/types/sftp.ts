@@ -59,3 +59,25 @@ export interface SftpUploadResult {
   nextOffset: number
   transferId?: string
 }
+
+export type SftpTransferDirection = 'upload' | 'download' | 'save' | (string & {})
+export type SftpTransferStatus = 'started' | 'progress' | 'completed' | 'failed' | (string & {})
+
+export interface SftpTransferEventPayload {
+  sessionId: string
+  connectionId?: string
+  userId?: string
+  path: string
+  direction: SftpTransferDirection
+  transferId: string
+  status: SftpTransferStatus
+  bytesTransferred?: number
+  totalBytes?: number
+  error?: string
+}
+
+export interface SftpTransferRealtimeEvent {
+  event: string
+  status: SftpTransferStatus
+  payload: SftpTransferEventPayload
+}

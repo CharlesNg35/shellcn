@@ -28,26 +28,37 @@ import {
   useSftpDirectory,
   useSftpUpload,
 } from '@/hooks/useSftp'
-import type { SftpEntry } from '@/types/sftp'
+import { useSftpTransfersStream } from '@/hooks/useSftpTransfersStream'
+import type { ActiveSessionParticipant } from '@/types/connections'
+import type { SftpEntry, SftpTransferRealtimeEvent } from '@/types/sftp'
 
 interface FileManagerProps {
   sessionId: string
   initialPath?: string
   className?: string
   canWrite?: boolean
+  currentUserId?: string
+  currentUserName?: string
+  participants?: Record<string, ActiveSessionParticipant>
 }
 
 type TransferStatus = 'pending' | 'uploading' | 'completed' | 'failed'
 
 interface TransferItem {
   id: string
+  remoteId?: string
   name: string
+  path: string
+  direction: string
   size: number
   uploaded: number
   status: TransferStatus
   startedAt: Date
   completedAt?: Date
   errorMessage?: string
+  totalBytes?: number
+  userId?: string
+  userName?: string
 }
 
 function normalizePath(path?: string): string {
@@ -116,14 +127,63 @@ function sortEntries(entries: SftpEntry[]): SftpEntry[] {
   })
 }
 
-function createTransfer(file: File): TransferItem {
+function extractNameFromPath(path: string): string {
+  if (!path) {
+    return ''
+  }
+  const cleaned = path.replace(/\/+$/, '')
+  const segments = cleaned.split('/')
+  return segments[segments.length - 1] || cleaned
+}
+
+function resolveParticipantName(
+  participants: Record<string, ActiveSessionParticipant> | undefined,
+  userId: string | undefined,
+  fallback?: string
+): string | undefined {
+  if (!userId) {
+    return fallback
+  }
+  const participant = participants?.[userId]
+  return participant?.user_name || fallback
+}
+
+function formatLabel(value?: string) {
+  if (!value) {
+    return ''
+  }
+  return value.charAt(0).toUpperCase() + value.slice(1)
+}
+
+interface CreateTransferParams {
+  name: string
+  path: string
+  direction: string
+  size?: number
+  userId?: string
+  userName?: string
+}
+
+function createTransfer({
+  name,
+  path,
+  direction,
+  size,
+  userId,
+  userName,
+}: CreateTransferParams): TransferItem {
   return {
-    id: crypto.randomUUID ? crypto.randomUUID() : `${file.name}-${Date.now()}`,
-    name: file.name,
-    size: file.size,
+    id: crypto.randomUUID ? crypto.randomUUID() : `${name}-${Date.now()}`,
+    remoteId: undefined,
+    name,
+    path,
+    direction,
+    size: size ?? 0,
     uploaded: 0,
     status: 'pending',
     startedAt: new Date(),
+    userId,
+    userName,
   }
 }
 
@@ -132,7 +192,16 @@ export function FileManager({
   initialPath,
   className,
   canWrite = true,
+  currentUserId,
+  currentUserName,
+  participants,
 }: FileManagerProps) {
+  const currentUserLabel = useMemo(
+    () =>
+      resolveParticipantName(participants ?? {}, currentUserId, currentUserName ?? currentUserId),
+    [participants, currentUserId, currentUserName]
+  )
+  const participantMap = useMemo(() => participants ?? {}, [participants])
   const [currentPath, setCurrentPath] = useState(() => normalizePath(initialPath))
   const [pathInput, setPathInput] = useState(() => displayPath(normalizePath(initialPath)))
   const [showHidden, setShowHidden] = useState(false)
@@ -178,44 +247,6 @@ export function FileManager({
     navigateTo(parentPath(currentPath))
   }, [currentPath, navigateTo])
 
-  const handleDownload = useCallback(
-    async (entry: SftpEntry) => {
-      try {
-        const result = await import('@/lib/api/sftp').then((module) =>
-          module.downloadSftpFile(sessionId, entry.path)
-        )
-        const url = URL.createObjectURL(result.data)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = result.filename ?? entry.name
-        document.body.appendChild(link)
-        link.click()
-        link.remove()
-        URL.revokeObjectURL(url)
-        toast.success(`Downloading ${entry.name}`, {
-          description: 'Download started in the background.',
-        })
-      } catch (err) {
-        const apiError = toApiError(err)
-        toast.error(`Unable to download ${entry.name}`, {
-          description: apiError.message,
-        })
-      }
-    },
-    [sessionId]
-  )
-
-  const handleEntryActivate = useCallback(
-    (entry: SftpEntry) => {
-      if (entry.isDir) {
-        navigateTo(entry.path)
-        return
-      }
-      void handleDownload(entry)
-    },
-    [handleDownload, navigateTo]
-  )
-
   const updateTransfer = useCallback(
     (id: string, updater: (transfer: TransferItem) => TransferItem) => {
       setTransfers((items) =>
@@ -230,6 +261,68 @@ export function FileManager({
     []
   )
 
+  const handleDownload = useCallback(
+    async (entry: SftpEntry) => {
+      const transfer = createTransfer({
+        name: entry.name,
+        path: entry.path,
+        direction: 'download',
+        size: entry.size,
+        userId: currentUserId,
+        userName: currentUserLabel,
+      })
+      setTransfers((items) => [...items, { ...transfer, status: 'uploading' }])
+
+      try {
+        const result = await import('@/lib/api/sftp').then((module) =>
+          module.downloadSftpFile(sessionId, entry.path)
+        )
+        const url = URL.createObjectURL(result.data)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = result.filename ?? entry.name
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(url)
+
+        updateTransfer(transfer.id, (item) => ({
+          ...item,
+          size: result.size ?? item.size,
+          uploaded: result.size ?? item.uploaded,
+          status: 'completed',
+          completedAt: new Date(),
+        }))
+        toast.success(`Downloading ${entry.name}`, {
+          description: 'Download started in the background.',
+        })
+      } catch (err) {
+        const apiError = toApiError(err)
+        updateTransfer(transfer.id, (item) => ({
+          ...item,
+          status: 'failed',
+          errorMessage: apiError.message,
+          completedAt: new Date(),
+        }))
+        toast.error(`Unable to download ${entry.name}`, {
+          description: apiError.message,
+        })
+      }
+    },
+    [currentUserId, currentUserLabel, sessionId, updateTransfer]
+  )
+
+  const handleEntryActivate = useCallback(
+    (entry: SftpEntry) => {
+      if (entry.isDir) {
+        navigateTo(entry.path)
+        return
+      }
+      void handleDownload(entry)
+    },
+    [handleDownload, navigateTo]
+  )
+
   const handleUploadFiles = useCallback(
     async (files: FileList | null) => {
       if (!files || files.length === 0) {
@@ -237,24 +330,42 @@ export function FileManager({
       }
 
       for (const file of Array.from(files)) {
-        const transfer = createTransfer(file)
+        const targetPath = resolveChildPath(currentPath, file.name)
+        const transfer = createTransfer({
+          name: file.name,
+          path: targetPath,
+          direction: 'upload',
+          size: file.size,
+          userId: currentUserId,
+          userName: currentUserLabel,
+        })
         setTransfers((items) => [...items, { ...transfer, status: 'uploading' }])
 
         try {
-          await uploadMutation.mutateAsync({
-            path: resolveChildPath(currentPath, file.name),
+          const result = await uploadMutation.mutateAsync({
+            path: targetPath,
             blob: file,
             options: {
               createParents: true,
               onChunk: ({ uploadedBytes, totalBytes }) => {
                 updateTransfer(transfer.id, (item) => ({
                   ...item,
-                  uploaded: totalBytes === 0 ? uploadedBytes : Math.min(uploadedBytes, totalBytes),
+                  totalBytes: totalBytes > 0 ? totalBytes : item.totalBytes,
+                  size: totalBytes > 0 ? totalBytes : item.size,
+                  uploaded: totalBytes > 0 ? Math.min(uploadedBytes, totalBytes) : uploadedBytes,
                   status: 'uploading',
                 }))
               },
             },
           })
+
+          if (result?.transferId) {
+            setTransfers((items) =>
+              items.map((item) =>
+                item.id === transfer.id ? { ...item, remoteId: result.transferId } : item
+              )
+            )
+          }
 
           updateTransfer(transfer.id, (item) => ({
             ...item,
@@ -281,8 +392,89 @@ export function FileManager({
         fileInputRef.current.value = ''
       }
     },
-    [currentPath, updateTransfer, uploadMutation]
+    [currentPath, currentUserId, currentUserLabel, updateTransfer, uploadMutation]
   )
+
+  const handleRealtimeEvent = useCallback(
+    (event: SftpTransferRealtimeEvent) => {
+      const { payload, status } = event
+      setTransfers((items) => {
+        let index = items.findIndex((item) => item.remoteId === payload.transferId)
+        if (index < 0) {
+          index = items.findIndex(
+            (item) =>
+              !item.remoteId && item.path === payload.path && item.direction === payload.direction
+          )
+        }
+
+        const now = new Date()
+
+        if (index < 0) {
+          const newItem: TransferItem = {
+            id: payload.transferId,
+            remoteId: payload.transferId,
+            name: extractNameFromPath(payload.path),
+            path: payload.path,
+            direction: payload.direction,
+            size: payload.totalBytes ?? 0,
+            uploaded: payload.bytesTransferred ?? 0,
+            status:
+              status === 'failed' ? 'failed' : status === 'completed' ? 'completed' : 'uploading',
+            startedAt: now,
+            completedAt: status === 'completed' || status === 'failed' ? now : undefined,
+            errorMessage: status === 'failed' ? payload.error : undefined,
+            totalBytes: payload.totalBytes,
+            userId: payload.userId,
+            userName: resolveParticipantName(participantMap, payload.userId, payload.userId),
+          }
+          const nextItems = [...items, newItem]
+          return nextItems.length > 50 ? nextItems.slice(nextItems.length - 50) : nextItems
+        }
+
+        const nextItems = [...items]
+        const current = { ...nextItems[index] }
+        current.remoteId = payload.transferId
+        current.name = current.name || extractNameFromPath(payload.path)
+        current.path = payload.path
+        current.direction = payload.direction
+        if (payload.totalBytes !== undefined) {
+          current.totalBytes = payload.totalBytes
+          current.size = payload.totalBytes
+        }
+        if (payload.bytesTransferred !== undefined) {
+          current.uploaded = payload.bytesTransferred
+        }
+        if (payload.userId) {
+          current.userId = payload.userId
+          current.userName = resolveParticipantName(participantMap, payload.userId, payload.userId)
+        }
+
+        if (status === 'completed') {
+          current.status = 'completed'
+          current.completedAt = now
+          if (payload.totalBytes !== undefined) {
+            current.uploaded = payload.totalBytes
+          }
+        } else if (status === 'failed') {
+          current.status = 'failed'
+          current.completedAt = now
+          current.errorMessage = payload.error ?? current.errorMessage
+        } else {
+          current.status = 'uploading'
+        }
+
+        nextItems[index] = current
+        return nextItems
+      })
+    },
+    [participantMap]
+  )
+
+  useSftpTransfersStream({
+    sessionId,
+    enabled: Boolean(sessionId),
+    onEvent: handleRealtimeEvent,
+  })
 
   const handleDeleteEntry = useCallback(
     async (entry: SftpEntry) => {
@@ -576,10 +768,18 @@ export function FileManager({
                           style={{ width: `${progress * 100}%` }}
                         />
                       </div>
-                      <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-                        <span className="capitalize">{transfer.status}</span>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                            {formatLabel(transfer.direction)}
+                          </span>
+                          <span className="capitalize">{formatLabel(transfer.status)}</span>
+                          {transfer.userName && (
+                            <span className="text-muted-foreground/80">· {transfer.userName}</span>
+                          )}
+                        </div>
                         <span>
-                          {transfer.uploaded === transfer.size
+                          {transfer.uploaded === transfer.size && transfer.size > 0
                             ? formatBytes(transfer.size)
                             : `${formatBytes(transfer.uploaded)} / ${formatBytes(transfer.size)}`}
                         </span>

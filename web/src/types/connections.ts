@@ -90,6 +90,15 @@ export interface ConnectionProtocolSummary {
   count: number
 }
 
+export interface ActiveSessionParticipant {
+  session_id: string
+  user_id: string
+  user_name?: string
+  role: string
+  access_mode: string
+  joined_at: string
+}
+
 export interface ActiveConnectionSession {
   id: string
   connection_id: string
@@ -103,4 +112,9 @@ export interface ActiveConnectionSession {
   host?: string
   port?: number
   metadata?: Record<string, unknown>
+  concurrent_limit?: number
+  owner_user_id?: string
+  owner_user_name?: string
+  write_holder?: string
+  participants?: Record<string, ActiveSessionParticipant>
 }
