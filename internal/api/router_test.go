@@ -16,6 +16,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	testutil "github.com/charlesng35/shellcn/internal/database/testutil"
+	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/monitoring"
@@ -85,7 +86,7 @@ func TestRouter_PublicAndProtectedRoutes(t *testing.T) {
 		t.Logf("initial readiness: %+v", report)
 	}
 
-	router, err := NewRouter(db, jwtSvc, cfg, sessionSvc, middleware.NewMemoryRateStore(), mon)
+	router, err := NewRouter(db, jwtSvc, cfg, drivers.NewRegistry(), sessionSvc, middleware.NewMemoryRateStore(), mon)
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}
@@ -159,7 +160,7 @@ func TestRouter_MetricsEndpoint(t *testing.T) {
 	}
 	monitoring.SetModule(mon)
 
-	router, err := NewRouter(db, jwtSvc, cfg, sessionSvc, middleware.NewMemoryRateStore(), mon)
+	router, err := NewRouter(db, jwtSvc, cfg, drivers.NewRegistry(), sessionSvc, middleware.NewMemoryRateStore(), mon)
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}
@@ -221,7 +222,7 @@ func TestRouter_MetricsCustomEndpoint(t *testing.T) {
 	}
 	monitoring.SetModule(mon)
 
-	router, err := NewRouter(db, jwtSvc, cfg, sessionSvc, middleware.NewMemoryRateStore(), mon)
+	router, err := NewRouter(db, jwtSvc, cfg, drivers.NewRegistry(), sessionSvc, middleware.NewMemoryRateStore(), mon)
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}
@@ -283,7 +284,7 @@ func TestRouter_MetricsDisabled(t *testing.T) {
 	}
 	monitoring.SetModule(mon)
 
-	router, err := NewRouter(db, jwtSvc, cfg, sessionSvc, middleware.NewMemoryRateStore(), mon)
+	router, err := NewRouter(db, jwtSvc, cfg, drivers.NewRegistry(), sessionSvc, middleware.NewMemoryRateStore(), mon)
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}
@@ -329,7 +330,7 @@ func TestRouter_HealthDisabled(t *testing.T) {
 	}
 	monitoring.SetModule(mon)
 
-	router, err := NewRouter(db, jwtSvc, cfg, sessionSvc, middleware.NewMemoryRateStore(), mon)
+	router, err := NewRouter(db, jwtSvc, cfg, drivers.NewRegistry(), sessionSvc, middleware.NewMemoryRateStore(), mon)
 	if err != nil {
 		t.Fatalf("router: %v", err)
 	}

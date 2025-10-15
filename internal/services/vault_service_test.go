@@ -101,6 +101,46 @@ func TestVaultServiceCreateShare(t *testing.T) {
 	require.Equal(t, share.ID, fetched.Shares[0].ID)
 }
 
+func TestVaultServiceLoadIdentitySecret(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+
+	auditSvc, err := NewAuditService(db)
+	require.NoError(t, err)
+
+	crypto, err := vault.NewCrypto([]byte("0123456789abcdef0123456789abcdef"))
+	require.NoError(t, err)
+
+	svc, err := NewVaultService(db, auditSvc, nil, crypto)
+	require.NoError(t, err)
+
+	owner := ViewerContext{UserID: "owner-1"}
+	recipient := ViewerContext{UserID: "user-2"}
+
+	ctx := context.Background()
+
+	identity, err := svc.CreateIdentity(ctx, owner, CreateIdentityInput{
+		Name:        "Deploy Key",
+		Scope:       models.IdentityScopeGlobal,
+		Payload:     map[string]any{"username": "deploy", "private_key": "PEM"},
+		OwnerUserID: owner.UserID,
+		CreatedBy:   owner.UserID,
+	})
+	require.NoError(t, err)
+
+	_, err = svc.CreateShare(ctx, owner, identity.ID, IdentityShareInput{
+		PrincipalType: models.IdentitySharePrincipalUser,
+		PrincipalID:   recipient.UserID,
+		Permission:    models.IdentitySharePermissionUse,
+		CreatedBy:     owner.UserID,
+	})
+	require.NoError(t, err)
+
+	secret, err := svc.LoadIdentitySecret(ctx, recipient, identity.ID)
+	require.NoError(t, err)
+	require.Equal(t, "deploy", secret["username"])
+	require.Equal(t, "PEM", secret["private_key"])
+}
+
 func TestVaultServiceListTemplates(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 

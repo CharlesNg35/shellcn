@@ -10,7 +10,7 @@
 ## 2. Core Decisions
 
 - **Terminal engine**: `xterm.js` (v5+) with WebGL addon + fit addon; lazy-load via dynamic import.
-- **Transport**: multiplex bidirectional SSH data, control messages, and heartbeat over WebSocket (`ws://.../ws/ssh/{sessionID}`). Binary frames for data, JSON for control.
+- **Transport**: multiplex bidirectional SSH data, control messages, and heartbeat over WebSocket (`ws://.../ws?tunnel=ssh&connection_id={connectionID}`). Binary frames are proxied for terminal data; control messages remain JSON.
 - **Recording format**: Asciinema v2 JSON (gzipped) for terminal; extensible codec registry for future RDP/VNC.
 - **Storage abstraction**: `RecorderStore` interface with filesystem (default `./data/records/<protocol>/<year>/<month>/`) and S3 backend.
 - **Concurrency enforcement**: per-connection limit (0 = unlimited) enforced in `ActiveSessionService` before launch.
@@ -90,6 +90,7 @@
   - Binary frames: raw terminal I/O (stdin/stdout)
   - JSON frames: control messages with envelope `{type, payload}`
 - **Message Types**:
+
   ```typescript
   // Terminal data (binary frame)
   type: "data" → payload: raw bytes
@@ -102,6 +103,7 @@
   type: "error"      → payload: {code, message}
   type: "heartbeat"  → payload: {timestamp}
   ```
+
 - **Heartbeat**: Client sends ping every 20s; server updates `LastSeenAt`. Auto-close after 60s silence.
 - **Reconnection**: Client retries with exponential backoff (1s → 30s max). Server rejects stale sessions (>5min idle).
 - **Error Codes**: `PERMISSION_DENIED`, `CONCURRENT_LIMIT`, `SESSION_CLOSED`, `WRITE_CONFLICT`
@@ -288,12 +290,14 @@
 - **UI Pattern**: Reuse SecuritySettingsPanel layout pattern
 
 **Connection Form Integration**:
+
 - Forms fetch admin defaults via `GET /api/settings/protocols/ssh`
 - Pre-fill fields with defaults
 - User can override any setting (stored in `connections.settings` JSON)
 - Show badge "Using admin default" when not overridden
 
 **User Preferences** (`/settings/account` or `/settings/preferences`):
+
 - Extend existing preferences panel with SSH section
 - Terminal preferences: font, cursor style, copy behavior
 - SFTP preferences: hidden files toggle, auto-open queue
@@ -346,6 +350,7 @@
 ## 8. Recording Consent & Compliance
 
 **Privacy Requirements**:
+
 - **Banner Display**: When recording is active (forced or optional), show persistent banner: _"This session is being recorded for security and compliance purposes."_
 - **Consent Mode**:
   - `forced`: No opt-out, banner shows info only
@@ -358,46 +363,57 @@
   - Audit log: `session.recording.consent_given` event
 
 **Banner Example**:
+
 ```tsx
-{isRecording && (
-  <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-2">
-    <div className="flex items-center gap-2 text-sm text-red-600">
-      <RecordIcon className="animate-pulse" />
-      <span>Recording active • {formatDuration(recordingDuration)}</span>
-      {canStopRecording && <Button size="sm" onClick={stopRecording}>Stop</Button>}
+{
+  isRecording && (
+    <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-2">
+      <div className="flex items-center gap-2 text-sm text-red-600">
+        <RecordIcon className="animate-pulse" />
+        <span>Recording active • {formatDuration(recordingDuration)}</span>
+        {canStopRecording && (
+          <Button size="sm" onClick={stopRecording}>
+            Stop
+          </Button>
+        )}
+      </div>
     </div>
-  </div>
-)}
+  );
+}
 ```
 
 ## 9. Proposed Optimizations
 
 ### 9.1 Adaptive Terminal Rendering
+
 - **Dynamic FPS**: Reduce frame rate to 30fps when tab inactive, restore to 120fps on focus
 - **Viewport Culling**: Only render visible terminal rows (xterm handles this natively with WebGL)
 - **Throttled Resize**: Debounce window resize events (300ms) before triggering terminal fit
 
 ### 9.2 Smart SFTP Caching
+
 ```typescript
 // Prefetch strategy
 interface SftpCache {
   // Cache directory listings with TTL
-  listings: Map<string, {data: FileEntry[], timestamp: number}>
+  listings: Map<string, { data: FileEntry[]; timestamp: number }>;
 
   // Prefetch breadcrumb parent on directory open
-  prefetch: (path: string) => void
+  prefetch: (path: string) => void;
 
   // Invalidate on mutations
-  invalidate: (path: string) => void
+  invalidate: (path: string) => void;
 }
 ```
 
 ### 9.3 Optimistic UI Updates
+
 - File operations (rename, delete, mkdir): update UI immediately, rollback on error
 - Chat messages: append locally before server confirmation
 - Write access transfer: show visual feedback before backend ACK
 
 ### 9.4 Connection Pooling Strategy
+
 ```go
 // SSH connection reuse across sessions
 type SSHConnectionPool struct {
@@ -406,10 +422,12 @@ type SSHConnectionPool struct {
   ttl   time.Duration  // 5 minutes idle timeout
 }
 ```
+
 - **Benefit**: Reduce SSH handshake overhead for rapid session switches
 - **Tradeoff**: Memory usage increases, add max pool size limit
 
 ### 9.5 Progressive Recording Uploads
+
 - Stream recording chunks to S3 every 5 minutes (don't wait for session end)
 - Reduces memory footprint, enables faster playback start
 - Final chunk uploaded on session close with metadata update
@@ -440,6 +458,7 @@ const (
 ```
 
 **API Endpoints**:
+
 ```
 GET    /api/settings/protocols/ssh      → fetch current settings
 PUT    /api/settings/protocols/ssh      → bulk update (audit logged)
@@ -448,19 +467,22 @@ PATCH  /api/settings/protocols/ssh/:key → update single setting
 
 **Connection Settings** (JSON in `connections.settings`):
 Per-connection overrides inherit from admin defaults when omitted:
+
 ```json
 {
   "host": "192.168.1.100",
   "port": 22,
-  "concurrent_limit": 5,         // overrides admin default
-  "enable_sftp": true,           // overrides admin default
-  "terminal_config_override": {  // optional overrides
+  "concurrent_limit": 5, // overrides admin default
+  "enable_sftp": true, // overrides admin default
+  "terminal_config_override": {
+    // optional overrides
     "font_size": 16
   }
 }
 ```
 
 **User Preferences** (`users.preferences` JSON):
+
 ```json
 {
   "ssh": {
@@ -478,6 +500,7 @@ Per-connection overrides inherit from admin defaults when omitted:
 ```
 
 **Resolution Hierarchy**:
+
 1. User preference (if exists)
 2. Connection override (if exists)
 3. Admin default (from `system_settings`)
@@ -486,6 +509,7 @@ Per-connection overrides inherit from admin defaults when omitted:
 ### 4.10 Snippet Management System
 
 **Database Schema**:
+
 ```sql
 CREATE TABLE snippets (
   id UUID PRIMARY KEY,
@@ -506,6 +530,7 @@ CREATE TABLE snippets (
 ```
 
 **API Endpoints**:
+
 ```
 GET    /api/snippets?scope=global|connection|user&connection_id=
 POST   /api/snippets                     (requires: protocol:ssh.manage_snippets)
@@ -515,6 +540,7 @@ POST   /api/active-sessions/:id/snippet  (execute snippet)
 ```
 
 **Security**:
+
 - Global snippets: requires `admin.manage_snippets`
 - Connection snippets: requires `connection.manage` + `protocol:ssh.manage_snippets`
 - User snippets: owner only
@@ -523,30 +549,35 @@ POST   /api/active-sessions/:id/snippet  (execute snippet)
 ### 4.11 Multi-Protocol Workspace State Management
 
 **Workspace Store** (Zustand):
+
 ```typescript
 interface WorkspaceStore {
   // Map protocol type → component state
-  protocolSessions: Map<ProtocolType, {
-    tabs: SessionTab[]
-    focusedTabId: string | null
-    layout: SplitLayout
-    mounted: boolean  // keep component mounted when inactive
-  }>
+  protocolSessions: Map<
+    ProtocolType,
+    {
+      tabs: SessionTab[];
+      focusedTabId: string | null;
+      layout: SplitLayout;
+      mounted: boolean; // keep component mounted when inactive
+    }
+  >;
 
   // Current focused protocol
-  activeProtocol: ProtocolType | null
+  activeProtocol: ProtocolType | null;
 
   // Switch protocol (hide current, show target)
-  switchProtocol: (protocol: ProtocolType) => void
+  switchProtocol: (protocol: ProtocolType) => void;
 
   // Session tab management
-  openSession: (session: ActiveSession) => void
-  closeSession: (sessionId: string) => void
-  focusSession: (sessionId: string) => void
+  openSession: (session: ActiveSession) => void;
+  closeSession: (sessionId: string) => void;
+  focusSession: (sessionId: string) => void;
 }
 ```
 
 **Strategy**:
+
 - Keep all protocol components mounted with CSS `display: none` when inactive
 - WebSocket connections remain open in background
 - Terminal buffers (xterm instances) persist in memory
@@ -564,30 +595,34 @@ interface WorkspaceStore {
 - Chat quick actions: embed contextual buttons (e.g., “Grant write”, “Open SFTP”) inside chat messages for owners/admins to act faster.
 - Connection escape hatch: from shared session UI provide “View Connection Details” link opening connection drawer/page for share or settings adjustments.
 
-
 ### 4.13 Performance Guardrails
 
 **Rendering**:
+
 - Terminal writes: batch to ≤120 fps, defer non-critical DOM with `requestIdleCallback`
 - Memoize terminal panes, chat, transfer lists with `React.memo`
 - Use `React.useTransition` for badge updates and low-priority UI
 
 **Network**:
+
 - Enable WebSocket compression (`permessage-deflate`)
 - Prefetch SFTP directories (top-level only), LRU cache (max 100 entries)
 - TanStack Query: `staleTime: 30s`, `gcTime: 5min`
 
 **Bundle Size**:
+
 - Initial SSH chunk: <300 KB (lazy-load Monaco, xterm addons, SFTP)
 - Dynamic imports for: terminal WebGL addon, file editor, image preview
 - Run Vite bundle analyzer; fail CI if baseline regresses >10%
 
 **Memory**:
+
 - Limit terminal scrollback: 1000 lines default (configurable)
 - Max 3 mounted protocol workspaces (LRU eviction)
 - Clear xterm buffers on session close
 
 **Monitoring**:
+
 - Track Web Vitals (LCP, FID, CLS) in dev builds
 - Custom metrics: `terminal_render_ms`, `sftp_list_latency`, `websocket_reconnects`
 - Alert on: >500ms SFTP response, >5 reconnects/session

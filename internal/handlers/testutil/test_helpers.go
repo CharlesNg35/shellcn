@@ -18,6 +18,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	sharedtestutil "github.com/charlesng35/shellcn/internal/database/testutil"
+	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/monitoring"
@@ -82,7 +83,11 @@ func NewEnv(t *testing.T) *Env {
 	require.NoError(t, err)
 	monitoring.SetModule(mon)
 
-	router, err := api.NewRouter(db, jwtSvc, cfg, sessionSvc, middleware.NewMemoryRateStore(), mon)
+	driverRegistry := drivers.NewRegistry()
+	router, err := api.NewRouter(
+		db, jwtSvc, cfg, driverRegistry,
+		sessionSvc, middleware.NewMemoryRateStore(), mon,
+	)
 	require.NoError(t, err)
 
 	return &Env{

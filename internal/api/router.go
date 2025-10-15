@@ -15,6 +15,7 @@ import (
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/auth/mfa"
 	"github.com/charlesng35/shellcn/internal/auth/providers"
+	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/handlers"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/monitoring"
@@ -29,7 +30,7 @@ import (
 
 // NewRouter builds the Gin engine, wires middleware and registers core routes.
 // Additional module routers can mount under /api in later phases.
-func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *iauth.SessionService, rateStore middleware.RateStore, mon *monitoring.Module) (*gin.Engine, error) {
+func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *drivers.Registry, sessions *iauth.SessionService, rateStore middleware.RateStore, mon *monitoring.Module) (*gin.Engine, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database handle must be provided")
 	}
@@ -215,16 +216,6 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	registerNotificationRoutes(api, notificationHandler, checker)
 	registerMonitoringRoutes(api, monitoringHandler, checker)
 
-	realtimeHandler := handlers.NewRealtimeHandler(
-		realtimeHub,
-		jwt,
-		realtime.StreamNotifications,
-		realtime.StreamConnectionSessions,
-	)
-	r.GET("/ws", realtimeHandler.Stream)
-	r.GET("/ws/:stream", realtimeHandler.Stream)
-	// ----- End Realtime Routes -------------------------------------------------
-
 	vaultCrypto, err := vault.NewCrypto(encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("initialise vault crypto: %w", err)
@@ -252,6 +243,18 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	activeSessionSvc := services.NewActiveSessionService(realtimeHub)
 	activeConnectionHandler := handlers.NewActiveConnectionHandler(activeSessionSvc, checker)
 	registerConnectionSessionRoutes(api, activeConnectionHandler, checker)
+
+	sshHandler := handlers.NewSSHSessionHandler(cfg, connectionSvc, vaultSvc, realtimeHub, activeSessionSvc, driverReg, checker, jwt)
+	realtimeHandler := handlers.NewRealtimeHandler(
+		realtimeHub,
+		jwt,
+		sshHandler,
+		realtime.StreamNotifications,
+		realtime.StreamConnectionSessions,
+		realtime.StreamSSHTerminal,
+	)
+	r.GET("/ws", realtimeHandler.Stream)
+	r.GET("/ws/:stream", realtimeHandler.Stream)
 
 	// Connection Share
 	shareHandler := handlers.NewConnectionShareHandler(shareSvc)

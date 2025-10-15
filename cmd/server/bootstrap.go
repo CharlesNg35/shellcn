@@ -174,7 +174,7 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		stack.RateStore = middleware.NewDatabaseRateStore(dbStore)
 	}
 
-	stack.Router, err = api.NewRouter(stack.DB, jwtSvc, cfg, stack.SessionSvc, stack.RateStore, mon)
+	stack.Router, err = api.NewRouter(stack.DB, jwtSvc, cfg, stack.DriverRegistry, stack.SessionSvc, stack.RateStore, mon)
 	if err != nil {
 		return nil, fmt.Errorf("build api router: %w", err)
 	}

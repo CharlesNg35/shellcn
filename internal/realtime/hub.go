@@ -69,10 +69,8 @@ func NewHub() *Hub {
 // Serve upgrades the HTTP connection to a WebSocket and registers the client with the provided streams.
 // The allowed set can be nil to indicate all streams are permitted.
 func (h *Hub) Serve(userID string, streams []string, allowed map[string]struct{}, w http.ResponseWriter, r *http.Request) {
-	conn, err := h.upgrader.Upgrade(w, r, nil)
+	conn, err := h.Upgrade(w, r)
 	if err != nil {
-		log.Printf("realtime: upgrade failed: %v", err)
-		monitoring.RecordRealtimeFailure("upgrade", "upgrade_failed", err.Error())
 		return
 	}
 
@@ -411,4 +409,15 @@ func uniqueStreams(streams []string) []string {
 		}
 	}
 	return result
+}
+
+// Upgrade performs the websocket handshake using hub defaults.
+func (h *Hub) Upgrade(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
+	conn, err := h.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("realtime: upgrade failed: %v", err)
+		monitoring.RecordRealtimeFailure("upgrade", "upgrade_failed", err.Error())
+		return nil, err
+	}
+	return conn, nil
 }

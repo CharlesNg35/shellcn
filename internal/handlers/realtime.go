@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	iauth "github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/realtime"
 	"github.com/charlesng35/shellcn/pkg/errors"
 	"github.com/charlesng35/shellcn/pkg/response"
@@ -16,11 +17,12 @@ type RealtimeHandler struct {
 	hub            *realtime.Hub
 	jwt            *iauth.JWTService
 	allowedStreams map[string]struct{}
+	ssh            *SSHSessionHandler
 }
 
 // NewRealtimeHandler constructs a realtime handler and optionally restricts allowed streams.
 // If no streams are provided, any stream name is accepted.
-func NewRealtimeHandler(hub *realtime.Hub, jwt *iauth.JWTService, streams ...string) *RealtimeHandler {
+func NewRealtimeHandler(hub *realtime.Hub, jwt *iauth.JWTService, ssh *SSHSessionHandler, streams ...string) *RealtimeHandler {
 	allowed := make(map[string]struct{}, len(streams))
 	for _, stream := range streams {
 		stream = normalizeStream(stream)
@@ -34,6 +36,7 @@ func NewRealtimeHandler(hub *realtime.Hub, jwt *iauth.JWTService, streams ...str
 		hub:            hub,
 		jwt:            jwt,
 		allowedStreams: allowed,
+		ssh:            ssh,
 	}
 }
 
@@ -42,20 +45,6 @@ func (h *RealtimeHandler) Stream(c *gin.Context) {
 	if h.jwt == nil || h.hub == nil {
 		response.Error(c, errors.ErrNotFound)
 		return
-	}
-
-	streams := gatherStreams(c)
-	if len(streams) == 0 {
-		streams = []string{realtime.StreamNotifications}
-	}
-
-	if len(h.allowedStreams) > 0 {
-		for _, stream := range streams {
-			if _, ok := h.allowedStreams[stream]; !ok {
-				response.Error(c, errors.ErrNotFound)
-				return
-			}
-		}
 	}
 
 	token := strings.TrimSpace(c.Query("token"))
@@ -80,11 +69,42 @@ func (h *RealtimeHandler) Stream(c *gin.Context) {
 		return
 	}
 
+	userID := strings.TrimSpace(claims.UserID)
+	if userID == "" {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+
+	tunnel := strings.ToLower(strings.TrimSpace(c.Query("tunnel")))
+	if tunnel == "ssh" {
+		if h.ssh == nil {
+			response.Error(c, errors.ErrNotFound)
+			return
+		}
+		c.Set(middleware.CtxUserIDKey, userID)
+		h.ssh.ServeTunnel(c, claims)
+		return
+	}
+
+	streams := gatherStreams(c)
+	if len(streams) == 0 {
+		streams = []string{realtime.StreamNotifications}
+	}
+
+	if len(h.allowedStreams) > 0 {
+		for _, stream := range streams {
+			if _, ok := h.allowedStreams[stream]; !ok {
+				response.Error(c, errors.ErrNotFound)
+				return
+			}
+		}
+	}
+
 	var allowed map[string]struct{}
 	if len(h.allowedStreams) > 0 {
 		allowed = h.allowedStreams
 	}
-	h.hub.Serve(claims.UserID, streams, allowed, c.Writer, c.Request)
+	h.hub.Serve(userID, streams, allowed, c.Writer, c.Request)
 }
 
 func gatherStreams(c *gin.Context) []string {
