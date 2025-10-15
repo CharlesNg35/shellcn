@@ -164,10 +164,11 @@ Button.displayName = 'Button';
 
 ### 2.4 Use Proven Packages Instead of Hand-Rolled Widgets
 
-- Reach for `@monaco-editor/react` whenever we need an in-browser editor. Do not build textarea-based editors for configuration or code—Monaco gives syntax highlighting, diffing, and accessibility out of the box.
+- Reach for `@monaco-editor/react` whenever we need an in-browser editor. Do not build textarea-based editors for configuration or code—Monaco delivers syntax highlighting, diffing, and accessibility with less maintenance.
 - Persist shared client state in Zustand stores and rely on React Query for server/cache orchestration. Avoid bespoke context providers or ad-hoc `useState` caches for workspace/session data.
-- For drag-and-drop, uploads, and other complex DOM interactions, adopt community packages such as `react-dropzone` rather than wiring raw `dragenter`/`drop` listeners repeatedly. This keeps behavior consistent and well-tested.
-- When a new UX need appears, audit the existing stack first; if a capability fits one of these packages, extend the shared implementation instead of re-inventing it in a leaf component.
+- For drag-and-drop, uploads, and other complex DOM interactions, adopt community packages such as `react-dropzone` rather than wiring raw `dragenter`/`drop` listeners repeatedly. This keeps behavior consistent and battle-tested.
+- When a new UX requirement appears, audit the existing stack first. If a capability fits one of these packages (or another maintained library), extend that shared implementation instead of reinventing it in a leaf component.
+- **Call it out during reviews:** if a PR reimplements state containers, editors, or uploaders without leveraging our approved packages, block it and point back to this section. Technical debt grows quickly when we skip well-supported tools.
 
 ---
 

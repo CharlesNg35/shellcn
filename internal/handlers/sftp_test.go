@@ -308,6 +308,47 @@ func TestSFTPHandler_DeleteFile(t *testing.T) {
 	require.NotContains(t, client.files, "/temp.txt")
 }
 
+func TestSanitizeSFTPPath(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		name      string
+		input     string
+		expect    string
+		expectErr string
+	}
+
+	invalidUTF8 := string([]byte{0xff, 0xfe, 0xfd})
+
+	cases := []testCase{
+		{name: "empty becomes dot", input: "", expect: "."},
+		{name: "whitespace trimmed", input: "   /var/log/ ", expect: "/var/log"},
+		{name: "dot returns dot", input: ".", expect: "."},
+		{name: "root retained", input: "/", expect: "/"},
+		{name: "duplicate slashes collapsed", input: "//home///user", expect: "/home/user"},
+		{name: "relative path cleaned", input: "config/app.yaml", expect: "config/app.yaml"},
+		{name: "reject parent segments", input: "../etc/passwd", expectErr: "parent directory segments"},
+		{name: "reject embedded parent segments", input: "home/../etc", expectErr: "parent directory segments"},
+		{name: "reject traversal after clean", input: "/../../etc", expectErr: "parent directory segments"},
+		{name: "reject null byte", input: "foo\x00bar", expectErr: "invalid characters"},
+		{name: "reject invalid utf8", input: invalidUTF8, expectErr: "valid UTF-8"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := sanitizeSFTPPath(tc.input)
+			if tc.expectErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.expectErr)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.expect, result)
+		})
+	}
+}
+
 func TestSFTPHandler_DownloadRange(t *testing.T) {
 	client := &stubSFTPClient{
 		files: map[string][]byte{"/file.txt": []byte("download")},

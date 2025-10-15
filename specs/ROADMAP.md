@@ -283,7 +283,7 @@
 - [x] Wire Zustand/React Query stores for cached directory navigation and live transfer updates
 - [x] Add drag/drop upload pipeline with resumable progress events
 - [x] Implement permission guard for SFTP interactions (`protocol:ssh.sftp`)
-- [ ] Write frontend + backend tests for file operations and path sanitization
+- [x] Write frontend + backend tests for file operations and path sanitization
 
 ### SSH Workspace UI
 
