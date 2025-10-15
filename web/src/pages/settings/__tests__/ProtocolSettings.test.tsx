@@ -18,16 +18,24 @@ vi.mock('@/hooks/useProtocolSettings', () => ({
   useSSHProtocolSettings: () => hookMock(),
 }))
 
-vi.mock('@/components/ui/Select', () => {
-  const React = require('react')
+vi.mock('@/components/ui/Select', async () => {
+  const React = await import('react')
   const SelectContext = React.createContext({
     value: '',
-    onChange: (_value: string) => {},
+    onChange: (value: string) => value,
     id: undefined as string | undefined,
-    setId: (_id?: string) => {},
+    setId: (value?: string) => value,
   })
 
-  const Select = ({ value, onValueChange, children }: any) => {
+  const Select = ({
+    value,
+    onValueChange,
+    children,
+  }: {
+    value: string
+    onValueChange?: (value: string) => void
+    children: React.ReactNode
+  }) => {
     const [triggerId, setTriggerId] = React.useState<string | undefined>()
     return (
       <SelectContext.Provider
@@ -38,7 +46,13 @@ vi.mock('@/components/ui/Select', () => {
     )
   }
 
-  const SelectTrigger = ({ children, id }: any) => {
+  const SelectTrigger = ({
+    children,
+    id,
+  }: {
+    children: React.ReactNode
+    id?: string
+  }) => {
     const ctx = React.useContext(SelectContext)
     React.useEffect(() => {
       ctx.setId(id)
@@ -46,7 +60,7 @@ vi.mock('@/components/ui/Select', () => {
     return <label htmlFor={id}>{children}</label>
   }
 
-  const SelectContent = ({ children }: any) => {
+  const SelectContent = ({ children }: { children: React.ReactNode }) => {
     const ctx = React.useContext(SelectContext)
     return (
       <select
@@ -59,9 +73,11 @@ vi.mock('@/components/ui/Select', () => {
     )
   }
 
-  const SelectItem = ({ value, children }: any) => <option value={value}>{children}</option>
+  const SelectItem = ({ value, children }: { value: string; children: React.ReactNode }) => (
+    <option value={value}>{children}</option>
+  )
 
-  const SelectValue = ({ placeholder }: any) => <span>{placeholder}</span>
+  const SelectValue = ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>
 
   return { Select, SelectTrigger, SelectContent, SelectItem, SelectValue }
 })
