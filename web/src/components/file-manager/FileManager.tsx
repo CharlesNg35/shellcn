@@ -30,6 +30,7 @@ import type { TransferItem } from './types'
 import { FileManagerToolbar } from './FileManagerToolbar'
 import { FileManagerTable } from './FileManagerTable'
 import { TransferSidebar } from './TransferSidebar'
+import { useSshWorkspaceStore } from '@/store/ssh-workspace-store'
 
 interface FileManagerProps {
   sessionId: string
@@ -39,6 +40,8 @@ interface FileManagerProps {
   currentUserId?: string
   currentUserName?: string
   participants?: Record<string, ActiveSessionParticipant>
+  onOpenFile?: (entry: SftpEntry) => void
+  showTransfers?: boolean
 }
 
 interface CreateTransferParams {
@@ -81,6 +84,8 @@ export function FileManager({
   currentUserId,
   currentUserName,
   participants,
+  onOpenFile,
+  showTransfers = true,
 }: FileManagerProps) {
   const currentUserLabel = useMemo(
     () =>
@@ -88,17 +93,55 @@ export function FileManager({
     [participants, currentUserId, currentUserName]
   )
   const participantMap = useMemo(() => participants ?? {}, [participants])
-  const [currentPath, setCurrentPath] = useState(() => normalizePath(initialPath))
-  const [pathInput, setPathInput] = useState(() => displayPath(normalizePath(initialPath)))
-  const [showHidden, setShowHidden] = useState(false)
-  const [transfers, setTransfers] = useState<TransferItem[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const ensureSession = useSshWorkspaceStore((state) => state.ensureSession)
+  const setBrowserPath = useSshWorkspaceStore((state) => state.setBrowserPath)
+  const setShowHidden = useSshWorkspaceStore((state) => state.setShowHidden)
+  const upsertTransfer = useSshWorkspaceStore((state) => state.upsertTransfer)
+  const updateTransferState = useSshWorkspaceStore((state) => state.updateTransfer)
+  const clearSessionTransfers = useSshWorkspaceStore((state) => state.clearCompletedTransfers)
+
+  const initializedSessionRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (initializedSessionRef.current !== sessionId) {
+      ensureSession(sessionId)
+      initializedSessionRef.current = sessionId
+    }
+  }, [ensureSession, sessionId])
+
+  const sessionSlice = useSshWorkspaceStore((state) => state.sessions[sessionId])
+
+  const browserPath = sessionSlice?.browserPath ?? '.'
+  const showHidden = sessionSlice?.showHidden ?? false
+  const transferOrder = sessionSlice?.transferOrder ?? []
+  const transfersMap = sessionSlice?.transfers ?? ({} as Record<string, TransferItem>)
 
   useEffect(() => {
-    setPathInput(displayPath(currentPath))
-  }, [currentPath])
+    if (initialPath) {
+      const normalizedInitial = normalizePath(initialPath)
+      if (normalizedInitial !== '.' && browserPath === '.') {
+        setBrowserPath(sessionId, normalizedInitial)
+      }
+    }
+  }, [browserPath, initialPath, sessionId, setBrowserPath])
 
-  const { data, isLoading, error, refetch } = useSftpDirectory(sessionId, currentPath)
+  const [pathInput, setPathInput] = useState(() => displayPath(browserPath))
+
+  useEffect(() => {
+    setPathInput(displayPath(browserPath))
+  }, [browserPath])
+
+  const transfers = useMemo(
+    () =>
+      transferOrder
+        .map((id) => transfersMap[id])
+        .filter((transfer): transfer is TransferItem => Boolean(transfer)),
+    [transferOrder, transfersMap]
+  )
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const { data, isLoading, error, refetch } = useSftpDirectory(sessionId, browserPath)
   const uploadMutation = useSftpUpload(sessionId)
   const deleteFileMutation = useSftpDeleteFile(sessionId)
   const deleteDirectoryMutation = useSftpDeleteDirectory(sessionId)
@@ -113,9 +156,12 @@ export function FileManager({
     return sortEntries(filtered)
   }, [data?.entries, showHidden])
 
-  const navigateTo = useCallback((path: string) => {
-    setCurrentPath(normalizePath(path))
-  }, [])
+  const navigateTo = useCallback(
+    (path: string) => {
+      setBrowserPath(sessionId, path)
+    },
+    [sessionId, setBrowserPath]
+  )
 
   const handleRefresh = useCallback(() => {
     void refetch()
@@ -130,22 +176,8 @@ export function FileManager({
   )
 
   const handleGoUp = useCallback(() => {
-    navigateTo(parentPath(currentPath))
-  }, [currentPath, navigateTo])
-
-  const updateTransfer = useCallback(
-    (id: string, updater: (transfer: TransferItem) => TransferItem) => {
-      setTransfers((items) =>
-        items.map((item) => {
-          if (item.id !== id) {
-            return item
-          }
-          return updater(item)
-        })
-      )
-    },
-    []
-  )
+    navigateTo(parentPath(browserPath))
+  }, [browserPath, navigateTo])
 
   const handleDownload = useCallback(
     async (entry: SftpEntry) => {
@@ -157,7 +189,7 @@ export function FileManager({
         userId: currentUserId,
         userName: currentUserLabel,
       })
-      setTransfers((items) => [...items, { ...transfer, status: 'uploading' }])
+      upsertTransfer(sessionId, { ...transfer, status: 'uploading' })
 
       try {
         const result = await import('@/lib/api/sftp').then((module) =>
@@ -172,7 +204,7 @@ export function FileManager({
         link.remove()
         URL.revokeObjectURL(url)
 
-        updateTransfer(transfer.id, (item) => ({
+        updateTransferState(sessionId, transfer.id, (item) => ({
           ...item,
           size: result.size ?? item.size,
           uploaded: result.size ?? item.uploaded,
@@ -184,7 +216,7 @@ export function FileManager({
         })
       } catch (err) {
         const apiError = toApiError(err)
-        updateTransfer(transfer.id, (item) => ({
+        updateTransferState(sessionId, transfer.id, (item) => ({
           ...item,
           status: 'failed',
           errorMessage: apiError.message,
@@ -195,7 +227,7 @@ export function FileManager({
         })
       }
     },
-    [currentUserId, currentUserLabel, sessionId, updateTransfer]
+    [currentUserId, currentUserLabel, sessionId, upsertTransfer, updateTransferState]
   )
 
   const handleEntryActivate = useCallback(
@@ -204,9 +236,13 @@ export function FileManager({
         navigateTo(entry.path)
         return
       }
+      if (onOpenFile) {
+        onOpenFile(entry)
+        return
+      }
       void handleDownload(entry)
     },
-    [handleDownload, navigateTo]
+    [handleDownload, navigateTo, onOpenFile]
   )
 
   const handleUploadFiles = useCallback(
@@ -216,7 +252,7 @@ export function FileManager({
       }
 
       for (const file of Array.from(files)) {
-        const targetPath = resolveChildPath(currentPath, file.name)
+        const targetPath = resolveChildPath(browserPath, file.name)
         const transfer = createTransfer({
           name: file.name,
           path: targetPath,
@@ -225,7 +261,7 @@ export function FileManager({
           userId: currentUserId,
           userName: currentUserLabel,
         })
-        setTransfers((items) => [...items, { ...transfer, status: 'uploading' }])
+        upsertTransfer(sessionId, { ...transfer, status: 'uploading' })
 
         try {
           const result = await uploadMutation.mutateAsync({
@@ -234,7 +270,7 @@ export function FileManager({
             options: {
               createParents: true,
               onChunk: ({ uploadedBytes, totalBytes }) => {
-                updateTransfer(transfer.id, (item) => ({
+                updateTransferState(sessionId, transfer.id, (item) => ({
                   ...item,
                   totalBytes: totalBytes > 0 ? totalBytes : item.totalBytes,
                   size: totalBytes > 0 ? totalBytes : item.size,
@@ -246,14 +282,13 @@ export function FileManager({
           })
 
           if (result?.transferId) {
-            setTransfers((items) =>
-              items.map((item) =>
-                item.id === transfer.id ? { ...item, remoteId: result.transferId } : item
-              )
-            )
+            updateTransferState(sessionId, transfer.id, (item) => ({
+              ...item,
+              remoteId: result.transferId,
+            }))
           }
 
-          updateTransfer(transfer.id, (item) => ({
+          updateTransferState(sessionId, transfer.id, (item) => ({
             ...item,
             uploaded: item.size,
             status: 'completed',
@@ -262,7 +297,7 @@ export function FileManager({
           toast.success(`Uploaded ${file.name}`)
         } catch (err) {
           const apiError = toApiError(err)
-          updateTransfer(transfer.id, (item) => ({
+          updateTransferState(sessionId, transfer.id, (item) => ({
             ...item,
             status: 'failed',
             errorMessage: apiError.message,
@@ -278,82 +313,93 @@ export function FileManager({
         fileInputRef.current.value = ''
       }
     },
-    [currentPath, currentUserId, currentUserLabel, updateTransfer, uploadMutation]
+    [
+      browserPath,
+      currentUserId,
+      currentUserLabel,
+      sessionId,
+      upsertTransfer,
+      updateTransferState,
+      uploadMutation,
+    ]
   )
 
   const handleRealtimeEvent = useCallback(
     (event: SftpTransferRealtimeEvent) => {
       const { payload, status } = event
-      setTransfers((items) => {
-        let index = items.findIndex((item) => item.remoteId === payload.transferId)
-        if (index < 0) {
-          index = items.findIndex(
-            (item) =>
-              !item.remoteId && item.path === payload.path && item.direction === payload.direction
-          )
-        }
+      const state = useSshWorkspaceStore.getState()
+      const session = state.sessions[sessionId]
+      const now = new Date()
 
-        const now = new Date()
+      let targetId: string | undefined
+      if (session) {
+        targetId = session.transferOrder.find(
+          (id) => session.transfers[id]?.remoteId === payload.transferId
+        )
+        if (!targetId) {
+          targetId = session.transferOrder.find((id) => {
+            const item = session.transfers[id]
+            return (
+              item &&
+              !item.remoteId &&
+              item.path === payload.path &&
+              item.direction === payload.direction
+            )
+          })
+        }
+      }
 
-        if (index < 0) {
-          const newItem: TransferItem = {
-            id: payload.transferId,
-            remoteId: payload.transferId,
-            name: extractNameFromPath(payload.path),
-            path: payload.path,
-            direction: payload.direction,
-            size: payload.totalBytes ?? 0,
-            uploaded: payload.bytesTransferred ?? 0,
-            status:
-              status === 'failed' ? 'failed' : status === 'completed' ? 'completed' : 'uploading',
-            startedAt: now,
-            completedAt: status === 'completed' || status === 'failed' ? now : undefined,
-            errorMessage: status === 'failed' ? payload.error : undefined,
-            totalBytes: payload.totalBytes,
-            userId: payload.userId,
-            userName: resolveParticipantName(participantMap, payload.userId, payload.userId),
-          }
-          const nextItems = [...items, newItem]
-          return nextItems.length > 50 ? nextItems.slice(nextItems.length - 50) : nextItems
-        }
+      const baseTransfer: TransferItem = {
+        id: targetId ?? payload.transferId ?? `${payload.path}-${payload.direction}`,
+        remoteId: payload.transferId,
+        name: extractNameFromPath(payload.path),
+        path: payload.path,
+        direction: payload.direction,
+        size: payload.totalBytes ?? 0,
+        uploaded: payload.bytesTransferred ?? 0,
+        status: status === 'failed' ? 'failed' : status === 'completed' ? 'completed' : 'uploading',
+        startedAt: now,
+        completedAt: status === 'completed' || status === 'failed' ? now : undefined,
+        errorMessage: status === 'failed' ? payload.error : undefined,
+        totalBytes: payload.totalBytes,
+        userId: payload.userId,
+        userName: resolveParticipantName(participantMap, payload.userId, payload.userId),
+      }
 
-        const nextItems = [...items]
-        const current = { ...nextItems[index] }
-        current.remoteId = payload.transferId
-        current.name = current.name || extractNameFromPath(payload.path)
-        current.path = payload.path
-        current.direction = payload.direction
-        if (payload.totalBytes !== undefined) {
-          current.totalBytes = payload.totalBytes
-          current.size = payload.totalBytes
-        }
-        if (payload.bytesTransferred !== undefined) {
-          current.uploaded = payload.bytesTransferred
-        }
-        if (payload.userId) {
-          current.userId = payload.userId
-          current.userName = resolveParticipantName(participantMap, payload.userId, payload.userId)
-        }
+      if (!targetId) {
+        upsertTransfer(sessionId, baseTransfer)
+        return
+      }
 
-        if (status === 'completed') {
-          current.status = 'completed'
-          current.completedAt = now
-          if (payload.totalBytes !== undefined) {
-            current.uploaded = payload.totalBytes
-          }
-        } else if (status === 'failed') {
-          current.status = 'failed'
-          current.completedAt = now
-          current.errorMessage = payload.error ?? current.errorMessage
-        } else {
-          current.status = 'uploading'
+      updateTransferState(sessionId, targetId, (existing) => {
+        const next: TransferItem = {
+          ...existing,
+          remoteId: payload.transferId ?? existing.remoteId,
+          name: existing.name || baseTransfer.name,
+          path: payload.path || existing.path,
+          direction: payload.direction || existing.direction,
+          userId: payload.userId ?? existing.userId,
+          userName: resolveParticipantName(
+            participantMap,
+            payload.userId,
+            existing.userName ?? existing.userId
+          ),
+          totalBytes: payload.totalBytes ?? existing.totalBytes,
+          size: payload.totalBytes ?? existing.size,
+          uploaded:
+            payload.bytesTransferred !== undefined ? payload.bytesTransferred : existing.uploaded,
+          errorMessage: payload.error ?? existing.errorMessage,
+          status:
+            status === 'failed' ? 'failed' : status === 'completed' ? 'completed' : 'uploading',
+          completedAt: status === 'completed' || status === 'failed' ? now : existing.completedAt,
         }
-
-        nextItems[index] = current
-        return nextItems
+        if (status === 'completed' && payload.totalBytes !== undefined) {
+          next.uploaded = payload.totalBytes
+        }
+        return next
       })
     },
-    [participantMap]
+    [participantMap, sessionId, upsertTransfer, updateTransferState]
   )
 
   useSftpTransfersStream({
@@ -388,8 +434,8 @@ export function FileManager({
   )
 
   const clearCompletedTransfers = useCallback(() => {
-    setTransfers((items) => items.filter((item) => item.status === 'uploading'))
-  }, [])
+    clearSessionTransfers(sessionId)
+  }, [clearSessionTransfers, sessionId])
 
   const renderEntryIcon = useCallback((entry: SftpEntry) => {
     if (entry.isDir) {
@@ -397,16 +443,6 @@ export function FileManager({
     }
     return <FileText className="h-5 w-5 text-muted-foreground" aria-hidden />
   }, [])
-
-  if (!sessionId) {
-    return (
-      <EmptyState
-        title="SFTP unavailable"
-        description="A valid session is required to browse remote files."
-        className="h-full"
-      />
-    )
-  }
 
   return (
     <PermissionGuard
@@ -421,10 +457,10 @@ export function FileManager({
     >
       <div className={cn('flex h-full flex-col gap-4', className)}>
         <FileManagerToolbar
-          isRootPath={currentPath === '.'}
+          isRootPath={browserPath === '.' || browserPath === '/'}
           isLoading={isLoading}
           showHidden={showHidden}
-          onToggleHidden={(checked) => setShowHidden(checked)}
+          onToggleHidden={(checked) => setShowHidden(sessionId, Boolean(checked))}
           onNavigateUp={handleGoUp}
           onNavigateHome={() => navigateTo('.')}
           onRefresh={handleRefresh}
@@ -525,7 +561,9 @@ export function FileManager({
             </div>
           </Card>
 
-          <TransferSidebar transfers={transfers} onClear={clearCompletedTransfers} />
+          {showTransfers && (
+            <TransferSidebar transfers={transfers} onClear={clearCompletedTransfers} />
+          )}
         </div>
       </div>
     </PermissionGuard>

@@ -16,11 +16,11 @@ vi.mock('@/hooks/useCurrentUser', () => ({
   useCurrentUser: () => mockUseCurrentUser(),
 }))
 
-const fileManagerMock = vi.fn(() => <div data-testid="file-manager-mock" />)
+const workspaceMock = vi.fn(() => <div data-testid="sftp-workspace-mock" />)
 
-vi.mock('@/components/file-manager/FileManager', () => ({
-  FileManager: (...args: unknown[]) => fileManagerMock(...args),
-  default: (...args: unknown[]) => fileManagerMock(...args),
+vi.mock('@/components/workspace/SftpWorkspace', () => ({
+  SftpWorkspace: (...args: unknown[]) => workspaceMock(...args),
+  default: (...args: unknown[]) => workspaceMock(...args),
 }))
 
 vi.mock('@/contexts/BreadcrumbContext', () => ({
@@ -37,7 +37,7 @@ describe('SessionFileManager page', () => {
     mockUseCurrentUser.mockReset()
     mockSetOverride.mockReset()
     mockClearOverride.mockReset()
-    fileManagerMock.mockClear()
+    workspaceMock.mockClear()
     mockUseCurrentUser.mockReturnValue({
       data: {
         id: 'usr-1',
@@ -90,9 +90,9 @@ describe('SessionFileManager page', () => {
     )
 
     expect(screen.getByText('Primary Server')).toBeInTheDocument()
-    expect(screen.getByTestId('file-manager-mock')).toBeInTheDocument()
-    expect(fileManagerMock).toHaveBeenCalled()
-    const props = fileManagerMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(screen.getByTestId('sftp-workspace-mock')).toBeInTheDocument()
+    expect(workspaceMock).toHaveBeenCalled()
+    const props = workspaceMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
     expect(props?.sessionId).toBe('sess-1')
     expect(props?.canWrite).toBe(true)
     expect(props?.currentUserId).toBe('usr-1')

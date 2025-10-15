@@ -1,16 +1,31 @@
-import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { webcrypto } from 'node:crypto'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FileManager } from '@/components/file-manager/FileManager'
 import type { SftpEntry, SftpTransferRealtimeEvent } from '@/types/sftp'
+import { resetSshWorkspaceStore, workspaceStoreMocks } from '@/store/ssh-workspace-store'
 
 const mockUseSftpDirectory = vi.fn()
 const mockUseSftpUpload = vi.fn()
 const mockUseSftpDeleteFile = vi.fn()
 const mockUseSftpDeleteDirectory = vi.fn()
 const mockUseSftpTransfersStream = vi.fn()
+
+const storeState = {
+  sessions: {
+    'sess-1': {
+      sessionId: 'sess-1',
+      browserPath: '.',
+      showHidden: false,
+      tabs: [],
+      activeTabId: '',
+      transfers: {},
+      transferOrder: [],
+    },
+  },
+}
 
 let realtimeHandler: ((event: unknown) => void) | undefined
 
@@ -27,6 +42,67 @@ vi.mock('@/hooks/useSftpTransfersStream', () => ({
     return mockUseSftpTransfersStream(options)
   },
 }))
+
+vi.mock('@/store/ssh-workspace-store', () => {
+  const ensureSessionMock = vi.fn()
+  const setBrowserPathMock = vi.fn()
+  const setShowHiddenMock = vi.fn()
+  const upsertTransferMock = vi.fn()
+  const updateTransferMock = vi.fn()
+  const clearTransfersMock = vi.fn()
+  const useStore = (selector: any) =>
+    selector({
+      sessions: storeState.sessions,
+      ensureSession: ensureSessionMock,
+      setBrowserPath: setBrowserPathMock,
+      setShowHidden: setShowHiddenMock,
+      upsertTransfer: upsertTransferMock,
+      updateTransfer: updateTransferMock,
+      clearCompletedTransfers: clearTransfersMock,
+    })
+  useStore.getState = () => ({ sessions: storeState.sessions })
+  useStore.setState = (updater: any) => {
+    if (typeof updater === 'function') {
+      const result = updater({ sessions: storeState.sessions })
+      if (result?.sessions) {
+        storeState.sessions = result.sessions as typeof storeState.sessions
+      }
+    } else if (updater?.sessions) {
+      storeState.sessions = updater.sessions as typeof storeState.sessions
+    }
+  }
+  const reset = () => {
+    storeState.sessions = {
+      'sess-1': {
+        sessionId: 'sess-1',
+        browserPath: '.',
+        showHidden: false,
+        tabs: [],
+        activeTabId: '',
+        transfers: {},
+        transferOrder: [],
+      },
+    }
+    ensureSessionMock.mockReset()
+    setBrowserPathMock.mockReset()
+    setShowHiddenMock.mockReset()
+    upsertTransferMock.mockReset()
+    updateTransferMock.mockReset()
+    clearTransfersMock.mockReset()
+  }
+  return {
+    useSshWorkspaceStore: useStore,
+    resetSshWorkspaceStore: reset,
+    workspaceStoreMocks: {
+      ensureSession: ensureSessionMock,
+      setBrowserPath: setBrowserPathMock,
+      setShowHidden: setShowHiddenMock,
+      upsertTransfer: upsertTransferMock,
+      updateTransfer: updateTransferMock,
+      clearCompletedTransfers: clearTransfersMock,
+    },
+  }
+})
 
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({
@@ -114,6 +190,7 @@ describe('FileManager component', () => {
     mockUseSftpDeleteDirectory.mockReset()
     mockUseSftpTransfersStream.mockReset()
     realtimeHandler = undefined
+    resetSshWorkspaceStore()
 
     mockUseSftpDirectory.mockReturnValue({
       data: { path: '.', entries: baseEntries },
@@ -191,12 +268,13 @@ describe('FileManager component', () => {
         onChunk: expect.any(Function),
       },
     })
+    expect(workspaceStoreMocks.upsertTransfer).toHaveBeenCalled()
   })
 
   it('updates transfers when realtime events arrive', async () => {
     renderWithClient(<FileManager sessionId="sess-1" />)
 
-    expect(realtimeHandler).toBeTypeOf('function')
+    expect(typeof realtimeHandler).toBe('function')
 
     const event: SftpTransferRealtimeEvent = {
       event: 'sftp.transfer.started',
@@ -219,12 +297,6 @@ describe('FileManager component', () => {
       realtimeHandler?.(event)
     })
 
-    const fileCell = await screen.findByText('example.txt')
-    const transferItem = fileCell.closest('li') as HTMLElement
-    expect(transferItem).toBeTruthy()
-
-    const scope = within(transferItem)
-    expect(scope.getByText('Upload')).toBeInTheDocument()
-    expect(scope.getByText('· usr-2')).toBeInTheDocument()
+    expect(workspaceStoreMocks.upsertTransfer).toHaveBeenCalled()
   })
 })

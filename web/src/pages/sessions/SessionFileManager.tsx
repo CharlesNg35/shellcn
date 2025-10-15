@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { FileManager } from '@/components/file-manager/FileManager'
+import { SftpWorkspace } from '@/components/workspace/SftpWorkspace'
 import { useActiveConnections } from '@/hooks/useActiveConnections'
 import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
@@ -141,7 +141,7 @@ export function SessionFileManager() {
       </Card>
 
       <div className="flex-1 overflow-hidden">
-        <FileManager
+        <SftpWorkspace
           sessionId={sessionId}
           canWrite={canWrite}
           currentUserId={currentUserId}
