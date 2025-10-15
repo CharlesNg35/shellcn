@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { SftpListResult } from '@/types/sftp'
 
 const BASE_BROWSER_TITLE = 'Files'
 
@@ -20,6 +21,12 @@ export interface WorkspaceSessionState {
   activeTabId: string
   transfers: Record<string, TransferItem>
   transferOrder: string[]
+  directoryCache: Record<string, DirectoryCacheEntry>
+}
+
+interface DirectoryCacheEntry {
+  data: SftpListResult
+  fetchedAt: number
 }
 
 export interface TransferItem {
@@ -55,6 +62,9 @@ interface WorkspaceStore {
     updater: (transfer: TransferItem) => TransferItem
   ) => void
   clearCompletedTransfers: (sessionId: string) => void
+  cacheDirectory: (sessionId: string, path: string, payload: SftpListResult) => void
+  getCachedDirectory: (sessionId: string, path: string) => SftpListResult | undefined
+  clearDirectoryCache: (sessionId: string, path?: string) => void
   reset: () => void
 }
 
@@ -101,6 +111,7 @@ export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
       activeTabId: browserId,
       transfers: {},
       transferOrder: [],
+      directoryCache: {},
     }
     set((state) => ({
       sessions: {
@@ -331,6 +342,67 @@ export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
             ...session,
             transfers: nextTransfers,
             transferOrder: nextOrder,
+          },
+        },
+      }
+    })
+  },
+  cacheDirectory: (sessionId, path, payload) => {
+    const normalized = normalizePath(path)
+    const timestamp = Date.now()
+    set((state) => {
+      const session = state.sessions[sessionId]
+      if (!session) {
+        return state
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...session,
+            directoryCache: {
+              ...session.directoryCache,
+              [normalized]: { data: payload, fetchedAt: timestamp },
+            },
+          },
+        },
+      }
+    })
+  },
+  getCachedDirectory: (sessionId, path) => {
+    const normalized = normalizePath(path)
+    const session = get().sessions[sessionId]
+    return session?.directoryCache?.[normalized]?.data
+  },
+  clearDirectoryCache: (sessionId, path) => {
+    set((state) => {
+      const session = state.sessions[sessionId]
+      if (!session) {
+        return state
+      }
+      if (!path) {
+        return {
+          sessions: {
+            ...state.sessions,
+            [sessionId]: {
+              ...session,
+              directoryCache: {},
+            },
+          },
+        }
+      }
+      const normalized = normalizePath(path)
+      if (!session.directoryCache[normalized]) {
+        return state
+      }
+      const nextCache = { ...session.directoryCache }
+      delete nextCache[normalized]
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...session,
+            directoryCache: nextCache,
           },
         },
       }

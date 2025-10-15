@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useDropzone } from 'react-dropzone'
 import { ArrowUp, FileText, Folder, Home, Loader2, RefreshCcw, Upload } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -13,6 +15,7 @@ import {
   useSftpDeleteFile,
   useSftpDirectory,
   useSftpUpload,
+  getSftpListQueryKey,
 } from '@/hooks/useSftp'
 import { useSftpTransfersStream } from '@/hooks/useSftpTransfersStream'
 import type { ActiveSessionParticipant } from '@/types/connections'
@@ -31,6 +34,10 @@ import { FileManagerToolbar } from './FileManagerToolbar'
 import { FileManagerTable } from './FileManagerTable'
 import { TransferSidebar } from './TransferSidebar'
 import { useSshWorkspaceStore } from '@/store/ssh-workspace-store'
+import { sftpApi } from '@/lib/api/sftp'
+
+const EMPTY_TRANSFER_ORDER: string[] = []
+const EMPTY_TRANSFERS_MAP: Record<string, TransferItem> = {}
 
 interface FileManagerProps {
   sessionId: string
@@ -87,6 +94,7 @@ export function FileManager({
   onOpenFile,
   showTransfers = true,
 }: FileManagerProps) {
+  const queryClient = useQueryClient()
   const currentUserLabel = useMemo(
     () =>
       resolveParticipantName(participants ?? {}, currentUserId, currentUserName ?? currentUserId),
@@ -100,6 +108,8 @@ export function FileManager({
   const upsertTransfer = useSshWorkspaceStore((state) => state.upsertTransfer)
   const updateTransferState = useSshWorkspaceStore((state) => state.updateTransfer)
   const clearSessionTransfers = useSshWorkspaceStore((state) => state.clearCompletedTransfers)
+  const cacheDirectory = useSshWorkspaceStore((state) => state.cacheDirectory)
+  const getCachedDirectory = useSshWorkspaceStore((state) => state.getCachedDirectory)
 
   const initializedSessionRef = useRef<string | null>(null)
   useEffect(() => {
@@ -113,8 +123,14 @@ export function FileManager({
 
   const browserPath = sessionSlice?.browserPath ?? '.'
   const showHidden = sessionSlice?.showHidden ?? false
-  const transferOrder = sessionSlice?.transferOrder ?? []
-  const transfersMap = sessionSlice?.transfers ?? ({} as Record<string, TransferItem>)
+  const transferOrder = sessionSlice?.transferOrder ?? EMPTY_TRANSFER_ORDER
+  const transfersMap = sessionSlice?.transfers ?? EMPTY_TRANSFERS_MAP
+  const cachedDirectory = useMemo(() => {
+    if (!sessionId) {
+      return undefined
+    }
+    return getCachedDirectory(sessionId, browserPath)
+  }, [browserPath, getCachedDirectory, sessionId])
 
   useEffect(() => {
     if (initialPath) {
@@ -141,7 +157,10 @@ export function FileManager({
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const { data, isLoading, error, refetch } = useSftpDirectory(sessionId, browserPath)
+  const { data, isLoading, error, refetch } = useSftpDirectory(sessionId, browserPath, {
+    initialData: cachedDirectory,
+    staleTime: cachedDirectory ? 15_000 : undefined,
+  })
   const uploadMutation = useSftpUpload(sessionId)
   const deleteFileMutation = useSftpDeleteFile(sessionId)
   const deleteDirectoryMutation = useSftpDeleteDirectory(sessionId)
@@ -246,12 +265,14 @@ export function FileManager({
   )
 
   const handleUploadFiles = useCallback(
-    async (files: FileList | null) => {
+    async (files: FileList | File[] | null) => {
       if (!files || files.length === 0) {
         return
       }
 
-      for (const file of Array.from(files)) {
+      const iterable = Array.isArray(files) ? files : Array.from(files)
+
+      for (const file of iterable) {
         const targetPath = resolveChildPath(browserPath, file.name)
         const transfer = createTransfer({
           name: file.name,
@@ -408,6 +429,27 @@ export function FileManager({
     onEvent: handleRealtimeEvent,
   })
 
+  useEffect(() => {
+    if (!data || !sessionId) {
+      return
+    }
+    cacheDirectory(sessionId, data.path, data)
+  }, [cacheDirectory, data, sessionId])
+
+  useEffect(() => {
+    if (!sessionId || !entries || entries.length === 0) {
+      return
+    }
+    const directories = entries.filter((entry) => entry.isDir).slice(0, 5)
+    directories.forEach((dir) => {
+      const key = getSftpListQueryKey(sessionId, dir.path)
+      void queryClient.prefetchQuery({
+        queryKey: key,
+        queryFn: () => sftpApi.list(sessionId, dir.path === '.' ? undefined : dir.path),
+      })
+    })
+  }, [entries, queryClient, sessionId])
+
   const handleDeleteEntry = useCallback(
     async (entry: SftpEntry) => {
       if (!canWrite) {
@@ -443,6 +485,16 @@ export function FileManager({
     }
     return <FileText className="h-5 w-5 text-muted-foreground" aria-hidden />
   }, [])
+
+  const { getRootProps, isDragActive, isDragReject, isDragAccept } = useDropzone({
+    noClick: true,
+    noKeyboard: true,
+    disabled: !canWrite,
+    multiple: true,
+    onDropAccepted: (accepted) => {
+      void handleUploadFiles(accepted)
+    },
+  })
 
   return (
     <PermissionGuard
@@ -516,15 +568,15 @@ export function FileManager({
         />
 
         <div className="flex flex-1 gap-4 overflow-hidden">
-          <Card className="flex-1 overflow-hidden">
-            <div className="flex h-full flex-col overflow-hidden">
+          <div {...getRootProps({ className: 'relative flex-1 overflow-hidden', tabIndex: -1 })}>
+            <Card className="flex h-full flex-col overflow-hidden">
               <div className="border-b border-border px-4 py-3">
                 <h3 className="text-sm font-semibold text-muted-foreground">
                   {entries.length === 1 ? '1 item' : `${entries.length} items`}
                 </h3>
               </div>
 
-              <div className="flex-1 overflow-auto">
+              <div className="relative flex-1 overflow-auto">
                 {isLoading ? (
                   <div className="flex h-full items-center justify-center gap-3 text-muted-foreground">
                     <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -557,9 +609,34 @@ export function FileManager({
                     renderIcon={renderEntryIcon}
                   />
                 )}
+
+                <div
+                  data-testid="sftp-dropzone-overlay"
+                  className={cn(
+                    'pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-primary/60 bg-primary/5 text-center text-sm font-semibold text-primary opacity-0 transition-opacity',
+                    isDragActive && 'opacity-100',
+                    isDragReject && 'border-destructive text-destructive'
+                  )}
+                >
+                  {isDragReject ? (
+                    <>
+                      <p>Unsupported files</p>
+                      <p className="text-xs text-destructive/80">
+                        Please drop regular files or folders only.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p>{isDragAccept ? 'Release to upload' : 'Drop files to upload'}</p>
+                      <p className="text-xs text-primary/80">
+                        Files will upload to {displayPath(browserPath)}
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
 
           {showTransfers && (
             <TransferSidebar transfers={transfers} onClear={clearCompletedTransfers} />

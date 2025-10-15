@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, RefreshCcw, RotateCcw, Save } from 'lucide-react'
+import Editor from '@monaco-editor/react'
 import { Button } from '@/components/ui/Button'
-import { Textarea } from '@/components/ui/Textarea'
 import { useSftpFileContent, useSftpSaveFile } from '@/hooks/useSftp'
 import { toast } from '@/lib/utils/toast'
 import { toApiError } from '@/lib/api/http'
@@ -29,6 +29,48 @@ function encodeBase64(value: string): string {
   return window.btoa(value)
 }
 
+function guessLanguage(path: string): string {
+  const extension = path.split('.').pop()?.toLowerCase()
+  switch (extension) {
+    case 'ts':
+    case 'tsx':
+      return 'typescript'
+    case 'js':
+    case 'jsx':
+      return 'javascript'
+    case 'json':
+      return 'json'
+    case 'yml':
+    case 'yaml':
+      return 'yaml'
+    case 'sh':
+    case 'bash':
+      return 'shell'
+    case 'py':
+      return 'python'
+    case 'go':
+      return 'go'
+    case 'rs':
+      return 'rust'
+    case 'rb':
+      return 'ruby'
+    case 'php':
+      return 'php'
+    case 'css':
+      return 'css'
+    case 'html':
+    case 'htm':
+      return 'html'
+    case 'md':
+    case 'markdown':
+      return 'markdown'
+    case 'sql':
+      return 'sql'
+    default:
+      return 'plaintext'
+  }
+}
+
 export function SftpFileEditor({ sessionId, tabId, path, canWrite }: SftpFileEditorProps) {
   const setTabDirty = useSshWorkspaceStore((state) => state.setTabDirty)
   const [content, setContent] = useState('')
@@ -36,6 +78,11 @@ export function SftpFileEditor({ sessionId, tabId, path, canWrite }: SftpFileEdi
 
   const { data, isLoading, error, refetch } = useSftpFileContent(sessionId, path)
   const saveMutation = useSftpSaveFile(sessionId)
+  const language = useMemo(() => guessLanguage(path), [path])
+  const monacoTheme =
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+      ? 'vs-dark'
+      : 'vs-light'
 
   useEffect(() => {
     if (data?.content) {
@@ -140,12 +187,33 @@ export function SftpFileEditor({ sessionId, tabId, path, canWrite }: SftpFileEdi
         </div>
       )}
 
-      <Textarea
-        value={content}
-        onChange={(event) => setContent(event.target.value)}
-        readOnly={!canWrite || saveMutation.isPending}
-        className="h-full min-h-[320px] flex-1 resize-none"
-      />
+      <div
+        className="flex-1 overflow-hidden rounded-md border border-border/60 bg-background"
+        style={{ minHeight: '320px' }}
+      >
+        <Editor
+          value={content}
+          onChange={(value) => setContent(value ?? '')}
+          language={language}
+          theme={monacoTheme}
+          height="100%"
+          loading={
+            <div className="flex h-full items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+              Initializing editor…
+            </div>
+          }
+          options={{
+            readOnly: !canWrite || saveMutation.isPending,
+            automaticLayout: true,
+            minimap: { enabled: false },
+            wordWrap: 'on',
+            scrollBeyondLastLine: false,
+            fontSize: 14,
+            tabSize: 2,
+          }}
+        />
+      </div>
     </div>
   )
 }

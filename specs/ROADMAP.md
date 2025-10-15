@@ -279,9 +279,9 @@
   - [x] Implement metadata lookup, inline read, and download endpoints
   - [x] Add resumable upload, save, rename, and delete APIs
 - [x] Stream large downloads/uploads efficiently with resumable support and realtime transfer events
-- [ ] Create frontend SFTP workspace (tabs, toolbar, queue panel, editor integration)
-- [ ] Wire Zustand/React Query stores for cached directory navigation and live transfer updates
-- [ ] Add drag/drop upload pipeline with resumable progress events
+- [x] Create frontend SFTP workspace (tabs, toolbar, queue panel, editor integration)
+- [x] Wire Zustand/React Query stores for cached directory navigation and live transfer updates
+- [x] Add drag/drop upload pipeline with resumable progress events
 - [x] Implement permission guard for SFTP interactions (`protocol:ssh.sftp`)
 - [ ] Write frontend + backend tests for file operations and path sanitization
 

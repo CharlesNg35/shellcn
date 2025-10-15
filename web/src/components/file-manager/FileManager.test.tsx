@@ -12,29 +12,26 @@ const mockUseSftpUpload = vi.fn()
 const mockUseSftpDeleteFile = vi.fn()
 const mockUseSftpDeleteDirectory = vi.fn()
 const mockUseSftpTransfersStream = vi.fn()
+const mockSftpApiList = vi.fn()
 
-const storeState = {
-  sessions: {
-    'sess-1': {
-      sessionId: 'sess-1',
-      browserPath: '.',
-      showHidden: false,
-      tabs: [],
-      activeTabId: '',
-      transfers: {},
-      transferOrder: [],
-    },
+vi.mock('@/lib/api/sftp', () => ({
+  sftpApi: {
+    list: (...args: unknown[]) => mockSftpApiList(...args),
   },
-}
+}))
 
 let realtimeHandler: ((event: unknown) => void) | undefined
 
-vi.mock('@/hooks/useSftp', () => ({
-  useSftpDirectory: (...args: unknown[]) => mockUseSftpDirectory(...args),
-  useSftpUpload: (...args: unknown[]) => mockUseSftpUpload(...args),
-  useSftpDeleteFile: (...args: unknown[]) => mockUseSftpDeleteFile(...args),
-  useSftpDeleteDirectory: (...args: unknown[]) => mockUseSftpDeleteDirectory(...args),
-}))
+vi.mock('@/hooks/useSftp', async () => {
+  const actual = await vi.importActual<typeof import('@/hooks/useSftp')>('@/hooks/useSftp')
+  return {
+    ...actual,
+    useSftpDirectory: (...args: unknown[]) => mockUseSftpDirectory(...args),
+    useSftpUpload: (...args: unknown[]) => mockUseSftpUpload(...args),
+    useSftpDeleteFile: (...args: unknown[]) => mockUseSftpDeleteFile(...args),
+    useSftpDeleteDirectory: (...args: unknown[]) => mockUseSftpDeleteDirectory(...args),
+  }
+})
 
 vi.mock('@/hooks/useSftpTransfersStream', () => ({
   useSftpTransfersStream: (options: { onEvent?: (event: unknown) => void }) => {
@@ -44,31 +41,68 @@ vi.mock('@/hooks/useSftpTransfersStream', () => ({
 }))
 
 vi.mock('@/store/ssh-workspace-store', () => {
+  const storeState = {
+    sessions: {
+      'sess-1': {
+        sessionId: 'sess-1',
+        browserPath: '.',
+        showHidden: false,
+        tabs: [],
+        activeTabId: '',
+        transfers: {},
+        transferOrder: [],
+        directoryCache: {},
+      },
+    },
+  }
   const ensureSessionMock = vi.fn()
   const setBrowserPathMock = vi.fn()
   const setShowHiddenMock = vi.fn()
   const upsertTransferMock = vi.fn()
   const updateTransferMock = vi.fn()
   const clearTransfersMock = vi.fn()
-  const useStore = (selector: any) =>
-    selector({
-      sessions: storeState.sessions,
-      ensureSession: ensureSessionMock,
-      setBrowserPath: setBrowserPathMock,
-      setShowHidden: setShowHiddenMock,
-      upsertTransfer: upsertTransferMock,
-      updateTransfer: updateTransferMock,
-      clearCompletedTransfers: clearTransfersMock,
-    })
-  useStore.getState = () => ({ sessions: storeState.sessions })
-  useStore.setState = (updater: any) => {
-    if (typeof updater === 'function') {
-      const result = updater({ sessions: storeState.sessions })
-      if (result?.sessions) {
-        storeState.sessions = result.sessions as typeof storeState.sessions
-      }
-    } else if (updater?.sessions) {
-      storeState.sessions = updater.sessions as typeof storeState.sessions
+  const cacheDirectoryMock = vi.fn()
+  const getCachedDirectoryMock = vi.fn()
+  const clearDirectoryCacheMock = vi.fn()
+
+  type MockSessions = typeof storeState.sessions
+  type MockStoreState = {
+    sessions: MockSessions
+    ensureSession: typeof ensureSessionMock
+    setBrowserPath: typeof setBrowserPathMock
+    setShowHidden: typeof setShowHiddenMock
+    upsertTransfer: typeof upsertTransferMock
+    updateTransfer: typeof updateTransferMock
+    clearCompletedTransfers: typeof clearTransfersMock
+    cacheDirectory: typeof cacheDirectoryMock
+    getCachedDirectory: typeof getCachedDirectoryMock
+    clearDirectoryCache: typeof clearDirectoryCacheMock
+  }
+
+  const mockState: MockStoreState = {
+    sessions: storeState.sessions,
+    ensureSession: ensureSessionMock,
+    setBrowserPath: setBrowserPathMock,
+    setShowHidden: setShowHiddenMock,
+    upsertTransfer: upsertTransferMock,
+    updateTransfer: updateTransferMock,
+    clearCompletedTransfers: clearTransfersMock,
+    cacheDirectory: cacheDirectoryMock,
+    getCachedDirectory: getCachedDirectoryMock,
+    clearDirectoryCache: clearDirectoryCacheMock,
+  }
+
+  const useStore = <T,>(selector: (state: MockStoreState) => T): T => selector(mockState)
+  useStore.getState = () => ({ sessions: mockState.sessions })
+  useStore.setState = (
+    updater:
+      | Partial<Pick<MockStoreState, 'sessions'>>
+      | ((state: MockStoreState) => Partial<Pick<MockStoreState, 'sessions'>>)
+  ) => {
+    const nextState = typeof updater === 'function' ? updater(mockState) : updater
+    if (nextState?.sessions) {
+      storeState.sessions = nextState.sessions
+      mockState.sessions = nextState.sessions
     }
   }
   const reset = () => {
@@ -81,14 +115,19 @@ vi.mock('@/store/ssh-workspace-store', () => {
         activeTabId: '',
         transfers: {},
         transferOrder: [],
+        directoryCache: {},
       },
     }
+    mockState.sessions = storeState.sessions
     ensureSessionMock.mockReset()
     setBrowserPathMock.mockReset()
     setShowHiddenMock.mockReset()
     upsertTransferMock.mockReset()
     updateTransferMock.mockReset()
     clearTransfersMock.mockReset()
+    cacheDirectoryMock.mockReset()
+    getCachedDirectoryMock.mockReset()
+    clearDirectoryCacheMock.mockReset()
   }
   return {
     useSshWorkspaceStore: useStore,
@@ -100,6 +139,9 @@ vi.mock('@/store/ssh-workspace-store', () => {
       upsertTransfer: upsertTransferMock,
       updateTransfer: updateTransferMock,
       clearCompletedTransfers: clearTransfersMock,
+      cacheDirectory: cacheDirectoryMock,
+      getCachedDirectory: getCachedDirectoryMock,
+      clearDirectoryCache: clearDirectoryCacheMock,
     },
   }
 })
@@ -189,6 +231,7 @@ describe('FileManager component', () => {
     mockUseSftpDeleteFile.mockReset()
     mockUseSftpDeleteDirectory.mockReset()
     mockUseSftpTransfersStream.mockReset()
+    mockSftpApiList.mockReset()
     realtimeHandler = undefined
     resetSshWorkspaceStore()
 
@@ -226,6 +269,8 @@ describe('FileManager component', () => {
     mockUseSftpTransfersStream.mockReturnValue({
       isConnected: true,
     })
+
+    mockSftpApiList.mockResolvedValue({ path: '.', entries: baseEntries })
   })
 
   it('renders directory entries', () => {
@@ -233,6 +278,20 @@ describe('FileManager component', () => {
 
     expect(screen.getByText('logs')).toBeInTheDocument()
     expect(screen.getByText('config.yaml')).toBeInTheDocument()
+  })
+
+  it('caches directory results after load', async () => {
+    renderWithClient(<FileManager sessionId="sess-1" />)
+
+    await waitFor(() =>
+      expect(workspaceStoreMocks.cacheDirectory).toHaveBeenCalledWith(
+        'sess-1',
+        '.',
+        expect.objectContaining({ path: '.', entries: baseEntries })
+      )
+    )
+
+    await waitFor(() => expect(mockSftpApiList).toHaveBeenCalledWith('sess-1', 'logs'))
   })
 
   it('invokes delete mutation when delete button is clicked', async () => {
