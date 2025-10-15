@@ -11,7 +11,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -20,19 +19,12 @@ import (
 	"github.com/charlesng35/shellcn/internal/app"
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/drivers"
+	terminalbridge "github.com/charlesng35/shellcn/internal/handlers/terminal"
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/realtime"
 	"github.com/charlesng35/shellcn/internal/services"
 	apperrors "github.com/charlesng35/shellcn/pkg/errors"
 	"github.com/charlesng35/shellcn/pkg/response"
-)
-
-const (
-	sshWriteWait   = 10 * time.Second
-	sshPongWait    = 60 * time.Second
-	sshPingPeriod  = (sshPongWait * 9) / 10
-	sshReadLimit   = int64(256 << 10) // 256 KiB
-	heartbeatEvery = 30 * time.Second
 )
 
 type sshTerminalHandle interface {
@@ -251,180 +243,43 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 	defer h.activeSessions.UnregisterSession(sessionID)
 	defer terminal.Close(context.Background())
 
-	wsConn.SetReadLimit(sshReadLimit)
-	_ = wsConn.SetReadDeadline(time.Now().Add(sshPongWait))
-	wsConn.SetPongHandler(func(string) error {
-		return wsConn.SetReadDeadline(time.Now().Add(sshPongWait))
-	})
-
-	out := make(chan outboundMessage, 32)
-	errCh := make(chan error, 4)
-	stop := make(chan struct{})
-
-	go h.writePump(wsConn, out, errCh, stop)
-	go h.readPump(ctx, wsConn, terminal, sessionID, out, errCh, stop)
-	go h.streamPump(ctx, terminal.Stdout(), websocket.BinaryMessage, sessionID, "stdout", out, errCh, stop)
-	go h.streamPump(ctx, terminal.Stderr(), websocket.BinaryMessage, sessionID, "stderr", out, errCh, stop)
-	go h.heartbeatLoop(sessionID, stop)
-
-	initial := map[string]any{
+	ready := map[string]any{
 		"type":          "ready",
 		"session_id":    sessionID,
 		"connection_id": connDTO.ID,
 		"connection":    connDTO.Name,
 	}
+	if err := wsConn.WriteJSON(ready); err != nil {
+		return
+	}
+
 	h.broadcastTerminal(sessionID, "ready", map[string]any{
 		"connection_id": connDTO.ID,
 		"connection":    connDTO.Name,
 		"user_id":       userID,
 	})
-	if b, err := json.Marshal(initial); err == nil {
-		select {
-		case out <- outboundMessage{messageType: websocket.TextMessage, payload: b}:
-		case <-stop:
-		}
-	}
 
-	select {
-	case err := <-errCh:
-		if err != nil && !isNormalSocketClose(err) {
-			msg := map[string]any{"type": "error", "message": err.Error()}
-			if b, marshalErr := json.Marshal(msg); marshalErr == nil {
-				_ = wsConn.WriteMessage(websocket.TextMessage, b)
-			}
-		}
-	case <-stop:
-	}
-
-	close(stop)
-	close(out)
-}
-
-func (h *SSHSessionHandler) readPump(ctx context.Context, conn *websocket.Conn, term sshTerminalHandle, sessionID string, outbound chan<- outboundMessage, errCh chan<- error, stop <-chan struct{}) {
-	for {
-		msgType, payload, err := conn.ReadMessage()
-		if err != nil {
-			errCh <- err
-			return
-		}
-
-		h.activeSessions.Heartbeat(sessionID)
-
-		if msgType == websocket.TextMessage {
-			if handled := h.processControlMessage(sessionID, term, payload); handled {
-				continue
-			}
-			payload = []byte(strings.TrimRight(string(payload), "\r\n"))
-		}
-
-		if len(payload) == 0 {
-			continue
-		}
-
-		if _, err := term.Stdin().Write(payload); err != nil {
-			errCh <- err
-			return
-		}
-	}
-}
-
-func (h *SSHSessionHandler) processControlMessage(sessionID string, term sshTerminalHandle, payload []byte) bool {
-	var ctrl struct {
-		Type string `json:"type"`
-		Cols int    `json:"cols"`
-		Rows int    `json:"rows"`
-	}
-	if err := json.Unmarshal(payload, &ctrl); err != nil {
-		return false
-	}
-
-	switch strings.ToLower(ctrl.Type) {
-	case "resize":
-		if err := term.Resize(ctrl.Cols, ctrl.Rows); err != nil {
-			return false
-		}
-		h.broadcastTerminal(sessionID, "resize", map[string]any{"cols": ctrl.Cols, "rows": ctrl.Rows})
-		return true
-	case "heartbeat":
-		return true
-	default:
-		return false
-	}
-}
-
-func (h *SSHSessionHandler) streamPump(ctx context.Context, reader io.Reader, messageType int, sessionID string, event string, outbound chan<- outboundMessage, errCh chan<- error, stop <-chan struct{}) {
-	if reader == nil {
-		return
-	}
-
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := reader.Read(buf)
-		if n > 0 {
-			chunk := make([]byte, n)
-			copy(chunk, buf[:n])
-			select {
-			case outbound <- outboundMessage{messageType: messageType, payload: chunk}:
-			case <-stop:
-				return
-			}
-			h.broadcastTerminal(sessionID, event, chunk)
-		}
-		if err != nil {
-			if err != io.EOF {
-				errCh <- err
-			} else {
-				errCh <- nil
-			}
-			return
-		}
-	}
-}
-
-func (h *SSHSessionHandler) writePump(conn *websocket.Conn, outbound <-chan outboundMessage, errCh chan<- error, stop <-chan struct{}) {
-	pingTicker := time.NewTicker(sshPingPeriod)
-	defer pingTicker.Stop()
-
-	for {
-		select {
-		case msg, ok := <-outbound:
-			if !ok {
-				return
-			}
-			if err := conn.SetWriteDeadline(time.Now().Add(sshWriteWait)); err != nil {
-				errCh <- err
-				return
-			}
-			if err := conn.WriteMessage(msg.messageType, msg.payload); err != nil {
-				errCh <- err
-				return
-			}
-		case <-pingTicker.C:
-			if err := conn.SetWriteDeadline(time.Now().Add(sshWriteWait)); err != nil {
-				errCh <- err
-				return
-			}
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				errCh <- err
-				return
-			}
-		case <-stop:
-			return
-		}
-	}
-}
-
-func (h *SSHSessionHandler) heartbeatLoop(sessionID string, stop <-chan struct{}) {
-	ticker := time.NewTicker(heartbeatEvery)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			h.activeSessions.Heartbeat(sessionID)
-		case <-stop:
-			return
-		}
+	bridgeErr := terminalbridge.Run(c.Request.Context(), terminalbridge.Config{
+		Conn:      wsConn,
+		SessionID: sessionID,
+		Streams:   terminal,
+		Callbacks: terminalbridge.Callbacks{
+			OnHeartbeat: func() {
+				h.activeSessions.Heartbeat(sessionID)
+			},
+			OnEvent: func(event string, payload any) {
+				h.handleTerminalEvent(sessionID, connDTO.ID, event, payload)
+			},
+			OnError: func(err error) {
+				h.broadcastTerminal(sessionID, "error", map[string]any{
+					"connection_id": connDTO.ID,
+					"message":       err.Error(),
+				})
+			},
+		},
+	})
+	if bridgeErr != nil && !isNormalSocketClose(bridgeErr) && !stdErrors.Is(bridgeErr, context.Canceled) {
+		// Errors already reported to client and subscribers; nothing further to do.
 	}
 }
 
@@ -449,6 +304,29 @@ func (h *SSHSessionHandler) sessionConcurrentLimit(settings map[string]any) int 
 		limit = 0
 	}
 	return limit
+}
+
+func (h *SSHSessionHandler) handleTerminalEvent(sessionID, connectionID, event string, payload any) {
+	if h == nil {
+		return
+	}
+
+	if data, ok := payload.(map[string]any); ok {
+		data["connection_id"] = connectionID
+		if raw, exists := data["payload"].([]byte); exists {
+			data["payload"] = base64.StdEncoding.EncodeToString(raw)
+			data["encoding"] = "base64"
+		}
+		payload = data
+	} else if chunk, ok := payload.([]byte); ok {
+		payload = map[string]any{
+			"connection_id": connectionID,
+			"payload":       base64.StdEncoding.EncodeToString(chunk),
+			"encoding":      "base64",
+		}
+	}
+
+	h.broadcastTerminal(sessionID, event, payload)
 }
 
 func (h *SSHSessionHandler) handleRegisterError(c *gin.Context, err error) {
@@ -600,25 +478,28 @@ func (h *SSHSessionHandler) broadcastTerminal(sessionID string, event string, pa
 		return
 	}
 
-	data := map[string]any{
-		"session_id": sessionID,
+	var data map[string]any
+	switch v := payload.(type) {
+	case map[string]any:
+		data = v
+		if _, ok := data["session_id"]; !ok {
+			data["session_id"] = sessionID
+		}
+	case nil:
+		data = map[string]any{"session_id": sessionID}
+	default:
+		data = map[string]any{
+			"session_id": sessionID,
+			"payload":    v,
+		}
 	}
 
-	switch v := payload.(type) {
-	case []byte:
-		if len(v) == 0 {
+	if raw, ok := data["payload"].([]byte); ok {
+		if len(raw) == 0 {
 			return
 		}
-		data["payload"] = base64.StdEncoding.EncodeToString(v)
+		data["payload"] = base64.StdEncoding.EncodeToString(raw)
 		data["encoding"] = "base64"
-	case string:
-		data["payload"] = v
-	case map[string]any:
-		data["payload"] = v
-	default:
-		if payload != nil {
-			data["payload"] = payload
-		}
 	}
 
 	h.hub.BroadcastStream(realtime.StreamSSHTerminal, realtime.Message{

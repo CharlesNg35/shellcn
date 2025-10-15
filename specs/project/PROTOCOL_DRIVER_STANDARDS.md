@@ -242,6 +242,8 @@ Active connection visibility is powered by `services.ActiveSessionService`. Ever
 5. **Broadcasts & Consumers**
    - Registering/unregistering sessions triggers `realtime.StreamConnectionSessions` events (`session.opened`, `session.closed`), consumed by React hooks such as `useActiveConnections` to keep the sidebar and badges in sync.
    - Admin users receive enriched payloads (`user_name`, `team_id`) while regular users only receive their own sessions via `/api/connections/active`.
+   - Terminal-style drivers (SSH, Telnet, Kubernetes exec, etc.) MUST stream their websocket traffic through the shared terminal bridge (`internal/handlers/terminal`). This helper handles stdin/stdout tunnelling, control frames (`resize`, `heartbeat`), binary-to-base64 encoding, and publishes structured events on `realtime.StreamSSHTerminal` (eavesdropping UIs can subscribe regardless of protocol).
+   - Desktop/video protocols (RDP, VNC) SHOULD follow the same pattern, but may swap in a protocol-specific bridge (e.g. frame transport) if the terminal helper is insufficient.
 6. **Driver-Specific Data**
    - Drivers should populate `ActiveSessionRecord.Metadata` with protocol context (e.g., Kubernetes namespace/workload, database name) using flat JSON-friendly primitives.
    - Avoid storing sensitive secrets in metadata; leverage Vault identities instead.

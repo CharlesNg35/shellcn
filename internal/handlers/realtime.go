@@ -40,7 +40,9 @@ func NewRealtimeHandler(hub *realtime.Hub, jwt *iauth.JWTService, ssh *SSHSessio
 	}
 }
 
-// Stream validates the caller and upgrades the request to a WebSocket connection.
+// Stream validates the caller and either tunnels SSH traffic or upgrades the
+// request to the realtime hub for broadcast streams. This keeps a single
+// websocket entry point while still supporting protocol-specific tunnels.
 func (h *RealtimeHandler) Stream(c *gin.Context) {
 	if h.jwt == nil || h.hub == nil {
 		response.Error(c, errors.ErrNotFound)
@@ -75,6 +77,7 @@ func (h *RealtimeHandler) Stream(c *gin.Context) {
 		return
 	}
 
+	// `tunnel=ssh` uses the SSH session handler instead of the hub multiplexer.
 	tunnel := strings.ToLower(strings.TrimSpace(c.Query("tunnel")))
 	if tunnel == "ssh" {
 		if h.ssh == nil {
