@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 
@@ -21,6 +21,7 @@ import { useCommandPaletteState } from './ssh-workspace/useCommandPaletteState'
 import { useTerminalSearch } from './ssh-workspace/useTerminalSearch'
 import { useWorkspaceTelemetry } from './ssh-workspace/useWorkspaceTelemetry'
 import SshWorkspaceHeader from './ssh-workspace/SshWorkspaceHeader'
+import { SessionShareDialog } from './ssh-workspace/SessionShareDialog'
 import SshWorkspaceContent from './ssh-workspace/SshWorkspaceContent'
 
 const LAYOUT_OPTIONS = [1, 2, 3, 4, 5]
@@ -73,6 +74,10 @@ export function SshWorkspace() {
 
   const canUseSnippets = hasPermission(PERMISSIONS.PROTOCOL.SSH.MANAGE_SNIPPETS)
   const canUseSftp = hasPermission(PERMISSIONS.PROTOCOL.SSH.SFTP)
+  const canShareSession = hasPermission(PERMISSIONS.PROTOCOL.SSH.SHARE)
+  const canGrantWrite = hasPermission(PERMISSIONS.PROTOCOL.SSH.GRANT_WRITE)
+
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
 
   const logEvent = useCallback((action: string, details?: Record<string, unknown>) => {
     if (import.meta.env.DEV) {
@@ -328,7 +333,13 @@ export function SshWorkspace() {
         isFullscreen && 'fixed inset-0 z-50 bg-background p-4 lg:p-6'
       )}
     >
-      <SshWorkspaceHeader session={session} />
+      <SshWorkspaceHeader
+        session={session}
+        participants={session.participants}
+        currentUserId={currentUserId}
+        canShare={canShareSession}
+        onOpenShare={() => setShareDialogOpen(true)}
+      />
 
       <SshWorkspaceToolbar
         layoutColumns={layoutColumns}
@@ -372,6 +383,16 @@ export function SshWorkspace() {
         onClose={commandPalette.close}
         tabs={commandPalette.paletteTabs}
         sessions={commandPalette.paletteSessions}
+      />
+
+      <SessionShareDialog
+        sessionId={sessionId}
+        open={shareDialogOpen}
+        onClose={() => setShareDialogOpen(false)}
+        session={session}
+        currentUserId={currentUserId}
+        canShare={canShareSession}
+        canGrantWrite={canGrantWrite}
       />
     </div>
   )

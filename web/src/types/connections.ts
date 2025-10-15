@@ -97,6 +97,8 @@ export interface ActiveSessionParticipant {
   role: string
   access_mode: string
   joined_at: string
+  is_owner?: boolean
+  is_write_holder?: boolean
 }
 
 export interface ActiveConnectionSession {
@@ -117,4 +119,13 @@ export interface ActiveConnectionSession {
   owner_user_name?: string
   write_holder?: string
   participants?: Record<string, ActiveSessionParticipant>
+}
+
+export interface SessionParticipantsSummary {
+  session_id: string
+  connection_id: string
+  owner_user_id: string
+  owner_user_name?: string
+  write_holder?: string | null
+  participants: ActiveSessionParticipant[]
 }

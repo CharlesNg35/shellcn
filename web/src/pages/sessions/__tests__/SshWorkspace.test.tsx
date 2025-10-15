@@ -7,6 +7,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SshWorkspace from '@/pages/sessions/SshWorkspace'
 import { PERMISSIONS } from '@/constants/permissions'
 
+const mockSessionParticipants = vi.fn()
+const mockSessionParticipantMutations = vi.fn()
+
+vi.mock('@/hooks/useSessionParticipants', () => ({
+  useSessionParticipants: (...args: unknown[]) => mockSessionParticipants(...args),
+  useSessionParticipantMutations: (...args: unknown[]) => mockSessionParticipantMutations(...args),
+}))
+
+const mockUseUsers = vi.fn()
+
+vi.mock('@/hooks/useUsers', () => ({
+  useUsers: (...args: unknown[]) => mockUseUsers(...args),
+}))
+
 const mockTabsStore = vi.hoisted(() => {
   const baseTabs = [
     {
@@ -303,6 +317,28 @@ describe('SshWorkspace page', () => {
     mockUsePermissions.mockReset()
     terminalMock.mockReset()
     sftpMock.mockReset()
+
+    mockSessionParticipants.mockReturnValue({
+      data: {
+        session_id: 'sess-1',
+        connection_id: 'conn-1',
+        owner_user_id: 'usr-1',
+        participants: [],
+      },
+      isLoading: false,
+    })
+
+    mockSessionParticipantMutations.mockReturnValue({
+      invite: { mutateAsync: vi.fn(), isPending: false },
+      remove: { mutate: vi.fn(), isPending: false },
+      grantWrite: { mutate: vi.fn(), isPending: false },
+      relinquishWrite: { mutate: vi.fn(), isPending: false },
+    })
+
+    mockUseUsers.mockReturnValue({
+      data: { data: [] },
+      isLoading: false,
+    })
 
     mockUsePermissions.mockReturnValue({
       hasPermission: (permission: string) =>

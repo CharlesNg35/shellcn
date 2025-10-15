@@ -102,6 +102,13 @@ type GrantWriteParams struct {
 	Actor           SessionActor
 }
 
+// RelinquishWriteParams controls relinquishing write access.
+type RelinquishWriteParams struct {
+	SessionID string
+	UserID    string
+	Actor     SessionActor
+}
+
 var (
 	// ErrSessionNotFound indicates the session record could not be located.
 	ErrSessionNotFound = errors.New("session lifecycle service: session not found")
@@ -424,6 +431,14 @@ func (s *SessionLifecycleService) FailSession(ctx context.Context, sessionID, re
 	})
 }
 
+// GetActiveSession returns a snapshot of the active session record, if present.
+func (s *SessionLifecycleService) GetActiveSession(sessionID string) (*ActiveSessionRecord, bool) {
+	if s == nil || s.active == nil {
+		return nil, false
+	}
+	return s.active.GetSession(sessionID)
+}
+
 // AuthorizeSessionAccess ensures the supplied user can interact with the session.
 func (s *SessionLifecycleService) AuthorizeSessionAccess(ctx context.Context, sessionID, userID string) (*models.ConnectionSession, error) {
 	if s == nil {
@@ -655,6 +670,83 @@ func (s *SessionLifecycleService) GrantWriteAccess(ctx context.Context, params G
 	monitoring.RecordSessionShareEvent("write_granted")
 
 	return participant, nil
+}
+
+// RelinquishWriteAccess revokes write control from the participant and optionally grants it to another.
+func (s *SessionLifecycleService) RelinquishWriteAccess(ctx context.Context, params RelinquishWriteParams) (ActiveSessionParticipant, *ActiveSessionParticipant, error) {
+	if s == nil {
+		return ActiveSessionParticipant{}, nil, errors.New("session lifecycle service: service not initialised")
+	}
+	ctx = ensureContext(ctx)
+
+	if strings.TrimSpace(params.SessionID) == "" || strings.TrimSpace(params.UserID) == "" {
+		return ActiveSessionParticipant{}, nil, errors.New("session lifecycle service: session id and user id are required")
+	}
+
+	participant, newWriter, err := s.active.RelinquishWriteAccess(params.SessionID, params.UserID)
+	if err != nil {
+		return ActiveSessionParticipant{}, nil, err
+	}
+
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		clearUpdates := map[string]any{
+			"access_mode":        "read",
+			"granted_by_user_id": gorm.Expr("NULL"),
+		}
+		if err := tx.
+			Model(&models.ConnectionSessionParticipant{}).
+			Where("session_id = ? AND user_id = ?", params.SessionID, params.UserID).
+			Updates(clearUpdates).Error; err != nil {
+			return err
+		}
+
+		if newWriter != nil {
+			assignments := map[string]any{
+				"access_mode": "write",
+			}
+			actorID := strings.TrimSpace(params.Actor.UserID)
+			if actorID != "" {
+				id := actorID
+				assignments["granted_by_user_id"] = &id
+			} else {
+				assignments["granted_by_user_id"] = gorm.Expr("NULL")
+			}
+			if err := tx.
+				Model(&models.ConnectionSessionParticipant{}).
+				Where("session_id = ? AND user_id = ?", params.SessionID, newWriter.UserID).
+				Updates(assignments).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return ActiveSessionParticipant{}, nil, err
+	}
+
+	if s.audit != nil {
+		if err := s.audit.Log(ctx, buildAuditEntry(params.Actor, AuditEntry{
+			Action:   "session.write_relinquished",
+			Resource: fmt.Sprintf("session:%s", params.SessionID),
+			Result:   "success",
+			Metadata: map[string]any{
+				"user_id": params.UserID,
+				"new_write_uid": func() string {
+					if newWriter != nil {
+						return newWriter.UserID
+					}
+					return ""
+				}(),
+			},
+		}, params.Actor.UserID)); err != nil {
+			return ActiveSessionParticipant{}, nil, err
+		}
+	}
+
+	monitoring.RecordSessionShareEvent("write_relinquished")
+
+	return participant, newWriter, nil
 }
 
 func encodeMetadata(meta map[string]any) (datatypes.JSON, error) {

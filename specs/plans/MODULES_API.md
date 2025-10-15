@@ -1041,10 +1041,15 @@ The service automatically expands dependency permissions (e.g., `connection.view
 
 ### 8.4 Active Sessions & Chat
 
-| Method | Path                                   | Description                                                                                          | Permission                          | Handler                           |
-| ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------- | --------------------------------- |
-| GET    | `/api/active-sessions/:sessionID/chat` | Retrieve the most recent chat messages for a session. Supports `limit` (≤200) and optional `before`. | Authenticated (session participant) | `SessionChatHandler.ListMessages` |
-| POST   | `/api/active-sessions/:sessionID/chat` | Post a chat message for an active session (owner or joined participant).                             | Authenticated (session participant) | `SessionChatHandler.PostMessage`  |
+| Method | Path                                                         | Description                                                                                            | Permission                                                    | Handler                                       |
+| ------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------------- |
+| GET    | `/api/active-sessions/:sessionID/participants`               | Retrieve active participants for a session, including owner and write-holder metadata.                 | Authenticated (session owner or participant)                  | `SessionParticipantHandler.ListParticipants`  |
+| POST   | `/api/active-sessions/:sessionID/participants`               | Invite a user to join the session as a participant. Requires owner or `protocol:ssh.share` permission. | Authenticated (session owner or share permission)             | `SessionParticipantHandler.AddParticipant`    |
+| POST   | `/api/active-sessions/:sessionID/participants/:userID/write` | Grant write access to a participant, transferring exclusive control.                                   | Authenticated (session owner or `protocol:ssh.grant_write`)   | `SessionParticipantHandler.GrantWrite`        |
+| DELETE | `/api/active-sessions/:sessionID/participants/:userID/write` | Relinquish a participant's write access (self, owner, or grant permission holders).                    | Authenticated (write holder, owner, or grant permission)      | `SessionParticipantHandler.RelinquishWrite`   |
+| DELETE | `/api/active-sessions/:sessionID/participants/:userID`       | Remove a participant from the session. Participants can remove themselves or owners can revoke access. | Authenticated (session owner/share permission or participant) | `SessionParticipantHandler.RemoveParticipant` |
+| GET    | `/api/active-sessions/:sessionID/chat`                       | Retrieve the most recent chat messages for a session. Supports `limit` (≤200) and optional `before`.   | Authenticated (session participant)                           | `SessionChatHandler.ListMessages`             |
+| POST   | `/api/active-sessions/:sessionID/chat`                       | Post a chat message for an active session (owner or joined participant).                               | Authenticated (session participant)                           | `SessionChatHandler.PostMessage`              |
 
 Session access enforcement is handled by `SessionLifecycleService.AuthorizeSessionAccess`, which grants access to the session owner and any active participant (readers or writers). Requests from other users receive `403`.
 
@@ -1110,17 +1115,17 @@ Response:
 
 Vector for file management inside active SSH sessions. All routes require the caller to be joined to the session (owner or participant) and to hold `protocol:ssh.sftp` along with the baseline `connection.launch` / session sharing permissions enforced by the lifecycle service.
 
-| Method | Path                                                        | Description                                                                 | Permission           | Handler                   |
-| ------ | ----------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------- | ------------------------- |
-| GET    | `/api/active-sessions/:id/sftp/list?path=/`                 | List directory entries at `path` (defaults to `.`).                         | `protocol:ssh.sftp`  | `SFTPHandler.List`        |
-| GET    | `/api/active-sessions/:id/sftp/metadata?path=/etc/passwd`   | Retrieve stat metadata (size, mode, timestamps) for a file or directory.   | `protocol:ssh.sftp`  | `SFTPHandler.Metadata`    |
-| GET    | `/api/active-sessions/:id/sftp/file?path=/etc/hosts`        | Inline-read a small file (≤5 MiB). Returns base64 by default.               | `protocol:ssh.sftp`  | `SFTPHandler.ReadFile`    |
-| GET    | `/api/active-sessions/:id/sftp/download?path=/var/log/app`  | Stream a file with support for HTTP range requests.                         | `protocol:ssh.sftp`  | `SFTPHandler.Download`    |
-| POST   | `/api/active-sessions/:id/sftp/upload?path=/tmp/app.log`    | Upload/resume file data (chunked ≤64 MiB) using `Upload-Offset` header.     | `protocol:ssh.sftp`* | `SFTPHandler.Upload`      |
-| PUT    | `/api/active-sessions/:id/sftp/file`                        | Replace file contents from JSON payload (base64 or UTF-8).                  | `protocol:ssh.sftp`  | `SFTPHandler.SaveFile`    |
-| POST   | `/api/active-sessions/:id/sftp/rename`                      | Rename or move a file/directory, optional overwrite semantics.             | `protocol:ssh.sftp`  | `SFTPHandler.Rename`      |
-| DELETE | `/api/active-sessions/:id/sftp/file?path=/tmp/app.log`      | Delete a single file (idempotent).                                          | `protocol:ssh.sftp`  | `SFTPHandler.DeleteFile`  |
-| DELETE | `/api/active-sessions/:id/sftp/directory?path=/tmp/cache`   | Delete directory; supports `?recursive=true` for capped-depth removal.      | `protocol:ssh.sftp`  | `SFTPHandler.DeleteDirectory` |
+| Method | Path                                                       | Description                                                              | Permission            | Handler                       |
+| ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------- | ----------------------------- |
+| GET    | `/api/active-sessions/:id/sftp/list?path=/`                | List directory entries at `path` (defaults to `.`).                      | `protocol:ssh.sftp`   | `SFTPHandler.List`            |
+| GET    | `/api/active-sessions/:id/sftp/metadata?path=/etc/passwd`  | Retrieve stat metadata (size, mode, timestamps) for a file or directory. | `protocol:ssh.sftp`   | `SFTPHandler.Metadata`        |
+| GET    | `/api/active-sessions/:id/sftp/file?path=/etc/hosts`       | Inline-read a small file (≤5 MiB). Returns base64 by default.            | `protocol:ssh.sftp`   | `SFTPHandler.ReadFile`        |
+| GET    | `/api/active-sessions/:id/sftp/download?path=/var/log/app` | Stream a file with support for HTTP range requests.                      | `protocol:ssh.sftp`   | `SFTPHandler.Download`        |
+| POST   | `/api/active-sessions/:id/sftp/upload?path=/tmp/app.log`   | Upload/resume file data (chunked ≤64 MiB) using `Upload-Offset` header.  | `protocol:ssh.sftp`\* | `SFTPHandler.Upload`          |
+| PUT    | `/api/active-sessions/:id/sftp/file`                       | Replace file contents from JSON payload (base64 or UTF-8).               | `protocol:ssh.sftp`   | `SFTPHandler.SaveFile`        |
+| POST   | `/api/active-sessions/:id/sftp/rename`                     | Rename or move a file/directory, optional overwrite semantics.           | `protocol:ssh.sftp`   | `SFTPHandler.Rename`          |
+| DELETE | `/api/active-sessions/:id/sftp/file?path=/tmp/app.log`     | Delete a single file (idempotent).                                       | `protocol:ssh.sftp`   | `SFTPHandler.DeleteFile`      |
+| DELETE | `/api/active-sessions/:id/sftp/directory?path=/tmp/cache`  | Delete directory; supports `?recursive=true` for capped-depth removal.   | `protocol:ssh.sftp`   | `SFTPHandler.DeleteDirectory` |
 
 \* Uploads implicitly require `protocol:ssh.sftp` and session write access. Owners can delegate write mode via the session sharing API.
 

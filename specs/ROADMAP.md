@@ -298,12 +298,12 @@
 
 ### Shared Session Collaboration (Protocol-Wide) - should work with ssh
 
-- [ ] Extend session data model to support participants, access modes, and chat
-- [ ] Deliver API for inviting/removing participants and toggling write access
-- [ ] Broadcast realtime events for participant list, ownership changes, and chat
-- [ ] Implement frontend participant panel, badges, and write-access UX
-- [ ] Add audit logging + metrics for share lifecycle events
-- [ ] Validate permission enforcement across owner, participant, and admin roles
+- [x] Extend session data model to support participants, access modes, and chat
+- [x] Deliver API for inviting/removing participants and toggling write access
+- [x] Broadcast realtime events for participant list, ownership changes, and chat
+- [x] Implement frontend participant panel, badges, and write-access UX
+- [x] Add audit logging + metrics for share lifecycle events
+- [x] Validate permission enforcement across owner, participant, and admin roles
 
 ### Session Recording
 

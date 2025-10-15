@@ -260,6 +260,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	sessionChatHandler := handlers.NewSessionChatHandler(sessionChatSvc, sessionLifecycleSvc)
 	registerSessionChatRoutes(api, sessionChatHandler)
 
+	sessionParticipantHandler := handlers.NewSessionParticipantHandler(db, sessionLifecycleSvc, checker)
+	registerSessionParticipantRoutes(api, sessionParticipantHandler)
+
 	sftpChannelSvc := services.NewSFTPChannelService()
 	sshHandler := handlers.NewSSHSessionHandler(
 		cfg, connectionSvc, vaultSvc,

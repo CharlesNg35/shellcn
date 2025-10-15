@@ -181,6 +181,101 @@ func TestSessionLifecycle_WriteDelegationAndRemoval(t *testing.T) {
 	require.NotNil(t, dbParticipant.LeftAt)
 }
 
+func TestSessionLifecycle_RelinquishWriteAccess(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	auditSvc, err := NewAuditService(db)
+	require.NoError(t, err)
+
+	active := NewActiveSessionService(nil)
+	seedSessionFixtures(t, db, "conn-1", "user-1")
+
+	svc, err := NewSessionLifecycleService(
+		db,
+		active,
+		WithSessionAuditService(auditSvc),
+		WithLifecycleClock(func() time.Time { return time.Date(2024, 10, 1, 12, 0, 0, 0, time.UTC) }),
+	)
+	require.NoError(t, err)
+
+	session, err := svc.StartSession(context.Background(), StartSessionParams{
+		SessionID:     "sess-release",
+		ConnectionID:  "conn-1",
+		ProtocolID:    "ssh",
+		OwnerUserID:   "user-1",
+		OwnerUserName: "alice",
+		Actor: SessionActor{
+			UserID:   "user-1",
+			Username: "alice",
+		},
+	})
+	require.NoError(t, err)
+
+	createTestUser(t, db, "user-2", "bob")
+
+	_, err = svc.AddParticipant(context.Background(), AddParticipantParams{
+		SessionID: session.ID,
+		UserID:    "user-2",
+		UserName:  "bob",
+		Actor: SessionActor{
+			UserID:   "user-1",
+			Username: "alice",
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = svc.GrantWriteAccess(context.Background(), GrantWriteParams{
+		SessionID:       session.ID,
+		UserID:          "user-2",
+		GrantedByUserID: ptrString("user-1"),
+		Actor: SessionActor{
+			UserID:   "user-1",
+			Username: "alice",
+		},
+	})
+	require.NoError(t, err)
+
+	released, newWriter, err := svc.RelinquishWriteAccess(context.Background(), RelinquishWriteParams{
+		SessionID: session.ID,
+		UserID:    "user-2",
+		Actor: SessionActor{
+			UserID:   "user-2",
+			Username: "bob",
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "user-2", released.UserID)
+	require.Equal(t, "read", released.AccessMode)
+	require.NotNil(t, newWriter)
+	require.Equal(t, "user-1", newWriter.UserID)
+	require.Equal(t, "write", newWriter.AccessMode)
+
+	participant := fetchParticipant(t, db, session.ID, "user-2")
+	require.Equal(t, "read", participant.AccessMode)
+	require.Nil(t, participant.GrantedByUserID)
+
+	ownerParticipant := fetchParticipant(t, db, session.ID, "user-1")
+	require.Equal(t, "write", ownerParticipant.AccessMode)
+	require.NotNil(t, ownerParticipant.GrantedByUserID)
+	require.Equal(t, ptrString("user-2"), ownerParticipant.GrantedByUserID)
+
+	releasedOwner, newWriter, err := svc.RelinquishWriteAccess(context.Background(), RelinquishWriteParams{
+		SessionID: session.ID,
+		UserID:    "user-1",
+		Actor: SessionActor{
+			UserID:   "user-1",
+			Username: "alice",
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "user-1", releasedOwner.UserID)
+	require.Equal(t, "read", releasedOwner.AccessMode)
+	require.Nil(t, newWriter)
+
+	ownerParticipant = fetchParticipant(t, db, session.ID, "user-1")
+	require.Equal(t, "read", ownerParticipant.AccessMode)
+	require.Nil(t, ownerParticipant.GrantedByUserID)
+}
+
 func TestSessionLifecycle_AuthorizeSessionAccess(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
 	auditSvc, err := NewAuditService(db)

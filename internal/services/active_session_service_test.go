@@ -1,6 +1,7 @@
 package services
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -215,6 +216,51 @@ func TestActiveSessionService_RemoveParticipantRevertsWrite(t *testing.T) {
 	require.NotContains(t, session.Participants, "user-2")
 	require.Equal(t, "user-1", session.WriteHolder)
 	require.Equal(t, "write", session.Participants["user-1"].AccessMode)
+}
+
+func TestActiveSessionService_RelinquishWriteAccess(t *testing.T) {
+	svc := NewActiveSessionService(nil)
+	require.NoError(t, svc.RegisterSession(&ActiveSessionRecord{
+		ID:           "sess-1",
+		ConnectionID: "conn-1",
+		UserID:       "owner-1",
+		UserName:     "alice",
+		ProtocolID:   "ssh",
+	}))
+
+	_, err := svc.AddParticipant("sess-1", ActiveSessionParticipant{
+		UserID:     "user-2",
+		UserName:   "bob",
+		AccessMode: "write",
+	})
+	require.NoError(t, err)
+	_, err = svc.GrantWriteAccess("sess-1", "user-2")
+	require.NoError(t, err)
+
+	updated, newWriter, err := svc.RelinquishWriteAccess("sess-1", "user-2")
+	require.NoError(t, err)
+	require.Equal(t, "user-2", updated.UserID)
+	require.Equal(t, "read", strings.ToLower(updated.AccessMode))
+	require.NotNil(t, newWriter)
+	require.Equal(t, "owner-1", newWriter.UserID)
+	require.Equal(t, "write", strings.ToLower(newWriter.AccessMode))
+
+	session, ok := svc.GetSession("sess-1")
+	require.True(t, ok)
+	require.Equal(t, "owner-1", session.WriteHolder)
+	require.Equal(t, "read", session.Participants["user-2"].AccessMode)
+	require.Equal(t, "write", session.Participants["owner-1"].AccessMode)
+
+	updatedOwner, newWriter, err := svc.RelinquishWriteAccess("sess-1", "owner-1")
+	require.NoError(t, err)
+	require.Equal(t, "owner-1", updatedOwner.UserID)
+	require.Equal(t, "read", strings.ToLower(updatedOwner.AccessMode))
+	require.Nil(t, newWriter)
+
+	session, ok = svc.GetSession("sess-1")
+	require.True(t, ok)
+	require.Equal(t, "", session.WriteHolder)
+	require.Equal(t, "read", session.Participants["owner-1"].AccessMode)
 }
 
 func TestActiveSessionService_AppendAndConsumeChatBuffer(t *testing.T) {

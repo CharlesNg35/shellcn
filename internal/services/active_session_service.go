@@ -365,6 +365,71 @@ func (s *ActiveSessionService) GrantWriteAccess(sessionID, userID string) (Activ
 	return *granted, nil
 }
 
+// RelinquishWriteAccess releases write control for the specified participant and optionally
+// transfers it back to the session owner. Returns the updated participant and the new writer, if any.
+func (s *ActiveSessionService) RelinquishWriteAccess(sessionID, userID string) (ActiveSessionParticipant, *ActiveSessionParticipant, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	userID = strings.TrimSpace(userID)
+	if sessionID == "" || userID == "" {
+		return ActiveSessionParticipant{}, nil, errors.New("active session: session and user id are required")
+	}
+
+	s.mu.Lock()
+	record, exists := s.sessions[sessionID]
+	if !exists {
+		s.mu.Unlock()
+		return ActiveSessionParticipant{}, nil, fmt.Errorf("active session: session %s not found", sessionID)
+	}
+	if record.Participants == nil {
+		s.mu.Unlock()
+		return ActiveSessionParticipant{}, nil, fmt.Errorf("active session: participant %s not found", userID)
+	}
+	participant, ok := record.Participants[userID]
+	if !ok || participant == nil {
+		s.mu.Unlock()
+		return ActiveSessionParticipant{}, nil, fmt.Errorf("active session: participant %s not found", userID)
+	}
+
+	// If the participant is not the current write holder, no changes are required.
+	if !strings.EqualFold(record.WriteHolder, userID) {
+		updated := cloneParticipant(participant)
+		s.mu.Unlock()
+		return *updated, nil, nil
+	}
+
+	ownerID := strings.TrimSpace(record.OwnerUserID)
+	newWriterID := ""
+	if ownerID != "" && !strings.EqualFold(ownerID, userID) {
+		newWriterID = ownerID
+	}
+
+	s.setWriteHolderLocked(record, newWriterID)
+
+	updatedParticipant := cloneParticipant(record.Participants[userID])
+
+	var newWriter *ActiveSessionParticipant
+	if newWriterID != "" {
+		if candidate, exists := record.Participants[newWriterID]; exists && candidate != nil {
+			newWriter = cloneParticipant(candidate)
+		}
+	}
+
+	s.mu.Unlock()
+
+	payload := map[string]any{
+		"session_id": sessionID,
+		"user_id":    "",
+		"user_name":  "",
+	}
+	if newWriter != nil {
+		payload["user_id"] = newWriter.UserID
+		payload["user_name"] = newWriter.UserName
+	}
+	s.broadcastEvent("session.write_granted", payload)
+
+	return *updatedParticipant, newWriter, nil
+}
+
 // GetSession returns a copy of the active session record if present.
 func (s *ActiveSessionService) GetSession(sessionID string) (*ActiveSessionRecord, bool) {
 	sessionID = strings.TrimSpace(sessionID)
