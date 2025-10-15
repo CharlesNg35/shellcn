@@ -7,6 +7,8 @@ const writeMock = vi.fn()
 const fitMock = vi.fn()
 const disposeMock = vi.fn()
 const loadAddonMock = vi.fn()
+const searchFindNextMock = vi.fn(() => true)
+const searchFindPreviousMock = vi.fn(() => true)
 
 class TerminalStub {
   public loadAddon = loadAddonMock
@@ -14,7 +16,8 @@ class TerminalStub {
   public dispose = disposeMock
   public focus = vi.fn()
   public open = vi.fn()
-  constructor(public readonly options: Record<string, unknown>) {}
+  public options: { fontSize: number } = { fontSize: 14 }
+  constructor(public readonly config: Record<string, unknown>) {}
 }
 
 class FitAddonStub {
@@ -23,6 +26,12 @@ class FitAddonStub {
 }
 
 class WebglAddonStub {
+  public dispose = disposeMock
+}
+
+class SearchAddonStub {
+  public findNext = searchFindNextMock
+  public findPrevious = searchFindPreviousMock
   public dispose = disposeMock
 }
 
@@ -36,6 +45,10 @@ vi.mock('@xterm/addon-fit', () => ({
 
 vi.mock('@xterm/addon-webgl', () => ({
   WebglAddon: WebglAddonStub,
+}))
+
+vi.mock('@xterm/addon-search', () => ({
+  SearchAddon: SearchAddonStub,
 }))
 
 const streamResult = {
@@ -78,6 +91,8 @@ describe('SshTerminal component', () => {
     streamResult.send.mockClear()
     streamResult.close.mockClear()
     capturedHandler = null
+    searchFindNextMock.mockClear()
+    searchFindPreviousMock.mockClear()
   })
 
   it('renders terminal container and writes streamed data', async () => {
