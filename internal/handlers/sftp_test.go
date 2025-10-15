@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	stdpath "path"
 	"testing"
 	"time"
 
@@ -42,7 +44,7 @@ func TestSFTPHandler_ListSuccess(t *testing.T) {
 	lifecycle := &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn-1"}}
 	checker := &stubResourceChecker{allowed: true}
 
-	h := NewSFTPHandler(channels, lifecycle, checker)
+	h := NewSFTPHandler(channels, lifecycle, checker, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "https://example.test/?path=/", nil)
 	w := httptest.NewRecorder()
@@ -70,7 +72,7 @@ func TestSFTPHandler_ListSuccess(t *testing.T) {
 }
 
 func TestSFTPHandler_ListInvalidPath(t *testing.T) {
-	h := NewSFTPHandler(&stubSFTPChannel{}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "c"}}, &stubResourceChecker{allowed: true})
+	h := NewSFTPHandler(&stubSFTPChannel{}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "c"}}, &stubResourceChecker{allowed: true}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example.invalid/?path=../etc", nil)
 	w := httptest.NewRecorder()
@@ -90,7 +92,7 @@ func TestSFTPHandler_ListPermissionDenied(t *testing.T) {
 	lifecycle := &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}
 	checker := &stubResourceChecker{allowed: false}
 
-	h := NewSFTPHandler(channels, lifecycle, checker)
+	h := NewSFTPHandler(channels, lifecycle, checker, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example/?path=.", nil)
 	w := httptest.NewRecorder()
@@ -108,7 +110,7 @@ func TestSFTPHandler_ListBorrowError(t *testing.T) {
 	channels := &stubSFTPChannel{err: services.ErrSFTPSessionNotFound}
 	lifecycle := &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}
 
-	h := NewSFTPHandler(channels, lifecycle, &stubResourceChecker{allowed: true})
+	h := NewSFTPHandler(channels, lifecycle, &stubResourceChecker{allowed: true}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example/?path=.", nil)
 	w := httptest.NewRecorder()
@@ -127,7 +129,7 @@ func TestSFTPHandler_MetadataSuccess(t *testing.T) {
 	client := &stubSFTPClient{
 		stats: map[string]os.FileInfo{"/file.txt": info},
 	}
-	h := NewSFTPHandler(&stubSFTPChannel{client: client}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}, &stubResourceChecker{allowed: true})
+	h := NewSFTPHandler(&stubSFTPChannel{client: client}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}, &stubResourceChecker{allowed: true}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example/?path=/file.txt", nil)
 	w := httptest.NewRecorder()
@@ -154,7 +156,7 @@ func TestSFTPHandler_ReadFileTooLarge(t *testing.T) {
 	client := &stubSFTPClient{
 		stats: map[string]os.FileInfo{"/big.dat": large},
 	}
-	h := NewSFTPHandler(&stubSFTPChannel{client: client}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}, &stubResourceChecker{allowed: true})
+	h := NewSFTPHandler(&stubSFTPChannel{client: client}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}, &stubResourceChecker{allowed: true}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example/?path=/big.dat", nil)
 	w := httptest.NewRecorder()
@@ -175,7 +177,7 @@ func TestSFTPHandler_ReadFileSuccess(t *testing.T) {
 		stats: map[string]os.FileInfo{"/file.txt": info},
 		files: map[string][]byte{"/file.txt": data},
 	}
-	h := NewSFTPHandler(&stubSFTPChannel{client: client}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}, &stubResourceChecker{allowed: true})
+	h := NewSFTPHandler(&stubSFTPChannel{client: client}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}, &stubResourceChecker{allowed: true}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example/?path=/file.txt", nil)
 	w := httptest.NewRecorder()
@@ -203,7 +205,7 @@ func TestSFTPHandler_DownloadSuccess(t *testing.T) {
 		stats: map[string]os.FileInfo{"/file.txt": info},
 		files: map[string][]byte{"/file.txt": data},
 	}
-	h := NewSFTPHandler(&stubSFTPChannel{client: client}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}, &stubResourceChecker{allowed: true})
+	h := NewSFTPHandler(&stubSFTPChannel{client: client}, &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}, &stubResourceChecker{allowed: true}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://example/?path=/file.txt", nil)
 	w := httptest.NewRecorder()
@@ -217,6 +219,118 @@ func TestSFTPHandler_DownloadSuccess(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	require.Equal(t, data, w.Body.Bytes())
 	require.Contains(t, w.Header().Get("Content-Disposition"), "file.txt")
+}
+
+func TestSFTPHandler_UploadWritesData(t *testing.T) {
+	client := &stubSFTPClient{}
+	channels := &stubSFTPChannel{client: client}
+	lifecycle := &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}
+
+	h := NewSFTPHandler(channels, lifecycle, &stubResourceChecker{allowed: true}, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "http://example/upload?path=/file.txt", bytes.NewBufferString("hello"))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+	c.Params = gin.Params{gin.Param{Key: "sessionID", Value: "session"}}
+	c.Set(middleware.CtxUserIDKey, "user")
+
+	h.Upload(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, "5", w.Header().Get("Upload-Offset"))
+	require.Equal(t, []byte("hello"), client.files["/file.txt"])
+}
+
+func TestSFTPHandler_SaveFile(t *testing.T) {
+	client := &stubSFTPClient{}
+	channels := &stubSFTPChannel{client: client}
+	lifecycle := &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}
+
+	h := NewSFTPHandler(channels, lifecycle, &stubResourceChecker{allowed: true}, nil)
+
+	body := `{"path":"/note.txt","content":"aGVsbG8=","encoding":"base64"}`
+	req := httptest.NewRequest(http.MethodPut, "http://example/file", bytes.NewBufferString(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+	c.Params = gin.Params{gin.Param{Key: "sessionID", Value: "session"}}
+	c.Set(middleware.CtxUserIDKey, "user")
+
+	h.SaveFile(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, []byte("hello"), client.files["/note.txt"])
+}
+
+func TestSFTPHandler_Rename(t *testing.T) {
+	client := &stubSFTPClient{files: map[string][]byte{"/old.txt": []byte("data")}, stats: map[string]os.FileInfo{"/old.txt": fileInfoStub{name: "old.txt", size: 4}}}
+	channels := &stubSFTPChannel{client: client}
+	lifecycle := &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}
+
+	h := NewSFTPHandler(channels, lifecycle, &stubResourceChecker{allowed: true}, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "http://example/rename", bytes.NewBufferString(`{"source":"/old.txt","target":"/new.txt"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+	c.Params = gin.Params{gin.Param{Key: "sessionID", Value: "session"}}
+	c.Set(middleware.CtxUserIDKey, "user")
+
+	h.Rename(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	_, existsOld := client.files["/old.txt"]
+	require.False(t, existsOld)
+	require.Equal(t, []byte("data"), client.files["/new.txt"])
+}
+
+func TestSFTPHandler_DeleteFile(t *testing.T) {
+	client := &stubSFTPClient{files: map[string][]byte{"/temp.txt": []byte("tmp")}}
+	channels := &stubSFTPChannel{client: client}
+	lifecycle := &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}
+
+	h := NewSFTPHandler(channels, lifecycle, &stubResourceChecker{allowed: true}, nil)
+
+	req := httptest.NewRequest(http.MethodDelete, "http://example/file?path=/temp.txt", nil)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+	c.Params = gin.Params{gin.Param{Key: "sessionID", Value: "session"}}
+	c.Set(middleware.CtxUserIDKey, "user")
+
+	h.DeleteFile(c)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	require.NotContains(t, client.files, "/temp.txt")
+}
+
+func TestSFTPHandler_DownloadRange(t *testing.T) {
+	client := &stubSFTPClient{
+		files: map[string][]byte{"/file.txt": []byte("download")},
+		stats: map[string]os.FileInfo{"/file.txt": fileInfoStub{name: "file.txt", size: 8}},
+	}
+	channels := &stubSFTPChannel{client: client}
+	lifecycle := &stubSessionAuthorizer{session: &models.ConnectionSession{ConnectionID: "conn"}}
+
+	h := NewSFTPHandler(channels, lifecycle, &stubResourceChecker{allowed: true}, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "http://example/download?path=/file.txt", nil)
+	req.Header.Set("Range", "bytes=1-3")
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = req
+	c.Params = gin.Params{gin.Param{Key: "sessionID", Value: "session"}}
+	c.Set(middleware.CtxUserIDKey, "user")
+
+	h.Download(c)
+
+	require.Equal(t, http.StatusPartialContent, w.Code)
+	require.Equal(t, []byte("own"), w.Body.Bytes())
+	require.Equal(t, "bytes 1-3/8", w.Header().Get("Content-Range"))
 }
 
 type stubSFTPChannel struct {
@@ -270,6 +384,18 @@ type stubSFTPClient struct {
 	err   error
 }
 
+func (s *stubSFTPClient) ensureMaps() {
+	if s.stats == nil {
+		s.stats = make(map[string]os.FileInfo)
+	}
+	if s.files == nil {
+		s.files = make(map[string][]byte)
+	}
+	if s.dirs == nil {
+		s.dirs = make(map[string][]os.FileInfo)
+	}
+}
+
 func (s *stubSFTPClient) ReadDir(path string) ([]os.FileInfo, error) {
 	if s.err != nil {
 		return nil, s.err
@@ -294,19 +420,165 @@ func (s *stubSFTPClient) Stat(path string) (os.FileInfo, error) {
 	return info, nil
 }
 
-func (s *stubSFTPClient) Open(path string) (io.ReadCloser, error) {
+func (s *stubSFTPClient) Open(path string) (shellsftp.ReadableFile, error) {
 	if s.err != nil {
 		return nil, s.err
-	}
-	if s.files == nil {
-		return io.NopCloser(bytes.NewReader(nil)), nil
 	}
 	data, ok := s.files[path]
 	if !ok {
 		return nil, os.ErrNotExist
 	}
-	return io.NopCloser(bytes.NewReader(data)), nil
+	return &stubReadableFile{Reader: bytes.NewReader(append([]byte(nil), data...))}, nil
 }
+
+func (s *stubSFTPClient) OpenFile(path string, flag int) (shellsftp.WritableFile, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	s.ensureMaps()
+	if flag&os.O_TRUNC != 0 {
+		s.files[path] = nil
+		s.stats[path] = fileInfoStub{name: stdpath.Base(path), mode: 0o644, modTime: time.Now()}
+	}
+	return &stubWritableFile{client: s, path: path}, nil
+}
+
+func (s *stubSFTPClient) Create(path string) (shellsftp.WritableFile, error) {
+	return s.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC)
+}
+
+func (s *stubSFTPClient) MkdirAll(path string) error {
+	s.ensureMaps()
+	return nil
+}
+
+func (s *stubSFTPClient) Remove(path string) error {
+	if s.err != nil {
+		return s.err
+	}
+	if s.files == nil {
+		return os.ErrNotExist
+	}
+	delete(s.files, path)
+	delete(s.stats, path)
+	return nil
+}
+
+func (s *stubSFTPClient) RemoveDirectory(path string) error {
+	if s.err != nil {
+		return s.err
+	}
+	delete(s.dirs, path)
+	return nil
+}
+
+func (s *stubSFTPClient) Rename(oldPath, newPath string) error {
+	if s.err != nil {
+		return s.err
+	}
+	if s.files == nil {
+		return os.ErrNotExist
+	}
+	data, ok := s.files[oldPath]
+	if !ok {
+		return os.ErrNotExist
+	}
+	s.files[newPath] = data
+	delete(s.files, oldPath)
+	if s.stats != nil {
+		if info, ok := s.stats[oldPath]; ok {
+			s.stats[newPath] = fileInfoStub{name: stdpath.Base(newPath), size: info.Size(), mode: info.Mode(), modTime: time.Now()}
+			delete(s.stats, oldPath)
+		}
+	}
+	return nil
+}
+
+func (s *stubSFTPClient) Truncate(path string, size int64) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.ensureMaps()
+	data := s.files[path]
+	if int64(len(data)) >= size {
+		s.files[path] = data[:size]
+	} else {
+		extra := make([]byte, size-int64(len(data)))
+		s.files[path] = append(data, extra...)
+	}
+	s.stats[path] = fileInfoStub{name: stdpath.Base(path), size: int64(len(s.files[path])), mode: 0o644, modTime: time.Now()}
+	return nil
+}
+
+type stubReadableFile struct {
+	Reader *bytes.Reader
+}
+
+func (s *stubReadableFile) Read(p []byte) (int, error) { return s.Reader.Read(p) }
+func (s *stubReadableFile) Close() error               { return nil }
+func (s *stubReadableFile) Seek(offset int64, whence int) (int64, error) {
+	return s.Reader.Seek(offset, whence)
+}
+
+type stubWritableFile struct {
+	client *stubSFTPClient
+	path   string
+	offset int64
+}
+
+func (w *stubWritableFile) ensureFile() {
+	w.client.ensureMaps()
+	if _, ok := w.client.files[w.path]; !ok {
+		w.client.files[w.path] = make([]byte, 0)
+	}
+}
+
+func (w *stubWritableFile) Write(p []byte) (int, error) {
+	if _, err := w.Seek(w.offset, io.SeekStart); err != nil {
+		return 0, err
+	}
+	n, err := w.WriteAt(p, w.offset)
+	if err != nil {
+		return n, err
+	}
+	w.offset += int64(n)
+	return n, nil
+}
+
+func (w *stubWritableFile) WriteAt(p []byte, off int64) (int, error) {
+	w.ensureFile()
+	data := append([]byte(nil), w.client.files[w.path]...)
+	required := off + int64(len(p))
+	if int64(len(data)) < required {
+		expanded := make([]byte, required)
+		copy(expanded, data)
+		data = expanded
+	}
+	copy(data[off:off+int64(len(p))], p)
+	w.client.files[w.path] = data
+	w.client.stats[w.path] = fileInfoStub{name: stdpath.Base(w.path), size: int64(len(data)), mode: 0o644, modTime: time.Now()}
+	return len(p), nil
+}
+
+func (w *stubWritableFile) Seek(offset int64, whence int) (int64, error) {
+	switch whence {
+	case io.SeekStart:
+		w.offset = offset
+	case io.SeekCurrent:
+		w.offset += offset
+	case io.SeekEnd:
+		data := w.client.files[w.path]
+		w.offset = int64(len(data)) + offset
+	default:
+		return 0, fmt.Errorf("unsupported whence")
+	}
+	if w.offset < 0 {
+		w.offset = 0
+	}
+	return w.offset, nil
+}
+
+func (w *stubWritableFile) Close() error { return nil }
 
 type fileInfoStub struct {
 	name    string

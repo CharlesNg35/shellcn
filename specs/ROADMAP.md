@@ -275,9 +275,10 @@
 ### SFTP File Manager
 
 - [x] Implement SFTP channel management inside SSH driver (lazy init, pooled reuse)
-- [ ] Build REST handlers for file browse, download, upload, edit, delete, and metadata
+- [x] Build REST handlers for file browse, download, upload, edit, delete, and metadata
   - [x] Implement metadata lookup, inline read, and download endpoints
-- [ ] Stream large downloads/uploads efficiently with resumable support and realtime transfer events
+  - [x] Add resumable upload, save, rename, and delete APIs
+- [x] Stream large downloads/uploads efficiently with resumable support and realtime transfer events
 - [ ] Create frontend SFTP workspace (tabs, toolbar, queue panel, editor integration)
 - [ ] Wire Zustand/React Query stores for cached directory navigation and live transfer updates
 - [ ] Add drag/drop upload pipeline with resumable progress events
@@ -293,7 +294,7 @@
 - [ ] Integrate command palette (`Cmd/Ctrl+K`) and sidebar ↔ tab synchronization
 - [ ] Support “Open in new window” workflow preserving session state tokens
 
-### Shared Session Collaboration (Protocol-Wide)
+### Shared Session Collaboration (Protocol-Wide) - should work with ssh
 
 - [ ] Extend session data model to support participants, access modes, and chat
 - [ ] Deliver API for inviting/removing participants and toggling write access

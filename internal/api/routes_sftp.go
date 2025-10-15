@@ -16,4 +16,9 @@ func registerSFTPRoutes(api *gin.RouterGroup, handler *handlers.SFTPHandler) {
 	group.GET("/metadata", handler.Metadata)
 	group.GET("/file", handler.ReadFile)
 	group.GET("/download", handler.Download)
+	group.POST("/upload", handler.Upload)
+	group.PUT("/file", handler.SaveFile)
+	group.POST("/rename", handler.Rename)
+	group.DELETE("/file", handler.DeleteFile)
+	group.DELETE("/directory", handler.DeleteDirectory)
 }

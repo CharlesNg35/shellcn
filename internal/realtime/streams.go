@@ -5,4 +5,5 @@ const (
 	StreamNotifications      = "notifications"
 	StreamConnectionSessions = "connection.sessions"
 	StreamSSHTerminal        = "ssh.terminal"
+	StreamSFTPTransfers      = "ssh.sftp"
 )

@@ -45,11 +45,111 @@ func (w *sftpClientWrapper) Stat(path string) (os.FileInfo, error) {
 	return w.client.Stat(path)
 }
 
-func (w *sftpClientWrapper) Open(path string) (io.ReadCloser, error) {
+func (w *sftpClientWrapper) Open(path string) (shellsftp.ReadableFile, error) {
 	if w == nil || w.client == nil {
 		return nil, errors.New("ssh: sftp client unavailable")
 	}
-	return w.client.Open(path)
+	f, err := w.client.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	return &sftpFileAdapter{File: f}, nil
+}
+
+func (w *sftpClientWrapper) OpenFile(path string, flag int) (shellsftp.WritableFile, error) {
+	if w == nil || w.client == nil {
+		return nil, errors.New("ssh: sftp client unavailable")
+	}
+	f, err := w.client.OpenFile(path, flag)
+	if err != nil {
+		return nil, err
+	}
+	return &sftpFileAdapter{File: f}, nil
+}
+
+func (w *sftpClientWrapper) Create(path string) (shellsftp.WritableFile, error) {
+	if w == nil || w.client == nil {
+		return nil, errors.New("ssh: sftp client unavailable")
+	}
+	f, err := w.client.Create(path)
+	if err != nil {
+		return nil, err
+	}
+	return &sftpFileAdapter{File: f}, nil
+}
+
+func (w *sftpClientWrapper) MkdirAll(path string) error {
+	if w == nil || w.client == nil {
+		return errors.New("ssh: sftp client unavailable")
+	}
+	return w.client.MkdirAll(path)
+}
+
+func (w *sftpClientWrapper) Remove(path string) error {
+	if w == nil || w.client == nil {
+		return errors.New("ssh: sftp client unavailable")
+	}
+	return w.client.Remove(path)
+}
+
+func (w *sftpClientWrapper) RemoveDirectory(path string) error {
+	if w == nil || w.client == nil {
+		return errors.New("ssh: sftp client unavailable")
+	}
+	return w.client.RemoveDirectory(path)
+}
+
+func (w *sftpClientWrapper) Rename(oldPath, newPath string) error {
+	if w == nil || w.client == nil {
+		return errors.New("ssh: sftp client unavailable")
+	}
+	return w.client.Rename(oldPath, newPath)
+}
+
+func (w *sftpClientWrapper) Truncate(path string, size int64) error {
+	if w == nil || w.client == nil {
+		return errors.New("ssh: sftp client unavailable")
+	}
+	return w.client.Truncate(path, size)
+}
+
+type sftpFileAdapter struct {
+	File *pkgsftp.File
+}
+
+func (a *sftpFileAdapter) Read(p []byte) (int, error) {
+	if a == nil || a.File == nil {
+		return 0, errors.New("ssh: sftp file unavailable")
+	}
+	return a.File.Read(p)
+}
+
+func (a *sftpFileAdapter) Close() error {
+	if a == nil || a.File == nil {
+		return nil
+	}
+	return a.File.Close()
+}
+
+func (a *sftpFileAdapter) Seek(offset int64, whence int) (int64, error) {
+	if a == nil || a.File == nil {
+		return 0, errors.New("ssh: sftp file unavailable")
+	}
+	return a.File.Seek(offset, whence)
+}
+
+func (a *sftpFileAdapter) Write(p []byte) (int, error) {
+	if a == nil || a.File == nil {
+		return 0, errors.New("ssh: sftp file unavailable")
+	}
+	return a.File.Write(p)
+}
+
+func (a *sftpFileAdapter) WriteAt(p []byte, off int64) (int, error) {
+	if a == nil || a.File == nil {
+		return 0, errors.New("ssh: sftp file unavailable")
+	}
+	return a.File.WriteAt(p, off)
 }
 
 var (

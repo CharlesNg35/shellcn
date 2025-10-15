@@ -1106,7 +1106,75 @@ Response:
 }
 ```
 
-### 8.5 Vault API
+### 8.5 SFTP File Manager API
+
+Vector for file management inside active SSH sessions. All routes require the caller to be joined to the session (owner or participant) and to hold `protocol:ssh.sftp` along with the baseline `connection.launch` / session sharing permissions enforced by the lifecycle service.
+
+| Method | Path                                                        | Description                                                                 | Permission           | Handler                   |
+| ------ | ----------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------- | ------------------------- |
+| GET    | `/api/active-sessions/:id/sftp/list?path=/`                 | List directory entries at `path` (defaults to `.`).                         | `protocol:ssh.sftp`  | `SFTPHandler.List`        |
+| GET    | `/api/active-sessions/:id/sftp/metadata?path=/etc/passwd`   | Retrieve stat metadata (size, mode, timestamps) for a file or directory.   | `protocol:ssh.sftp`  | `SFTPHandler.Metadata`    |
+| GET    | `/api/active-sessions/:id/sftp/file?path=/etc/hosts`        | Inline-read a small file (≤5 MiB). Returns base64 by default.               | `protocol:ssh.sftp`  | `SFTPHandler.ReadFile`    |
+| GET    | `/api/active-sessions/:id/sftp/download?path=/var/log/app`  | Stream a file with support for HTTP range requests.                         | `protocol:ssh.sftp`  | `SFTPHandler.Download`    |
+| POST   | `/api/active-sessions/:id/sftp/upload?path=/tmp/app.log`    | Upload/resume file data (chunked ≤64 MiB) using `Upload-Offset` header.     | `protocol:ssh.sftp`* | `SFTPHandler.Upload`      |
+| PUT    | `/api/active-sessions/:id/sftp/file`                        | Replace file contents from JSON payload (base64 or UTF-8).                  | `protocol:ssh.sftp`  | `SFTPHandler.SaveFile`    |
+| POST   | `/api/active-sessions/:id/sftp/rename`                      | Rename or move a file/directory, optional overwrite semantics.             | `protocol:ssh.sftp`  | `SFTPHandler.Rename`      |
+| DELETE | `/api/active-sessions/:id/sftp/file?path=/tmp/app.log`      | Delete a single file (idempotent).                                          | `protocol:ssh.sftp`  | `SFTPHandler.DeleteFile`  |
+| DELETE | `/api/active-sessions/:id/sftp/directory?path=/tmp/cache`   | Delete directory; supports `?recursive=true` for capped-depth removal.      | `protocol:ssh.sftp`  | `SFTPHandler.DeleteDirectory` |
+
+\* Uploads implicitly require `protocol:ssh.sftp` and session write access. Owners can delegate write mode via the session sharing API.
+
+**Upload semantics:**
+
+- Clients send raw binary data with `Content-Type: application/octet-stream` and the next byte position in either the `Upload-Offset` header or `offset` query parameter. Absent offsets default to `0`.
+- Each chunk must be ≤64 MiB. The handler returns `Upload-Offset` with the next byte position on success.
+- Optional `create_parents=true` ensures intermediate directories are created; `append=true` continues writing at end-of-file.
+- Progress events (`sftp.transfer.*`) are broadcast on the realtime stream `ssh.sftp` containing `{session_id, path, transfer_id, bytes_transferred, total_bytes, status}` for UI consumption.
+
+**Download semantics:**
+
+- Supports `Range: bytes=<start>-<end>` headers. Successful partial responses return `206` with `Content-Range` and emit transfer events mirroring uploads.
+- Responses set `Accept-Ranges: bytes` and sanitise filenames via RFC 5987 encoding when emitting `Content-Disposition`.
+
+**Save file payload:**
+
+```http
+PUT /api/active-sessions/sess_01JF5Q8ZF2K/sftp/file
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "path": "/etc/profile.d/custom.sh",
+  "encoding": "base64",             // or "utf-8"
+  "create_parents": true,
+  "content": "IyEgL2Jpbi9iYXNo..."
+}
+```
+
+**Rename payload:**
+
+```http
+POST /api/active-sessions/sess_01JF5Q8ZF2K/sftp/rename
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "source": "/var/log/app.log",
+  "target": "/var/log/app-archived.log",
+  "overwrite": false
+}
+```
+
+**Realtime telemetry:** upload, download, save, and inline read operations trigger the following stream events on `ssh.sftp`:
+
+- `sftp.transfer.started`
+- `sftp.transfer.progress`
+- `sftp.transfer.completed`
+- `sftp.transfer.failed`
+
+Each payload includes `transfer_id`, `session_id`, `connection_id`, `user_id`, `direction` (`upload`, `download`, `save`), `path`, `bytes_transferred`, and optional `total_bytes` and `error` string.
+
+### 8.6 Vault API
 
 | Method | Path                               | Description                                                                   | Permission     | Handler                       |
 | ------ | ---------------------------------- | ----------------------------------------------------------------------------- | -------------- | ----------------------------- |
@@ -1150,7 +1218,7 @@ Content-Type: application/json
 
 Responses mirror `IdentityDTO`. Secrets are only included when `include=payload` is requested on the GET endpoint immediately after creation. Subsequent list operations return metadata only, ensuring vault contents remain encrypted unless explicitly requested.
 
-### 8.6 Notifications
+### 8.7 Notifications
 
 | Method | Path                            | Description                                      | Permission            | Handler                           |
 | ------ | ------------------------------- | ------------------------------------------------ | --------------------- | --------------------------------- |

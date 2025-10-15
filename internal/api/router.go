@@ -267,7 +267,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 		sftpChannelSvc, driverReg, checker, jwt,
 	)
 
-	sftpHandler := handlers.NewSFTPHandler(sftpChannelSvc, sessionLifecycleSvc, checker)
+	sftpHandler := handlers.NewSFTPHandler(sftpChannelSvc, sessionLifecycleSvc, checker, realtimeHub)
 	registerSFTPRoutes(api, sftpHandler)
 
 	realtimeHandler := handlers.NewRealtimeHandler(
@@ -277,6 +277,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 		realtime.StreamNotifications,
 		realtime.StreamConnectionSessions,
 		realtime.StreamSSHTerminal,
+		realtime.StreamSFTPTransfers,
 	)
 	r.GET("/ws", realtimeHandler.Stream)
 	r.GET("/ws/:stream", realtimeHandler.Stream)

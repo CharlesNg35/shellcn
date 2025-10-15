@@ -61,12 +61,46 @@ func (s *stubSFTPClient) Stat(path string) (os.FileInfo, error) {
 	return s.stat(path)
 }
 
-func (s *stubSFTPClient) Open(path string) (io.ReadCloser, error) {
-	if s == nil || s.open == nil {
-		return io.NopCloser(bytes.NewReader(nil)), nil
+func (s *stubSFTPClient) Open(path string) (shellsftp.ReadableFile, error) {
+	var reader io.ReadCloser
+	if s != nil && s.open != nil {
+		var err error
+		reader, err = s.open(path)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		reader = io.NopCloser(bytes.NewReader(nil))
 	}
-	return s.open(path)
+	return &stubReadableFile{ReadCloser: reader}, nil
 }
+
+func (s *stubSFTPClient) OpenFile(string, int) (shellsftp.WritableFile, error) {
+	return &stubWritableFile{}, nil
+}
+
+func (s *stubSFTPClient) Create(string) (shellsftp.WritableFile, error) {
+	return &stubWritableFile{}, nil
+}
+
+func (s *stubSFTPClient) MkdirAll(string) error        { return nil }
+func (s *stubSFTPClient) Remove(string) error          { return nil }
+func (s *stubSFTPClient) RemoveDirectory(string) error { return nil }
+func (s *stubSFTPClient) Rename(string, string) error  { return nil }
+func (s *stubSFTPClient) Truncate(string, int64) error { return nil }
+
+type stubReadableFile struct {
+	io.ReadCloser
+}
+
+func (s *stubReadableFile) Seek(offset int64, whence int) (int64, error) { return offset, nil }
+
+type stubWritableFile struct{}
+
+func (s *stubWritableFile) Close() error                                 { return nil }
+func (s *stubWritableFile) Write(p []byte) (int, error)                  { return len(p), nil }
+func (s *stubWritableFile) WriteAt(p []byte, off int64) (int, error)     { return len(p), nil }
+func (s *stubWritableFile) Seek(offset int64, whence int) (int64, error) { return offset, nil }
 
 func TestSFTPChannelService_AttachAndBorrow(t *testing.T) {
 	svc := NewSFTPChannelService()
