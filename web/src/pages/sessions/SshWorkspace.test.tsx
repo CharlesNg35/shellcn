@@ -95,6 +95,41 @@ describe('SshWorkspace page', () => {
     expect(sftpMock).toHaveBeenCalled()
   })
 
+  it('allows selecting layout columns and persists selection', () => {
+    mockUseActiveConnections.mockReturnValue({
+      data: [
+        {
+          id: 'sess-1',
+          connection_id: 'conn-1',
+          connection_name: 'Primary Server',
+          user_id: 'usr-1',
+          user_name: 'Alice',
+          protocol_id: 'ssh',
+          started_at: '2024-01-01T00:00:00Z',
+          last_seen_at: '2024-01-01T01:00:00Z',
+          participants: {},
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/active-sessions/sess-1']}>
+        <Routes>
+          <Route path="/active-sessions/:sessionId" element={<SshWorkspace />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    const grid = screen.getByTestId('terminal-grid')
+    expect(grid).toHaveAttribute('data-columns', '1')
+
+    const [threeColumnButton] = screen.getAllByRole('button', { name: '3 columns' })
+    fireEvent.click(threeColumnButton)
+    expect(grid).toHaveAttribute('data-columns', '3')
+  })
+
   it('renders fallback when session missing', () => {
     mockUseActiveConnections.mockReturnValue({
       data: [],

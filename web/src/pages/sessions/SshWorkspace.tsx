@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
-import { Loader2, X } from 'lucide-react'
+import { LayoutGrid, Loader2, X } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs'
@@ -12,6 +12,7 @@ import { selectSessionWorkspace, useSshWorkspaceTabsStore } from '@/store/ssh-se
 import type { WorkspaceTab } from '@/store/ssh-session-tabs-store'
 import { SftpWorkspace } from '@/components/workspace/SftpWorkspace'
 import { SshTerminal } from '@/components/workspace/SshTerminal'
+import { Button } from '@/components/ui/Button'
 
 function resolveDisplayName(user?: {
   first_name?: string | null
@@ -81,8 +82,10 @@ export function SshWorkspace() {
   const closeTab = useSshWorkspaceTabsStore((state) => state.closeTab)
   const setActiveTab = useSshWorkspaceTabsStore((state) => state.setActiveTab)
   const focusSession = useSshWorkspaceTabsStore((state) => state.focusSession)
+  const setLayoutColumns = useSshWorkspaceTabsStore((state) => state.setLayoutColumns)
 
   const workspace = useSshWorkspaceTabsStore(selectSessionWorkspace(sessionId))
+  const layoutColumns = workspace?.layoutColumns ?? 1
 
   useEffect(() => {
     if (!session) {
@@ -124,6 +127,14 @@ export function SshWorkspace() {
 
   const activeTabId = workspace?.activeTabId ?? ''
   const tabs = workspace?.tabs ?? []
+  const layoutOptions = [1, 2, 3, 4, 5]
+
+  const handleSelectColumns = (columns: number) => {
+    if (!sessionId) {
+      return
+    }
+    setLayoutColumns(sessionId, columns)
+  }
 
   if (!sessionId) {
     return (
@@ -233,18 +244,55 @@ export function SshWorkspace() {
               className="h-full w-full rounded-b-xl border-0 bg-transparent p-0"
               forceMount
             >
-              <div className="h-full w-full p-4">
-                {tab.type === 'terminal' ? (
-                  <SshTerminal sessionId={sessionId} />
-                ) : (
-                  <SftpWorkspace
-                    sessionId={sessionId}
-                    canWrite={canWrite}
-                    currentUserId={currentUserId}
-                    currentUserName={currentUserDisplayName}
-                    participants={session.participants}
-                  />
-                )}
+              <div className="flex h-full w-full flex-col gap-4 p-4">
+                <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <LayoutGrid className="h-4 w-4" aria-hidden />
+                    <span>Layout</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {layoutOptions.map((option) => {
+                      const isActive = option === layoutColumns
+                      return (
+                        <Button
+                          key={option}
+                          variant={isActive ? 'secondary' : 'ghost'}
+                          size="sm"
+                          onClick={() => handleSelectColumns(option)}
+                          aria-pressed={isActive}
+                          aria-label={`${option} column${option > 1 ? 's' : ''}`}
+                          title={`${option} column${option > 1 ? 's' : ''}`}
+                          className="min-w-8 px-0"
+                        >
+                          {option}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div
+                  className="grid h-full gap-4"
+                  style={{ gridTemplateColumns: `repeat(${layoutColumns}, minmax(0, 1fr))` }}
+                  data-columns={layoutColumns}
+                  data-testid={tab.type === 'terminal' ? 'terminal-grid' : undefined}
+                >
+                  {tab.type === 'terminal' ? (
+                    <div className="col-span-full h-full">
+                      <SshTerminal sessionId={sessionId} />
+                    </div>
+                  ) : (
+                    <div className="col-span-full h-full">
+                      <SftpWorkspace
+                        sessionId={sessionId}
+                        canWrite={canWrite}
+                        currentUserId={currentUserId}
+                        currentUserName={currentUserDisplayName}
+                        participants={session.participants}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             </TabsContent>
           ))}
