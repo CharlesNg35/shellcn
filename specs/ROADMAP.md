@@ -276,6 +276,7 @@
 
 - [x] Implement SFTP channel management inside SSH driver (lazy init, pooled reuse)
 - [ ] Build REST handlers for file browse, download, upload, edit, delete, and metadata
+  - [x] Implement metadata lookup, inline read, and download endpoints
 - [ ] Stream large downloads/uploads efficiently with resumable support and realtime transfer events
 - [ ] Create frontend SFTP workspace (tabs, toolbar, queue panel, editor integration)
 - [ ] Wire Zustand/React Query stores for cached directory navigation and live transfer updates

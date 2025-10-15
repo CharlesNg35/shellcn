@@ -1,7 +1,9 @@
 package services
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"os"
 	"testing"
 
@@ -42,6 +44,7 @@ func (s *stubSFTPProvider) AcquireSFTP() (shellsftp.Client, func() error, error)
 type stubSFTPClient struct {
 	readDir func(string) ([]os.FileInfo, error)
 	stat    func(string) (os.FileInfo, error)
+	open    func(string) (io.ReadCloser, error)
 }
 
 func (s *stubSFTPClient) ReadDir(path string) ([]os.FileInfo, error) {
@@ -56,6 +59,13 @@ func (s *stubSFTPClient) Stat(path string) (os.FileInfo, error) {
 		return nil, nil
 	}
 	return s.stat(path)
+}
+
+func (s *stubSFTPClient) Open(path string) (io.ReadCloser, error) {
+	if s == nil || s.open == nil {
+		return io.NopCloser(bytes.NewReader(nil)), nil
+	}
+	return s.open(path)
 }
 
 func TestSFTPChannelService_AttachAndBorrow(t *testing.T) {

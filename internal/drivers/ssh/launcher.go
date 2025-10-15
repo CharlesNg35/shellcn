@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,31 @@ const (
 	defaultTermWidth    = 80
 	defaultDialTimeout  = 10 * time.Second
 )
+
+type sftpClientWrapper struct {
+	client *pkgsftp.Client
+}
+
+func (w *sftpClientWrapper) ReadDir(path string) ([]os.FileInfo, error) {
+	if w == nil || w.client == nil {
+		return nil, errors.New("ssh: sftp client unavailable")
+	}
+	return w.client.ReadDir(path)
+}
+
+func (w *sftpClientWrapper) Stat(path string) (os.FileInfo, error) {
+	if w == nil || w.client == nil {
+		return nil, errors.New("ssh: sftp client unavailable")
+	}
+	return w.client.Stat(path)
+}
+
+func (w *sftpClientWrapper) Open(path string) (io.ReadCloser, error) {
+	if w == nil || w.client == nil {
+		return nil, errors.New("ssh: sftp client unavailable")
+	}
+	return w.client.Open(path)
+}
 
 var (
 	_ drivers.SessionHandle = (*Handle)(nil)
@@ -134,7 +160,7 @@ func (h *Handle) AcquireSFTP() (shellsftp.Client, func() error, error) {
 	}
 
 	h.sftpUsers++
-	acquired := h.sftpClient
+	acquired := &sftpClientWrapper{client: h.sftpClient}
 	released := false
 
 	release := func() error {

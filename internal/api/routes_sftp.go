@@ -13,4 +13,7 @@ func registerSFTPRoutes(api *gin.RouterGroup, handler *handlers.SFTPHandler) {
 
 	group := api.Group("/active-sessions/:sessionID/sftp")
 	group.GET("/list", handler.List)
+	group.GET("/metadata", handler.Metadata)
+	group.GET("/file", handler.ReadFile)
+	group.GET("/download", handler.Download)
 }

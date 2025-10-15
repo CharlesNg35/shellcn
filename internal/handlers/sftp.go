@@ -2,8 +2,12 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	stdpath "path"
 	"sort"
@@ -50,50 +54,12 @@ func NewSFTPHandler(channels sftpChannelBorrower, lifecycle sessionAuthorizer, c
 	}
 }
 
+const maxInlineFileBytes = 5 * 1024 * 1024
+
 // List enumerates entries within the requested directory path.
 func (h *SFTPHandler) List(c *gin.Context) {
-	if h == nil || h.channels == nil || h.lifecycle == nil {
-		response.Error(c, apperrors.ErrNotFound)
-		return
-	}
-
-	sessionID := strings.TrimSpace(c.Param("sessionID"))
-	if sessionID == "" {
-		response.Error(c, apperrors.NewBadRequest("session id is required"))
-		return
-	}
-
-	userID := strings.TrimSpace(c.GetString(middleware.CtxUserIDKey))
-	if userID == "" {
-		response.Error(c, apperrors.ErrUnauthorized)
-		return
-	}
-
-	session, err := h.lifecycle.AuthorizeSessionAccess(c.Request.Context(), sessionID, userID)
-	if err != nil {
-		h.handleLifecycleError(c, err)
-		return
-	}
-	if session.ClosedAt != nil {
-		response.Error(c, apperrors.NewBadRequest("session is no longer active"))
-		return
-	}
-
-	if h.checker != nil {
-		allowed, checkErr := h.checker.CheckResource(c.Request.Context(), userID, "connection", session.ConnectionID, "protocol:ssh.sftp")
-		if checkErr != nil {
-			response.Error(c, apperrors.Wrap(checkErr, "sftp permission check"))
-			return
-		}
-		if !allowed {
-			response.Error(c, apperrors.ErrForbidden)
-			return
-		}
-	}
-
-	client, release, err := h.channels.Borrow(sessionID)
-	if err != nil {
-		h.handleBorrowError(c, err)
+	client, release, _, _, ok := h.borrowClient(c)
+	if !ok {
 		return
 	}
 	defer release()
@@ -129,6 +95,173 @@ func (h *SFTPHandler) List(c *gin.Context) {
 		Path:    cleanPath,
 		Entries: dtos,
 	})
+}
+
+// Metadata returns stat information for a single file or directory.
+func (h *SFTPHandler) Metadata(c *gin.Context) {
+	client, release, _, _, ok := h.borrowClient(c)
+	if !ok {
+		return
+	}
+	defer release()
+
+	cleanPath, err := sanitizeSFTPPath(c.Query("path"))
+	if err != nil {
+		response.Error(c, apperrors.NewBadRequest(err.Error()))
+		return
+	}
+
+	info, err := client.Stat(cleanPath)
+	if err != nil {
+		response.Error(c, mapSFTPError(err))
+		return
+	}
+
+	entry := toSFTPEntryDTO(stdpath.Dir(cleanPath), info)
+	response.Success(c, http.StatusOK, entry)
+}
+
+// ReadFile fetches file contents for inline editing subject to a size cap.
+func (h *SFTPHandler) ReadFile(c *gin.Context) {
+	client, release, _, _, ok := h.borrowClient(c)
+	if !ok {
+		return
+	}
+	defer release()
+
+	cleanPath, err := sanitizeSFTPPath(c.Query("path"))
+	if err != nil {
+		response.Error(c, apperrors.NewBadRequest(err.Error()))
+		return
+	}
+
+	info, err := client.Stat(cleanPath)
+	if err != nil {
+		response.Error(c, mapSFTPError(err))
+		return
+	}
+	if info.IsDir() {
+		response.Error(c, apperrors.NewBadRequest("requested path is a directory"))
+		return
+	}
+	if info.Size() > maxInlineFileBytes {
+		response.Error(c, apperrors.New("sftp.file_too_large", fmt.Sprintf("file exceeds %d bytes inline limit", maxInlineFileBytes), http.StatusRequestEntityTooLarge))
+		return
+	}
+
+	reader, err := client.Open(cleanPath)
+	if err != nil {
+		response.Error(c, mapSFTPError(err))
+		return
+	}
+	defer reader.Close()
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		response.Error(c, apperrors.Wrap(err, "read sftp file"))
+		return
+	}
+
+	payload := sftpFileContentResponse{
+		Entry:    toSFTPEntryDTO(stdpath.Dir(cleanPath), info),
+		Encoding: "base64",
+		Content:  base64.StdEncoding.EncodeToString(data),
+	}
+
+	response.Success(c, http.StatusOK, payload)
+}
+
+// Download streams the requested file to the caller.
+func (h *SFTPHandler) Download(c *gin.Context) {
+	client, release, _, _, ok := h.borrowClient(c)
+	if !ok {
+		return
+	}
+	defer release()
+
+	cleanPath, err := sanitizeSFTPPath(c.Query("path"))
+	if err != nil {
+		response.Error(c, apperrors.NewBadRequest(err.Error()))
+		return
+	}
+
+	info, err := client.Stat(cleanPath)
+	if err != nil {
+		response.Error(c, mapSFTPError(err))
+		return
+	}
+	if info.IsDir() {
+		response.Error(c, apperrors.NewBadRequest("requested path is a directory"))
+		return
+	}
+
+	reader, err := client.Open(cleanPath)
+	if err != nil {
+		response.Error(c, mapSFTPError(err))
+		return
+	}
+	defer reader.Close()
+
+	filename := info.Name()
+	if filename == "" {
+		filename = "download"
+	}
+
+	setDownloadHeaders(c, filename, info.Size(), info.ModTime())
+
+	if _, err := io.Copy(c.Writer, reader); err != nil {
+		// The response has already started; best effort log via Gin context.
+		c.Error(fmt.Errorf("sftp download copy: %w", err)) //nolint:errcheck // nothing to do if logging fails.
+	}
+}
+
+func (h *SFTPHandler) borrowClient(c *gin.Context) (shellsftp.Client, func() error, *models.ConnectionSession, string, bool) {
+	if h == nil || h.channels == nil || h.lifecycle == nil {
+		response.Error(c, apperrors.ErrNotFound)
+		return nil, nil, nil, "", false
+	}
+
+	sessionID := strings.TrimSpace(c.Param("sessionID"))
+	if sessionID == "" {
+		response.Error(c, apperrors.NewBadRequest("session id is required"))
+		return nil, nil, nil, "", false
+	}
+
+	userID := strings.TrimSpace(c.GetString(middleware.CtxUserIDKey))
+	if userID == "" {
+		response.Error(c, apperrors.ErrUnauthorized)
+		return nil, nil, nil, "", false
+	}
+
+	session, err := h.lifecycle.AuthorizeSessionAccess(c.Request.Context(), sessionID, userID)
+	if err != nil {
+		h.handleLifecycleError(c, err)
+		return nil, nil, nil, "", false
+	}
+	if session.ClosedAt != nil {
+		response.Error(c, apperrors.NewBadRequest("session is no longer active"))
+		return nil, nil, nil, "", false
+	}
+
+	if h.checker != nil {
+		allowed, checkErr := h.checker.CheckResource(c.Request.Context(), userID, "connection", session.ConnectionID, "protocol:ssh.sftp")
+		if checkErr != nil {
+			response.Error(c, apperrors.Wrap(checkErr, "sftp permission check"))
+			return nil, nil, nil, "", false
+		}
+		if !allowed {
+			response.Error(c, apperrors.ErrForbidden)
+			return nil, nil, nil, "", false
+		}
+	}
+
+	client, release, err := h.channels.Borrow(sessionID)
+	if err != nil {
+		h.handleBorrowError(c, err)
+		return nil, nil, nil, "", false
+	}
+
+	return client, release, session, userID, true
 }
 
 func (h *SFTPHandler) handleLifecycleError(c *gin.Context, err error) {
@@ -224,6 +357,12 @@ func toSFTPEntryDTO(base string, info os.FileInfo) sftpEntryDTO {
 	}
 }
 
+type sftpFileContentResponse struct {
+	Entry    sftpEntryDTO `json:"entry"`
+	Encoding string       `json:"encoding"`
+	Content  string       `json:"content"`
+}
+
 func mapSFTPError(err error) error {
 	if err == nil {
 		return nil
@@ -246,4 +385,15 @@ func mapSFTPError(err error) error {
 		return apperrors.ErrForbidden
 	}
 	return apperrors.Wrap(err, "sftp operation failed")
+}
+
+func setDownloadHeaders(c *gin.Context, filename string, size int64, modTime time.Time) {
+	quoted := url.PathEscape(filename)
+	disposition := fmt.Sprintf("attachment; filename*=UTF-8''%s", quoted)
+	c.Header("Content-Disposition", disposition)
+	c.Header("Content-Type", "application/octet-stream")
+	c.Header("Content-Length", fmt.Sprintf("%d", size))
+	if !modTime.IsZero() {
+		c.Header("Last-Modified", modTime.UTC().Format(http.TimeFormat))
+	}
 }
