@@ -288,6 +288,8 @@
 ### SSH Workspace UI
 
 - [ ] Build `/active-sessions/:sessionId` workspace with tabbed sessions, SFTP tab, and per-session splitter layouts
+  - [x] Implement workspace route with terminal + SFTP tabs backed by shared Zustand store
+  - [ ] Add splitter layout controls and persist per-session column selections
 - [ ] Implement `layout-grid` splitter dropdown with 1–5 column support and persisted pane configs
 - [ ] Add toolbar actions (Snippets, File Manager, Full Screen) with permissions + analytics
 - [ ] Render bottom bar with zoom/search, latency, recording, and transfer indicators
