@@ -1,26 +1,27 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import SshWorkspaceTabsBar from '@/components/workspace/ssh/SshWorkspaceTabsBar'
 import type { WorkspaceTab } from '@/store/ssh-session-tabs-store'
 
 vi.mock('framer-motion', () => ({
   Reorder: {
-    Group: ({ children }: { children: any }) => <div>{children}</div>,
+    Group: ({ children }: { children: ReactNode }) => <div>{children}</div>,
     Item: ({
       children,
       onClick,
       'data-testid': dataTestId,
     }: {
-      children: any
+      children: ReactNode
       onClick?: () => void
       'data-testid'?: string
     }) => (
-      <button type="button" data-testid={dataTestId} onClick={onClick}>
+      <div data-testid={dataTestId} onClick={onClick} role="presentation">
         {children}
-      </button>
+      </div>
     ),
   },
-  AnimatePresence: ({ children }: { children: any }) => <>{children}</>,
+  AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
   motion: { button: 'button' },
 }))
 

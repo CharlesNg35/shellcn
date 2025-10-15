@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -77,18 +78,30 @@ const mockCommandPalette = vi.hoisted(() => ({
   paletteSessions: [],
 }))
 
+type MockTabsStoreState = typeof mockTabsStore.state & {
+  openSession: typeof mockTabsStore.openSession
+  ensureTab: typeof mockTabsStore.ensureTab
+  closeTab: typeof mockTabsStore.closeTab
+  reorderTabs: typeof mockTabsStore.reorderTabs
+  setActiveTab: typeof mockTabsStore.setActiveTab
+  setLayoutColumns: typeof mockTabsStore.setLayoutColumns
+  setFullscreen: typeof mockTabsStore.setFullscreen
+}
+
 vi.mock('@/store/ssh-session-tabs-store', () => {
-  const useSshWorkspaceTabsStore = (selector: (state: any) => any) =>
-    selector({
-      ...mockTabsStore.state,
-      openSession: mockTabsStore.openSession,
-      ensureTab: mockTabsStore.ensureTab,
-      closeTab: mockTabsStore.closeTab,
-      reorderTabs: mockTabsStore.reorderTabs,
-      setActiveTab: mockTabsStore.setActiveTab,
-      setLayoutColumns: mockTabsStore.setLayoutColumns,
-      setFullscreen: mockTabsStore.setFullscreen,
-    })
+  const composeState = (): MockTabsStoreState => ({
+    ...mockTabsStore.state,
+    openSession: mockTabsStore.openSession,
+    ensureTab: mockTabsStore.ensureTab,
+    closeTab: mockTabsStore.closeTab,
+    reorderTabs: mockTabsStore.reorderTabs,
+    setActiveTab: mockTabsStore.setActiveTab,
+    setLayoutColumns: mockTabsStore.setLayoutColumns,
+    setFullscreen: mockTabsStore.setFullscreen,
+  })
+
+  const useSshWorkspaceTabsStore = <T,>(selector: (state: MockTabsStoreState) => T): T =>
+    selector(composeState())
 
   useSshWorkspaceTabsStore.getState = () => ({
     ...mockTabsStore.state,
@@ -108,11 +121,32 @@ vi.mock('@/store/ssh-session-tabs-store', () => {
   }
 })
 
-vi.mock('@/store/ssh-workspace-store', () => ({
-  useSshWorkspaceStore: (selector: (state: any) => any) =>
-    selector({ sessions: { 'sess-1': { transfers: {}, transferOrder: [] } } }),
-  resetSshWorkspaceStore: vi.fn(),
-}))
+type MockWorkspaceStoreState = {
+  sessions: Record<
+    string,
+    {
+      transfers: Record<string, unknown>
+      transferOrder: string[]
+    }
+  >
+}
+
+vi.mock('@/store/ssh-workspace-store', () => {
+  const state: MockWorkspaceStoreState = {
+    sessions: {
+      'sess-1': {
+        transfers: {},
+        transferOrder: [],
+      },
+    },
+  }
+  const useSshWorkspaceStore = <T,>(selector: (mockState: MockWorkspaceStoreState) => T): T =>
+    selector(state)
+  return {
+    useSshWorkspaceStore,
+    resetSshWorkspaceStore: vi.fn(),
+  }
+})
 
 vi.mock('@/pages/sessions/ssh-workspace/useActiveSshSession', () => ({
   useActiveSshSession: () => ({
@@ -188,22 +222,22 @@ vi.mock('@/pages/sessions/ssh-workspace/useWorkspaceTelemetry', () => ({
 
 vi.mock('framer-motion', () => ({
   Reorder: {
-    Group: ({ children }: { children: any }) => <div>{children}</div>,
+    Group: ({ children }: { children: ReactNode }) => <div>{children}</div>,
     Item: ({
       children,
       onClick,
       'data-testid': dataTestId,
     }: {
-      children: any
+      children: ReactNode
       onClick?: () => void
       'data-testid'?: string
     }) => (
-      <button type="button" data-testid={dataTestId} onClick={onClick}>
+      <div data-testid={dataTestId} onClick={onClick} role="presentation">
         {children}
-      </button>
+      </div>
     ),
   },
-  AnimatePresence: ({ children }: { children: any }) => <>{children}</>,
+  AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
   motion: { button: 'button' },
 }))
 
