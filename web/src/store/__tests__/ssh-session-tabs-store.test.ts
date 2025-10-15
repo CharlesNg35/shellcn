@@ -140,4 +140,48 @@ describe('ssh workspace tabs store', () => {
     expect(state.orderedSessionIds).not.toContain(SESSION_ID)
     expect(state.activeSessionId).toBe('sess-999')
   })
+
+  it('reorders tabs and persists order to localStorage', () => {
+    const store = useSshWorkspaceTabsStore.getState()
+    const session = store.openSession({
+      sessionId: SESSION_ID,
+      connectionId: CONNECTION_ID,
+    })
+    const terminalId = session.tabs[0]?.id ?? ''
+    const sftpTab = store.ensureTab(SESSION_ID, 'sftp', { title: 'Files', closable: true })
+
+    store.reorderTabs(SESSION_ID, [sftpTab.id, terminalId])
+
+    const reordered = useSshWorkspaceTabsStore.getState().sessions[SESSION_ID]?.tabs ?? []
+    expect(reordered.map((tab) => tab.id)).toEqual([sftpTab.id, terminalId])
+    const storedOrder = window.localStorage.getItem('sshWorkspace.tabOrder.sess-123')
+    expect(storedOrder).toBeTruthy()
+
+    resetSshWorkspaceTabsStore()
+    const reopened = useSshWorkspaceTabsStore.getState().openSession({
+      sessionId: SESSION_ID,
+      connectionId: CONNECTION_ID,
+    })
+    expect(reopened.tabs[0]?.id).toBe(terminalId)
+    const withSftp = useSshWorkspaceTabsStore.getState().ensureTab(SESSION_ID, 'sftp', {
+      title: 'Files',
+      closable: true,
+    })
+    const reorderedAfterEnsure =
+      useSshWorkspaceTabsStore.getState().sessions[SESSION_ID]?.tabs ?? []
+    expect(reorderedAfterEnsure.map((tab) => tab.id)).toEqual([withSftp.id, terminalId])
+  })
+
+  it('clears stored tab order on session close', () => {
+    const store = useSshWorkspaceTabsStore.getState()
+    store.openSession({ sessionId: SESSION_ID, connectionId: CONNECTION_ID })
+    const sftpTab = store.ensureTab(SESSION_ID, 'sftp', { title: 'Files', closable: true })
+    const terminalId = `${SESSION_ID}:terminal`
+    store.reorderTabs(SESSION_ID, [sftpTab.id, terminalId])
+
+    expect(window.localStorage.getItem('sshWorkspace.tabOrder.sess-123')).toBeTruthy()
+
+    store.closeSession(SESSION_ID)
+    expect(window.localStorage.getItem('sshWorkspace.tabOrder.sess-123')).toBeNull()
+  })
 })

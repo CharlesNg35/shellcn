@@ -59,6 +59,7 @@ interface SshWorkspaceStore {
     options?: EnsureTabOptions
   ) => WorkspaceTab
   closeTab: (sessionId: string, tabId: string) => void
+  reorderTabs: (sessionId: string, orderedTabIds: string[]) => void
   setActiveTab: (sessionId: string, tabId: string) => void
   updateTabMeta: (sessionId: string, tabId: string, meta: WorkspaceTabMeta) => void
   setLayoutColumns: (sessionId: string, columns: number) => void
@@ -78,6 +79,76 @@ function normaliseColumns(value: number) {
     return 5
   }
   return Math.floor(value)
+}
+
+const TAB_ORDER_KEY_PREFIX = 'sshWorkspace.tabOrder.'
+
+function getTabOrderKey(sessionId: string) {
+  return `${TAB_ORDER_KEY_PREFIX}${sessionId}`
+}
+
+function safeWindowStorage() {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return undefined
+  }
+  return window.localStorage
+}
+
+function loadTabOrder(sessionId: string): string[] {
+  const storage = safeWindowStorage()
+  if (!storage) {
+    return []
+  }
+  try {
+    const raw = storage.getItem(getTabOrderKey(sessionId))
+    if (!raw) {
+      return []
+    }
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function persistTabOrder(sessionId: string, order: string[]) {
+  const storage = safeWindowStorage()
+  if (!storage) {
+    return
+  }
+  try {
+    storage.setItem(getTabOrderKey(sessionId), JSON.stringify(order))
+  } catch {
+    // ignore persistence errors in storage-restricted environments
+  }
+}
+
+function clearTabOrder(sessionId: string) {
+  const storage = safeWindowStorage()
+  if (!storage) {
+    return
+  }
+  storage.removeItem(getTabOrderKey(sessionId))
+}
+
+function applyTabOrder(tabs: WorkspaceTab[], order: string[]): WorkspaceTab[] {
+  if (!order.length) {
+    return tabs
+  }
+  const orderMap = new Map<string, number>()
+  order.forEach((id, index) => {
+    if (!orderMap.has(id)) {
+      orderMap.set(id, index)
+    }
+  })
+  return [...tabs].sort((a, b) => {
+    const indexA = orderMap.has(a.id) ? orderMap.get(a.id)! : Number.MAX_SAFE_INTEGER
+    const indexB = orderMap.has(b.id) ? orderMap.get(b.id)! : Number.MAX_SAFE_INTEGER
+    if (indexA === indexB) {
+      return tabs.findIndex((tab) => tab.id === a.id) - tabs.findIndex((tab) => tab.id === b.id)
+    }
+    return indexA - indexB
+  })
 }
 
 export const useSshWorkspaceTabsStore = create<SshWorkspaceStore>()((set, get) => ({
@@ -106,12 +177,17 @@ export const useSshWorkspaceTabsStore = create<SshWorkspaceStore>()((set, get) =
       meta: undefined,
     }
 
+    const savedOrder = loadTabOrder(trimmedSession)
+
+    const initialTabs = applyTabOrder([terminalTab], savedOrder)
+    const initialActive = initialTabs[0]?.id ?? terminalTabId
+
     const sessionState: SessionWorkspaceState = {
       sessionId: trimmedSession,
       connectionId: trimmedConnection,
       connectionName,
-      tabs: [terminalTab],
-      activeTabId: terminalTabId,
+      tabs: initialTabs,
+      activeTabId: initialActive,
       layoutColumns: DEFAULT_COLUMNS,
       isFullscreen: false,
       lastFocusedAt: Date.now(),
@@ -173,6 +249,7 @@ export const useSshWorkspaceTabsStore = create<SshWorkspaceStore>()((set, get) =
       const remainingIds = state.orderedSessionIds.filter((id) => id !== trimmed)
       const nextActive =
         state.activeSessionId === trimmed ? (remainingIds[0] ?? null) : state.activeSessionId
+      clearTabOrder(trimmed)
       return {
         ...state,
         sessions: nextSessions,
@@ -207,7 +284,11 @@ export const useSshWorkspaceTabsStore = create<SshWorkspaceStore>()((set, get) =
       meta: options?.meta,
     }
 
-    const nextTabs = [...session.tabs, tab]
+    const nextTabs = applyTabOrder([...session.tabs, tab], loadTabOrder(trimmed))
+    persistTabOrder(
+      trimmed,
+      nextTabs.map((item) => item.id)
+    )
 
     const nextSession: SessionWorkspaceState = {
       ...session,
@@ -241,6 +322,10 @@ export const useSshWorkspaceTabsStore = create<SshWorkspaceStore>()((set, get) =
         return state
       }
       const remainingTabs = session.tabs.filter((tab) => tab.id !== tabId)
+      persistTabOrder(
+        trimmed,
+        remainingTabs.map((tab) => tab.id)
+      )
       const nextActive =
         session.activeTabId === tabId
           ? (remainingTabs[0]?.id ?? session.activeTabId)
@@ -252,6 +337,37 @@ export const useSshWorkspaceTabsStore = create<SshWorkspaceStore>()((set, get) =
           [trimmed]: {
             ...session,
             tabs: remainingTabs,
+            activeTabId: nextActive,
+          },
+        },
+      }
+    })
+  },
+  reorderTabs: (sessionId, orderedTabIds) => {
+    const trimmed = sessionId.trim()
+    if (!trimmed || !Array.isArray(orderedTabIds) || orderedTabIds.length === 0) {
+      return
+    }
+    set((state) => {
+      const session = state.sessions[trimmed]
+      if (!session) {
+        return state
+      }
+      const nextTabs = applyTabOrder(session.tabs, orderedTabIds)
+      persistTabOrder(
+        trimmed,
+        nextTabs.map((tab) => tab.id)
+      )
+      const nextActive = nextTabs.some((tab) => tab.id === session.activeTabId)
+        ? session.activeTabId
+        : (nextTabs[0]?.id ?? session.activeTabId)
+      return {
+        ...state,
+        sessions: {
+          ...state.sessions,
+          [trimmed]: {
+            ...session,
+            tabs: nextTabs,
             activeTabId: nextActive,
           },
         },

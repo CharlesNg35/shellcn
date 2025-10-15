@@ -287,14 +287,14 @@
 
 ### SSH Workspace UI
 
-- [ ] Build `/active-sessions/:sessionId` workspace with tabbed sessions, SFTP tab, and per-session splitter layouts
+- [x] Build `/active-sessions/:sessionId` workspace with tabbed sessions, SFTP tab, and per-session splitter layouts
   - [x] Implement workspace route with terminal + SFTP tabs backed by shared Zustand store
   - [x] Add splitter layout controls and persist per-session column selections
-- [ ] Implement `layout-grid` splitter dropdown with 1–5 column support and persisted pane configs
-- [ ] Add toolbar actions (Snippets, File Manager, Full Screen) with permissions + analytics
-- [ ] Render bottom bar with zoom/search, latency, recording, and transfer indicators
-- [ ] Integrate command palette (`Cmd/Ctrl+K`) and sidebar ↔ tab synchronization
-- [ ] Support “Open in new window” workflow preserving session state tokens
+- [x] Implement `layout-grid` splitter dropdown with 1–5 column support and persisted pane configs
+- [x] Add toolbar actions (Snippets, File Manager, Full Screen) with permissions + analytics
+- [x] Render bottom bar with zoom/search, latency, recording, and transfer indicators
+- [x] Integrate command palette (`Cmd/Ctrl+K`) and sidebar ↔ tab synchronization
+- [x] Support “Open in new window” workflow preserving session state tokens
 
 ### Shared Session Collaboration (Protocol-Wide) - should work with ssh
 

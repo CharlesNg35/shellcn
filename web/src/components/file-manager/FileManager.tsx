@@ -211,9 +211,7 @@ export function FileManager({
       upsertTransfer(sessionId, { ...transfer, status: 'uploading' })
 
       try {
-        const result = await import('@/lib/api/sftp').then((module) =>
-          module.downloadSftpFile(sessionId, entry.path)
-        )
+        const result = await sftpApi.download(sessionId, entry.path)
         const url = URL.createObjectURL(result.data)
         const link = document.createElement('a')
         link.href = url
