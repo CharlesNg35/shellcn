@@ -1,20 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ArrowUp,
-  Download,
-  FileText,
-  Folder,
-  Home,
-  Loader2,
-  MoreVertical,
-  RefreshCcw,
-  Trash2,
-  Upload,
-} from 'lucide-react'
-import { format } from 'date-fns'
+import { ArrowUp, FileText, Folder, Home, Loader2, RefreshCcw, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { Checkbox } from '@/components/ui/Checkbox'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
@@ -31,6 +17,19 @@ import {
 import { useSftpTransfersStream } from '@/hooks/useSftpTransfersStream'
 import type { ActiveSessionParticipant } from '@/types/connections'
 import type { SftpEntry, SftpTransferRealtimeEvent } from '@/types/sftp'
+import {
+  displayPath,
+  extractNameFromPath,
+  normalizePath,
+  parentPath,
+  resolveChildPath,
+  resolveParticipantName,
+  sortEntries,
+} from './utils'
+import type { TransferItem } from './types'
+import { FileManagerToolbar } from './FileManagerToolbar'
+import { FileManagerTable } from './FileManagerTable'
+import { TransferSidebar } from './TransferSidebar'
 
 interface FileManagerProps {
   sessionId: string
@@ -40,119 +39,6 @@ interface FileManagerProps {
   currentUserId?: string
   currentUserName?: string
   participants?: Record<string, ActiveSessionParticipant>
-}
-
-type TransferStatus = 'pending' | 'uploading' | 'completed' | 'failed'
-
-interface TransferItem {
-  id: string
-  remoteId?: string
-  name: string
-  path: string
-  direction: string
-  size: number
-  uploaded: number
-  status: TransferStatus
-  startedAt: Date
-  completedAt?: Date
-  errorMessage?: string
-  totalBytes?: number
-  userId?: string
-  userName?: string
-}
-
-function normalizePath(path?: string): string {
-  const trimmed = path?.trim()
-  if (!trimmed || trimmed === '.' || trimmed === '/') {
-    return '.'
-  }
-  return trimmed.replace(/^\/+/, '').replace(/\/+$/, '')
-}
-
-function displayPath(path: string): string {
-  if (!path || path === '.' || path === '/') {
-    return '/'
-  }
-  return path.startsWith('/') ? path : `/${path}`
-}
-
-function resolveChildPath(basePath: string, name: string): string {
-  const safeName = name.replace(/^\//, '')
-  if (!basePath || basePath === '.' || basePath === '/') {
-    return safeName
-  }
-  return `${basePath.replace(/\/+$/, '')}/${safeName}`
-}
-
-function parentPath(path: string): string {
-  if (!path || path === '.' || path === '/') {
-    return '.'
-  }
-  const normalized = path.replace(/\/+$/, '')
-  const slashIndex = normalized.lastIndexOf('/')
-  if (slashIndex <= 0) {
-    return '.'
-  }
-  return normalized.slice(0, slashIndex)
-}
-
-function formatBytes(value: number): string {
-  if (!Number.isFinite(value)) {
-    return '—'
-  }
-  const absValue = Math.abs(value)
-  if (absValue < 1024) {
-    return `${value} B`
-  }
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let index = -1
-  let size = absValue
-  do {
-    size /= 1024
-    index += 1
-  } while (size >= 1024 && index < units.length - 1)
-  const formatted = `${value < 0 ? '-' : ''}${size.toFixed(size >= 10 ? 0 : 1)} ${units[index]}`
-  return formatted
-}
-
-function sortEntries(entries: SftpEntry[]): SftpEntry[] {
-  return [...entries].sort((a, b) => {
-    if (a.isDir && !b.isDir) {
-      return -1
-    }
-    if (!a.isDir && b.isDir) {
-      return 1
-    }
-    return a.name.localeCompare(b.name)
-  })
-}
-
-function extractNameFromPath(path: string): string {
-  if (!path) {
-    return ''
-  }
-  const cleaned = path.replace(/\/+$/, '')
-  const segments = cleaned.split('/')
-  return segments[segments.length - 1] || cleaned
-}
-
-function resolveParticipantName(
-  participants: Record<string, ActiveSessionParticipant> | undefined,
-  userId: string | undefined,
-  fallback?: string
-): string | undefined {
-  if (!userId) {
-    return fallback
-  }
-  const participant = participants?.[userId]
-  return participant?.user_name || fallback
-}
-
-function formatLabel(value?: string) {
-  if (!value) {
-    return ''
-  }
-  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 interface CreateTransferParams {
@@ -534,33 +420,37 @@ export function FileManager({
       }
     >
       <div className={cn('flex h-full flex-col gap-4', className)}>
-        <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={handleGoUp} disabled={currentPath === '.'}>
+        <FileManagerToolbar
+          isRootPath={currentPath === '.'}
+          isLoading={isLoading}
+          showHidden={showHidden}
+          onToggleHidden={(checked) => setShowHidden(checked)}
+          onNavigateUp={handleGoUp}
+          onNavigateHome={() => navigateTo('.')}
+          onRefresh={handleRefresh}
+          pathInput={pathInput}
+          onPathInputChange={(value) => setPathInput(value)}
+          onSubmitPath={handlePathSubmit}
+          navigateUpLabel={
+            <>
               <ArrowUp className="mr-2 h-4 w-4" aria-hidden />
               Up
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigateTo('.')}
-              disabled={currentPath === '.'}
-            >
+            </>
+          }
+          navigateHomeLabel={
+            <>
               <Home className="mr-2 h-4 w-4" aria-hidden />
               Home
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={isLoading}>
+            </>
+          }
+          refreshLabel={
+            <>
               <RefreshCcw className="mr-2 h-4 w-4" aria-hidden />
               Refresh
-            </Button>
-            <div className="ml-auto flex items-center gap-2">
-              <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Checkbox
-                  checked={showHidden}
-                  onCheckedChange={(checked) => setShowHidden(Boolean(checked))}
-                />
-                Show hidden files
-              </label>
+            </>
+          }
+          uploadControl={
+            <>
               <PermissionGuard permission={PERMISSIONS.PROTOCOL.SSH.SFTP}>
                 <Button
                   variant="default"
@@ -585,27 +475,9 @@ export function FileManager({
                 onChange={(event) => handleUploadFiles(event.target.files)}
                 disabled={!canWrite}
               />
-            </div>
-          </div>
-          <form className="flex items-center gap-3" onSubmit={handlePathSubmit}>
-            <label
-              className="text-xs font-semibold uppercase text-muted-foreground"
-              htmlFor="sftp-path"
-            >
-              Current path
-            </label>
-            <Input
-              id="sftp-path"
-              value={pathInput}
-              onChange={(event) => setPathInput(event.target.value)}
-              className="flex-1"
-              autoComplete="off"
-            />
-            <Button type="submit" size="sm" variant="secondary">
-              Go
-            </Button>
-          </form>
-        </div>
+            </>
+          }
+        />
 
         <div className="flex flex-1 gap-4 overflow-hidden">
           <Card className="flex-1 overflow-hidden">
@@ -640,159 +512,20 @@ export function FileManager({
                     className="m-6 min-h-[240px]"
                   />
                 ) : (
-                  <table className="min-w-full text-sm">
-                    <thead className="sticky top-0 z-10 bg-muted/70 backdrop-blur">
-                      <tr className="text-left">
-                        <th className="px-4 py-2 font-medium text-muted-foreground">Name</th>
-                        <th className="px-4 py-2 font-medium text-muted-foreground">Size</th>
-                        <th className="px-4 py-2 font-medium text-muted-foreground">Modified</th>
-                        <th className="px-4 py-2 font-medium text-muted-foreground">Mode</th>
-                        <th className="px-4 py-2 text-right font-medium text-muted-foreground">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {entries.map((entry) => (
-                        <tr
-                          key={entry.path}
-                          className="group cursor-pointer border-b border-border/80 hover:bg-muted/40"
-                          onDoubleClick={() => handleEntryActivate(entry)}
-                        >
-                          <td className="flex items-center gap-3 px-4 py-2">
-                            {renderEntryIcon(entry)}
-                            <div className="flex flex-col">
-                              <span className="font-medium text-foreground">{entry.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {displayPath(entry.path)}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">
-                            {entry.isDir ? '—' : formatBytes(entry.size)}
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">
-                            {format(entry.modifiedAt, 'yyyy-MM-dd HH:mm')}
-                          </td>
-                          <td className="px-4 py-2 text-muted-foreground">{entry.mode}</td>
-                          <td className="px-4 py-2">
-                            <div className="flex justify-end gap-1 opacity-0 transition group-hover:opacity-100">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="Download"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  void handleDownload(entry)
-                                }}
-                                disabled={entry.isDir}
-                              >
-                                <Download className="h-4 w-4" aria-hidden />
-                              </Button>
-                              {canWrite && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label="Delete"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    void handleDeleteEntry(entry)
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4 text-destructive" aria-hidden />
-                                </Button>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="More actions"
-                                disabled
-                              >
-                                <MoreVertical
-                                  className="h-4 w-4 text-muted-foreground"
-                                  aria-hidden
-                                />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <FileManagerTable
+                    entries={entries}
+                    onActivate={handleEntryActivate}
+                    onDownload={handleDownload}
+                    onDelete={handleDeleteEntry}
+                    canWrite={canWrite}
+                    renderIcon={renderEntryIcon}
+                  />
                 )}
               </div>
             </div>
           </Card>
 
-          <aside className="w-full max-w-xs space-y-3 rounded-lg border border-border bg-card p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-muted-foreground">Transfers</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearCompletedTransfers}
-                disabled={!transfers.some((transfer) => transfer.status !== 'uploading')}
-              >
-                Clear completed
-              </Button>
-            </div>
-
-            {transfers.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border/70 p-4 text-xs text-muted-foreground">
-                No active transfers. Upload files to see progress here.
-              </div>
-            ) : (
-              <ul className="space-y-2 overflow-y-auto">
-                {transfers.map((transfer) => {
-                  const progress = transfer.size
-                    ? Math.min(transfer.uploaded / transfer.size, 1)
-                    : transfer.uploaded > 0
-                      ? 1
-                      : 0
-                  return (
-                    <li
-                      key={transfer.id}
-                      className="rounded-md border border-border/80 bg-background/80 p-3 shadow-sm"
-                    >
-                      <div className="flex items-center justify-between text-sm font-medium">
-                        <span className="truncate">{transfer.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatBytes(transfer.size)}
-                        </span>
-                      </div>
-                      <div className="mt-2 h-2 rounded-full bg-muted">
-                        <div
-                          className={cn('h-2 rounded-full bg-primary transition-all', {
-                            'bg-destructive': transfer.status === 'failed',
-                          })}
-                          style={{ width: `${progress * 100}%` }}
-                        />
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                            {formatLabel(transfer.direction)}
-                          </span>
-                          <span className="capitalize">{formatLabel(transfer.status)}</span>
-                          {transfer.userName && (
-                            <span className="text-muted-foreground/80">· {transfer.userName}</span>
-                          )}
-                        </div>
-                        <span>
-                          {transfer.uploaded === transfer.size && transfer.size > 0
-                            ? formatBytes(transfer.size)
-                            : `${formatBytes(transfer.uploaded)} / ${formatBytes(transfer.size)}`}
-                        </span>
-                      </div>
-                      {transfer.errorMessage && (
-                        <p className="mt-2 text-xs text-destructive">{transfer.errorMessage}</p>
-                      )}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-          </aside>
+          <TransferSidebar transfers={transfers} onClear={clearCompletedTransfers} />
         </div>
       </div>
     </PermissionGuard>
