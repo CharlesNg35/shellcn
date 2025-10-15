@@ -69,6 +69,16 @@ export const PERMISSIONS = {
     VIEW: 'notification.view',
     MANAGE: 'notification.manage',
   },
+  PROTOCOL: {
+    SSH: {
+      CONNECT: 'protocol:ssh.connect',
+      SFTP: 'protocol:ssh.sftp',
+      SHARE: 'protocol:ssh.share',
+      GRANT_WRITE: 'protocol:ssh.grant_write',
+      RECORD: 'protocol:ssh.record',
+      MANAGE_SNIPPETS: 'protocol:ssh.manage_snippets',
+    },
+  },
 } as const
 
 type PermissionTree = typeof PERMISSIONS
@@ -127,4 +137,10 @@ export const PERMISSION_IDS = [
   PERMISSIONS.SECURITY.AUDIT,
   PERMISSIONS.NOTIFICATION.VIEW,
   PERMISSIONS.NOTIFICATION.MANAGE,
+  PERMISSIONS.PROTOCOL.SSH.CONNECT,
+  PERMISSIONS.PROTOCOL.SSH.SFTP,
+  PERMISSIONS.PROTOCOL.SSH.SHARE,
+  PERMISSIONS.PROTOCOL.SSH.GRANT_WRITE,
+  PERMISSIONS.PROTOCOL.SSH.RECORD,
+  PERMISSIONS.PROTOCOL.SSH.MANAGE_SNIPPETS,
 ] as const satisfies ReadonlyArray<PermissionId>

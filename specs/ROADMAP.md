@@ -282,7 +282,7 @@
 - [ ] Create frontend SFTP workspace (tabs, toolbar, queue panel, editor integration)
 - [ ] Wire Zustand/React Query stores for cached directory navigation and live transfer updates
 - [ ] Add drag/drop upload pipeline with resumable progress events
-- [ ] Implement permission guard for SFTP interactions (`protocol:ssh.sftp`)
+- [x] Implement permission guard for SFTP interactions (`protocol:ssh.sftp`)
 - [ ] Write frontend + backend tests for file operations and path sanitization
 
 ### SSH Workspace UI
