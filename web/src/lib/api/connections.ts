@@ -8,6 +8,7 @@ import type {
   ConnectionShareSummary,
   ConnectionSharePrincipal,
   ConnectionProtocolSummary,
+  ConnectionSettings,
 } from '@/types/connections'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
@@ -109,6 +110,20 @@ function coerceObject<T extends Record<string, unknown>>(
     }
   }
   return value as T
+}
+
+function normaliseConnectionSettings(
+  value?: Record<string, unknown> | string | null
+): ConnectionSettings | undefined {
+  const settings = coerceObject<ConnectionSettings>(value)
+  if (!settings) {
+    return undefined
+  }
+  const normalised: ConnectionSettings = { ...settings }
+  if (Object.prototype.hasOwnProperty.call(settings, 'recording_enabled')) {
+    normalised.recording_enabled = Boolean(settings.recording_enabled)
+  }
+  return normalised
 }
 
 function transformTargets(targets?: ConnectionTargetResponse[]): ConnectionTarget[] {
@@ -256,7 +271,7 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
     owner_user_id: raw.owner_user_id ?? null,
     folder_id: raw.folder_id ?? null,
     metadata: coerceObject(raw.metadata),
-    settings: coerceObject(raw.settings),
+    settings: normaliseConnectionSettings(raw.settings),
     identity_id: raw.identity_id ?? null,
     last_used_at: raw.last_used_at ?? null,
     targets: transformTargets(raw.targets),

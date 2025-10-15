@@ -22,6 +22,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/monitoring"
+	"github.com/charlesng35/shellcn/internal/services"
 	"github.com/charlesng35/shellcn/pkg/crypto"
 	"github.com/charlesng35/shellcn/pkg/response"
 )
@@ -83,10 +84,15 @@ func NewEnv(t *testing.T) *Env {
 	require.NoError(t, err)
 	monitoring.SetModule(mon)
 
+	recorderStore, err := services.NewFilesystemRecorderStore(t.TempDir())
+	require.NoError(t, err)
+	recorderSvc, err := services.NewRecorderService(db, recorderStore)
+	require.NoError(t, err)
+
 	driverRegistry := drivers.NewRegistry()
 	router, err := api.NewRouter(
 		db, jwtSvc, cfg, driverRegistry,
-		sessionSvc, middleware.NewMemoryRateStore(), mon,
+		sessionSvc, middleware.NewMemoryRateStore(), mon, recorderSvc,
 	)
 	require.NoError(t, err)
 

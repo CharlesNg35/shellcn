@@ -21,6 +21,17 @@ vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({ hasPermission: () => true }),
 }))
 
+vi.mock('@/lib/api/protocol-settings', () => ({
+  fetchSSHProtocolSettings: vi.fn().mockResolvedValue({
+    recording: {
+      mode: 'optional',
+      storage: 'filesystem',
+      retention_days: 0,
+      require_consent: false,
+    },
+  }),
+}))
+
 vi.mock('@/components/ui/Select', () => {
   const SelectContent = Object.assign(
     ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -195,6 +206,7 @@ describe('ConnectionFormModal identity integration', () => {
       expect(mutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({
           identity_id: 'identity-1',
+          settings: expect.objectContaining({ recording_enabled: false }),
         })
       )
     })

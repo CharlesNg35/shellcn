@@ -26,6 +26,7 @@ import { useConnectionMutations } from '@/hooks/useConnectionMutations'
 import { ApiError, toApiError } from '@/lib/api/http'
 import { teamsApi } from '@/lib/api/teams'
 import type { ConnectionCreatePayload } from '@/lib/api/connections'
+import { fetchSSHProtocolSettings } from '@/lib/api/protocol-settings'
 import { usePermissions } from '@/hooks/usePermissions'
 import {
   CONNECTION_COLOR_OPTIONS,
@@ -81,11 +82,13 @@ export function ConnectionFormModal({
   const { create } = useConnectionMutations()
   const [formError, setFormError] = useState<ApiError | null>(null)
   const grantToggleInteractedRef = useRef(false)
+  const recordingDefaultAppliedRef = useRef(false)
   const [autoGrantTeamPermissions, setAutoGrantTeamPermissions] = useState(false)
   const { hasPermission } = usePermissions()
   const canCreateIdentity = hasPermission(PERMISSIONS.VAULT.CREATE)
   const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null)
   const [identityModalOpen, setIdentityModalOpen] = useState(false)
+  const [recordingOptIn, setRecordingOptIn] = useState(false)
 
   const iconOptions = useMemo(() => {
     return getIconOptionsForProtocol(protocol?.id, protocol?.category)
@@ -105,6 +108,13 @@ export function ConnectionFormModal({
       color: '',
     }
   }, [defaultIcon, teamId])
+
+  const { data: sshSettings, isLoading: sshSettingsLoading } = useQuery({
+    queryKey: ['protocol-settings', 'ssh'],
+    queryFn: fetchSSHProtocolSettings,
+    enabled: open && protocol?.id === 'ssh',
+    staleTime: 60_000,
+  })
 
   const {
     register,
@@ -126,6 +136,10 @@ export function ConnectionFormModal({
       grantToggleInteractedRef.current = false
       setAutoGrantTeamPermissions(false)
       setSelectedIdentityId(null)
+      recordingDefaultAppliedRef.current = false
+    } else {
+      setRecordingOptIn(false)
+      recordingDefaultAppliedRef.current = false
     }
   }, [defaultValues, open, reset])
 
@@ -194,6 +208,11 @@ export function ConnectionFormModal({
   const missingTeamPermissionIds = teamCapabilityAnalysis.missingPermissionIds
   const teamCapabilityWarnings = teamCapabilityAnalysis.messages
 
+  const recordingMode =
+    protocol?.id === 'ssh' ? (sshSettings?.recording.mode ?? 'optional') : undefined
+  const recordingRetentionDays =
+    protocol?.id === 'ssh' ? (sshSettings?.recording.retention_days ?? 0) : 0
+
   const handleAutoGrantToggle = (checked: boolean) => {
     grantToggleInteractedRef.current = true
     setAutoGrantTeamPermissions(checked)
@@ -217,6 +236,34 @@ export function ConnectionFormModal({
       setAutoGrantTeamPermissions(false)
     }
   }, [missingTeamPermissionIds.length])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    if (recordingDefaultAppliedRef.current) {
+      return
+    }
+    if (protocol?.id !== 'ssh') {
+      recordingDefaultAppliedRef.current = true
+      setRecordingOptIn(false)
+      return
+    }
+    const mode = sshSettings?.recording.mode
+    if (!mode) {
+      if (!sshSettingsLoading) {
+        recordingDefaultAppliedRef.current = true
+        setRecordingOptIn(false)
+      }
+      return
+    }
+    if (mode === 'forced') {
+      setRecordingOptIn(true)
+    } else {
+      setRecordingOptIn(false)
+    }
+    recordingDefaultAppliedRef.current = true
+  }, [open, protocol?.id, sshSettings?.recording.mode, sshSettingsLoading])
 
   useEffect(() => {
     if (!selectedIcon) {
@@ -258,6 +305,18 @@ export function ConnectionFormModal({
         team_id: denormalizeTeamValue(values.team_id),
         metadata: Object.keys(metadata).length ? metadata : undefined,
         identity_id: selectedIdentityId,
+      }
+
+      const settings: Record<string, unknown> = {}
+      if (protocol.id === 'ssh') {
+        if (recordingMode === 'forced') {
+          settings.recording_enabled = true
+        } else if (recordingMode === 'optional') {
+          settings.recording_enabled = recordingOptIn
+        }
+      }
+      if (Object.keys(settings).length > 0) {
+        payload.settings = settings
       }
 
       if (effectiveTeamId && autoGrantTeamPermissions && missingTeamPermissionIds.length > 0) {
@@ -503,6 +562,61 @@ export function ConnectionFormModal({
                 an existing credential or create a connection-scoped identity.
               </p>
             </div>
+
+            {protocol.id === 'ssh' ? (
+              <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4">
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">Session recording</p>
+                      <p className="text-xs text-muted-foreground">
+                        {recordingMode === 'forced'
+                          ? 'Recording is enforced for all SSH sessions.'
+                          : recordingMode === 'disabled'
+                            ? 'Administrators have disabled session recording for SSH.'
+                            : 'Enable capture so terminal activity from this connection can be reviewed later.'}
+                      </p>
+                    </div>
+                    {recordingMode === 'optional' ? (
+                      <label
+                        htmlFor="recording-enabled"
+                        className="flex cursor-pointer items-center gap-2 text-sm text-foreground"
+                      >
+                        <Checkbox
+                          id="recording-enabled"
+                          checked={recordingOptIn}
+                          onCheckedChange={(checked) => setRecordingOptIn(Boolean(checked))}
+                          disabled={sshSettingsLoading || isLoading}
+                        />
+                        <span>Record sessions launched from this connection</span>
+                      </label>
+                    ) : (
+                      <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
+                        {recordingMode === 'forced' ? 'Forced' : 'Disabled'}
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    {sshSettingsLoading
+                      ? 'Loading recording defaults…'
+                      : recordingMode === 'forced'
+                        ? 'All sessions launched from this connection will be captured automatically.'
+                        : recordingMode === 'disabled'
+                          ? 'Recording cannot be enabled unless administrators change the global policy.'
+                          : recordingOptIn
+                            ? 'Recording starts automatically and the playback will appear under Settings → Protocols.'
+                            : 'You can still enable recording after launching a session when policies allow it.'}
+                  </div>
+                  {recordingMode !== 'disabled' && recordingRetentionDays > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Recordings are retained for {recordingRetentionDays} day
+                      {recordingRetentionDays === 1 ? '' : 's'}.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
             <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-3 py-2">
               <p className="text-xs text-muted-foreground">

@@ -2,6 +2,9 @@ package maintenance
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -140,10 +143,46 @@ func TestCleanerRunOnce(t *testing.T) {
 		ExpiresAt: clock.Now().Add(-time.Hour),
 	}).Error)
 
+	recordingRoot := filepath.Join(t.TempDir(), "records")
+	recorderStore, err := services.NewFilesystemRecorderStore(recordingRoot)
+	require.NoError(t, err)
+	recorderSvc, err := services.NewRecorderService(db, recorderStore)
+	require.NoError(t, err)
+
+	expiredRetention := clock.Now().Add(-48 * time.Hour)
+	recordingPath := "expired.cast.gz"
+	require.NoError(t, os.WriteFile(filepath.Join(recordingRoot, recordingPath), []byte("payload"), 0o600))
+	require.NoError(t, db.Create(&models.Connection{
+		BaseModel:   models.BaseModel{ID: "conn-cleanup"},
+		Name:        "Cleanup",
+		ProtocolID:  "ssh",
+		OwnerUserID: user.ID,
+	}).Error)
+	require.NoError(t, db.Create(&models.ConnectionSession{
+		BaseModel:       models.BaseModel{ID: "sess-cleanup"},
+		ConnectionID:    "conn-cleanup",
+		ProtocolID:      "ssh",
+		OwnerUserID:     user.ID,
+		Status:          services.SessionStatusClosed,
+		StartedAt:       clock.Now(),
+		LastHeartbeatAt: clock.Now(),
+	}).Error)
+	require.NoError(t, db.Create(&models.ConnectionSessionRecord{
+		BaseModel:       models.BaseModel{ID: "rec-cleanup"},
+		SessionID:       "sess-cleanup",
+		StorageKind:     "filesystem",
+		StoragePath:     recordingPath,
+		SizeBytes:       7,
+		DurationSeconds: 3,
+		CreatedByUserID: user.ID,
+		RetentionUntil:  &expiredRetention,
+	}).Error)
+
 	c := NewCleaner(db, sessionSvc, auditSvc,
 		WithNow(clock.Now),
 		WithAuditRetentionDays(7),
 		WithCron(cron.New(cron.WithLogger(cron.DiscardLogger))),
+		WithRecorderService(recorderSvc),
 	)
 
 	require.NoError(t, c.RunOnce(context.Background()))
@@ -171,6 +210,13 @@ func TestCleanerRunOnce(t *testing.T) {
 	require.Equal(t, int64(0), tokenCount)
 	require.NoError(t, db.Model(&models.EmailVerification{}).Count(&tokenCount).Error)
 	require.Equal(t, int64(0), tokenCount)
+
+	var recordingCount int64
+	require.NoError(t, db.Model(&models.ConnectionSessionRecord{}).Count(&recordingCount).Error)
+	require.Equal(t, int64(0), recordingCount)
+
+	_, statErr := os.Stat(filepath.Join(recordingRoot, recordingPath))
+	require.True(t, errors.Is(statErr, os.ErrNotExist))
 }
 
 func seedUser(t *testing.T, db *gorm.DB, username string) *models.User {

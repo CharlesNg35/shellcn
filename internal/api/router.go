@@ -30,7 +30,7 @@ import (
 
 // NewRouter builds the Gin engine, wires middleware and registers core routes.
 // Additional module routers can mount under /api in later phases.
-func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *drivers.Registry, sessions *iauth.SessionService, rateStore middleware.RateStore, mon *monitoring.Module) (*gin.Engine, error) {
+func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *drivers.Registry, sessions *iauth.SessionService, rateStore middleware.RateStore, mon *monitoring.Module, recorder *services.RecorderService) (*gin.Engine, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database handle must be provided")
 	}
@@ -42,6 +42,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	}
 	if cfg == nil {
 		return nil, fmt.Errorf("config must be provided")
+	}
+	if recorder == nil {
+		return nil, fmt.Errorf("recorder service must be provided")
 	}
 
 	r := gin.New()
@@ -253,6 +256,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 		activeSessionSvc,
 		services.WithSessionAuditService(auditSvc),
 		services.WithSessionChatStore(sessionChatSvc),
+		services.WithSessionRecorder(recorder),
 	)
 	if err != nil {
 		return nil, err
@@ -263,10 +267,20 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	sessionParticipantHandler := handlers.NewSessionParticipantHandler(db, sessionLifecycleSvc, checker)
 	registerSessionParticipantRoutes(api, sessionParticipantHandler)
 
+	sessionRecordingHandler := handlers.NewSessionRecordingHandler(recorder, sessionLifecycleSvc, checker)
+	registerSessionRecordingRoutes(api, sessionRecordingHandler)
+
+	protocolSettingsSvc, err := services.NewProtocolSettingsService(db, auditSvc, services.WithProtocolRecorder(recorder))
+	if err != nil {
+		return nil, err
+	}
+	protocolSettingsHandler := handlers.NewProtocolSettingsHandler(protocolSettingsSvc, checker)
+	registerProtocolSettingsRoutes(api, protocolSettingsHandler)
+
 	sftpChannelSvc := services.NewSFTPChannelService()
 	sshHandler := handlers.NewSSHSessionHandler(
 		cfg, connectionSvc, vaultSvc,
-		realtimeHub, activeSessionSvc, sessionLifecycleSvc,
+		realtimeHub, activeSessionSvc, sessionLifecycleSvc, recorder,
 		sftpChannelSvc, driverReg, checker, jwt,
 	)
 

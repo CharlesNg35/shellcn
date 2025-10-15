@@ -20,9 +20,11 @@ import { useWorkspaceSnippets } from './ssh-workspace/useWorkspaceSnippets'
 import { useCommandPaletteState } from './ssh-workspace/useCommandPaletteState'
 import { useTerminalSearch } from './ssh-workspace/useTerminalSearch'
 import { useWorkspaceTelemetry } from './ssh-workspace/useWorkspaceTelemetry'
+import { useSessionRecording } from '@/hooks/useSessionRecording'
 import SshWorkspaceHeader from './ssh-workspace/SshWorkspaceHeader'
 import { SessionShareDialog } from './ssh-workspace/SessionShareDialog'
 import SshWorkspaceContent from './ssh-workspace/SshWorkspaceContent'
+import { SessionRecordingDialog } from './ssh-workspace/SessionRecordingDialog'
 
 const LAYOUT_OPTIONS = [1, 2, 3, 4, 5]
 
@@ -50,6 +52,13 @@ export function SshWorkspace() {
   const { hasPermission } = usePermissions()
 
   const { session, activeSessions, isLoading, isError } = useActiveSshSession(sessionId)
+  const {
+    status: recordingStatus,
+    isLoading: recordingStatusLoading,
+    refetch: refetchRecordingStatus,
+  } = useSessionRecording(session?.id ?? null, {
+    enabled: Boolean(session?.id),
+  })
 
   const openSession = useSshWorkspaceTabsStore((state) => state.openSession)
   const ensureTab = useSshWorkspaceTabsStore((state) => state.ensureTab)
@@ -78,6 +87,7 @@ export function SshWorkspace() {
   const canGrantWrite = hasPermission(PERMISSIONS.PROTOCOL.SSH.GRANT_WRITE)
 
   const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [recordingDialogOpen, setRecordingDialogOpen] = useState(false)
 
   const logEvent = useCallback((action: string, details?: Record<string, unknown>) => {
     if (import.meta.env.DEV) {
@@ -123,6 +133,10 @@ export function SshWorkspace() {
     }
     return undefined
   }, [clearOverride, session?.connection_id, session?.connection_name, sessionId, setOverride])
+
+  useEffect(() => {
+    setRecordingDialogOpen(false)
+  }, [session?.id])
 
   useEffect(() => {
     if (!isFullscreen) {
@@ -189,6 +203,9 @@ export function SshWorkspace() {
   })
 
   const recordingActive = useMemo(() => {
+    if (recordingStatus) {
+      return recordingStatus.active
+    }
     const metadata = session?.metadata ?? {}
     if (typeof metadata !== 'object' || metadata === null) {
       return false
@@ -200,7 +217,7 @@ export function SshWorkspace() {
       return Boolean((metadata.recording as Record<string, unknown>).active)
     }
     return false
-  }, [session?.metadata])
+  }, [recordingStatus, session?.metadata])
 
   const canWrite = useMemo(() => {
     if (!session || !currentUserId) {
@@ -249,6 +266,13 @@ export function SshWorkspace() {
     },
     [logEvent, reorderTabs, sessionId]
   )
+
+  const handleRecordingDetails = useCallback(() => {
+    if (!session) {
+      return
+    }
+    setRecordingDialogOpen(true)
+  }, [session])
 
   const handleLayoutSelect = useCallback(
     (columns: number) => {
@@ -375,6 +399,9 @@ export function SshWorkspace() {
         currentUserName={currentUserDisplayName}
         participants={session.participants}
         recordingActive={recordingActive}
+        recordingStatus={recordingStatus}
+        recordingLoading={recordingStatusLoading}
+        onRecordingDetails={session ? handleRecordingDetails : undefined}
         transfers={transfersSummary}
       />
 
@@ -393,6 +420,15 @@ export function SshWorkspace() {
         currentUserId={currentUserId}
         canShare={canShareSession}
         canGrantWrite={canGrantWrite}
+      />
+
+      <SessionRecordingDialog
+        open={recordingDialogOpen}
+        onClose={() => setRecordingDialogOpen(false)}
+        sessionId={session?.id ?? sessionId}
+        status={recordingStatus}
+        isLoading={recordingStatusLoading}
+        onRefresh={refetchRecordingStatus}
       />
     </div>
   )

@@ -1,8 +1,9 @@
 import { Button } from '@/components/ui/Button'
 import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils/cn'
-import { Search as SearchIcon } from 'lucide-react'
+import { Loader2, Search as SearchIcon } from 'lucide-react'
 import type { RefObject } from 'react'
+import type { SessionRecordingStatus } from '@/types/session-recording'
 
 interface SshWorkspaceStatusBarProps {
   fontSize: number
@@ -21,6 +22,9 @@ interface SshWorkspaceStatusBarProps {
   lastActivityAt: Date | null
   transfers: { active: number; total: number }
   recordingActive: boolean
+  recordingStatus?: SessionRecordingStatus
+  recordingLoading?: boolean
+  onRecordingDetails?: () => void
   searchInputRef?: RefObject<HTMLInputElement>
 }
 
@@ -41,11 +45,65 @@ export function SshWorkspaceStatusBar({
   lastActivityAt,
   transfers,
   recordingActive,
+  recordingStatus,
+  recordingLoading,
+  onRecordingDetails,
   searchInputRef,
 }: SshWorkspaceStatusBarProps) {
   const lastActivityLabel = lastActivityAt
     ? formatDistanceToNow(lastActivityAt, { addSuffix: true })
     : '—'
+
+  const showRecordingIndicator =
+    recordingLoading || recordingStatus?.active || recordingStatus?.record || recordingActive
+
+  const recordingLabel = recordingLoading
+    ? 'Checking…'
+    : recordingStatus?.active || recordingActive
+      ? 'Recording…'
+      : recordingStatus?.record
+        ? 'Recording saved'
+        : null
+
+  const recordingIndicator =
+    showRecordingIndicator && recordingLabel ? (
+      <div className="flex items-center">
+        {onRecordingDetails ? (
+          <button
+            type="button"
+            onClick={onRecordingDetails}
+            className="flex items-center gap-1 rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-rose-500 transition-colors hover:bg-rose-500/20"
+            disabled={recordingLoading}
+          >
+            {recordingLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <span
+                className={cn(
+                  'h-2 w-2 rounded-full bg-rose-500',
+                  (recordingStatus?.active || recordingActive) && 'animate-pulse'
+                )}
+              />
+            )}
+            <span>{recordingLabel}</span>
+          </button>
+        ) : (
+          <span className="flex items-center gap-1 text-rose-500">
+            {recordingLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <span
+                className={cn(
+                  'h-2 w-2 rounded-full bg-rose-500',
+                  (recordingStatus?.active || recordingActive) && 'animate-pulse'
+                )}
+              />
+            )}
+            <span>{recordingLabel}</span>
+          </span>
+        )}
+      </div>
+    ) : null
 
   return (
     <div className="flex flex-col gap-2 border-t border-border/60 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
@@ -80,7 +138,7 @@ export function SshWorkspaceStatusBar({
           <span>
             Transfers: {transfers.active}/{transfers.total}
           </span>
-          {recordingActive && <span className="text-rose-500">Recording</span>}
+          {recordingIndicator}
         </div>
       </div>
 

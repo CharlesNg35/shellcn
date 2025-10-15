@@ -1050,8 +1050,13 @@ The service automatically expands dependency permissions (e.g., `connection.view
 | DELETE | `/api/active-sessions/:sessionID/participants/:userID`       | Remove a participant from the session. Participants can remove themselves or owners can revoke access. | Authenticated (session owner/share permission or participant) | `SessionParticipantHandler.RemoveParticipant` |
 | GET    | `/api/active-sessions/:sessionID/chat`                       | Retrieve the most recent chat messages for a session. Supports `limit` (≤200) and optional `before`.   | Authenticated (session participant)                           | `SessionChatHandler.ListMessages`             |
 | POST   | `/api/active-sessions/:sessionID/chat`                       | Post a chat message for an active session (owner or joined participant).                               | Authenticated (session participant)                           | `SessionChatHandler.PostMessage`              |
+| GET    | `/api/active-sessions/:sessionID/recording/status`           | Inspect the recording state, including active flag, bytes captured, and finalized record metadata.     | Authenticated (session owner or participant)                  | `SessionRecordingHandler.Status`              |
+| POST   | `/api/active-sessions/:sessionID/recording/stop`             | Stop the active recording for the session.                                                             | Authenticated (session owner or `protocol:ssh.record`)        | `SessionRecordingHandler.Stop`                |
+| GET    | `/api/session-records/:recordID/download`                    | Stream the stored recording artifact (`*.cast.gz`) for offline playback or archival.                   | Authenticated (session owner or `protocol:ssh.record`)        | `SessionRecordingHandler.Download`            |
 
 Session access enforcement is handled by `SessionLifecycleService.AuthorizeSessionAccess`, which grants access to the session owner and any active participant (readers or writers). Requests from other users receive `403`.
+
+Recording status responses expose `recording_mode`, reflecting the effective policy (`disabled`, `optional`, `forced`, or runtime values such as `active`/`recorded` when policy data is unavailable). When a finalized artifact exists, the `record` object includes `retention_until` indicating the scheduled purge timestamp in addition to size, checksum, and duration metadata.
 
 **Example** — Post Chat Message:
 

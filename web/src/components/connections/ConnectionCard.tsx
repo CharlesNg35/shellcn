@@ -118,6 +118,9 @@ export function ConnectionCard({
         : undefined
     : undefined
 
+  const recordingEnabled =
+    connection.protocol_id === 'ssh' && Boolean(connection.settings?.recording_enabled)
+
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-lg border border-border/60 bg-card transition-all hover:border-border hover:shadow-lg">
       {hasActiveSessions && (
@@ -216,6 +219,11 @@ export function ConnectionCard({
           <Badge variant={isPersonal ? 'secondary' : 'default'} className="text-xs font-medium">
             {isPersonal ? 'Personal' : (teamName ?? 'Team')}
           </Badge>
+          {recordingEnabled ? (
+            <Badge variant="destructive" className="text-xs font-medium">
+              Recording enabled
+            </Badge>
+          ) : null}
           {hasShare && shareBadgeLabel && (
             <Badge variant="secondary" className="text-xs font-medium" title={shareTooltip}>
               {shareBadgeLabel}

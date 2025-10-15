@@ -307,13 +307,13 @@
 
 ### Session Recording
 
-- [ ] Introduce recorder service + storage abstraction (filesystem + S3)
-- [ ] Stream SSH terminal output into recorder when enabled
-- [ ] Persist recording metadata and retention policy rows
-- [ ] Build admin toggles (global + per-connection) for recording enablement
-- [ ] Surface recording status indicator + playback UI in frontend
-- [ ] Implement cleanup job honoring retention settings
-- [ ] Write integration test covering start/stop/download flows
+- [x] Introduce recorder service + storage abstraction (filesystem + S3)
+- [x] Stream SSH terminal output into recorder when enabled
+- [x] Persist recording metadata and retention policy rows
+- [x] Build admin toggles (global + per-connection) for recording enablement
+- [x] Surface recording status indicator + playback UI in frontend
+- [x] Implement cleanup job honoring retention settings
+- [x] Write integration test covering start/stop/download flows
 
 ### Protocol Settings & Preferences
 

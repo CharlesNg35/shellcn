@@ -27,6 +27,8 @@ import (
 	"github.com/charlesng35/shellcn/pkg/response"
 )
 
+const defaultTerminalType = "xterm-256color"
+
 type sshTerminalHandle interface {
 	drivers.SessionHandle
 	Stdin() io.WriteCloser
@@ -42,6 +44,7 @@ type SSHSessionHandler struct {
 	vault          *services.VaultService
 	activeSessions *services.ActiveSessionService
 	lifecycle      *services.SessionLifecycleService
+	recordings     *services.RecorderService
 	sftpChannels   *services.SFTPChannelService
 	driverRegistry *drivers.Registry
 	checker        *permissions.Checker
@@ -57,6 +60,7 @@ func NewSSHSessionHandler(
 	realtimeHub *realtime.Hub,
 	activeSvc *services.ActiveSessionService,
 	lifecycleSvc *services.SessionLifecycleService,
+	recorderSvc *services.RecorderService,
 	sftpChannels *services.SFTPChannelService,
 	driverReg *drivers.Registry,
 	checker *permissions.Checker,
@@ -68,6 +72,7 @@ func NewSSHSessionHandler(
 		vault:          vaultSvc,
 		activeSessions: activeSvc,
 		lifecycle:      lifecycleSvc,
+		recordings:     recorderSvc,
 		sftpChannels:   sftpChannels,
 		driverRegistry: driverReg,
 		checker:        checker,
@@ -191,6 +196,78 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 	metadata := map[string]any{
 		"connection_id": connDTO.ID,
 	}
+
+	terminalWidth := intFromAnyOrZero(settings["terminal_width"])
+	if terminalWidth <= 0 {
+		terminalWidth = 80
+	}
+	terminalHeight := intFromAnyOrZero(settings["terminal_height"])
+	if terminalHeight <= 0 {
+		terminalHeight = 24
+	}
+	terminalType := strings.TrimSpace(stringFromAny(settings["terminal_type"]))
+	if terminalType == "" {
+		terminalType = defaultTerminalType
+	}
+
+	policy := services.RecorderPolicy{
+		Mode:           services.RecordingModeOptional,
+		Storage:        "filesystem",
+		RetentionDays:  0,
+		RequireConsent: true,
+	}
+	if h.recordings != nil {
+		policy = h.recordings.Policy()
+	} else if h.cfg != nil {
+		mode := strings.ToLower(strings.TrimSpace(h.cfg.Features.Recording.Mode))
+		switch mode {
+		case services.RecordingModeDisabled, services.RecordingModeForced, services.RecordingModeOptional:
+			policy.Mode = mode
+		default:
+			policy.Mode = services.RecordingModeOptional
+		}
+		storage := strings.ToLower(strings.TrimSpace(h.cfg.Features.Recording.Storage))
+		if storage == "" {
+			storage = "filesystem"
+		}
+		policy.Storage = storage
+		retention := h.cfg.Features.Recording.RetentionDays
+		if retention < 0 {
+			retention = 0
+		}
+		policy.RetentionDays = retention
+		policy.RequireConsent = h.cfg.Features.Recording.RequireConsent
+	}
+
+	recordingEnabled := false
+	switch policy.Mode {
+	case services.RecordingModeForced:
+		recordingEnabled = true
+	case services.RecordingModeOptional:
+		if value, ok := boolFromAny(settings["recording_enabled"]); ok {
+			recordingEnabled = value
+		}
+	default:
+		recordingEnabled = false
+	}
+
+	delete(settings, "recording_enabled")
+
+	metadata["terminal_width"] = terminalWidth
+	metadata["terminal_height"] = terminalHeight
+	metadata["terminal_type"] = terminalType
+	metadata["recording_enabled"] = recordingEnabled
+	recordingActive := recordingEnabled && !strings.EqualFold(policy.Mode, services.RecordingModeDisabled)
+	metadata["recording_active"] = recordingActive
+	metadata["recording"] = map[string]any{
+		"mode":            policy.Mode,
+		"storage":         policy.Storage,
+		"requested":       recordingEnabled,
+		"active":          recordingActive,
+		"retention_days":  policy.RetentionDays,
+		"require_consent": policy.RequireConsent,
+	}
+
 	if connDTO.IdentityID != nil && strings.TrimSpace(*connDTO.IdentityID) != "" {
 		metadata["identity_id"] = strings.TrimSpace(*connDTO.IdentityID)
 	}
@@ -327,6 +404,11 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 				}
 			},
 			OnEvent: func(event string, payload any) {
+				if h.recordings != nil && (event == "stdout" || event == "stderr") {
+					if chunk := extractPayloadBytes(payload); len(chunk) > 0 {
+						h.recordings.RecordStream(sessionID, event, chunk)
+					}
+				}
 				h.handleTerminalEvent(sessionID, connDTO.ID, event, payload)
 			},
 			OnError: func(err error) {
@@ -529,6 +611,41 @@ func intFromAnyOrZero(value any) int {
 		return v
 	}
 	return 0
+}
+
+func boolFromAny(value any) (bool, bool) {
+	switch v := value.(type) {
+	case bool:
+		return v, true
+	case string:
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
+			return parsed, true
+		}
+	case float64:
+		return v != 0, true
+	case int:
+		return v != 0, true
+	}
+	return false, false
+}
+
+func extractPayloadBytes(payload any) []byte {
+	switch v := payload.(type) {
+	case []byte:
+		if len(v) == 0 {
+			return nil
+		}
+		out := make([]byte, len(v))
+		copy(out, v)
+		return out
+	case map[string]any:
+		if raw, ok := v["payload"].([]byte); ok && len(raw) > 0 {
+			out := make([]byte, len(raw))
+			copy(out, raw)
+			return out
+		}
+	}
+	return nil
 }
 
 func (h *SSHSessionHandler) broadcastTerminal(sessionID string, event string, payload any) {

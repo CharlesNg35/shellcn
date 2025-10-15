@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,7 @@ type runtimeStack struct {
 	SessionSvc     *iauth.SessionService
 	AuditSvc       *services.AuditService
 	VaultSvc       *services.VaultService
+	RecorderSvc    *services.RecorderService
 	Cleaner        *maintenance.Cleaner
 	RateStore      middleware.RateStore
 	DriverRegistry *drivers.Registry
@@ -159,7 +161,21 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		return nil, fmt.Errorf("initialise vault service: %w", err)
 	}
 
-	stack.Cleaner = maintenance.NewCleaner(stack.DB, stack.SessionSvc, stack.AuditSvc, maintenance.WithVaultService(stack.VaultSvc))
+	recordingRoot := filepath.Join("data", "records")
+	recorderStore, err := services.NewFilesystemRecorderStore(recordingRoot)
+	if err != nil {
+		return nil, fmt.Errorf("initialise recorder store: %w", err)
+	}
+	recorderPolicy := services.LoadRecorderPolicy(ctx, stack.DB)
+	stack.RecorderSvc, err = services.NewRecorderService(stack.DB, recorderStore, services.WithRecorderPolicy(recorderPolicy))
+	if err != nil {
+		return nil, fmt.Errorf("initialise recorder service: %w", err)
+	}
+
+	stack.Cleaner = maintenance.NewCleaner(stack.DB, stack.SessionSvc, stack.AuditSvc,
+		maintenance.WithVaultService(stack.VaultSvc),
+		maintenance.WithRecorderService(stack.RecorderSvc),
+	)
 	if err := stack.Cleaner.Start(); err != nil {
 		return nil, fmt.Errorf("start maintenance jobs: %w", err)
 	}
@@ -174,7 +190,7 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		stack.RateStore = middleware.NewDatabaseRateStore(dbStore)
 	}
 
-	stack.Router, err = api.NewRouter(stack.DB, jwtSvc, cfg, stack.DriverRegistry, stack.SessionSvc, stack.RateStore, mon)
+	stack.Router, err = api.NewRouter(stack.DB, jwtSvc, cfg, stack.DriverRegistry, stack.SessionSvc, stack.RateStore, mon, stack.RecorderSvc)
 	if err != nil {
 		return nil, fmt.Errorf("build api router: %w", err)
 	}

@@ -6,6 +6,7 @@ import SshWorkspaceStatusBar from '@/components/workspace/ssh/SshWorkspaceStatus
 import SshWorkspaceTabsBar from '@/components/workspace/ssh/SshWorkspaceTabsBar'
 import type { WorkspaceTab } from '@/store/ssh-session-tabs-store'
 import type { ActiveConnectionSession } from '@/types/connections'
+import type { SessionRecordingStatus } from '@/types/session-recording'
 import type { TerminalSearchControls } from './useTerminalSearch'
 import type { WorkspaceTelemetryControls } from './useWorkspaceTelemetry'
 
@@ -25,6 +26,9 @@ interface SshWorkspaceContentProps {
   currentUserName?: string
   participants?: ActiveConnectionSession['participants']
   recordingActive: boolean
+  recordingStatus?: SessionRecordingStatus
+  recordingLoading?: boolean
+  onRecordingDetails?: () => void
   transfers: {
     active: number
     total: number
@@ -47,6 +51,9 @@ export function SshWorkspaceContent({
   currentUserName,
   participants,
   recordingActive,
+  recordingStatus,
+  recordingLoading,
+  onRecordingDetails,
   transfers,
 }: SshWorkspaceContentProps) {
   return (
@@ -119,6 +126,9 @@ export function SshWorkspaceContent({
           lastActivityAt={telemetry.lastActivityAt}
           transfers={transfers}
           recordingActive={recordingActive}
+          recordingStatus={recordingStatus}
+          recordingLoading={recordingLoading}
+          onRecordingDetails={onRecordingDetails}
           searchInputRef={search.inputRef as RefObject<HTMLInputElement>}
         />
       </div>

@@ -46,6 +46,7 @@ export interface ConnectionMetadata {
 export interface ConnectionSettings {
   host?: string
   port?: number
+  recording_enabled?: boolean
   [key: string]: unknown
 }
 
