@@ -11,6 +11,9 @@
 
 - **Terminal engine**: `xterm.js` (v5+) with WebGL addon + fit addon; lazy-load via dynamic import.
 - **Transport**: multiplex bidirectional SSH data, control messages, and heartbeat over WebSocket (`ws://.../ws?tunnel=ssh&connection_id={connectionID}`). Binary frames are proxied for terminal data; control messages remain JSON.
+  - Frontend connects via the shared websocket utility (`web/src/lib/utils/websocket.ts`) using `buildWebSocketUrl('/ws', { tunnel: 'ssh', connection_id, token })`. The `token` parameter carries the bearer token so the server can authenticate the tunnel outside of the legacy `/ws/:stream` path.
+  - UI consumers must subscribe to `ssh.terminal` events on the existing realtime stream helper (`web/src/lib/realtime/useRealtimeStream.ts` / equivalent). These events bubble up from the backend terminal bridge and include `session_id`, `connection_id`, payload (`stdout`, `stderr`, etc.), and resize metadata. Handlers should decode base64 payloads before writing to xterm.
+  - For launch lifecycle UI (ready/opened/closed/error), listen to the same stream and update workspace state accordingly (e.g. mark session as ready, attach participants, surface errors). The tunnel connection itself continues to deliver binary frames for the active buffer; the broadcast stream is purely for passive observers/state updates.
 - **Recording format**: Asciinema v2 JSON (gzipped) for terminal; extensible codec registry for future RDP/VNC.
 - **Storage abstraction**: `RecorderStore` interface with filesystem (default `./data/records/<protocol>/<year>/<month>/`) and S3 backend.
 - **Concurrency enforcement**: per-connection limit (0 = unlimited) enforced in `ActiveSessionService` before launch.
