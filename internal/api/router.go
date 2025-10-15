@@ -244,7 +244,21 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	activeConnectionHandler := handlers.NewActiveConnectionHandler(activeSessionSvc, checker)
 	registerConnectionSessionRoutes(api, activeConnectionHandler, checker)
 
-	sshHandler := handlers.NewSSHSessionHandler(cfg, connectionSvc, vaultSvc, realtimeHub, activeSessionSvc, driverReg, checker, jwt)
+	sessionChatSvc, err := services.NewSessionChatService(db, activeSessionSvc)
+	if err != nil {
+		return nil, err
+	}
+	sessionLifecycleSvc, err := services.NewSessionLifecycleService(
+		db,
+		activeSessionSvc,
+		services.WithSessionAuditService(auditSvc),
+		services.WithSessionChatStore(sessionChatSvc),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	sshHandler := handlers.NewSSHSessionHandler(cfg, connectionSvc, vaultSvc, realtimeHub, activeSessionSvc, sessionLifecycleSvc, driverReg, checker, jwt)
 	realtimeHandler := handlers.NewRealtimeHandler(
 		realtimeHub,
 		jwt,

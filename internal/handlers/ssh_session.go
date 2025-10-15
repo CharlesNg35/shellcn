@@ -41,6 +41,7 @@ type SSHSessionHandler struct {
 	connections    *services.ConnectionService
 	vault          *services.VaultService
 	activeSessions *services.ActiveSessionService
+	lifecycle      *services.SessionLifecycleService
 	driverRegistry *drivers.Registry
 	checker        *permissions.Checker
 	jwt            *iauth.JWTService
@@ -54,6 +55,7 @@ func NewSSHSessionHandler(
 	vaultSvc *services.VaultService,
 	realtimeHub *realtime.Hub,
 	activeSvc *services.ActiveSessionService,
+	lifecycleSvc *services.SessionLifecycleService,
 	driverReg *drivers.Registry,
 	checker *permissions.Checker,
 	jwt *iauth.JWTService,
@@ -63,6 +65,7 @@ func NewSSHSessionHandler(
 		connections:    connectionSvc,
 		vault:          vaultSvc,
 		activeSessions: activeSvc,
+		lifecycle:      lifecycleSvc,
 		driverRegistry: driverReg,
 		checker:        checker,
 		jwt:            jwt,
@@ -74,7 +77,7 @@ func NewSSHSessionHandler(
 
 // ServeTunnel bridges an SSH session over WebSocket using prevalidated claims.
 func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
-	if h == nil || h.driverRegistry == nil || h.connections == nil || h.vault == nil || h.activeSessions == nil {
+	if h == nil || h.driverRegistry == nil || h.connections == nil || h.vault == nil || h.lifecycle == nil {
 		response.Error(c, apperrors.ErrNotFound)
 		return
 	}
@@ -182,24 +185,43 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		userName = userID
 	}
 
-	record := &services.ActiveSessionRecord{
-		ID:              sessionID,
-		ConnectionID:    connDTO.ID,
-		ConnectionName:  connDTO.Name,
-		UserID:          userID,
-		UserName:        userName,
-		TeamID:          connDTO.TeamID,
-		ProtocolID:      connDTO.ProtocolID,
-		Host:            host,
-		Port:            port,
-		ConcurrentLimit: concurrencyLimit,
-		Metadata:        map[string]any{"connection_id": connDTO.ID},
+	metadata := map[string]any{
+		"connection_id": connDTO.ID,
+	}
+	if connDTO.IdentityID != nil && strings.TrimSpace(*connDTO.IdentityID) != "" {
+		metadata["identity_id"] = strings.TrimSpace(*connDTO.IdentityID)
+	}
+	sessionActor := services.SessionActor{
+		UserID:    userID,
+		Username:  userName,
+		IPAddress: c.ClientIP(),
+		UserAgent: c.Request.UserAgent(),
+	}
+	if h.lifecycle == nil {
+		response.Error(c, apperrors.New("session.lifecycle_unavailable", "session lifecycle service unavailable", http.StatusInternalServerError))
+		return
 	}
 
-	if err := h.activeSessions.RegisterSession(record); err != nil {
+	startParams := services.StartSessionParams{
+		SessionID:       sessionID,
+		ConnectionID:    connDTO.ID,
+		ConnectionName:  connDTO.Name,
+		ProtocolID:      connDTO.ProtocolID,
+		OwnerUserID:     userID,
+		OwnerUserName:   userName,
+		TeamID:          connDTO.TeamID,
+		Host:            host,
+		Port:            port,
+		Metadata:        metadata,
+		ConcurrentLimit: concurrencyLimit,
+		Actor:           sessionActor,
+	}
+
+	if _, err := h.lifecycle.StartSession(ctx, startParams); err != nil {
 		h.handleRegisterError(c, err)
 		return
 	}
+
 	h.broadcastTerminal(sessionID, "opened", map[string]any{
 		"connection_id": connDTO.ID,
 		"user_id":       userID,
@@ -208,6 +230,19 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		"connection_id": connDTO.ID,
 		"user_id":       userID,
 	})
+
+	closeStatus := services.SessionStatusClosed
+	closeReason := "completed"
+	defer func() {
+		if h.lifecycle != nil {
+			_ = h.lifecycle.CloseSession(context.Background(), services.CloseSessionParams{
+				SessionID: sessionID,
+				Status:    closeStatus,
+				Reason:    closeReason,
+				Actor:     sessionActor,
+			})
+		}
+	}()
 
 	req := drivers.SessionRequest{
 		ConnectionID: connDTO.ID,
@@ -219,7 +254,8 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 
 	handle, err := launcher.Launch(ctx, req)
 	if err != nil {
-		h.activeSessions.UnregisterSession(sessionID)
+		closeStatus = services.SessionStatusFailed
+		closeReason = err.Error()
 		response.Error(c, apperrors.Wrap(err, "failed to launch ssh session"))
 		return
 	}
@@ -227,7 +263,8 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 	terminal, ok := handle.(sshTerminalHandle)
 	if !ok {
 		_ = handle.Close(context.Background())
-		h.activeSessions.UnregisterSession(sessionID)
+		closeStatus = services.SessionStatusFailed
+		closeReason = "incompatible session handle"
 		response.Error(c, apperrors.New("session.handle_incompatible", "ssh driver returned incompatible session handle", http.StatusInternalServerError))
 		return
 	}
@@ -235,12 +272,12 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 	wsConn, err := h.upgradeConnection(c)
 	if err != nil {
 		_ = terminal.Close(context.Background())
-		h.activeSessions.UnregisterSession(sessionID)
+		closeStatus = services.SessionStatusFailed
+		closeReason = "websocket upgrade failed"
 		return
 	}
 
 	defer wsConn.Close()
-	defer h.activeSessions.UnregisterSession(sessionID)
 	defer terminal.Close(context.Background())
 
 	ready := map[string]any{
@@ -250,6 +287,8 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		"connection":    connDTO.Name,
 	}
 	if err := wsConn.WriteJSON(ready); err != nil {
+		closeStatus = services.SessionStatusFailed
+		closeReason = "websocket ready write failed"
 		return
 	}
 
@@ -265,12 +304,18 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		Streams:   terminal,
 		Callbacks: terminalbridge.Callbacks{
 			OnHeartbeat: func() {
-				h.activeSessions.Heartbeat(sessionID)
+				if h.lifecycle != nil {
+					_ = h.lifecycle.Heartbeat(context.Background(), sessionID)
+				} else if h.activeSessions != nil {
+					h.activeSessions.Heartbeat(sessionID)
+				}
 			},
 			OnEvent: func(event string, payload any) {
 				h.handleTerminalEvent(sessionID, connDTO.ID, event, payload)
 			},
 			OnError: func(err error) {
+				closeStatus = services.SessionStatusFailed
+				closeReason = err.Error()
 				h.broadcastTerminal(sessionID, "error", map[string]any{
 					"connection_id": connDTO.ID,
 					"message":       err.Error(),
@@ -279,7 +324,8 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		},
 	})
 	if bridgeErr != nil && !isNormalSocketClose(bridgeErr) && !stdErrors.Is(bridgeErr, context.Canceled) {
-		// Errors already reported to client and subscribers; nothing further to do.
+		closeStatus = services.SessionStatusFailed
+		closeReason = bridgeErr.Error()
 	}
 }
 

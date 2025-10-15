@@ -7,22 +7,24 @@ import (
 )
 
 type collectors struct {
-	authAttempts          *prometheus.CounterVec
-	permissionChecks      *prometheus.CounterVec
-	activeSessions        prometheus.Gauge
-	apiLatency            *prometheus.HistogramVec
-	vaultOperations       *prometheus.CounterVec
-	vaultPayloadRequests  *prometheus.CounterVec
-	realtimeConnections   prometheus.Gauge
-	realtimeBroadcasts    *prometheus.CounterVec
-	realtimeFailures      *prometheus.CounterVec
-	realtimeSubscriptions *prometheus.CounterVec
-	maintenanceRuns       *prometheus.CounterVec
-	maintenanceDuration   *prometheus.HistogramVec
-	maintenanceLastRun    *prometheus.GaugeVec
-	protocolLaunches      *prometheus.CounterVec
-	protocolLaunchLatency *prometheus.HistogramVec
-	sessionDuration       prometheus.Histogram
+	authAttempts           *prometheus.CounterVec
+	permissionChecks       *prometheus.CounterVec
+	activeSessions         prometheus.Gauge
+	apiLatency             *prometheus.HistogramVec
+	vaultOperations        *prometheus.CounterVec
+	vaultPayloadRequests   *prometheus.CounterVec
+	realtimeConnections    prometheus.Gauge
+	realtimeBroadcasts     *prometheus.CounterVec
+	realtimeFailures       *prometheus.CounterVec
+	realtimeSubscriptions  *prometheus.CounterVec
+	maintenanceRuns        *prometheus.CounterVec
+	maintenanceDuration    *prometheus.HistogramVec
+	maintenanceLastRun     *prometheus.GaugeVec
+	protocolLaunches       *prometheus.CounterVec
+	protocolLaunchLatency  *prometheus.HistogramVec
+	sessionDuration        prometheus.Histogram
+	sessionShareEvents     *prometheus.CounterVec
+	sessionRecordingEvents *prometheus.CounterVec
 }
 
 func newCollectors(namespace string) *collectors {
@@ -163,6 +165,22 @@ func newCollectors(namespace string) *collectors {
 				Buckets:   sessionBuckets,
 			},
 		),
+		sessionShareEvents: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Name:      "session_share_events_total",
+				Help:      "Count of session sharing lifecycle events",
+			},
+			[]string{"event"},
+		),
+		sessionRecordingEvents: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Namespace: namespace,
+				Name:      "session_recording_events_total",
+				Help:      "Count of session recording lifecycle events",
+			},
+			[]string{"event"},
+		),
 	}
 }
 
@@ -184,6 +202,8 @@ func (c *collectors) all() []prometheus.Collector {
 		c.protocolLaunches,
 		c.protocolLaunchLatency,
 		c.sessionDuration,
+		c.sessionShareEvents,
+		c.sessionRecordingEvents,
 	}
 }
 

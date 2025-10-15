@@ -216,6 +216,26 @@ func RecordProtocolLaunch(protocolID, result, message string, duration time.Dura
 	stats.record(result, strings.TrimSpace(message), duration)
 }
 
+// RecordSessionShareEvent tracks participant and sharing lifecycle events.
+func RecordSessionShareEvent(event string) {
+	module := ensureModule()
+	if module == nil {
+		return
+	}
+	label := normalizeLabel(event)
+	module.metrics.sessionShareEvents.WithLabelValues(label).Inc()
+}
+
+// RecordSessionRecordingEvent tracks recording lifecycle activity per session.
+func RecordSessionRecordingEvent(event string) {
+	module := ensureModule()
+	if module == nil {
+		return
+	}
+	label := normalizeLabel(event)
+	module.metrics.sessionRecordingEvents.WithLabelValues(label).Inc()
+}
+
 func normalizeLabel(value string) string {
 	value = strings.TrimSpace(strings.ToLower(value))
 	if value == "" {

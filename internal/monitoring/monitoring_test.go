@@ -21,7 +21,6 @@ func setupModule(t *testing.T) *monitoring.Module {
 }
 
 func TestSummaryAggregatesMetrics(t *testing.T) {
-	t.Parallel()
 	setupModule(t)
 
 	monitoring.RecordAuthAttempt("success")
@@ -45,8 +44,6 @@ func TestSummaryAggregatesMetrics(t *testing.T) {
 }
 
 func TestHealthManagerEvaluate(t *testing.T) {
-	t.Parallel()
-
 	manager := monitoring.NewHealthManager()
 	manager.RegisterReadiness(monitoring.NewCheck("database", func(ctx context.Context) monitoring.ProbeResult {
 		return monitoring.ProbeResult{Status: monitoring.StatusUp}
@@ -62,7 +59,6 @@ func TestHealthManagerEvaluate(t *testing.T) {
 }
 
 func TestMaintenanceCheck(t *testing.T) {
-	t.Parallel()
 	setupModule(t)
 
 	monitoring.RecordMaintenanceRun("session_cleanup", "success", "", time.Second)

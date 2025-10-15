@@ -1,4 +1,4 @@
-# Core Module API Documentation
+# Modules API Documentation
 
 **Base URL:** `https://{host}:{port}` (default `http://localhost:8000`)
 **Version:** v1 (stabilised once backend reaches GA)

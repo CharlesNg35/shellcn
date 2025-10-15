@@ -251,7 +251,7 @@
 
 ## 4. SSH Module — Not Started
 
-### SSH Driver & Terminal Foundations
+### (SSH/SFTP Driver) & Terminal Foundations
 
 - [x] Finalize SSH/SFTP implementation plan (`specs/plans/2.ssh-sftp/SSH_SFTP_IMPLEMENTATION_PLAN.md`)
 - [x] Ship Go SSH driver (`internal/drivers/ssh`) with launcher + health check
@@ -266,11 +266,11 @@
 
 ### Session Lifecycle Foundations
 
-- [ ] Create migrations for `connection_sessions`, `session_participants`, `session_messages`, and `session_records` with indexes
-- [ ] Implement `SessionLifecycleService` coordinating DB rows, ActiveSessionService, and recorder hooks
-- [ ] Build `SessionChatService` with persistence, HTML sanitization, and realtime broadcasts
-- [ ] Extend ActiveSessionService for participant tracking, write-holder enforcement, and concurrent limit checks
-- [ ] Emit audit + Prometheus metrics for session open/close, sharing, and recording events
+- [x] Create migrations for `connection_sessions`, `session_participants`, `session_messages`, and `session_records` with indexes
+- [x] Implement `SessionLifecycleService` coordinating DB rows, ActiveSessionService, and recorder hooks
+- [x] Build `SessionChatService` with persistence, HTML sanitization, and realtime broadcasts
+- [x] Extend ActiveSessionService for participant tracking, write-holder enforcement, and concurrent limit checks
+- [x] Emit audit + Prometheus metrics for session open/close, sharing, and recording events
 
 ### SFTP File Manager
 
@@ -282,8 +282,6 @@
 - [ ] Add drag/drop upload pipeline with resumable progress events
 - [ ] Implement permission guard for SFTP interactions (`protocol:ssh.sftp`)
 - [ ] Write frontend + backend tests for file operations and path sanitization
-
-### SFTP Module — Not Started
 
 ### SSH Workspace UI
 

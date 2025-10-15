@@ -35,6 +35,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.CredentialTemplate{},
 		&models.CredentialVersion{},
 		&models.VaultKeyMetadata{},
+		&models.ConnectionSession{},
+		&models.ConnectionSessionParticipant{},
+		&models.ConnectionSessionMessage{},
+		&models.ConnectionSessionRecord{},
 	)
 }
 

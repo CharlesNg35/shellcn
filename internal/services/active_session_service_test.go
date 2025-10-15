@@ -32,6 +32,12 @@ func TestActiveSessionService_RegisterAndList(t *testing.T) {
 	require.Equal(t, "alice", results[0].UserName)
 	require.False(t, results[0].StartedAt.IsZero())
 	require.False(t, results[0].LastSeenAt.IsZero())
+	require.Equal(t, "user-1", results[0].OwnerUserID)
+	require.Equal(t, "alice", results[0].OwnerUserName)
+	require.Equal(t, "user-1", results[0].WriteHolder)
+	require.NotNil(t, results[0].Participants)
+	require.Contains(t, results[0].Participants, "user-1")
+	require.Equal(t, "write", results[0].Participants["user-1"].AccessMode)
 }
 
 func TestActiveSessionService_RegisterDuplicateUserConnection(t *testing.T) {
@@ -148,6 +154,118 @@ func TestActiveSessionService_ListActive_TeamVisibility(t *testing.T) {
 	require.Equal(t, "conn-2", results[0].ConnectionID)
 }
 
+func TestActiveSessionService_AddParticipantAndGrantWrite(t *testing.T) {
+	svc := NewActiveSessionService(nil)
+	require.NoError(t, svc.RegisterSession(&ActiveSessionRecord{
+		ID:           "sess-1",
+		ConnectionID: "conn-1",
+		UserID:       "user-1",
+		UserName:     "alice",
+		ProtocolID:   "ssh",
+	}))
+
+	added, err := svc.AddParticipant("sess-1", ActiveSessionParticipant{
+		UserID:   "user-2",
+		UserName: "bob",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "participant", added.Role)
+	require.Equal(t, "read", added.AccessMode)
+
+	session, ok := svc.GetSession("sess-1")
+	require.True(t, ok)
+	require.Contains(t, session.Participants, "user-2")
+	require.Equal(t, "read", session.Participants["user-2"].AccessMode)
+	require.Equal(t, "user-1", session.WriteHolder)
+
+	granted, err := svc.GrantWriteAccess("sess-1", "user-2")
+	require.NoError(t, err)
+	require.Equal(t, "write", granted.AccessMode)
+
+	session, ok = svc.GetSession("sess-1")
+	require.True(t, ok)
+	require.Equal(t, "user-2", session.WriteHolder)
+	require.Equal(t, "read", session.Participants["user-1"].AccessMode)
+	require.Equal(t, "write", session.Participants["user-2"].AccessMode)
+}
+
+func TestActiveSessionService_RemoveParticipantRevertsWrite(t *testing.T) {
+	svc := NewActiveSessionService(nil)
+	require.NoError(t, svc.RegisterSession(&ActiveSessionRecord{
+		ID:           "sess-1",
+		ConnectionID: "conn-1",
+		UserID:       "user-1",
+		UserName:     "alice",
+		ProtocolID:   "ssh",
+	}))
+	_, err := svc.AddParticipant("sess-1", ActiveSessionParticipant{
+		UserID:     "user-2",
+		UserName:   "bob",
+		AccessMode: "write",
+	})
+	require.NoError(t, err)
+	_, err = svc.GrantWriteAccess("sess-1", "user-2")
+	require.NoError(t, err)
+
+	removed := svc.RemoveParticipant("sess-1", "user-2")
+	require.True(t, removed)
+
+	session, ok := svc.GetSession("sess-1")
+	require.True(t, ok)
+	require.NotContains(t, session.Participants, "user-2")
+	require.Equal(t, "user-1", session.WriteHolder)
+	require.Equal(t, "write", session.Participants["user-1"].AccessMode)
+}
+
+func TestActiveSessionService_AppendAndConsumeChatBuffer(t *testing.T) {
+	svc := NewActiveSessionService(nil)
+	require.NoError(t, svc.RegisterSession(&ActiveSessionRecord{
+		ID:           "sess-1",
+		ConnectionID: "conn-1",
+		UserID:       "user-1",
+		UserName:     "alice",
+		ProtocolID:   "ssh",
+	}))
+
+	message, err := svc.AppendChatMessage("sess-1", ActiveSessionChatMessage{
+		AuthorID: "user-1",
+		Author:   "alice",
+		Content:  "hello world",
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, message.MessageID)
+
+	buffer := svc.ConsumeChatBuffer("sess-1")
+	require.Len(t, buffer, 1)
+	require.Equal(t, "hello world", buffer[0].Content)
+
+	buffer = svc.ConsumeChatBuffer("sess-1")
+	require.Empty(t, buffer)
+}
+
+func TestActiveSessionService_AckChatMessage(t *testing.T) {
+	svc := NewActiveSessionService(nil)
+	require.NoError(t, svc.RegisterSession(&ActiveSessionRecord{
+		ID:           "sess-1",
+		ConnectionID: "conn-1",
+		UserID:       "user-1",
+		UserName:     "alice",
+		ProtocolID:   "ssh",
+	}))
+
+	message, err := svc.AppendChatMessage("sess-1", ActiveSessionChatMessage{
+		AuthorID: "user-1",
+		Content:  "pending",
+	})
+	require.NoError(t, err)
+
+	require.True(t, svc.AckChatMessage("sess-1", message.MessageID))
+	require.False(t, svc.AckChatMessage("sess-1", "missing"))
+
+	buffer := svc.ConsumeChatBuffer("sess-1")
+	require.Empty(t, buffer)
+}
+
 func TestActiveSessionService_CleanupStale(t *testing.T) {
 	svc := NewActiveSessionService(nil)
 	base := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -205,6 +323,12 @@ func TestActiveSessionService_ConcurrentLimitEnforced(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrConcurrentLimitReached)
+	var limitErr *ConcurrentLimitError
+	require.ErrorAs(t, err, &limitErr)
+	require.NotNil(t, limitErr)
+	require.Equal(t, "conn-1", limitErr.ConnectionID)
+	require.Equal(t, 2, limitErr.Limit)
+	require.Equal(t, ConcurrentLimitReasonReached, limitErr.Reason)
 
 	svc.UnregisterSession("sess-2")
 
