@@ -1039,7 +1039,74 @@ Content-Type: application/json
 
 The service automatically expands dependency permissions (e.g., `connection.view`) and ensures the grantor already holds each scope. Responses mirror `ConnectionShareDTO`, which aligns with `share_summary.entries`.
 
-### 8.4 Vault API
+### 8.4 Active Sessions & Chat
+
+| Method | Path                                   | Description                                                                                          | Permission                          | Handler                           |
+| ------ | -------------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------- | --------------------------------- |
+| GET    | `/api/active-sessions/:sessionID/chat` | Retrieve the most recent chat messages for a session. Supports `limit` (≤200) and optional `before`. | Authenticated (session participant) | `SessionChatHandler.ListMessages` |
+| POST   | `/api/active-sessions/:sessionID/chat` | Post a chat message for an active session (owner or joined participant).                             | Authenticated (session participant) | `SessionChatHandler.PostMessage`  |
+
+Session access enforcement is handled by `SessionLifecycleService.AuthorizeSessionAccess`, which grants access to the session owner and any active participant (readers or writers). Requests from other users receive `403`.
+
+**Example** — Post Chat Message:
+
+```http
+POST /api/active-sessions/sess_01JF5Q8ZF2K/chat
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "content": "Deploy window starts in 5 minutes."
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_01JF5QDHJ2N",
+    "session_id": "sess_01JF5Q8ZF2K",
+    "author_id": "usr_01JF5N77SE0",
+    "content": "Deploy window starts in 5 minutes.",
+    "created_at": "2025-01-14T21:36:42.517Z"
+  }
+}
+```
+
+**Example** — List Chat Messages:
+
+```http
+GET /api/active-sessions/sess_01JF5Q8ZF2K/chat?limit=20&before=2025-01-14T21:40:00Z
+Authorization: Bearer <access-token>
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "msg_01JF5QDHJ2N",
+      "session_id": "sess_01JF5Q8ZF2K",
+      "author_id": "usr_01JF5N77SE0",
+      "content": "Deploy window starts in 5 minutes.",
+      "created_at": "2025-01-14T21:36:42.517Z"
+    },
+    {
+      "id": "msg_01JF5QKVZ9X",
+      "session_id": "sess_01JF5Q8ZF2K",
+      "author_id": "usr_01JF5NTBHB",
+      "content": "Copy that, putting servers into maintenance.",
+      "created_at": "2025-01-14T21:37:10.213Z"
+    }
+  ]
+}
+```
+
+### 8.5 Vault API
 
 | Method | Path                               | Description                                                                   | Permission     | Handler                       |
 | ------ | ---------------------------------- | ----------------------------------------------------------------------------- | -------------- | ----------------------------- |
@@ -1083,7 +1150,7 @@ Content-Type: application/json
 
 Responses mirror `IdentityDTO`. Secrets are only included when `include=payload` is requested on the GET endpoint immediately after creation. Subsequent list operations return metadata only, ensuring vault contents remain encrypted unless explicitly requested.
 
-### 8.4 Notifications
+### 8.6 Notifications
 
 | Method | Path                            | Description                                      | Permission            | Handler                           |
 | ------ | ------------------------------- | ------------------------------------------------ | --------------------- | --------------------------------- |

@@ -42,6 +42,7 @@ type SSHSessionHandler struct {
 	vault          *services.VaultService
 	activeSessions *services.ActiveSessionService
 	lifecycle      *services.SessionLifecycleService
+	sftpChannels   *services.SFTPChannelService
 	driverRegistry *drivers.Registry
 	checker        *permissions.Checker
 	jwt            *iauth.JWTService
@@ -56,6 +57,7 @@ func NewSSHSessionHandler(
 	realtimeHub *realtime.Hub,
 	activeSvc *services.ActiveSessionService,
 	lifecycleSvc *services.SessionLifecycleService,
+	sftpChannels *services.SFTPChannelService,
 	driverReg *drivers.Registry,
 	checker *permissions.Checker,
 	jwt *iauth.JWTService,
@@ -66,6 +68,7 @@ func NewSSHSessionHandler(
 		vault:          vaultSvc,
 		activeSessions: activeSvc,
 		lifecycle:      lifecycleSvc,
+		sftpChannels:   sftpChannels,
 		driverRegistry: driverReg,
 		checker:        checker,
 		jwt:            jwt,
@@ -258,6 +261,19 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		closeReason = err.Error()
 		response.Error(c, apperrors.Wrap(err, "failed to launch ssh session"))
 		return
+	}
+
+	if h.sftpChannels != nil {
+		if provider, ok := handle.(services.SFTPProvider); ok {
+			if err := h.sftpChannels.Attach(sessionID, provider); err != nil {
+				closeStatus = services.SessionStatusFailed
+				closeReason = "sftp channel registration failed"
+				_ = handle.Close(context.Background())
+				response.Error(c, apperrors.Wrap(err, "register sftp channel"))
+				return
+			}
+			defer h.sftpChannels.Detach(sessionID)
+		}
 	}
 
 	terminal, ok := handle.(sshTerminalHandle)

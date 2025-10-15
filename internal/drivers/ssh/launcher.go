@@ -12,9 +12,11 @@ import (
 	"sync"
 	"time"
 
+	pkgsftp "github.com/pkg/sftp"
 	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/charlesng35/shellcn/internal/drivers"
+	shellsftp "github.com/charlesng35/shellcn/internal/sftp"
 )
 
 const (
@@ -36,6 +38,11 @@ type Handle struct {
 	stdin   io.WriteCloser
 	stdout  io.Reader
 	stderr  io.Reader
+
+	sftpMu     sync.Mutex
+	sftpClient *pkgsftp.Client
+	sftpUsers  int
+	closed     bool
 
 	closeOnce sync.Once
 	closeErr  error
@@ -77,15 +84,80 @@ func (h *Handle) Resize(columns, rows int) error {
 
 // Close terminates the SSH session and underlying client connection.
 func (h *Handle) Close(ctx context.Context) error {
+	if h == nil {
+		return nil
+	}
 	h.closeOnce.Do(func() {
+		h.sftpMu.Lock()
+		if h.sftpClient != nil {
+			_ = h.sftpClient.Close()
+			h.sftpClient = nil
+		}
+		h.sftpUsers = 0
+		h.closed = true
+		h.sftpMu.Unlock()
+
 		if h.session != nil {
 			_ = h.session.Close()
 		}
 		if h.client != nil {
 			h.closeErr = h.client.Close()
+			h.client = nil
 		}
 	})
 	return h.closeErr
+}
+
+// AcquireSFTP returns a pooled SFTP client associated with the underlying SSH connection.
+// Callers must invoke the returned release function once they finish using the client.
+func (h *Handle) AcquireSFTP() (shellsftp.Client, func() error, error) {
+	if h == nil {
+		return nil, nil, errors.New("ssh: handle is nil")
+	}
+
+	h.sftpMu.Lock()
+	defer h.sftpMu.Unlock()
+
+	if h.closed {
+		return nil, nil, errors.New("ssh: session already closed")
+	}
+	if h.client == nil {
+		return nil, nil, errors.New("ssh: client not initialised")
+	}
+
+	if h.sftpClient == nil {
+		client, err := pkgsftp.NewClient(h.client, pkgsftp.MaxPacket(1<<15))
+		if err != nil {
+			return nil, nil, fmt.Errorf("ssh: create sftp client: %w", err)
+		}
+		h.sftpClient = client
+	}
+
+	h.sftpUsers++
+	acquired := h.sftpClient
+	released := false
+
+	release := func() error {
+		h.sftpMu.Lock()
+		defer h.sftpMu.Unlock()
+		if released {
+			return nil
+		}
+		released = true
+		if h.sftpUsers > 0 {
+			h.sftpUsers--
+		}
+		if h.sftpUsers == 0 && (h.closed || h.client == nil) {
+			if h.sftpClient != nil {
+				err := h.sftpClient.Close()
+				h.sftpClient = nil
+				return err
+			}
+		}
+		return nil
+	}
+
+	return acquired, release, nil
 }
 
 // Launch establishes an interactive SSH session and returns a session handle.
@@ -115,56 +187,68 @@ func (d *Driver) Launch(ctx context.Context, req drivers.SessionRequest) (driver
 	}
 
 	client := gossh.NewClient(clientConn, chans, reqs)
-	session, err := client.NewSession()
-	if err != nil {
+
+	isSFTPOnly := strings.EqualFold(strings.TrimSpace(req.ProtocolID), DriverIDSFTP)
+
+	var session *gossh.Session
+	var stdin io.WriteCloser
+	var stdout io.Reader
+	var stderr io.Reader
+
+	cleanup := func() {
+		if session != nil {
+			_ = session.Close()
+		}
 		_ = client.Close()
-		return nil, fmt.Errorf("ssh: create session: %w", err)
 	}
 
-	stdin, err := session.StdinPipe()
-	if err != nil {
-		_ = session.Close()
-		_ = client.Close()
-		return nil, fmt.Errorf("ssh: stdin pipe: %w", err)
-	}
+	if !isSFTPOnly {
+		session, err = client.NewSession()
+		if err != nil {
+			_ = client.Close()
+			return nil, fmt.Errorf("ssh: create session: %w", err)
+		}
 
-	stdout, err := session.StdoutPipe()
-	if err != nil {
-		_ = session.Close()
-		_ = client.Close()
-		return nil, fmt.Errorf("ssh: stdout pipe: %w", err)
-	}
+		stdin, err = session.StdinPipe()
+		if err != nil {
+			cleanup()
+			return nil, fmt.Errorf("ssh: stdin pipe: %w", err)
+		}
 
-	stderr, err := session.StderrPipe()
-	if err != nil {
-		_ = session.Close()
-		_ = client.Close()
-		return nil, fmt.Errorf("ssh: stderr pipe: %w", err)
-	}
+		stdout, err = session.StdoutPipe()
+		if err != nil {
+			cleanup()
+			return nil, fmt.Errorf("ssh: stdout pipe: %w", err)
+		}
 
-	columns := cfg.TerminalWidth
-	if columns <= 0 {
-		columns = defaultTermWidth
-	}
-	rows := cfg.TerminalHeight
-	if rows <= 0 {
-		rows = defaultTermHeight
-	}
-	modes := gossh.TerminalModes{
-		gossh.ECHO:          1,
-		gossh.TTY_OP_ISPEED: 14400,
-		gossh.TTY_OP_OSPEED: 14400,
-	}
-	if err := session.RequestPty(cfg.TerminalType, rows, columns, modes); err != nil {
-		_ = session.Close()
-		_ = client.Close()
-		return nil, fmt.Errorf("ssh: request pty: %w", err)
-	}
+		stderr, err = session.StderrPipe()
+		if err != nil {
+			cleanup()
+			return nil, fmt.Errorf("ssh: stderr pipe: %w", err)
+		}
 
-	if err := session.Shell(); err != nil {
-		_ = session.Close()
-		_ = client.Close()
-		return nil, fmt.Errorf("ssh: start shell: %w", err)
+		columns := cfg.TerminalWidth
+		if columns <= 0 {
+			columns = defaultTermWidth
+		}
+		rows := cfg.TerminalHeight
+		if rows <= 0 {
+			rows = defaultTermHeight
+		}
+		modes := gossh.TerminalModes{
+			gossh.ECHO:          1,
+			gossh.TTY_OP_ISPEED: 14400,
+			gossh.TTY_OP_OSPEED: 14400,
+		}
+		if err := session.RequestPty(cfg.TerminalType, rows, columns, modes); err != nil {
+			cleanup()
+			return nil, fmt.Errorf("ssh: request pty: %w", err)
+		}
+
+		if err := session.Shell(); err != nil {
+			cleanup()
+			return nil, fmt.Errorf("ssh: start shell: %w", err)
+		}
 	}
 
 	handle := &Handle{

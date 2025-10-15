@@ -274,7 +274,7 @@
 
 ### SFTP File Manager
 
-- [ ] Implement SFTP channel management inside SSH driver (lazy init, pooled reuse)
+- [x] Implement SFTP channel management inside SSH driver (lazy init, pooled reuse)
 - [ ] Build REST handlers for file browse, download, upload, edit, delete, and metadata
 - [ ] Stream large downloads/uploads efficiently with resumable support and realtime transfer events
 - [ ] Create frontend SFTP workspace (tabs, toolbar, queue panel, editor integration)
