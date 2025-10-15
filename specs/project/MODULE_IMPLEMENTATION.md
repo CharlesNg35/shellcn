@@ -963,7 +963,6 @@ CREATE TABLE vault_keys (
 ### Features
 
 #### 3.1 SSH Connection
-- SSH v1 support (disabled by default for security)
 - SSH v2 support (enabled by default)
 - Auto protocol detection
 - Multiple authentication methods:
@@ -1106,7 +1105,7 @@ SSH_PERMISSIONS = {
 type SSHConnectionConfig struct {
     // Basic
     Name        string
-    Protocol    string  // "ssh-v1", "ssh-v2", "auto"
+    Protocol    string  // "ssh", "auto"
     Icon        string
 
     // Connection

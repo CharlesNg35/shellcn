@@ -23,6 +23,28 @@ type Registry struct {
 	drivers map[string]Driver
 }
 
+var defaultRegistry = NewRegistry()
+
+// DefaultRegistry returns the singleton registry used during application bootstrap.
+func DefaultRegistry() *Registry {
+	return defaultRegistry
+}
+
+// RegisterDefault registers a driver with the default registry.
+func RegisterDefault(driver Driver) error {
+	return defaultRegistry.Register(driver)
+}
+
+// MustRegisterDefault registers a driver with the default registry and panics on error.
+func MustRegisterDefault(driver Driver) {
+	defaultRegistry.MustRegister(driver)
+}
+
+// ResetDefaultRegistry clears the default registry. Intended for tests.
+func ResetDefaultRegistry() {
+	defaultRegistry.Reset()
+}
+
 // NewRegistry constructs an empty driver registry instance.
 func NewRegistry() *Registry {
 	return &Registry{drivers: make(map[string]Driver)}

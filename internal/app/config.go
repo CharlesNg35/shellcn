@@ -95,14 +95,18 @@ type HealthConfig struct {
 
 // FeatureConfig toggles optional platform features.
 type FeatureConfig struct {
-	SessionSharing SessionSharingConfig `mapstructure:"session_sharing"`
-	Notifications  NotificationConfig   `mapstructure:"notifications"`
+	SessionSharing SessionSharingConfig   `mapstructure:"session_sharing"`
+	Notifications  NotificationConfig     `mapstructure:"notifications"`
+	Recording      RecordingConfig        `mapstructure:"recording"`
+	Sessions       SessionLifecycleConfig `mapstructure:"sessions"`
 }
 
 // SessionSharingConfig controls collaborative session sharing.
 type SessionSharingConfig struct {
-	Enabled        bool `mapstructure:"enabled"`
-	MaxSharedUsers int  `mapstructure:"max_shared_users"`
+	Enabled               bool `mapstructure:"enabled"`
+	MaxSharedUsers        int  `mapstructure:"max_shared_users"`
+	AllowDefault          bool `mapstructure:"allow_default"`
+	RestrictWriteToAdmins bool `mapstructure:"restrict_write_to_admins"`
 }
 
 // NotificationConfig toggles notifications.
@@ -112,7 +116,7 @@ type NotificationConfig struct {
 
 // ProtocolConfig enables individual protocol drivers.
 type ProtocolConfig struct {
-	SSH           SimpleProtocolConfig   `mapstructure:"ssh"`
+	SSH           SSHProtocolConfig      `mapstructure:"ssh"`
 	Telnet        SimpleProtocolConfig   `mapstructure:"telnet"`
 	SFTP          SimpleProtocolConfig   `mapstructure:"sftp"`
 	RDP           SimpleProtocolConfig   `mapstructure:"rdp"`
@@ -127,6 +131,36 @@ type ProtocolConfig struct {
 // SimpleProtocolConfig enables optional protocols without extra settings.
 type SimpleProtocolConfig struct {
 	Enabled bool `mapstructure:"enabled"`
+}
+
+// SSHProtocolConfig exposes SSH-specific defaults and feature toggles.
+type SSHProtocolConfig struct {
+	Enabled           bool              `mapstructure:"enabled"`
+	EnableSFTPDefault bool              `mapstructure:"enable_sftp_default"`
+	Terminal          SSHTerminalConfig `mapstructure:"terminal"`
+}
+
+// RecordingConfig controls session recording defaults.
+type RecordingConfig struct {
+	Mode           string `mapstructure:"mode"`
+	Storage        string `mapstructure:"storage"`
+	RetentionDays  int    `mapstructure:"retention_days"`
+	RequireConsent bool   `mapstructure:"require_consent"`
+}
+
+// SessionLifecycleConfig controls cross-protocol session policies.
+type SessionLifecycleConfig struct {
+	ConcurrentLimitDefault int           `mapstructure:"concurrent_limit_default"`
+	IdleTimeout            time.Duration `mapstructure:"idle_timeout"`
+}
+
+// SSHTerminalConfig defines default terminal presentation options.
+type SSHTerminalConfig struct {
+	ThemeMode   string `mapstructure:"theme_mode"`
+	FontFamily  string `mapstructure:"font_family"`
+	FontSize    int    `mapstructure:"font_size"`
+	Scrollback  int    `mapstructure:"scrollback_limit"`
+	EnableWebGL bool   `mapstructure:"enable_webgl"`
 }
 
 // DatabaseProtocolConfig toggles database client support.
@@ -237,9 +271,23 @@ func setDefaults(v *viper.Viper) {
 
 	v.SetDefault("features.session_sharing.enabled", true)
 	v.SetDefault("features.session_sharing.max_shared_users", 5)
+	v.SetDefault("features.session_sharing.allow_default", true)
+	v.SetDefault("features.session_sharing.restrict_write_to_admins", false)
 	v.SetDefault("features.notifications.enabled", true)
+	v.SetDefault("features.recording.mode", "optional")
+	v.SetDefault("features.recording.storage", "filesystem")
+	v.SetDefault("features.recording.retention_days", 90)
+	v.SetDefault("features.recording.require_consent", true)
+	v.SetDefault("features.sessions.concurrent_limit_default", 0)
+	v.SetDefault("features.sessions.idle_timeout", "30m")
 
 	v.SetDefault("protocols.ssh.enabled", true)
+	v.SetDefault("protocols.ssh.enable_sftp_default", true)
+	v.SetDefault("protocols.ssh.terminal.theme_mode", "auto")
+	v.SetDefault("protocols.ssh.terminal.font_family", "monospace")
+	v.SetDefault("protocols.ssh.terminal.font_size", 14)
+	v.SetDefault("protocols.ssh.terminal.scrollback_limit", 1000)
+	v.SetDefault("protocols.ssh.terminal.enable_webgl", true)
 	v.SetDefault("protocols.telnet.enabled", true)
 	v.SetDefault("protocols.sftp.enabled", true)
 	v.SetDefault("protocols.rdp.enabled", true)

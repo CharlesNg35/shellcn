@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/cache"
 	"github.com/charlesng35/shellcn/internal/database"
+	"github.com/charlesng35/shellcn/internal/drivers"
+	_ "github.com/charlesng35/shellcn/internal/drivers/ssh"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/monitoring"
 	"github.com/charlesng35/shellcn/internal/monitoring/checks"
@@ -28,15 +31,16 @@ import (
 
 // runtimeStack bundles long-lived services used by the HTTP server.
 type runtimeStack struct {
-	DB          *gorm.DB
-	Redis       cache.Store
-	RedisClient *cache.RedisClient
-	SessionSvc  *iauth.SessionService
-	AuditSvc    *services.AuditService
-	VaultSvc    *services.VaultService
-	Cleaner     *maintenance.Cleaner
-	RateStore   middleware.RateStore
-	Router      *gin.Engine
+	DB             *gorm.DB
+	Redis          cache.Store
+	RedisClient    *cache.RedisClient
+	SessionSvc     *iauth.SessionService
+	AuditSvc       *services.AuditService
+	VaultSvc       *services.VaultService
+	Cleaner        *maintenance.Cleaner
+	RateStore      middleware.RateStore
+	DriverRegistry *drivers.Registry
+	Router         *gin.Engine
 }
 
 // bootstrapRuntime initialises databases, caches, services, and the HTTP router.
@@ -76,6 +80,25 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 
 	if err := database.EnsureVaultEncryptionKey(ctx, stack.DB, cfg.Vault.EncryptionKey); err != nil {
 		return nil, err
+	}
+
+	if err := seedSSHProtocolDefaults(ctx, stack.DB, cfg); err != nil {
+		return nil, fmt.Errorf("seed ssh defaults: %w", err)
+	}
+	if err := seedRecordingDefaults(ctx, stack.DB, cfg); err != nil {
+		return nil, fmt.Errorf("seed recording defaults: %w", err)
+	}
+	if err := seedSessionSharingDefaults(ctx, stack.DB, cfg); err != nil {
+		return nil, fmt.Errorf("seed session sharing defaults: %w", err)
+	}
+
+	stack.DriverRegistry = drivers.DefaultRegistry()
+	catalogSvc, err := services.NewProtocolCatalogService(stack.DB)
+	if err != nil {
+		return nil, fmt.Errorf("initialise protocol catalog service: %w", err)
+	}
+	if err := catalogSvc.Sync(ctx, stack.DriverRegistry, cfg); err != nil {
+		return nil, fmt.Errorf("sync protocol catalog: %w", err)
 	}
 
 	dbStore := cache.NewDatabaseStore(stack.DB)
@@ -158,6 +181,128 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 
 	success = true
 	return stack, nil
+}
+
+func seedSSHProtocolDefaults(ctx context.Context, db *gorm.DB, cfg *app.Config) error {
+	if db == nil || cfg == nil {
+		return nil
+	}
+
+	sshCfg := cfg.Protocols.SSH
+	defaults := map[string]string{
+		"protocol.ssh.enable_sftp_default":       strconv.FormatBool(sshCfg.EnableSFTPDefault),
+		"protocol.ssh.terminal.theme_mode":       strings.ToLower(strings.TrimSpace(sshCfg.Terminal.ThemeMode)),
+		"protocol.ssh.terminal.font_family":      strings.TrimSpace(sshCfg.Terminal.FontFamily),
+		"protocol.ssh.terminal.font_size":        strconv.Itoa(max(sshCfg.Terminal.FontSize, 0)),
+		"protocol.ssh.terminal.scrollback_limit": strconv.Itoa(max(sshCfg.Terminal.Scrollback, 0)),
+		"protocol.ssh.terminal.enable_webgl":     strconv.FormatBool(sshCfg.Terminal.EnableWebGL),
+	}
+
+	for key, value := range defaults {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		current, err := database.GetSystemSetting(ctx, db, key)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(current) != "" {
+			continue
+		}
+		if err := database.UpsertSystemSetting(ctx, db, key, value); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func seedRecordingDefaults(ctx context.Context, db *gorm.DB, cfg *app.Config) error {
+	if db == nil || cfg == nil {
+		return nil
+	}
+
+	recCfg := cfg.Features.Recording
+	defaults := map[string]string{
+		"recording.mode":            strings.ToLower(strings.TrimSpace(recCfg.Mode)),
+		"recording.storage":         strings.ToLower(strings.TrimSpace(recCfg.Storage)),
+		"recording.retention_days":  strconv.Itoa(max(recCfg.RetentionDays, 0)),
+		"recording.require_consent": strconv.FormatBool(recCfg.RequireConsent),
+	}
+
+	for key, value := range defaults {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		current, err := database.GetSystemSetting(ctx, db, key)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(current) != "" {
+			continue
+		}
+		if err := database.UpsertSystemSetting(ctx, db, key, value); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func seedSessionSharingDefaults(ctx context.Context, db *gorm.DB, cfg *app.Config) error {
+	if db == nil || cfg == nil {
+		return nil
+	}
+
+	shareCfg := cfg.Features.SessionSharing
+	sessCfg := cfg.Features.Sessions
+	defaults := map[string]string{
+		"session_sharing.enabled":                  strconv.FormatBool(shareCfg.Enabled),
+		"session_sharing.max_shared_users":         strconv.Itoa(max(shareCfg.MaxSharedUsers, 0)),
+		"session_sharing.allow_default":            strconv.FormatBool(shareCfg.AllowDefault),
+		"session_sharing.restrict_write_to_admins": strconv.FormatBool(shareCfg.RestrictWriteToAdmins),
+		"sessions.concurrent_limit_default":        strconv.Itoa(max(sessCfg.ConcurrentLimitDefault, 0)),
+		"sessions.idle_timeout_minutes":            formatIdleTimeoutMinutes(sessCfg.IdleTimeout),
+	}
+
+	for key, value := range defaults {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		current, err := database.GetSystemSetting(ctx, db, key)
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(current) != "" {
+			continue
+		}
+		if err := database.UpsertSystemSetting(ctx, db, key, value); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func formatIdleTimeoutMinutes(d time.Duration) string {
+	if d <= 0 {
+		return "0"
+	}
+	minutes := int(d / time.Minute)
+	if minutes <= 0 {
+		minutes = 0
+	}
+	return strconv.Itoa(minutes)
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // Shutdown gracefully stops background jobs and releases resources.

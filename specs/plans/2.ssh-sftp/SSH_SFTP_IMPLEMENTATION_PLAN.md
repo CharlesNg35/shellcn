@@ -422,20 +422,20 @@ Protocol defaults managed via Admin UI, not config files. Settings stored as key
 ```go
 // Backend: Protocol settings keys
 const (
-    "protocol.ssh.concurrent_limit_default"     → "0"  // 0 = unlimited
-    "protocol.ssh.idle_timeout_minutes"         → "30"
+    "sessions.concurrent_limit_default"     → "0"  // 0 = unlimited
+    "sessions.idle_timeout_minutes"         → "30"
     "protocol.ssh.enable_sftp_default"          → "true"
-    "protocol.ssh.recording.mode"               → "optional"  // disabled|optional|forced
-    "protocol.ssh.recording.storage"            → "filesystem"  // filesystem|s3
-    "protocol.ssh.recording.retention_days"     → "90"
-    "protocol.ssh.recording.require_consent"    → "true"
+    "recording.mode"               → "optional"  // disabled|optional|forced
+    "recording.storage"            → "filesystem"  // filesystem|s3
+    "recording.retention_days"     → "90"
+    "recording.require_consent"    → "true"
     "protocol.ssh.terminal.theme_mode"          → "auto"  // auto|force_dark|force_light
     "protocol.ssh.terminal.font_family"         → "monospace"
     "protocol.ssh.terminal.font_size"           → "14"
     "protocol.ssh.terminal.scrollback_limit"    → "1000"
     "protocol.ssh.terminal.enable_webgl"        → "true"
-    "protocol.ssh.shared_sessions.allow_default" → "true"
-    "protocol.ssh.shared_sessions.restrict_write_to_admins" → "false"
+    "session_sharing.allow_default" → "true"
+    "session_sharing.restrict_write_to_admins" → "false"
 )
 ```
 

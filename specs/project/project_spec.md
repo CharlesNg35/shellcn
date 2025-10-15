@@ -759,7 +759,7 @@ Users → ShellCN Platform → External Services
 
 **Default enabled protocols:**
 
-1. **SSH/SFTP** - Essential remote server access (SSH v1 & v2 support)
+1. **SSH/SFTP** - Essential remote server access (SSH v2 support)
 2. **Telnet** - Legacy device management
 3. **RDP** - Windows desktop access (Rust FFI)
 4. **VNC** - Cross-platform remote desktop (Rust FFI)
@@ -777,9 +777,7 @@ Users → ShellCN Platform → External Services
 
 #### SSH Protocol Support
 
-- **SSH v1** - Legacy protocol support (disabled by default for security)
 - **SSH v2** - Primary protocol (enabled by default)
-- **Auto-detection** - Detect protocol version during handshake
 
 #### SSH Connection Settings
 
@@ -789,7 +787,7 @@ Users → ShellCN Platform → External Services
 type SSHConnectionConfig struct {
     // Basic
     Name        string
-    Protocol    string  // "ssh-v1", "ssh-v2", "auto"
+    Protocol    string  // "ssh" (future: "auto")
     Icon        string  // UI icon selection
 
     // Connection
@@ -970,7 +968,7 @@ type VaultService interface {
    - **Basic Tab:**
 
      - Name (e.g., "Production Server")
-     - Protocol (dropdown: SSH v2, SSH v1, Telnet, etc.)
+    - Protocol (dropdown: SSH, Telnet, etc.)
      - Icon (select from icon library)
      - Address (hostname or IP)
      - Port (default based on protocol)
@@ -2334,7 +2332,7 @@ email:
 **SSH Connection Form:**
 
 - Name, Icon
-- Protocol (SSH v1, SSH v2, Auto)
+- Protocol (SSH, Auto)
 - Address, Port
 - **Identity Selector** (saved identities + "Custom Identity")
 - Authentication method (Password, Public Key, Keyboard-Interactive)
@@ -2531,7 +2529,6 @@ email:
 - ✅ Clipboard sync permission-based
 - ✅ Session sharing with explicit permissions
 - ✅ Prometheus metrics without sensitive data
-- ✅ SSH v1 disabled by default (security risk)
 - ✅ **First user created via UI** (no default credentials)
 
 ---

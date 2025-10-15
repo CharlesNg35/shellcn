@@ -11,23 +11,28 @@ import (
 	"github.com/charlesng35/shellcn/internal/realtime"
 )
 
-// ErrActiveSessionExists indicates a user already has a live session for the connection.
-var ErrActiveSessionExists = errors.New("active session already exists for user and connection")
+var (
+	// ErrActiveSessionExists indicates a user already has a live session for the connection.
+	ErrActiveSessionExists = errors.New("active session already exists for user and connection")
+	// ErrConcurrentLimitReached indicates the connection's concurrent session limit has been reached.
+	ErrConcurrentLimitReached = errors.New("active session concurrent limit reached")
+)
 
 // ActiveSessionRecord represents an in-memory record of an active connection session.
 type ActiveSessionRecord struct {
-	ID             string         `json:"id"`
-	ConnectionID   string         `json:"connection_id"`
-	ConnectionName string         `json:"connection_name,omitempty"`
-	UserID         string         `json:"user_id"`
-	UserName       string         `json:"user_name,omitempty"`
-	TeamID         *string        `json:"team_id,omitempty"`
-	ProtocolID     string         `json:"protocol_id"`
-	StartedAt      time.Time      `json:"started_at"`
-	LastSeenAt     time.Time      `json:"last_seen_at"`
-	Host           string         `json:"host,omitempty"`
-	Port           int            `json:"port,omitempty"`
-	Metadata       map[string]any `json:"metadata,omitempty"`
+	ID              string         `json:"id"`
+	ConnectionID    string         `json:"connection_id"`
+	ConnectionName  string         `json:"connection_name,omitempty"`
+	UserID          string         `json:"user_id"`
+	UserName        string         `json:"user_name,omitempty"`
+	TeamID          *string        `json:"team_id,omitempty"`
+	ProtocolID      string         `json:"protocol_id"`
+	StartedAt       time.Time      `json:"started_at"`
+	LastSeenAt      time.Time      `json:"last_seen_at"`
+	Host            string         `json:"host,omitempty"`
+	Port            int            `json:"port,omitempty"`
+	Metadata        map[string]any `json:"metadata,omitempty"`
+	ConcurrentLimit int            `json:"concurrent_limit,omitempty"`
 }
 
 // ListActiveOptions controls how active sessions are filtered.
@@ -40,20 +45,22 @@ type ListActiveOptions struct {
 
 // ActiveSessionService stores active sessions in memory and emits realtime events.
 type ActiveSessionService struct {
-	mu            sync.RWMutex
-	sessions      map[string]*ActiveSessionRecord
-	userConnIndex map[string]string
-	hub           *realtime.Hub
-	timeNow       func() time.Time
+	mu               sync.RWMutex
+	sessions         map[string]*ActiveSessionRecord
+	userConnIndex    map[string]string
+	connectionCounts map[string]int
+	hub              *realtime.Hub
+	timeNow          func() time.Time
 }
 
 // NewActiveSessionService constructs an ActiveSessionService backed by the supplied realtime hub.
 func NewActiveSessionService(hub *realtime.Hub) *ActiveSessionService {
 	return &ActiveSessionService{
-		sessions:      make(map[string]*ActiveSessionRecord),
-		userConnIndex: make(map[string]string),
-		hub:           hub,
-		timeNow:       time.Now,
+		sessions:         make(map[string]*ActiveSessionRecord),
+		userConnIndex:    make(map[string]string),
+		connectionCounts: make(map[string]int),
+		hub:              hub,
+		timeNow:          time.Now,
 	}
 }
 
@@ -98,8 +105,18 @@ func (s *ActiveSessionService) RegisterSession(session *ActiveSessionRecord) err
 		return fmt.Errorf("%w: existing session id %s", ErrActiveSessionExists, existingID)
 	}
 
+	limit := record.ConcurrentLimit
+	if limit < 0 {
+		limit = 0
+	}
+	currentCount := s.connectionCounts[record.ConnectionID]
+	if limit > 0 && currentCount >= limit {
+		return fmt.Errorf("%w: limit=%d connection=%s", ErrConcurrentLimitReached, limit, record.ConnectionID)
+	}
+
 	s.sessions[record.ID] = record
 	s.userConnIndex[indexKey] = record.ID
+	s.connectionCounts[record.ConnectionID] = currentCount + 1
 
 	s.broadcastEvent("session.opened", record)
 
@@ -117,6 +134,11 @@ func (s *ActiveSessionService) UnregisterSession(sessionID string) {
 	if exists {
 		delete(s.sessions, sessionID)
 		delete(s.userConnIndex, userConnectionKey(record.UserID, record.ConnectionID))
+		if count := s.connectionCounts[record.ConnectionID]; count > 1 {
+			s.connectionCounts[record.ConnectionID] = count - 1
+		} else {
+			delete(s.connectionCounts, record.ConnectionID)
+		}
 	}
 	s.mu.Unlock()
 
@@ -216,6 +238,11 @@ func (s *ActiveSessionService) CleanupStale(gracePeriod time.Duration) {
 		if record.LastSeenAt.Before(threshold) {
 			delete(s.sessions, id)
 			delete(s.userConnIndex, userConnectionKey(record.UserID, record.ConnectionID))
+			if count := s.connectionCounts[record.ConnectionID]; count > 1 {
+				s.connectionCounts[record.ConnectionID] = count - 1
+			} else {
+				delete(s.connectionCounts, record.ConnectionID)
+			}
 			expired = append(expired, cloneSessionRecord(record))
 		}
 	}
@@ -257,6 +284,7 @@ func cloneSessionRecord(session *ActiveSessionRecord) *ActiveSessionRecord {
 		team := *session.TeamID
 		clone.TeamID = &team
 	}
+	clone.ConcurrentLimit = session.ConcurrentLimit
 	if session.Metadata != nil {
 		meta := make(map[string]any, len(session.Metadata))
 		for key, value := range session.Metadata {

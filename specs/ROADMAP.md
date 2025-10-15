@@ -254,15 +254,15 @@
 ### SSH Driver & Terminal Foundations
 
 - [ ] Finalize SSH/SFTP implementation plan (`specs/plans/2.ssh-sftp/SSH_SFTP_IMPLEMENTATION_PLAN.md`)
-- [ ] Ship Go SSH driver (`internal/drivers/ssh`) with launcher + health check
-- [ ] Enforce per-connection concurrent session limits at launch time
+- [x] Ship Go SSH driver (`internal/drivers/ssh`) with launcher + health check
+- [x] Enforce per-connection concurrent session limits at launch time
 - [ ] Wire ActiveSessionService lifecycle updates (register, heartbeat, unregister) for SSH
 - [ ] Expose SSH launch websocket endpoint and terminal streaming pipeline
-- [ ] Add protocol-scoped permissions (`protocol:ssh.connect`, `protocol:ssh.share`, `protocol:ssh.record`, etc.) with tests
-- [ ] Seed connection defaults (font, theme, enable_sftp flag) via migrations and config
-- [ ] Cover driver unit tests and integration smoke test against mock SSH server
-- [ ] Register `ssh` and `sftp` protocol descriptors backed by the new SSH driver (shared launcher)
-- [ ] Replace simple `protocols.ssh` config with enriched struct (concurrency, idle timeout, sftp auto-enable, recording, sharing)
+- [x] Add protocol-scoped permissions (`protocol:ssh.connect`, `protocol:ssh.share`, `protocol:ssh.record`, etc.) with tests
+- [x] Seed connection defaults (font, theme, enable_sftp flag) via migrations and config
+- [x] Cover driver unit tests and integration smoke test against mock SSH server
+- [x] Register `ssh` and `sftp` protocol descriptors backed by the new SSH driver (shared launcher)
+- [x] Replace simple `protocols.ssh` config with enriched struct (concurrency, idle timeout, sftp auto-enable, recording, sharing)
 - [ ] Document new config keys and defaults (`config.example.yaml`, env prefix `SHELLCN_PROTOCOLS_SSH_*`)
 
 ### Session Lifecycle Foundations

@@ -976,7 +976,7 @@ export interface CreateIdentityRequest {
 export interface SSHConnection {
     id: string;
     name: string;
-    protocol: 'ssh-v1' | 'ssh-v2' | 'auto';
+    protocol: 'ssh' | 'auto';
     icon?: string;
     host: string;
     port: number;

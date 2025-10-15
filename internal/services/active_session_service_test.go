@@ -178,6 +178,45 @@ func TestActiveSessionService_CleanupStale(t *testing.T) {
 	require.Equal(t, "sess-2", results[0].ID)
 }
 
+func TestActiveSessionService_ConcurrentLimitEnforced(t *testing.T) {
+	svc := NewActiveSessionService(nil)
+
+	require.NoError(t, svc.RegisterSession(&ActiveSessionRecord{
+		ID:              "sess-1",
+		ConnectionID:    "conn-1",
+		UserID:          "user-1",
+		ProtocolID:      "ssh",
+		ConcurrentLimit: 2,
+	}))
+	require.NoError(t, svc.RegisterSession(&ActiveSessionRecord{
+		ID:              "sess-2",
+		ConnectionID:    "conn-1",
+		UserID:          "user-2",
+		ProtocolID:      "ssh",
+		ConcurrentLimit: 2,
+	}))
+
+	err := svc.RegisterSession(&ActiveSessionRecord{
+		ID:              "sess-3",
+		ConnectionID:    "conn-1",
+		UserID:          "user-3",
+		ProtocolID:      "ssh",
+		ConcurrentLimit: 2,
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrConcurrentLimitReached)
+
+	svc.UnregisterSession("sess-2")
+
+	require.NoError(t, svc.RegisterSession(&ActiveSessionRecord{
+		ID:              "sess-4",
+		ConnectionID:    "conn-1",
+		UserID:          "user-4",
+		ProtocolID:      "ssh",
+		ConcurrentLimit: 2,
+	}))
+}
+
 func ptrString(value string) *string {
 	return &value
 }
