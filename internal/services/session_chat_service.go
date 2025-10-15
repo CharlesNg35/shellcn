@@ -63,10 +63,6 @@ func (s *SessionChatService) PostMessage(ctx context.Context, params ChatMessage
 		return ActiveSessionChatMessage{}, errors.New("session chat service: author id is required")
 	}
 
-	if _, ok := s.active.GetSession(sessionID); !ok {
-		return ActiveSessionChatMessage{}, errors.New("session chat service: session is not active")
-	}
-
 	content := strings.TrimSpace(params.Content)
 	if content == "" {
 		return ActiveSessionChatMessage{}, errors.New("session chat service: message content is required")
@@ -89,10 +85,11 @@ func (s *SessionChatService) PostMessage(ctx context.Context, params ChatMessage
 		return ActiveSessionChatMessage{}, err
 	}
 
-	if _, err := s.active.AppendChatMessage(sessionID, message); err != nil {
-		return ActiveSessionChatMessage{}, err
+	if _, exists := s.active.GetSession(sessionID); exists {
+		if _, err := s.active.AppendChatMessage(sessionID, message); err == nil {
+			s.active.AckChatMessage(sessionID, message.MessageID)
+		}
 	}
-	s.active.AckChatMessage(sessionID, message.MessageID)
 
 	return message, nil
 }
@@ -132,4 +129,41 @@ func (s *SessionChatService) PersistMessages(ctx context.Context, sessionID stri
 		return nil
 	}
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(&records).Error
+}
+
+// ListMessages returns persisted chat messages for the supplied session ordered chronologically.
+func (s *SessionChatService) ListMessages(ctx context.Context, sessionID string, limit int, before time.Time) ([]models.ConnectionSessionMessage, error) {
+	if s == nil {
+		return nil, errors.New("session chat service: service not initialised")
+	}
+	ctx = ensureContext(ctx)
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, errors.New("session chat service: session id is required")
+	}
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+
+	query := s.db.WithContext(ctx).
+		Model(&models.ConnectionSessionMessage{}).
+		Where("session_id = ?", sessionID).
+		Order("created_at DESC").
+		Limit(limit)
+
+	if !before.IsZero() {
+		query = query.Where("created_at < ?", before)
+	}
+
+	var rows []models.ConnectionSessionMessage
+	if err := query.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	// Reverse to chronological order
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
+	}
+
+	return rows, nil
 }

@@ -257,6 +257,8 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	if err != nil {
 		return nil, err
 	}
+	sessionChatHandler := handlers.NewSessionChatHandler(sessionChatSvc, sessionLifecycleSvc)
+	registerSessionChatRoutes(api, sessionChatHandler)
 
 	sshHandler := handlers.NewSSHSessionHandler(cfg, connectionSvc, vaultSvc, realtimeHub, activeSessionSvc, sessionLifecycleSvc, driverReg, checker, jwt)
 	realtimeHandler := handlers.NewRealtimeHandler(

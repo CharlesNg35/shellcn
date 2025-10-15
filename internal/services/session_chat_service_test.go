@@ -105,6 +105,12 @@ func TestSessionChatService_PersistMessages(t *testing.T) {
 	var count int64
 	require.NoError(t, db.Model(&models.ConnectionSessionMessage{}).Where("session_id = ?", "sess-buffer").Count(&count).Error)
 	require.EqualValues(t, 2, count)
+
+	listed, err := chatSvc.ListMessages(context.Background(), "sess-buffer", 10, time.Time{})
+	require.NoError(t, err)
+	require.Len(t, listed, 2)
+	require.Equal(t, "first", listed[0].Content)
+	require.Equal(t, "second", listed[1].Content)
 }
 
 func TestSessionChatService_PostMessageLengthGuard(t *testing.T) {
@@ -145,6 +151,41 @@ func TestSessionChatService_PostMessageLengthGuard(t *testing.T) {
 		Content:   long,
 	})
 	require.Error(t, err)
+}
+
+func TestSessionChatService_PostMessageInactiveSession(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	active := NewActiveSessionService(nil)
+	chatSvc, err := NewSessionChatService(db, active)
+	require.NoError(t, err)
+
+	createChatFixtures(t, db, "conn-1", "user-1")
+	require.NoError(t, db.Create(&models.ConnectionSession{
+		BaseModel:       models.BaseModel{ID: "sess-offline"},
+		ConnectionID:    "conn-1",
+		ProtocolID:      "ssh",
+		OwnerUserID:     "user-1",
+		Status:          SessionStatusClosed,
+		StartedAt:       time.Now().Add(-time.Hour),
+		LastHeartbeatAt: time.Now().Add(-30 * time.Minute),
+		ClosedAt:        timePtr(time.Now().Add(-30 * time.Minute)),
+	}).Error)
+
+	message, err := chatSvc.PostMessage(context.Background(), ChatMessageParams{
+		SessionID: "sess-offline",
+		AuthorID:  "user-1",
+		Content:   "stored",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "stored", message.Content)
+
+	var stored models.ConnectionSessionMessage
+	require.NoError(t, db.First(&stored, "session_id = ? AND author_id = ?", "sess-offline", "user-1").Error)
+	require.Equal(t, "stored", stored.Content)
+}
+
+func timePtr(t time.Time) *time.Time {
+	return &t
 }
 
 func createChatFixtures(t *testing.T, db *gorm.DB, connectionID, ownerID string) {

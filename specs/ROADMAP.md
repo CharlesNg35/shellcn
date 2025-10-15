@@ -301,7 +301,7 @@
 - [ ] Add audit logging + metrics for share lifecycle events
 - [ ] Validate permission enforcement across owner, participant, and admin roles
 
-### Session Recording (SSH-first)
+### Session Recording
 
 - [ ] Introduce recorder service + storage abstraction (filesystem + S3)
 - [ ] Stream SSH terminal output into recorder when enabled

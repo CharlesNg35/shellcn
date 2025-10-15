@@ -181,6 +181,58 @@ func TestSessionLifecycle_WriteDelegationAndRemoval(t *testing.T) {
 	require.NotNil(t, dbParticipant.LeftAt)
 }
 
+func TestSessionLifecycle_AuthorizeSessionAccess(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	auditSvc, err := NewAuditService(db)
+	require.NoError(t, err)
+
+	active := NewActiveSessionService(nil)
+	seedSessionFixtures(t, db, "conn-1", "owner-1")
+	createTestUser(t, db, "participant-1", "bob")
+
+	svc, err := NewSessionLifecycleService(
+		db,
+		active,
+		WithSessionAuditService(auditSvc),
+	)
+	require.NoError(t, err)
+
+	session, err := svc.StartSession(context.Background(), StartSessionParams{
+		SessionID:     "sess-access",
+		ConnectionID:  "conn-1",
+		ProtocolID:    "ssh",
+		OwnerUserID:   "owner-1",
+		OwnerUserName: "alice",
+		Actor: SessionActor{
+			UserID:   "owner-1",
+			Username: "alice",
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = svc.AuthorizeSessionAccess(context.Background(), session.ID, "owner-1")
+	require.NoError(t, err)
+
+	_, err = svc.AddParticipant(context.Background(), AddParticipantParams{
+		SessionID: session.ID,
+		UserID:    "participant-1",
+		UserName:  "bob",
+		Actor:     SessionActor{UserID: "owner-1", Username: "alice"},
+	})
+	require.NoError(t, err)
+
+	_, err = svc.AuthorizeSessionAccess(context.Background(), session.ID, "participant-1")
+	require.NoError(t, err)
+
+	_, err = svc.AuthorizeSessionAccess(context.Background(), session.ID, "someone-else")
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrSessionAccessDenied)
+
+	_, err = svc.AuthorizeSessionAccess(context.Background(), "missing", "owner-1")
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrSessionNotFound)
+}
+
 func fetchParticipant(t *testing.T, db *gorm.DB, sessionID, userID string) models.ConnectionSessionParticipant {
 	t.Helper()
 	var model models.ConnectionSessionParticipant

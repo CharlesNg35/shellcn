@@ -102,6 +102,13 @@ type GrantWriteParams struct {
 	Actor           SessionActor
 }
 
+var (
+	// ErrSessionNotFound indicates the session record could not be located.
+	ErrSessionNotFound = errors.New("session lifecycle service: session not found")
+	// ErrSessionAccessDenied indicates the caller cannot access the session.
+	ErrSessionAccessDenied = errors.New("session lifecycle service: access denied")
+)
+
 // SessionLifecycleService coordinates persisted session lifecycle with the active service.
 type SessionLifecycleService struct {
 	db       *gorm.DB
@@ -415,6 +422,59 @@ func (s *SessionLifecycleService) FailSession(ctx context.Context, sessionID, re
 		Reason:    reason,
 		Actor:     actor,
 	})
+}
+
+// AuthorizeSessionAccess ensures the supplied user can interact with the session.
+func (s *SessionLifecycleService) AuthorizeSessionAccess(ctx context.Context, sessionID, userID string) (*models.ConnectionSession, error) {
+	if s == nil {
+		return nil, errors.New("session lifecycle service: service not initialised")
+	}
+	ctx = ensureContext(ctx)
+	sessionID = strings.TrimSpace(sessionID)
+	userID = strings.TrimSpace(userID)
+	if sessionID == "" {
+		return nil, errors.New("session lifecycle service: session id is required")
+	}
+	if userID == "" {
+		return nil, errors.New("session lifecycle service: user id is required")
+	}
+
+	var session models.ConnectionSession
+	if err := s.db.WithContext(ctx).
+		First(&session, "id = ?", sessionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrSessionNotFound
+		}
+		return nil, err
+	}
+
+	if strings.EqualFold(session.OwnerUserID, userID) {
+		return &session, nil
+	}
+
+	var participantCount int64
+	if err := s.db.WithContext(ctx).
+		Model(&models.ConnectionSessionParticipant{}).
+		Where("session_id = ? AND user_id = ? AND (left_at IS NULL)", sessionID, userID).
+		Count(&participantCount).Error; err != nil {
+		return nil, err
+	}
+	if participantCount > 0 {
+		return &session, nil
+	}
+
+	if active, ok := s.active.GetSession(sessionID); ok {
+		if strings.EqualFold(active.OwnerUserID, userID) {
+			return &session, nil
+		}
+		if active.Participants != nil {
+			if p, exists := active.Participants[userID]; exists && p != nil {
+				return &session, nil
+			}
+		}
+	}
+
+	return nil, ErrSessionAccessDenied
 }
 
 // AddParticipant registers a participant both in-memory and in persistence.
