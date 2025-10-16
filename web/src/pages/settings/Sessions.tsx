@@ -50,7 +50,12 @@ interface TeamOption {
 
 const RECORDINGS_PER_PAGE = 20
 
-const scopeOptions: { label: string; value: SessionRecordingScope }[] = [
+const activeScopeOptions: { label: string; value: SessionRecordingScope }[] = [
+  { label: 'Team sessions', value: 'team' },
+  { label: 'All sessions', value: 'all' },
+]
+
+const recordingScopeOptions: { label: string; value: SessionRecordingScope }[] = [
   { label: 'My sessions', value: 'personal' },
   { label: 'Team sessions', value: 'team' },
   { label: 'All sessions', value: 'all' },
@@ -102,7 +107,6 @@ function getDefaultScope(canViewAll: boolean, canViewTeam: boolean): SessionReco
 
 export function Sessions() {
   const { hasPermission } = usePermissions()
-  const [activeTab, setActiveTab] = useState<'active' | 'recordings'>('active')
 
   const canViewActiveAll =
     hasPermission(PERMISSIONS.SESSION.ACTIVE.VIEW_ALL) ||
@@ -115,6 +119,7 @@ export function Sessions() {
     hasPermission(PERMISSIONS.PERMISSION.MANAGE)
   const canViewRecordingTeam =
     canViewRecordingAll || hasPermission(PERMISSIONS.SESSION.RECORDING.VIEW_TEAM)
+  const canViewRecordingPersonal = hasPermission(PERMISSIONS.SESSION.RECORDING.VIEW)
   const canDeleteRecordings = hasPermission(PERMISSIONS.SESSION.RECORDING.DELETE)
 
   const canListTeams =
@@ -129,6 +134,21 @@ export function Sessions() {
     return teamsData.map((team) => ({ label: team.name, value: `team:${team.id}` }))
   }, [teamsData])
 
+  const hasActiveAccess = canViewActiveAll || canViewActiveTeam
+  const hasRecordingAccess = canViewRecordingAll || canViewRecordingTeam || canViewRecordingPersonal
+
+  const [activeTab, setActiveTab] = useState<'active' | 'recordings'>(
+    hasActiveAccess ? 'active' : 'recordings'
+  )
+
+  useEffect(() => {
+    if (!hasActiveAccess && activeTab === 'active' && hasRecordingAccess) {
+      setActiveTab('recordings')
+    } else if (!hasRecordingAccess && activeTab === 'recordings' && hasActiveAccess) {
+      setActiveTab('active')
+    }
+  }, [activeTab, hasActiveAccess, hasRecordingAccess])
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -141,28 +161,34 @@ export function Sessions() {
         onValueChange={(value) => setActiveTab(value as 'active' | 'recordings')}
       >
         <TabsList>
-          <TabsTrigger value="active">Active Sessions</TabsTrigger>
-          <TabsTrigger value="recordings">Session Recordings</TabsTrigger>
+          {hasActiveAccess ? <TabsTrigger value="active">Active Sessions</TabsTrigger> : null}
+          {hasRecordingAccess ? (
+            <TabsTrigger value="recordings">Session Recordings</TabsTrigger>
+          ) : null}
         </TabsList>
 
-        <TabsContent value="active">
-          <ActiveSessionsSection
-            canViewAll={canViewActiveAll}
-            canViewTeam={canViewActiveTeam}
-            teamOptions={teamOptions}
-            isTeamsLoading={teamsQuery.isLoading}
-          />
-        </TabsContent>
+        {hasActiveAccess ? (
+          <TabsContent value="active">
+            <ActiveSessionsSection
+              canViewAll={canViewActiveAll}
+              canViewTeam={canViewActiveTeam}
+              teamOptions={teamOptions}
+              isTeamsLoading={teamsQuery.isLoading}
+            />
+          </TabsContent>
+        ) : null}
 
-        <TabsContent value="recordings">
-          <SessionRecordingsSection
-            canViewAll={canViewRecordingAll}
-            canViewTeam={canViewRecordingTeam}
-            canDelete={canDeleteRecordings}
-            teamOptions={teamOptions}
-            isTeamsLoading={teamsQuery.isLoading}
-          />
-        </TabsContent>
+        {hasRecordingAccess ? (
+          <TabsContent value="recordings">
+            <SessionRecordingsSection
+              canViewAll={canViewRecordingAll}
+              canViewTeam={canViewRecordingTeam}
+              canDelete={canDeleteRecordings}
+              teamOptions={teamOptions}
+              isTeamsLoading={teamsQuery.isLoading}
+            />
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   )
@@ -181,23 +207,30 @@ function ActiveSessionsSection({
   teamOptions,
   isTeamsLoading,
 }: ActiveSessionsSectionProps) {
-  const [scope, setScope] = useState<SessionRecordingScope>(
-    getDefaultScope(canViewAll, canViewTeam)
-  )
+  const hasScopeAccess = canViewAll || canViewTeam
+  const [scope, setScope] = useState<SessionRecordingScope>(() => (canViewTeam ? 'team' : 'all'))
   const [teamFilter, setTeamFilter] = useState<TeamFilterValue>('all')
   const [customTeam, setCustomTeam] = useState('')
-
-  useEffect(() => {
-    if (scope === 'personal') {
-      setTeamFilter('all')
-    }
-  }, [scope])
 
   useEffect(() => {
     if (teamFilter !== 'custom') {
       setCustomTeam('')
     }
   }, [teamFilter])
+
+  useEffect(() => {
+    if (scope === 'team' && !canViewTeam && canViewAll) {
+      setScope('all')
+    } else if (scope === 'all' && !canViewAll && canViewTeam) {
+      setScope('team')
+    }
+  }, [scope, canViewAll, canViewTeam])
+
+  useEffect(() => {
+    if (scope === 'personal') {
+      setScope(canViewTeam ? 'team' : 'all')
+    }
+  }, [scope, canViewTeam])
 
   const teamParam = useMemo(
     () => (scope === 'personal' ? undefined : resolveTeamParameter(teamFilter, customTeam)),
@@ -208,6 +241,7 @@ function ActiveSessionsSection({
     scope,
     team_id: teamParam,
     refetchInterval: 20_000,
+    enabled: hasScopeAccess,
   })
   const activeSessions = activeSessionsQuery.data ?? []
 
@@ -270,7 +304,7 @@ function ActiveSessionsSection({
 
   const scopeOptionsWithPermissions = useMemo(
     () =>
-      scopeOptions.map((option) => ({
+      activeScopeOptions.map((option) => ({
         ...option,
         disabled:
           (option.value === 'team' && !canViewTeam) || (option.value === 'all' && !canViewAll),
@@ -281,6 +315,10 @@ function ActiveSessionsSection({
   const columnCount = columns.length
   const isLoading = activeSessionsQuery.isLoading
   const showEmpty = !isLoading && activeSessions.length === 0
+
+  if (!hasScopeAccess) {
+    return null
+  }
 
   return (
     <Card>
@@ -325,7 +363,6 @@ function ActiveSessionsSection({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All teams</SelectItem>
-                  <SelectItem value="personal">Only personal sessions</SelectItem>
                   {teamOptions.map((team) => (
                     <SelectItem key={team.value} value={team.value}>
                       {team.label}
@@ -618,7 +655,7 @@ function SessionRecordingsSection({
 
   const scopeOptionsWithPermissions = useMemo(
     () =>
-      scopeOptions.map((option) => ({
+      recordingScopeOptions.map((option) => ({
         ...option,
         disabled:
           (option.value === 'team' && !canViewTeam) || (option.value === 'all' && !canViewAll),

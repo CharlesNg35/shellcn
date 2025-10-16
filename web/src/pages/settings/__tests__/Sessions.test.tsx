@@ -139,7 +139,7 @@ describe('Sessions settings page', () => {
     expect(getByText('Bob')).toBeInTheDocument()
   })
 
-  it('requests active sessions with team scope when selected', () => {
+  it('requests active sessions with team or all scope selections', () => {
     const queryClient = new QueryClient()
     render(
       <QueryClientProvider client={queryClient}>
@@ -147,12 +147,15 @@ describe('Sessions settings page', () => {
       </QueryClientProvider>
     )
 
+    const initialCall = mockUseActiveConnections.mock.calls[0]?.[0]
+    expect(initialCall?.scope).toBe('team')
+
     const scopeTrigger = screen.getAllByRole('combobox')[0]
     fireEvent.click(scopeTrigger)
-    fireEvent.click(screen.getByRole('option', { name: 'Team sessions' }))
+    fireEvent.click(screen.getByRole('option', { name: 'All sessions' }))
 
-    const lastCall = mockUseActiveConnections.mock.calls.at(-1)?.[0]
-    expect(lastCall?.scope).toBe('team')
+    const updatedCall = mockUseActiveConnections.mock.calls.at(-1)?.[0]
+    expect(updatedCall?.scope).toBe('all')
   })
 
   it('allows downloading and deleting recordings', async () => {
