@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useSettings } from '@/hooks/useSettings'
 import type { ThemePreference } from '@/store/settings-store'
 import { SSHPreferencesPanel } from './SSHPreferencesPanel'
+import { useAvailableProtocols } from '@/hooks/useProtocols'
 
 interface AppearanceSettingsPanelProps {
   className?: string
@@ -20,6 +21,13 @@ const THEME_OPTIONS: Array<{ value: ThemePreference; label: string; description:
 
 export function AppearanceSettingsPanel({ className }: AppearanceSettingsPanelProps) {
   const { theme, setTheme } = useSettings()
+  const { data: availableProtocols } = useAvailableProtocols({ staleTime: 300_000 })
+
+  const sshPreferencesSupported = Boolean(
+    availableProtocols?.data.some(
+      (protocol) => protocol.id === 'ssh' && protocol.available && protocol.driverEnabled
+    )
+  )
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -50,7 +58,7 @@ export function AppearanceSettingsPanel({ className }: AppearanceSettingsPanelPr
         </CardContent>
       </Card>
 
-      <SSHPreferencesPanel />
+      {sshPreferencesSupported ? <SSHPreferencesPanel /> : null}
     </div>
   )
 }

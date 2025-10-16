@@ -89,7 +89,8 @@ func (h *SessionRecordingHandler) Stop(c *gin.Context) {
 	}
 
 	if !strings.EqualFold(session.OwnerUserID, userID) {
-		allowed, permErr := h.checker.CheckResource(ctx, userID, "connection", session.ConnectionID, "protocol:ssh.record")
+		permissionID := recordingPermissionForProtocol(session.ProtocolID)
+		allowed, permErr := h.checker.CheckResource(ctx, userID, "connection", session.ConnectionID, permissionID)
 		if permErr != nil {
 			response.Error(c, permErr)
 			return
@@ -160,7 +161,8 @@ func (h *SessionRecordingHandler) Download(c *gin.Context) {
 	}
 
 	if !strings.EqualFold(session.OwnerUserID, userID) {
-		allowed, permErr := h.checker.CheckResource(ctx, userID, "connection", session.ConnectionID, "protocol:ssh.record")
+		permissionID := recordingPermissionForProtocol(session.ProtocolID)
+		allowed, permErr := h.checker.CheckResource(ctx, userID, "connection", session.ConnectionID, permissionID)
 		if permErr != nil {
 			response.Error(c, permErr)
 			return
@@ -192,6 +194,14 @@ func (h *SessionRecordingHandler) handleLifecycleError(c *gin.Context, err error
 	default:
 		response.Error(c, apperrors.Wrap(err, "session access"))
 	}
+}
+
+func recordingPermissionForProtocol(protocolID string) string {
+	protocolID = strings.ToLower(strings.TrimSpace(protocolID))
+	if protocolID == "" {
+		protocolID = "ssh"
+	}
+	return fmt.Sprintf("protocol:%s.record", protocolID)
 }
 
 type recordingRecordDTO struct {

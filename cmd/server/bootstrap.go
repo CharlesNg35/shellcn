@@ -57,6 +57,9 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		}
 	}()
 
+	// ---------------------------------------------------------------------------
+	// Monitoring / Telemetry
+	// ---------------------------------------------------------------------------
 	mon, err := monitoring.NewModule(monitoring.Options{})
 	if err != nil {
 		return nil, fmt.Errorf("initialise monitoring module: %w", err)
@@ -69,6 +72,9 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	// ---------------------------------------------------------------------------
+	// Database (primary persistence layer)
+	// ---------------------------------------------------------------------------
 	stack.DB, err = initialiseDatabase(cfg)
 	if err != nil {
 		return nil, err
@@ -84,6 +90,9 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		return nil, err
 	}
 
+	// ---------------------------------------------------------------------------
+	// System Settings Seeding
+	// ---------------------------------------------------------------------------
 	if err := seedSSHProtocolDefaults(ctx, stack.DB, cfg); err != nil {
 		return nil, fmt.Errorf("seed ssh defaults: %w", err)
 	}
@@ -94,6 +103,9 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		return nil, fmt.Errorf("seed session sharing defaults: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// Protocol Catalogue
+	// ---------------------------------------------------------------------------
 	stack.DriverRegistry = drivers.DefaultRegistry()
 	catalogSvc, err := services.NewProtocolCatalogService(stack.DB)
 	if err != nil {
@@ -103,6 +115,9 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		return nil, fmt.Errorf("sync protocol catalog: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// Cache & Rate Limiting Stores
+	// ---------------------------------------------------------------------------
 	dbStore := cache.NewDatabaseStore(stack.DB)
 
 	if cfg.Cache.Redis.Enabled {
@@ -123,6 +138,9 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		}
 	}
 
+	// ---------------------------------------------------------------------------
+	// Authentication / Sessions
+	// ---------------------------------------------------------------------------
 	jwtSvc, err := iauth.NewJWTService(cfg.Auth.JWTServiceConfig())
 	if err != nil {
 		return nil, fmt.Errorf("initialise jwt service: %w", err)
@@ -141,6 +159,9 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		return nil, fmt.Errorf("initialise session service: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// Auditing
+	// ---------------------------------------------------------------------------
 	stack.AuditSvc, err = services.NewAuditService(stack.DB)
 	if err != nil {
 		return nil, fmt.Errorf("initialise audit service: %w", err)
@@ -156,22 +177,32 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		return nil, fmt.Errorf("initialise vault crypto: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// Vault Service
+	// ---------------------------------------------------------------------------
 	stack.VaultSvc, err = services.NewVaultService(stack.DB, stack.AuditSvc, nil, vaultCrypto)
 	if err != nil {
 		return nil, fmt.Errorf("initialise vault service: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// Recorder (Session Recording)
+	// ---------------------------------------------------------------------------
 	recordingRoot := filepath.Join("data", "records")
 	recorderStore, err := services.NewFilesystemRecorderStore(recordingRoot)
 	if err != nil {
 		return nil, fmt.Errorf("initialise recorder store: %w", err)
 	}
+
 	recorderPolicy := services.LoadRecorderPolicy(ctx, stack.DB)
 	stack.RecorderSvc, err = services.NewRecorderService(stack.DB, recorderStore, services.WithRecorderPolicy(recorderPolicy))
 	if err != nil {
 		return nil, fmt.Errorf("initialise recorder service: %w", err)
 	}
 
+	// ---------------------------------------------------------------------------
+	// Background Maintenance Jobs
+	// ---------------------------------------------------------------------------
 	stack.Cleaner = maintenance.NewCleaner(stack.DB, stack.SessionSvc, stack.AuditSvc,
 		maintenance.WithVaultService(stack.VaultSvc),
 		maintenance.WithRecorderService(stack.RecorderSvc),
@@ -179,10 +210,14 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 	if err := stack.Cleaner.Start(); err != nil {
 		return nil, fmt.Errorf("start maintenance jobs: %w", err)
 	}
+
 	if health := mon.Health(); health != nil {
 		health.RegisterReadiness(checks.Maintenance(0))
 	}
 
+	// ---------------------------------------------------------------------------
+	// Rate Limiter Store Selection
+	// ---------------------------------------------------------------------------
 	switch {
 	case stack.Redis != nil:
 		stack.RateStore = middleware.NewRedisRateStore(stack.Redis)
@@ -190,6 +225,9 @@ func bootstrapRuntime(ctx context.Context, cfg *app.Config, log *zap.Logger) (*r
 		stack.RateStore = middleware.NewDatabaseRateStore(dbStore)
 	}
 
+	// ---------------------------------------------------------------------------
+	// HTTP Router
+	// ---------------------------------------------------------------------------
 	stack.Router, err = api.NewRouter(stack.DB, jwtSvc, cfg, stack.DriverRegistry, stack.SessionSvc, stack.RateStore, mon, stack.RecorderSvc)
 	if err != nil {
 		return nil, fmt.Errorf("build api router: %w", err)

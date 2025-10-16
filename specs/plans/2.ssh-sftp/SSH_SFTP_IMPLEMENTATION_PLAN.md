@@ -256,6 +256,7 @@
 - Show live badge when recording.
 - Add Session Recordings page under `/settings/protocols` to list captured sessions (admin view).
 - Build playback modal leveraging Asciinema player (embed via react component) with download option.
+- Recording permissions are derived from the session protocol (`protocol:<driver>.record`). Backends MUST NOT hardcode SSH so future drivers (RDP, VNC, etc.) automatically inherit the same recording lifecycle.
 
 ### 4.7 Settings & Preferences
 
