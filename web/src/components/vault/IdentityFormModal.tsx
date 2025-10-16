@@ -1,24 +1,21 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type ClipboardEvent } from 'react'
-import { Controller, type Control, useForm } from 'react-hook-form'
+import { useEffect, useMemo, useState } from 'react'
+import { useForm, type FieldErrors } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Modal } from '@/components/ui/Modal'
-import { Input } from '@/components/ui/Input'
-import { Textarea } from '@/components/ui/Textarea'
-import { Button } from '@/components/ui/Button'
-import { Checkbox } from '@/components/ui/Checkbox'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { useTeams } from '@/hooks/useTeams'
 import { useCredentialTemplates, useIdentity, useIdentityMutations } from '@/hooks/useIdentities'
-import type {
-  CredentialField,
-  CredentialTemplateRecord,
-  IdentityRecord,
-  IdentityScope,
-} from '@/types/vault'
-import { cn } from '@/lib/utils/cn'
-import { toast } from '@/lib/utils/toast'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select'
+import type { CredentialTemplateRecord, IdentityRecord, IdentityScope } from '@/types/vault'
+import { isCredentialFieldVisible } from '@/lib/vault/credentialFieldVisibility'
+import {
+  CustomPayloadSection,
+  FormActions,
+  IdentityDetailsSection,
+  MetadataSection,
+  TemplateFieldsSection,
+  TemplateSelectionSection,
+} from './identity-form/Sections'
 
 const identityFormSchema = z.object({
   name: z
@@ -43,7 +40,8 @@ const identityFormSchema = z.object({
 
 const MASKED_SECRET_PLACEHOLDER = '••••••••'
 
-type IdentityFormValues = z.infer<typeof identityFormSchema>
+export type IdentityFormValues = z.infer<typeof identityFormSchema>
+export type IdentityFormErrors = FieldErrors<IdentityFormValues>
 
 interface IdentityFormModalProps {
   open: boolean
@@ -116,7 +114,7 @@ function buildTemplateDefaults(
       defaults[field.name] = existingValue
       return
     }
-    if (field.default_value !== undefined) {
+    if (field.default_value !== undefined && !hasDefinedValue(defaults[field.name])) {
       defaults[field.name] = field.default_value
       return
     }
@@ -128,6 +126,26 @@ function buildTemplateDefaults(
         defaults[field.name] = ''
     }
   })
+
+  const templateMetadata = toRecord(template.metadata)
+  if (templateMetadata) {
+    const metadataDefaults = toRecord(templateMetadata.defaults)
+    if (metadataDefaults) {
+      Object.entries(metadataDefaults).forEach(([key, value]) => {
+        if (!hasDefinedValue(defaults[key])) {
+          defaults[key] = value
+        }
+      })
+    }
+
+    template.fields.forEach((field) => {
+      const metadataKey = `default_${field.name}`
+      if (metadataKey in templateMetadata && !hasDefinedValue(defaults[field.name])) {
+        defaults[field.name] = templateMetadata[metadataKey]
+      }
+    })
+  }
+
   return defaults
 }
 
@@ -265,6 +283,9 @@ export function IdentityFormModal({
     if (selectedTemplate) {
       const currentPayload = values.payload ?? {}
       selectedTemplate.fields.forEach((field) => {
+        if (!isCredentialFieldVisible(field, currentPayload)) {
+          return
+        }
         const rawValue = currentPayload[field.name]
         if (rawValue === undefined || rawValue === '' || rawValue === null) {
           if (field.required && mode === 'create') {
@@ -272,12 +293,21 @@ export function IdentityFormModal({
           }
           return
         }
+        if (rawValue === MASKED_SECRET_PLACEHOLDER) {
+          return
+        }
         switch (field.type) {
           case 'number':
-            payload[field.name] = Number(rawValue)
+            {
+              const numericValue =
+                typeof rawValue === 'number' ? rawValue : Number(String(rawValue).trim())
+              if (!Number.isNaN(numericValue)) {
+                payload[field.name] = numericValue
+              }
+            }
             break
           case 'boolean':
-            payload[field.name] = Boolean(rawValue)
+            payload[field.name] = coerceBoolean(rawValue)
             break
           default:
             payload[field.name] = rawValue
@@ -348,351 +378,69 @@ export function IdentityFormModal({
         </div>
       ) : (
         <form className="space-y-6" onSubmit={onSubmit}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="identity-name" className="text-sm font-medium">
-                Name
-              </label>
-              <Input id="identity-name" placeholder="Production SSH key" {...register('name')} />
-              {formState.errors.name ? (
-                <p className="text-xs text-destructive">{formState.errors.name.message}</p>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="identity-scope" className="text-sm font-medium">
-                Scope
-              </label>
-              <Controller
-                name="scope"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    disabled={mode === 'edit'}
-                    value={(field.value as IdentityScope) ?? defaultScope}
-                    onValueChange={(value) => field.onChange(value as IdentityScope)}
-                  >
-                    <SelectTrigger id="identity-scope" className="h-10 w-full justify-between">
-                      <SelectValue placeholder="Select scope" />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectItem value="global">Global</SelectItem>
-                      <SelectItem value="team">Team</SelectItem>
-                      <SelectItem value="connection">Connection</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="identity-description" className="text-sm font-medium">
-              Description
-            </label>
-            <Textarea
-              id="identity-description"
-              rows={3}
-              placeholder="Optional summary to help collaborators understand this credential"
-              {...register('description')}
-            />
-            {formState.errors.description ? (
-              <p className="text-xs text-destructive">{formState.errors.description.message}</p>
-            ) : null}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="identity-template" className="text-sm font-medium">
-                Credential template
-              </label>
-              <Controller
-                name="template_id"
-                control={control}
-                render={({ field }) => (
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                    <SelectTrigger id="identity-template" className="h-10 w-full justify-between">
-                      <SelectValue placeholder="Custom (JSON)" />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectItem value="">Custom (JSON)</SelectItem>
-                      {templates.map((tpl) => (
-                        <SelectItem key={tpl.id} value={tpl.id}>
-                          {tpl.display_name} · {tpl.driver_id}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="identity-team" className="text-sm font-medium">
-                Team (team scope)
-              </label>
-              <Controller
-                name="team_id"
-                control={control}
-                render={({ field }) => (
-                  <Select
-                    disabled={disableTeamSelect}
-                    value={field.value ?? ''}
-                    onValueChange={field.onChange}
-                  >
-                    <SelectTrigger
-                      id="identity-team"
-                      className={cn(
-                        'h-10 w-full justify-between',
-                        disableTeamSelect && 'bg-muted text-muted-foreground'
-                      )}
-                    >
-                      <SelectValue placeholder="No team" />
-                    </SelectTrigger>
-                    <SelectContent align="start">
-                      <SelectItem value="">No team</SelectItem>
-                      {teams.map((team) => (
-                        <SelectItem key={team.id} value={team.id}>
-                          {team.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {disableTeamSelect ? (
-                <p className="text-xs text-muted-foreground">
-                  Switch to the Team scope to select a default team.
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="identity-metadata" className="text-sm font-medium">
-              Metadata (JSON)
-            </label>
-            <Textarea
-              id="identity-metadata"
-              rows={4}
-              placeholder='{"notes":"Optional metadata"}'
-              {...register('metadata')}
-            />
-            {formState.errors.metadata ? (
-              <p className="text-xs text-destructive">{formState.errors.metadata.message}</p>
-            ) : null}
-          </div>
-
+          <IdentityDetailsSection
+            register={register}
+            control={control}
+            errors={formState.errors}
+            defaultScope={defaultScope}
+            mode={mode}
+          />
+          <TemplateSelectionSection
+            control={control}
+            templates={templates}
+            teams={teams}
+            disableTeamSelect={disableTeamSelect}
+            selectedTemplate={selectedTemplate}
+          />
           {selectedTemplate ? (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                    Credential fields
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Provide values that match the selected template. Sensitive values remain
-                    encrypted.
-                  </p>
-                </div>
-                {mode === 'edit' ? (
-                  <label className="flex items-center gap-2 text-sm text-foreground">
-                    <Controller
-                      name="rotate_payload"
-                      control={control}
-                      render={({ field }) => (
-                        <Checkbox
-                          checked={Boolean(field.value)}
-                          onCheckedChange={(checked) => field.onChange(Boolean(checked))}
-                        />
-                      )}
-                    />
-                    Rotate credentials
-                  </label>
-                ) : null}
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                {selectedTemplate.fields.map((field) => (
-                  <CredentialFieldInput
-                    key={field.name}
-                    field={field}
-                    control={control}
-                    disabled={mode === 'edit' && !rotatePayload}
-                  />
-                ))}
-              </div>
-            </div>
+            <TemplateFieldsSection
+              control={control}
+              template={selectedTemplate}
+              mode={mode}
+              rotatePayload={rotatePayload}
+            />
           ) : (
-            <div className="space-y-2">
-              <label htmlFor="identity-custom-payload" className="text-sm font-medium">
-                Credential payload (JSON)
-              </label>
-              <Textarea
-                id="identity-custom-payload"
-                rows={6}
-                placeholder='{"username":"admin","password":"••••"}'
-                {...register('customPayload')}
-              />
-            </div>
+            <CustomPayloadSection register={register} />
           )}
-
-          {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
-
-          <div className="flex justify-end gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleModalClose}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Saving…' : mode === 'create' ? 'Create identity' : 'Save changes'}
-            </Button>
-          </div>
+          <MetadataSection register={register} error={formState.errors.metadata?.message} />
+          <FormActions
+            onCancel={handleModalClose}
+            isSubmitting={isSubmitting}
+            mode={mode}
+            formError={formError}
+          />
         </form>
       )}
     </Modal>
   )
 }
 
-interface CredentialFieldInputProps {
-  field: CredentialField
-  control: Control<IdentityFormValues>
-  disabled?: boolean
+function hasDefinedValue(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== ''
 }
 
-function CredentialFieldInput({ field, control, disabled }: CredentialFieldInputProps) {
-  const fieldName = `payload.${field.name}` as const
-
-  const handleClipboardBlock = (event: ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    event.preventDefault()
-    toast.warning('Copy disabled', {
-      description: 'Secret values cannot be copied from the vault form.',
-    })
+function coerceBoolean(value: unknown): boolean {
+  if (typeof value === 'boolean') {
+    return value
   }
-
-  if (field.type === 'boolean') {
-    return (
-      <Controller
-        name={fieldName}
-        control={control}
-        defaultValue={false}
-        render={({ field: controllerField }) => (
-          <label
-            className={cn(
-              'flex items-start gap-3 rounded-md border border-border p-3',
-              disabled ? 'bg-muted text-muted-foreground' : ''
-            )}
-          >
-            <Checkbox
-              checked={Boolean(controllerField.value)}
-              onCheckedChange={(checked) => controllerField.onChange(Boolean(checked))}
-              disabled={disabled}
-            />
-            <div>
-              <p className="text-sm font-medium text-foreground">{field.label ?? field.name}</p>
-              {field.description ? (
-                <p className="text-xs text-muted-foreground">{field.description}</p>
-              ) : null}
-            </div>
-          </label>
-        )}
-      />
-    )
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['true', '1', 'yes', 'y', 'on'].includes(normalized)) {
+      return true
+    }
+    if (['false', '0', 'no', 'n', 'off'].includes(normalized)) {
+      return false
+    }
   }
-
-  if (field.type === 'enum' && Array.isArray(field.options)) {
-    return (
-      <div className="space-y-2">
-        <label htmlFor={`field-${field.name}`} className="text-sm font-medium">
-          {field.label ?? field.name}
-        </label>
-        <Controller
-          name={fieldName}
-          control={control}
-          defaultValue={
-            typeof field.options[0] === 'string'
-              ? field.options[0]
-              : field.options[0] && 'value' in field.options[0]
-                ? String(field.options[0].value ?? '')
-                : ''
-          }
-          render={({ field: controllerField }) => (
-            <Select
-              disabled={disabled}
-              value={(controllerField.value as string) ?? ''}
-              onValueChange={(value) => controllerField.onChange(value)}
-            >
-              <SelectTrigger id={`field-${field.name}`} className="h-10 w-full justify-between">
-                <SelectValue placeholder="Select option" />
-              </SelectTrigger>
-              <SelectContent align="start">
-                {field.options?.map((option) => {
-                  if (typeof option === 'string') {
-                    return (
-                      <SelectItem key={option} value={option}>
-                        {option}
-                      </SelectItem>
-                    )
-                  }
-                  const rawValue = option.value
-                  const label =
-                    typeof option.label === 'string' ? option.label : String(option.value ?? '')
-                  return (
-                    <SelectItem key={String(rawValue)} value={String(rawValue)}>
-                      {label}
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
-          )}
-        />
-        {field.description ? (
-          <p className="text-xs text-muted-foreground">{field.description}</p>
-        ) : null}
-      </div>
-    )
+  if (typeof value === 'number') {
+    return value !== 0
   }
+  return Boolean(value)
+}
 
-  const isSecret = field.type === 'secret'
-  const InputComponent = isSecret ? Textarea : Input
-  const inputProps = isSecret ? { rows: field.input_modes?.includes('textarea') ? 4 : 3 } : {}
-
-  return (
-    <div className="space-y-2">
-      <label htmlFor={`field-${field.name}`} className="text-sm font-medium">
-        {field.label ?? field.name}
-      </label>
-      <Controller
-        name={fieldName}
-        control={control}
-        defaultValue={field.default_value ?? ''}
-        render={({ field: controllerField }) => (
-          <InputComponent
-            id={`field-${field.name}`}
-            disabled={disabled}
-            placeholder={field.description ?? ''}
-            value={(controllerField.value as string) ?? ''}
-            onChange={(event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-              controllerField.onChange(event.target.value)
-            }
-            autoComplete={isSecret ? 'off' : undefined}
-            onCopy={isSecret ? handleClipboardBlock : undefined}
-            onCut={isSecret ? handleClipboardBlock : undefined}
-            {...inputProps}
-          />
-        )}
-      />
-      {field.description ? (
-        <p className="text-xs text-muted-foreground">{field.description}</p>
-      ) : null}
-      {isSecret && disabled ? (
-        <p className="text-xs text-muted-foreground">
-          Hidden for security. Enable rotation to update this secret.
-        </p>
-      ) : null}
-    </div>
-  )
+function toRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return undefined
 }

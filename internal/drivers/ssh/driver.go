@@ -128,42 +128,86 @@ func (d *Driver) CredentialTemplate() (*drivers.CredentialTemplate, error) {
 		},
 		Fields: []drivers.CredentialField{
 			{
-				Key:         "username",
+				Key:         drivers.CredentialFieldKeyUsername,
 				Label:       "Username",
-				Type:        "string",
+				Type:        drivers.CredentialFieldTypeString,
 				Required:    true,
 				Description: "Remote login username.",
 			},
 			{
-				Key:      "auth_method",
+				Key:      drivers.CredentialFieldKeyAuthMethod,
 				Label:    "Authentication Method",
-				Type:     "enum",
+				Type:     drivers.CredentialFieldTypeEnum,
 				Required: true,
 				Options: []drivers.CredentialOption{
 					{Value: "private_key", Label: "Private Key"},
 					{Value: "password", Label: "Password"},
 				},
 				Description: "Select the preferred authentication mechanism.",
+				Metadata: map[string]any{
+					"section": "authentication",
+					"hint":    "Choose how ShellCN authenticates to the remote host.",
+				},
 			},
 			{
-				Key:         "private_key",
+				Key:         drivers.CredentialFieldKeyPrivateKey,
 				Label:       "Private Key",
-				Type:        "secret",
-				InputModes:  []string{"text", "file"},
+				Type:        drivers.CredentialFieldTypeSecret,
+				InputModes:  []string{drivers.CredentialInputModeText, drivers.CredentialInputModeFile},
 				Description: "PEM-encoded private key material.",
+				Metadata: map[string]any{
+					"visibility": map[string]any{
+						"field":  drivers.CredentialFieldKeyAuthMethod,
+						"equals": []string{"private_key"},
+					},
+					"required_when": map[string]any{
+						"field":  drivers.CredentialFieldKeyAuthMethod,
+						"equals": []string{"private_key"},
+					},
+					"section": "authentication",
+				},
 			},
 			{
-				Key:         "passphrase",
+				Key:         drivers.CredentialFieldKeyPassphrase,
 				Label:       "Passphrase",
-				Type:        "secret",
+				Type:        drivers.CredentialFieldTypeSecret,
 				Description: "Optional passphrase for encrypted private keys.",
+				Metadata: map[string]any{
+					"visibility": map[string]any{
+						"field":  drivers.CredentialFieldKeyAuthMethod,
+						"equals": []string{"private_key"},
+					},
+					"section": "authentication",
+					"hint":    "Only required when the private key is encrypted.",
+				},
 			},
 			{
-				Key:         "password",
+				Key:         drivers.CredentialFieldKeyPassword,
 				Label:       "Password",
-				Type:        "secret",
+				Type:        drivers.CredentialFieldTypeSecret,
 				Description: "Password authentication fallback.",
+				Metadata: map[string]any{
+					"visibility": map[string]any{
+						"field":  drivers.CredentialFieldKeyAuthMethod,
+						"equals": []string{"password"},
+					},
+					"required_when": map[string]any{
+						"field":  drivers.CredentialFieldKeyAuthMethod,
+						"equals": []string{"password"},
+					},
+					"section": "authentication",
+				},
 			},
+		},
+		Metadata: map[string]any{
+			"sections": []map[string]string{
+				{
+					"id":          "authentication",
+					"label":       "Authentication",
+					"description": "Provide credentials used to establish SSH and SFTP sessions.",
+				},
+			},
+			"default_auth_method": "private_key",
 		},
 	}
 	return tpl, nil

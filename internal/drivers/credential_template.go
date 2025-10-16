@@ -19,6 +19,45 @@ type CredentialTemplate struct {
 	Metadata            map[string]any
 }
 
+// Credential field type constants.
+const (
+	CredentialFieldTypeString  = "string"
+	CredentialFieldTypeSecret  = "secret"
+	CredentialFieldTypeFile    = "file"
+	CredentialFieldTypeEnum    = "enum"
+	CredentialFieldTypeBoolean = "boolean"
+	CredentialFieldTypeNumber  = "number"
+)
+
+// Credential field input mode constants.
+const (
+	CredentialInputModeText     = "text"
+	CredentialInputModeFile     = "file"
+	CredentialInputModeSelect   = "select"
+	CredentialInputModePassword = "password"
+	CredentialInputModeTextarea = "textarea"
+)
+
+// Well-known credential field keys that can be shared across drivers.
+const (
+	CredentialFieldKeyUsername          = "username"
+	CredentialFieldKeyPassword          = "password"
+	CredentialFieldKeyAuthMethod        = "auth_method"
+	CredentialFieldKeyPrivateKey        = "private_key"
+	CredentialFieldKeyPassphrase        = "passphrase"
+	CredentialFieldKeyDomain            = "domain"
+	CredentialFieldKeyKubeconfig        = "kubeconfig"
+	CredentialFieldKeyClientCertificate = "client_certificate"
+	CredentialFieldKeyClientKey         = "client_key"
+	CredentialFieldKeyToken             = "token"
+	CredentialFieldKeyRegistry          = "registry"
+	CredentialFieldKeyAccessKey         = "access_key"
+	CredentialFieldKeySecretKey         = "secret_key"
+	CredentialFieldKeyAPIToken          = "api_token"
+	CredentialFieldKeyCACertificate     = "ca_certificate"
+	CredentialFieldKeyOtpSecret         = "otp_secret"
+)
+
 // CredentialField describes an individual field in a credential template.
 type CredentialField struct {
 	Key         string
@@ -29,6 +68,7 @@ type CredentialField struct {
 	InputModes  []string
 	Placeholder string
 	Options     []CredentialOption
+	Metadata    map[string]any
 	Validation  map[string]any
 }
 
