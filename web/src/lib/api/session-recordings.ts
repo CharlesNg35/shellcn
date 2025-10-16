@@ -1,5 +1,10 @@
-import type { ApiResponse } from '@/types/api'
-import type { SessionRecordingStatus } from '@/types/session-recording'
+import type { ApiMeta, ApiResponse } from '@/types/api'
+import { isApiSuccess } from '@/types/api'
+import type {
+  SessionRecordingScope,
+  SessionRecordingStatus,
+  SessionRecordingSummary,
+} from '@/types/session-recording'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
 
@@ -29,6 +34,38 @@ interface SessionRecordingStatusResponse {
     created_at?: string | null
     retention_until?: string | null
   } | null
+}
+
+interface SessionRecordingSummaryResponse {
+  record_id: string
+  session_id: string
+  connection_id: string
+  connection_name?: string | null
+  protocol_id: string
+  owner_user_id: string
+  owner_user_name?: string | null
+  team_id?: string | null
+  created_by_user_id: string
+  created_by_user_name?: string | null
+  storage_kind: string
+  storage_path: string
+  size_bytes: number
+  duration_seconds: number
+  checksum?: string | null
+  created_at: string
+  retention_until?: string | null
+}
+
+export interface FetchSessionRecordingsParams {
+  scope?: SessionRecordingScope
+  team_id?: string
+  protocol_id?: string
+  connection_id?: string
+  owner_user_id?: string
+  created_by_user_id?: string
+  page?: number
+  per_page?: number
+  sort?: 'recent' | 'oldest' | 'size_desc' | 'size_asc'
 }
 
 function normaliseStatus(payload: SessionRecordingStatusResponse): SessionRecordingStatus {
@@ -72,6 +109,28 @@ function normaliseStatus(payload: SessionRecordingStatusResponse): SessionRecord
   }
 }
 
+function transformSummary(payload: SessionRecordingSummaryResponse): SessionRecordingSummary {
+  return {
+    record_id: payload.record_id,
+    session_id: payload.session_id,
+    connection_id: payload.connection_id,
+    connection_name: payload.connection_name ?? undefined,
+    protocol_id: payload.protocol_id,
+    owner_user_id: payload.owner_user_id,
+    owner_user_name: payload.owner_user_name ?? undefined,
+    team_id: payload.team_id ?? undefined,
+    created_by_user_id: payload.created_by_user_id,
+    created_by_user_name: payload.created_by_user_name ?? undefined,
+    storage_kind: payload.storage_kind,
+    storage_path: payload.storage_path,
+    size_bytes: payload.size_bytes,
+    duration_seconds: payload.duration_seconds,
+    checksum: payload.checksum ?? undefined,
+    created_at: payload.created_at,
+    retention_until: payload.retention_until ?? undefined,
+  }
+}
+
 export async function fetchSessionRecordingStatus(
   sessionId: string
 ): Promise<SessionRecordingStatus> {
@@ -88,6 +147,30 @@ export async function stopSessionRecording(sessionId: string): Promise<SessionRe
   )
   const data = unwrapResponse(response)
   return normaliseStatus(data)
+}
+
+export async function fetchSessionRecordings(params?: FetchSessionRecordingsParams): Promise<{
+  data: SessionRecordingSummary[]
+  meta?: ApiMeta
+}> {
+  const response = await apiClient.get<ApiResponse<SessionRecordingSummaryResponse[]>>(
+    '/session-records',
+    {
+      params,
+    }
+  )
+  const payload = response.data
+  const data = unwrapResponse(response)
+  const summaries = Array.isArray(data) ? data.map(transformSummary) : []
+  const meta = isApiSuccess(payload) ? payload.meta : undefined
+  return {
+    data: summaries,
+    meta,
+  }
+}
+
+export async function deleteSessionRecording(recordId: string): Promise<void> {
+  await apiClient.delete(`/session-records/${recordId}`)
 }
 
 export async function downloadSessionRecording(recordId: string): Promise<Blob> {

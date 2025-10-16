@@ -98,6 +98,7 @@ func TestSessionChatHandler_PostAndListMessages(t *testing.T) {
 type apiEnvelope struct {
 	Success bool            `json:"success"`
 	Data    json.RawMessage `json:"data"`
+	Meta    json.RawMessage `json:"meta"`
 }
 
 func createTestUser(t *testing.T, db *gorm.DB, username string) *models.User {

@@ -229,6 +229,181 @@ func createRecorderTestConnection(t *testing.T, db *gorm.DB, id, ownerID string)
 	return conn
 }
 
+func TestRecorderService_ListRecordings(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
+	root := filepath.Join(t.TempDir(), "records")
+	store, err := NewFilesystemRecorderStore(root)
+	require.NoError(t, err)
+
+	service, err := NewRecorderService(db, store)
+	require.NoError(t, err)
+
+	owner := createRecorderTestUser(t, db, "owner-list")
+	otherUser := createRecorderTestUser(t, db, "other-list")
+
+	team := &models.Team{Name: "DevOps"}
+	require.NoError(t, db.Create(team).Error)
+	require.NoError(t, db.Model(team).Association("Users").Append(owner))
+
+	teamConnID := "conn-team"
+	connTeam := &models.Connection{
+		BaseModel:   models.BaseModel{ID: teamConnID},
+		Name:        "Team Connection",
+		ProtocolID:  "ssh",
+		OwnerUserID: owner.ID,
+		TeamID:      &team.ID,
+		Settings:    datatypes.JSON([]byte(`{}`)),
+	}
+	require.NoError(t, db.Create(connTeam).Error)
+
+	personalConn := createRecorderTestConnection(t, db, "conn-personal", owner.ID)
+
+	otherTeam := &models.Team{Name: "Security"}
+	require.NoError(t, db.Create(otherTeam).Error)
+	require.NoError(t, db.Model(otherTeam).Association("Users").Append(otherUser))
+
+	connOtherTeam := &models.Connection{
+		BaseModel:   models.BaseModel{ID: "conn-other-team"},
+		Name:        "Other Team",
+		ProtocolID:  "ssh",
+		OwnerUserID: otherUser.ID,
+		TeamID:      &otherTeam.ID,
+		Settings:    datatypes.JSON([]byte(`{}`)),
+	}
+	require.NoError(t, db.Create(connOtherTeam).Error)
+
+	now := time.Now().UTC()
+	sessionTeam := models.ConnectionSession{
+		BaseModel:       models.BaseModel{ID: "sess-team"},
+		ConnectionID:    connTeam.ID,
+		ProtocolID:      "ssh",
+		OwnerUserID:     owner.ID,
+		TeamID:          &team.ID,
+		Status:          SessionStatusClosed,
+		StartedAt:       now.Add(-2 * time.Hour),
+		LastHeartbeatAt: now.Add(-2 * time.Hour),
+	}
+	sessionPersonal := models.ConnectionSession{
+		BaseModel:       models.BaseModel{ID: "sess-personal"},
+		ConnectionID:    personalConn.ID,
+		ProtocolID:      "ssh",
+		OwnerUserID:     owner.ID,
+		Status:          SessionStatusClosed,
+		StartedAt:       now.Add(-time.Hour),
+		LastHeartbeatAt: now.Add(-time.Hour),
+	}
+	sessionOther := models.ConnectionSession{
+		BaseModel:       models.BaseModel{ID: "sess-other"},
+		ConnectionID:    connOtherTeam.ID,
+		ProtocolID:      "ssh",
+		OwnerUserID:     otherUser.ID,
+		TeamID:          &otherTeam.ID,
+		Status:          SessionStatusClosed,
+		StartedAt:       now.Add(-3 * time.Hour),
+		LastHeartbeatAt: now.Add(-3 * time.Hour),
+	}
+
+	require.NoError(t, db.Create(&sessionTeam).Error)
+	require.NoError(t, db.Create(&sessionPersonal).Error)
+	require.NoError(t, db.Create(&sessionOther).Error)
+
+	records := []models.ConnectionSessionRecord{
+		{
+			BaseModel:       models.BaseModel{ID: "rec-team"},
+			SessionID:       sessionTeam.ID,
+			StorageKind:     "filesystem",
+			StoragePath:     "team.cast.gz",
+			SizeBytes:       150,
+			DurationSeconds: 90,
+			CreatedByUserID: owner.ID,
+		},
+		{
+			BaseModel:       models.BaseModel{ID: "rec-personal"},
+			SessionID:       sessionPersonal.ID,
+			StorageKind:     "filesystem",
+			StoragePath:     "personal.cast.gz",
+			SizeBytes:       200,
+			DurationSeconds: 120,
+			CreatedByUserID: owner.ID,
+		},
+		{
+			BaseModel:       models.BaseModel{ID: "rec-other"},
+			SessionID:       sessionOther.ID,
+			StorageKind:     "filesystem",
+			StoragePath:     "other.cast.gz",
+			SizeBytes:       90,
+			DurationSeconds: 60,
+			CreatedByUserID: otherUser.ID,
+		},
+	}
+	for _, record := range records {
+		require.NoError(t, db.Create(&record).Error)
+	}
+
+	t.Run("personal scope includes owned sessions", func(t *testing.T) {
+		summaries, total, err := service.ListRecordings(context.Background(), ListRecordingsOptions{
+			Scope:  RecordingScopePersonal,
+			UserID: owner.ID,
+			Limit:  10,
+		})
+		require.NoError(t, err)
+		require.EqualValues(t, 2, total)
+		require.Len(t, summaries, 2)
+		gotIDs := []string{summaries[0].RecordID, summaries[1].RecordID}
+		require.ElementsMatch(t, []string{"rec-personal", "rec-team"}, gotIDs)
+	})
+
+	t.Run("team scope filters by membership", func(t *testing.T) {
+		summaries, total, err := service.ListRecordings(context.Background(), ListRecordingsOptions{
+			Scope:   RecordingScopeTeam,
+			UserID:  owner.ID,
+			TeamIDs: []string{team.ID},
+			Limit:   10,
+		})
+		require.NoError(t, err)
+		require.EqualValues(t, 2, total)
+		require.Len(t, summaries, 2)
+	})
+
+	t.Run("team scope with explicit team filter", func(t *testing.T) {
+		summaries, total, err := service.ListRecordings(context.Background(), ListRecordingsOptions{
+			Scope:   RecordingScopeTeam,
+			UserID:  owner.ID,
+			TeamIDs: []string{team.ID},
+			TeamID:  team.ID,
+			Limit:   10,
+		})
+		require.NoError(t, err)
+		require.EqualValues(t, 1, total)
+		require.Len(t, summaries, 1)
+		require.Equal(t, "rec-team", summaries[0].RecordID)
+	})
+
+	t.Run("all scope returns every record", func(t *testing.T) {
+		summaries, total, err := service.ListRecordings(context.Background(), ListRecordingsOptions{
+			Scope:  RecordingScopeAll,
+			UserID: owner.ID,
+			Limit:  10,
+		})
+		require.NoError(t, err)
+		require.EqualValues(t, 3, total)
+		require.Len(t, summaries, 3)
+	})
+
+	t.Run("all scope filters by team", func(t *testing.T) {
+		summaries, total, err := service.ListRecordings(context.Background(), ListRecordingsOptions{
+			Scope:  RecordingScopeAll,
+			UserID: owner.ID,
+			TeamID: otherTeam.ID,
+			Limit:  10,
+		})
+		require.NoError(t, err)
+		require.EqualValues(t, 1, total)
+		require.Len(t, summaries, 1)
+		require.Equal(t, "rec-other", summaries[0].RecordID)
+	})
+}
+
 func TestRecorderService_CleanupExpired(t *testing.T) {
 	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 	root := filepath.Join(t.TempDir(), "records")

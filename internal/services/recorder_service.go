@@ -66,6 +66,55 @@ type RecordingStatus struct {
 	PolicyMode     string     `json:"-"`
 }
 
+// RecordingScope represents the visibility scope requested when listing recordings.
+type RecordingScope string
+
+const (
+	// RecordingScopePersonal limits results to the caller's own sessions.
+	RecordingScopePersonal RecordingScope = "personal"
+	// RecordingScopeTeam limits results to the caller's teams.
+	RecordingScopeTeam RecordingScope = "team"
+	// RecordingScopeAll returns all recordings irrespective of ownership.
+	RecordingScopeAll RecordingScope = "all"
+)
+
+// ListRecordingsOptions controls how session recordings are queried.
+type ListRecordingsOptions struct {
+	Scope           RecordingScope
+	UserID          string
+	TeamIDs         []string
+	TeamID          string
+	ProtocolID      string
+	ConnectionID    string
+	SessionID       string
+	OwnerUserID     string
+	CreatedByUserID string
+	Limit           int
+	Offset          int
+	Sort            string
+}
+
+// RecordingSummary summarises stored recording metadata for administrative listings.
+type RecordingSummary struct {
+	RecordID          string     `json:"record_id"`
+	SessionID         string     `json:"session_id"`
+	ConnectionID      string     `json:"connection_id"`
+	ConnectionName    string     `json:"connection_name,omitempty"`
+	ProtocolID        string     `json:"protocol_id"`
+	OwnerUserID       string     `json:"owner_user_id"`
+	OwnerUserName     string     `json:"owner_user_name,omitempty"`
+	TeamID            *string    `json:"team_id,omitempty"`
+	CreatedByUserID   string     `json:"created_by_user_id"`
+	CreatedByUserName string     `json:"created_by_user_name,omitempty"`
+	StorageKind       string     `json:"storage_kind"`
+	StoragePath       string     `json:"storage_path"`
+	SizeBytes         int64      `json:"size_bytes"`
+	DurationSeconds   int64      `json:"duration_seconds"`
+	Checksum          string     `json:"checksum,omitempty"`
+	CreatedAt         time.Time  `json:"created_at"`
+	RetentionUntil    *time.Time `json:"retention_until,omitempty"`
+}
+
 // RecorderOption customises RecorderService construction.
 type RecorderOption func(*RecorderService)
 
@@ -400,6 +449,255 @@ func (s *RecorderService) Status(ctx context.Context, sessionID string) (Recordi
 		status.CompletedAt = &completed
 	}
 	return status, nil
+}
+
+// ListRecordings returns paginated recording summaries respecting the supplied scope.
+func (s *RecorderService) ListRecordings(ctx context.Context, opts ListRecordingsOptions) ([]RecordingSummary, int64, error) {
+	if s == nil {
+		return nil, 0, errors.New("recorder service: service not initialised")
+	}
+	ctx = ensureContext(ctx)
+
+	scope := opts.Scope
+	if scope == "" {
+		scope = RecordingScopePersonal
+	}
+
+	userID := strings.TrimSpace(opts.UserID)
+	if scope != RecordingScopeAll && userID == "" {
+		return nil, 0, errors.New("recorder service: user id is required for scoped queries")
+	}
+
+	limit := opts.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 25
+	}
+	offset := opts.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	teamFilter := strings.TrimSpace(opts.TeamID)
+	sanitizeTeamIDs := func(ids []string) []string {
+		cleaned := make([]string, 0, len(ids))
+		for _, id := range ids {
+			if trimmed := strings.TrimSpace(id); trimmed != "" {
+				cleaned = append(cleaned, trimmed)
+			}
+		}
+		return cleaned
+	}
+
+	effectiveScope := scope
+
+	switch scope {
+	case RecordingScopeTeam:
+		if strings.EqualFold(teamFilter, "personal") {
+			effectiveScope = RecordingScopePersonal
+			opts.TeamID = ""
+			opts.TeamIDs = nil
+		} else {
+			allowedTeams := sanitizeTeamIDs(opts.TeamIDs)
+			if teamFilter != "" {
+				allowedTeams = sanitizeTeamIDs([]string{teamFilter})
+				opts.TeamID = strings.TrimSpace(teamFilter)
+			} else {
+				opts.TeamID = ""
+			}
+			if len(allowedTeams) == 0 {
+				return []RecordingSummary{}, 0, nil
+			}
+			opts.TeamIDs = allowedTeams
+		}
+	case RecordingScopeAll:
+		if strings.EqualFold(teamFilter, "personal") {
+			effectiveScope = RecordingScopePersonal
+			opts.TeamID = ""
+			opts.TeamIDs = nil
+		} else if teamFilter != "" {
+			opts.TeamID = teamFilter
+		}
+	default:
+		opts.TeamID = ""
+		opts.TeamIDs = nil
+	}
+
+	scope = effectiveScope
+	opts.Scope = scope
+
+	const selectClause = `
+        connection_session_records.id AS record_id,
+        connection_session_records.session_id AS session_id,
+        connection_session_records.storage_kind AS storage_kind,
+        connection_session_records.storage_path AS storage_path,
+        connection_session_records.size_bytes AS size_bytes,
+        connection_session_records.duration_seconds AS duration_seconds,
+        connection_session_records.checksum AS checksum,
+        connection_session_records.created_by_user_id AS created_by_user_id,
+        connection_session_records.created_at AS created_at,
+        connection_session_records.retention_until AS retention_until,
+        connection_sessions.connection_id AS connection_id,
+        connection_sessions.protocol_id AS protocol_id,
+        connection_sessions.owner_user_id AS owner_user_id,
+        connection_sessions.team_id AS team_id,
+        connections.name AS connection_name,
+        owner.username AS owner_user_name,
+        creator.username AS created_by_user_name
+    `
+
+	applyFilters := func(q *gorm.DB) *gorm.DB {
+		switch scope {
+		case RecordingScopePersonal:
+			q = q.Where("(connection_sessions.owner_user_id = ? OR connection_session_records.created_by_user_id = ?)", userID, userID)
+		case RecordingScopeTeam:
+			teamIDs := sanitizeTeamIDs(opts.TeamIDs)
+			if opts.TeamID != "" && len(teamIDs) > 0 {
+				q = q.Where("connection_sessions.team_id IN ?", teamIDs)
+			} else if len(teamIDs) > 0 {
+				q = q.Where("(connection_sessions.team_id IN ? OR connection_sessions.owner_user_id = ? OR connection_session_records.created_by_user_id = ?)", teamIDs, userID, userID)
+			} else {
+				q = q.Where("(connection_sessions.owner_user_id = ? OR connection_session_records.created_by_user_id = ?)", userID, userID)
+			}
+		case RecordingScopeAll:
+			if trimmed := strings.TrimSpace(opts.TeamID); trimmed != "" {
+				q = q.Where("connection_sessions.team_id = ?", trimmed)
+			}
+		}
+
+		if trimmed := strings.TrimSpace(opts.ProtocolID); trimmed != "" {
+			q = q.Where("connection_sessions.protocol_id = ?", trimmed)
+		}
+		if trimmed := strings.TrimSpace(opts.ConnectionID); trimmed != "" {
+			q = q.Where("connection_sessions.connection_id = ?", trimmed)
+		}
+		if trimmed := strings.TrimSpace(opts.SessionID); trimmed != "" {
+			q = q.Where("connection_session_records.session_id = ?", trimmed)
+		}
+		if trimmed := strings.TrimSpace(opts.OwnerUserID); trimmed != "" {
+			q = q.Where("connection_sessions.owner_user_id = ?", trimmed)
+		}
+		if trimmed := strings.TrimSpace(opts.CreatedByUserID); trimmed != "" {
+			q = q.Where("connection_session_records.created_by_user_id = ?", trimmed)
+		}
+		return q
+	}
+
+	dataQuery := s.db.WithContext(ctx).
+		Model(&models.ConnectionSessionRecord{}).
+		Joins("JOIN connection_sessions ON connection_sessions.id = connection_session_records.session_id").
+		Joins("LEFT JOIN connections ON connections.id = connection_sessions.connection_id").
+		Joins("LEFT JOIN users owner ON owner.id = connection_sessions.owner_user_id").
+		Joins("LEFT JOIN users creator ON creator.id = connection_session_records.created_by_user_id").
+		Select(selectClause)
+	dataQuery = applyFilters(dataQuery)
+
+	countQuery := s.db.WithContext(ctx).
+		Model(&models.ConnectionSessionRecord{}).
+		Joins("JOIN connection_sessions ON connection_sessions.id = connection_session_records.session_id")
+	countQuery = applyFilters(countQuery)
+
+	var total int64
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("recorder service: count recordings: %w", err)
+	}
+	if total == 0 {
+		return []RecordingSummary{}, 0, nil
+	}
+
+	orderExpr := "connection_session_records.created_at DESC"
+	switch strings.ToLower(strings.TrimSpace(opts.Sort)) {
+	case "oldest":
+		orderExpr = "connection_session_records.created_at ASC"
+	case "size_desc":
+		orderExpr = "connection_session_records.size_bytes DESC, connection_session_records.created_at DESC"
+	case "size_asc":
+		orderExpr = "connection_session_records.size_bytes ASC, connection_session_records.created_at DESC"
+	}
+
+	dataQuery = dataQuery.Order(orderExpr).Limit(limit).Offset(offset)
+
+	type recordingRow struct {
+		RecordID          string     `gorm:"column:record_id"`
+		SessionID         string     `gorm:"column:session_id"`
+		StorageKind       string     `gorm:"column:storage_kind"`
+		StoragePath       string     `gorm:"column:storage_path"`
+		SizeBytes         int64      `gorm:"column:size_bytes"`
+		DurationSeconds   int64      `gorm:"column:duration_seconds"`
+		Checksum          string     `gorm:"column:checksum"`
+		CreatedByUserID   string     `gorm:"column:created_by_user_id"`
+		CreatedByUserName string     `gorm:"column:created_by_user_name"`
+		CreatedAt         time.Time  `gorm:"column:created_at"`
+		RetentionUntil    *time.Time `gorm:"column:retention_until"`
+		ConnectionID      string     `gorm:"column:connection_id"`
+		ConnectionName    string     `gorm:"column:connection_name"`
+		ProtocolID        string     `gorm:"column:protocol_id"`
+		OwnerUserID       string     `gorm:"column:owner_user_id"`
+		OwnerUserName     string     `gorm:"column:owner_user_name"`
+		TeamID            *string    `gorm:"column:team_id"`
+	}
+
+	rows := make([]recordingRow, 0, limit)
+	if err := dataQuery.Scan(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("recorder service: list recordings: %w", err)
+	}
+
+	summaries := make([]RecordingSummary, 0, len(rows))
+	for _, row := range rows {
+		summary := RecordingSummary{
+			RecordID:          row.RecordID,
+			SessionID:         row.SessionID,
+			ConnectionID:      row.ConnectionID,
+			ConnectionName:    row.ConnectionName,
+			ProtocolID:        row.ProtocolID,
+			OwnerUserID:       row.OwnerUserID,
+			OwnerUserName:     row.OwnerUserName,
+			TeamID:            row.TeamID,
+			CreatedByUserID:   row.CreatedByUserID,
+			CreatedByUserName: row.CreatedByUserName,
+			StorageKind:       row.StorageKind,
+			StoragePath:       row.StoragePath,
+			SizeBytes:         row.SizeBytes,
+			DurationSeconds:   row.DurationSeconds,
+			Checksum:          row.Checksum,
+			CreatedAt:         row.CreatedAt,
+			RetentionUntil:    row.RetentionUntil,
+		}
+		summaries = append(summaries, summary)
+	}
+
+	return summaries, total, nil
+}
+
+// GetRecord fetches a recording and its parent session metadata without opening storage.
+func (s *RecorderService) GetRecord(ctx context.Context, recordID string) (models.ConnectionSessionRecord, models.ConnectionSession, error) {
+	if s == nil {
+		return models.ConnectionSessionRecord{}, models.ConnectionSession{}, errors.New("recorder service: service not initialised")
+	}
+	ctx = ensureContext(ctx)
+	recordID = strings.TrimSpace(recordID)
+	if recordID == "" {
+		return models.ConnectionSessionRecord{}, models.ConnectionSession{}, errors.New("recorder service: record id is required")
+	}
+
+	var record models.ConnectionSessionRecord
+	if err := s.db.WithContext(ctx).First(&record, "id = ?", recordID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return models.ConnectionSessionRecord{}, models.ConnectionSession{}, ErrSessionNotFound
+		}
+		return models.ConnectionSessionRecord{}, models.ConnectionSession{}, err
+	}
+
+	var session models.ConnectionSession
+	if err := s.db.WithContext(ctx).
+		Select("id", "connection_id", "protocol_id", "owner_user_id", "team_id").
+		First(&session, "id = ?", record.SessionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return record, models.ConnectionSession{}, ErrSessionNotFound
+		}
+		return record, models.ConnectionSession{}, err
+	}
+
+	return record, session, nil
 }
 
 // OpenRecording returns a reader for the stored recording along with metadata.

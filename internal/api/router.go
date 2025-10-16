@@ -307,7 +307,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	registerSessionParticipantRoutes(api, sessionParticipantHandler)
 
 	sessionRecordingHandler := handlers.NewSessionRecordingHandler(recorder, sessionLifecycleSvc, checker)
-	registerSessionRecordingRoutes(api, sessionRecordingHandler)
+	registerSessionRecordingRoutes(api, sessionRecordingHandler, checker)
 
 	// ---------------------------------------------------------------------------
 	// Protocol Settings

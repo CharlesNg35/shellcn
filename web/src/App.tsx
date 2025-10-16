@@ -66,6 +66,9 @@ const AuthProviders = lazy(() =>
 const Security = lazy(() =>
   import('@/pages/settings/Security').then((module) => ({ default: module.Security }))
 )
+const SessionsPage = lazy(() =>
+  import('@/pages/settings/Sessions').then((module) => ({ default: module.Sessions }))
+)
 const SessionFileManager = lazy(() =>
   import('@/pages/sessions/SessionFileManager').then((module) => ({
     default: module.SessionFileManager,
@@ -106,6 +109,7 @@ function AppRoutes() {
               <Route path="/settings/audit" element={<AuditLogs />} />
               <Route path="/settings/auth-providers" element={<AuthProviders />} />
               <Route path="/settings/security" element={<Security />} />
+              <Route path="/settings/sessions" element={<SessionsPage />} />
               <Route path="/active-sessions/:sessionId" element={<SshWorkspace />} />
               <Route path="/active-sessions/:sessionId/sftp" element={<SessionFileManager />} />
             </Route>

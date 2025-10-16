@@ -399,3 +399,39 @@ func TestCheckerIncludesTeamRoles(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, perms, "user.view")
 }
+
+func TestCheckerGetUserTeamIDs(t *testing.T) {
+	db := setupPermissionTestDB(t)
+
+	teamA := &models.Team{Name: "Alpha"}
+	require.NoError(t, db.Create(teamA).Error)
+	teamB := &models.Team{Name: "Bravo"}
+	require.NoError(t, db.Create(teamB).Error)
+
+	user := &models.User{
+		Username: "team-scope",
+		Email:    "team-scope@example.com",
+		Password: "secret",
+	}
+	require.NoError(t, db.Create(user).Error)
+	require.NoError(t, db.Model(teamA).Association("Users").Append(user))
+	require.NoError(t, db.Model(teamB).Association("Users").Append(user))
+
+	checker, err := NewChecker(db)
+	require.NoError(t, err)
+
+	ids, err := checker.GetUserTeamIDs(context.Background(), user.ID)
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{teamA.ID, teamB.ID}, ids)
+
+	other := &models.User{
+		Username: "no-team",
+		Email:    "no-team@example.com",
+		Password: "secret",
+	}
+	require.NoError(t, db.Create(other).Error)
+
+	empty, err := checker.GetUserTeamIDs(context.Background(), other.ID)
+	require.NoError(t, err)
+	require.Empty(t, empty)
+}

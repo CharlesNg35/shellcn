@@ -101,6 +101,7 @@ func SeedData(db *gorm.DB) error {
 		"connection.launch",
 		"connection.folder.view",
 		"vault.use_shared",
+		"session.recording.view",
 	}); err != nil {
 		return err
 	}

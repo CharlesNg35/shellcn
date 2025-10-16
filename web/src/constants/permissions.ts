@@ -69,6 +69,18 @@ export const PERMISSIONS = {
     VIEW: 'notification.view',
     MANAGE: 'notification.manage',
   },
+  SESSION: {
+    ACTIVE: {
+      VIEW_TEAM: 'session.active.view_team',
+      VIEW_ALL: 'session.active.view_all',
+    },
+    RECORDING: {
+      VIEW: 'session.recording.view',
+      VIEW_TEAM: 'session.recording.view_team',
+      VIEW_ALL: 'session.recording.view_all',
+      DELETE: 'session.recording.delete',
+    },
+  },
   PROTOCOL: {
     SSH: {
       CONNECT: 'protocol:ssh.connect',
@@ -137,6 +149,12 @@ export const PERMISSION_IDS = [
   PERMISSIONS.SECURITY.AUDIT,
   PERMISSIONS.NOTIFICATION.VIEW,
   PERMISSIONS.NOTIFICATION.MANAGE,
+  PERMISSIONS.SESSION.ACTIVE.VIEW_TEAM,
+  PERMISSIONS.SESSION.ACTIVE.VIEW_ALL,
+  PERMISSIONS.SESSION.RECORDING.VIEW,
+  PERMISSIONS.SESSION.RECORDING.VIEW_TEAM,
+  PERMISSIONS.SESSION.RECORDING.VIEW_ALL,
+  PERMISSIONS.SESSION.RECORDING.DELETE,
   PERMISSIONS.PROTOCOL.SSH.CONNECT,
   PERMISSIONS.PROTOCOL.SSH.SFTP,
   PERMISSIONS.PROTOCOL.SSH.SHARE,

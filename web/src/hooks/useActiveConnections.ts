@@ -24,16 +24,16 @@ export function useActiveConnections(
   options: UseActiveConnectionsOptions = {},
   queryOptions?: QueryOptions
 ) {
-  const { protocol_id, team_id, enabled = true, refetchInterval = 20_000 } = options
+  const { protocol_id, team_id, scope, enabled = true, refetchInterval = 20_000 } = options
 
   const queryKey = useMemo(
-    () => [...ACTIVE_CONNECTIONS_QUERY_KEY, { protocol_id, team_id }] as const,
-    [protocol_id, team_id]
+    () => [...ACTIVE_CONNECTIONS_QUERY_KEY, { protocol_id, team_id, scope }] as const,
+    [protocol_id, team_id, scope]
   )
 
   return useQuery<ActiveConnectionSession[], ApiError>({
     queryKey,
-    queryFn: () => fetchActiveConnectionSessions({ protocol_id, team_id }),
+    queryFn: () => fetchActiveConnectionSessions({ protocol_id, team_id, scope }),
     staleTime: 15_000,
     refetchInterval,
     refetchOnWindowFocus: false,
