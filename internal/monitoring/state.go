@@ -28,6 +28,7 @@ type statStore struct {
 
 	maintenance sync.Map // string -> *maintenanceStats
 	protocols   sync.Map // string -> *protocolStats
+	webVitals   sync.Map // string -> *webVitalStats
 }
 
 func newStatStore() *statStore {
@@ -56,6 +57,17 @@ func (s *statStore) cloneProtocols() []ProtocolSummary {
 		return true
 	})
 	return summaries
+}
+
+func (s *statStore) cloneWebVitals() []WebVitalSummary {
+	vitals := []WebVitalSummary{}
+	s.webVitals.Range(func(key, value any) bool {
+		metric := key.(string)
+		stats := value.(*webVitalStats)
+		vitals = append(vitals, stats.snapshot(metric))
+		return true
+	})
+	return vitals
 }
 
 func (s *statStore) summary() Summary {
@@ -99,6 +111,7 @@ func (s *statStore) summary() Summary {
 			Jobs: s.cloneMaintenance(),
 		},
 		Protocols: s.cloneProtocols(),
+		WebVitals: s.cloneWebVitals(),
 	}
 }
 
@@ -176,6 +189,60 @@ func (s *statStore) protocolEntry(protocol string) *protocolStats {
 	stats := &protocolStats{}
 	actual, _ := s.protocols.LoadOrStore(protocol, stats)
 	return actual.(*protocolStats)
+}
+
+func (s *statStore) recordWebVital(metric, rating string, value float64) {
+	entry := s.webVitalEntry(metric)
+	entry.record(rating, value)
+}
+
+func (s *statStore) webVitalEntry(metric string) *webVitalStats {
+	value, ok := s.webVitals.Load(metric)
+	if ok {
+		return value.(*webVitalStats)
+	}
+	stats := &webVitalStats{}
+	actual, _ := s.webVitals.LoadOrStore(metric, stats)
+	return actual.(*webVitalStats)
+}
+
+type webVitalStats struct {
+	mu          sync.Mutex
+	total       float64
+	count       uint64
+	lastValue   float64
+	lastRating  string
+	lastUpdated time.Time
+}
+
+func (w *webVitalStats) record(rating string, value float64) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if value < 0 {
+		value = 0
+	}
+	w.total += value
+	w.count++
+	w.lastValue = value
+	w.lastRating = rating
+	w.lastUpdated = time.Now()
+}
+
+func (w *webVitalStats) snapshot(metric string) WebVitalSummary {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var average float64
+	if w.count > 0 {
+		average = w.total / float64(w.count)
+	}
+	return WebVitalSummary{
+		Metric:         metric,
+		LastValue:      w.lastValue,
+		AverageValue:   average,
+		Samples:        w.count,
+		LastRecordedAt: w.lastUpdated,
+		LastRating:     w.lastRating,
+	}
 }
 
 type maintenanceStats struct {

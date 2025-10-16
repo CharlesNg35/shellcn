@@ -22,6 +22,7 @@ export interface WorkspaceSessionState {
   transfers: Record<string, TransferItem>
   transferOrder: string[]
   directoryCache: Record<string, DirectoryCacheEntry>
+  directoryCacheOrder: string[]
 }
 
 interface DirectoryCacheEntry {
@@ -89,6 +90,8 @@ const fileNameFromPath = (path: string) => {
   return segments[segments.length - 1] || cleaned
 }
 
+const MAX_DIRECTORY_CACHE_ENTRIES = 100
+
 export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
   sessions: {},
   ensureSession: (sessionId: string) => {
@@ -112,6 +115,7 @@ export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
       transfers: {},
       transferOrder: [],
       directoryCache: {},
+      directoryCacheOrder: [],
     }
     set((state) => ({
       sessions: {
@@ -355,15 +359,25 @@ export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
       if (!session) {
         return state
       }
+      const nextCache = {
+        ...session.directoryCache,
+        [normalized]: { data: payload, fetchedAt: timestamp },
+      }
+      const nextOrder = session.directoryCacheOrder.filter((key) => key !== normalized)
+      nextOrder.push(normalized)
+      while (nextOrder.length > MAX_DIRECTORY_CACHE_ENTRIES) {
+        const evicted = nextOrder.shift()
+        if (evicted && evicted !== normalized) {
+          delete nextCache[evicted]
+        }
+      }
       return {
         sessions: {
           ...state.sessions,
           [sessionId]: {
             ...session,
-            directoryCache: {
-              ...session.directoryCache,
-              [normalized]: { data: payload, fetchedAt: timestamp },
-            },
+            directoryCache: nextCache,
+            directoryCacheOrder: nextOrder,
           },
         },
       }
@@ -372,7 +386,30 @@ export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
   getCachedDirectory: (sessionId, path) => {
     const normalized = normalizePath(path)
     const session = get().sessions[sessionId]
-    return session?.directoryCache?.[normalized]?.data
+    const cached = session?.directoryCache?.[normalized]
+    if (!session || !cached) {
+      return undefined
+    }
+    if (session.directoryCacheOrder[session.directoryCacheOrder.length - 1] !== normalized) {
+      set((state) => {
+        const current = state.sessions[sessionId]
+        if (!current || !current.directoryCache[normalized]) {
+          return state
+        }
+        const updatedOrder = current.directoryCacheOrder.filter((key) => key !== normalized)
+        updatedOrder.push(normalized)
+        return {
+          sessions: {
+            ...state.sessions,
+            [sessionId]: {
+              ...current,
+              directoryCacheOrder: updatedOrder,
+            },
+          },
+        }
+      })
+    }
+    return cached.data
   },
   clearDirectoryCache: (sessionId, path) => {
     set((state) => {
@@ -387,6 +424,7 @@ export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
             [sessionId]: {
               ...session,
               directoryCache: {},
+              directoryCacheOrder: [],
             },
           },
         }
@@ -397,12 +435,14 @@ export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
       }
       const nextCache = { ...session.directoryCache }
       delete nextCache[normalized]
+      const nextOrder = session.directoryCacheOrder.filter((key) => key !== normalized)
       return {
         sessions: {
           ...state.sessions,
           [sessionId]: {
             ...session,
             directoryCache: nextCache,
+            directoryCacheOrder: nextOrder,
           },
         },
       }

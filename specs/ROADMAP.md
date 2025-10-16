@@ -326,11 +326,11 @@
 
 ### Performance Guardrails
 
-- [ ] Enforce lazy loading for terminal, Monaco, and heavy UI bundles; keep initial SSH chunk <300 KB
-- [ ] Batch terminal writes (≤120 fps) and use `requestIdleCallback` for low-priority UI updates
-- [ ] Virtualize SFTP directory list and cache directory metadata with LRU invalidation
-- [ ] Enable websocket compression and monitor client-side Web Vitals for regressions
-- [ ] Add automated bundle analyzer + performance checks to CI gate (warn on regression)
+- [x] Enforce lazy loading for terminal, Monaco, and heavy UI bundles; keep initial SSH chunk <300 KB
+- [x] Batch terminal writes (≤120 fps) and use `requestIdleCallback` for low-priority UI updates
+- [x] Virtualize SFTP directory list and cache directory metadata with LRU invalidation
+- [x] Enable websocket compression and monitor client-side Web Vitals for regressions
+- [x] Add automated bundle analyzer + performance checks to CI gate (warn on regression)
 
 ### Testing & Quality
 

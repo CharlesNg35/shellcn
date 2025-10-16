@@ -11,6 +11,7 @@ type collectors struct {
 	permissionChecks       *prometheus.CounterVec
 	activeSessions         prometheus.Gauge
 	apiLatency             *prometheus.HistogramVec
+	webVitals              *prometheus.HistogramVec
 	vaultOperations        *prometheus.CounterVec
 	vaultPayloadRequests   *prometheus.CounterVec
 	realtimeConnections    prometheus.Gauge
@@ -67,6 +68,15 @@ func newCollectors(namespace string) *collectors {
 				Buckets:   buckets,
 			},
 			[]string{"method", "path", "status"},
+		),
+		webVitals: prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Namespace: namespace,
+				Name:      "web_vitals_seconds",
+				Help:      "Client-reported Web Vitals (seconds)",
+				Buckets:   []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8},
+			},
+			[]string{"metric", "rating"},
 		),
 		vaultOperations: prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -190,6 +200,7 @@ func (c *collectors) all() []prometheus.Collector {
 		c.permissionChecks,
 		c.activeSessions,
 		c.apiLatency,
+		c.webVitals,
 		c.vaultOperations,
 		c.vaultPayloadRequests,
 		c.realtimeConnections,

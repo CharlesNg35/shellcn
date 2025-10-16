@@ -1,13 +1,24 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo } from 'react'
 import { Card } from '@/components/ui/Card'
 import { useSshWorkspaceStore } from '@/store/ssh-workspace-store'
 import type { ActiveSessionParticipant } from '@/types/connections'
 import type { TransferItem } from '@/store/ssh-workspace-store'
 import type { SftpEntry } from '@/types/sftp'
 import { SftpWorkspaceTabs } from './SftpWorkspaceTabs'
-import { SftpFileEditor } from './SftpFileEditor'
 import FileManager from '@/components/file-manager/FileManager'
 import { TransferSidebar } from '@/components/file-manager/TransferSidebar'
+
+const LazySftpFileEditor = lazy(() =>
+  import('./SftpFileEditor').then((module) => ({ default: module.SftpFileEditor }))
+)
+
+function EditorFallback() {
+  return (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      Loading editor…
+    </div>
+  )
+}
 
 interface SftpWorkspaceProps {
   sessionId: string
@@ -88,12 +99,14 @@ export function SftpWorkspace({
       <div className="flex flex-1 gap-4 overflow-hidden">
         <div className="flex-1 overflow-hidden">
           {activeTab?.type === 'editor' && activeTab.path ? (
-            <SftpFileEditor
-              sessionId={sessionId}
-              tabId={activeTab.id}
-              path={activeTab.path}
-              canWrite={canWrite}
-            />
+            <Suspense fallback={<EditorFallback />}>
+              <LazySftpFileEditor
+                sessionId={sessionId}
+                tabId={activeTab.id}
+                path={activeTab.path}
+                canWrite={canWrite}
+              />
+            </Suspense>
           ) : (
             <FileManager
               sessionId={sessionId}

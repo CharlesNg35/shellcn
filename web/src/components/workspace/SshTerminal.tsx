@@ -54,6 +54,11 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
   const webglAddonRef = useRef<InstanceType<WebglAddonCtor> | null>(null)
   const searchAddonRef = useRef<InstanceType<SearchAddonCtor> | null>(null)
   const pendingBufferRef = useRef<string[]>([])
+  const flushScheduledRef = useRef(false)
+  const frameHandleRef = useRef<number | null>(null)
+  const timeoutHandleRef = useRef<number | null>(null)
+  const idleHandleRef = useRef<number | null>(null)
+  const lastFlushTimeRef = useRef(0)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
 
   const [isTerminalReady, setTerminalReady] = useState(false)
@@ -61,28 +66,126 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined)
   const [fontSize, setFontSize] = useState<number>(14)
 
-  const flushPending = useCallback(() => {
+  const cancelScheduledFlush = useCallback(() => {
+    if (frameHandleRef.current != null && typeof window !== 'undefined') {
+      if (typeof window.cancelAnimationFrame === 'function') {
+        window.cancelAnimationFrame(frameHandleRef.current)
+      }
+      frameHandleRef.current = null
+    }
+    if (timeoutHandleRef.current != null) {
+      clearTimeout(timeoutHandleRef.current)
+      timeoutHandleRef.current = null
+    }
+    if (idleHandleRef.current != null) {
+      if (typeof window !== 'undefined') {
+        const cancel = (window as WindowWithIdleCallback).cancelIdleCallback
+        if (typeof cancel === 'function') {
+          cancel(idleHandleRef.current)
+        } else {
+          clearTimeout(idleHandleRef.current)
+        }
+      } else {
+        clearTimeout(idleHandleRef.current)
+      }
+      idleHandleRef.current = null
+    }
+    flushScheduledRef.current = false
+  }, [])
+
+  const flushImmediately = useCallback(() => {
     const terminal = terminalRef.current
-    if (!terminal) {
+    if (!terminal || pendingBufferRef.current.length === 0) {
       return
     }
     const pending = pendingBufferRef.current.splice(0)
-    pending.forEach((chunk) => {
-      terminal.write(chunk)
-    })
+    const combined = pending.join('')
+    if (!combined) {
+      return
+    }
+    terminal.write(combined)
+    lastFlushTimeRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now()
   }, [])
 
-  const writeChunk = useCallback((chunk?: string) => {
-    if (!chunk) {
-      return
-    }
+  const flushBuffered = useCallback(() => {
     const terminal = terminalRef.current
-    if (!terminal) {
-      pendingBufferRef.current.push(chunk)
+    if (!terminal || pendingBufferRef.current.length === 0) {
+      flushScheduledRef.current = false
       return
     }
-    terminal.write(chunk)
+    const combined = pendingBufferRef.current.join('')
+    pendingBufferRef.current = []
+    const write = () => {
+      terminal.write(combined)
+      lastFlushTimeRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      flushScheduledRef.current = false
+    }
+    if (typeof window !== 'undefined') {
+      const idle = (window as WindowWithIdleCallback).requestIdleCallback
+      if (typeof idle === 'function') {
+        idleHandleRef.current = idle(
+          () => {
+            idleHandleRef.current = null
+            write()
+          },
+          { timeout: 50 }
+        )
+        return
+      }
+    }
+    write()
   }, [])
+
+  const scheduleFlush = useCallback(() => {
+    if (flushScheduledRef.current) {
+      return
+    }
+    flushScheduledRef.current = true
+    const budget = 1000 / 120
+    const triggerFlush = () => {
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      const elapsed = now - lastFlushTimeRef.current
+      if (elapsed >= budget) {
+        flushBuffered()
+        return
+      }
+      timeoutHandleRef.current = window.setTimeout(
+        () => {
+          timeoutHandleRef.current = null
+          flushBuffered()
+        },
+        Math.max(0, budget - elapsed)
+      )
+    }
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      frameHandleRef.current = window.requestAnimationFrame(() => {
+        frameHandleRef.current = null
+        triggerFlush()
+      })
+      return
+    }
+    timeoutHandleRef.current = window.setTimeout(() => {
+      timeoutHandleRef.current = null
+      triggerFlush()
+    }, budget)
+  }, [flushBuffered])
+
+  const flushPending = useCallback(() => {
+    flushImmediately()
+  }, [flushImmediately])
+
+  const writeChunk = useCallback(
+    (chunk?: string) => {
+      if (!chunk) {
+        return
+      }
+      pendingBufferRef.current.push(chunk)
+      if (terminalRef.current) {
+        scheduleFlush()
+      }
+    },
+    [scheduleFlush]
+  )
 
   const handleTerminalEvent = useCallback(
     (event: SshTerminalEvent) => {
@@ -199,6 +302,7 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
 
     return () => {
       disposed = true
+      cancelScheduledFlush()
       resizeObserverRef.current?.disconnect()
       resizeObserverRef.current = null
       webglAddonRef.current?.dispose()
@@ -211,7 +315,7 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
       terminalRef.current = null
       setTerminalReady(false)
     }
-  }, [flushPending, onFontSizeChange])
+  }, [cancelScheduledFlush, flushPending, onFontSizeChange])
 
   useImperativeHandle(
     ref,

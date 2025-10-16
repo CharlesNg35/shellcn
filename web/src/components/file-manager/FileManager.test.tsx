@@ -52,6 +52,7 @@ vi.mock('@/store/ssh-workspace-store', () => {
         transfers: {},
         transferOrder: [],
         directoryCache: {},
+        directoryCacheOrder: [],
       },
     },
   }
@@ -116,6 +117,7 @@ vi.mock('@/store/ssh-workspace-store', () => {
         transfers: {},
         transferOrder: [],
         directoryCache: {},
+        directoryCacheOrder: [],
       },
     }
     mockState.sessions = storeState.sessions

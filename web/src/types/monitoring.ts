@@ -13,6 +13,7 @@ export interface MonitoringSummary {
   realtime: RealtimeSummary
   maintenance: MaintenanceSummary
   protocols: ProtocolSummary[]
+  web_vitals: WebVitalSummary[]
 }
 
 export interface MetricBreakdown {
@@ -74,6 +75,15 @@ export interface ProtocolSummary {
   last_completed_at: string
   last_error?: string
   average_latency_seconds: number
+}
+
+export interface WebVitalSummary {
+  metric: string
+  last_value: number
+  average_value: number
+  samples: number
+  last_recorded_at: string
+  last_rating: string
 }
 
 export interface PrometheusMetadata {

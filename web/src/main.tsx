@@ -69,3 +69,13 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>
 )
+
+if (typeof window !== 'undefined' && import.meta.env.MODE !== 'test') {
+  void import('@/lib/monitoring/registerWebVitals')
+    .then(({ registerWebVitals }) => registerWebVitals())
+    .catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn('Failed to initialise web vitals monitoring', error)
+      }
+    })
+}

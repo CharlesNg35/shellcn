@@ -489,8 +489,9 @@ func (h *SSHSessionHandler) upgradeConnection(c *gin.Context) (*websocket.Conn, 
 		return h.hub.Upgrade(c.Writer, c.Request)
 	}
 	upgrader := websocket.Upgrader{
-		ReadBufferSize:  4096,
-		WriteBufferSize: 4096,
+		ReadBufferSize:    4096,
+		WriteBufferSize:   4096,
+		EnableCompression: true,
 		CheckOrigin: func(r *http.Request) bool {
 			origin := strings.TrimSpace(r.Header.Get("Origin"))
 			if origin == "" {

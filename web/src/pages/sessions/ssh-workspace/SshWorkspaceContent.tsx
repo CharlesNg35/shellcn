@@ -1,7 +1,6 @@
-import type { RefObject } from 'react'
+import { Suspense, lazy, type RefObject } from 'react'
 import { Tabs, TabsContent } from '@/components/ui/Tabs'
-import { SshTerminal, type SshTerminalHandle } from '@/components/workspace/SshTerminal'
-import { SftpWorkspace } from '@/components/workspace/SftpWorkspace'
+import type { SshTerminalHandle } from '@/components/workspace/SshTerminal'
 import SshWorkspaceStatusBar from '@/components/workspace/ssh/SshWorkspaceStatusBar'
 import SshWorkspaceTabsBar from '@/components/workspace/ssh/SshWorkspaceTabsBar'
 import type { WorkspaceTab } from '@/store/ssh-session-tabs-store'
@@ -9,6 +8,31 @@ import type { ActiveConnectionSession } from '@/types/connections'
 import type { SessionRecordingStatus } from '@/types/session-recording'
 import type { TerminalSearchControls } from './useTerminalSearch'
 import type { WorkspaceTelemetryControls } from './useWorkspaceTelemetry'
+
+const LazySshTerminal = lazy(() =>
+  import('@/components/workspace/SshTerminal').then((module) => ({ default: module.SshTerminal }))
+)
+const LazySftpWorkspace = lazy(() =>
+  import('@/components/workspace/SftpWorkspace').then((module) => ({
+    default: module.SftpWorkspace,
+  }))
+)
+
+function TerminalFallback() {
+  return (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      Preparing terminal…
+    </div>
+  )
+}
+
+function SftpFallback() {
+  return (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      Loading file manager…
+    </div>
+  )
+}
 
 interface SshWorkspaceContentProps {
   sessionId: string
@@ -84,24 +108,28 @@ export function SshWorkspaceContent({
               >
                 {tab.type === 'terminal' ? (
                   <div className="col-span-full h-full">
-                    <SshTerminal
-                      ref={terminalRef}
-                      sessionId={sessionId}
-                      onEvent={telemetry.handleTerminalEvent}
-                      onFontSizeChange={telemetry.setFontSize}
-                      searchOverlay={search.overlay}
-                      onSearchResolved={({ matched }) => search.onResolved(matched)}
-                    />
+                    <Suspense fallback={<TerminalFallback />}>
+                      <LazySshTerminal
+                        ref={terminalRef}
+                        sessionId={sessionId}
+                        onEvent={telemetry.handleTerminalEvent}
+                        onFontSizeChange={telemetry.setFontSize}
+                        searchOverlay={search.overlay}
+                        onSearchResolved={({ matched }) => search.onResolved(matched)}
+                      />
+                    </Suspense>
                   </div>
                 ) : (
                   <div className="col-span-full h-full">
-                    <SftpWorkspace
-                      sessionId={sessionId}
-                      canWrite={canWrite}
-                      currentUserId={currentUserId}
-                      currentUserName={currentUserName}
-                      participants={participants}
-                    />
+                    <Suspense fallback={<SftpFallback />}>
+                      <LazySftpWorkspace
+                        sessionId={sessionId}
+                        canWrite={canWrite}
+                        currentUserId={currentUserId}
+                        currentUserName={currentUserName}
+                        participants={participants}
+                      />
+                    </Suspense>
                   </div>
                 )}
               </div>

@@ -11,6 +11,7 @@ type Summary struct {
 	Realtime    RealtimeSummary    `json:"realtime"`
 	Maintenance MaintenanceSummary `json:"maintenance"`
 	Protocols   []ProtocolSummary  `json:"protocols"`
+	WebVitals   []WebVitalSummary  `json:"web_vitals"`
 }
 
 type AuthSummary struct {
@@ -72,6 +73,15 @@ type ProtocolSummary struct {
 	LastCompletedAt       time.Time     `json:"last_completed_at"`
 	LastError             string        `json:"last_error,omitempty"`
 	AverageLatencySeconds float64       `json:"average_latency_seconds"`
+}
+
+type WebVitalSummary struct {
+	Metric         string    `json:"metric"`
+	LastValue      float64   `json:"last_value"`
+	AverageValue   float64   `json:"average_value"`
+	Samples        uint64    `json:"samples"`
+	LastRecordedAt time.Time `json:"last_recorded_at"`
+	LastRating     string    `json:"last_rating"`
 }
 
 // Snapshot returns a point-in-time summary from the current module when configured.

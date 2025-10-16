@@ -156,6 +156,7 @@ export function FileManager({
   )
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
 
   const { data, isLoading, error, refetch } = useSftpDirectory(sessionId, browserPath, {
     initialData: cachedDirectory,
@@ -574,7 +575,7 @@ export function FileManager({
                 </h3>
               </div>
 
-              <div className="relative flex-1 overflow-auto">
+              <div ref={scrollContainerRef} className="relative flex-1 overflow-auto">
                 {isLoading ? (
                   <div className="flex h-full items-center justify-center gap-3 text-muted-foreground">
                     <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -605,6 +606,7 @@ export function FileManager({
                     onDelete={handleDeleteEntry}
                     canWrite={canWrite}
                     renderIcon={renderEntryIcon}
+                    scrollContainerRef={scrollContainerRef}
                   />
                 )}
 

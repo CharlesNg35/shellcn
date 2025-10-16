@@ -165,15 +165,40 @@ describe('ssh workspace store', () => {
 
     const cached = store.getCachedDirectory(SESSION_ID, '.')
     expect(cached).toBe(listing)
+    let session = useSshWorkspaceStore.getState().sessions[SESSION_ID]
+    expect(session?.directoryCacheOrder).toEqual(['.'])
 
     store.clearDirectoryCache(SESSION_ID, '.')
     expect(store.getCachedDirectory(SESSION_ID, '.')).toBeUndefined()
 
     store.cacheDirectory(SESSION_ID, '.', listing)
     store.cacheDirectory(SESSION_ID, 'logs', { path: 'logs', entries: [] })
+    // Access the root entry again to move it to the tail of the LRU list
+    expect(store.getCachedDirectory(SESSION_ID, '.')).toBe(listing)
+    session = useSshWorkspaceStore.getState().sessions[SESSION_ID]
+    expect(session?.directoryCacheOrder[session.directoryCacheOrder.length - 1]).toBe('.')
     store.clearDirectoryCache(SESSION_ID)
     expect(store.getCachedDirectory(SESSION_ID, '.')).toBeUndefined()
     expect(store.getCachedDirectory(SESSION_ID, 'logs')).toBeUndefined()
+    session = useSshWorkspaceStore.getState().sessions[SESSION_ID]
+    expect(session?.directoryCacheOrder).toEqual([])
+  })
+
+  it('evicts the least recently used cached directories when capacity is exceeded', () => {
+    const store = useSshWorkspaceStore.getState()
+    store.ensureSession(SESSION_ID)
+
+    for (let index = 0; index < 120; index += 1) {
+      store.cacheDirectory(SESSION_ID, `dir-${index}`, {
+        path: `dir-${index}`,
+        entries: [],
+      })
+    }
+
+    const session = useSshWorkspaceStore.getState().sessions[SESSION_ID]
+    expect(Object.keys(session?.directoryCache ?? {})).toHaveLength(100)
+    expect(session?.directoryCache['dir-0']).toBeUndefined()
+    expect(session?.directoryCache['dir-119']).toBeDefined()
   })
 
   it('resets store state', () => {

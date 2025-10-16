@@ -34,6 +34,7 @@ func TestSummaryAggregatesMetrics(t *testing.T) {
 	monitoring.RecordRealtimeFailure("notifications", "backpressure", "drop")
 	monitoring.RecordMaintenanceRun("session_cleanup", "success", "", time.Second)
 	monitoring.RecordProtocolLaunch("ssh", "success", "", 500*time.Millisecond)
+	monitoring.RecordWebVital("LCP", "good", 1200)
 
 	summary := monitoring.Snapshot()
 	require.Equal(t, uint64(2), summary.Auth.Success+summary.Auth.Failure)
@@ -41,6 +42,7 @@ func TestSummaryAggregatesMetrics(t *testing.T) {
 	require.GreaterOrEqual(t, summary.Realtime.Failures, uint64(1))
 	require.NotEmpty(t, summary.Maintenance.Jobs)
 	require.NotEmpty(t, summary.Protocols)
+	require.NotEmpty(t, summary.WebVitals)
 }
 
 func TestHealthManagerEvaluate(t *testing.T) {

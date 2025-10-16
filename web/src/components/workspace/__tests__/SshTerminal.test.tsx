@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import SshTerminal from '@/components/workspace/SshTerminal'
 import type { SshTerminalEvent } from '@/types/ssh'
@@ -83,7 +83,31 @@ afterAll(() => {
 })
 
 describe('SshTerminal component', () => {
+  let originalRaf: typeof window.requestAnimationFrame
+  let originalCancelRaf: typeof window.cancelAnimationFrame
+  let originalIdle: typeof window.requestIdleCallback
+  let originalCancelIdle: typeof window.cancelIdleCallback
+
   beforeEach(() => {
+    originalRaf = window.requestAnimationFrame
+    originalCancelRaf = window.cancelAnimationFrame
+    originalIdle = window.requestIdleCallback
+    originalCancelIdle = window.cancelIdleCallback
+
+    window.requestAnimationFrame = (callback) => window.setTimeout(() => callback(16), 0)
+    window.cancelAnimationFrame = (handle) => window.clearTimeout(handle)
+    window.requestIdleCallback = (callback) =>
+      window.setTimeout(
+        () =>
+          callback({
+            didTimeout: false,
+            timeRemaining: () => 50,
+          }),
+        0
+      )
+    window.cancelIdleCallback = (handle) => window.clearTimeout(handle)
+
+    vi.useFakeTimers()
     writeMock.mockClear()
     fitMock.mockClear()
     disposeMock.mockClear()
@@ -95,12 +119,22 @@ describe('SshTerminal component', () => {
     searchFindPreviousMock.mockClear()
   })
 
+  afterEach(() => {
+    window.requestAnimationFrame = originalRaf
+    window.cancelAnimationFrame = originalCancelRaf
+    window.requestIdleCallback = originalIdle
+    window.cancelIdleCallback = originalCancelIdle
+    vi.runOnlyPendingTimers()
+    vi.useRealTimers()
+  })
+
   it('renders terminal container and writes streamed data', async () => {
     render(<SshTerminal sessionId="sess-1" />)
 
-    await waitFor(() => {
-      expect(fitMock).toHaveBeenCalled()
+    await act(async () => {
+      vi.runAllTimers()
     })
+    expect(fitMock).toHaveBeenCalled()
 
     expect(screen.getByTestId('ssh-terminal-canvas')).toBeInTheDocument()
     expect(writeMock).not.toHaveBeenCalled()
@@ -112,6 +146,7 @@ describe('SshTerminal component', () => {
         sessionId: 'sess-1',
         text: 'hello world',
       })
+      vi.runAllTimers()
     })
 
     expect(writeMock).toHaveBeenCalledWith('hello world')
@@ -119,9 +154,10 @@ describe('SshTerminal component', () => {
 
   it('updates status when session closes', async () => {
     render(<SshTerminal sessionId="sess-2" />)
-    await waitFor(() => {
-      expect(fitMock).toHaveBeenCalled()
+    await act(async () => {
+      vi.runAllTimers()
     })
+    expect(fitMock).toHaveBeenCalled()
 
     act(() => {
       capturedHandler?.({

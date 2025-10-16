@@ -50,8 +50,9 @@ func NewHub() *Hub {
 	return &Hub{
 		subscriptions: make(map[string]map[string]map[*connection]struct{}),
 		upgrader: websocket.Upgrader{
-			ReadBufferSize:  4096,
-			WriteBufferSize: 4096,
+			ReadBufferSize:    4096,
+			WriteBufferSize:   4096,
+			EnableCompression: true,
 			CheckOrigin: func(r *http.Request) bool {
 				// Allow same-origin requests and explicit localhost development.
 				origin := r.Header.Get("Origin")
