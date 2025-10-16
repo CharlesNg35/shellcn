@@ -29,6 +29,16 @@ export interface ConnectionCreatePayload {
   identity_id?: string | null
 }
 
+export interface ConnectionUpdatePayload {
+  name: string
+  description?: string
+  team_id?: string | null
+  folder_id?: string | null
+  metadata?: Record<string, unknown>
+  settings?: Record<string, unknown>
+  identity_id?: string | null
+}
+
 interface ConnectionTargetResponse {
   id: string
   host: string
@@ -123,7 +133,49 @@ function normaliseConnectionSettings(
   if (Object.prototype.hasOwnProperty.call(settings, 'recording_enabled')) {
     normalised.recording_enabled = Boolean(settings.recording_enabled)
   }
+  if (Object.prototype.hasOwnProperty.call(settings, 'concurrent_limit')) {
+    const limit = Number(settings.concurrent_limit)
+    normalised.concurrent_limit = Number.isFinite(limit) && limit >= 0 ? limit : undefined
+  }
+  if (Object.prototype.hasOwnProperty.call(settings, 'idle_timeout_minutes')) {
+    const timeout = Number(settings.idle_timeout_minutes)
+    normalised.idle_timeout_minutes = Number.isFinite(timeout) && timeout >= 0 ? timeout : undefined
+  }
+  if (Object.prototype.hasOwnProperty.call(settings, 'enable_sftp')) {
+    normalised.enable_sftp = Boolean(settings.enable_sftp)
+  }
+  const terminalOverride = settings.terminal_config_override
+  if (terminalOverride) {
+    if (typeof terminalOverride === 'string') {
+      try {
+        const parsed = JSON.parse(terminalOverride) as Record<string, unknown>
+        normalised.terminal_config_override = coerceTerminalConfig(parsed)
+      } catch {
+        normalised.terminal_config_override = undefined
+      }
+    } else if (typeof terminalOverride === 'object') {
+      normalised.terminal_config_override = coerceTerminalConfig(
+        terminalOverride as Record<string, unknown>
+      )
+    }
+  }
   return normalised
+}
+
+function coerceTerminalConfig(
+  raw: Record<string, unknown>
+): ConnectionSettings['terminal_config_override'] {
+  const fontSize = Number(raw.font_size)
+  const scrollback = Number(raw.scrollback_limit)
+  return {
+    font_family:
+      typeof raw.font_family === 'string' && raw.font_family.trim().length > 0
+        ? raw.font_family.trim()
+        : undefined,
+    font_size: Number.isFinite(fontSize) && fontSize > 0 ? fontSize : undefined,
+    scrollback_limit: Number.isFinite(scrollback) && scrollback >= 0 ? scrollback : undefined,
+    enable_webgl: raw.enable_webgl === undefined ? undefined : Boolean(raw.enable_webgl),
+  }
 }
 
 function transformTargets(targets?: ConnectionTargetResponse[]): ConnectionTarget[] {
@@ -364,6 +416,18 @@ export async function createConnection(
 ): Promise<ConnectionRecord> {
   const response = await apiClient.post<ApiResponse<ConnectionResponse>>(
     CONNECTIONS_ENDPOINT,
+    payload
+  )
+  const data = unwrapResponse(response)
+  return transformConnection(data)
+}
+
+export async function updateConnection(
+  id: string,
+  payload: ConnectionUpdatePayload
+): Promise<ConnectionRecord> {
+  const response = await apiClient.put<ApiResponse<ConnectionResponse>>(
+    `${CONNECTIONS_ENDPOINT}/${id}`,
     payload
   )
   const data = unwrapResponse(response)

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SSHPreferencesPanel } from '../SSHPreferencesPanel'
@@ -16,6 +16,10 @@ import { toast } from 'sonner'
 const hookMock = vi.fn()
 vi.mock('@/hooks/useUserPreferences', () => ({
   useUserPreferences: () => hookMock(),
+}))
+
+vi.mock('../PersonalSnippetsSection', () => ({
+  PersonalSnippetsSection: () => <div data-testid="personal-snippets-section" />,
 }))
 
 vi.mock('@/components/ui/Select', async () => {
@@ -83,10 +87,14 @@ describe('SSHPreferencesPanel', () => {
         font_family: 'Fira Code',
         cursor_style: 'block',
         copy_on_select: true,
+        font_size: 14,
+        scrollback_limit: 1000,
+        enable_webgl: true,
       },
       sftp: {
         show_hidden_files: false,
         auto_open_queue: true,
+        confirm_before_overwrite: true,
       },
     },
   }
@@ -119,9 +127,17 @@ describe('SSHPreferencesPanel', () => {
     const cursorSelect = screen.getByLabelText('Cursor style') as HTMLSelectElement
     await user.selectOptions(cursorSelect, 'beam')
 
+    const fontSizeInput = screen.getByLabelText('Font size (px)') as HTMLInputElement
+    fireEvent.change(fontSizeInput, { target: { value: '16' } })
+
+    const scrollbackInput = screen.getByLabelText('Scrollback limit') as HTMLInputElement
+    fireEvent.change(scrollbackInput, { target: { value: '2000' } })
+
     await user.click(screen.getByLabelText('Copy on select'))
+    await user.click(screen.getByLabelText('Enable WebGL acceleration'))
     await user.click(screen.getByLabelText('Show hidden files by default'))
     await user.click(screen.getByLabelText('Open transfer queue automatically'))
+    await user.click(screen.getByLabelText('Confirm before overwriting files'))
 
     await user.click(screen.getByRole('button', { name: /save preferences/i }))
 
@@ -132,10 +148,14 @@ describe('SSHPreferencesPanel', () => {
             font_family: 'JetBrains Mono',
             cursor_style: 'beam',
             copy_on_select: false,
+            font_size: 16,
+            scrollback_limit: 2000,
+            enable_webgl: false,
           },
           sftp: {
             show_hidden_files: true,
             auto_open_queue: false,
+            confirm_before_overwrite: false,
           },
         },
       })

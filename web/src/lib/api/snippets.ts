@@ -35,6 +35,36 @@ export async function fetchSnippets(params: FetchSnippetsParams = {}): Promise<S
   return unwrapResponse(response)
 }
 
+export interface SnippetPayload {
+  name: string
+  description?: string
+  command: string
+  scope: SnippetScope
+  connection_id?: string | null
+}
+
+export async function createSnippet(payload: SnippetPayload): Promise<SnippetRecord> {
+  const response = await apiClient.post<ApiResponse<SnippetRecord>>('/snippets', payload)
+  return unwrapResponse(response)
+}
+
+export async function updateSnippet(
+  snippetId: string,
+  payload: SnippetPayload
+): Promise<SnippetRecord> {
+  const response = await apiClient.put<ApiResponse<SnippetRecord>>(
+    `/snippets/${encodeURIComponent(snippetId)}`,
+    payload
+  )
+  return unwrapResponse(response)
+}
+
+export async function deleteSnippet(snippetId: string): Promise<void> {
+  await apiClient.delete<ApiResponse<Record<string, unknown>>>(
+    `/snippets/${encodeURIComponent(snippetId)}`
+  )
+}
+
 interface ExecuteSnippetPayload {
   snippet_id: string
 }

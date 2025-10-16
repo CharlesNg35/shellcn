@@ -1,5 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createConnection, type ConnectionCreatePayload } from '@/lib/api/connections'
+import {
+  createConnection,
+  updateConnection,
+  type ConnectionCreatePayload,
+  type ConnectionUpdatePayload,
+} from '@/lib/api/connections'
 import { toast } from '@/lib/utils/toast'
 import { toApiError } from '@/lib/api/http'
 import { CONNECTIONS_QUERY_BASE_KEY } from './useConnections'
@@ -31,7 +36,25 @@ export function useConnectionMutations() {
     },
   })
 
+  const update = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: ConnectionUpdatePayload }) =>
+      updateConnection(id, payload),
+    onSuccess: async (connection) => {
+      await invalidate()
+      toast.success('Connection updated', {
+        description: `${connection.name} was updated successfully.`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
+      toast.error('Failed to update connection', {
+        description: apiError.message,
+      })
+    },
+  })
+
   return {
     create,
+    update,
   }
 }

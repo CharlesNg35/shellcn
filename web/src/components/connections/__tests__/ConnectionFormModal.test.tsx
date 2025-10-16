@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import * as React from 'react'
 import { vi } from 'vitest'
@@ -14,6 +15,10 @@ vi.mock('@/hooks/useConnectionMutations', () => ({
       mutateAsync,
       isPending: false,
     },
+    update: {
+      mutateAsync,
+      isPending: false,
+    },
   }),
 }))
 
@@ -23,11 +28,27 @@ vi.mock('@/hooks/usePermissions', () => ({
 
 vi.mock('@/lib/api/protocol-settings', () => ({
   fetchSSHProtocolSettings: vi.fn().mockResolvedValue({
+    session: {
+      concurrent_limit: 2,
+      idle_timeout_minutes: 30,
+      enable_sftp: true,
+    },
+    terminal: {
+      theme_mode: 'auto',
+      font_family: 'Fira Code',
+      font_size: 14,
+      scrollback_limit: 1200,
+      enable_webgl: true,
+    },
     recording: {
       mode: 'optional',
       storage: 'filesystem',
       retention_days: 0,
       require_consent: false,
+    },
+    collaboration: {
+      allow_sharing: true,
+      restrict_write_to_admins: false,
     },
   }),
 }))
@@ -156,6 +177,7 @@ describe('ConnectionFormModal identity integration', () => {
   })
 
   it('requires an identity before submission', async () => {
+    const user = userEvent.setup()
     const queryClient = new QueryClient()
     render(
       <QueryClientProvider client={queryClient}>
@@ -169,11 +191,12 @@ describe('ConnectionFormModal identity integration', () => {
       </QueryClientProvider>
     )
 
-    fireEvent.change(screen.getByLabelText(/Connection name/i), {
-      target: { value: 'Prod SSH' },
-    })
+    await screen.findByPlaceholderText('Production SSH')
 
-    fireEvent.click(screen.getByRole('button', { name: /Create Connection/i }))
+    await user.clear(screen.getByLabelText(/Connection name/i))
+    await user.type(screen.getByLabelText(/Connection name/i), 'Prod SSH')
+
+    await user.click(screen.getByRole('button', { name: /Create Connection/i }))
 
     expect(await screen.findByText(/Select or create a vault identity/i)).toBeInTheDocument()
     expect(mutateAsync).not.toHaveBeenCalled()
@@ -182,6 +205,7 @@ describe('ConnectionFormModal identity integration', () => {
   it('submits with selected identity', async () => {
     const handleSuccess = vi.fn()
     const queryClient = new QueryClient()
+    const user = userEvent.setup()
     render(
       <QueryClientProvider client={queryClient}>
         <ConnectionFormModal
@@ -194,13 +218,14 @@ describe('ConnectionFormModal identity integration', () => {
       </QueryClientProvider>
     )
 
-    fireEvent.change(screen.getByLabelText(/Connection name/i), {
-      target: { value: 'Prod SSH' },
-    })
+    await screen.findByPlaceholderText('Production SSH')
 
-    fireEvent.click(screen.getByText(/Select identity/i))
+    await user.clear(screen.getByLabelText(/Connection name/i))
+    await user.type(screen.getByLabelText(/Connection name/i), 'Prod SSH')
 
-    fireEvent.click(screen.getByRole('button', { name: /Create Connection/i }))
+    await user.click(screen.getByText(/Select identity/i))
+
+    await user.click(screen.getByRole('button', { name: /Create Connection/i }))
 
     await waitFor(() => {
       expect(mutateAsync).toHaveBeenCalledWith(
@@ -209,6 +234,113 @@ describe('ConnectionFormModal identity integration', () => {
           settings: expect.objectContaining({ recording_enabled: false }),
         })
       )
+    })
+    expect(handleSuccess).toHaveBeenCalledWith(connectionRecord)
+  })
+
+  it('allows overriding session defaults before submission', async () => {
+    const queryClient = new QueryClient()
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectionFormModal
+          open
+          onClose={vi.fn()}
+          protocol={protocol}
+          folders={[]}
+          onSuccess={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+
+    await user.clear(screen.getByLabelText(/Connection name/i))
+    await user.type(screen.getByLabelText(/Connection name/i), 'Prod SSH')
+
+    await user.click(screen.getByText(/Select identity/i))
+
+    await user.click(screen.getByLabelText(/Customise session values/i))
+
+    const concurrentInput = screen.getByLabelText(/Concurrent sessions/i)
+    await user.clear(concurrentInput)
+    await user.type(concurrentInput, '5')
+
+    const idleInput = screen.getByLabelText(/Idle timeout/i)
+    await user.clear(idleInput)
+    await user.type(idleInput, '10')
+
+    await user.click(screen.getByLabelText(/Allow SFTP/i))
+
+    await user.click(screen.getByRole('button', { name: /Create Connection/i }))
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          settings: expect.objectContaining({
+            concurrent_limit: 5,
+            idle_timeout_minutes: 10,
+            enable_sftp: false,
+          }),
+        })
+      )
+    })
+  })
+
+  it('triggers update mutation in edit mode', async () => {
+    const existing: ConnectionRecord = {
+      ...connectionRecord,
+      metadata: { icon: 'terminal', color: '#ff0000' },
+      settings: {
+        concurrent_limit: 3,
+        idle_timeout_minutes: 45,
+        enable_sftp: true,
+        recording_enabled: true,
+      },
+    }
+
+    const handleSuccess = vi.fn()
+    const queryClient = new QueryClient()
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectionFormModal
+          open
+          onClose={vi.fn()}
+          protocol={protocol}
+          folders={[]}
+          mode="edit"
+          connection={existing}
+          onSuccess={handleSuccess}
+        />
+      </QueryClientProvider>
+    )
+
+    await screen.findByDisplayValue('SSH Example')
+    await user.clear(screen.getByLabelText(/Connection name/i))
+    await user.type(screen.getByLabelText(/Connection name/i), 'Updated SSH')
+
+    await user.click(screen.getByText(/Select identity/i))
+
+    const sessionOverrideToggle = screen.getByLabelText(
+      'Customise session values'
+    ) as HTMLInputElement
+    expect(sessionOverrideToggle.checked).toBe(true)
+
+    await user.click(screen.getByRole('button', { name: /Save changes/i }))
+
+    await waitFor(() => expect(mutateAsync).toHaveBeenCalled())
+    const lastCall = mutateAsync.mock.calls.at(-1)?.[0] as
+      | { id: string; payload: Record<string, unknown> }
+      | undefined
+    expect(lastCall).toBeDefined()
+    expect(lastCall?.id).toBe(existing.id)
+    expect(lastCall?.payload).toMatchObject({
+      name: 'Updated SSH',
+      settings: expect.objectContaining({
+        concurrent_limit: 3,
+        idle_timeout_minutes: 45,
+        enable_sftp: true,
+        recording_enabled: true,
+      }),
     })
     expect(handleSuccess).toHaveBeenCalledWith(connectionRecord)
   })

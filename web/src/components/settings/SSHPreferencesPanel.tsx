@@ -18,6 +18,7 @@ import { useUserPreferences } from '@/hooks/useUserPreferences'
 import type { TerminalCursorStyle, UserPreferences } from '@/types/preferences'
 import { cn } from '@/lib/utils/cn'
 import { toast } from 'sonner'
+import { PersonalSnippetsSection } from './PersonalSnippetsSection'
 
 const cursorStyleOptions: Array<{
   value: TerminalCursorStyle
@@ -47,10 +48,20 @@ const preferenceSchema = z.object({
       font_family: z.string().trim().min(1, 'Font family is required').max(128),
       cursor_style: z.enum(['block', 'underline', 'beam']),
       copy_on_select: z.boolean(),
+      font_size: z
+        .number()
+        .min(8, 'Font size must be at least 8')
+        .max(96, 'Font size must be at most 96'),
+      scrollback_limit: z
+        .number()
+        .min(200, 'Scrollback must be at least 200 lines')
+        .max(10000, 'Scrollback must be at most 10000 lines'),
+      enable_webgl: z.boolean(),
     }),
     sftp: z.object({
       show_hidden_files: z.boolean(),
       auto_open_queue: z.boolean(),
+      confirm_before_overwrite: z.boolean(),
     }),
   }),
 })
@@ -72,10 +83,14 @@ export function SSHPreferencesPanel({ className }: SSHPreferencesPanelProps) {
           font_family: 'Fira Code',
           cursor_style: 'block',
           copy_on_select: true,
+          font_size: 14,
+          scrollback_limit: 1000,
+          enable_webgl: true,
         },
         sftp: {
           show_hidden_files: false,
           auto_open_queue: true,
+          confirm_before_overwrite: true,
         },
       },
     },
@@ -95,10 +110,14 @@ export function SSHPreferencesPanel({ className }: SSHPreferencesPanelProps) {
           font_family: values.ssh.terminal.font_family.trim(),
           cursor_style: values.ssh.terminal.cursor_style,
           copy_on_select: values.ssh.terminal.copy_on_select,
+          font_size: values.ssh.terminal.font_size,
+          scrollback_limit: values.ssh.terminal.scrollback_limit,
+          enable_webgl: values.ssh.terminal.enable_webgl,
         },
         sftp: {
           show_hidden_files: values.ssh.sftp.show_hidden_files,
           auto_open_queue: values.ssh.sftp.auto_open_queue,
+          confirm_before_overwrite: values.ssh.sftp.confirm_before_overwrite,
         },
       },
     }
@@ -184,6 +203,61 @@ export function SSHPreferencesPanel({ className }: SSHPreferencesPanelProps) {
                   Choose how the terminal cursor should appear when you open new sessions.
                 </p>
               </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground" htmlFor="pref-terminal-size">
+                  Font size (px)
+                </label>
+                <Input
+                  id="pref-terminal-size"
+                  type="number"
+                  min={8}
+                  max={96}
+                  value={form.watch('ssh.terminal.font_size')}
+                  onChange={(event) =>
+                    form.setValue('ssh.terminal.font_size', Number(event.target.value) || 14, {
+                      shouldDirty: true,
+                    })
+                  }
+                  disabled={isLoading || submitting}
+                />
+                {form.formState.errors.ssh?.terminal?.font_size ? (
+                  <p className="text-xs text-rose-500">
+                    {form.formState.errors.ssh.terminal.font_size.message}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  className="text-sm font-medium text-foreground"
+                  htmlFor="pref-terminal-scrollback"
+                >
+                  Scrollback limit
+                </label>
+                <Input
+                  id="pref-terminal-scrollback"
+                  type="number"
+                  min={200}
+                  max={10000}
+                  value={form.watch('ssh.terminal.scrollback_limit')}
+                  onChange={(event) =>
+                    form.setValue(
+                      'ssh.terminal.scrollback_limit',
+                      Number(event.target.value) || 1000,
+                      {
+                        shouldDirty: true,
+                      }
+                    )
+                  }
+                  disabled={isLoading || submitting}
+                />
+                {form.formState.errors.ssh?.terminal?.scrollback_limit ? (
+                  <p className="text-xs text-rose-500">
+                    {form.formState.errors.ssh.terminal.scrollback_limit.message}
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-muted/10 px-3 py-2">
@@ -203,6 +277,31 @@ export function SSHPreferencesPanel({ className }: SSHPreferencesPanelProps) {
                 </label>
                 <p className="text-xs text-muted-foreground">
                   Automatically copy highlighted text to your clipboard without pressing a shortcut.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-muted/10 px-3 py-2">
+              <Checkbox
+                id="pref-terminal-webgl"
+                checked={form.watch('ssh.terminal.enable_webgl')}
+                onCheckedChange={(checked) =>
+                  form.setValue('ssh.terminal.enable_webgl', Boolean(checked), {
+                    shouldDirty: true,
+                  })
+                }
+                disabled={isLoading || submitting}
+              />
+              <div className="space-y-1">
+                <label
+                  className="text-sm font-medium text-foreground"
+                  htmlFor="pref-terminal-webgl"
+                >
+                  Enable WebGL acceleration
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Improves rendering performance on supported GPUs. Disable if you encounter
+                  graphical issues.
                 </p>
               </div>
             </div>
@@ -251,7 +350,34 @@ export function SSHPreferencesPanel({ className }: SSHPreferencesPanelProps) {
                 </p>
               </div>
             </div>
+
+            <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-muted/10 px-3 py-2">
+              <Checkbox
+                id="pref-sftp-overwrite"
+                checked={form.watch('ssh.sftp.confirm_before_overwrite')}
+                onCheckedChange={(checked) =>
+                  form.setValue('ssh.sftp.confirm_before_overwrite', Boolean(checked), {
+                    shouldDirty: true,
+                  })
+                }
+                disabled={isLoading || submitting}
+              />
+              <div className="space-y-1">
+                <label
+                  className="text-sm font-medium text-foreground"
+                  htmlFor="pref-sftp-overwrite"
+                >
+                  Confirm before overwriting files
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, the file manager asks for confirmation before replacing an existing
+                  file.
+                </p>
+              </div>
+            </div>
           </div>
+
+          <PersonalSnippetsSection />
 
           <div className="flex items-center gap-3">
             <Button type="submit" disabled={isLoading || submitting}>

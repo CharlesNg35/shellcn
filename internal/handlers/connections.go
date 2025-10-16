@@ -123,6 +123,36 @@ func (h *ConnectionHandler) Create(c *gin.Context) {
 	response.Success(c, http.StatusCreated, connection)
 }
 
+// Update modifies an existing connection with provided payload.
+func (h *ConnectionHandler) Update(c *gin.Context) {
+	userID := c.GetString(middleware.CtxUserIDKey)
+	if userID == "" {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+
+	var payload updateConnectionPayload
+	if !bindAndValidate(c, &payload) {
+		return
+	}
+
+	ctx := requestContext(c)
+	connection, err := h.svc.Update(ctx, userID, c.Param("id"), services.UpdateConnectionInput{
+		Name:        payload.Name,
+		Description: payload.Description,
+		TeamID:      payload.TeamID,
+		FolderID:    payload.FolderID,
+		Metadata:    payload.Metadata,
+		Settings:    payload.Settings,
+		IdentityID:  payload.IdentityID,
+	})
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, connection)
+}
+
 // Summary returns connection counts grouped by protocol for the authenticated user.
 func (h *ConnectionHandler) Summary(c *gin.Context) {
 	userID := c.GetString(middleware.CtxUserIDKey)
@@ -219,6 +249,16 @@ type createConnectionPayload struct {
 	GrantTeamPermissions []string               `json:"grant_team_permissions"`
 	IdentityID           *string                `json:"identity_id"`
 	InlineIdentity       *inlineIdentityPayload `json:"inline_identity"`
+}
+
+type updateConnectionPayload struct {
+	Name        string         `json:"name" binding:"required"`
+	Description string         `json:"description"`
+	TeamID      *string        `json:"team_id"`
+	FolderID    *string        `json:"folder_id"`
+	Metadata    map[string]any `json:"metadata"`
+	Settings    map[string]any `json:"settings"`
+	IdentityID  *string        `json:"identity_id"`
 }
 
 type inlineIdentityPayload struct {

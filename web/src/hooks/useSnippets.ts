@@ -11,7 +11,7 @@ export interface UseSnippetsOptions extends FetchSnippetsParams {
   enabled?: boolean
 }
 
-const SNIPPETS_QUERY_KEY = ['snippets'] as const
+export const SNIPPETS_QUERY_KEY = ['snippets'] as const
 
 export function useSnippets(options: UseSnippetsOptions = {}) {
   const { enabled = true, ...params } = options

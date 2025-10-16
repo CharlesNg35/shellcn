@@ -47,7 +47,18 @@ export interface ConnectionSettings {
   host?: string
   port?: number
   recording_enabled?: boolean
+  concurrent_limit?: number
+  idle_timeout_minutes?: number
+  enable_sftp?: boolean
+  terminal_config_override?: ConnectionTerminalConfigOverride
   [key: string]: unknown
+}
+
+export interface ConnectionTerminalConfigOverride {
+  font_family?: string
+  font_size?: number
+  scrollback_limit?: number
+  enable_webgl?: boolean
 }
 
 export interface ConnectionFolderSummary {

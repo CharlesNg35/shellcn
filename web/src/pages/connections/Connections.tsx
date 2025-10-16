@@ -39,6 +39,8 @@ export function Connections() {
   const [resourceModalOpen, setResourceModalOpen] = useState(false)
   const [connectionModalOpen, setConnectionModalOpen] = useState(false)
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
+  const [formMode, setFormMode] = useState<'create' | 'edit'>('create')
+  const [editingConnection, setEditingConnection] = useState<ConnectionRecord | null>(null)
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [shareTargetConnection, setShareTargetConnection] = useState<ConnectionRecord | null>(null)
   const [showActiveOnly, setShowActiveOnly] = useState(false)
@@ -282,6 +284,8 @@ export function Connections() {
   const hasError = protocolsError || connectionsError
 
   const handleStartCreateConnection = () => {
+    setFormMode('create')
+    setEditingConnection(null)
     setSelectedProtocolId(null)
     setResourceModalOpen(true)
   }
@@ -295,11 +299,14 @@ export function Connections() {
   const handleCloseConnectionModal = () => {
     setConnectionModalOpen(false)
     setSelectedProtocolId(null)
+    setEditingConnection(null)
+    setFormMode('create')
   }
-
-  const handleConnectionCreated = (connection: ConnectionRecord) => {
+  const handleConnectionFormSuccess = (connection: ConnectionRecord) => {
     setConnectionModalOpen(false)
     setSelectedProtocolId(null)
+    setEditingConnection(null)
+    setFormMode('create')
     setProtocolFilter(connection.protocol_id)
     const params = new URLSearchParams(searchParams)
     if (connection.folder_id) {
@@ -308,6 +315,18 @@ export function Connections() {
       params.delete('folder')
     }
     setSearchParams(params, { replace: true })
+  }
+
+  const handleOpenEditConnection = (connectionId: string) => {
+    const target = connections.find((conn) => conn.id === connectionId)
+    if (!target) {
+      return
+    }
+    setFormMode('edit')
+    setEditingConnection(target)
+    setSelectedProtocolId(target.protocol_id)
+    setResourceModalOpen(false)
+    setConnectionModalOpen(true)
   }
 
   const handleOpenShareModal = (connectionId: string) => {
@@ -481,6 +500,7 @@ export function Connections() {
                   protocol={protocolLookup[connection.protocol_id]}
                   protocolIcon={resolveProtocolIcon(protocolLookup[connection.protocol_id])}
                   teamName={connection.team_id ? teamLookup[connection.team_id] : undefined}
+                  onEdit={handleOpenEditConnection}
                   onShare={canShareConnections ? handleOpenShareModal : undefined}
                   activeSessions={activeSessionsByConnection[connection.id]}
                   showActiveUsers={isAdmin}
@@ -511,7 +531,9 @@ export function Connections() {
         teamId={teamFilterValue ?? null}
         teams={teams}
         allowTeamAssignment={canAssignTeams}
-        onSuccess={handleConnectionCreated}
+        onSuccess={handleConnectionFormSuccess}
+        mode={formMode}
+        connection={editingConnection}
       />
 
       <ShareConnectionModal

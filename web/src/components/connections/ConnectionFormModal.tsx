@@ -38,6 +38,37 @@ import {
 import { PERMISSIONS } from '@/constants/permissions'
 import { cn } from '@/lib/utils/cn'
 
+const sessionOverrideSchema = z.object({
+  use_custom: z.boolean(),
+  concurrent_limit: z
+    .number()
+    .min(0, 'Concurrent limit must be zero or greater')
+    .max(1000, 'Concurrent limit must be 1000 or less'),
+  idle_timeout_minutes: z
+    .number()
+    .min(0, 'Idle timeout must be zero or greater')
+    .max(10080, 'Idle timeout must be less than 10081 minutes'),
+  enable_sftp: z.boolean(),
+})
+
+const terminalOverrideSchema = z.object({
+  use_custom: z.boolean(),
+  font_family: z
+    .string()
+    .trim()
+    .min(1, 'Font family is required')
+    .max(128, 'Font family must be at most 128 characters'),
+  font_size: z
+    .number()
+    .min(8, 'Font size must be at least 8')
+    .max(96, 'Font size must be at most 96'),
+  scrollback_limit: z
+    .number()
+    .min(200, 'Scrollback must be at least 200 lines')
+    .max(10000, 'Scrollback must be at most 10000 lines'),
+  enable_webgl: z.boolean(),
+})
+
 const connectionSchema = z.object({
   name: z
     .string()
@@ -54,6 +85,10 @@ const connectionSchema = z.object({
   team_id: z.string().trim().optional().or(z.literal('')),
   icon: z.string().trim().optional().or(z.literal('')),
   color: z.string().trim().optional().or(z.literal('')),
+  overrides: z.object({
+    session: sessionOverrideSchema,
+    terminal: terminalOverrideSchema,
+  }),
 })
 
 type ConnectionFormValues = z.infer<typeof connectionSchema>
@@ -67,6 +102,8 @@ interface ConnectionFormModalProps {
   teams?: TeamRecord[]
   allowTeamAssignment?: boolean
   onSuccess: (connection: ConnectionRecord) => void
+  mode?: 'create' | 'edit'
+  connection?: ConnectionRecord | null
 }
 
 export function ConnectionFormModal({
@@ -78,8 +115,10 @@ export function ConnectionFormModal({
   teams = [],
   allowTeamAssignment = false,
   onSuccess,
+  mode = 'create',
+  connection = null,
 }: ConnectionFormModalProps) {
-  const { create } = useConnectionMutations()
+  const { create, update } = useConnectionMutations()
   const [formError, setFormError] = useState<ApiError | null>(null)
   const grantToggleInteractedRef = useRef(false)
   const recordingDefaultAppliedRef = useRef(false)
@@ -89,6 +128,7 @@ export function ConnectionFormModal({
   const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null)
   const [identityModalOpen, setIdentityModalOpen] = useState(false)
   const [recordingOptIn, setRecordingOptIn] = useState(false)
+  const formInitializedRef = useRef(false)
 
   const iconOptions = useMemo(() => {
     return getIconOptionsForProtocol(protocol?.id, protocol?.category)
@@ -98,23 +138,38 @@ export function ConnectionFormModal({
     return getDefaultIconForProtocol(protocol?.id, protocol?.category)
   }, [protocol?.category, protocol?.id])
 
-  const defaultValues = useMemo<ConnectionFormValues>(() => {
-    return {
-      name: '',
-      description: '',
-      folder_id: '',
-      team_id: normalizeTeamValue(teamId),
-      icon: defaultIcon ?? DEFAULT_CONNECTION_ICON_ID,
-      color: '',
-    }
-  }, [defaultIcon, teamId])
-
   const { data: sshSettings, isLoading: sshSettingsLoading } = useQuery({
     queryKey: ['protocol-settings', 'ssh'],
     queryFn: fetchSSHProtocolSettings,
     enabled: open && protocol?.id === 'ssh',
     staleTime: 60_000,
   })
+
+  const sessionDefaults = useMemo(() => {
+    return {
+      concurrent_limit: sshSettings?.session.concurrent_limit ?? 0,
+      idle_timeout_minutes: sshSettings?.session.idle_timeout_minutes ?? 0,
+      enable_sftp: sshSettings?.session.enable_sftp ?? true,
+    }
+  }, [
+    sshSettings?.session.concurrent_limit,
+    sshSettings?.session.enable_sftp,
+    sshSettings?.session.idle_timeout_minutes,
+  ])
+
+  const terminalDefaults = useMemo(() => {
+    return {
+      font_family: sshSettings?.terminal.font_family ?? 'monospace',
+      font_size: sshSettings?.terminal.font_size ?? 14,
+      scrollback_limit: sshSettings?.terminal.scrollback_limit ?? 1000,
+      enable_webgl: sshSettings?.terminal.enable_webgl ?? true,
+    }
+  }, [
+    sshSettings?.terminal.enable_webgl,
+    sshSettings?.terminal.font_family,
+    sshSettings?.terminal.font_size,
+    sshSettings?.terminal.scrollback_limit,
+  ])
 
   const {
     register,
@@ -126,26 +181,186 @@ export function ConnectionFormModal({
     formState: { errors, isSubmitting },
   } = useForm<ConnectionFormValues>({
     resolver: zodResolver(connectionSchema),
-    defaultValues,
+    defaultValues: {
+      name: '',
+      description: '',
+      folder_id: '',
+      team_id: normalizeTeamValue(teamId),
+      icon: defaultIcon ?? DEFAULT_CONNECTION_ICON_ID,
+      color: '',
+      overrides: {
+        session: {
+          use_custom: false,
+          concurrent_limit: 0,
+          idle_timeout_minutes: 0,
+          enable_sftp: true,
+        },
+        terminal: {
+          use_custom: false,
+          font_family: 'monospace',
+          font_size: 14,
+          scrollback_limit: 1000,
+          enable_webgl: true,
+        },
+      },
+    },
   })
 
   useEffect(() => {
-    if (open) {
-      reset(defaultValues)
-      setFormError(null)
-      grantToggleInteractedRef.current = false
-      setAutoGrantTeamPermissions(false)
-      setSelectedIdentityId(null)
+    if (!open) {
+      setRecordingOptIn(false)
       recordingDefaultAppliedRef.current = false
+      formInitializedRef.current = false
+      return
+    }
+    if (protocol?.id === 'ssh' && sshSettingsLoading && !formInitializedRef.current) {
+      return
+    }
+    if (formInitializedRef.current) {
+      return
+    }
+
+    const metadata = (connection?.metadata ?? {}) as Record<string, unknown>
+    const iconFromMetadata =
+      typeof metadata.icon === 'string' && metadata.icon.trim().length > 0
+        ? metadata.icon.trim()
+        : undefined
+    const colorFromMetadata =
+      typeof metadata.color === 'string' && metadata.color.trim().length > 0
+        ? metadata.color.trim()
+        : ''
+
+    const settings = connection?.settings ?? {}
+    const sessionOverrideEnabled =
+      typeof settings.concurrent_limit === 'number' ||
+      typeof settings.idle_timeout_minutes === 'number' ||
+      typeof settings.enable_sftp === 'boolean'
+
+    const terminalOverrides = settings.terminal_config_override ?? undefined
+
+    const initialValues: ConnectionFormValues = {
+      name: connection?.name ?? '',
+      description: connection?.description ?? '',
+      folder_id: connection?.folder_id ?? '',
+      team_id: normalizeTeamValue(connection?.team_id ?? teamId),
+      icon: iconFromMetadata ?? defaultIcon ?? DEFAULT_CONNECTION_ICON_ID,
+      color: colorFromMetadata,
+      overrides: {
+        session: {
+          use_custom: sessionOverrideEnabled,
+          concurrent_limit: sessionOverrideEnabled
+            ? typeof settings.concurrent_limit === 'number'
+              ? settings.concurrent_limit
+              : sessionDefaults.concurrent_limit
+            : sessionDefaults.concurrent_limit,
+          idle_timeout_minutes: sessionOverrideEnabled
+            ? typeof settings.idle_timeout_minutes === 'number'
+              ? settings.idle_timeout_minutes
+              : sessionDefaults.idle_timeout_minutes
+            : sessionDefaults.idle_timeout_minutes,
+          enable_sftp:
+            sessionOverrideEnabled && typeof settings.enable_sftp === 'boolean'
+              ? Boolean(settings.enable_sftp)
+              : sessionDefaults.enable_sftp,
+        },
+        terminal: {
+          use_custom: Boolean(terminalOverrides),
+          font_family:
+            terminalOverrides && terminalOverrides.font_family
+              ? String(terminalOverrides.font_family)
+              : terminalDefaults.font_family,
+          font_size:
+            terminalOverrides && typeof terminalOverrides.font_size === 'number'
+              ? Number(terminalOverrides.font_size)
+              : terminalDefaults.font_size,
+          scrollback_limit:
+            terminalOverrides && typeof terminalOverrides.scrollback_limit === 'number'
+              ? Number(terminalOverrides.scrollback_limit)
+              : terminalDefaults.scrollback_limit,
+          enable_webgl:
+            terminalOverrides && terminalOverrides.enable_webgl !== undefined
+              ? Boolean(terminalOverrides.enable_webgl)
+              : terminalDefaults.enable_webgl,
+        },
+      },
+    }
+
+    reset(initialValues)
+    setValue('overrides.session.use_custom', initialValues.overrides.session.use_custom, {
+      shouldDirty: false,
+    })
+    setValue('overrides.terminal.use_custom', initialValues.overrides.terminal.use_custom, {
+      shouldDirty: false,
+    })
+    setFormError(null)
+    grantToggleInteractedRef.current = false
+    setAutoGrantTeamPermissions(false)
+    setSelectedIdentityId(connection?.identity_id ?? null)
+
+    if (mode === 'edit' && typeof settings.recording_enabled === 'boolean') {
+      setRecordingOptIn(Boolean(settings.recording_enabled))
+      recordingDefaultAppliedRef.current = true
     } else {
       setRecordingOptIn(false)
       recordingDefaultAppliedRef.current = false
     }
-  }, [defaultValues, open, reset])
+
+    formInitializedRef.current = true
+  }, [
+    connection,
+    defaultIcon,
+    mode,
+    open,
+    protocol?.id,
+    reset,
+    sessionDefaults,
+    setValue,
+    sshSettingsLoading,
+    teamId,
+    terminalDefaults,
+  ])
 
   const selectedIcon = watch('icon')
   const selectedColor = watch('color')
   const selectedTeamValue = watch('team_id')
+  const sessionOverride = watch('overrides.session')
+  const terminalOverride = watch('overrides.terminal')
+
+  const usingSessionDefaults = !sessionOverride?.use_custom
+  const usingTerminalDefaults = !terminalOverride?.use_custom
+
+  const handleSessionOverrideToggle = (checked: boolean) => {
+    setValue('overrides.session.use_custom', checked, { shouldDirty: true })
+    if (!checked) {
+      setValue('overrides.session.concurrent_limit', sessionDefaults.concurrent_limit, {
+        shouldDirty: true,
+      })
+      setValue('overrides.session.idle_timeout_minutes', sessionDefaults.idle_timeout_minutes, {
+        shouldDirty: true,
+      })
+      setValue('overrides.session.enable_sftp', sessionDefaults.enable_sftp, {
+        shouldDirty: true,
+      })
+    }
+  }
+
+  const handleTerminalOverrideToggle = (checked: boolean) => {
+    setValue('overrides.terminal.use_custom', checked, { shouldDirty: true })
+    if (!checked) {
+      setValue('overrides.terminal.font_family', terminalDefaults.font_family, {
+        shouldDirty: true,
+      })
+      setValue('overrides.terminal.font_size', terminalDefaults.font_size, {
+        shouldDirty: true,
+      })
+      setValue('overrides.terminal.scrollback_limit', terminalDefaults.scrollback_limit, {
+        shouldDirty: true,
+      })
+      setValue('overrides.terminal.enable_webgl', terminalDefaults.enable_webgl, {
+        shouldDirty: true,
+      })
+    }
+  }
 
   const effectiveTeamId = useMemo(
     () => denormalizeTeamValue(selectedTeamValue),
@@ -314,6 +529,19 @@ export function ConnectionFormModal({
         } else if (recordingMode === 'optional') {
           settings.recording_enabled = recordingOptIn
         }
+        if (values.overrides.session.use_custom) {
+          settings.concurrent_limit = values.overrides.session.concurrent_limit
+          settings.idle_timeout_minutes = values.overrides.session.idle_timeout_minutes
+          settings.enable_sftp = values.overrides.session.enable_sftp
+        }
+        if (values.overrides.terminal.use_custom) {
+          settings.terminal_config_override = {
+            font_family: values.overrides.terminal.font_family.trim(),
+            font_size: values.overrides.terminal.font_size,
+            scrollback_limit: values.overrides.terminal.scrollback_limit,
+            enable_webgl: values.overrides.terminal.enable_webgl,
+          }
+        }
       }
       if (Object.keys(settings).length > 0) {
         payload.settings = settings
@@ -326,8 +554,22 @@ export function ConnectionFormModal({
         }
       }
 
-      const connection = await create.mutateAsync(payload)
-      onSuccess(connection)
+      let savedConnection: ConnectionRecord
+      if (mode === 'edit' && connection) {
+        const updatePayload = {
+          name: payload.name,
+          description: payload.description,
+          folder_id: payload.folder_id,
+          team_id: payload.team_id,
+          metadata: payload.metadata,
+          settings: payload.settings,
+          identity_id: payload.identity_id,
+        }
+        savedConnection = await update.mutateAsync({ id: connection.id, payload: updatePayload })
+      } else {
+        savedConnection = await create.mutateAsync(payload)
+      }
+      onSuccess(savedConnection)
       onClose()
     } catch (error) {
       const apiError = toApiError(error)
@@ -335,7 +577,7 @@ export function ConnectionFormModal({
     }
   }
 
-  const isLoading = isSubmitting || create.isPending
+  const isLoading = isSubmitting || create.isPending || update.isPending
   const folderOptions = useMemo(() => flattenFolders(folders), [folders])
 
   if (!protocol) {
@@ -343,14 +585,21 @@ export function ConnectionFormModal({
   }
 
   const Icon = resolveProtocolIcon(protocol)
+  const modalTitle =
+    mode === 'edit' && connection ? `Edit ${connection.name}` : `Configure ${protocol.name}`
+  const submitLabel = mode === 'edit' ? 'Save changes' : 'Create Connection'
 
   return (
     <>
       <Modal
         open={open}
         onClose={onClose}
-        title={`Configure ${protocol.name}`}
-        description="Provide a name and optional folder to keep things organized."
+        title={modalTitle}
+        description={
+          mode === 'edit'
+            ? 'Update the connection details and overrides for this resource.'
+            : 'Provide a name and optional folder to keep things organized.'
+        }
         size="lg"
       >
         <div className="flex flex-col gap-6">
@@ -564,6 +813,273 @@ export function ConnectionFormModal({
             </div>
 
             {protocol.id === 'ssh' ? (
+              <div className="space-y-4 rounded-lg border border-border/60 bg-muted/10 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Session behaviour</p>
+                    <p className="text-xs text-muted-foreground">
+                      Control concurrency, idle timeout, and SFTP access for this connection.
+                    </p>
+                  </div>
+                  <label
+                    htmlFor="session-override-toggle"
+                    className="flex cursor-pointer items-center gap-2 text-sm text-foreground"
+                  >
+                    <Checkbox
+                      id="session-override-toggle"
+                      checked={!usingSessionDefaults}
+                      onCheckedChange={(checked) => handleSessionOverrideToggle(Boolean(checked))}
+                      disabled={isLoading || sshSettingsLoading}
+                    />
+                    <span>Customise session values</span>
+                  </label>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-medium text-foreground"
+                      htmlFor="override-concurrent-limit"
+                    >
+                      Concurrent sessions
+                    </label>
+                    <Input
+                      id="override-concurrent-limit"
+                      type="number"
+                      min={0}
+                      max={1000}
+                      value={sessionOverride?.concurrent_limit ?? sessionDefaults.concurrent_limit}
+                      onChange={(event) =>
+                        setValue(
+                          'overrides.session.concurrent_limit',
+                          Number(event.target.value) || 0,
+                          { shouldDirty: true }
+                        )
+                      }
+                      disabled={usingSessionDefaults || isLoading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Default: {sessionDefaults.concurrent_limit || 'Unlimited'} concurrent session
+                      {sessionDefaults.concurrent_limit === 1 ? '' : 's'}.
+                    </p>
+                    {errors.overrides?.session?.concurrent_limit ? (
+                      <p className="text-xs text-rose-500">
+                        {errors.overrides.session.concurrent_limit.message}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-medium text-foreground"
+                      htmlFor="override-idle-timeout"
+                    >
+                      Idle timeout (minutes)
+                    </label>
+                    <Input
+                      id="override-idle-timeout"
+                      type="number"
+                      min={0}
+                      max={10080}
+                      value={
+                        sessionOverride?.idle_timeout_minutes ??
+                        sessionDefaults.idle_timeout_minutes
+                      }
+                      onChange={(event) =>
+                        setValue(
+                          'overrides.session.idle_timeout_minutes',
+                          Number(event.target.value) || 0,
+                          { shouldDirty: true }
+                        )
+                      }
+                      disabled={usingSessionDefaults || isLoading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Default: {sessionDefaults.idle_timeout_minutes} minute
+                      {sessionDefaults.idle_timeout_minutes === 1 ? '' : 's'}.
+                    </p>
+                    {errors.overrides?.session?.idle_timeout_minutes ? (
+                      <p className="text-xs text-rose-500">
+                        {errors.overrides.session.idle_timeout_minutes.message}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-foreground">SFTP access</span>
+                    <label
+                      htmlFor="override-sftp"
+                      className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 bg-background px-3 py-2"
+                    >
+                      <Checkbox
+                        id="override-sftp"
+                        checked={sessionOverride?.enable_sftp ?? sessionDefaults.enable_sftp}
+                        onCheckedChange={(checked) =>
+                          setValue('overrides.session.enable_sftp', Boolean(checked), {
+                            shouldDirty: true,
+                          })
+                        }
+                        disabled={usingSessionDefaults || isLoading}
+                      />
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-foreground">Allow SFTP</p>
+                        <p className="text-xs text-muted-foreground">
+                          Default is {sessionDefaults.enable_sftp ? 'enabled' : 'disabled'}.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {protocol.id === 'ssh' ? (
+              <div className="space-y-4 rounded-lg border border-border/60 bg-muted/10 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Terminal appearance</p>
+                    <p className="text-xs text-muted-foreground">
+                      Adjust font, size, and scrollback for terminals launched from this connection.
+                    </p>
+                  </div>
+                  <label
+                    htmlFor="terminal-override-toggle"
+                    className="flex cursor-pointer items-center gap-2 text-sm text-foreground"
+                  >
+                    <Checkbox
+                      id="terminal-override-toggle"
+                      checked={!usingTerminalDefaults}
+                      onCheckedChange={(checked) => handleTerminalOverrideToggle(Boolean(checked))}
+                      disabled={isLoading || sshSettingsLoading}
+                    />
+                    <span>Customise terminal values</span>
+                  </label>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-medium text-foreground"
+                      htmlFor="override-font-family"
+                    >
+                      Font family
+                    </label>
+                    <Input
+                      id="override-font-family"
+                      value={terminalOverride?.font_family ?? terminalDefaults.font_family}
+                      onChange={(event) =>
+                        setValue('overrides.terminal.font_family', event.target.value, {
+                          shouldDirty: true,
+                        })
+                      }
+                      disabled={usingTerminalDefaults || isLoading}
+                      placeholder="e.g. Fira Code"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Default: {terminalDefaults.font_family}.
+                    </p>
+                    {errors.overrides?.terminal?.font_family ? (
+                      <p className="text-xs text-rose-500">
+                        {errors.overrides.terminal.font_family.message}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-medium text-foreground"
+                      htmlFor="override-font-size"
+                    >
+                      Font size (px)
+                    </label>
+                    <Input
+                      id="override-font-size"
+                      type="number"
+                      min={8}
+                      max={96}
+                      value={terminalOverride?.font_size ?? terminalDefaults.font_size}
+                      onChange={(event) =>
+                        setValue(
+                          'overrides.terminal.font_size',
+                          Number(event.target.value) || terminalDefaults.font_size,
+                          { shouldDirty: true }
+                        )
+                      }
+                      disabled={usingTerminalDefaults || isLoading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Default: {terminalDefaults.font_size}px.
+                    </p>
+                    {errors.overrides?.terminal?.font_size ? (
+                      <p className="text-xs text-rose-500">
+                        {errors.overrides.terminal.font_size.message}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label
+                      className="text-sm font-medium text-foreground"
+                      htmlFor="override-scrollback"
+                    >
+                      Scrollback limit
+                    </label>
+                    <Input
+                      id="override-scrollback"
+                      type="number"
+                      min={200}
+                      max={10000}
+                      value={
+                        terminalOverride?.scrollback_limit ?? terminalDefaults.scrollback_limit
+                      }
+                      onChange={(event) =>
+                        setValue(
+                          'overrides.terminal.scrollback_limit',
+                          Number(event.target.value) || terminalDefaults.scrollback_limit,
+                          { shouldDirty: true }
+                        )
+                      }
+                      disabled={usingTerminalDefaults || isLoading}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Default: {terminalDefaults.scrollback_limit} lines.
+                    </p>
+                    {errors.overrides?.terminal?.scrollback_limit ? (
+                      <p className="text-xs text-rose-500">
+                        {errors.overrides.terminal.scrollback_limit.message}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium text-foreground">WebGL acceleration</span>
+                    <label
+                      htmlFor="override-webgl"
+                      className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 bg-background px-3 py-2"
+                    >
+                      <Checkbox
+                        id="override-webgl"
+                        checked={terminalOverride?.enable_webgl ?? terminalDefaults.enable_webgl}
+                        onCheckedChange={(checked) =>
+                          setValue('overrides.terminal.enable_webgl', Boolean(checked), {
+                            shouldDirty: true,
+                          })
+                        }
+                        disabled={usingTerminalDefaults || isLoading}
+                      />
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-foreground">Enable WebGL</p>
+                        <p className="text-xs text-muted-foreground">
+                          Default is {terminalDefaults.enable_webgl ? 'enabled' : 'disabled'}.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {protocol.id === 'ssh' ? (
               <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4">
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -636,7 +1152,7 @@ export function ConnectionFormModal({
                 Cancel
               </Button>
               <Button type="submit" loading={isLoading}>
-                Create Connection
+                {submitLabel}
               </Button>
             </div>
           </form>

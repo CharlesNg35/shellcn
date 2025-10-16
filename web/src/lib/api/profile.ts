@@ -58,10 +58,20 @@ function normalisePreferences(payload?: Partial<UserPreferences>): UserPreferenc
         cursor_style: (terminal.cursor_style ??
           'block') as UserPreferences['ssh']['terminal']['cursor_style'],
         copy_on_select: terminal.copy_on_select !== false,
+        font_size:
+          typeof terminal.font_size === 'number' && terminal.font_size >= 8
+            ? terminal.font_size
+            : 14,
+        scrollback_limit:
+          typeof terminal.scrollback_limit === 'number' && terminal.scrollback_limit >= 200
+            ? terminal.scrollback_limit
+            : 1000,
+        enable_webgl: terminal.enable_webgl !== false,
       },
       sftp: {
         show_hidden_files: Boolean(sftp.show_hidden_files),
         auto_open_queue: sftp.auto_open_queue !== false,
+        confirm_before_overwrite: sftp.confirm_before_overwrite !== false,
       },
     },
   }

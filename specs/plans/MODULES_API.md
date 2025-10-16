@@ -942,7 +942,8 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 | GET    | `/api/connections`             | List connections visible to the caller (supports filters).     | `connection.view`          | `ConnectionHandler.List`           |
 | GET    | `/api/connections/:id`         | Retrieve a specific connection with targets and share summary. | `connection.view`          | `ConnectionHandler.Get`            |
 | GET    | `/api/connections/summary`     | Aggregate counts grouped by protocol (supports team filters).  | `connection.view`          | `ConnectionHandler.Summary`        |
-| POST   | `/api/connections`             | Create a connection (metadata, folder, optional team).         | `connection.manage`        | `ConnectionHandler.Create`         |
+| POST   | `/api/connections`             | Create a connection (metadata, folder, optional team).         | `connection.create`        | `ConnectionHandler.Create`         |
+| PUT    | `/api/connections/:id`         | Update connection metadata, preferences, or identity.          | `connection.view`*         | `ConnectionHandler.Update`         |
 | GET    | `/api/connection-folders/tree` | Folder hierarchy plus connection counts.                       | `connection.folder.view`   | `ConnectionFolderHandler.ListTree` |
 | POST   | `/api/connection-folders`      | Create a new connection folder.                                | `connection.folder.manage` | `ConnectionFolderHandler.Create`   |
 | PATCH  | `/api/connection-folders/:id`  | Update folder metadata (name, parent, color, etc.).            | `connection.folder.manage` | `ConnectionFolderHandler.Update`   |
@@ -958,6 +959,23 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 - `page`, `per_page`: pagination controls (standard envelope).
 
 `GET /api/connection-folders/tree` accepts the same `team_id` semantics (team UUID or `personal`) to scope the returned hierarchy and connection counts.
+
+\* Update requires view permission for routing but enforces ownership or manage privileges server-side.
+
+### 8.3 Snippets API
+
+| Method | Path                 | Description                                                                 | Permission                                       | Handler                 |
+| ------ | -------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------- |
+| GET    | `/api/snippets`      | List snippets filtered by scope (`global`, `connection`, `user`).          | Scope-dependent\*                                | `SnippetHandler.List`   |
+| POST   | `/api/snippets`      | Create a snippet (global, connection-specific, or personal).               | Scope-dependent\*                                | `SnippetHandler.Create` |
+| PUT    | `/api/snippets/:id`  | Update snippet metadata/command.                                           | Scope-dependent\*                                | `SnippetHandler.Update` |
+| DELETE | `/api/snippets/:id`  | Remove a snippet.                                                           | Scope-dependent\*                                | `SnippetHandler.Delete` |
+
+\* **Scope-dependent permissions**:
+
+- **Personal snippets (`scope=user`)** – owner only (authenticated user matches `owner_id`).
+- **Connection snippets (`scope=connection`)** – requires `connection.manage` on the target connection plus `protocol:ssh.manage_snippets`.
+- **Global snippets (`scope=global`)** – requires `protocol:ssh.manage_snippets` (typically administrators).
 
 **Connection payload**
 

@@ -143,6 +143,17 @@ type CreateConnectionInput struct {
 	InlineIdentity *InlineIdentityInput
 }
 
+// UpdateConnectionInput describes editable fields for an existing connection.
+type UpdateConnectionInput struct {
+	Name        string
+	Description string
+	TeamID      *string
+	FolderID    *string
+	Metadata    map[string]any
+	Settings    map[string]any
+	IdentityID  *string
+}
+
 // InlineIdentityInput captures inline credential data submitted during connection creation.
 type InlineIdentityInput struct {
 	TemplateID *string
@@ -251,6 +262,104 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 			}
 		}
 
+		if err := tx.Preload("Folder").First(&connection, "id = ?", connection.ID).Error; err != nil {
+			return fmt.Errorf("connection service: reload connection: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	dto, err := mapConnection(ctx, s.db, connection, false, false)
+	if err != nil {
+		return nil, err
+	}
+	return &dto, nil
+}
+
+// Update modifies an existing connection when the caller is authorised.
+func (s *ConnectionService) Update(ctx context.Context, userID, connectionID string, input UpdateConnectionInput) (*ConnectionDTO, error) {
+	ctx = ensureContext(ctx)
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, apperrors.ErrUnauthorized
+	}
+
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return nil, apperrors.NewBadRequest("connection name is required")
+	}
+
+	var connection models.Connection
+	if err := s.db.WithContext(ctx).First(&connection, "id = ?", strings.TrimSpace(connectionID)).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, fmt.Errorf("connection service: load connection: %w", err)
+	}
+
+	allowed := connection.OwnerUserID == userID
+	if !allowed && s.checker != nil {
+		ok, err := s.checker.CheckResource(ctx, userID, connectionResourceType, connectionID, "connection.manage")
+		if err != nil {
+			return nil, err
+		}
+		allowed = ok
+	}
+	if !allowed {
+		canManage, err := s.canManageConnections(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		allowed = canManage
+	}
+	if !allowed {
+		return nil, apperrors.ErrForbidden
+	}
+
+	updates := map[string]any{
+		"name":        name,
+		"description": strings.TrimSpace(input.Description),
+	}
+
+	if input.TeamID != nil {
+		updates["team_id"] = normalizeOptionalID(input.TeamID)
+	}
+	if input.FolderID != nil {
+		updates["folder_id"] = normalizeOptionalID(input.FolderID)
+	}
+	if input.IdentityID != nil {
+		updates["identity_id"] = normalizeOptionalID(input.IdentityID)
+	}
+
+	if input.Metadata != nil {
+		if len(input.Metadata) == 0 {
+			updates["metadata"] = nil
+		} else {
+			data, err := json.Marshal(input.Metadata)
+			if err != nil {
+				return nil, apperrors.NewBadRequest("invalid metadata payload")
+			}
+			updates["metadata"] = datatypes.JSON(data)
+		}
+	}
+
+	if input.Settings != nil {
+		if len(input.Settings) == 0 {
+			updates["settings"] = nil
+		} else {
+			data, err := json.Marshal(input.Settings)
+			if err != nil {
+				return nil, apperrors.NewBadRequest("invalid settings payload")
+			}
+			updates["settings"] = datatypes.JSON(data)
+		}
+	}
+
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.Connection{}).Where("id = ?", connection.ID).Updates(updates).Error; err != nil {
+			return fmt.Errorf("connection service: update connection: %w", err)
+		}
 		if err := tx.Preload("Folder").First(&connection, "id = ?", connection.ID).Error; err != nil {
 			return fmt.Errorf("connection service: reload connection: %w", err)
 		}
@@ -596,6 +705,25 @@ func (s *ConnectionService) canCreateConnections(ctx context.Context, userID str
 		return true, nil
 	}
 	for _, id := range []string{"connection.create", "connection.manage", "permission.manage"} {
+		ok, err := s.checker.Check(ctx, userID, id)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *ConnectionService) canManageConnections(ctx context.Context, userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return true, nil
+	}
+	if s.checker == nil {
+		return true, nil
+	}
+	for _, id := range []string{"connection.manage", "permission.manage"} {
 		ok, err := s.checker.Check(ctx, userID, id)
 		if err != nil {
 			return false, err
