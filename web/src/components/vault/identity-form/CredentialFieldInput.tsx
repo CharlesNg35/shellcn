@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/Select'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { Button } from '@/components/ui/Button'
-import type { CredentialField } from '@/types/vault'
+import type { CredentialField, CredentialFieldMetadata } from '@/types/vault'
 import type { IdentityFormValues } from '../IdentityFormModal'
 
 interface CredentialFieldInputProps {
@@ -25,6 +25,7 @@ interface CredentialFieldInputProps {
 export function CredentialFieldInput({ field, control, disabled }: CredentialFieldInputProps) {
   const fieldName = `payload.${field.name}` as const
   const fileInputRef: MutableRefObject<HTMLInputElement | null> = useRef(null)
+  const metadata = (field.metadata ?? {}) as CredentialFieldMetadata
 
   if (field.type === 'boolean') {
     return (
@@ -49,8 +50,8 @@ export function CredentialFieldInput({ field, control, disabled }: CredentialFie
               {field.description ? (
                 <p className="text-xs text-muted-foreground">{field.description}</p>
               ) : null}
-              {field.metadata?.hint ? (
-                <p className="text-xs text-muted-foreground">{String(field.metadata.hint)}</p>
+              {metadata.hint ? (
+                <p className="text-xs text-muted-foreground">{String(metadata.hint)}</p>
               ) : null}
             </div>
           </label>
@@ -104,24 +105,19 @@ export function CredentialFieldInput({ field, control, disabled }: CredentialFie
         {field.description ? (
           <p className="text-xs text-muted-foreground">{field.description}</p>
         ) : null}
-        {field.metadata?.hint ? (
-          <p className="text-xs text-muted-foreground">{String(field.metadata.hint)}</p>
+        {metadata.hint ? (
+          <p className="text-xs text-muted-foreground">{String(metadata.hint)}</p>
         ) : null}
       </div>
     )
   }
 
   const allowFileImport =
-    field.input_modes?.includes('file') ||
-    field.type === 'file' ||
-    field.metadata?.allow_file_import === true
-  const usesTextarea =
-    field.input_modes?.includes('textarea') ||
-    field.type === 'secret' ||
-    field.type === 'file' ||
-    (field.input_modes?.length ?? 0) === 0
-  const InputComponent = usesTextarea ? Textarea : Input
-  const inputProps = buildInputProps(field, usesTextarea)
+    field.input_modes?.includes('file') || field.type === 'file' || metadata.allow_file_import === true
+  const wantsTextarea =
+    field.input_modes?.includes('textarea') || metadata.multiline === true || field.type === 'file'
+  const InputComponent = wantsTextarea ? Textarea : Input
+  const inputProps = buildInputProps(field, wantsTextarea)
 
   const handleClipboardBlock = (event: ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (field.type !== 'secret') {
@@ -213,9 +209,9 @@ export function CredentialFieldInput({ field, control, disabled }: CredentialFie
       {field.description ? (
         <p className="text-xs text-muted-foreground">{field.description}</p>
       ) : null}
-      {field.metadata?.hint ? (
-        <p className="text-xs text-muted-foreground">{String(field.metadata.hint)}</p>
-      ) : null}
+        {metadata.hint ? (
+          <p className="text-xs text-muted-foreground">{String(metadata.hint)}</p>
+        ) : null}
       {field.type === 'secret' && disabled ? (
         <p className="text-xs text-muted-foreground">
           Hidden for security. Enable rotation to update this secret.

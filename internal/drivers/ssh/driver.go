@@ -164,7 +164,9 @@ func (d *Driver) CredentialTemplate() (*drivers.CredentialTemplate, error) {
 						"field":  drivers.CredentialFieldKeyAuthMethod,
 						"equals": []string{"private_key"},
 					},
-					"section": "authentication",
+					"allow_file_import": true,
+					"multiline":         true,
+					"section":           "authentication",
 				},
 			},
 			{

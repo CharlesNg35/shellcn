@@ -63,6 +63,8 @@ export interface CredentialFieldMetadata {
   visibility?: CredentialFieldVisibilityRule | CredentialFieldVisibilityRule[]
   visibility_mode?: 'all' | 'any'
   required_when?: CredentialFieldVisibilityRule | CredentialFieldVisibilityRule[]
+  multiline?: boolean
+  allow_file_import?: boolean
   [key: string]: unknown
 }
 
