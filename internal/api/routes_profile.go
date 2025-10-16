@@ -12,5 +12,7 @@ func registerProfileRoutes(api *gin.RouterGroup, handler *handlers.ProfileHandle
 		profile.POST("/mfa/setup", handler.SetupMFA)
 		profile.POST("/mfa/enable", handler.EnableMFA)
 		profile.POST("/mfa/disable", handler.DisableMFA)
+		profile.GET("/preferences", handler.GetPreferences)
+		profile.PUT("/preferences", handler.UpdatePreferences)
 	}
 }

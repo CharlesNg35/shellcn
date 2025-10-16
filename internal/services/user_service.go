@@ -108,6 +108,7 @@ func (s *UserService) Create(ctx context.Context, input CreateUserInput) (*model
 		IsRoot:       input.IsRoot,
 		IsActive:     true,
 		AuthProvider: "local",
+		Preferences:  MarshalUserPreferences(DefaultUserPreferences()),
 	}
 
 	if input.IsActive != nil {

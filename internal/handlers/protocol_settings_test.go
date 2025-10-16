@@ -16,7 +16,6 @@ import (
 	testutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	_ "github.com/charlesng35/shellcn/internal/drivers/ssh"
 	"github.com/charlesng35/shellcn/internal/middleware"
-	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/permissions"
 	"github.com/charlesng35/shellcn/internal/services"
 )
@@ -25,17 +24,20 @@ func TestProtocolSettingsHandler_GetAndUpdate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
-	require.NoError(t, db.Create(&models.User{
-		BaseModel: models.BaseModel{ID: "root-user"},
-		Username:  "root",
-		Email:     "root@example.com",
-		Password:  "password",
-		IsActive:  true,
-		IsRoot:    true,
-	}).Error)
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 
 	auditSvc, err := services.NewAuditService(db)
+	require.NoError(t, err)
+
+	userSvc, err := services.NewUserService(db, auditSvc)
+	require.NoError(t, err)
+
+	rootUser, err := userSvc.Create(context.Background(), services.CreateUserInput{
+		Username: "root",
+		Email:    "root@example.com",
+		Password: "password",
+		IsRoot:   true,
+	})
 	require.NoError(t, err)
 
 	store, err := services.NewFilesystemRecorderStore(t.TempDir())
@@ -56,8 +58,8 @@ func TestProtocolSettingsHandler_GetAndUpdate(t *testing.T) {
 	t.Logf("authorise: allowed=%v err=%v", allowed, authErr)
 
 	router.Use(func(c *gin.Context) {
-		c.Set(middleware.CtxUserIDKey, "root-user")
-		ctx := auditctx.WithActor(c.Request.Context(), auditctx.Actor{UserID: "root-user", Username: "root"})
+		c.Set(middleware.CtxUserIDKey, rootUser.ID)
+		ctx := auditctx.WithActor(c.Request.Context(), auditctx.Actor{UserID: rootUser.ID, Username: "root"})
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	})
@@ -78,14 +80,32 @@ func TestProtocolSettingsHandler_GetAndUpdate(t *testing.T) {
 	var getPayload services.SSHProtocolSettings
 	require.NoError(t, json.Unmarshal(getEnvelope.Data, &getPayload))
 	require.Equal(t, services.RecordingModeOptional, getPayload.Recording.Mode)
+	require.Equal(t, 0, getPayload.Session.ConcurrentLimit)
+	require.True(t, getPayload.Session.EnableSFTP)
 
 	// Update recording defaults
 	body := map[string]any{
+		"session": map[string]any{
+			"concurrent_limit":     3,
+			"idle_timeout_minutes": 45,
+			"enable_sftp":          true,
+		},
+		"terminal": map[string]any{
+			"theme_mode":       "force_light",
+			"font_family":      "Fira Code",
+			"font_size":        14,
+			"scrollback_limit": 2000,
+			"enable_webgl":     true,
+		},
 		"recording": map[string]any{
 			"mode":            services.RecordingModeForced,
 			"storage":         "filesystem",
 			"retention_days":  15,
 			"require_consent": false,
+		},
+		"collaboration": map[string]any{
+			"allow_sharing":            true,
+			"restrict_write_to_admins": false,
 		},
 	}
 	payloadBytes, _ := json.Marshal(body)
@@ -103,6 +123,8 @@ func TestProtocolSettingsHandler_GetAndUpdate(t *testing.T) {
 	require.NoError(t, json.Unmarshal(putEnvelope.Data, &updated))
 	require.Equal(t, services.RecordingModeForced, updated.Recording.Mode)
 	require.Equal(t, 15, updated.Recording.RetentionDays)
+	require.Equal(t, 3, updated.Session.ConcurrentLimit)
+	require.Equal(t, "Fira Code", updated.Terminal.FontFamily)
 
 	modeValue, err := database.GetSystemSetting(context.Background(), db, "recording.mode")
 	require.NoError(t, err)
@@ -113,17 +135,22 @@ func TestProtocolSettingsHandler_Unauthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
-	require.NoError(t, db.Create(&models.User{
-		BaseModel: models.BaseModel{ID: "user-1"},
-		Username:  "user",
-		Email:     "user@example.com",
-		Password:  "password",
-		IsActive:  true,
-		IsRoot:    false,
-	}).Error)
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 
-	svc, err := services.NewProtocolSettingsService(db, nil)
+	auditSvc, err := services.NewAuditService(db)
+	require.NoError(t, err)
+
+	userSvc, err := services.NewUserService(db, auditSvc)
+	require.NoError(t, err)
+
+	user, err := userSvc.Create(context.Background(), services.CreateUserInput{
+		Username: "user",
+		Email:    "user@example.com",
+		Password: "password",
+	})
+	require.NoError(t, err)
+
+	svc, err := services.NewProtocolSettingsService(db, auditSvc)
 	require.NoError(t, err)
 
 	checker, err := permissions.NewChecker(db)
@@ -131,12 +158,12 @@ func TestProtocolSettingsHandler_Unauthorized(t *testing.T) {
 
 	handler := NewProtocolSettingsHandler(svc, checker)
 
-	allowed, authErr := handler.authorize(context.Background(), "user-1")
+	allowed, authErr := handler.authorize(context.Background(), user.ID)
 	t.Logf("authorize preflight: allowed=%v err=%v", allowed, authErr)
 
 	router.Use(func(c *gin.Context) {
-		c.Set(middleware.CtxUserIDKey, "user-1")
-		ctx := auditctx.WithActor(c.Request.Context(), auditctx.Actor{UserID: "user-1"})
+		c.Set(middleware.CtxUserIDKey, user.ID)
+		ctx := auditctx.WithActor(c.Request.Context(), auditctx.Actor{UserID: user.ID})
 		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	})
@@ -144,11 +171,27 @@ func TestProtocolSettingsHandler_Unauthorized(t *testing.T) {
 	router.PUT("/api/settings/protocols/ssh", handler.UpdateSSHSettings)
 
 	body := map[string]any{
+		"session": map[string]any{
+			"concurrent_limit":     1,
+			"idle_timeout_minutes": 30,
+			"enable_sftp":          true,
+		},
+		"terminal": map[string]any{
+			"theme_mode":       "auto",
+			"font_family":      "monospace",
+			"font_size":        14,
+			"scrollback_limit": 1000,
+			"enable_webgl":     true,
+		},
 		"recording": map[string]any{
 			"mode":            services.RecordingModeForced,
 			"storage":         "filesystem",
 			"retention_days":  15,
 			"require_consent": false,
+		},
+		"collaboration": map[string]any{
+			"allow_sharing":            true,
+			"restrict_write_to_admins": false,
 		},
 	}
 	payloadBytes, _ := json.Marshal(body)

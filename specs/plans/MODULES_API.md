@@ -227,6 +227,13 @@ Response:
 }
 ```
 
+### 2.3 Profile & Preferences
+
+| Method | Path                       | Description                                                                | Permission    | Handler                            |
+| ------ | -------------------------- | -------------------------------------------------------------------------- | ------------- | ---------------------------------- |
+| GET    | `/api/profile/preferences` | Retrieve the authenticated user's saved terminal and SFTP preferences.     | Authenticated | `ProfileHandler.GetPreferences`    |
+| PUT    | `/api/profile/preferences` | Update the authenticated user's SSH terminal and SFTP preference defaults. | Authenticated | `ProfileHandler.UpdatePreferences` |
+
 ---
 
 ## 3. Setup Workflow

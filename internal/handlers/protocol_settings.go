@@ -85,11 +85,27 @@ func (h *ProtocolSettingsHandler) UpdateSSHSettings(c *gin.Context) {
 	}
 
 	settings, err := h.service.UpdateSSHSettings(ctx, actor, services.UpdateSSHSettingsInput{
+		Session: services.SessionSettingsInput{
+			ConcurrentLimit:    payload.Session.ConcurrentLimit,
+			IdleTimeoutMinutes: payload.Session.IdleTimeoutMinutes,
+			EnableSFTP:         payload.Session.EnableSFTP,
+		},
+		Terminal: services.TerminalSettingsInput{
+			ThemeMode:   payload.Terminal.ThemeMode,
+			FontFamily:  payload.Terminal.FontFamily,
+			FontSize:    payload.Terminal.FontSize,
+			Scrollback:  payload.Terminal.Scrollback,
+			EnableWebGL: payload.Terminal.EnableWebGL,
+		},
 		Recording: services.RecordingSettingsInput{
 			Mode:           payload.Recording.Mode,
 			Storage:        payload.Recording.Storage,
 			RetentionDays:  payload.Recording.RetentionDays,
 			RequireConsent: payload.Recording.RequireConsent,
+		},
+		Collaboration: services.CollaborationSettingsInput{
+			AllowSharing:          payload.Collaboration.AllowSharing,
+			RestrictWriteToAdmins: payload.Collaboration.RestrictWriteToAdmins,
 		},
 	})
 	if err != nil {
@@ -108,7 +124,24 @@ func (h *ProtocolSettingsHandler) authorize(ctx context.Context, userID string) 
 }
 
 type updateSSHSettingsRequest struct {
-	Recording recordingSettingsPayload `json:"recording" binding:"required"`
+	Session       sessionSettingsPayload       `json:"session" binding:"required"`
+	Terminal      terminalSettingsPayload      `json:"terminal" binding:"required"`
+	Recording     recordingSettingsPayload     `json:"recording" binding:"required"`
+	Collaboration collaborationSettingsPayload `json:"collaboration" binding:"required"`
+}
+
+type sessionSettingsPayload struct {
+	ConcurrentLimit    int  `json:"concurrent_limit" binding:"min=0,max=1000"`
+	IdleTimeoutMinutes int  `json:"idle_timeout_minutes" binding:"min=0,max=10080"`
+	EnableSFTP         bool `json:"enable_sftp"`
+}
+
+type terminalSettingsPayload struct {
+	ThemeMode   string `json:"theme_mode" binding:"required,oneof=auto force_dark force_light"`
+	FontFamily  string `json:"font_family" binding:"required,max=128"`
+	FontSize    int    `json:"font_size" binding:"min=8,max=96"`
+	Scrollback  int    `json:"scrollback_limit" binding:"min=200,max=10000"`
+	EnableWebGL bool   `json:"enable_webgl"`
 }
 
 type recordingSettingsPayload struct {
@@ -116,4 +149,9 @@ type recordingSettingsPayload struct {
 	Storage        string `json:"storage" binding:"required,oneof=filesystem s3"`
 	RetentionDays  int    `json:"retention_days" binding:"min=0,max=3650"`
 	RequireConsent bool   `json:"require_consent"`
+}
+
+type collaborationSettingsPayload struct {
+	AllowSharing          bool `json:"allow_sharing"`
+	RestrictWriteToAdmins bool `json:"restrict_write_to_admins"`
 }

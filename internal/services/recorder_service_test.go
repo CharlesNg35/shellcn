@@ -20,7 +20,7 @@ import (
 )
 
 func TestRecorderService_RecordLifecycle(t *testing.T) {
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 	root := filepath.Join(t.TempDir(), "records")
 	store, err := NewFilesystemRecorderStore(root)
 	require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestRecorderService_RecordLifecycle(t *testing.T) {
 	service, err := NewRecorderService(db, store, WithRecorderPolicy(policy))
 	require.NoError(t, err)
 
-	owner := createRecorderTestUser(t, db, "owner-1", "owner")
+	owner := createRecorderTestUser(t, db, "owner")
 	connection := createRecorderTestConnection(t, db, "conn-1", owner.ID)
 
 	startedAt := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
@@ -114,7 +114,7 @@ func TestRecorderService_RecordLifecycle(t *testing.T) {
 }
 
 func TestRecorderService_StopRecording(t *testing.T) {
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 	root := filepath.Join(t.TempDir(), "records")
 	store, err := NewFilesystemRecorderStore(root)
 	require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestRecorderService_StopRecording(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	owner := createRecorderTestUser(t, db, "owner-stop", "owner-stop")
+	owner := createRecorderTestUser(t, db, "owner-stop")
 	connection := createRecorderTestConnection(t, db, "conn-stop", owner.ID)
 
 	session := models.ConnectionSession{
@@ -157,7 +157,7 @@ func TestRecorderService_StopRecording(t *testing.T) {
 }
 
 func TestRecorderService_OptionalModeRequiresOptIn(t *testing.T) {
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 	root := filepath.Join(t.TempDir(), "records")
 	store, err := NewFilesystemRecorderStore(root)
 	require.NoError(t, err)
@@ -170,7 +170,7 @@ func TestRecorderService_OptionalModeRequiresOptIn(t *testing.T) {
 	}))
 	require.NoError(t, err)
 
-	owner := createRecorderTestUser(t, db, "owner-opt", "owner-opt")
+	owner := createRecorderTestUser(t, db, "owner-opt")
 	connection := createRecorderTestConnection(t, db, "conn-opt", owner.ID)
 
 	session := models.ConnectionSession{
@@ -204,15 +204,16 @@ func recordingTimePtr(t time.Time) *time.Time {
 	return &t
 }
 
-func createRecorderTestUser(t *testing.T, db *gorm.DB, id, username string) *models.User {
-	user := &models.User{
-		BaseModel: models.BaseModel{ID: id},
-		Username:  username,
-		Email:     username + "@example.com",
-		Password:  "password",
-		IsActive:  true,
-	}
-	require.NoError(t, db.Create(user).Error)
+func createRecorderTestUser(t *testing.T, db *gorm.DB, username string) *models.User {
+	userSvc, err := NewUserService(db, nil)
+	require.NoError(t, err)
+
+	user, err := userSvc.Create(context.Background(), CreateUserInput{
+		Username: username,
+		Email:    username + "@example.com",
+		Password: "password",
+	})
+	require.NoError(t, err)
 	return user
 }
 
@@ -229,7 +230,7 @@ func createRecorderTestConnection(t *testing.T, db *gorm.DB, id, ownerID string)
 }
 
 func TestRecorderService_CleanupExpired(t *testing.T) {
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 	root := filepath.Join(t.TempDir(), "records")
 	store, err := NewFilesystemRecorderStore(root)
 	require.NoError(t, err)
@@ -237,13 +238,7 @@ func TestRecorderService_CleanupExpired(t *testing.T) {
 	recorder, err := NewRecorderService(db, store)
 	require.NoError(t, err)
 
-	require.NoError(t, db.Create(&models.User{
-		BaseModel: models.BaseModel{ID: "owner"},
-		Username:  "owner",
-		Email:     "owner@example.com",
-		Password:  "password",
-		IsActive:  true,
-	}).Error)
+	owner := createRecorderTestUser(t, db, "owner")
 
 	retention := time.Now().Add(-24 * time.Hour)
 	path := "expired.cast.gz"
@@ -253,13 +248,13 @@ func TestRecorderService_CleanupExpired(t *testing.T) {
 		BaseModel:   models.BaseModel{ID: "conn-cleanup"},
 		Name:        "Cleanup",
 		ProtocolID:  "ssh",
-		OwnerUserID: "owner",
+		OwnerUserID: owner.ID,
 	}).Error)
 	require.NoError(t, db.Create(&models.ConnectionSession{
 		BaseModel:       models.BaseModel{ID: "sess-cleanup"},
 		ConnectionID:    "conn-cleanup",
 		ProtocolID:      "ssh",
-		OwnerUserID:     "owner",
+		OwnerUserID:     owner.ID,
 		Status:          SessionStatusClosed,
 		StartedAt:       time.Now(),
 		LastHeartbeatAt: time.Now(),
@@ -272,7 +267,7 @@ func TestRecorderService_CleanupExpired(t *testing.T) {
 		StoragePath:     path,
 		SizeBytes:       9,
 		RetentionUntil:  &retention,
-		CreatedByUserID: "owner",
+		CreatedByUserID: owner.ID,
 	}
 	require.NoError(t, db.Create(&record).Error)
 

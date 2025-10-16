@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/datatypes"
+)
 
 // User describes platform users with relationships to teams and roles.
 type User struct {
@@ -13,9 +17,10 @@ type User struct {
 	AuthProvider string `gorm:"size:64;index" json:"auth_provider,omitempty"`
 	AuthSubject  string `gorm:"size:512" json:"-"`
 
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Avatar    string `json:"avatar"`
+	FirstName   string            `json:"first_name"`
+	LastName    string            `json:"last_name"`
+	Avatar      string            `json:"avatar"`
+	Preferences datatypes.JSONMap `json:"preferences,omitempty"`
 
 	IsRoot   bool `gorm:"default:false" json:"is_root"`
 	IsActive bool `gorm:"default:true" json:"is_active"`

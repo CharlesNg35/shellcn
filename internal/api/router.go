@@ -192,7 +192,11 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	if err != nil {
 		return nil, err
 	}
-	profileHandler := handlers.NewProfileHandler(profileUserSvc, totpSvc)
+	userPrefsSvc, err := services.NewUserPreferencesService(db, auditSvc)
+	if err != nil {
+		return nil, err
+	}
+	profileHandler := handlers.NewProfileHandler(profileUserSvc, userPrefsSvc, totpSvc)
 	// ----- Profile Routes ------------------------------------------------------
 	registerProfileRoutes(api, profileHandler)
 	// ----- End Profile Routes --------------------------------------------------

@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils/cn'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { useSettings } from '@/hooks/useSettings'
 import type { ThemePreference } from '@/store/settings-store'
+import { SSHPreferencesPanel } from './SSHPreferencesPanel'
 
 interface AppearanceSettingsPanelProps {
   className?: string
@@ -48,6 +49,8 @@ export function AppearanceSettingsPanel({ className }: AppearanceSettingsPanelPr
           })}
         </CardContent>
       </Card>
+
+      <SSHPreferencesPanel />
     </div>
   )
 }

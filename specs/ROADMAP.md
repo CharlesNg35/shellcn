@@ -317,10 +317,10 @@
 
 ### Protocol Settings & Preferences
 
-- [ ] Ship admin Protocol Settings page (`/settings/protocols`) with SSH defaults (concurrency, idle timeout, SFTP auto-enable)
-- [ ] Add terminal appearance controls (theme, font, size, scrollback, WebGL) with live preview
-- [ ] Implement recording policy form (disabled/optional/forced, retention days, storage target, consent banner)
-- [ ] Persist settings via new `/api/settings/protocols/ssh` endpoint + audit events
+- [x] Ship admin Protocol Settings page (`/settings/protocols`) with SSH defaults (concurrency, idle timeout, SFTP auto-enable)
+- [x] Add terminal appearance controls (theme, font, size, scrollback, WebGL) with live preview
+- [x] Implement recording policy form (disabled/optional/forced, retention days, storage target, consent banner)
+- [x] Persist settings via new `/api/settings/protocols/ssh` endpoint + audit events
 - [ ] Update connection create/edit flows to inherit admin defaults and allow overrides
 - [ ] Expose user preferences for terminal appearance, SFTP behavior, and personal snippets
 
