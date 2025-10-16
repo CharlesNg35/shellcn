@@ -387,6 +387,26 @@ func TestActiveSessionService_ConcurrentLimitEnforced(t *testing.T) {
 	}))
 }
 
+func TestActiveSessionService_GrantWriteAccessMissingParticipant(t *testing.T) {
+	svc := NewActiveSessionService(nil)
+	require.NoError(t, svc.RegisterSession(&ActiveSessionRecord{
+		ID:           "sess-1",
+		ConnectionID: "conn-1",
+		UserID:       "owner-1",
+		UserName:     "alice",
+		ProtocolID:   "ssh",
+	}))
+
+	_, err := svc.GrantWriteAccess("sess-1", "missing-user")
+	require.Error(t, err)
+	require.Contains(t, strings.ToLower(err.Error()), "participant missing-user not found")
+
+	session, ok := svc.GetSession("sess-1")
+	require.True(t, ok)
+	require.Equal(t, "owner-1", session.WriteHolder)
+	require.Equal(t, "write", session.Participants["owner-1"].AccessMode)
+}
+
 func ptrString(value string) *string {
 	return &value
 }

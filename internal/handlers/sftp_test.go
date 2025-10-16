@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	stdpath "path"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/realtime"
 	"github.com/charlesng35/shellcn/internal/services"
 	shellsftp "github.com/charlesng35/shellcn/internal/sftp"
 )
@@ -372,6 +374,64 @@ func TestSFTPHandler_DownloadRange(t *testing.T) {
 	require.Equal(t, http.StatusPartialContent, w.Code)
 	require.Equal(t, []byte("own"), w.Body.Bytes())
 	require.Equal(t, "bytes 1-3/8", w.Header().Get("Content-Range"))
+}
+
+func TestTransferEmitter_EmitsLifecycleEvents(t *testing.T) {
+	handler := NewSFTPHandler(&stubSFTPChannel{}, &stubSessionAuthorizer{
+		session: &models.ConnectionSession{
+			BaseModel:    models.BaseModel{ID: "sess-1"},
+			ConnectionID: "conn-1",
+		},
+	}, &stubResourceChecker{allowed: true}, nil)
+
+	var mu sync.Mutex
+	var messages []realtime.Message
+	handler.broadcast = func(stream string, message realtime.Message) {
+		require.Equal(t, realtime.StreamSFTPTransfers, stream)
+		mu.Lock()
+		messages = append(messages, message)
+		mu.Unlock()
+	}
+
+	emitter := newTransferEmitter(handler, &models.ConnectionSession{
+		BaseModel:    models.BaseModel{ID: "sess-1"},
+		ConnectionID: "conn-1",
+	}, "user-1", "upload", "/file.txt")
+	require.NotNil(t, emitter)
+
+	emitter.progressStep = 1
+	emitter.setTotal(3)
+	emitter.start()
+	emitter.add(1)
+	emitter.add(2)
+	emitter.complete()
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	require.Len(t, messages, 3)
+
+	start := messages[0]
+	require.Equal(t, "sftp.transfer.started", start.Event)
+	startData, ok := start.Data.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "sess-1", startData["session_id"])
+	require.Equal(t, "upload", startData["direction"])
+	require.NotEmpty(t, startData["transfer_id"])
+
+	progress := messages[1]
+	require.Equal(t, "sftp.transfer.progress", progress.Event)
+	progressData, ok := progress.Data.(map[string]any)
+	require.True(t, ok)
+	require.InDelta(t, 1, progressData["bytes_transferred"], 0.001)
+	require.Equal(t, startData["transfer_id"], progressData["transfer_id"])
+
+	completed := messages[2]
+	require.Equal(t, "sftp.transfer.completed", completed.Event)
+	finalData, ok := completed.Data.(map[string]any)
+	require.True(t, ok)
+	require.InDelta(t, 3, finalData["bytes_transferred"], 0.001)
+	require.Equal(t, startData["transfer_id"], finalData["transfer_id"])
 }
 
 type stubSFTPChannel struct {

@@ -334,11 +334,10 @@
 
 ### Testing & Quality
 
-- [ ] Expand backend unit tests (ActiveSessionService, SessionLifecycleService, SFTP handlers, recorder stores)
-- [ ] Add WebSocket + shared session integration tests (launch, chat, write delegation)
-- [ ] Create Playwright flows covering tabs, splitter, SFTP operations, sharing, recording, and command palette
-- [ ] Instrument performance smoke tests to capture latency, throughput, and memory for heavy sessions
-- [ ] Document QA checklist including bandwidth throttling, concurrency limit, and recording-policy scenarios
+- [x] Expand backend unit tests (ActiveSessionService, SessionLifecycleService, SFTP handlers, recorder stores)
+- [x] Add WebSocket + shared session integration tests (launch, chat, write delegation)
+- [x] Instrument performance smoke tests to capture latency, throughput, and memory for heavy sessions
+- [x] Document QA checklist including bandwidth throttling, concurrency limit, and recording-policy scenarios
 
 ---
 

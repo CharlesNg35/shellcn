@@ -328,6 +328,80 @@ func TestSessionLifecycle_AuthorizeSessionAccess(t *testing.T) {
 	require.ErrorIs(t, err, ErrSessionNotFound)
 }
 
+func TestSessionLifecycle_ConcurrentLimitRejectsLaunch(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+
+	active := NewActiveSessionService(nil)
+	svc, err := NewSessionLifecycleService(
+		db,
+		active,
+		WithLifecycleClock(func() time.Time { return time.Date(2024, 10, 1, 12, 0, 0, 0, time.UTC) }),
+	)
+	require.NoError(t, err)
+
+	owner := models.User{
+		BaseModel: models.BaseModel{ID: "owner-1"},
+		Username:  "alice",
+		Email:     "alice@example.com",
+		Password:  "secret",
+	}
+	require.NoError(t, db.Create(&owner).Error)
+
+	connection := models.Connection{
+		BaseModel:   models.BaseModel{ID: "conn-1"},
+		Name:        "SSH Primary",
+		ProtocolID:  "ssh",
+		OwnerUserID: owner.ID,
+	}
+	require.NoError(t, db.Create(&connection).Error)
+
+	_, err = svc.StartSession(context.Background(), StartSessionParams{
+		SessionID:       "sess-first",
+		ConnectionID:    connection.ID,
+		ConnectionName:  connection.Name,
+		ProtocolID:      "ssh",
+		OwnerUserID:     owner.ID,
+		OwnerUserName:   owner.Username,
+		ConcurrentLimit: 1,
+		Actor: SessionActor{
+			UserID:   owner.ID,
+			Username: owner.Username,
+		},
+	})
+	require.NoError(t, err)
+
+	// Second user attempts to launch while concurrent limit reached.
+	userTwo := models.User{
+		BaseModel: models.BaseModel{ID: "user-2"},
+		Username:  "bob",
+		Email:     "bob@example.com",
+		Password:  "secret",
+	}
+	require.NoError(t, db.Create(&userTwo).Error)
+
+	_, err = svc.StartSession(context.Background(), StartSessionParams{
+		SessionID:       "sess-second",
+		ConnectionID:    connection.ID,
+		ConnectionName:  connection.Name,
+		ProtocolID:      "ssh",
+		OwnerUserID:     userTwo.ID,
+		OwnerUserName:   userTwo.Username,
+		ConcurrentLimit: 1,
+		Actor: SessionActor{
+			UserID:   userTwo.ID,
+			Username: userTwo.Username,
+		},
+	})
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrConcurrentLimitReached)
+
+	var sessionCount int64
+	require.NoError(t, db.Model(&models.ConnectionSession{}).Count(&sessionCount).Error)
+	require.EqualValues(t, 1, sessionCount)
+
+	require.Equal(t, 1, active.Count())
+}
+
 func fetchParticipant(t *testing.T, db *gorm.DB, sessionID, userID string) models.ConnectionSessionParticipant {
 	t.Helper()
 	var model models.ConnectionSessionParticipant

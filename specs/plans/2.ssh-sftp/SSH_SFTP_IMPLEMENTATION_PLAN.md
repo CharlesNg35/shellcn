@@ -158,6 +158,9 @@
   - Handler flows for launching, sharing, chat posting (use httptest + in-memory hub).
   - Recording: spin up fake SSH echo server capturing streams; verify stored file contents.
   - SFTP operations against dockerized OpenSSH server to validate browse/upload/download flows and transfer events.
+- Added realtime websocket integration tests covering session launch, chat, and write delegation (`internal/handlers/session_stream_integration_test.go`).
+- Extended SFTP transfer emitter and recorder store unit coverage alongside concurrency-limit regression tests.
+- Introduced session performance smoke test to log latency, throughput, and heap usage for heavy launch cycles.
 - Load/resilience tests: script hooking go test + ssh server to ensure concurrency limit enforcement and cleanup.
 
 ## 4. Frontend Plan

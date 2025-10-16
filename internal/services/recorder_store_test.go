@@ -69,3 +69,25 @@ func TestFilesystemRecorderStore_Delete(t *testing.T) {
 	_, err = store.Stat(context.Background(), writer.Path)
 	require.Error(t, err)
 }
+
+func TestFilesystemRecorderStore_SanitizesPathFragments(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewFilesystemRecorderStore(dir)
+	require.NoError(t, err)
+
+	start := time.Date(2025, 2, 1, 15, 4, 5, 0, time.UTC)
+	writer, err := store.Create(context.Background(), RecordingResource{
+		SessionID:  "sess../../../Strange ID",
+		ProtocolID: "../SSH??",
+		StartedAt:  start,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, writer)
+	require.NoError(t, writer.Writer.Close())
+
+	require.NotContains(t, writer.Path, "..")
+	require.Contains(t, writer.Path, "ssh")
+	require.Contains(t, writer.Path, "sess")
+
+	require.Contains(t, writer.Path, "ssh/2025/02")
+}

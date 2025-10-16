@@ -36,6 +36,7 @@ type SFTPHandler struct {
 	lifecycle sessionAuthorizer
 	checker   resourceChecker
 	hub       *realtime.Hub
+	broadcast func(stream string, message realtime.Message)
 }
 
 type sftpChannelBorrower interface {
@@ -52,12 +53,16 @@ type resourceChecker interface {
 
 // NewSFTPHandler constructs a handler when dependencies are supplied.
 func NewSFTPHandler(channels sftpChannelBorrower, lifecycle sessionAuthorizer, checker resourceChecker, hub *realtime.Hub) *SFTPHandler {
-	return &SFTPHandler{
+	handler := &SFTPHandler{
 		channels:  channels,
 		lifecycle: lifecycle,
 		checker:   checker,
 		hub:       hub,
 	}
+	if hub != nil {
+		handler.broadcast = hub.BroadcastStream
+	}
+	return handler
 }
 
 const maxInlineFileBytes = 5 * 1024 * 1024
@@ -1002,13 +1007,13 @@ func (h *SFTPHandler) handleBorrowError(c *gin.Context, err error) {
 }
 
 func (h *SFTPHandler) emitTransferEvent(event string, data map[string]any) {
-	if h == nil || h.hub == nil {
+	if h == nil || h.broadcast == nil {
 		return
 	}
 	if data == nil {
 		data = make(map[string]any)
 	}
-	h.hub.BroadcastStream(realtime.StreamSFTPTransfers, realtime.Message{
+	h.broadcast(realtime.StreamSFTPTransfers, realtime.Message{
 		Event: event,
 		Data:  data,
 	})
