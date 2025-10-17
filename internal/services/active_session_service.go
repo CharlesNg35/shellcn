@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/realtime"
 )
 
@@ -80,11 +82,14 @@ type ActiveSessionRecord struct {
 	UserName        string                               `json:"user_name,omitempty"`
 	TeamID          *string                              `json:"team_id,omitempty"`
 	ProtocolID      string                               `json:"protocol_id"`
+	DescriptorID    string                               `json:"descriptor_id,omitempty"`
 	StartedAt       time.Time                            `json:"started_at"`
 	LastSeenAt      time.Time                            `json:"last_seen_at"`
 	Host            string                               `json:"host,omitempty"`
 	Port            int                                  `json:"port,omitempty"`
 	Metadata        map[string]any                       `json:"metadata,omitempty"`
+	Template        map[string]any                       `json:"template,omitempty"`
+	Capabilities    map[string]any                       `json:"capabilities,omitempty"`
 	ConcurrentLimit int                                  `json:"concurrent_limit,omitempty"`
 	OwnerUserID     string                               `json:"owner_user_id,omitempty"`
 	OwnerUserName   string                               `json:"owner_user_name,omitempty"`
@@ -107,6 +112,7 @@ type ActiveSessionService struct {
 	sessions         map[string]*ActiveSessionRecord
 	userConnIndex    map[string]string
 	connectionCounts map[string]int
+	handles          map[string]drivers.SessionHandle
 	hub              *realtime.Hub
 	timeNow          func() time.Time
 }
@@ -117,6 +123,7 @@ func NewActiveSessionService(hub *realtime.Hub) *ActiveSessionService {
 		sessions:         make(map[string]*ActiveSessionRecord),
 		userConnIndex:    make(map[string]string),
 		connectionCounts: make(map[string]int),
+		handles:          make(map[string]drivers.SessionHandle),
 		hub:              hub,
 		timeNow:          time.Now,
 	}
@@ -543,6 +550,8 @@ func (s *ActiveSessionService) UnregisterSession(sessionID string) {
 		return
 	}
 
+	var handle drivers.SessionHandle
+
 	s.mu.Lock()
 	record, exists := s.sessions[sessionID]
 	if exists {
@@ -553,10 +562,17 @@ func (s *ActiveSessionService) UnregisterSession(sessionID string) {
 		} else {
 			delete(s.connectionCounts, record.ConnectionID)
 		}
+		if existing, ok := s.handles[sessionID]; ok {
+			handle = existing
+			delete(s.handles, sessionID)
+		}
 	}
 	s.mu.Unlock()
 
 	if !exists {
+		if handle != nil {
+			_ = handle.Close(context.Background())
+		}
 		return
 	}
 
@@ -565,6 +581,10 @@ func (s *ActiveSessionService) UnregisterSession(sessionID string) {
 		"connection_id": record.ConnectionID,
 		"user_id":       record.UserID,
 	})
+
+	if handle != nil {
+		_ = handle.Close(context.Background())
+	}
 }
 
 // Heartbeat updates the last seen timestamp for the session.
@@ -581,6 +601,58 @@ func (s *ActiveSessionService) Heartbeat(sessionID string) {
 	if session, exists := s.sessions[sessionID]; exists {
 		session.LastSeenAt = now
 	}
+}
+
+// AttachHandle associates a driver session handle with the active session identifier.
+func (s *ActiveSessionService) AttachHandle(sessionID string, handle drivers.SessionHandle) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" || handle == nil {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if existing, ok := s.handles[sessionID]; ok && existing != nil && existing != handle {
+		_ = existing.Close(context.Background())
+	}
+	s.handles[sessionID] = handle
+}
+
+// CheckoutHandle retrieves and removes a handle associated with the session.
+func (s *ActiveSessionService) CheckoutHandle(sessionID string) (drivers.SessionHandle, bool) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, false
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	handle, ok := s.handles[sessionID]
+	if !ok || handle == nil {
+		return nil, false
+	}
+
+	delete(s.handles, sessionID)
+	return handle, true
+}
+
+// PeekHandle returns the handle associated with the session without removing it.
+func (s *ActiveSessionService) PeekHandle(sessionID string) (drivers.SessionHandle, bool) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, false
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	handle, ok := s.handles[sessionID]
+	if !ok || handle == nil {
+		return nil, false
+	}
+	return handle, true
 }
 
 // ListActive returns copies of the sessions visible to the requesting user.
@@ -718,6 +790,20 @@ func cloneSessionRecord(session *ActiveSessionRecord) *ActiveSessionRecord {
 			meta[key] = value
 		}
 		clone.Metadata = meta
+	}
+	if session.Template != nil {
+		template := make(map[string]any, len(session.Template))
+		for key, value := range session.Template {
+			template[key] = value
+		}
+		clone.Template = template
+	}
+	if session.Capabilities != nil {
+		caps := make(map[string]any, len(session.Capabilities))
+		for key, value := range session.Capabilities {
+			caps[key] = value
+		}
+		clone.Capabilities = caps
 	}
 	if session.Participants != nil {
 		clone.Participants = make(map[string]*ActiveSessionParticipant, len(session.Participants))

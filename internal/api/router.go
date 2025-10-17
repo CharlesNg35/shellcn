@@ -317,6 +317,20 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	sessionRecordingHandler := handlers.NewSessionRecordingHandler(recorder, sessionLifecycleSvc, checker)
 	registerSessionRecordingRoutes(api, sessionRecordingHandler, checker)
 
+	launchHandler := handlers.NewActiveSessionLaunchHandler(
+		cfg,
+		connectionSvc,
+		connectionTemplateSvc,
+		vaultSvc,
+		sessionLifecycleSvc,
+		activeSessionSvc,
+		recorder,
+		driverReg,
+		checker,
+		jwt,
+	)
+	registerActiveSessionLaunchRoutes(api, launchHandler)
+
 	// ---------------------------------------------------------------------------
 	// Protocol Settings
 	// ---------------------------------------------------------------------------

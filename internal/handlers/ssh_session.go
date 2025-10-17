@@ -110,6 +110,8 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		return
 	}
 
+	sessionID := strings.TrimSpace(c.Query("session_id"))
+
 	ctx := requestContext(c)
 	connDTO, err := h.connections.GetVisible(ctx, userID, connectionID, true, false)
 	if err != nil {
@@ -137,6 +139,28 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		return
 	}
 
+	var prelaunchRecord *services.ActiveSessionRecord
+	if sessionID != "" {
+		record, ok := h.activeSessions.GetSession(sessionID)
+		if !ok {
+			response.Error(c, apperrors.ErrNotFound)
+			return
+		}
+		if !strings.EqualFold(strings.TrimSpace(record.ConnectionID), connDTO.ID) {
+			response.Error(c, apperrors.NewBadRequest("session does not belong to the requested connection"))
+			return
+		}
+		if !strings.EqualFold(strings.TrimSpace(record.UserID), userID) {
+			response.Error(c, apperrors.ErrForbidden)
+			return
+		}
+		if !strings.EqualFold(strings.TrimSpace(record.ProtocolID), connDTO.ProtocolID) {
+			response.Error(c, apperrors.NewBadRequest("session protocol mismatch"))
+			return
+		}
+		prelaunchRecord = record
+	}
+
 	settings := cloneMap(connDTO.Settings)
 	host, port, hostErr := resolveHostPort(connDTO, settings)
 	if hostErr != nil {
@@ -149,7 +173,25 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 	}
 	settings["port"] = port
 
-	concurrencyLimit := h.sessionConcurrentLimit(settings)
+	sftpEnabled := true
+	if h.cfg != nil {
+		sftpEnabled = h.cfg.Protocols.SSH.EnableSFTPDefault
+	}
+	if value, ok := boolFromAny(settings["enable_sftp"]); ok {
+		sftpEnabled = value
+		delete(settings, "enable_sftp")
+	}
+	if strings.EqualFold(strings.TrimSpace(connDTO.ProtocolID), "sftp") {
+		sftpEnabled = true
+	}
+	if prelaunchRecord != nil && prelaunchRecord.Metadata != nil {
+		sftpEnabled = metadataBool(prelaunchRecord.Metadata, "sftp_enabled")
+	}
+
+	concurrencyLimit := sessionConcurrentLimit(settings, h.cfg)
+	if prelaunchRecord != nil {
+		concurrencyLimit = prelaunchRecord.ConcurrentLimit
+	}
 
 	var identitySecret map[string]any
 	isRoot := metadataBool(claims.Metadata, "is_root")
@@ -170,7 +212,9 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 	}
 
 	secret := cloneMap(identitySecret)
-	sessionID := uuid.NewString()
+	if sessionID == "" {
+		sessionID = uuid.NewString()
+	}
 	secret["session_id"] = sessionID
 
 	driver, ok := h.driverRegistry.Get(connDTO.ProtocolID)
@@ -192,9 +236,20 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 	if userName == "" {
 		userName = userID
 	}
+	if prelaunchRecord != nil && strings.TrimSpace(userName) == "" {
+		userName = strings.TrimSpace(prelaunchRecord.OwnerUserName)
+	}
 
-	metadata := map[string]any{
-		"connection_id": connDTO.ID,
+	var metadata map[string]any
+	if prelaunchRecord != nil && prelaunchRecord.Metadata != nil {
+		metadata = cloneMap(prelaunchRecord.Metadata)
+		if _, exists := metadata["connection_id"]; !exists {
+			metadata["connection_id"] = connDTO.ID
+		}
+	} else {
+		metadata = map[string]any{
+			"connection_id": connDTO.ID,
+		}
 	}
 
 	terminalWidth := intFromAnyOrZero(settings["terminal_width"])
@@ -253,23 +308,56 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 
 	delete(settings, "recording_enabled")
 
-	metadata["terminal_width"] = terminalWidth
-	metadata["terminal_height"] = terminalHeight
-	metadata["terminal_type"] = terminalType
-	metadata["recording_enabled"] = recordingEnabled
-	recordingActive := recordingEnabled && !strings.EqualFold(policy.Mode, services.RecordingModeDisabled)
-	metadata["recording_active"] = recordingActive
-	metadata["recording"] = map[string]any{
-		"mode":            policy.Mode,
-		"storage":         policy.Storage,
-		"requested":       recordingEnabled,
-		"active":          recordingActive,
-		"retention_days":  policy.RetentionDays,
-		"require_consent": policy.RequireConsent,
+	if prelaunchRecord == nil {
+		metadata["terminal_width"] = terminalWidth
+		metadata["terminal_height"] = terminalHeight
+		metadata["terminal_type"] = terminalType
+		metadata["sftp_enabled"] = sftpEnabled
+		metadata["recording_enabled"] = recordingEnabled
+		recordingActive := recordingEnabled && !strings.EqualFold(policy.Mode, services.RecordingModeDisabled)
+		metadata["recording_active"] = recordingActive
+		metadata["recording"] = map[string]any{
+			"mode":            policy.Mode,
+			"storage":         policy.Storage,
+			"requested":       recordingEnabled,
+			"active":          recordingActive,
+			"retention_days":  policy.RetentionDays,
+			"require_consent": policy.RequireConsent,
+		}
 	}
+
+	metadata["sftp_enabled"] = sftpEnabled
 
 	if connDTO.IdentityID != nil && strings.TrimSpace(*connDTO.IdentityID) != "" {
 		metadata["identity_id"] = strings.TrimSpace(*connDTO.IdentityID)
+	}
+
+	var templateMeta map[string]any
+	if connDTO.Metadata != nil {
+		if raw, ok := connDTO.Metadata["connection_template"].(map[string]any); ok {
+			templateMeta = cloneMap(raw)
+			if fieldsRaw, ok := raw["fields"].(map[string]any); ok {
+				templateMeta["fields"] = cloneMap(fieldsRaw)
+			}
+		}
+	}
+	if templateMeta != nil && len(templateMeta) == 0 {
+		templateMeta = nil
+	}
+
+	capabilities, err := driverCapabilitiesMap(h.driverRegistry, connDTO.ProtocolID, sftpEnabled)
+	if err != nil {
+		response.Error(c, apperrors.Wrap(err, "resolve driver capabilities"))
+		return
+	}
+
+	if prelaunchRecord == nil {
+		if templateMeta != nil {
+			metadata["template"] = templateMeta
+		}
+		if capabilities != nil {
+			metadata["capabilities"] = capabilities
+		}
 	}
 	sessionActor := services.SessionActor{
 		UserID:    userID,
@@ -282,24 +370,29 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		return
 	}
 
-	startParams := services.StartSessionParams{
-		SessionID:       sessionID,
-		ConnectionID:    connDTO.ID,
-		ConnectionName:  connDTO.Name,
-		ProtocolID:      connDTO.ProtocolID,
-		OwnerUserID:     userID,
-		OwnerUserName:   userName,
-		TeamID:          connDTO.TeamID,
-		Host:            host,
-		Port:            port,
-		Metadata:        metadata,
-		ConcurrentLimit: concurrencyLimit,
-		Actor:           sessionActor,
-	}
+	if prelaunchRecord == nil {
+		startParams := services.StartSessionParams{
+			SessionID:       sessionID,
+			ConnectionID:    connDTO.ID,
+			ConnectionName:  connDTO.Name,
+			ProtocolID:      connDTO.ProtocolID,
+			DescriptorID:    workspaceDescriptorID(connDTO.ProtocolID),
+			OwnerUserID:     userID,
+			OwnerUserName:   userName,
+			TeamID:          connDTO.TeamID,
+			Host:            host,
+			Port:            port,
+			Metadata:        metadata,
+			Template:        templateMeta,
+			Capabilities:    capabilities,
+			ConcurrentLimit: concurrencyLimit,
+			Actor:           sessionActor,
+		}
 
-	if _, err := h.lifecycle.StartSession(ctx, startParams); err != nil {
-		h.handleRegisterError(c, err)
-		return
+		if _, err := h.lifecycle.StartSession(ctx, startParams); err != nil {
+			h.handleRegisterError(c, err)
+			return
+		}
 	}
 
 	h.broadcastTerminal(sessionID, "opened", map[string]any{
@@ -340,7 +433,7 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		return
 	}
 
-	if h.sftpChannels != nil {
+	if sftpEnabled && h.sftpChannels != nil {
 		if provider, ok := handle.(services.SFTPProvider); ok {
 			if err := h.sftpChannels.Attach(sessionID, provider); err != nil {
 				closeStatus = services.SessionStatusFailed
@@ -434,10 +527,10 @@ func (h *SSHSessionHandler) checkPermission(ctx context.Context, userID, resourc
 	return h.checker.CheckResource(ctx, userID, "connection", resourceID, permission)
 }
 
-func (h *SSHSessionHandler) sessionConcurrentLimit(settings map[string]any) int {
+func sessionConcurrentLimit(settings map[string]any, cfg *app.Config) int {
 	limit := 0
-	if h.cfg != nil {
-		limit = h.cfg.Features.Sessions.ConcurrentLimitDefault
+	if cfg != nil {
+		limit = cfg.Features.Sessions.ConcurrentLimitDefault
 	}
 
 	if v, ok := intFromAny(settings["concurrent_limit"]); ok {

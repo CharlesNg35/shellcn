@@ -264,7 +264,9 @@ Active connection visibility is powered by `services.ActiveSessionService`. Ever
      - `ID`: unique session identifier (driver-specific UUID).
      - `ConnectionID`, `UserID`, `ProtocolID` (required).
      - `ConnectionName`, `UserName`, `TeamID` when available.
+     - `DescriptorID`: workspace descriptor key (e.g. `workspace/ssh`) consumed by the frontend registry to mount the correct workspace shell.
      - Protocol metadata such as `Host`, `Port`, or additional `Metadata` map (e.g. namespace, pod, database).
+     - Template snapshots and capability maps: set the top-level `Template` and `Capabilities` fields and mirror the data in `metadata.template` / `metadata.capabilities` so clients can render protocol-specific panes without additional lookups.
 3. **Heartbeat**
    - Long-running drivers should periodically call `ActiveSessionService.Heartbeat(sessionID)` or delegate to a scheduler so that stale sessions (timeout default: 5 minutes) are not garbage collected.
    - Drivers without natural heartbeats must emit one when user activity is detected (command executed, data streamed, etc.).

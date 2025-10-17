@@ -53,12 +53,15 @@ type StartSessionParams struct {
 	ConnectionID    string
 	ConnectionName  string
 	ProtocolID      string
+	DescriptorID    string
 	OwnerUserID     string
 	OwnerUserName   string
 	TeamID          *string
 	Host            string
 	Port            int
 	Metadata        map[string]any
+	Template        map[string]any
+	Capabilities    map[string]any
 	ConcurrentLimit int
 	StartedAt       time.Time
 	Actor           SessionActor
@@ -213,6 +216,12 @@ func (s *SessionLifecycleService) StartSession(ctx context.Context, params Start
 	if params.Port > 0 {
 		metadata["port"] = params.Port
 	}
+	if len(params.Template) > 0 {
+		metadata["template"] = cloneMetadata(params.Template)
+	}
+	if len(params.Capabilities) > 0 {
+		metadata["capabilities"] = cloneMetadata(params.Capabilities)
+	}
 	metaJSON, err := encodeMetadata(metadata)
 	if err != nil {
 		return nil, err
@@ -238,12 +247,19 @@ func (s *SessionLifecycleService) StartSession(ctx context.Context, params Start
 		UserName:        strings.TrimSpace(params.OwnerUserName),
 		TeamID:          params.TeamID,
 		ProtocolID:      session.ProtocolID,
+		DescriptorID:    strings.TrimSpace(params.DescriptorID),
 		StartedAt:       startedAt,
 		LastSeenAt:      startedAt,
 		Host:            params.Host,
 		Port:            params.Port,
 		Metadata:        metadata,
 		ConcurrentLimit: params.ConcurrentLimit,
+	}
+	if len(params.Template) > 0 {
+		activeRecord.Template = cloneMetadata(params.Template)
+	}
+	if len(params.Capabilities) > 0 {
+		activeRecord.Capabilities = cloneMetadata(params.Capabilities)
 	}
 
 	registered := false

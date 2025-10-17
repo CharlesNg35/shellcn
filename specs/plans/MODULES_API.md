@@ -895,11 +895,55 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ### 8.1 Protocol Catalog
 
-| Method | Path                             | Description                                                           | Permission        | Handler                           |
-| ------ | -------------------------------- | --------------------------------------------------------------------- | ----------------- | --------------------------------- |
-| GET    | `/api/protocols`                 | Return the full driver catalog (driver + config enablement metadata). | `connection.view` | `ProtocolHandler.ListAll`         |
-| GET    | `/api/protocols/available`       | Return only protocols available to the calling user.                  | `connection.view` | `ProtocolHandler.ListForUser`     |
-| GET    | `/api/protocols/:id/permissions` | List permission metadata registered by the driver.                    | `connection.view` | `ProtocolHandler.ListPermissions` |
+| Method | Path                                     | Description                                                                                       | Permission        | Handler                                 |
+| ------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------- |
+| GET    | `/api/protocols`                         | Return the full driver catalog (driver + config enablement metadata).                             | `connection.view` | `ProtocolHandler.ListAll`               |
+| GET    | `/api/protocols/available`               | Return only protocols available to the calling user.                                              | `connection.view` | `ProtocolHandler.ListForUser`           |
+| GET    | `/api/protocols/:id/permissions`         | List permission metadata registered by the driver.                                                | `connection.view` | `ProtocolHandler.ListPermissions`       |
+| GET    | `/api/protocols/:id/connection-template` | Retrieve the latest connection template schema for a driver (field layout, defaults, validation). | `connection.view` | `ProtocolHandler.GetConnectionTemplate` |
+
+**Example — `GET /api/protocols/ssh/connection-template`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "template": {
+      "driver_id": "ssh",
+      "version": "2025-01-15",
+      "display_name": "SSH Connection",
+      "metadata": {
+        "requires_identity": true
+      },
+      "sections": [
+        {
+          "id": "endpoint",
+          "label": "Endpoint",
+          "fields": [
+            {
+              "key": "host",
+              "label": "Host",
+              "type": "target_host",
+              "required": true,
+              "placeholder": "server.example.com",
+              "validation": { "pattern": "^[a-zA-Z0-9._-]+$" },
+              "binding": { "target": "target", "index": 0, "property": "host" }
+            },
+            {
+              "key": "port",
+              "label": "Port",
+              "type": "target_port",
+              "default": 22,
+              "validation": { "min": 1, "max": 65535 },
+              "binding": { "target": "target", "index": 0, "property": "port" }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
 
 **ProtocolInfo Example**
 
@@ -937,17 +981,40 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ### 8.2 Connections API
 
-| Method | Path                           | Description                                                    | Permission                 | Handler                            |
-| ------ | ------------------------------ | -------------------------------------------------------------- | -------------------------- | ---------------------------------- |
-| GET    | `/api/connections`             | List connections visible to the caller (supports filters).     | `connection.view`          | `ConnectionHandler.List`           |
-| GET    | `/api/connections/:id`         | Retrieve a specific connection with targets and share summary. | `connection.view`          | `ConnectionHandler.Get`            |
-| GET    | `/api/connections/summary`     | Aggregate counts grouped by protocol (supports team filters).  | `connection.view`          | `ConnectionHandler.Summary`        |
-| POST   | `/api/connections`             | Create a connection (metadata, folder, optional team).         | `connection.create`        | `ConnectionHandler.Create`         |
-| PUT    | `/api/connections/:id`         | Update connection metadata, preferences, or identity.          | `connection.view`*         | `ConnectionHandler.Update`         |
-| GET    | `/api/connection-folders/tree` | Folder hierarchy plus connection counts.                       | `connection.folder.view`   | `ConnectionFolderHandler.ListTree` |
-| POST   | `/api/connection-folders`      | Create a new connection folder.                                | `connection.folder.manage` | `ConnectionFolderHandler.Create`   |
-| PATCH  | `/api/connection-folders/:id`  | Update folder metadata (name, parent, color, etc.).            | `connection.folder.manage` | `ConnectionFolderHandler.Update`   |
-| DELETE | `/api/connection-folders/:id`  | Delete a folder (children reassigned, connections unassigned). | `connection.folder.manage` | `ConnectionFolderHandler.Delete`   |
+| Method | Path                       | Description                                                                     | Permission          | Handler                     |
+| ------ | -------------------------- | ------------------------------------------------------------------------------- | ------------------- | --------------------------- |
+| GET    | `/api/connections`         | List connections visible to the caller (supports filters).                      | `connection.view`   | `ConnectionHandler.List`    |
+| GET    | `/api/connections/:id`     | Retrieve a specific connection with targets and share summary.                  | `connection.view`   | `ConnectionHandler.Get`     |
+| GET    | `/api/connections/summary` | Aggregate counts grouped by protocol (supports team filters).                   | `connection.view`   | `ConnectionHandler.Summary` |
+| POST   | `/api/connections`         | Create a connection (metadata, folder, optional team, dynamic template fields). | `connection.create` | `ConnectionHandler.Create`  |
+| PUT    | `/api/connections/:id`     | Update connection metadata, identity, or template-backed fields.                | `connection.view`\* | `ConnectionHandler.Update`  |
+
+**Request payload (create/update):**
+
+```json
+{
+  "name": "Production SSH",
+  "description": "Jump host for prod cluster",
+  "protocol_id": "ssh",
+  "folder_id": "fld_01J7ZP0X...",
+  "team_id": "team_01H5S4...",
+  "fields": {
+    "host": "prod.internal.example.com",
+    "port": 22,
+    "session_override_enabled": true,
+    "concurrent_limit": 2,
+    "enable_sftp": true
+  },
+  "identity_id": "idn_01J23...",
+  "grant_team_permissions": ["connection.launch"]
+}
+```
+
+`fields` is validated against the driver’s connection template. Missing optional keys fall back to template defaults; disabled or hidden fields (via dependency rules) are ignored server side.
+| GET | `/api/connection-folders/tree` | Folder hierarchy plus connection counts. | `connection.folder.view` | `ConnectionFolderHandler.ListTree` |
+| POST | `/api/connection-folders` | Create a new connection folder. | `connection.folder.manage` | `ConnectionFolderHandler.Create` |
+| PATCH | `/api/connection-folders/:id` | Update folder metadata (name, parent, color, etc.). | `connection.folder.manage` | `ConnectionFolderHandler.Update` |
+| DELETE | `/api/connection-folders/:id` | Delete a folder (children reassigned, connections unassigned). | `connection.folder.manage` | `ConnectionFolderHandler.Delete` |
 
 **Supported query parameters for `GET /api/connections`:**
 
@@ -964,12 +1031,12 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ### 8.3 Snippets API
 
-| Method | Path                 | Description                                                                 | Permission                                       | Handler                 |
-| ------ | -------------------- | --------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------- |
-| GET    | `/api/snippets`      | List snippets filtered by scope (`global`, `connection`, `user`).          | Scope-dependent\*                                | `SnippetHandler.List`   |
-| POST   | `/api/snippets`      | Create a snippet (global, connection-specific, or personal).               | Scope-dependent\*                                | `SnippetHandler.Create` |
-| PUT    | `/api/snippets/:id`  | Update snippet metadata/command.                                           | Scope-dependent\*                                | `SnippetHandler.Update` |
-| DELETE | `/api/snippets/:id`  | Remove a snippet.                                                           | Scope-dependent\*                                | `SnippetHandler.Delete` |
+| Method | Path                | Description                                                       | Permission        | Handler                 |
+| ------ | ------------------- | ----------------------------------------------------------------- | ----------------- | ----------------------- |
+| GET    | `/api/snippets`     | List snippets filtered by scope (`global`, `connection`, `user`). | Scope-dependent\* | `SnippetHandler.List`   |
+| POST   | `/api/snippets`     | Create a snippet (global, connection-specific, or personal).      | Scope-dependent\* | `SnippetHandler.Create` |
+| PUT    | `/api/snippets/:id` | Update snippet metadata/command.                                  | Scope-dependent\* | `SnippetHandler.Update` |
+| DELETE | `/api/snippets/:id` | Remove a snippet.                                                 | Scope-dependent\* | `SnippetHandler.Delete` |
 
 \* **Scope-dependent permissions**:
 
@@ -1067,7 +1134,7 @@ The service automatically expands dependency permissions (e.g., `connection.view
 ### 8.4 Active Sessions & Chat
 
 | Method | Path                                                         | Description                                                                                            | Permission                                                    | Handler                                       |
-| ------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------------- |
+| POST   | `/api/active-sessions`                                       | Launch a connection via the multi-protocol assistant. Body accepts `connection_id`, optional `protocol_id`, and `fields_override`. Returns the active session payload, tunnel credentials, and workspace descriptor. | Authenticated (`connection.launch` + `protocol:<id>.connect`) | `ActiveSessionLaunchHandler.Launch`           |
 | GET    | `/api/active-sessions/:sessionID/participants`               | Retrieve active participants for a session, including owner and write-holder metadata.                 | Authenticated (session owner or participant)                  | `SessionParticipantHandler.ListParticipants`  |
 | POST   | `/api/active-sessions/:sessionID/participants`               | Invite a user to join the session as a participant. Requires owner or `protocol:ssh.share` permission. | Authenticated (session owner or share permission)             | `SessionParticipantHandler.AddParticipant`    |
 | POST   | `/api/active-sessions/:sessionID/participants/:userID/write` | Grant write access to a participant, transferring exclusive control.                                   | Authenticated (session owner or `protocol:ssh.grant_write`)   | `SessionParticipantHandler.GrantWrite`        |
@@ -1080,6 +1147,61 @@ The service automatically expands dependency permissions (e.g., `connection.view
 | GET    | `/api/session-records/:recordID/download`                    | Stream the stored recording artifact (`*.cast.gz`) for offline playback or archival.                   | Authenticated (session owner or `protocol:ssh.record`)        | `SessionRecordingHandler.Download`            |
 
 Session access enforcement is handled by `SessionLifecycleService.AuthorizeSessionAccess`, which grants access to the session owner and any active participant (readers or writers). Requests from other users receive `403`.
+
+**Example — Launch Session:**
+
+```http
+POST /api/active-sessions
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "connection_id": "conn_01J9P9Q3STR",
+  "protocol_id": "ssh"
+}
+```
+
+Successful responses include the registered session, tunnel credentials for `GET /ws`, and the workspace descriptor id used by the frontend router:
+
+```json
+{
+  "success": true,
+  "data": {
+    "session": {
+      "id": "sess_01J9PA1R4HV",
+      "connection_id": "conn_01J9P9Q3STR",
+      "protocol_id": "ssh",
+      "descriptor_id": "workspace/ssh",
+      "metadata": {
+        "sftp_enabled": true,
+        "template": {
+          "driver_id": "ssh",
+          "version": "2025-01-15"
+        },
+        "capabilities": {
+          "panes": ["terminal", "files"]
+        }
+      }
+    },
+    "tunnel": {
+      "url": "/ws",
+      "protocol": "ssh",
+      "token": "<jwt>",
+      "params": {
+        "tunnel": "ssh",
+        "connection_id": "conn_01J9P9Q3STR",
+        "session_id": "sess_01J9PA1R4HV"
+      }
+    },
+    "descriptor": {
+      "id": "workspace/ssh",
+      "display_name": "SSH",
+      "protocol_id": "ssh",
+      "default_route": "/active-sessions/sess_01J9PA1R4HV"
+    }
+  }
+}
+```
 
 Recording status responses expose `recording_mode`, reflecting the effective policy (`disabled`, `optional`, `forced`, or runtime values such as `active`/`recorded` when policy data is unavailable). When a finalized artifact exists, the `record` object includes `retention_until` indicating the scheduled purge timestamp in addition to size, checksum, and duration metadata.
 
