@@ -203,6 +203,23 @@ func (h *ConnectionHandler) Get(c *gin.Context) {
 	response.Success(c, http.StatusOK, connection)
 }
 
+// Delete removes a connection when authorised.
+func (h *ConnectionHandler) Delete(c *gin.Context) {
+	userID := c.GetString(middleware.CtxUserIDKey)
+	if userID == "" {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+
+	ctx := requestContext(c)
+	if err := h.svc.Delete(ctx, userID, c.Param("id")); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 func parseIncludes(includeParam string) (bool, bool) {
 	if includeParam == "" {
 		return true, false

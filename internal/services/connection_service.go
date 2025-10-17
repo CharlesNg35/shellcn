@@ -527,6 +527,59 @@ func (s *ConnectionService) Update(ctx context.Context, userID, connectionID str
 	return &dto, nil
 }
 
+// Delete removes a connection when the caller is authorised.
+func (s *ConnectionService) Delete(ctx context.Context, userID, connectionID string) error {
+	ctx = ensureContext(ctx)
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return apperrors.ErrUnauthorized
+	}
+
+	connectionID = strings.TrimSpace(connectionID)
+	if connectionID == "" {
+		return apperrors.NewBadRequest("connection id is required")
+	}
+
+	var connection models.Connection
+	if err := s.db.WithContext(ctx).First(&connection, "id = ?", connectionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperrors.ErrNotFound
+		}
+		return fmt.Errorf("connection service: load connection: %w", err)
+	}
+
+	allowed := connection.OwnerUserID == userID
+	if !allowed && s.checker != nil {
+		for _, permissionID := range []string{"connection.manage", "connection.delete"} {
+			ok, err := s.checker.CheckResource(ctx, userID, connectionResourceType, connectionID, permissionID)
+			if err != nil {
+				return err
+			}
+			if ok {
+				allowed = true
+				break
+			}
+		}
+	}
+	if !allowed {
+		canDelete, err := s.canDeleteConnections(ctx, userID)
+		if err != nil {
+			return err
+		}
+		allowed = canDelete
+	}
+	if !allowed {
+		return apperrors.ErrForbidden
+	}
+
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&models.Connection{}, "id = ?", connection.ID).Error; err != nil {
+			return fmt.Errorf("connection service: delete connection: %w", err)
+		}
+		return nil
+	})
+}
+
 // ListVisible returns connections accessible to the supplied user, applying optional filters.
 func (s *ConnectionService) ListVisible(ctx context.Context, opts ListConnectionsOptions) (*ListConnectionsResult, error) {
 	ctx = ensureContext(ctx)
@@ -876,6 +929,25 @@ func (s *ConnectionService) canManageConnections(ctx context.Context, userID str
 		return true, nil
 	}
 	for _, id := range []string{"connection.manage", "permission.manage"} {
+		ok, err := s.checker.Check(ctx, userID, id)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *ConnectionService) canDeleteConnections(ctx context.Context, userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return true, nil
+	}
+	if s.checker == nil {
+		return true, nil
+	}
+	for _, id := range []string{"connection.delete", "connection.manage", "permission.manage"} {
 		ok, err := s.checker.Check(ctx, userID, id)
 		if err != nil {
 			return false, err
