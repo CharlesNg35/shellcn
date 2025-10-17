@@ -596,14 +596,38 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
         allowProposedApi: true,
         convertEol: true,
         cursorBlink: true,
-        fontFamily:
-          'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace)',
+        fontSize: 13,
+        lineHeight: 1.2,
+        fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace',
+        fontWeight: '400',
+        fontWeightBold: '700',
+        letterSpacing: 0,
         theme: {
-          background: '#0f172a',
-          cursor: '#22d3ee',
+          background: '#1e1e2e',
+          foreground: '#cdd6f4',
+          cursor: '#f5e0dc',
+          cursorAccent: '#1e1e2e',
+          selectionBackground: '#45475a',
+          selectionForeground: '#cdd6f4',
+          black: '#45475a',
+          red: '#f38ba8',
+          green: '#a6e3a1',
+          yellow: '#f9e2af',
+          blue: '#89b4fa',
+          magenta: '#f5c2e7',
+          cyan: '#94e2d5',
+          white: '#bac2de',
+          brightBlack: '#585b70',
+          brightRed: '#f38ba8',
+          brightGreen: '#a6e3a1',
+          brightYellow: '#f9e2af',
+          brightBlue: '#89b4fa',
+          brightMagenta: '#f5c2e7',
+          brightCyan: '#94e2d5',
+          brightWhite: '#a6adc8',
         },
       })
-      const initialFontSize = terminal.options.fontSize ?? 14
+      const initialFontSize = terminal.options.fontSize ?? 13
       setFontSize(initialFontSize)
       onFontSizeChange?.(initialFontSize)
 
@@ -842,7 +866,8 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
     >
       <div
         ref={containerRef}
-        className="h-full w-full bg-slate-950/95"
+        className="h-full w-full"
+        style={{ backgroundColor: '#1e1e2e' }}
         role="presentation"
         data-testid="ssh-terminal-canvas"
       />

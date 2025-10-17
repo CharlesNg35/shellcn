@@ -3,7 +3,6 @@ import { useDropzone } from 'react-dropzone'
 import { ArrowUp, FileText, Folder, Home, Loader2, RefreshCcw, Upload } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -506,7 +505,7 @@ export function FileManager({
         />
       }
     >
-      <div className={cn('flex h-full flex-col gap-3', className)}>
+      <div className={cn('flex h-full flex-col gap-2', className)}>
         <FileManagerToolbar
           isRootPath={browserPath === '.' || browserPath === '/'}
           isLoading={isLoading}
@@ -566,11 +565,11 @@ export function FileManager({
           }
         />
 
-        <div className="flex flex-1 gap-3 overflow-hidden">
+        <div className="flex flex-1 gap-2 overflow-hidden">
           <div {...getRootProps({ className: 'relative flex-1 overflow-hidden', tabIndex: -1 })}>
-            <Card className="flex h-full flex-col overflow-hidden">
-              <div className="border-b border-border px-3 py-2">
-                <p className="text-xs font-medium text-muted-foreground">
+            <div className="flex h-full flex-col overflow-hidden rounded-lg border border-border bg-background/60 shadow-sm">
+              <div className="border-b border-border/50 px-3 py-1.5">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   {entries.length === 1 ? '1 item' : `${entries.length} items`}
                 </p>
               </div>
@@ -635,7 +634,7 @@ export function FileManager({
                   )}
                 </div>
               </div>
-            </Card>
+            </div>
           </div>
 
           {showTransfers && (

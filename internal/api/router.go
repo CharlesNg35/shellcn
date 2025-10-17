@@ -325,6 +325,8 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	snippetHandler := handlers.NewSnippetHandler(snippetSvc, checker, sessionLifecycleSvc, activeSessionSvc)
 	registerSnippetRoutes(api, snippetHandler)
 
+	sftpChannelSvc := services.NewSFTPChannelService()
+
 	launchHandler := handlers.NewActiveSessionLaunchHandler(
 		cfg,
 		connectionSvc,
@@ -336,6 +338,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 		driverReg,
 		checker,
 		jwt,
+		sftpChannelSvc,
 	)
 	registerActiveSessionLaunchRoutes(api, launchHandler)
 
@@ -348,8 +351,6 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	}
 	protocolSettingsHandler := handlers.NewProtocolSettingsHandler(protocolSettingsSvc, checker)
 	registerProtocolSettingsRoutes(api, protocolSettingsHandler)
-
-	sftpChannelSvc := services.NewSFTPChannelService()
 	// ---------------------------------------------------------------------------
 	// SSH & SFTP Handlers
 	// ---------------------------------------------------------------------------

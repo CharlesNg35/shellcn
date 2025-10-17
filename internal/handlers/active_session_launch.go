@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -22,16 +23,17 @@ import (
 )
 
 type ActiveSessionLaunchHandler struct {
-	cfg         *app.Config
-	connections *services.ConnectionService
-	templates   *services.ConnectionTemplateService
-	vault       *services.VaultService
-	lifecycle   *services.SessionLifecycleService
-	active      *services.ActiveSessionService
-	recordings  *services.RecorderService
-	drivers     *drivers.Registry
-	checker     *permissions.Checker
-	jwt         *iauth.JWTService
+	cfg          *app.Config
+	connections  *services.ConnectionService
+	templates    *services.ConnectionTemplateService
+	vault        *services.VaultService
+	lifecycle    *services.SessionLifecycleService
+	active       *services.ActiveSessionService
+	recordings   *services.RecorderService
+	drivers      *drivers.Registry
+	checker      *permissions.Checker
+	jwt          *iauth.JWTService
+	sftpChannels *services.SFTPChannelService
 }
 
 func NewActiveSessionLaunchHandler(
@@ -45,18 +47,20 @@ func NewActiveSessionLaunchHandler(
 	driverReg *drivers.Registry,
 	checker *permissions.Checker,
 	jwt *iauth.JWTService,
+	sftpChannels *services.SFTPChannelService,
 ) *ActiveSessionLaunchHandler {
 	return &ActiveSessionLaunchHandler{
-		cfg:         cfg,
-		connections: connections,
-		templates:   templates,
-		vault:       vault,
-		lifecycle:   lifecycle,
-		active:      active,
-		recordings:  recordings,
-		drivers:     driverReg,
-		checker:     checker,
-		jwt:         jwt,
+		cfg:          cfg,
+		connections:  connections,
+		templates:    templates,
+		vault:        vault,
+		lifecycle:    lifecycle,
+		active:       active,
+		recordings:   recordings,
+		drivers:      driverReg,
+		checker:      checker,
+		jwt:          jwt,
+		sftpChannels: sftpChannels,
 	}
 }
 
@@ -173,6 +177,12 @@ func (h *ActiveSessionLaunchHandler) Launch(c *gin.Context) {
 		return
 	}
 	if _, err := h.vault.AuthorizeIdentityUse(ctx, viewer, strings.TrimSpace(*conn.IdentityID)); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	identitySecret, err := h.vault.LoadIdentitySecret(ctx, viewer, strings.TrimSpace(*conn.IdentityID))
+	if err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -315,6 +325,19 @@ func (h *ActiveSessionLaunchHandler) Launch(c *gin.Context) {
 	if _, err := h.lifecycle.StartSession(ctx, startParams); err != nil {
 		h.handleRegisterError(c, err)
 		return
+	}
+
+	if strings.EqualFold(protocolID, driversssh.DriverIDSFTP) {
+		if err := h.bootstrapSFTPSession(ctx, sessionID, protocolID, conn, settings, identitySecret, userID); err != nil {
+			_ = h.lifecycle.CloseSession(ctx, services.CloseSessionParams{
+				SessionID: sessionID,
+				Status:    services.SessionStatusFailed,
+				Reason:    err.Error(),
+				Actor:     startParams.Actor,
+			})
+			response.Error(c, apperrors.Wrap(err, "initialise sftp channel"))
+			return
+		}
 	}
 
 	record, ok := h.active.GetSession(sessionID)
@@ -548,6 +571,103 @@ func (h *ActiveSessionLaunchHandler) buildDescriptor(protocolID, descriptorID, c
 		Icon:         icon,
 		DefaultRoute: "/active-sessions/" + sessionID,
 	}
+}
+
+func (h *ActiveSessionLaunchHandler) bootstrapSFTPSession(
+	ctx context.Context,
+	sessionID string,
+	protocolID string,
+	conn *services.ConnectionDTO,
+	settings map[string]any,
+	identitySecret map[string]any,
+	userID string,
+) error {
+	if h == nil {
+		return errors.New("sftp bootstrap: handler not initialised")
+	}
+	if h.sftpChannels == nil {
+		return errors.New("sftp bootstrap: channel service unavailable")
+	}
+	if h.active == nil {
+		return errors.New("sftp bootstrap: active session service unavailable")
+	}
+	if conn == nil {
+		return errors.New("sftp bootstrap: connection payload missing")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return errors.New("sftp bootstrap: session id is required")
+	}
+	if h.sftpChannels.Has(sessionID) {
+		return nil
+	}
+
+	if h.drivers == nil {
+		return errors.New("sftp bootstrap: driver registry unavailable")
+	}
+	driver, ok := h.drivers.Get(protocolID)
+	if !ok {
+		return fmt.Errorf("sftp bootstrap: driver %s not registered", protocolID)
+	}
+	launcher, ok := driver.(drivers.Launcher)
+	if !ok {
+		return fmt.Errorf("sftp bootstrap: driver %s does not support launching sessions", protocolID)
+	}
+
+	secret := cloneMap(identitySecret)
+	secret["session_id"] = sessionID
+
+	req := drivers.SessionRequest{
+		ConnectionID: conn.ID,
+		ProtocolID:   protocolID,
+		UserID:       userID,
+		Settings:     cloneMap(settings),
+		Secret:       secret,
+	}
+
+	handle, err := launcher.Launch(ctx, req)
+	if err != nil {
+		return fmt.Errorf("sftp bootstrap: launch driver: %w", err)
+	}
+
+	provider, ok := handle.(services.SFTPProvider)
+	if !ok {
+		_ = handle.Close(ctx)
+		return errors.New("sftp bootstrap: driver handle does not expose SFTP provider")
+	}
+
+	if err := h.sftpChannels.Attach(sessionID, provider); err != nil {
+		_ = handle.Close(ctx)
+		return fmt.Errorf("sftp bootstrap: attach channel: %w", err)
+	}
+
+	wrapped := &sftpHandleWrapper{
+		base:      handle,
+		sessionID: sessionID,
+		channels:  h.sftpChannels,
+	}
+	h.active.AttachHandle(sessionID, wrapped)
+
+	return nil
+}
+
+type sftpHandleWrapper struct {
+	base      drivers.SessionHandle
+	sessionID string
+	channels  *services.SFTPChannelService
+}
+
+func (w *sftpHandleWrapper) Close(ctx context.Context) error {
+	if w == nil {
+		return nil
+	}
+	if w.channels != nil && w.sessionID != "" {
+		w.channels.Detach(w.sessionID)
+	}
+	if w.base != nil {
+		return w.base.Close(ctx)
+	}
+	return nil
 }
 
 func (h *ActiveSessionLaunchHandler) handleRegisterError(c *gin.Context, err error) {

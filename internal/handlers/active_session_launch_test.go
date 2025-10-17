@@ -39,6 +39,7 @@ type launchTestEnv struct {
 	cfg           *app.Config
 	jwt           *iauth.JWTService
 	crypto        *vault.Crypto
+	sftpChannels  *services.SFTPChannelService
 }
 
 func setupLaunchTestEnv(t *testing.T) launchTestEnv {
@@ -74,6 +75,8 @@ func setupLaunchTestEnv(t *testing.T) launchTestEnv {
 	lifecycleSvc, err := services.NewSessionLifecycleService(db, activeSvc)
 	require.NoError(t, err)
 
+	sftpChannels := services.NewSFTPChannelService()
+
 	jwtSvc, err := iauth.NewJWTService(iauth.JWTConfig{Secret: "launch-secret"})
 	require.NoError(t, err)
 
@@ -96,6 +99,7 @@ func setupLaunchTestEnv(t *testing.T) launchTestEnv {
 		driverReg,
 		checker,
 		jwtSvc,
+		sftpChannels,
 	)
 
 	return launchTestEnv{
@@ -110,6 +114,7 @@ func setupLaunchTestEnv(t *testing.T) launchTestEnv {
 		cfg:           cfg,
 		jwt:           jwtSvc,
 		crypto:        crypto,
+		sftpChannels:  sftpChannels,
 	}
 }
 

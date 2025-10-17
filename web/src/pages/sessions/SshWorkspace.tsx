@@ -72,7 +72,6 @@ export function SshWorkspace() {
   const openSession = useSshWorkspaceTabsStore((state) => state.openSession)
   const ensureTab = useSshWorkspaceTabsStore((state) => state.ensureTab)
   const closeTab = useSshWorkspaceTabsStore((state) => state.closeTab)
-  const reorderTabs = useSshWorkspaceTabsStore((state) => state.reorderTabs)
   const setActiveTab = useSshWorkspaceTabsStore((state) => state.setActiveTab)
   const setLayoutColumns = useSshWorkspaceTabsStore((state) => state.setLayoutColumns)
   const setFullscreen = useSshWorkspaceTabsStore((state) => state.setFullscreen)
@@ -127,14 +126,8 @@ export function SshWorkspace() {
       }
       ensureTab(session.id, 'terminal', { title: 'Terminal', closable: false })
     },
-    ensureSftpTab: canUseSftp
-      ? () => {
-          if (!session) {
-            return
-          }
-          ensureTab(session.id, 'sftp', { title: 'Files', closable: true })
-        }
-      : undefined,
+    // Don't auto-create SFTP tab - user opens it manually via button or separate page
+    ensureSftpTab: undefined,
   })
 
   useEffect(() => {
@@ -273,27 +266,6 @@ export function SshWorkspace() {
     [sessionId, setActiveTab]
   )
 
-  const handleTabClose = useCallback(
-    (tabId: string) => {
-      if (!sessionId) {
-        return
-      }
-      closeTab(sessionId, tabId)
-    },
-    [closeTab, sessionId]
-  )
-
-  const handleTabReorder = useCallback(
-    (orderedTabIds: string[]) => {
-      if (!sessionId) {
-        return
-      }
-      reorderTabs(sessionId, orderedTabIds)
-      logEvent('tabs.reordered', { sessionId, order: orderedTabIds })
-    },
-    [logEvent, reorderTabs, sessionId]
-  )
-
   const handleRecordingDetails = useCallback(() => {
     if (!session) {
       return
@@ -323,10 +295,10 @@ export function SshWorkspace() {
     if (!session) {
       return
     }
-    const tab = ensureTab(session.id, 'sftp', { title: 'Files', closable: true })
-    setActiveTab(session.id, tab.id)
+    // Navigate to dedicated file manager page
+    navigate(`/active-sessions/${sessionId}/files`)
     logEvent('file_manager.open', { sessionId })
-  }, [ensureTab, logEvent, session, sessionId, setActiveTab])
+  }, [logEvent, navigate, session, sessionId])
 
   const handleToggleFullscreen = useCallback(() => {
     if (!sessionId) {
@@ -428,10 +400,7 @@ export function SshWorkspace() {
         sessionId={sessionId}
         tabs={tabs}
         activeTabId={activeTabId}
-        layoutColumns={layoutColumns}
         onSelectTab={handleSelectTab}
-        onCloseTab={handleTabClose}
-        onReorderTabs={handleTabReorder}
         terminalRef={terminalRef}
         search={searchControls}
         telemetry={telemetry}

@@ -2,7 +2,6 @@ import { Suspense, lazy, type RefObject } from 'react'
 import { Tabs, TabsContent } from '@/components/ui/Tabs'
 import type { SshTerminalHandle } from '@/components/workspace/SshTerminal'
 import SshWorkspaceStatusBar from '@/components/workspace/ssh/SshWorkspaceStatusBar'
-import SshWorkspaceTabsBar from '@/components/workspace/ssh/SshWorkspaceTabsBar'
 import type { WorkspaceTab } from '@/store/ssh-session-tabs-store'
 import type { ActiveConnectionSession } from '@/types/connections'
 import type { SessionRecordingStatus } from '@/types/session-recording'
@@ -39,10 +38,7 @@ interface SshWorkspaceContentProps {
   sessionId: string
   tabs: WorkspaceTab[]
   activeTabId: string
-  layoutColumns?: number
   onSelectTab: (tabId: string) => void
-  onCloseTab: (tabId: string) => void
-  onReorderTabs: (orderedIds: string[]) => void
   terminalRef: React.RefObject<SshTerminalHandle | null>
   search: TerminalSearchControls
   telemetry: WorkspaceTelemetryControls
@@ -66,8 +62,6 @@ export function SshWorkspaceContent({
   tabs,
   activeTabId,
   onSelectTab,
-  onCloseTab,
-  onReorderTabs,
   terminalRef,
   search,
   telemetry,
@@ -89,46 +83,32 @@ export function SshWorkspaceContent({
       className="flex h-full flex-1 flex-col overflow-hidden"
     >
       <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background/60 shadow-inner">
-        <div className="border-b border-border/60 px-3 py-2">
-          <SshWorkspaceTabsBar
-            tabs={tabs}
-            activeTabId={activeTabId}
-            onTabSelect={onSelectTab}
-            onTabClose={onCloseTab}
-            onTabsReordered={onReorderTabs}
-          />
-        </div>
-
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden p-4">
           {tabs.map((tab) => (
-            <TabsContent key={tab.id} value={tab.id} className="h-full w-full p-0 m-0" forceMount>
+            <TabsContent key={tab.id} value={tab.id} className="h-full w-full" forceMount>
               {tab.type === 'terminal' ? (
-                <div className="h-full w-full p-4">
-                  <Suspense fallback={<TerminalFallback />}>
-                    <LazySshTerminal
-                      ref={terminalRef}
-                      sessionId={sessionId}
-                      tunnel={tunnel}
-                      onEvent={telemetry.handleTerminalEvent}
-                      onFontSizeChange={telemetry.setFontSize}
-                      searchOverlay={search.overlay}
-                      onSearchResolved={({ matched }) => search.onResolved(matched)}
-                      activeTabId={activeTabId}
-                    />
-                  </Suspense>
-                </div>
+                <Suspense fallback={<TerminalFallback />}>
+                  <LazySshTerminal
+                    ref={terminalRef}
+                    sessionId={sessionId}
+                    tunnel={tunnel}
+                    onEvent={telemetry.handleTerminalEvent}
+                    onFontSizeChange={telemetry.setFontSize}
+                    searchOverlay={search.overlay}
+                    onSearchResolved={({ matched }) => search.onResolved(matched)}
+                    activeTabId={activeTabId}
+                  />
+                </Suspense>
               ) : (
-                <div className="h-full w-full p-4">
-                  <Suspense fallback={<SftpFallback />}>
-                    <LazySftpWorkspace
-                      sessionId={sessionId}
-                      canWrite={canWrite}
-                      currentUserId={currentUserId}
-                      currentUserName={currentUserName}
-                      participants={participants}
-                    />
-                  </Suspense>
-                </div>
+                <Suspense fallback={<SftpFallback />}>
+                  <LazySftpWorkspace
+                    sessionId={sessionId}
+                    canWrite={canWrite}
+                    currentUserId={currentUserId}
+                    currentUserName={currentUserName}
+                    participants={participants}
+                  />
+                </Suspense>
               )}
             </TabsContent>
           ))}
