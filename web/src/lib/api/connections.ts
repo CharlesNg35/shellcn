@@ -370,6 +370,7 @@ export interface ConnectionSharePayload {
 
 export interface FetchActiveConnectionSessionsParams {
   protocol_id?: string
+  protocol_ids?: string[]
   team_id?: string
   scope?: 'personal' | 'team' | 'all'
 }

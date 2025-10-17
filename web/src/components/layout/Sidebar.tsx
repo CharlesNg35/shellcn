@@ -19,6 +19,8 @@ import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { useActiveConnections } from '@/hooks/useActiveConnections'
 import { PERMISSIONS } from '@/constants/permissions'
 import { useSshWorkspaceTabsStore } from '@/store/ssh-session-tabs-store'
+import { useLaunchConnectionContext } from '@/contexts/LaunchConnectionContext'
+import { getWorkspaceDescriptor } from '@/workspaces/protocolWorkspaceRegistry'
 
 interface SidebarProps {
   isOpen?: boolean
@@ -29,6 +31,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const location = useLocation()
   const navigate = useNavigate()
   const { hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions()
+  const launchContext = useLaunchConnectionContext()
   const openSession = useSshWorkspaceTabsStore((state) => state.openSession)
   const ensureTab = useSshWorkspaceTabsStore((state) => state.ensureTab)
   const focusSession = useSshWorkspaceTabsStore((state) => state.focusSession)
@@ -236,7 +239,10 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                     <div key={item.connectionId} className="rounded-md border border-border/40 p-2">
                       <button
                         type="button"
-                        onClick={() => navigate(`/connections/${item.connectionId}`)}
+                        onClick={() => {
+                          void launchContext.openById(item.connectionId)
+                          onClose?.()
+                        }}
                         className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm font-medium text-foreground transition hover:bg-muted"
                         title={adminTooltip ?? latestSeenLabel ?? undefined}
                       >
@@ -267,6 +273,9 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               )}
                               onClick={() => {
+                                const descriptorForSession = getWorkspaceDescriptor(
+                                  sessionRecord.descriptor_id ?? sessionRecord.protocol_id
+                                )
                                 openSession({
                                   sessionId: sessionRecord.id,
                                   connectionId: sessionRecord.connection_id,
@@ -278,7 +287,7 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                                 })
                                 focusSession(sessionRecord.id)
                                 setActiveTab(sessionRecord.id, terminalTab.id)
-                                navigate(`/active-sessions/${sessionRecord.id}`)
+                                navigate(descriptorForSession.defaultRoute(sessionRecord.id))
                                 onClose?.()
                               }}
                             >

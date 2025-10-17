@@ -154,7 +154,7 @@ describe('ssh workspace tabs store', () => {
 
     const reordered = useSshWorkspaceTabsStore.getState().sessions[SESSION_ID]?.tabs ?? []
     expect(reordered.map((tab) => tab.id)).toEqual([sftpTab.id, terminalId])
-    const storedOrder = window.localStorage.getItem('sshWorkspace.tabOrder.sess-123')
+    const storedOrder = window.localStorage.getItem('workspace.tabOrder.sess-123')
     expect(storedOrder).toBeTruthy()
 
     resetSshWorkspaceTabsStore()
@@ -179,9 +179,9 @@ describe('ssh workspace tabs store', () => {
     const terminalId = `${SESSION_ID}:terminal`
     store.reorderTabs(SESSION_ID, [sftpTab.id, terminalId])
 
-    expect(window.localStorage.getItem('sshWorkspace.tabOrder.sess-123')).toBeTruthy()
+    expect(window.localStorage.getItem('workspace.tabOrder.sess-123')).toBeTruthy()
 
     store.closeSession(SESSION_ID)
-    expect(window.localStorage.getItem('sshWorkspace.tabOrder.sess-123')).toBeNull()
+    expect(window.localStorage.getItem('workspace.tabOrder.sess-123')).toBeNull()
   })
 })

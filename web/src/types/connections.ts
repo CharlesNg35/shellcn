@@ -121,6 +121,12 @@ export interface ActiveSessionParticipant {
   is_write_holder?: boolean
 }
 
+export interface ActiveSessionCapabilities {
+  panes?: string[]
+  features?: Record<string, boolean>
+  [key: string]: unknown
+}
+
 export interface ActiveConnectionSession {
   id: string
   connection_id: string
@@ -134,6 +140,9 @@ export interface ActiveConnectionSession {
   host?: string
   port?: number
   metadata?: Record<string, unknown>
+  descriptor_id?: string
+  capabilities?: ActiveSessionCapabilities
+  template?: ConnectionTemplateMetadata
   concurrent_limit?: number
   owner_user_id?: string
   owner_user_name?: string

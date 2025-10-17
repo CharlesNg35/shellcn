@@ -5,6 +5,7 @@ import * as usePermissionsModule from '@/hooks/usePermissions'
 import * as useActiveConnectionsModule from '@/hooks/useActiveConnections'
 import { Sidebar } from '../Sidebar'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { LaunchConnectionProvider } from '@/contexts/LaunchConnectionContext'
 
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: vi.fn(),
@@ -37,7 +38,9 @@ describe('Sidebar', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <MemoryRouter>
-          <Sidebar />
+          <LaunchConnectionProvider>
+            <Sidebar />
+          </LaunchConnectionProvider>
         </MemoryRouter>
       </QueryClientProvider>
     )

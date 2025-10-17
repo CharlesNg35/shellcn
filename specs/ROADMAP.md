@@ -162,7 +162,7 @@
 - [x] Implement code splitting
 - [x] Final UI/UX polish
 
-### Phase 12: Multi-Protocol Launch & Workspace Revamp (In Progress)
+### Phase 12: Multi-Protocol Launch & Workspace Revamp (Complete)
 
 #### Backend
 
@@ -173,14 +173,14 @@
 
 #### Frontend
 
-- [ ] Implement launch assistant hook & modal and replace launch CTAs
-- [ ] Create protocol workspace registry & shared layout components
-- [ ] Rename/migrate workspace stores to protocol-agnostic versions
-- [ ] Update `App.tsx` to orchestrate workspace mounting via registry
-- [ ] Migrate SSH workspace to descriptor pattern and honour `sftp_enabled`
-- [ ] Generalise hooks (`useActiveSession`, `useActiveConnections`) and update Sidebar/Settings pages
-- [ ] Surface template fields & version warnings in connection UI
-- [ ] Refresh tests (launch modal, SSH/SFTP workspaces, session pages) and docs
+- [x] Implement launch assistant hook & modal and replace launch CTAs
+- [x] Create protocol workspace registry & shared layout components
+- [x] Rename/migrate workspace stores to protocol-agnostic versions
+- [x] Update `App.tsx` to orchestrate workspace mounting via registry
+- [x] Migrate SSH workspace to descriptor pattern and honour `sftp_enabled`
+- [x] Generalise hooks (`useActiveSession`, `useActiveConnections`) and update Sidebar/Settings pages
+- [x] Surface template fields & version warnings in connection UI
+- [x] Refresh tests (launch modal, SSH/SFTP workspaces, session pages) and docs
 
 ## 2. Vault Module (Credentials, Encryption)
 

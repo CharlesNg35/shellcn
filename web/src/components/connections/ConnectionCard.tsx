@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
-import { MoreVertical, Clock, ExternalLink, Pencil, Trash2, Share2 } from 'lucide-react'
+import { MoreVertical, Clock, Pencil, Trash2, Share2, Rocket } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -9,6 +9,7 @@ import type { ActiveConnectionSession, ConnectionRecord } from '@/types/connecti
 import { cn } from '@/lib/utils/cn'
 import { useState } from 'react'
 import { resolveConnectionIcon } from '@/constants/connections'
+import { useLaunchConnectionContext } from '@/contexts/LaunchConnectionContext'
 
 interface ConnectionCardProps {
   connection: ConnectionRecord
@@ -34,6 +35,7 @@ export function ConnectionCard({
   showActiveUsers = false,
 }: ConnectionCardProps) {
   const [showMenu, setShowMenu] = useState(false)
+  const launchContext = useLaunchConnectionContext()
   const metadata = connection.metadata ?? {}
   const tags = extractTags(metadata)
   const endpoint = resolvePrimaryEndpoint(connection.targets, connection.settings)
@@ -291,11 +293,13 @@ export function ConnectionCard({
       {/* Card Footer */}
       <div className="border-t border-border/40 bg-muted/20 p-3">
         <div className="flex gap-2">
-          <Button size="sm" className="flex-1 font-medium" asChild>
-            <Link to={`/connections/${connection.id}`}>
-              <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-              Launch
-            </Link>
+          <Button
+            size="sm"
+            className="flex-1 font-medium"
+            onClick={() => launchContext.open(connection)}
+          >
+            <Rocket className="mr-1.5 h-3.5 w-3.5" />
+            Launch
           </Button>
           <Button size="sm" variant="outline" asChild>
             <Link to={`/connections/${connection.id}/edit`}>

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 
 import { Sessions } from '../Sessions'
@@ -126,7 +127,9 @@ describe('Sessions settings page', () => {
     const queryClient = new QueryClient()
     const { getByRole, getByText } = render(
       <QueryClientProvider client={queryClient}>
-        <Sessions />
+        <MemoryRouter>
+          <Sessions />
+        </MemoryRouter>
       </QueryClientProvider>
     )
 
@@ -143,7 +146,9 @@ describe('Sessions settings page', () => {
     const queryClient = new QueryClient()
     render(
       <QueryClientProvider client={queryClient}>
-        <Sessions />
+        <MemoryRouter>
+          <Sessions />
+        </MemoryRouter>
       </QueryClientProvider>
     )
 
@@ -166,7 +171,9 @@ describe('Sessions settings page', () => {
     const queryClient = new QueryClient()
     render(
       <QueryClientProvider client={queryClient}>
-        <Sessions />
+        <MemoryRouter>
+          <Sessions />
+        </MemoryRouter>
       </QueryClientProvider>
     )
 

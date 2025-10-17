@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { Download, RefreshCw, Trash2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { flexRender, getCoreRowModel, type ColumnDef, useReactTable } from '@tanstack/react-table'
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -40,6 +41,7 @@ import { toast } from '@/lib/utils/toast'
 import { downloadSessionRecording } from '@/lib/api/session-recordings'
 import type { ActiveConnectionSession } from '@/types/connections'
 import type { SessionRecordingScope, SessionRecordingSummary } from '@/types/session-recording'
+import { getWorkspaceDescriptor } from '@/workspaces/protocolWorkspaceRegistry'
 
 type TeamFilterValue = 'all' | 'personal' | 'custom' | string
 
@@ -208,6 +210,7 @@ function ActiveSessionsSection({
   isTeamsLoading,
 }: ActiveSessionsSectionProps) {
   const hasScopeAccess = canViewAll || canViewTeam
+  const navigate = useNavigate()
   const [scope, setScope] = useState<SessionRecordingScope>(() => (canViewTeam ? 'team' : 'all'))
   const [teamFilter, setTeamFilter] = useState<TeamFilterValue>('all')
   const [customTeam, setCustomTeam] = useState('')
@@ -257,6 +260,20 @@ function ActiveSessionsSection({
         ),
       },
       {
+        accessorKey: 'protocol_id',
+        header: () => 'Workspace',
+        cell: ({ row }) => {
+          const descriptor = getWorkspaceDescriptor(
+            row.original.descriptor_id ?? row.original.protocol_id
+          )
+          return (
+            <Badge variant="secondary" className="text-[11px] font-semibold">
+              {descriptor.displayName}
+            </Badge>
+          )
+        },
+      },
+      {
         accessorKey: 'owner',
         header: () => 'Owner',
         cell: ({ row }) => {
@@ -273,16 +290,6 @@ function ActiveSessionsSection({
         cell: ({ row }) => <span>{row.original.team_id ?? '—'}</span>,
       },
       {
-        accessorKey: 'protocol_id',
-        header: () => 'Protocol',
-        cell: ({ row }) => (
-          <Badge variant="outline" className="uppercase">
-            {row.original.protocol_id}
-          </Badge>
-        ),
-        size: 80,
-      },
-      {
         accessorKey: 'started_at',
         header: () => 'Started',
         cell: ({ row }) => <span>{formatRelativeTime(row.original.started_at)}</span>,
@@ -292,8 +299,35 @@ function ActiveSessionsSection({
         header: () => 'Last seen',
         cell: ({ row }) => <span>{formatRelativeTime(row.original.last_seen_at)}</span>,
       },
+      {
+        accessorKey: 'template_version',
+        header: () => 'Template',
+        cell: ({ row }) => <span>{row.original.template?.version ?? '—'}</span>,
+      },
+      {
+        id: 'actions',
+        header: () => 'Actions',
+        cell: ({ row }) => {
+          const descriptor = getWorkspaceDescriptor(
+            row.original.descriptor_id ?? row.original.protocol_id
+          )
+          return (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate(descriptor.defaultRoute(row.original.id))}
+            >
+              Resume
+            </Button>
+          )
+        },
+        enableSorting: false,
+        meta: {
+          align: 'end',
+        },
+      },
     ],
-    []
+    [navigate]
   )
 
   const table = useReactTable({

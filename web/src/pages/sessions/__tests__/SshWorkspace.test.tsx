@@ -162,8 +162,8 @@ vi.mock('@/store/ssh-workspace-store', () => {
   }
 })
 
-vi.mock('@/pages/sessions/ssh-workspace/useActiveSshSession', () => ({
-  useActiveSshSession: () => ({
+vi.mock('@/hooks/useActiveSession', () => ({
+  useActiveSession: () => ({
     session: {
       id: 'sess-1',
       connection_id: 'conn-1',
@@ -176,7 +176,7 @@ vi.mock('@/pages/sessions/ssh-workspace/useActiveSshSession', () => ({
       metadata: {},
       participants: {},
     },
-    activeSessions: [],
+    sessions: [],
     isLoading: false,
     isError: false,
   }),

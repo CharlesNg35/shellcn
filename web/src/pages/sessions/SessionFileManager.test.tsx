@@ -112,4 +112,38 @@ describe('SessionFileManager page', () => {
 
     expect(screen.getByText('Session unavailable')).toBeInTheDocument()
   })
+
+  it('shows disabled state when SFTP is not supported', () => {
+    mockUseActiveConnections.mockReturnValue({
+      data: [
+        {
+          id: 'sess-2',
+          connection_id: 'conn-2',
+          connection_name: 'Restricted Server',
+          user_id: 'usr-1',
+          user_name: 'Alice',
+          protocol_id: 'ssh',
+          started_at: '2024-01-02T00:00:00Z',
+          last_seen_at: '2024-01-02T01:00:00Z',
+          metadata: {
+            sftp_enabled: false,
+          },
+          participants: {},
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/active-sessions/sess-2/sftp']}>
+        <Routes>
+          <Route path="/active-sessions/:sessionId/sftp" element={<SessionFileManager />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(screen.getByText('SFTP disabled')).toBeInTheDocument()
+    expect(workspaceMock).not.toHaveBeenCalled()
+  })
 })

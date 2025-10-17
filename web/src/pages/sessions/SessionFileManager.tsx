@@ -8,6 +8,7 @@ import { useActiveConnections } from '@/hooks/useActiveConnections'
 import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { formatDistanceToNow } from 'date-fns'
+import { sessionSupportsSftp } from '@/lib/utils/sessionCapabilities'
 
 export function SessionFileManager() {
   const { sessionId = '' } = useParams<{ sessionId: string }>()
@@ -98,6 +99,16 @@ export function SessionFileManager() {
       <EmptyState
         title="Session unavailable"
         description="The requested session could not be found or is no longer active."
+        className="h-full"
+      />
+    )
+  }
+
+  if (!sessionSupportsSftp(session)) {
+    return (
+      <EmptyState
+        title="SFTP disabled"
+        description="File manager is not available for this session."
         className="h-full"
       />
     )

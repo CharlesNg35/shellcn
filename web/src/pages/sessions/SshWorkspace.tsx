@@ -13,8 +13,9 @@ import { useSshWorkspaceTabsStore } from '@/store/ssh-session-tabs-store'
 import { useSshWorkspaceStore } from '@/store/ssh-workspace-store'
 import type { SshTerminalHandle } from '@/components/workspace/SshTerminal'
 import { cn } from '@/lib/utils/cn'
+import { sessionSupportsSftp } from '@/lib/utils/sessionCapabilities'
 
-import { useActiveSshSession } from './ssh-workspace/useActiveSshSession'
+import { useActiveSession } from '@/hooks/useActiveSession'
 import { useSessionTabsLifecycle } from './ssh-workspace/useSessionTabsLifecycle'
 import { useWorkspaceSnippets } from './ssh-workspace/useWorkspaceSnippets'
 import { useCommandPaletteState } from './ssh-workspace/useCommandPaletteState'
@@ -51,7 +52,14 @@ export function SshWorkspace() {
   const { setOverride, clearOverride } = useBreadcrumb()
   const { hasPermission } = usePermissions()
 
-  const { session, activeSessions, isLoading, isError } = useActiveSshSession(sessionId)
+  const {
+    session,
+    sessions: activeSessions,
+    isLoading,
+    isError,
+  } = useActiveSession(sessionId, {
+    protocolId: 'ssh',
+  })
   const {
     status: recordingStatus,
     isLoading: recordingStatusLoading,
@@ -82,7 +90,8 @@ export function SshWorkspace() {
   const currentUserDisplayName = resolveDisplayName(currentUser)
 
   const canUseSnippets = hasPermission(PERMISSIONS.PROTOCOL.SSH.MANAGE_SNIPPETS)
-  const canUseSftp = hasPermission(PERMISSIONS.PROTOCOL.SSH.SFTP)
+  const sftpSupported = sessionSupportsSftp(session)
+  const canUseSftp = hasPermission(PERMISSIONS.PROTOCOL.SSH.SFTP) && sftpSupported
   const canShareSession = hasPermission(PERMISSIONS.PROTOCOL.SSH.SHARE)
   const canGrantWrite = hasPermission(PERMISSIONS.PROTOCOL.SSH.GRANT_WRITE)
 
@@ -114,13 +123,27 @@ export function SshWorkspace() {
       }
       ensureTab(session.id, 'terminal', { title: 'Terminal', closable: false })
     },
-    ensureSftpTab: () => {
-      if (!session) {
-        return
-      }
-      ensureTab(session.id, 'sftp', { title: 'Files', closable: true })
-    },
+    ensureSftpTab: canUseSftp
+      ? () => {
+          if (!session) {
+            return
+          }
+          ensureTab(session.id, 'sftp', { title: 'Files', closable: true })
+        }
+      : undefined,
   })
+
+  useEffect(() => {
+    if (!session || canUseSftp) {
+      return
+    }
+    const tabs = workspace?.tabs ?? []
+    tabs
+      .filter((tab) => tab.type === 'sftp')
+      .forEach((tab) => {
+        closeTab(session.id, tab.id)
+      })
+  }, [session, canUseSftp, workspace?.tabs, closeTab])
 
   useEffect(() => {
     const label = session?.connection_name ?? session?.connection_id
