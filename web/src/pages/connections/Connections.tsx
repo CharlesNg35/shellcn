@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import { Loader2, Plus, Search, Server, X } from 'lucide-react'
@@ -10,6 +10,7 @@ import { useConnections } from '@/hooks/useConnections'
 import { useConnectionFolders } from '@/hooks/useConnectionFolders'
 import { useTeams } from '@/hooks/useTeams'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useConnectionMutations } from '@/hooks/useConnectionMutations'
 import type { Protocol } from '@/types/protocols'
 import type { ActiveConnectionSession, ConnectionRecord } from '@/types/connections'
 import { ConnectionCard } from '@/components/connections/ConnectionCard'
@@ -70,6 +71,17 @@ export function Connections() {
     PERMISSIONS.PERMISSION.MANAGE,
   ])
   const canShareConnections = hasPermission(PERMISSIONS.CONNECTION.SHARE)
+  const canEditConnections = hasAnyPermission([
+    PERMISSIONS.CONNECTION.UPDATE,
+    PERMISSIONS.CONNECTION.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
+  const canDeleteConnections = hasAnyPermission([
+    PERMISSIONS.CONNECTION.DELETE,
+    PERMISSIONS.CONNECTION.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
+  const { remove: deleteConnectionMutation } = useConnectionMutations()
   const canViewConnections = hasAnyPermission([
     PERMISSIONS.CONNECTION.VIEW,
     PERMISSIONS.CONNECTION.VIEW_ALL,
@@ -338,6 +350,18 @@ export function Connections() {
     setShareModalOpen(true)
   }
 
+  const handleDeleteConnection = useCallback(
+    (connectionId: string) => {
+      const target = connections.find((conn) => conn.id === connectionId)
+      const label = target?.name ?? 'this connection'
+      if (!window.confirm(`Delete ${label}? This action cannot be undone.`)) {
+        return
+      }
+      deleteConnectionMutation.mutate(connectionId)
+    },
+    [connections, deleteConnectionMutation]
+  )
+
   return (
     <div className="flex h-full flex-col space-y-6 p-6">
       {/* Page Header */}
@@ -500,8 +524,9 @@ export function Connections() {
                   protocol={protocolLookup[connection.protocol_id]}
                   protocolIcon={resolveProtocolIcon(protocolLookup[connection.protocol_id])}
                   teamName={connection.team_id ? teamLookup[connection.team_id] : undefined}
-                  onEdit={handleOpenEditConnection}
+                  onEdit={canEditConnections ? handleOpenEditConnection : undefined}
                   onShare={canShareConnections ? handleOpenShareModal : undefined}
+                  onDelete={canDeleteConnections ? handleDeleteConnection : undefined}
                   activeSessions={activeSessionsByConnection[connection.id]}
                   showActiveUsers={isAdmin}
                 />

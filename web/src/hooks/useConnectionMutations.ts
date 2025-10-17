@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   createConnection,
   updateConnection,
+  deleteConnection,
   type ConnectionCreatePayload,
   type ConnectionUpdatePayload,
 } from '@/lib/api/connections'
@@ -53,8 +54,28 @@ export function useConnectionMutations() {
     },
   })
 
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteConnection(id),
+    onSuccess: async (_result, id) => {
+      await invalidate()
+      toast.success('Connection deleted', {
+        description: 'The connection has been removed.',
+      })
+      queryClient.removeQueries({
+        queryKey: [...CONNECTIONS_QUERY_BASE_KEY, { id }],
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = toApiError(error)
+      toast.error('Failed to delete connection', {
+        description: apiError.message,
+      })
+    },
+  })
+
   return {
     create,
     update,
+    remove,
   }
 }

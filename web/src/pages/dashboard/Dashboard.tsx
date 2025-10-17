@@ -12,6 +12,7 @@ import { useAvailableProtocols } from '@/hooks/useProtocols'
 import type { ConnectionRecord } from '@/types/connections'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { PERMISSIONS } from '@/constants/permissions'
+import { useLaunchConnectionContext } from '@/contexts/LaunchConnectionContext'
 
 export function Dashboard() {
   const { user } = useAuth()
@@ -219,10 +220,13 @@ function StatCard({ title, value, description, icon, loading }: StatCardProps) {
 }
 
 function RecentConnection({ connection }: { connection: ConnectionRecord }) {
+  const launch = useLaunchConnectionContext()
+
   return (
-    <Link
-      to={`/connections/${connection.id}`}
-      className="flex items-center justify-between px-6 py-4 transition hover:bg-muted/40"
+    <button
+      type="button"
+      onClick={() => launch.open(connection)}
+      className="flex w-full items-center justify-between px-6 py-4 text-left transition hover:bg-muted/40"
     >
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium text-foreground hover:underline">{connection.name}</p>
@@ -233,7 +237,7 @@ function RecentConnection({ connection }: { connection: ConnectionRecord }) {
       <Badge variant="outline" className="ml-4 shrink-0 text-xs capitalize">
         {connection.folder?.name ?? 'Unassigned'}
       </Badge>
-    </Link>
+    </button>
   )
 }
 

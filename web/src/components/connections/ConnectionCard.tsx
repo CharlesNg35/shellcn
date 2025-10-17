@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { MoreVertical, Clock, Pencil, Trash2, Share2, Rocket } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -158,55 +157,61 @@ export function ConnectionCard({
         </div>
 
         {/* Actions Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
-            aria-label="Connection actions"
-          >
-            <MoreVertical className="h-4 w-4" />
-          </button>
+        {Boolean(onEdit || onShare || onDelete) && (
+          <div className="relative">
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-foreground group-hover:opacity-100"
+              aria-label="Connection actions"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
 
-          {showMenu && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-              <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-border bg-popover p-1 shadow-lg">
-                <button
-                  onClick={() => {
-                    onEdit?.(connection.id)
-                    setShowMenu(false)
-                  }}
-                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-foreground hover:bg-accent"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit
-                </button>
-                {onShare && (
-                  <button
-                    onClick={() => {
-                      onShare(connection.id)
-                      setShowMenu(false)
-                    }}
-                    className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-foreground hover:bg-accent"
-                  >
-                    <Share2 className="h-4 w-4" />
-                    Share
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    onDelete?.(connection.id)
-                    setShowMenu(false)
-                  }}
-                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-border bg-popover p-1 shadow-lg">
+                  {onEdit && (
+                    <button
+                      onClick={() => {
+                        onEdit(connection.id)
+                        setShowMenu(false)
+                      }}
+                      className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-foreground hover:bg-accent"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </button>
+                  )}
+                  {onShare && (
+                    <button
+                      onClick={() => {
+                        onShare(connection.id)
+                        setShowMenu(false)
+                      }}
+                      className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-foreground hover:bg-accent"
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Share
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      onClick={() => {
+                        onDelete(connection.id)
+                        setShowMenu(false)
+                      }}
+                      className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Card Body */}
@@ -292,21 +297,14 @@ export function ConnectionCard({
 
       {/* Card Footer */}
       <div className="border-t border-border/40 bg-muted/20 p-3">
-        <div className="flex gap-2">
-          <Button
-            size="sm"
-            className="flex-1 font-medium"
-            onClick={() => launchContext.open(connection)}
-          >
-            <Rocket className="mr-1.5 h-3.5 w-3.5" />
-            Launch
-          </Button>
-          <Button size="sm" variant="outline" asChild>
-            <Link to={`/connections/${connection.id}/edit`}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        </div>
+        <Button
+          size="sm"
+          className="w-full font-medium"
+          onClick={() => launchContext.open(connection)}
+        >
+          <Rocket className="mr-1.5 h-3.5 w-3.5" />
+          Launch
+        </Button>
       </div>
     </div>
   )

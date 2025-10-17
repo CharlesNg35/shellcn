@@ -437,6 +437,11 @@ export async function updateConnection(
   return transformConnection(data)
 }
 
+export async function deleteConnection(id: string): Promise<void> {
+  const response = await apiClient.delete<ApiResponse<null>>(`${CONNECTIONS_ENDPOINT}/${id}`)
+  unwrapResponse(response)
+}
+
 export async function fetchConnectionShares(connectionId: string): Promise<ConnectionShare[]> {
   const response = await apiClient.get<ApiResponse<ConnectionShareResponse[]>>(
     `${CONNECTIONS_ENDPOINT}/${connectionId}/shares`

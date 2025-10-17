@@ -19,6 +19,10 @@ vi.mock('@/hooks/useConnectionMutations', () => ({
       mutateAsync,
       isPending: false,
     },
+    remove: {
+      mutateAsync,
+      isPending: false,
+    },
   }),
 }))
 
