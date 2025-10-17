@@ -17,7 +17,7 @@ Each driver receives its own spec file under `specs/project/drivers/<driver-id>.
 2. **Connection Schema** – base settings persisted in `connections.settings` (host, port, namespace, context, path, etc.). Include `required?`, `default`, `validation`, and the capability flag(s) each property unlocks.
 3. **Identity Requirements** – identities or vault credentials needed (e.g. SSH key, kubeconfig, Docker TLS cert). Specify secret schema keys so Credential Vault integration can be automated.
 4. **Permission Profile** – list of permission ids (base + optional). Align with section 4 below.
-5. **Frontend Contract** – form panels, quick actions, optional wizards, capability-specific UI toggles.
+5. **Frontend Contract** – form panels, quick actions, optional wizards, capability-specific UI toggles. For drivers that implement dynamic connection fields, document the connection template described in §11.
 6. **Testing Guidance** – driver-specific fixtures, integration tests, and mocks.
 7. **Future Enhancements** – optional roadmap for driver-specific features.
 
@@ -218,6 +218,38 @@ Driver → Driver Registry → Database → API
 - Any config change that toggles driver availability must update the relevant spec sections (config schema + permission updates).
 - **`Descriptor()` method**: Still supported for backward compatibility but deprecated. Use direct metadata methods instead.
 
+### 10.3 Dynamic Connection Templates (2025-02 Proposal)
+
+> See `specs/plans/1.core/DYNAMIC_CONNECTION_FORM_SPEC.md` for the full implementation plan.
+
+Drivers can optionally publish a connection configuration schema so the platform renders protocol-specific fields dynamically.
+
+- **Interface**
+
+  - Implement `ConnectionTemplater` in addition to `Driver`, `Launcher`, etc.:
+
+    ```go
+    type ConnectionTemplater interface {
+        ConnectionTemplate() (*drivers.ConnectionTemplate, error)
+    }
+    ```
+
+  - Templates describe sections/fields, validation rules, and bindings (e.g., settings map vs. `connection_targets`).
+  - Shared fields (name, description, folder, team, icon, identity selector) remain part of the common form shell; drivers should not duplicate them.
+
+- **Driver registration pattern**
+
+  - Construct the template during driver initialisation and return it from `ConnectionTemplate()`.
+  - Version templates (e.g., `"2025-01-01"`) so the catalog can detect schema changes and trigger migrations.
+  - Reference the template schema inside the driver spec file (`specs/project/drivers/<driver-id>.md`) alongside credential requirements.
+
+- **Platform responsibilities**
+  - `ProtocolCatalogService.Sync` persists templates from drivers implementing the interface.
+  - Backend connection services validate create/update payloads against the template and normalise settings/targets.
+  - Frontend form builder fetches the template through `/api/protocols/:id/connection-template` (planned) and renders driver-specific fields automatically.
+
+Until the registry ships, implementing `ConnectionTemplater` is recommended for new drivers so the UI can adopt the dynamic form without additional code changes.
+
 ## 11. Session Lifecycle & Active Connection Tracking
 
 Active connection visibility is powered by `services.ActiveSessionService`. Every launcher-enabled driver participates in the following flow:
@@ -289,37 +321,43 @@ Shared sessions allow multiple users to attach to the same live connection. All 
 When users work across multiple protocol types (SSH, K8s, Docker, etc.), the frontend must preserve component state when switching between protocols.
 
 **Requirements**:
+
 1. **Component Lifecycle**
+
    - Keep up to 3 protocol workspace components mounted simultaneously
    - Use CSS `display: none` for inactive protocols (not unmount)
    - Evict least-recently-used protocol when mounting 4th type
 
 2. **State Preservation**
+
    - Terminal buffers (xterm instances) remain in memory when switching away
    - SFTP navigation history and open tabs persist
    - WebSocket connections stay alive in background
    - Split pane layouts saved per active session
 
 3. **Workspace Store Contract**
+
    ```typescript
    interface ProtocolWorkspace {
-     protocolType: string
-     sessions: Map<string, SessionState>  // sessionId → state
-     layout: SplitLayout
-     lastActiveAt: number
+     protocolType: string;
+     sessions: Map<string, SessionState>; // sessionId → state
+     layout: SplitLayout;
+     lastActiveAt: number;
    }
 
    // Global store
-   workspaces: Map<ProtocolType, ProtocolWorkspace>
+   workspaces: Map<ProtocolType, ProtocolWorkspace>;
    ```
 
 4. **Routing Strategy**
+
    - Route pattern: `/active-sessions/:sessionId`
    - Protocol inferred from session metadata
    - Clicking sidebar entry focuses existing tab or creates new one
    - URL sync: navigating to session URL rehydrates workspace state
 
 5. **Memory Management**
+
    - Enforce max scrollback (1000 lines) per terminal
    - Clear buffers on explicit session close
    - Warn user if >3 protocols mounted (memory usage banner)

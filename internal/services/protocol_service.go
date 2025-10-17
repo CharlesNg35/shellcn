@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/charlesng35/shellcn/internal/drivers"
@@ -18,20 +20,22 @@ import (
 
 // ProtocolInfo represents a protocol record returned to API consumers.
 type ProtocolInfo struct {
-	ID            string               `json:"id"`
-	Name          string               `json:"name"`
-	Module        string               `json:"module"`
-	Description   string               `json:"description"`
-	Category      string               `json:"category"`
-	Icon          string               `json:"icon"`
-	DefaultPort   int                  `json:"default_port"`
-	SortOrder     int                  `json:"sort_order"`
-	Features      []string             `json:"features"`
-	Capabilities  drivers.Capabilities `json:"capabilities"`
-	DriverEnabled bool                 `json:"driver_enabled"`
-	ConfigEnabled bool                 `json:"config_enabled"`
-	Available     bool                 `json:"available"`
-	Permissions   []ProtocolPermission `json:"permissions"`
+	ID                        string               `json:"id"`
+	Name                      string               `json:"name"`
+	Module                    string               `json:"module"`
+	Description               string               `json:"description"`
+	Category                  string               `json:"category"`
+	Icon                      string               `json:"icon"`
+	DefaultPort               int                  `json:"default_port"`
+	SortOrder                 int                  `json:"sort_order"`
+	Features                  []string             `json:"features"`
+	Capabilities              drivers.Capabilities `json:"capabilities"`
+	DriverEnabled             bool                 `json:"driver_enabled"`
+	ConfigEnabled             bool                 `json:"config_enabled"`
+	Available                 bool                 `json:"available"`
+	ConnectionTemplateVersion string               `json:"connection_template_version,omitempty"`
+	IdentityRequired          bool                 `json:"identity_required"`
+	Permissions               []ProtocolPermission `json:"permissions"`
 }
 
 // ProtocolPermission describes permission metadata associated with a protocol/driver.
@@ -72,9 +76,29 @@ func (s *ProtocolService) ListAll(ctx context.Context) ([]ProtocolInfo, error) {
 		return nil, fmt.Errorf("protocol service: list protocols: %w", err)
 	}
 
+	idSet := make(map[string]struct{}, len(rows))
+	driverIDs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if _, exists := idSet[row.DriverID]; exists {
+			continue
+		}
+		id := strings.TrimSpace(row.DriverID)
+		if id == "" {
+			continue
+		}
+		idSet[id] = struct{}{}
+		driverIDs = append(driverIDs, id)
+	}
+
+	templates, err := s.loadLatestTemplates(ctx, driverIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	infos := make([]ProtocolInfo, 0, len(rows))
 	for _, row := range rows {
-		info, err := mapProtocolRow(row)
+		template := templates[strings.TrimSpace(row.DriverID)]
+		info, err := mapProtocolRow(row, template)
 		if err != nil {
 			return nil, err
 		}
@@ -146,7 +170,7 @@ func filterAvailable(protocols []ProtocolInfo) []ProtocolInfo {
 	return filtered
 }
 
-func mapProtocolRow(row models.ConnectionProtocol) (ProtocolInfo, error) {
+func mapProtocolRow(row models.ConnectionProtocol, template *models.ConnectionTemplate) (ProtocolInfo, error) {
 	var features []string
 	if len(row.Features) > 0 {
 		if err := json.Unmarshal(row.Features, &features); err != nil {
@@ -166,7 +190,7 @@ func mapProtocolRow(row models.ConnectionProtocol) (ProtocolInfo, error) {
 
 	available := row.DriverEnabled && row.ConfigEnabled
 
-	return ProtocolInfo{
+	info := ProtocolInfo{
 		ID:            row.ProtocolID,
 		Name:          row.Name,
 		Module:        row.Module,
@@ -181,7 +205,72 @@ func mapProtocolRow(row models.ConnectionProtocol) (ProtocolInfo, error) {
 		ConfigEnabled: row.ConfigEnabled,
 		Available:     available,
 		Permissions:   mapProtocolPermissions(row.ProtocolID),
-	}, nil
+	}
+
+	if template != nil {
+		info.ConnectionTemplateVersion = template.Version
+		info.IdentityRequired = metadataBool(template.Metadata, "requires_identity")
+	}
+
+	return info, nil
+}
+
+func (s *ProtocolService) loadLatestTemplates(ctx context.Context, driverIDs []string) (map[string]*models.ConnectionTemplate, error) {
+	if len(driverIDs) == 0 {
+		return map[string]*models.ConnectionTemplate{}, nil
+	}
+
+	var records []models.ConnectionTemplate
+	if err := s.db.WithContext(ctx).
+		Where("driver_id IN ?", driverIDs).
+		Order("driver_id ASC, created_at DESC").
+		Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("protocol service: load connection templates: %w", err)
+	}
+
+	result := make(map[string]*models.ConnectionTemplate, len(records))
+	for i := range records {
+		record := records[i]
+		if _, exists := result[record.DriverID]; exists {
+			continue
+		}
+		copy := record
+		result[record.DriverID] = &copy
+	}
+
+	return result, nil
+}
+
+func metadataBool(data datatypes.JSON, key string) bool {
+	if len(data) == 0 {
+		return false
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return false
+	}
+	value, ok := meta[key]
+	if !ok {
+		return false
+	}
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		parsed, err := strconv.ParseBool(strings.TrimSpace(v))
+		if err == nil {
+			return parsed
+		}
+	case float64:
+		return v != 0
+	case int:
+		return v != 0
+	case json.Number:
+		if f, err := v.Float64(); err == nil {
+			return f != 0
+		}
+	}
+	return false
 }
 
 func mapProtocolPermissions(protocolID string) []ProtocolPermission {

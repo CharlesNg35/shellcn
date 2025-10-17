@@ -113,7 +113,9 @@ export function CredentialFieldInput({ field, control, disabled }: CredentialFie
   }
 
   const allowFileImport =
-    field.input_modes?.includes('file') || field.type === 'file' || metadata.allow_file_import === true
+    field.input_modes?.includes('file') ||
+    field.type === 'file' ||
+    metadata.allow_file_import === true
   const wantsTextarea =
     field.input_modes?.includes('textarea') || metadata.multiline === true || field.type === 'file'
   const InputComponent = wantsTextarea ? Textarea : Input
@@ -209,9 +211,9 @@ export function CredentialFieldInput({ field, control, disabled }: CredentialFie
       {field.description ? (
         <p className="text-xs text-muted-foreground">{field.description}</p>
       ) : null}
-        {metadata.hint ? (
-          <p className="text-xs text-muted-foreground">{String(metadata.hint)}</p>
-        ) : null}
+      {metadata.hint ? (
+        <p className="text-xs text-muted-foreground">{String(metadata.hint)}</p>
+      ) : null}
       {field.type === 'secret' && disabled ? (
         <p className="text-xs text-muted-foreground">
           Hidden for security. Enable rotation to update this secret.

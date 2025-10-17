@@ -36,10 +36,18 @@ export interface ConnectionShareSummary {
   entries: ConnectionShareEntry[]
 }
 
+export interface ConnectionTemplateMetadata {
+  driver_id?: string
+  version?: string
+  fields?: Record<string, unknown>
+  [key: string]: unknown
+}
+
 export interface ConnectionMetadata {
   icon?: string
   color?: string
   tags?: string[]
+  connection_template?: ConnectionTemplateMetadata
   [key: string]: unknown
 }
 

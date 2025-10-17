@@ -22,19 +22,27 @@ var (
 	_ drivers.Driver              = (*Driver)(nil)
 	_ drivers.HealthReporter      = (*Driver)(nil)
 	_ drivers.CredentialTemplater = (*Driver)(nil)
+	_ drivers.ConnectionTemplater = (*Driver)(nil)
+)
+
+const (
+	sshTemplateVersion = "2025-01-15"
+	hostnamePattern    = `^[a-zA-Z0-9._-]+$`
 )
 
 // Driver implements the drivers.Driver interface for SSH and SFTP descriptors.
 type Driver struct {
 	drivers.BaseDriver
-	caps drivers.Capabilities
+	caps     drivers.Capabilities
+	template *drivers.ConnectionTemplate
 }
 
 // newDriver constructs a driver instance with shared metadata and capability flags.
-func newDriver(desc drivers.Descriptor, caps drivers.Capabilities) *Driver {
+func newDriver(desc drivers.Descriptor, caps drivers.Capabilities, template *drivers.ConnectionTemplate) *Driver {
 	return &Driver{
 		BaseDriver: drivers.NewBaseDriver(desc),
 		caps:       caps,
+		template:   template,
 	}
 }
 
@@ -56,7 +64,7 @@ func NewSSHDriver() *Driver {
 			"shareable": true,
 			"sftp":      true,
 		},
-	})
+	}, newSSHTemplate())
 }
 
 // NewSFTPDriver returns the SFTP file transfer descriptor backed by the SSH driver.
@@ -73,7 +81,7 @@ func NewSFTPDriver() *Driver {
 		Extras: map[string]bool{
 			"ssh_transport": true,
 		},
-	})
+	}, nil)
 }
 
 // Capabilities reports the supported feature flags for the driver instance.
@@ -96,6 +104,220 @@ func (d *Driver) Description() string {
 // DefaultPort returns the conventional SSH port.
 func (d *Driver) DefaultPort() int {
 	return 22
+}
+
+// ConnectionTemplate publishes the dynamic connection schema for SSH.
+func (d *Driver) ConnectionTemplate() (*drivers.ConnectionTemplate, error) {
+	if d.ID() != DriverIDSSH {
+		return nil, nil
+	}
+	return d.template, nil
+}
+
+func newSSHTemplate() *drivers.ConnectionTemplate {
+	return &drivers.ConnectionTemplate{
+		DriverID:    DriverIDSSH,
+		Version:     sshTemplateVersion,
+		DisplayName: "SSH Connection",
+		Description: "Configure host, port, and session behaviour for SSH connections.",
+		Metadata: map[string]any{
+			"requires_identity": true,
+		},
+		Sections: []drivers.ConnectionSection{
+			{
+				ID:    "endpoint",
+				Label: "Endpoint",
+				Fields: []drivers.ConnectionField{
+					{
+						Key:         "host",
+						Label:       "Host",
+						Type:        drivers.ConnectionFieldTypeTargetHost,
+						Required:    true,
+						Placeholder: "server.example.com",
+						Validation: map[string]any{
+							"pattern": hostnamePattern,
+						},
+						Binding: &drivers.ConnectionBinding{
+							Target:   drivers.BindingTargetConnectionTarget,
+							Index:    0,
+							Property: "host",
+						},
+					},
+					{
+						Key:     "port",
+						Label:   "Port",
+						Type:    drivers.ConnectionFieldTypeTargetPort,
+						Default: 22,
+						Validation: map[string]any{
+							"min": 1,
+							"max": 65535,
+						},
+						Binding: &drivers.ConnectionBinding{
+							Target:   drivers.BindingTargetConnectionTarget,
+							Index:    0,
+							Property: "port",
+						},
+					},
+				},
+			},
+			{
+				ID:    "session",
+				Label: "Session Behaviour",
+				Fields: []drivers.ConnectionField{
+					{
+						Key:      "session_override_enabled",
+						Label:    "Custom Session Overrides",
+						Type:     drivers.ConnectionFieldTypeBoolean,
+						Default:  false,
+						HelpText: "Toggle to override concurrency and timeout defaults for this connection.",
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetMetadata,
+							Path:   "session_override.enabled",
+						},
+					},
+					{
+						Key:      "concurrent_limit",
+						Label:    "Concurrent Sessions",
+						Type:     drivers.ConnectionFieldTypeNumber,
+						Default:  0,
+						HelpText: "Maximum concurrent sessions. Zero uses the global default.",
+						Validation: map[string]any{
+							"min": 0,
+							"max": 1000,
+						},
+						Dependencies: []drivers.FieldDependency{
+							{Field: "session_override_enabled", Equals: true},
+						},
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetSettings,
+							Path:   "concurrent_limit",
+						},
+					},
+					{
+						Key:      "idle_timeout_minutes",
+						Label:    "Idle Timeout (minutes)",
+						Type:     drivers.ConnectionFieldTypeNumber,
+						Default:  0,
+						HelpText: "Disconnect after N minutes of inactivity. Zero disables the override.",
+						Validation: map[string]any{
+							"min": 0,
+							"max": 10080,
+						},
+						Dependencies: []drivers.FieldDependency{
+							{Field: "session_override_enabled", Equals: true},
+						},
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetSettings,
+							Path:   "idle_timeout_minutes",
+						},
+					},
+					{
+						Key:      "enable_sftp",
+						Label:    "Enable SFTP",
+						Type:     drivers.ConnectionFieldTypeBoolean,
+						Default:  true,
+						HelpText: "Allow SFTP alongside SSH sessions.",
+						Dependencies: []drivers.FieldDependency{
+							{Field: "session_override_enabled", Equals: true},
+						},
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetSettings,
+							Path:   "enable_sftp",
+						},
+					},
+					{
+						Key:      "recording_enabled",
+						Label:    "Enable Session Recording",
+						Type:     drivers.ConnectionFieldTypeBoolean,
+						Default:  false,
+						HelpText: "Capture session activity when optional recording is enabled.",
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetSettings,
+							Path:   "recording_enabled",
+						},
+					},
+				},
+			},
+			{
+				ID:    "terminal",
+				Label: "Terminal Overrides",
+				Fields: []drivers.ConnectionField{
+					{
+						Key:      "terminal_override_enabled",
+						Label:    "Custom Terminal Settings",
+						Type:     drivers.ConnectionFieldTypeBoolean,
+						Default:  false,
+						HelpText: "Toggle to override default terminal appearance for this connection.",
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetMetadata,
+							Path:   "terminal_override.enabled",
+						},
+					},
+					{
+						Key:         "terminal_font_family",
+						Label:       "Font Family",
+						Type:        drivers.ConnectionFieldTypeString,
+						Default:     "monospace",
+						Placeholder: "JetBrains Mono, Fira Code",
+						Dependencies: []drivers.FieldDependency{
+							{Field: "terminal_override_enabled", Equals: true},
+						},
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetSettings,
+							Path:   "terminal_config_override.font_family",
+						},
+					},
+					{
+						Key:     "terminal_font_size",
+						Label:   "Font Size",
+						Type:    drivers.ConnectionFieldTypeNumber,
+						Default: 14,
+						Validation: map[string]any{
+							"min": 8,
+							"max": 96,
+						},
+						Dependencies: []drivers.FieldDependency{
+							{Field: "terminal_override_enabled", Equals: true},
+						},
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetSettings,
+							Path:   "terminal_config_override.font_size",
+						},
+					},
+					{
+						Key:     "terminal_scrollback_limit",
+						Label:   "Scrollback Limit",
+						Type:    drivers.ConnectionFieldTypeNumber,
+						Default: 1000,
+						Validation: map[string]any{
+							"min": 200,
+							"max": 10000,
+						},
+						Dependencies: []drivers.FieldDependency{
+							{Field: "terminal_override_enabled", Equals: true},
+						},
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetSettings,
+							Path:   "terminal_config_override.scrollback_limit",
+						},
+					},
+					{
+						Key:     "terminal_enable_webgl",
+						Label:   "Enable WebGL renderer",
+						Type:    drivers.ConnectionFieldTypeBoolean,
+						Default: true,
+						Dependencies: []drivers.FieldDependency{
+							{Field: "terminal_override_enabled", Equals: true},
+						},
+						Binding: &drivers.ConnectionBinding{
+							Target: drivers.BindingTargetSettings,
+							Path:   "terminal_config_override.enable_webgl",
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 // HealthCheck performs a lightweight validation ensuring the SSH implementation is usable.

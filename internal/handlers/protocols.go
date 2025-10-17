@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -13,12 +14,13 @@ import (
 
 // ProtocolHandler delivers protocol catalogue endpoints.
 type ProtocolHandler struct {
-	service *services.ProtocolService
+	service   *services.ProtocolService
+	templates *services.ConnectionTemplateService
 }
 
 // NewProtocolHandler constructs a ProtocolHandler instance.
-func NewProtocolHandler(service *services.ProtocolService) *ProtocolHandler {
-	return &ProtocolHandler{service: service}
+func NewProtocolHandler(service *services.ProtocolService, templates *services.ConnectionTemplateService) *ProtocolHandler {
+	return &ProtocolHandler{service: service, templates: templates}
 }
 
 // GET /api/protocols
@@ -58,4 +60,24 @@ func (h *ProtocolHandler) ListPermissions(c *gin.Context) {
 		"permissions": perms,
 		"count":       len(perms),
 	})
+}
+
+// GET /api/protocols/:id/connection-template
+func (h *ProtocolHandler) GetConnectionTemplate(c *gin.Context) {
+	if h.templates == nil {
+		response.Success(c, http.StatusOK, gin.H{"template": nil})
+		return
+	}
+	protocolID := strings.TrimSpace(c.Param("id"))
+	if protocolID == "" {
+		response.Error(c, errors.NewBadRequest("protocol id is required"))
+		return
+	}
+
+	template, err := h.templates.Resolve(requestContext(c), protocolID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, gin.H{"template": template})
 }

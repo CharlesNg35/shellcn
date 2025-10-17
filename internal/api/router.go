@@ -266,7 +266,15 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	// ---------------------------------------------------------------------------
 	// Connections & Sharing
 	// ---------------------------------------------------------------------------
-	connectionSvc, err := services.NewConnectionService(db, checker, services.WithConnectionVault(vaultSvc))
+	connectionTemplateSvc, err := services.NewConnectionTemplateService(db, driverReg)
+	if err != nil {
+		return nil, err
+	}
+
+	connectionSvc, err := services.NewConnectionService(db, checker,
+		services.WithConnectionVault(vaultSvc),
+		services.WithConnectionTemplates(connectionTemplateSvc),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +397,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 			return monitoring.ProbeResult{Status: monitoring.StatusUp, Duration: time.Since(start)}
 		}))
 	}
-	protocolHandler := handlers.NewProtocolHandler(protocolSvc)
+	protocolHandler := handlers.NewProtocolHandler(protocolSvc, connectionTemplateSvc)
 	registerProtocolRoutes(api, protocolHandler, checker)
 
 	// ---------------------------------------------------------------------------

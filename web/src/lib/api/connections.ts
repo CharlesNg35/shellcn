@@ -25,6 +25,7 @@ export interface ConnectionCreatePayload {
   folder_id?: string | null
   metadata?: Record<string, unknown>
   settings?: Record<string, unknown>
+  fields?: Record<string, unknown>
   grant_team_permissions?: string[]
   identity_id?: string | null
 }
@@ -36,6 +37,7 @@ export interface ConnectionUpdatePayload {
   folder_id?: string | null
   metadata?: Record<string, unknown>
   settings?: Record<string, unknown>
+  fields?: Record<string, unknown>
   identity_id?: string | null
 }
 

@@ -98,6 +98,7 @@ func (h *ConnectionHandler) Create(c *gin.Context) {
 		FolderID:       payload.FolderID,
 		Metadata:       payload.Metadata,
 		Settings:       payload.Settings,
+		Fields:         payload.Fields,
 		IdentityID:     payload.IdentityID,
 		InlineIdentity: inlineIdentity,
 	})
@@ -144,6 +145,7 @@ func (h *ConnectionHandler) Update(c *gin.Context) {
 		FolderID:    payload.FolderID,
 		Metadata:    payload.Metadata,
 		Settings:    payload.Settings,
+		Fields:      payload.Fields,
 		IdentityID:  payload.IdentityID,
 	})
 	if err != nil {
@@ -246,6 +248,7 @@ type createConnectionPayload struct {
 	FolderID             *string                `json:"folder_id"`
 	Metadata             map[string]any         `json:"metadata"`
 	Settings             map[string]any         `json:"settings"`
+	Fields               map[string]any         `json:"fields"`
 	GrantTeamPermissions []string               `json:"grant_team_permissions"`
 	IdentityID           *string                `json:"identity_id"`
 	InlineIdentity       *inlineIdentityPayload `json:"inline_identity"`
@@ -258,6 +261,7 @@ type updateConnectionPayload struct {
 	FolderID    *string        `json:"folder_id"`
 	Metadata    map[string]any `json:"metadata"`
 	Settings    map[string]any `json:"settings"`
+	Fields      map[string]any `json:"fields"`
 	IdentityID  *string        `json:"identity_id"`
 }
 

@@ -115,9 +115,10 @@ type ListConnectionsResult struct {
 
 // ConnectionService orchestrates read operations for connections.
 type ConnectionService struct {
-	db      *gorm.DB
-	checker PermissionChecker
-	vault   *VaultService
+	db        *gorm.DB
+	checker   PermissionChecker
+	vault     *VaultService
+	templates *ConnectionTemplateService
 }
 
 // ConnectionServiceOption configures optional behaviours for the connection service.
@@ -130,6 +131,13 @@ func WithConnectionVault(vault *VaultService) ConnectionServiceOption {
 	}
 }
 
+// WithConnectionTemplates attaches a connection template service for schema validation.
+func WithConnectionTemplates(templates *ConnectionTemplateService) ConnectionServiceOption {
+	return func(s *ConnectionService) {
+		s.templates = templates
+	}
+}
+
 // CreateConnectionInput describes the fields needed to create a connection.
 type CreateConnectionInput struct {
 	Name           string
@@ -139,6 +147,7 @@ type CreateConnectionInput struct {
 	FolderID       *string
 	Metadata       map[string]any
 	Settings       map[string]any
+	Fields         map[string]any
 	IdentityID     *string
 	InlineIdentity *InlineIdentityInput
 }
@@ -151,6 +160,7 @@ type UpdateConnectionInput struct {
 	FolderID    *string
 	Metadata    map[string]any
 	Settings    map[string]any
+	Fields      map[string]any
 	IdentityID  *string
 }
 
@@ -164,6 +174,43 @@ type InlineIdentityInput struct {
 type connectionIdentityPlan struct {
 	identityID *string
 	after      func(ctx context.Context, tx *gorm.DB, connectionID string) error
+}
+
+func cloneAnyMap(src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return nil
+	}
+	copy := make(map[string]any, len(src))
+	for k, v := range src {
+		copy[k] = v
+	}
+	return copy
+}
+
+func mergeAnyMaps(dst map[string]any, src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return dst
+	}
+	if dst == nil {
+		dst = make(map[string]any, len(src))
+	}
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func cloneTargets(src []models.ConnectionTarget) []models.ConnectionTarget {
+	if len(src) == 0 {
+		return nil
+	}
+	cloned := make([]models.ConnectionTarget, len(src))
+	for i, target := range src {
+		cloned[i] = target
+		cloned[i].BaseModel = models.BaseModel{}
+		cloned[i].ConnectionID = ""
+	}
+	return cloned
 }
 
 // NewConnectionService constructs a ConnectionService.
@@ -218,6 +265,43 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 		return nil, apperrors.NewBadRequest("vault integration is required for inline identities")
 	}
 
+	metadataMap := cloneAnyMap(input.Metadata)
+	settingsMap := cloneAnyMap(nil)
+	var targets []models.ConnectionTarget
+
+	if s.templates != nil {
+		template, err := s.templates.Resolve(ctx, protocolID)
+		if err != nil {
+			return nil, err
+		}
+		if template != nil {
+			materialised, err := s.templates.Materialise(template, input.Fields)
+			if err != nil {
+				return nil, err
+			}
+			if materialised != nil {
+				if len(materialised.Settings) > 0 {
+					settingsMap = mergeAnyMaps(settingsMap, materialised.Settings)
+				}
+				if len(materialised.Metadata) > 0 {
+					metadataMap = mergeAnyMaps(metadataMap, materialised.Metadata)
+				}
+				targets = cloneTargets(materialised.Targets)
+				metadataMap = mergeAnyMaps(metadataMap, map[string]any{
+					"connection_template": map[string]any{
+						"driver_id": template.DriverID,
+						"version":   template.Version,
+						"fields":    materialised.Fields,
+					},
+				})
+			}
+		}
+	}
+
+	if len(input.Settings) > 0 {
+		settingsMap = mergeAnyMaps(settingsMap, input.Settings)
+	}
+
 	connection := models.Connection{
 		Name:        name,
 		Description: strings.TrimSpace(input.Description),
@@ -235,16 +319,16 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 		connection.IdentityID = plan.identityID
 	}
 
-	if input.Metadata != nil {
-		data, marshalErr := json.Marshal(input.Metadata)
+	if len(metadataMap) > 0 {
+		data, marshalErr := json.Marshal(metadataMap)
 		if marshalErr != nil {
 			return nil, apperrors.NewBadRequest("invalid metadata payload")
 		}
 		connection.Metadata = datatypes.JSON(data)
 	}
 
-	if input.Settings != nil {
-		data, marshalErr := json.Marshal(input.Settings)
+	if len(settingsMap) > 0 {
+		data, marshalErr := json.Marshal(settingsMap)
 		if marshalErr != nil {
 			return nil, apperrors.NewBadRequest("invalid settings payload")
 		}
@@ -254,6 +338,15 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&connection).Error; err != nil {
 			return fmt.Errorf("connection service: create connection: %w", err)
+		}
+
+		if len(targets) > 0 {
+			for i := range targets {
+				targets[i].ConnectionID = connection.ID
+			}
+			if err := tx.Create(&targets).Error; err != nil {
+				return fmt.Errorf("connection service: create connection targets: %w", err)
+			}
 		}
 
 		if plan != nil && plan.after != nil {
@@ -317,6 +410,52 @@ func (s *ConnectionService) Update(ctx context.Context, userID, connectionID str
 		return nil, apperrors.ErrForbidden
 	}
 
+	existingMetadata := decodeJSONMap(connection.Metadata)
+
+	metadataMap := cloneAnyMap(existingMetadata)
+	if input.Metadata != nil {
+		metadataMap = cloneAnyMap(input.Metadata)
+	}
+
+	settingsMap := cloneAnyMap(nil)
+	if input.Settings != nil {
+		settingsMap = mergeAnyMaps(settingsMap, input.Settings)
+	}
+
+	shouldUpdateMetadata := input.Metadata != nil
+	shouldUpdateSettings := input.Settings != nil
+	templateUsed := false
+	var targets []models.ConnectionTarget
+
+	if s.templates != nil {
+		template, err := s.templates.Resolve(ctx, connection.ProtocolID)
+		if err != nil {
+			return nil, err
+		}
+		if template != nil {
+			materialised, err := s.templates.Materialise(template, input.Fields)
+			if err != nil {
+				return nil, err
+			}
+			templateUsed = true
+			settingsMap = cloneAnyMap(materialised.Settings)
+			if input.Settings != nil {
+				settingsMap = mergeAnyMaps(settingsMap, input.Settings)
+			}
+			metadataMap = mergeAnyMaps(metadataMap, materialised.Metadata)
+			metadataMap = mergeAnyMaps(metadataMap, map[string]any{
+				"connection_template": map[string]any{
+					"driver_id": template.DriverID,
+					"version":   template.Version,
+					"fields":    materialised.Fields,
+				},
+			})
+			shouldUpdateMetadata = true
+			shouldUpdateSettings = true
+			targets = cloneTargets(materialised.Targets)
+		}
+	}
+
 	updates := map[string]any{
 		"name":        name,
 		"description": strings.TrimSpace(input.Description),
@@ -332,11 +471,11 @@ func (s *ConnectionService) Update(ctx context.Context, userID, connectionID str
 		updates["identity_id"] = normalizeOptionalID(input.IdentityID)
 	}
 
-	if input.Metadata != nil {
-		if len(input.Metadata) == 0 {
+	if shouldUpdateMetadata {
+		if len(metadataMap) == 0 {
 			updates["metadata"] = nil
 		} else {
-			data, err := json.Marshal(input.Metadata)
+			data, err := json.Marshal(metadataMap)
 			if err != nil {
 				return nil, apperrors.NewBadRequest("invalid metadata payload")
 			}
@@ -344,11 +483,11 @@ func (s *ConnectionService) Update(ctx context.Context, userID, connectionID str
 		}
 	}
 
-	if input.Settings != nil {
-		if len(input.Settings) == 0 {
+	if shouldUpdateSettings {
+		if len(settingsMap) == 0 {
 			updates["settings"] = nil
 		} else {
-			data, err := json.Marshal(input.Settings)
+			data, err := json.Marshal(settingsMap)
 			if err != nil {
 				return nil, apperrors.NewBadRequest("invalid settings payload")
 			}
@@ -359,6 +498,19 @@ func (s *ConnectionService) Update(ctx context.Context, userID, connectionID str
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&models.Connection{}).Where("id = ?", connection.ID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("connection service: update connection: %w", err)
+		}
+		if templateUsed {
+			if err := tx.Where("connection_id = ?", connection.ID).Delete(&models.ConnectionTarget{}).Error; err != nil {
+				return fmt.Errorf("connection service: clear connection targets: %w", err)
+			}
+			if len(targets) > 0 {
+				for i := range targets {
+					targets[i].ConnectionID = connection.ID
+				}
+				if err := tx.Create(&targets).Error; err != nil {
+					return fmt.Errorf("connection service: upsert connection targets: %w", err)
+				}
+			}
 		}
 		if err := tx.Preload("Folder").First(&connection, "id = ?", connection.ID).Error; err != nil {
 			return fmt.Errorf("connection service: reload connection: %w", err)
