@@ -8,9 +8,12 @@ import {
   useRef,
   useState,
 } from 'react'
+
 import { cn } from '@/lib/utils/cn'
 import { useSshTerminalStream } from '@/hooks/useSshTerminalStream'
 import type { SshTerminalEvent } from '@/types/ssh'
+import { buildWebSocketUrl } from '@/lib/utils/websocket'
+import type { SessionTunnelEntry } from '@/store/ssh-session-tunnel-store'
 
 interface SshTerminalProps {
   sessionId: string
@@ -23,6 +26,8 @@ interface SshTerminalProps {
     direction: 'next' | 'previous'
   }
   onSearchResolved?: (result: { matched: boolean }) => void
+  tunnel?: SessionTunnelEntry
+  activeTabId?: string
 }
 
 export interface SshTerminalHandle {
@@ -45,7 +50,16 @@ function isStreamData(event: SshTerminalEvent) {
 }
 
 export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(function SshTerminal(
-  { sessionId, className, onEvent, onFontSizeChange, searchOverlay, onSearchResolved },
+  {
+    sessionId,
+    className,
+    onEvent,
+    onFontSizeChange,
+    searchOverlay,
+    onSearchResolved,
+    tunnel,
+    activeTabId,
+  },
   ref
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -60,11 +74,42 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
   const idleHandleRef = useRef<number | null>(null)
   const lastFlushTimeRef = useRef(0)
   const resizeObserverRef = useRef<ResizeObserver | null>(null)
+  const directSocketRef = useRef<WebSocket | null>(null)
+  const decoderRef = useRef<TextDecoder | null>(null)
+  const suppressResizeRef = useRef(false)
+  const lastSentResizeRef = useRef<{ cols: number; rows: number } | null>(null)
+  const lastRemoteResizeRef = useRef<{ cols: number; rows: number } | null>(null)
 
   const [isTerminalReady, setTerminalReady] = useState(false)
   const [status, setStatus] = useState<'connecting' | 'ready' | 'closed' | 'error'>('connecting')
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined)
   const [fontSize, setFontSize] = useState<number>(14)
+  const [tunnelState, setTunnelState] = useState<'idle' | 'connecting' | 'open' | 'failed'>(
+    tunnel ? 'connecting' : 'idle'
+  )
+
+  useEffect(() => {
+    if (!tunnel) {
+      setTunnelState('idle')
+      return
+    }
+    setTunnelState((previous) => (previous === 'open' ? previous : 'connecting'))
+  }, [tunnel])
+
+  const closeDirectSocket = useCallback(() => {
+    const socket = directSocketRef.current
+    if (!socket) {
+      return
+    }
+    directSocketRef.current = null
+    try {
+      socket.close(1000, 'client closing')
+    } catch {
+      // ignore failures
+    }
+    lastSentResizeRef.current = null
+    lastRemoteResizeRef.current = null
+  }, [])
 
   const cancelScheduledFlush = useCallback(() => {
     if (frameHandleRef.current != null && typeof window !== 'undefined') {
@@ -212,7 +257,12 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
             const cols = Number(event.original?.cols ?? 0)
             const rows = Number(event.original?.rows ?? 0)
             if (cols > 0 && rows > 0) {
-              terminalRef.current?.resize(cols, rows)
+              const normalizedCols = Math.max(1, Math.floor(cols))
+              const normalizedRows = Math.max(1, Math.floor(rows))
+              suppressResizeRef.current = true
+              lastRemoteResizeRef.current = { cols: normalizedCols, rows: normalizedRows }
+              lastSentResizeRef.current = { cols: normalizedCols, rows: normalizedRows }
+              terminalRef.current?.resize(normalizedCols, normalizedRows)
             }
             break
           }
@@ -224,11 +274,311 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
     [sessionId, writeChunk, onEvent]
   )
 
-  const websocket = useSshTerminalStream({
+  const sendTunnelPayload = useCallback(
+    (payload: string) => {
+      if (tunnelState !== 'open') {
+        return false
+      }
+      const socket = directSocketRef.current
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        return false
+      }
+      try {
+        socket.send(payload)
+        return true
+      } catch {
+        return false
+      }
+    },
+    [tunnelState]
+  )
+
+  const sendTunnelInput = useCallback(
+    (data: string) => {
+      if (!data) {
+        return false
+      }
+      return sendTunnelPayload(data)
+    },
+    [sendTunnelPayload]
+  )
+
+  const sendTunnelResize = useCallback(
+    (cols: number, rows: number) => {
+      if (!cols || !rows || tunnelState !== 'open') {
+        return false
+      }
+      const normalizedCols = Math.max(1, Math.floor(cols))
+      const normalizedRows = Math.max(1, Math.floor(rows))
+      const lastSent = lastSentResizeRef.current
+      if (lastSent && lastSent.cols === normalizedCols && lastSent.rows === normalizedRows) {
+        return true
+      }
+      const payload = JSON.stringify({ type: 'resize', cols: normalizedCols, rows: normalizedRows })
+      const ok = sendTunnelPayload(payload)
+      if (ok) {
+        lastSentResizeRef.current = { cols: normalizedCols, rows: normalizedRows }
+      }
+      return ok
+    },
+    [sendTunnelPayload, tunnelState]
+  )
+
+  const processTunnelBuffer = useCallback(
+    (buffer: ArrayBuffer) => {
+      if (!buffer || buffer.byteLength === 0) {
+        return
+      }
+      let decoder = decoderRef.current
+      if (!decoder) {
+        decoder = new TextDecoder()
+        decoderRef.current = decoder
+      }
+      const text = decoder.decode(buffer)
+      if (!text) {
+        return
+      }
+      handleTerminalEvent({
+        stream: 'ssh.tunnel',
+        event: 'stdout',
+        sessionId,
+        text,
+      })
+    },
+    [handleTerminalEvent, sessionId]
+  )
+
+  const processTunnelControl = useCallback(
+    (payload: string) => {
+      if (!payload) {
+        return
+      }
+      let parsed: Record<string, unknown> | null = null
+      const trimmed = payload.trimStart()
+      if (trimmed.startsWith('{')) {
+        try {
+          parsed = JSON.parse(trimmed) as Record<string, unknown>
+        } catch {
+          parsed = null
+        }
+      }
+      if (parsed) {
+        const type =
+          typeof parsed.type === 'string'
+            ? parsed.type.toLowerCase()
+            : typeof parsed.event === 'string'
+              ? parsed.event.toLowerCase()
+              : ''
+        const message = typeof parsed.message === 'string' ? parsed.message : undefined
+        const connectionId =
+          tunnel?.params?.connection_id ?? tunnel?.params?.connectionId ?? undefined
+        const eventBase: SshTerminalEvent = {
+          stream: 'ssh.tunnel',
+          event: type || 'event',
+          sessionId,
+          connectionId,
+          message,
+          original: parsed,
+        }
+        switch (type) {
+          case 'ready':
+            handleTerminalEvent(eventBase)
+            return
+          case 'closed':
+            handleTerminalEvent(eventBase)
+            return
+          case 'error':
+            handleTerminalEvent(eventBase)
+            setStatus('error')
+            setStatusMessage(message ?? 'Tunnel error')
+            return
+          case 'resize': {
+            const colsValue = Number(parsed.cols)
+            const rowsValue = Number(parsed.rows)
+            if (Number.isFinite(colsValue) && Number.isFinite(rowsValue)) {
+              lastRemoteResizeRef.current = {
+                cols: Math.max(1, Math.floor(colsValue)),
+                rows: Math.max(1, Math.floor(rowsValue)),
+              }
+            }
+            handleTerminalEvent(eventBase)
+            return
+          }
+          default:
+            break
+        }
+      }
+      handleTerminalEvent({
+        stream: 'ssh.tunnel',
+        event: 'stdout',
+        sessionId,
+        text: payload,
+      })
+    },
+    [handleTerminalEvent, sessionId, tunnel?.params?.connectionId, tunnel?.params?.connection_id]
+  )
+
+  const tunnelKey = useMemo(() => {
+    if (!tunnel) {
+      return ''
+    }
+    const paramsKey = tunnel.params ? JSON.stringify(tunnel.params) : ''
+    return `${tunnel.url}|${tunnel.token}|${paramsKey}`
+  }, [tunnel])
+
+  useEffect(() => {
+    if (!tunnel || !sessionId) {
+      closeDirectSocket()
+      return
+    }
+
+    closeDirectSocket()
+    setStatus('connecting')
+    setStatusMessage(undefined)
+    setTunnelState('connecting')
+    lastSentResizeRef.current = null
+    lastRemoteResizeRef.current = null
+    suppressResizeRef.current = false
+
+    const params: Record<string, string> = {
+      ...(tunnel.params ?? {}),
+      token: tunnel.token,
+    }
+
+    const socketUrl = buildWebSocketUrl(tunnel.url || '/ws', params)
+    let disposed = false
+    const socket = new WebSocket(socketUrl)
+    socket.binaryType = 'arraybuffer'
+    directSocketRef.current = socket
+
+    socket.onopen = () => {
+      if (disposed) {
+        return
+      }
+      setTunnelState('open')
+    }
+
+    socket.onmessage = (event: MessageEvent) => {
+      if (disposed) {
+        return
+      }
+      if (typeof event.data === 'string') {
+        processTunnelControl(event.data)
+        return
+      }
+      if (event.data instanceof ArrayBuffer) {
+        processTunnelBuffer(event.data)
+        return
+      }
+      if (event.data instanceof Blob) {
+        void event.data
+          .arrayBuffer()
+          .then((buffer) => {
+            if (!disposed) {
+              processTunnelBuffer(buffer)
+            }
+          })
+          .catch(() => {
+            if (!disposed) {
+              setTunnelState('failed')
+              setStatus('error')
+              setStatusMessage('Failed to read tunnel payload')
+            }
+          })
+      }
+    }
+
+    socket.onerror = () => {
+      if (disposed) {
+        return
+      }
+      setTunnelState('failed')
+      setStatus('error')
+      setStatusMessage('Unable to establish tunnel connection')
+    }
+
+    socket.onclose = (event) => {
+      if (disposed) {
+        return
+      }
+      directSocketRef.current = null
+      if (event.wasClean || event.code === 1000) {
+        setTunnelState('idle')
+        handleTerminalEvent({
+          stream: 'ssh.tunnel',
+          event: 'closed',
+          sessionId,
+          message: event.reason || 'Session closed',
+        })
+        return
+      }
+      setTunnelState('failed')
+      setStatus('error')
+      setStatusMessage(event.reason || 'Tunnel connection closed unexpectedly')
+    }
+
+    return () => {
+      disposed = true
+      if (directSocketRef.current === socket) {
+        directSocketRef.current = null
+      }
+      try {
+        socket.close(1000, 'client closing')
+      } catch {
+        // ignore
+      }
+    }
+  }, [
+    closeDirectSocket,
+    handleTerminalEvent,
+    processTunnelBuffer,
+    processTunnelControl,
     sessionId,
-    onEvent: handleTerminalEvent,
-    enabled: Boolean(sessionId),
-  })
+    tunnel,
+    tunnelKey,
+  ])
+
+  useEffect(() => closeDirectSocket, [closeDirectSocket])
+
+  // Handle visibility changes (when tab becomes active)
+  useEffect(() => {
+    const container = containerRef.current
+    const terminal = terminalRef.current
+    const fitAddon = fitAddonRef.current
+
+    if (!container || !terminal || !fitAddon) {
+      return
+    }
+
+    // Check if container is visible (check parent TabsContent data-state)
+    const checkVisibility = () => {
+      if (!isTerminalReady) {
+        return
+      }
+
+      // Find parent TabsContent element
+      let parent = container.parentElement
+      while (parent && parent.getAttribute('data-radix-tabs-content') === null) {
+        parent = parent.parentElement
+      }
+
+      // Check if tab is active (data-state="active")
+      const isActive = parent?.getAttribute('data-state') === 'active'
+
+      if (isActive) {
+        fitAddon.fit()
+        terminal.focus()
+        if (terminal.cols > 0 && terminal.rows > 0) {
+          sendTunnelResize(terminal.cols, terminal.rows)
+        }
+      }
+    }
+
+    // Small delay to ensure layout is complete
+    const timeoutId = setTimeout(checkVisibility, 100)
+
+    return () => clearTimeout(timeoutId)
+  }, [isTerminalReady, sendTunnelResize, activeTabId])
 
   useEffect(() => {
     let disposed = false
@@ -285,19 +635,66 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
       }
 
       terminal.open(host)
+
+      // Always fit on mount - the visibility effect will handle re-fitting when tab becomes visible
       fitAddon.fit()
       terminal.focus()
+      if (terminal.cols > 0 && terminal.rows > 0) {
+        sendTunnelResize(terminal.cols, terminal.rows)
+      }
 
       terminalRef.current = terminal
       fitAddonRef.current = fitAddon
       setTerminalReady(true)
       flushPending()
 
+      const dataDisposable = terminal.onData((chunk) => {
+        sendTunnelInput(chunk)
+      })
+
+      const resizeDisposable = terminal.onResize(({ cols, rows }) => {
+        const normalizedCols = Math.max(1, Math.floor(cols))
+        const normalizedRows = Math.max(1, Math.floor(rows))
+        if (!Number.isFinite(normalizedCols) || !Number.isFinite(normalizedRows)) {
+          return
+        }
+        if (suppressResizeRef.current) {
+          suppressResizeRef.current = false
+          lastRemoteResizeRef.current = { cols: normalizedCols, rows: normalizedRows }
+          return
+        }
+        const remote = lastRemoteResizeRef.current
+        if (remote && remote.cols === normalizedCols && remote.rows === normalizedRows) {
+          lastRemoteResizeRef.current = null
+          return
+        }
+        sendTunnelResize(normalizedCols, normalizedRows)
+      })
+
       const observer = new ResizeObserver(() => {
+        // Only resize if the tab is active
+        let parent = host.parentElement
+        while (parent && parent.getAttribute('data-radix-tabs-content') === null) {
+          parent = parent.parentElement
+        }
+        const isActive = parent?.getAttribute('data-state') === 'active'
+
+        if (!isActive) {
+          return
+        }
+
         fitAddon.fit()
+        if (terminal.cols > 0 && terminal.rows > 0) {
+          sendTunnelResize(terminal.cols, terminal.rows)
+        }
       })
       observer.observe(host)
       resizeObserverRef.current = observer
+
+      return () => {
+        dataDisposable.dispose()
+        resizeDisposable.dispose()
+      }
     })()
 
     return () => {
@@ -315,7 +712,7 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
       terminalRef.current = null
       setTerminalReady(false)
     }
-  }, [cancelScheduledFlush, flushPending, onFontSizeChange])
+  }, [cancelScheduledFlush, flushPending, onFontSizeChange, sendTunnelInput, sendTunnelResize])
 
   useImperativeHandle(
     ref,
@@ -380,7 +777,46 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
     onSearchResolved?.({ matched })
   }, [searchOverlay, onSearchResolved])
 
-  const isConnected = websocket.isConnected
+  useEffect(() => {
+    if (tunnelState !== 'open') {
+      return
+    }
+    const terminal = terminalRef.current
+    const fitAddon = fitAddonRef.current
+    const container = containerRef.current
+    if (!terminal || !fitAddon || !container) {
+      return
+    }
+
+    // Only fit and resize if the tab is active
+    let parent = container.parentElement
+    while (parent && parent.getAttribute('data-radix-tabs-content') === null) {
+      parent = parent.parentElement
+    }
+    const isActive = parent?.getAttribute('data-state') === 'active'
+
+    if (isActive) {
+      fitAddon.fit()
+      if (terminal.cols > 0 && terminal.rows > 0) {
+        sendTunnelResize(terminal.cols, terminal.rows)
+      }
+    }
+  }, [sendTunnelResize, tunnelState])
+
+  const useRealtimeStream = !tunnel || tunnelState === 'failed'
+  const websocket = useSshTerminalStream({
+    sessionId,
+    onEvent: handleTerminalEvent,
+    enabled: Boolean(sessionId) && useRealtimeStream,
+  })
+
+  const isConnected = useRealtimeStream ? websocket.isConnected : tunnelState === 'open'
+
+  useEffect(() => {
+    if (tunnelState !== 'open') {
+      lastSentResizeRef.current = null
+    }
+  }, [tunnelState])
 
   const statusLabel = useMemo(() => {
     switch (status) {

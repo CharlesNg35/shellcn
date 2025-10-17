@@ -57,6 +57,7 @@ func TestConnectionTemplateServiceResolveFromDB(t *testing.T) {
 	require.NotNil(t, template)
 	require.Equal(t, "1.0.0", template.Version)
 	require.True(t, template.Metadata["requires_identity"].(bool))
+	require.Equal(t, []string{"ssh"}, template.Protocols)
 }
 
 func TestConnectionTemplateServiceMaterialise(t *testing.T) {
@@ -171,4 +172,69 @@ func TestConnectionTemplateServiceMaterialiseMissingField(t *testing.T) {
 
 	_, err := svc.Materialise(template, map[string]any{})
 	require.Error(t, err)
+}
+
+func TestConnectionTemplateServiceMaterialiseConfig(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	svc, err := NewConnectionTemplateService(db, drivers.NewRegistry())
+	require.NoError(t, err)
+
+	template := &drivers.ConnectionTemplate{
+		DriverID:    "ssh",
+		Version:     "2025-01-15",
+		DisplayName: "SSH",
+		Protocols:   []string{"ssh", "sftp"},
+		Sections: []drivers.ConnectionSection{
+			{
+				ID:    "endpoint",
+				Label: "Endpoint",
+				Fields: []drivers.ConnectionField{
+					{
+						Key:      "host",
+						Label:    "Host",
+						Type:     drivers.ConnectionFieldTypeTargetHost,
+						Required: true,
+						Binding: &drivers.ConnectionBinding{
+							Target:   drivers.BindingTargetConnectionTarget,
+							Index:    0,
+							Property: "host",
+						},
+					},
+					{
+						Key:     "port",
+						Label:   "Port",
+						Type:    drivers.ConnectionFieldTypeTargetPort,
+						Default: 22,
+						Binding: &drivers.ConnectionBinding{
+							Target:   drivers.BindingTargetConnectionTarget,
+							Index:    0,
+							Property: "port",
+						},
+					},
+				},
+			},
+		},
+	}
+	require.NoError(t, svc.persist(context.Background(), "ssh", template))
+
+	conn := ConnectionDTO{
+		ProtocolID: "ssh",
+		Settings:   map[string]any{},
+		Metadata: map[string]any{
+			"connection_template": map[string]any{
+				"fields": map[string]any{
+					"host": "example.com",
+				},
+			},
+		},
+	}
+
+	config, cfgErr := svc.MaterialiseConfig(context.Background(), conn)
+	require.NoError(t, cfgErr)
+	require.NotNil(t, config)
+	require.Equal(t, "example.com", config.Settings["host"])
+	require.Equal(t, 22, config.Settings["port"])
+	require.Len(t, config.Targets, 1)
+	require.Equal(t, "example.com", config.Targets[0].Host)
+	require.Equal(t, 22, config.Targets[0].Port)
 }

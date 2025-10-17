@@ -11,6 +11,7 @@ type ConnectionTemplate struct {
 	Version     string              `json:"version"`
 	DisplayName string              `json:"display_name"`
 	Description string              `json:"description"`
+	Protocols   []string            `json:"protocols,omitempty"`
 	Sections    []ConnectionSection `json:"sections"`
 	Metadata    map[string]any      `json:"metadata,omitempty"`
 }

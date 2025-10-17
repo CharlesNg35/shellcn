@@ -177,29 +177,59 @@ func (h *ActiveSessionLaunchHandler) Launch(c *gin.Context) {
 		return
 	}
 
-	templateMeta, fields, templateMismatch, err := h.materialiseTemplate(ctx, conn, protocolID, req.FieldsOverride)
+	var baseConfig *services.ConnectionConfig
+	if h.templates != nil {
+		baseConfig, err = h.templates.MaterialiseConfig(ctx, *conn)
+		if err != nil {
+			response.Error(c, err)
+			return
+		}
+	}
+
+	materialised, templateMeta, templateMismatch, err := h.materialiseTemplate(ctx, conn, protocolID, req.FieldsOverride)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
 
 	settings := cloneMap(conn.Settings)
-	if len(fields) > 0 {
-		if err := h.applyTemplateFields(templateMeta, fields, settings); err != nil {
-			response.Error(c, err)
-			return
+	var host string
+	var port int
+
+	if baseConfig != nil {
+		settings = cloneMap(baseConfig.Settings)
+		if len(baseConfig.Targets) > 0 {
+			host = strings.TrimSpace(baseConfig.Targets[0].Host)
+			port = baseConfig.Targets[0].Port
 		}
 	}
 
-	host, port, err := resolveHostPort(conn, settings)
-	if err != nil {
-		response.Error(c, apperrors.NewBadRequest(err.Error()))
-		return
+	if materialised != nil {
+		for key, value := range materialised.Settings {
+			settings[key] = value
+		}
+		if len(materialised.Targets) > 0 {
+			target := materialised.Targets[0]
+			host = strings.TrimSpace(target.Host)
+			port = target.Port
+		}
 	}
 
-	if _, exists := settings["host"]; !exists {
-		settings["host"] = host
+	if host == "" || port <= 0 {
+		fallbackHost, fallbackPort, err := resolveHostPort(conn, settings)
+		if err != nil {
+			response.Error(c, apperrors.NewBadRequest(err.Error()))
+			return
+		}
+		if host == "" {
+			host = fallbackHost
+		}
+		if port <= 0 {
+			port = fallbackPort
+		}
 	}
+
+	settings["host"] = host
 	settings["port"] = port
 
 	sftpEnabled := h.resolveSFTP(settings, protocolID)
@@ -230,6 +260,13 @@ func (h *ActiveSessionLaunchHandler) Launch(c *gin.Context) {
 		"recording":         recordingMetadata,
 		"recording_enabled": recordingRequested,
 		"recording_active":  recordingActive,
+	}
+	if baseConfig != nil && len(baseConfig.Metadata) > 0 {
+		for key, value := range baseConfig.Metadata {
+			if _, exists := metadata[key]; !exists {
+				metadata[key] = value
+			}
+		}
 	}
 
 	if conn.IdentityID != nil {
@@ -314,7 +351,7 @@ func (h *ActiveSessionLaunchHandler) materialiseTemplate(
 	conn *services.ConnectionDTO,
 	protocolID string,
 	override map[string]any,
-) (map[string]any, map[string]any, bool, error) {
+) (*services.MaterialisedConnection, map[string]any, bool, error) {
 	if h == nil || h.templates == nil || conn == nil {
 		return nil, nil, false, nil
 	}
@@ -348,16 +385,7 @@ func (h *ActiveSessionLaunchHandler) materialiseTemplate(
 	}
 
 	if materialised == nil {
-		return existingMeta, fields, false, nil
-	}
-
-	fields = cloneMap(materialised.Fields)
-
-	settings := materialised.Settings
-	if len(settings) > 0 {
-		for key, value := range settings {
-			fields[key] = value
-		}
+		return nil, existingMeta, false, nil
 	}
 
 	templateMeta := map[string]any{
@@ -372,30 +400,7 @@ func (h *ActiveSessionLaunchHandler) materialiseTemplate(
 		templateMeta["version_mismatch"] = true
 	}
 
-	if len(materialised.Targets) > 0 {
-		target := materialised.Targets[0]
-		if target.Host != "" {
-			fields["host"] = target.Host
-		}
-		if target.Port > 0 {
-			fields["port"] = target.Port
-		}
-	}
-
-	return templateMeta, fields, templateMismatch, nil
-}
-
-func (h *ActiveSessionLaunchHandler) applyTemplateFields(templateMeta, fields, settings map[string]any) error {
-	if len(fields) == 0 {
-		return nil
-	}
-	for key, value := range fields {
-		switch strings.ToLower(key) {
-		case "host", "port", "enable_sftp", "terminal_width", "terminal_height", "terminal_type", "recording_enabled", "concurrent_limit":
-			settings[key] = value
-		}
-	}
-	return nil
+	return materialised, templateMeta, templateMismatch, nil
 }
 
 func (h *ActiveSessionLaunchHandler) resolveSFTP(settings map[string]any, protocolID string) bool {

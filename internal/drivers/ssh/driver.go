@@ -120,6 +120,10 @@ func newSSHTemplate() *drivers.ConnectionTemplate {
 		Version:     sshTemplateVersion,
 		DisplayName: "SSH Connection",
 		Description: "Configure host, port, and session behaviour for SSH connections.",
+		Protocols: []string{
+			DriverIDSSH,
+			DriverIDSFTP,
+		},
 		Metadata: map[string]any{
 			"requires_identity": true,
 		},

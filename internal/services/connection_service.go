@@ -11,6 +11,7 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/models"
 	apperrors "github.com/charlesng35/shellcn/pkg/errors"
 )
@@ -119,6 +120,7 @@ type ConnectionService struct {
 	checker   PermissionChecker
 	vault     *VaultService
 	templates *ConnectionTemplateService
+	drivers   *drivers.Registry
 }
 
 // ConnectionServiceOption configures optional behaviours for the connection service.
@@ -135,6 +137,13 @@ func WithConnectionVault(vault *VaultService) ConnectionServiceOption {
 func WithConnectionTemplates(templates *ConnectionTemplateService) ConnectionServiceOption {
 	return func(s *ConnectionService) {
 		s.templates = templates
+	}
+}
+
+// WithConnectionDrivers attaches the driver registry for configuration validation.
+func WithConnectionDrivers(reg *drivers.Registry) ConnectionServiceOption {
+	return func(s *ConnectionService) {
+		s.drivers = reg
 	}
 }
 
@@ -198,6 +207,49 @@ func mergeAnyMaps(dst map[string]any, src map[string]any) map[string]any {
 		dst[k] = v
 	}
 	return dst
+}
+
+func (s *ConnectionService) validateDriverConfig(ctx context.Context, protocolID string, settings map[string]any, targets []models.ConnectionTarget) error {
+	if s == nil || s.drivers == nil {
+		return nil
+	}
+	protocolID = strings.TrimSpace(protocolID)
+	if protocolID == "" {
+		return nil
+	}
+
+	driver, ok := s.drivers.Get(protocolID)
+	if !ok {
+		return nil
+	}
+	validator, ok := driver.(drivers.Validator)
+	if !ok {
+		return nil
+	}
+
+	cfg := cloneAnyMap(settings)
+	if cfg == nil {
+		cfg = map[string]any{}
+	}
+
+	if len(targets) > 0 {
+		entries := make([]map[string]any, 0, len(targets))
+		for _, target := range targets {
+			entry := map[string]any{
+				"host":     strings.TrimSpace(target.Host),
+				"port":     target.Port,
+				"ordering": target.Ordering,
+			}
+			labels := decodeJSONMapString(target.Labels)
+			if len(labels) > 0 {
+				entry["labels"] = labels
+			}
+			entries = append(entries, entry)
+		}
+		cfg["targets"] = entries
+	}
+
+	return validator.ValidateConfig(ctx, cfg)
 }
 
 func cloneTargets(src []models.ConnectionTarget) []models.ConnectionTarget {
@@ -335,6 +387,10 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 		connection.Settings = datatypes.JSON(data)
 	}
 
+	if err := s.validateDriverConfig(ctx, protocolID, settingsMap, targets); err != nil {
+		return nil, err
+	}
+
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&connection).Error; err != nil {
 			return fmt.Errorf("connection service: create connection: %w", err)
@@ -454,6 +510,10 @@ func (s *ConnectionService) Update(ctx context.Context, userID, connectionID str
 			shouldUpdateSettings = true
 			targets = cloneTargets(materialised.Targets)
 		}
+	}
+
+	if err := s.validateDriverConfig(ctx, connection.ProtocolID, settingsMap, targets); err != nil {
+		return nil, err
 	}
 
 	updates := map[string]any{

@@ -100,6 +100,7 @@ export interface ConnectionTemplate {
   version: string
   displayName: string
   description?: string
+  protocols?: string[]
   sections: ConnectionTemplateSection[]
   metadata?: Record<string, unknown>
 }

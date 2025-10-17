@@ -16,7 +16,12 @@ class TerminalStub {
   public dispose = disposeMock
   public focus = vi.fn()
   public open = vi.fn()
+  public clear = vi.fn()
+  public cols = 80
+  public rows = 24
   public options: { fontSize: number } = { fontSize: 14 }
+  public onData = vi.fn(() => ({ dispose: vi.fn() }))
+  public onResize = vi.fn(() => ({ dispose: vi.fn() }))
   constructor(public readonly config: Record<string, unknown>) {}
 }
 

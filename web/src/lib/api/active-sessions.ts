@@ -14,6 +14,8 @@ export interface LaunchSessionPayload {
 export interface LaunchSessionTunnel {
   url: string
   token: string
+  protocol?: string
+  params?: Record<string, string>
   expires_at?: string
 }
 

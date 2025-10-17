@@ -26,6 +26,7 @@ import SshWorkspaceHeader from './ssh-workspace/SshWorkspaceHeader'
 import { SessionShareDialog } from './ssh-workspace/SessionShareDialog'
 import SshWorkspaceContent from './ssh-workspace/SshWorkspaceContent'
 import { SessionRecordingDialog } from './ssh-workspace/SessionRecordingDialog'
+import { useSshSessionTunnelStore } from '@/store/ssh-session-tunnel-store'
 
 const LAYOUT_OPTIONS = [1, 2, 3, 4, 5]
 
@@ -81,6 +82,9 @@ export function SshWorkspace() {
   const activeTabId = workspace?.activeTabId ?? ''
   const layoutColumns = workspace?.layoutColumns ?? 1
   const isFullscreen = workspace?.isFullscreen ?? false
+  const sessionTunnel = useSshSessionTunnelStore(
+    useCallback((state) => state.tunnels[sessionId], [sessionId])
+  )
 
   const terminalRef = useRef<SshTerminalHandle | null>(null)
 
@@ -372,6 +376,19 @@ export function SshWorkspace() {
   }
 
   const snippetButtonDisabled = snippetsLoading || snippetExecuting || !snippetsAvailable
+  const tunnel = useMemo(() => {
+    if (!sessionTunnel) {
+      return undefined
+    }
+    const paramsSessionId = sessionTunnel.params?.session_id ?? sessionTunnel.params?.sessionId
+    if (session && session.id !== paramsSessionId && paramsSessionId) {
+      return undefined
+    }
+    if (!canWrite) {
+      return undefined
+    }
+    return sessionTunnel
+  }, [canWrite, session, sessionTunnel])
 
   return (
     <div
@@ -426,6 +443,7 @@ export function SshWorkspace() {
         recordingLoading={recordingStatusLoading}
         onRecordingDetails={session ? handleRecordingDetails : undefined}
         transfers={transfersSummary}
+        tunnel={tunnel}
       />
 
       <SshCommandPalette

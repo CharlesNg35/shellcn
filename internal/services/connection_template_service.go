@@ -38,6 +38,13 @@ type MaterialisedConnection struct {
 	TemplateVersion string
 }
 
+// ConnectionConfig describes the normalised configuration used by session launch handlers.
+type ConnectionConfig struct {
+	Settings map[string]any
+	Metadata map[string]any
+	Targets  []models.ConnectionTarget
+}
+
 // NewConnectionTemplateService constructs a ConnectionTemplateService instance.
 func NewConnectionTemplateService(db *gorm.DB, registry *drivers.Registry) (*ConnectionTemplateService, error) {
 	if db == nil {
@@ -53,32 +60,108 @@ func (s *ConnectionTemplateService) Resolve(ctx context.Context, protocolID stri
 	}
 
 	ctx = ensureContext(ctx)
-	protocolID = strings.TrimSpace(protocolID)
+	protocolID = strings.TrimSpace(strings.ToLower(protocolID))
 	if protocolID == "" {
 		return nil, nil
 	}
 
-	var record models.ConnectionTemplate
-	err := s.db.WithContext(ctx).
-		Where("driver_id = ?", protocolID).
-		Order("created_at DESC").
-		First(&record).Error
-	if err == nil {
-		return modelToDriverTemplate(record)
+	if template, err := s.resolveFromBinding(ctx, protocolID); err != nil {
+		return nil, err
+	} else if template != nil {
+		return template, nil
 	}
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("connection template service: load template: %w", err)
+
+	if template, err := s.resolveByDriver(ctx, protocolID); err != nil {
+		return nil, err
+	} else if template != nil {
+		return template, nil
 	}
 
 	if s.registry == nil {
 		return nil, nil
 	}
 
-	driver, ok := s.registry.Get(protocolID)
-	if !ok {
+	return s.resolveFromRegistry(ctx, protocolID)
+}
+
+func (s *ConnectionTemplateService) resolveFromBinding(ctx context.Context, protocolID string) (*drivers.ConnectionTemplate, error) {
+	if s.db == nil {
 		return nil, nil
 	}
-	templater, ok := driver.(drivers.ConnectionTemplater)
+
+	var binding models.ConnectionTemplateProtocol
+	err := s.db.WithContext(ctx).
+		Where("protocol_id = ?", protocolID).
+		First(&binding).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("connection template service: load binding: %w", err)
+	}
+
+	template, err := s.loadTemplateRecord(ctx, binding.DriverID, binding.Version)
+	if err != nil {
+		return nil, err
+	}
+	if template != nil {
+		return template, nil
+	}
+
+	if binding.DriverID != "" {
+		return s.loadTemplateRecord(ctx, binding.DriverID, "")
+	}
+
+	return nil, nil
+}
+
+func (s *ConnectionTemplateService) resolveByDriver(ctx context.Context, driverID string) (*drivers.ConnectionTemplate, error) {
+	template, err := s.loadTemplateRecord(ctx, driverID, "")
+	if err != nil || template == nil {
+		return template, err
+	}
+	if len(template.Protocols) == 0 {
+		template.Protocols = models.NormalizeConnectionTemplateProtocols(nil, driverID)
+		if err := s.persist(ctx, driverID, template); err != nil {
+			return nil, err
+		}
+	}
+	return template, nil
+}
+
+func (s *ConnectionTemplateService) resolveFromRegistry(ctx context.Context, protocolID string) (*drivers.ConnectionTemplate, error) {
+	if s.registry == nil {
+		return nil, nil
+	}
+
+	if driver, ok := s.registry.Get(protocolID); ok {
+		template, err := s.fetchTemplateFromDriver(ctx, driver, protocolID)
+		if err != nil {
+			return nil, err
+		}
+		if template != nil {
+			return template, nil
+		}
+	}
+
+	for _, drv := range s.registry.All() {
+		if strings.EqualFold(drv.ID(), protocolID) {
+			continue
+		}
+		template, err := s.fetchTemplateFromDriver(ctx, drv, protocolID)
+		if err != nil {
+			return nil, err
+		}
+		if template != nil {
+			return template, nil
+		}
+	}
+
+	return nil, nil
+}
+
+func (s *ConnectionTemplateService) fetchTemplateFromDriver(ctx context.Context, drv drivers.Driver, protocolID string) (*drivers.ConnectionTemplate, error) {
+	templater, ok := drv.(drivers.ConnectionTemplater)
 	if !ok {
 		return nil, nil
 	}
@@ -90,13 +173,50 @@ func (s *ConnectionTemplateService) Resolve(ctx context.Context, protocolID stri
 	if template == nil {
 		return nil, nil
 	}
+
+	protocols := models.NormalizeConnectionTemplateProtocols(template.Protocols, drv.ID())
+	template.Protocols = protocols
+
+	if !containsProtocol(protocols, protocolID) {
+		return nil, nil
+	}
+
 	if err := validateConnectionTemplate(template); err != nil {
 		return nil, fmt.Errorf("connection template service: driver template invalid: %w", err)
 	}
-	if err := s.persist(ctx, driver.ID(), template); err != nil {
+
+	if err := s.persist(ctx, drv.ID(), template); err != nil {
 		return nil, err
 	}
+
 	return template, nil
+}
+
+func (s *ConnectionTemplateService) loadTemplateRecord(ctx context.Context, driverID, version string) (*drivers.ConnectionTemplate, error) {
+	if s.db == nil {
+		return nil, nil
+	}
+
+	driverID = strings.TrimSpace(strings.ToLower(driverID))
+	if driverID == "" {
+		return nil, nil
+	}
+
+	query := s.db.WithContext(ctx).Where("driver_id = ?", driverID)
+	if strings.TrimSpace(version) != "" {
+		query = query.Where("version = ?", strings.TrimSpace(version))
+	}
+	query = query.Order("created_at DESC")
+
+	var record models.ConnectionTemplate
+	if err := query.First(&record).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("connection template service: load template: %w", err)
+	}
+
+	return modelToDriverTemplate(record)
 }
 
 // Materialise transforms template fields into settings, metadata, and connection targets.
@@ -172,11 +292,109 @@ func (s *ConnectionTemplateService) Materialise(template *drivers.ConnectionTemp
 	return result, nil
 }
 
+// MaterialiseConfig reconstructs a connection's runtime configuration using stored template metadata and persisted fields.
+func (s *ConnectionTemplateService) MaterialiseConfig(ctx context.Context, conn ConnectionDTO) (*ConnectionConfig, error) {
+	settings := cloneAnyMap(conn.Settings)
+	if settings == nil {
+		settings = map[string]any{}
+	}
+
+	metadata := cloneAnyMap(conn.Metadata)
+	targets := dtoTargetsToModels(conn.Targets)
+
+	fields := map[string]any{}
+	if metadata != nil {
+		if raw, ok := metadata["connection_template"]; ok {
+			if meta, ok := raw.(map[string]any); ok {
+				if f, ok := meta["fields"].(map[string]any); ok {
+					fields = cloneAnyMap(f)
+				}
+			}
+		}
+	}
+
+	var template *drivers.ConnectionTemplate
+	var err error
+	if s != nil {
+		template, err = s.Resolve(ctx, conn.ProtocolID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if template != nil && len(fields) > 0 {
+		materialised, err := s.Materialise(template, fields)
+		if err != nil {
+			return nil, err
+		}
+		if materialised != nil {
+			settings = mergeAnyMaps(settings, materialised.Settings)
+			metadata = mergeAnyMaps(materialised.Metadata, metadata)
+			if len(materialised.Targets) > 0 {
+				targets = cloneTargets(materialised.Targets)
+			}
+		}
+	}
+
+	host := ""
+	port := 0
+	if len(targets) > 0 {
+		host = strings.TrimSpace(targets[0].Host)
+		port = targets[0].Port
+	}
+
+	if host == "" {
+		host = strings.TrimSpace(fmt.Sprint(settings["host"]))
+	}
+	if host == "" && len(fields) > 0 {
+		if value, ok := fields["host"]; ok {
+			host = strings.TrimSpace(fmt.Sprint(value))
+		}
+	}
+	if host == "" {
+		return nil, fieldError("host", "required", "Host is required")
+	}
+
+	if port <= 0 {
+		if value, ok := settings["port"]; ok {
+			if parsed, err := toInt(value); err == nil {
+				port = parsed
+			}
+		}
+	}
+	if port <= 0 && len(fields) > 0 {
+		if value, ok := fields["port"]; ok {
+			if parsed, err := toInt(value); err == nil {
+				port = parsed
+			}
+		}
+	}
+	if port <= 0 {
+		return nil, fieldError("port", "invalid", "Port is required")
+	}
+
+	if len(targets) == 0 {
+		targets = []models.ConnectionTarget{{Ordering: 0}}
+	}
+	targets[0].Host = host
+	targets[0].Port = port
+
+	settings["host"] = host
+	settings["port"] = port
+
+	return &ConnectionConfig{
+		Settings: settings,
+		Metadata: metadata,
+		Targets:  targets,
+	}, nil
+}
+
 func (s *ConnectionTemplateService) persist(ctx context.Context, fallbackDriverID string, template *drivers.ConnectionTemplate) error {
 	driverID := strings.TrimSpace(template.DriverID)
 	if driverID == "" {
 		driverID = strings.TrimSpace(fallbackDriverID)
 	}
+	template.DriverID = driverID
 	version := strings.TrimSpace(template.Version)
 	if version == "" {
 		return fmt.Errorf("connection template service: template for %s missing version", driverID)
@@ -185,6 +403,14 @@ func (s *ConnectionTemplateService) persist(ctx context.Context, fallbackDriverI
 	sectionsJSON, err := json.Marshal(template.Sections)
 	if err != nil {
 		return fmt.Errorf("connection template service: marshal sections: %w", err)
+	}
+
+	protocols := models.NormalizeConnectionTemplateProtocols(template.Protocols, driverID)
+	template.Protocols = protocols
+
+	protocolsJSON, err := json.Marshal(protocols)
+	if err != nil {
+		return fmt.Errorf("connection template service: marshal protocols: %w", err)
 	}
 
 	var metadataJSON datatypes.JSON
@@ -202,6 +428,7 @@ func (s *ConnectionTemplateService) persist(ctx context.Context, fallbackDriverI
 		"display_name": strings.TrimSpace(template.DisplayName),
 		"description":  strings.TrimSpace(template.Description),
 		"sections":     template.Sections,
+		"protocols":    protocols,
 		"metadata":     template.Metadata,
 	}
 	encoded, err := json.Marshal(payload)
@@ -217,16 +444,55 @@ func (s *ConnectionTemplateService) persist(ctx context.Context, fallbackDriverI
 		DisplayName: strings.TrimSpace(template.DisplayName),
 		Description: strings.TrimSpace(template.Description),
 		Sections:    sectionsJSON,
+		Protocols:   datatypes.JSON(protocolsJSON),
 		Metadata:    metadataJSON,
 		Hash:        hash,
 	}
 
 	if err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "driver_id"}, {Name: "version"}},
-		DoUpdates: clause.AssignmentColumns([]string{"display_name", "description", "sections", "metadata", "hash"}),
+		DoUpdates: clause.AssignmentColumns([]string{"display_name", "description", "sections", "protocols", "metadata", "hash"}),
 	}).Create(&record).Error; err != nil {
 		return fmt.Errorf("connection template service: upsert template: %w", err)
 	}
+
+	if err := s.syncTemplateProtocols(ctx, driverID, version, protocols); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *ConnectionTemplateService) syncTemplateProtocols(ctx context.Context, driverID, version string, protocols []string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+
+	normalized := models.NormalizeConnectionTemplateProtocols(protocols, driverID)
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	tx := s.db.WithContext(ctx)
+
+	if err := tx.Where("driver_id = ? AND protocol_id NOT IN ?", driverID, normalized).
+		Delete(&models.ConnectionTemplateProtocol{}).Error; err != nil {
+		return fmt.Errorf("connection template service: prune template protocols: %w", err)
+	}
+
+	for _, protocolID := range normalized {
+		record := models.ConnectionTemplateProtocol{
+			ProtocolID: protocolID,
+			DriverID:   driverID,
+			Version:    version,
+		}
+		if err := tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "protocol_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"driver_id", "version", "updated_at"}),
+		}).Create(&record).Error; err != nil {
+			return fmt.Errorf("connection template service: upsert template protocol %s: %w", protocolID, err)
+		}
+	}
+
 	return nil
 }
 
@@ -243,14 +509,59 @@ func modelToDriverTemplate(record models.ConnectionTemplate) (*drivers.Connectio
 		}
 	}
 
+	protocols := []string{}
+	if len(record.Protocols) > 0 {
+		if err := json.Unmarshal(record.Protocols, &protocols); err != nil {
+			return nil, fmt.Errorf("connection template service: decode protocols: %w", err)
+		}
+	}
+	if len(protocols) == 0 && strings.TrimSpace(record.DriverID) != "" {
+		protocols = []string{strings.TrimSpace(record.DriverID)}
+	}
+
 	return &drivers.ConnectionTemplate{
 		DriverID:    record.DriverID,
 		Version:     record.Version,
 		DisplayName: record.DisplayName,
 		Description: record.Description,
+		Protocols:   protocols,
 		Sections:    sections,
 		Metadata:    metadata,
 	}, nil
+}
+
+func containsProtocol(protocols []string, target string) bool {
+	target = strings.TrimSpace(strings.ToLower(target))
+	if target == "" {
+		return false
+	}
+	for _, id := range protocols {
+		if strings.EqualFold(strings.TrimSpace(id), target) {
+			return true
+		}
+	}
+	return false
+}
+
+func dtoTargetsToModels(dtos []ConnectionTargetDTO) []models.ConnectionTarget {
+	if len(dtos) == 0 {
+		return nil
+	}
+	targets := make([]models.ConnectionTarget, 0, len(dtos))
+	for _, dto := range dtos {
+		target := models.ConnectionTarget{
+			Host:     strings.TrimSpace(dto.Host),
+			Port:     dto.Port,
+			Ordering: dto.Order,
+		}
+		if len(dto.Labels) > 0 {
+			if data, err := json.Marshal(dto.Labels); err == nil {
+				target.Labels = datatypes.JSON(data)
+			}
+		}
+		targets = append(targets, target)
+	}
+	return targets
 }
 
 func coerceFieldValue(field drivers.ConnectionField, raw any, provided bool) (any, bool, error) {

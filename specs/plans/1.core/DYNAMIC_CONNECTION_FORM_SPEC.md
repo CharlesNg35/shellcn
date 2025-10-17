@@ -58,6 +58,7 @@ type ConnectionTemplate struct {
     Version     string
     DisplayName string
     Description string
+    Protocols   []string
     Sections    []ConnectionSection
     Metadata    map[string]any
 }
@@ -67,6 +68,7 @@ type ConnectionSection struct {
     Label       string
     Description string
     Fields      []ConnectionField
+    Metadata    map[string]any
 }
 
 type ConnectionField struct {
@@ -101,10 +103,15 @@ type FieldDependency struct {
 }
 ```
 
+- `Protocols` declares which protocol IDs (e.g. `["ssh","sftp"]`) consume this template. If omitted, it defaults to `DriverID`. This mirrors the credential template’s `CompatibleProtocols` field.
+- `Metadata` can expose descriptor level hints (e.g., default icon, protocol-specific defaults).
 - `Type` drives frontend widgets; predefined types include `string`, `multiline`, `number`, `boolean`, `select`, `target_host`, `target_port`, `json`, etc.
 - `Binding` instructs backend/front-end where to store output: e.g. SSH host → `{Target:"target", Index:0, Property:"host"}`; concurrency override → `{Target:"settings", Path:"session.concurrent_limit"}`.
 - `Dependencies` allow conditional visibility/enabled status without wiring extra props in React.
-- Drivers may attach `Metadata` (e.g., grouping hints, icon suggestions).
+- Drivers may attach `Metadata` (e.g., grouping hints, icon suggestions, protocol-specific applicability such as `{"protocols":["ssh"]}` when a field should be hidden for `sftp`).
+
+> **Credential alignment**  
+> When a driver supports multiple protocols, keep `ConnectionTemplate.Protocols` in sync with the credential template’s `CompatibleProtocols` so that the UI can present both the correct credential options and connection fields for the chosen protocol.
 
 ### 3.2 SSH Reference Template
 
@@ -116,6 +123,10 @@ func NewSSHDriver() *Driver {
         DriverID:    "ssh",
         Version:     "2025-01-01",
         DisplayName: "SSH Connection",
+        Protocols: []string{
+            DriverIDSSH,  // interactive terminal
+            DriverIDSFTP, // SFTP-only connections reuse the same template
+        },
         Sections: []drivers.ConnectionSection{
             {
                 ID:    "endpoint",
@@ -157,6 +168,9 @@ func NewSSHDriver() *Driver {
                         Type:     drivers.ConnectionFieldTypeNumber,
                         Default:  0,
                         Validation: map[string]any{"min": 0, "max": 1000},
+                        Metadata: map[string]any{
+                            "protocols": []string{DriverIDSSH}, // hide for pure SFTP
+                        },
                         Binding: drivers.ConnectionBinding{
                             Target: drivers.BindingTargetSettings,
                             Path:   "session.concurrent_limit",

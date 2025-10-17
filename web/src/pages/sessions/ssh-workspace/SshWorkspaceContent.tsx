@@ -8,6 +8,7 @@ import type { ActiveConnectionSession } from '@/types/connections'
 import type { SessionRecordingStatus } from '@/types/session-recording'
 import type { TerminalSearchControls } from './useTerminalSearch'
 import type { WorkspaceTelemetryControls } from './useWorkspaceTelemetry'
+import type { SessionTunnelEntry } from '@/store/ssh-session-tunnel-store'
 
 const LazySshTerminal = lazy(() =>
   import('@/components/workspace/SshTerminal').then((module) => ({ default: module.SshTerminal }))
@@ -57,6 +58,7 @@ interface SshWorkspaceContentProps {
     active: number
     total: number
   }
+  tunnel?: SessionTunnelEntry
 }
 
 export function SshWorkspaceContent({
@@ -79,6 +81,7 @@ export function SshWorkspaceContent({
   recordingLoading,
   onRecordingDetails,
   transfers,
+  tunnel,
 }: SshWorkspaceContentProps) {
   return (
     <Tabs
@@ -112,10 +115,12 @@ export function SshWorkspaceContent({
                       <LazySshTerminal
                         ref={terminalRef}
                         sessionId={sessionId}
+                        tunnel={tunnel}
                         onEvent={telemetry.handleTerminalEvent}
                         onFontSizeChange={telemetry.setFontSize}
                         searchOverlay={search.overlay}
                         onSearchResolved={({ matched }) => search.onResolved(matched)}
+                        activeTabId={activeTabId}
                       />
                     </Suspense>
                   </div>

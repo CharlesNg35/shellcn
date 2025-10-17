@@ -77,27 +77,28 @@ func (s *ProtocolService) ListAll(ctx context.Context) ([]ProtocolInfo, error) {
 	}
 
 	idSet := make(map[string]struct{}, len(rows))
-	driverIDs := make([]string, 0, len(rows))
+	protocolIDs := make([]string, 0, len(rows))
 	for _, row := range rows {
-		if _, exists := idSet[row.DriverID]; exists {
-			continue
-		}
-		id := strings.TrimSpace(row.DriverID)
+		id := strings.TrimSpace(row.ProtocolID)
 		if id == "" {
 			continue
 		}
-		idSet[id] = struct{}{}
-		driverIDs = append(driverIDs, id)
+		idLower := strings.ToLower(id)
+		if _, exists := idSet[idLower]; exists {
+			continue
+		}
+		idSet[idLower] = struct{}{}
+		protocolIDs = append(protocolIDs, idLower)
 	}
 
-	templates, err := s.loadLatestTemplates(ctx, driverIDs)
+	templates, err := s.loadLatestTemplates(ctx, protocolIDs)
 	if err != nil {
 		return nil, err
 	}
 
 	infos := make([]ProtocolInfo, 0, len(rows))
 	for _, row := range rows {
-		template := templates[strings.TrimSpace(row.DriverID)]
+		template := templates[strings.ToLower(strings.TrimSpace(row.ProtocolID))]
 		info, err := mapProtocolRow(row, template)
 		if err != nil {
 			return nil, err
@@ -215,9 +216,52 @@ func mapProtocolRow(row models.ConnectionProtocol, template *models.ConnectionTe
 	return info, nil
 }
 
-func (s *ProtocolService) loadLatestTemplates(ctx context.Context, driverIDs []string) (map[string]*models.ConnectionTemplate, error) {
-	if len(driverIDs) == 0 {
+func (s *ProtocolService) loadLatestTemplates(ctx context.Context, protocolIDs []string) (map[string]*models.ConnectionTemplate, error) {
+	if len(protocolIDs) == 0 {
 		return map[string]*models.ConnectionTemplate{}, nil
+	}
+
+	var bindings []models.ConnectionTemplateProtocol
+	if err := s.db.WithContext(ctx).
+		Where("protocol_id IN ?", protocolIDs).
+		Find(&bindings).Error; err != nil {
+		return nil, fmt.Errorf("protocol service: load template bindings: %w", err)
+	}
+
+	if len(bindings) == 0 {
+		return map[string]*models.ConnectionTemplate{}, nil
+	}
+
+	type templateKey struct {
+		DriverID string
+		Version  string
+	}
+
+	protoToKey := make(map[string]templateKey, len(bindings))
+	driverSet := make(map[string]struct{}, len(bindings))
+
+	for _, binding := range bindings {
+		protocolID := strings.ToLower(strings.TrimSpace(binding.ProtocolID))
+		if protocolID == "" {
+			continue
+		}
+		key := templateKey{
+			DriverID: strings.TrimSpace(binding.DriverID),
+			Version:  strings.TrimSpace(binding.Version),
+		}
+		protoToKey[protocolID] = key
+		if key.DriverID != "" {
+			driverSet[key.DriverID] = struct{}{}
+		}
+	}
+
+	if len(protoToKey) == 0 || len(driverSet) == 0 {
+		return map[string]*models.ConnectionTemplate{}, nil
+	}
+
+	driverIDs := make([]string, 0, len(driverSet))
+	for driverID := range driverSet {
+		driverIDs = append(driverIDs, driverID)
 	}
 
 	var records []models.ConnectionTemplate
@@ -228,14 +272,30 @@ func (s *ProtocolService) loadLatestTemplates(ctx context.Context, driverIDs []s
 		return nil, fmt.Errorf("protocol service: load connection templates: %w", err)
 	}
 
-	result := make(map[string]*models.ConnectionTemplate, len(records))
+	templatesByKey := make(map[templateKey]*models.ConnectionTemplate, len(records))
+	templatesByDriver := make(map[string]*models.ConnectionTemplate, len(records))
 	for i := range records {
 		record := records[i]
-		if _, exists := result[record.DriverID]; exists {
-			continue
+		key := templateKey{
+			DriverID: strings.TrimSpace(record.DriverID),
+			Version:  strings.TrimSpace(record.Version),
 		}
 		copy := record
-		result[record.DriverID] = &copy
+		templatesByKey[key] = &copy
+		if _, exists := templatesByDriver[key.DriverID]; !exists {
+			templatesByDriver[key.DriverID] = &copy
+		}
+	}
+
+	result := make(map[string]*models.ConnectionTemplate, len(protoToKey))
+	for protocolID, key := range protoToKey {
+		if tpl, ok := templatesByKey[key]; ok {
+			result[protocolID] = tpl
+			continue
+		}
+		if tpl, ok := templatesByDriver[key.DriverID]; ok {
+			result[protocolID] = tpl
+		}
 	}
 
 	return result, nil

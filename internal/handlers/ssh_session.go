@@ -41,6 +41,7 @@ type sshTerminalHandle interface {
 type SSHSessionHandler struct {
 	cfg            *app.Config
 	connections    *services.ConnectionService
+	templates      *services.ConnectionTemplateService
 	vault          *services.VaultService
 	activeSessions *services.ActiveSessionService
 	lifecycle      *services.SessionLifecycleService
@@ -56,6 +57,7 @@ type SSHSessionHandler struct {
 func NewSSHSessionHandler(
 	cfg *app.Config,
 	connectionSvc *services.ConnectionService,
+	templateSvc *services.ConnectionTemplateService,
 	vaultSvc *services.VaultService,
 	realtimeHub *realtime.Hub,
 	activeSvc *services.ActiveSessionService,
@@ -69,6 +71,7 @@ func NewSSHSessionHandler(
 	handler := &SSHSessionHandler{
 		cfg:            cfg,
 		connections:    connectionSvc,
+		templates:      templateSvc,
 		vault:          vaultSvc,
 		activeSessions: activeSvc,
 		lifecycle:      lifecycleSvc,
@@ -161,16 +164,52 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		prelaunchRecord = record
 	}
 
-	settings := cloneMap(connDTO.Settings)
-	host, port, hostErr := resolveHostPort(connDTO, settings)
-	if hostErr != nil {
-		response.Error(c, apperrors.NewBadRequest(hostErr.Error()))
-		return
+	var (
+		settings map[string]any
+		host     string
+		port     int
+	)
+
+	if h.templates != nil {
+		config, cfgErr := h.templates.MaterialiseConfig(ctx, *connDTO)
+		if cfgErr != nil {
+			response.Error(c, cfgErr)
+			return
+		}
+		if config != nil {
+			settings = cloneMap(config.Settings)
+			if len(config.Targets) > 0 {
+				host = strings.TrimSpace(config.Targets[0].Host)
+				port = config.Targets[0].Port
+			}
+		}
 	}
 
-	if _, exists := settings["host"]; !exists {
-		settings["host"] = host
+	if settings == nil {
+		settings = cloneMap(connDTO.Settings)
+		var hostErr error
+		host, port, hostErr = resolveHostPort(connDTO, settings)
+		if hostErr != nil {
+			response.Error(c, apperrors.NewBadRequest(hostErr.Error()))
+			return
+		}
+	} else {
+		if host == "" {
+			host = strings.TrimSpace(stringFromAny(settings["host"]))
+		}
+		if port <= 0 {
+			port = intFromAnyOrZero(settings["port"]) // fall back to stored value if template missed it
+		}
+		if host == "" {
+			response.Error(c, apperrors.NewBadRequest("connection is missing host information"))
+			return
+		}
+		if port <= 0 {
+			port = 22
+		}
 	}
+
+	settings["host"] = host
 	settings["port"] = port
 
 	sftpEnabled := true
@@ -453,6 +492,10 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 		closeReason = "incompatible session handle"
 		response.Error(c, apperrors.New("session.handle_incompatible", "ssh driver returned incompatible session handle", http.StatusInternalServerError))
 		return
+	}
+
+	if h.activeSessions != nil {
+		h.activeSessions.AttachHandle(sessionID, terminal)
 	}
 
 	wsConn, err := h.upgradeConnection(c)

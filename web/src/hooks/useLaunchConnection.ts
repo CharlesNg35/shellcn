@@ -17,6 +17,7 @@ import { useConnectionTemplate } from '@/hooks/useConnectionTemplate'
 import { useActiveConnections, ACTIVE_CONNECTIONS_QUERY_KEY } from '@/hooks/useActiveConnections'
 import { CONNECTIONS_QUERY_BASE_KEY } from '@/hooks/useConnections'
 import type { ActiveConnectionSession } from '@/types/connections'
+import { useSshSessionTunnelStore } from '@/store/ssh-session-tunnel-store'
 
 export interface LaunchDialogState {
   isOpen: boolean
@@ -38,6 +39,7 @@ export function useLaunchConnection() {
 
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const setTunnel = useSshSessionTunnelStore((state) => state.setTunnel)
 
   const open = useCallback((connection: ConnectionRecord) => {
     setState({
@@ -113,6 +115,9 @@ export function useLaunchConnection() {
       queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_BASE_KEY, exact: false })
       close()
       const session = response.session
+      if (response.tunnel) {
+        setTunnel(session.id, session.connection_id, response.tunnel)
+      }
       const descriptorFromResponse =
         getWorkspaceDescriptor(response.descriptor?.id ?? session.descriptor_id) ??
         getWorkspaceDescriptorForProtocol(session.protocol_id)

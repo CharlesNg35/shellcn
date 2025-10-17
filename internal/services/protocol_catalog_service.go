@@ -214,6 +214,7 @@ func (s *ProtocolCatalogService) persistConnectionTemplate(ctx context.Context, 
 	if driverID == "" {
 		driverID = fallbackDriverID
 	}
+	template.DriverID = driverID
 	version := strings.TrimSpace(template.Version)
 	if version == "" {
 		return fmt.Errorf("protocol catalog service: connection template for %s missing version", driverID)
@@ -222,9 +223,17 @@ func (s *ProtocolCatalogService) persistConnectionTemplate(ctx context.Context, 
 		return fmt.Errorf("protocol catalog service: connection template for %s invalid: %w", driverID, err)
 	}
 
+	protocols := models.NormalizeConnectionTemplateProtocols(template.Protocols, driverID)
+	template.Protocols = protocols
+
 	sectionsJSON, err := json.Marshal(template.Sections)
 	if err != nil {
 		return fmt.Errorf("protocol catalog service: marshal connection sections for %s: %w", driverID, err)
+	}
+
+	protocolsJSON, err := json.Marshal(protocols)
+	if err != nil {
+		return fmt.Errorf("protocol catalog service: marshal connection protocols for %s: %w", driverID, err)
 	}
 
 	var metadataJSON datatypes.JSON
@@ -242,6 +251,7 @@ func (s *ProtocolCatalogService) persistConnectionTemplate(ctx context.Context, 
 		"display_name": strings.TrimSpace(template.DisplayName),
 		"description":  strings.TrimSpace(template.Description),
 		"sections":     template.Sections,
+		"protocols":    protocols,
 		"metadata":     template.Metadata,
 	}
 	encoded, err := json.Marshal(payload)
@@ -257,15 +267,20 @@ func (s *ProtocolCatalogService) persistConnectionTemplate(ctx context.Context, 
 		DisplayName: strings.TrimSpace(template.DisplayName),
 		Description: strings.TrimSpace(template.Description),
 		Sections:    sectionsJSON,
+		Protocols:   datatypes.JSON(protocolsJSON),
 		Metadata:    metadataJSON,
 		Hash:        hash,
 	}
 
 	if err := tx.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "driver_id"}, {Name: "version"}},
-		DoUpdates: clause.AssignmentColumns([]string{"display_name", "description", "sections", "metadata", "hash"}),
+		DoUpdates: clause.AssignmentColumns([]string{"display_name", "description", "sections", "protocols", "metadata", "hash"}),
 	}).Create(&record).Error; err != nil {
 		return fmt.Errorf("protocol catalog service: upsert connection template for %s: %w", driverID, err)
+	}
+
+	if err := syncConnectionTemplateProtocols(ctx, tx, driverID, version, protocols); err != nil {
+		return err
 	}
 
 	return nil
@@ -275,6 +290,12 @@ func validateConnectionTemplate(template *drivers.ConnectionTemplate) error {
 	if template == nil {
 		return errors.New("template is nil")
 	}
+	driverID := strings.TrimSpace(template.DriverID)
+	protocols := models.NormalizeConnectionTemplateProtocols(template.Protocols, driverID)
+	if len(protocols) == 0 {
+		return errors.New("no protocols defined")
+	}
+	template.Protocols = protocols
 	if len(template.Sections) == 0 {
 		return errors.New("no sections defined")
 	}
@@ -314,6 +335,39 @@ func validateConnectionTemplate(template *drivers.ConnectionTemplate) error {
 			}
 		}
 	}
+	return nil
+}
+
+func syncConnectionTemplateProtocols(ctx context.Context, tx *gorm.DB, driverID, version string, protocols []string) error {
+	if tx == nil {
+		return nil
+	}
+
+	normalized := models.NormalizeConnectionTemplateProtocols(protocols, driverID)
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	if err := tx.WithContext(ctx).
+		Where("driver_id = ? AND protocol_id NOT IN ?", driverID, normalized).
+		Delete(&models.ConnectionTemplateProtocol{}).Error; err != nil {
+		return fmt.Errorf("protocol catalog service: prune protocol bindings for %s: %w", driverID, err)
+	}
+
+	for _, protocolID := range normalized {
+		record := models.ConnectionTemplateProtocol{
+			ProtocolID: protocolID,
+			DriverID:   driverID,
+			Version:    version,
+		}
+		if err := tx.WithContext(ctx).Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "protocol_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"driver_id", "version", "updated_at"}),
+		}).Create(&record).Error; err != nil {
+			return fmt.Errorf("protocol catalog service: upsert protocol binding %s: %w", protocolID, err)
+		}
+	}
+
 	return nil
 }
 

@@ -55,7 +55,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	r.Use(middleware.Recovery())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Metrics())
-	r.Use(middleware.SecurityHeaders())
+	// r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
 	if cfg.Server.CSRF.Enabled {
 		r.Use(middleware.CSRF())
@@ -274,6 +274,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	connectionSvc, err := services.NewConnectionService(db, checker,
 		services.WithConnectionVault(vaultSvc),
 		services.WithConnectionTemplates(connectionTemplateSvc),
+		services.WithConnectionDrivers(driverReg),
 	)
 	if err != nil {
 		return nil, err
@@ -317,6 +318,13 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	sessionRecordingHandler := handlers.NewSessionRecordingHandler(recorder, sessionLifecycleSvc, checker)
 	registerSessionRecordingRoutes(api, sessionRecordingHandler, checker)
 
+	snippetSvc, err := services.NewSnippetService(db)
+	if err != nil {
+		return nil, err
+	}
+	snippetHandler := handlers.NewSnippetHandler(snippetSvc, checker, sessionLifecycleSvc, activeSessionSvc)
+	registerSnippetRoutes(api, snippetHandler)
+
 	launchHandler := handlers.NewActiveSessionLaunchHandler(
 		cfg,
 		connectionSvc,
@@ -346,7 +354,7 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *d
 	// SSH & SFTP Handlers
 	// ---------------------------------------------------------------------------
 	sshHandler := handlers.NewSSHSessionHandler(
-		cfg, connectionSvc, vaultSvc,
+		cfg, connectionSvc, connectionTemplateSvc, vaultSvc,
 		realtimeHub, activeSessionSvc, sessionLifecycleSvc, recorder,
 		sftpChannelSvc, driverReg, checker, jwt,
 	)

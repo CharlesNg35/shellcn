@@ -175,6 +175,7 @@ interface ConnectionTemplateResponse {
   version: string
   display_name: string
   description?: string
+  protocols?: string[] | string | null
   sections?: ConnectionTemplateSectionResponse[] | null
   metadata?: Record<string, unknown> | string | null
 }
@@ -320,6 +321,7 @@ function transformConnectionTemplateResponse(
     version: raw.version,
     displayName: raw.display_name,
     description: raw.description,
+    protocols: normalizeStringArrayPayload(raw.protocols),
     sections: (raw.sections ?? []).map(transformConnectionTemplateSection),
     metadata: parseRecordPayload(raw.metadata),
   }

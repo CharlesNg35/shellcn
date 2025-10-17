@@ -19,6 +19,7 @@ type ConnectionTemplate struct {
 	DisplayName string         `gorm:"not null" json:"display_name"`
 	Description string         `json:"description"`
 	Sections    datatypes.JSON `gorm:"not null" json:"sections"`
+	Protocols   datatypes.JSON `json:"protocols"`
 	Metadata    datatypes.JSON `json:"metadata"`
 	Hash        string         `gorm:"index" json:"hash"`
 }
@@ -58,5 +59,49 @@ func (t *ConnectionTemplate) BeforeSave(tx *gorm.DB) error {
 		}
 	}
 
+	var rawProtocols []string
+	if len(t.Protocols) > 0 {
+		if err := json.Unmarshal(t.Protocols, &rawProtocols); err != nil {
+			return fmt.Errorf("connection_template: protocols must be valid json: %w", err)
+		}
+	}
+
+	normalized := NormalizeConnectionTemplateProtocols(rawProtocols, t.DriverID)
+	data, err := json.Marshal(normalized)
+	if err != nil {
+		return fmt.Errorf("connection_template: marshal protocols: %w", err)
+	}
+	t.Protocols = datatypes.JSON(data)
+
 	return nil
+}
+
+// NormalizeConnectionTemplateProtocols deduplicates and normalizes protocol identifiers.
+func NormalizeConnectionTemplateProtocols(protocols []string, driverID string) []string {
+	driverID = strings.TrimSpace(strings.ToLower(driverID))
+	seen := make(map[string]struct{})
+	ordered := make([]string, 0, len(protocols)+1)
+
+	if driverID != "" {
+		seen[driverID] = struct{}{}
+		ordered = append(ordered, driverID)
+	}
+
+	for _, id := range protocols {
+		normalized := strings.TrimSpace(strings.ToLower(id))
+		if normalized == "" {
+			continue
+		}
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		ordered = append(ordered, normalized)
+	}
+
+	if len(ordered) == 0 && driverID != "" {
+		return []string{driverID}
+	}
+
+	return ordered
 }
