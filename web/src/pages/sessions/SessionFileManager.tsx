@@ -66,7 +66,7 @@ export function SessionFileManager() {
   useEffect(() => {
     const label = session?.connection_name ?? session?.connection_id
     if (sessionId && label) {
-      const path = `/active-sessions/${sessionId}/sftp`
+      const path = `/active-sessions/${sessionId}`
       setOverride(path, `${label} · SFTP`)
       return () => {
         clearOverride(path)

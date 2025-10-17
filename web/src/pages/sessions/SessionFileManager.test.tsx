@@ -82,9 +82,9 @@ describe('SessionFileManager page', () => {
     })
 
     render(
-      <MemoryRouter initialEntries={['/active-sessions/sess-1/sftp']}>
+      <MemoryRouter initialEntries={['/active-sessions/sess-1']}>
         <Routes>
-          <Route path="/active-sessions/:sessionId/sftp" element={<SessionFileManager />} />
+          <Route path="/active-sessions/:sessionId" element={<SessionFileManager />} />
         </Routes>
       </MemoryRouter>
     )
@@ -103,9 +103,9 @@ describe('SessionFileManager page', () => {
     mockUseCurrentUser.mockReturnValue({ data: null })
 
     render(
-      <MemoryRouter initialEntries={['/active-sessions/unknown/sftp']}>
+      <MemoryRouter initialEntries={['/active-sessions/unknown']}>
         <Routes>
-          <Route path="/active-sessions/:sessionId/sftp" element={<SessionFileManager />} />
+          <Route path="/active-sessions/:sessionId" element={<SessionFileManager />} />
         </Routes>
       </MemoryRouter>
     )
@@ -136,9 +136,9 @@ describe('SessionFileManager page', () => {
     })
 
     render(
-      <MemoryRouter initialEntries={['/active-sessions/sess-2/sftp']}>
+      <MemoryRouter initialEntries={['/active-sessions/sess-2']}>
         <Routes>
-          <Route path="/active-sessions/:sessionId/sftp" element={<SessionFileManager />} />
+          <Route path="/active-sessions/:sessionId" element={<SessionFileManager />} />
         </Routes>
       </MemoryRouter>
     )

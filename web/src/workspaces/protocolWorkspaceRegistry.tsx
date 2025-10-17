@@ -2,6 +2,7 @@ import { LifeBuoy } from 'lucide-react'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 import { SSH_WORKSPACE_DESCRIPTOR } from './ssh/SshWorkspaceDescriptor'
+import { SFTP_WORKSPACE_DESCRIPTOR } from './sftp/SftpWorkspaceDescriptor'
 import type { WorkspaceDescriptor, WorkspaceMountProps } from './types'
 
 const descriptorsById = new Map<string, WorkspaceDescriptor>()
@@ -62,3 +63,4 @@ export function getWorkspaceDescriptorForProtocol(protocolId?: string | null): W
 export { FALLBACK_DESCRIPTOR }
 
 registerWorkspaceDescriptor(SSH_WORKSPACE_DESCRIPTOR)
+registerWorkspaceDescriptor(SFTP_WORKSPACE_DESCRIPTOR)

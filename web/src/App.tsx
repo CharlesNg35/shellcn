@@ -69,11 +69,6 @@ const Security = lazy(() =>
 const SessionsPage = lazy(() =>
   import('@/pages/settings/Sessions').then((module) => ({ default: module.Sessions }))
 )
-const SessionFileManager = lazy(() =>
-  import('@/pages/sessions/SessionFileManager').then((module) => ({
-    default: module.SessionFileManager,
-  }))
-)
 const ProtocolWorkspaceRoute = lazy(() =>
   import('@/pages/sessions/ProtocolWorkspaceRoute').then((module) => ({
     default: module.ProtocolWorkspaceRoute,
@@ -113,7 +108,6 @@ function AppRoutes() {
               <Route path="/settings/security" element={<Security />} />
               <Route path="/settings/sessions" element={<SessionsPage />} />
               <Route path="/active-sessions/:sessionId" element={<ProtocolWorkspaceRoute />} />
-              <Route path="/active-sessions/:sessionId/sftp" element={<SessionFileManager />} />
             </Route>
           </Route>
         </Route>
