@@ -1,5 +1,4 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo } from 'react'
-import { Card } from '@/components/ui/Card'
 import { useSshWorkspaceStore } from '@/store/ssh-workspace-store'
 import type { ActiveSessionParticipant } from '@/types/connections'
 import type { TransferItem } from '@/store/ssh-workspace-store'
@@ -86,17 +85,19 @@ export function SftpWorkspace({
   )
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <Card className="border border-border bg-card p-2 shadow-sm">
-        <SftpWorkspaceTabs
-          tabs={sessionState?.tabs ?? []}
-          activeTabId={sessionState?.activeTabId ?? ''}
-          onSelect={handleSelectTab}
-          onClose={handleCloseTab}
-        />
-      </Card>
+    <div className="flex h-full flex-col gap-3">
+      {sessionState && sessionState.tabs.length > 0 && (
+        <div className="border-b border-border/50 pb-2">
+          <SftpWorkspaceTabs
+            tabs={sessionState.tabs}
+            activeTabId={sessionState.activeTabId ?? ''}
+            onSelect={handleSelectTab}
+            onClose={handleCloseTab}
+          />
+        </div>
+      )}
 
-      <div className="flex flex-1 gap-4 overflow-hidden">
+      <div className="flex flex-1 gap-3 overflow-hidden">
         <div className="flex-1 overflow-hidden">
           {activeTab?.type === 'editor' && activeTab.path ? (
             <Suspense fallback={<EditorFallback />}>

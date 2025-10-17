@@ -52,24 +52,94 @@ function formatTemplateValue(value: unknown): string {
   return String(value)
 }
 
+function normalizeProtocols(value: unknown): string[] {
+  if (!value) {
+    return []
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === 'string' ? item.trim() : String(item).trim()))
+      .filter((item) => item.length > 0)
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0)
+  }
+  return []
+}
+
+function shouldDisplayTemplateField(rawValue: unknown): boolean {
+  if (rawValue === null || rawValue === undefined) {
+    return false
+  }
+  if (typeof rawValue === 'boolean') {
+    return rawValue
+  }
+  if (typeof rawValue === 'number') {
+    return Number.isFinite(rawValue) && rawValue !== 0
+  }
+  if (typeof rawValue === 'string') {
+    return rawValue.trim().length > 0
+  }
+  if (Array.isArray(rawValue)) {
+    return rawValue.length > 0
+  }
+  if (typeof rawValue === 'object') {
+    return Object.keys(rawValue as Record<string, unknown>).length > 0
+  }
+  return true
+}
+
 function resolveTemplateFields(
   connectionTemplate?: ConnectionTemplateMetadata,
-  templateDefinition?: ConnectionTemplate | null
+  templateDefinition?: ConnectionTemplate | null,
+  protocolId?: string | null
 ) {
   if (!connectionTemplate?.fields) {
     return []
   }
-  const fieldLabels = new Map<string, string>()
+  const definitions = new Map<
+    string,
+    {
+      label: string
+      metadata?: Record<string, unknown>
+    }
+  >()
   templateDefinition?.sections.forEach((section) => {
     section.fields.forEach((field) => {
-      fieldLabels.set(field.key, field.label)
+      definitions.set(field.key, { label: field.label, metadata: field.metadata })
     })
   })
-  return Object.entries(connectionTemplate.fields).map(([key, value]) => ({
-    key,
-    label: fieldLabels.get(key) ?? key,
-    value: formatTemplateValue(value),
-  }))
+  const normalizedProtocol = typeof protocolId === 'string' ? protocolId.trim().toLowerCase() : ''
+
+  return Object.entries(connectionTemplate.fields)
+    .map(([key, rawValue]) => {
+      const definition = definitions.get(key)
+      if (definition?.metadata) {
+        const allowed = normalizeProtocols(definition.metadata.protocols)
+        if (allowed.length > 0 && normalizedProtocol) {
+          const permitted = allowed.some((value) => value.toLowerCase() === normalizedProtocol)
+          if (!permitted) {
+            return null
+          }
+        } else if (allowed.length > 0 && !normalizedProtocol) {
+          return null
+        }
+      }
+
+      if (!shouldDisplayTemplateField(rawValue)) {
+        return null
+      }
+
+      return {
+        key,
+        label: definition?.label ?? key,
+        value: formatTemplateValue(rawValue),
+      }
+    })
+    .filter((entry): entry is { key: string; label: string; value: string } => entry !== null)
 }
 
 export function LaunchConnectionModal({
@@ -87,8 +157,8 @@ export function LaunchConnectionModal({
 }: LaunchConnectionModalProps) {
   const templateMetadata = connection?.metadata?.connection_template
   const templateFields = useMemo(
-    () => resolveTemplateFields(templateMetadata, template),
-    [template, templateMetadata]
+    () => resolveTemplateFields(templateMetadata, template, connection?.protocol_id),
+    [connection?.protocol_id, template, templateMetadata]
   )
 
   const versionMismatch = useMemo(() => {

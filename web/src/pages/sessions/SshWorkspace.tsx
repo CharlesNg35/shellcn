@@ -346,6 +346,21 @@ export function SshWorkspace() {
     logEvent('window.open', { sessionId })
   }, [logEvent, sessionId])
 
+  const snippetButtonDisabled = snippetsLoading || snippetExecuting || !snippetsAvailable
+  const tunnel = useMemo(() => {
+    if (!sessionTunnel) {
+      return undefined
+    }
+    const paramsSessionId = sessionTunnel.params?.session_id ?? sessionTunnel.params?.sessionId
+    if (session && session.id !== paramsSessionId && paramsSessionId) {
+      return undefined
+    }
+    if (!canWrite) {
+      return undefined
+    }
+    return sessionTunnel
+  }, [canWrite, session, sessionTunnel])
+
   if (!sessionId) {
     return (
       <EmptyState
@@ -375,25 +390,10 @@ export function SshWorkspace() {
     )
   }
 
-  const snippetButtonDisabled = snippetsLoading || snippetExecuting || !snippetsAvailable
-  const tunnel = useMemo(() => {
-    if (!sessionTunnel) {
-      return undefined
-    }
-    const paramsSessionId = sessionTunnel.params?.session_id ?? sessionTunnel.params?.sessionId
-    if (session && session.id !== paramsSessionId && paramsSessionId) {
-      return undefined
-    }
-    if (!canWrite) {
-      return undefined
-    }
-    return sessionTunnel
-  }, [canWrite, session, sessionTunnel])
-
   return (
     <div
       className={cn(
-        'flex h-full flex-col gap-6',
+        'flex h-full flex-col gap-3',
         isFullscreen && 'fixed inset-0 z-50 bg-background p-4 lg:p-6'
       )}
     >
@@ -403,6 +403,7 @@ export function SshWorkspace() {
         currentUserId={currentUserId}
         canShare={canShareSession}
         onOpenShare={() => setShareDialogOpen(true)}
+        className="shadow-none"
       />
 
       <SshWorkspaceToolbar

@@ -39,7 +39,7 @@ interface SshWorkspaceContentProps {
   sessionId: string
   tabs: WorkspaceTab[]
   activeTabId: string
-  layoutColumns: number
+  layoutColumns?: number
   onSelectTab: (tabId: string) => void
   onCloseTab: (tabId: string) => void
   onReorderTabs: (orderedIds: string[]) => void
@@ -65,7 +65,6 @@ export function SshWorkspaceContent({
   sessionId,
   tabs,
   activeTabId,
-  layoutColumns,
   onSelectTab,
   onCloseTab,
   onReorderTabs,
@@ -102,42 +101,35 @@ export function SshWorkspaceContent({
 
         <div className="flex-1 overflow-hidden">
           {tabs.map((tab) => (
-            <TabsContent key={tab.id} value={tab.id} className="h-full w-full" forceMount>
-              <div
-                className="grid h-full gap-4 px-4 py-4"
-                style={{ gridTemplateColumns: `repeat(${layoutColumns}, minmax(0, 1fr))` }}
-                data-columns={layoutColumns}
-                data-testid={tab.type === 'terminal' ? 'terminal-grid' : undefined}
-              >
-                {tab.type === 'terminal' ? (
-                  <div className="col-span-full h-full">
-                    <Suspense fallback={<TerminalFallback />}>
-                      <LazySshTerminal
-                        ref={terminalRef}
-                        sessionId={sessionId}
-                        tunnel={tunnel}
-                        onEvent={telemetry.handleTerminalEvent}
-                        onFontSizeChange={telemetry.setFontSize}
-                        searchOverlay={search.overlay}
-                        onSearchResolved={({ matched }) => search.onResolved(matched)}
-                        activeTabId={activeTabId}
-                      />
-                    </Suspense>
-                  </div>
-                ) : (
-                  <div className="col-span-full h-full">
-                    <Suspense fallback={<SftpFallback />}>
-                      <LazySftpWorkspace
-                        sessionId={sessionId}
-                        canWrite={canWrite}
-                        currentUserId={currentUserId}
-                        currentUserName={currentUserName}
-                        participants={participants}
-                      />
-                    </Suspense>
-                  </div>
-                )}
-              </div>
+            <TabsContent key={tab.id} value={tab.id} className="h-full w-full p-0 m-0" forceMount>
+              {tab.type === 'terminal' ? (
+                <div className="h-full w-full p-4">
+                  <Suspense fallback={<TerminalFallback />}>
+                    <LazySshTerminal
+                      ref={terminalRef}
+                      sessionId={sessionId}
+                      tunnel={tunnel}
+                      onEvent={telemetry.handleTerminalEvent}
+                      onFontSizeChange={telemetry.setFontSize}
+                      searchOverlay={search.overlay}
+                      onSearchResolved={({ matched }) => search.onResolved(matched)}
+                      activeTabId={activeTabId}
+                    />
+                  </Suspense>
+                </div>
+              ) : (
+                <div className="h-full w-full p-4">
+                  <Suspense fallback={<SftpFallback />}>
+                    <LazySftpWorkspace
+                      sessionId={sessionId}
+                      canWrite={canWrite}
+                      currentUserId={currentUserId}
+                      currentUserName={currentUserName}
+                      participants={participants}
+                    />
+                  </Suspense>
+                </div>
+              )}
             </TabsContent>
           ))}
         </div>

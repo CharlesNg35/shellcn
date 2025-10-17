@@ -1,13 +1,11 @@
 import { useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
-import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { SftpWorkspace } from '@/components/workspace/SftpWorkspace'
 import { useActiveConnections } from '@/hooks/useActiveConnections'
 import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
-import { formatDistanceToNow } from 'date-fns'
 import { sessionSupportsSftp } from '@/lib/utils/sessionCapabilities'
 
 export function SessionFileManager() {
@@ -19,7 +17,6 @@ export function SessionFileManager() {
     isLoading,
     isError,
   } = useActiveConnections({
-    protocol_id: 'ssh',
     enabled: Boolean(sessionId),
     refetchInterval: 20_000,
   })
@@ -114,42 +111,20 @@ export function SessionFileManager() {
     )
   }
 
-  const startedAt = session.started_at ? new Date(session.started_at) : undefined
-  const lastSeenAt = session.last_seen_at ? new Date(session.last_seen_at) : undefined
-
   return (
-    <div className="flex h-full flex-col gap-6">
-      <Card className="border border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">
-              {session.connection_name ?? 'SSH Session'}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Connected as{' '}
-              <span className="font-medium text-foreground">
-                {session.user_name ?? session.user_id}
-              </span>
-              {session.host ? ` · ${session.host}` : ''}
-              {session.port ? `:${session.port}` : ''}
-            </p>
-          </div>
-          <dl className="grid grid-cols-2 gap-4 text-sm text-muted-foreground">
-            {startedAt && (
-              <div>
-                <dt className="font-medium text-foreground">Started</dt>
-                <dd>{formatDistanceToNow(startedAt, { addSuffix: true })}</dd>
-              </div>
-            )}
-            {lastSeenAt && (
-              <div>
-                <dt className="font-medium text-foreground">Last activity</dt>
-                <dd>{formatDistanceToNow(lastSeenAt, { addSuffix: true })}</dd>
-              </div>
-            )}
-          </dl>
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex items-center justify-between border-b border-border/50 pb-3">
+        <div>
+          <h1 className="text-base font-semibold text-foreground">
+            {session.connection_name ?? 'SSH Session'}
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            {session.user_name ?? session.user_id}
+            {session.host ? ` @ ${session.host}` : ''}
+            {session.port && session.port !== 22 ? `:${session.port}` : ''}
+          </p>
         </div>
-      </Card>
+      </div>
 
       <div className="flex-1 overflow-hidden">
         <SftpWorkspace

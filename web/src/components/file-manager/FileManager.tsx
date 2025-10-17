@@ -506,7 +506,7 @@ export function FileManager({
         />
       }
     >
-      <div className={cn('flex h-full flex-col gap-4', className)}>
+      <div className={cn('flex h-full flex-col gap-3', className)}>
         <FileManagerToolbar
           isRootPath={browserPath === '.' || browserPath === '/'}
           isLoading={isLoading}
@@ -566,13 +566,13 @@ export function FileManager({
           }
         />
 
-        <div className="flex flex-1 gap-4 overflow-hidden">
+        <div className="flex flex-1 gap-3 overflow-hidden">
           <div {...getRootProps({ className: 'relative flex-1 overflow-hidden', tabIndex: -1 })}>
             <Card className="flex h-full flex-col overflow-hidden">
-              <div className="border-b border-border px-4 py-3">
-                <h3 className="text-sm font-semibold text-muted-foreground">
+              <div className="border-b border-border px-3 py-2">
+                <p className="text-xs font-medium text-muted-foreground">
                   {entries.length === 1 ? '1 item' : `${entries.length} items`}
-                </h3>
+                </p>
               </div>
 
               <div ref={scrollContainerRef} className="relative flex-1 overflow-auto">
