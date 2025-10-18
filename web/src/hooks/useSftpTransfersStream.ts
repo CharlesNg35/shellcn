@@ -1,10 +1,8 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import type { RealtimeMessage } from '@/types/realtime'
 import { REALTIME_STREAM_SFTP } from '@/types/realtime'
 import type { SftpTransferRealtimeEvent, SftpTransferStatus } from '@/types/sftp'
-import { useAuth } from './useAuth'
-import { buildWebSocketUrl } from '@/lib/utils/websocket'
-import { useWebSocket } from './useWebSocket'
+import { useAuthenticatedWebSocket } from './useAuthenticatedWebSocket'
 
 interface RawSftpTransferPayload {
   session_id?: string
@@ -86,20 +84,6 @@ export function useSftpTransfersStream({
   enabled = true,
   onEvent,
 }: UseSftpTransfersStreamOptions) {
-  const { tokens, isAuthenticated } = useAuth({ autoInitialize: true })
-
-  const accessToken = tokens?.accessToken ?? ''
-
-  const websocketUrl = useMemo(() => {
-    if (!isAuthenticated || !enabled || !accessToken) {
-      return ''
-    }
-    return buildWebSocketUrl('/ws', {
-      token: accessToken,
-      streams: REALTIME_STREAM_SFTP,
-    })
-  }, [accessToken, enabled, isAuthenticated])
-
   const handleMessage = useCallback(
     (message: RealtimeMessage<RawSftpTransferPayload> | null) => {
       if (!message || message.stream !== REALTIME_STREAM_SFTP) {
@@ -121,10 +105,11 @@ export function useSftpTransfersStream({
     [onEvent, sessionId]
   )
 
-  const { isConnected, close, send, lastMessage } = useWebSocket<
+  const { isConnected, close, send, lastMessage } = useAuthenticatedWebSocket<
     RealtimeMessage<RawSftpTransferPayload>
-  >(websocketUrl, {
-    enabled: Boolean(websocketUrl),
+  >({
+    params: { streams: REALTIME_STREAM_SFTP },
+    enabled,
     autoReconnect: true,
     onMessage: handleMessage,
   })

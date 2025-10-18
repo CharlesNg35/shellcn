@@ -213,75 +213,68 @@ export function Users() {
       />
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'users' | 'invites')}>
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <TabsList className="gap-2">
-              <TabsTrigger value="users" className="gap-2">
-                <span>Users</span>
-                <Badge
-                  variant={activeTab === 'users' ? 'secondary' : 'outline'}
-                  className="text-xs font-semibold"
-                >
-                  {userCount}
-                </Badge>
-              </TabsTrigger>
-              <TabsTrigger value="invites" className="gap-2">
-                <span>Invitations</span>
-                <Badge
-                  variant={activeTab === 'invites' ? 'secondary' : 'outline'}
-                  className="text-xs font-semibold"
-                >
-                  {invitesQuery.isLoading ? '...' : inviteCount}
-                </Badge>
-              </TabsTrigger>
-            </TabsList>
-            <p className="text-sm text-muted-foreground">
-              {activeTab === 'users'
-                ? 'Review user accounts, filters, and bulk actions.'
-                : 'Monitor pending invitations and revoke access when needed.'}
-            </p>
-          </div>
-
-          <TabsContent value="users" className="space-y-4">
-            <UserFilters filters={filters} onChange={setFilters} />
-
-            <UserBulkActionsBar
-              selectedCount={selectedIds.length}
-              onActivate={handleBulkActivate}
-              onDeactivate={handleBulkDeactivate}
-              onDelete={handleBulkDelete}
-              isProcessing={isBulkProcessing}
-            />
-
-            <UserTable
-              users={users}
-              meta={meta}
-              page={meta?.page ?? page}
-              perPage={meta?.per_page ?? DEFAULT_PER_PAGE}
-              isLoading={isLoading}
-              onPageChange={setPage}
-              onSelectionChange={handleSelectionChange}
-              onViewUser={handleViewUser}
-              onEditUser={handleEditUser}
-            />
-          </TabsContent>
-
-          <TabsContent value="invites" className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Track pending invitations and revoke them when they are no longer needed.
-            </p>
-            <UserInviteList
-              invites={invitesQuery.data}
-              isLoading={invitesQuery.isLoading}
-              onRevoke={(inviteId) => revokeInvite.mutate(inviteId)}
-              isRevoking={isRevokingInvite}
-              onResend={(inviteId) => resendInvite.mutate(inviteId)}
-              isResending={isResendingInvite}
-              onCopyLink={handleCopyInviteLink}
-              isCopying={isGeneratingInviteLink}
-            />
-          </TabsContent>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList className="gap-2">
+            <TabsTrigger value="users" className="gap-2">
+              <span>Users</span>
+              <Badge
+                variant={activeTab === 'users' ? 'secondary' : 'outline'}
+                className="text-xs font-semibold"
+              >
+                {userCount}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="invites" className="gap-2">
+              <span>Invitations</span>
+              <Badge
+                variant={activeTab === 'invites' ? 'secondary' : 'outline'}
+                className="text-xs font-semibold"
+              >
+                {invitesQuery.isLoading ? '...' : inviteCount}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
         </div>
+
+        <TabsContent value="users" className="space-y-4">
+          <UserFilters filters={filters} onChange={setFilters} />
+
+          <UserBulkActionsBar
+            selectedCount={selectedIds.length}
+            onActivate={handleBulkActivate}
+            onDeactivate={handleBulkDeactivate}
+            onDelete={handleBulkDelete}
+            isProcessing={isBulkProcessing}
+          />
+
+          <UserTable
+            users={users}
+            meta={meta}
+            page={meta?.page ?? page}
+            perPage={meta?.per_page ?? DEFAULT_PER_PAGE}
+            isLoading={isLoading}
+            onPageChange={setPage}
+            onSelectionChange={handleSelectionChange}
+            onViewUser={handleViewUser}
+            onEditUser={handleEditUser}
+          />
+        </TabsContent>
+
+        <TabsContent value="invites" className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Track pending invitations and revoke them when they are no longer needed.
+          </p>
+          <UserInviteList
+            invites={invitesQuery.data}
+            isLoading={invitesQuery.isLoading}
+            onRevoke={(inviteId) => revokeInvite.mutate(inviteId)}
+            isRevoking={isRevokingInvite}
+            onResend={(inviteId) => resendInvite.mutate(inviteId)}
+            isResending={isResendingInvite}
+            onCopyLink={handleCopyInviteLink}
+            isCopying={isGeneratingInviteLink}
+          />
+        </TabsContent>
       </Tabs>
 
       <Modal

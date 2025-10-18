@@ -516,7 +516,7 @@ export function Connections() {
               showingActiveOnly={showActiveOnly}
             />
           ) : (
-            <div className="grid gap-4 pb-6 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid gap-4 pb-6 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
               {filteredConnections.map((connection) => (
                 <ConnectionCard
                   key={connection.id}
@@ -695,37 +695,33 @@ function EmptyState({
 
 function LoadingState() {
   return (
-    <div className="grid gap-4 pb-6 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-      {Array.from({ length: 8 }).map((_, index) => (
+    <div className="grid gap-4 pb-6 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
+      {Array.from({ length: 10 }).map((_, index) => (
         <div
           key={`connection-skeleton-${index}`}
-          className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm"
+          className="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card"
         >
-          {/* Header skeleton */}
-          <div className="border-b border-border/40 bg-muted/30 p-4">
-            <div className="flex items-start gap-3">
-              <div className="h-12 w-12 animate-pulse rounded-lg bg-muted" />
+          {/* Content skeleton */}
+          <div className="flex-1 p-5">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="h-11 w-11 animate-pulse rounded-lg bg-muted" />
               <div className="flex-1 space-y-2">
                 <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-                <div className="h-3 w-48 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-40 animate-pulse rounded bg-muted" />
               </div>
             </div>
-          </div>
-          {/* Body skeleton */}
-          <div className="flex-1 space-y-3 p-4">
-            <div className="flex gap-2">
-              <div className="h-5 w-16 animate-pulse rounded bg-muted" />
-              <div className="h-5 w-20 animate-pulse rounded bg-muted" />
+            <div className="mb-4 flex gap-2">
+              <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-16 animate-pulse rounded bg-muted" />
             </div>
-            <div className="h-3 w-full animate-pulse rounded bg-muted" />
-            <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+            <div className="space-y-2">
+              <div className="h-3 w-full animate-pulse rounded bg-muted" />
+              <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+            </div>
           </div>
           {/* Footer skeleton */}
-          <div className="border-t border-border/40 bg-muted/20 p-3">
-            <div className="flex gap-2">
-              <div className="h-9 flex-1 animate-pulse rounded bg-muted" />
-              <div className="h-9 w-9 animate-pulse rounded bg-muted" />
-            </div>
+          <div className="border-t border-border/40 bg-muted/10 p-3">
+            <div className="h-9 w-full animate-pulse rounded bg-muted" />
           </div>
         </div>
       ))}

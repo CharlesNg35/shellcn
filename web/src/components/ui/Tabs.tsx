@@ -60,7 +60,7 @@ const TabsList = forwardRef<
 >(({ className, justify, dense, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
-    className={cn(tabsListVariants({ justify, dense }), className)}
+    className={cn(tabsListVariants({ justify, dense }), 'mb-2', className)}
     {...props}
   />
 ))

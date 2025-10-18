@@ -8,10 +8,12 @@ const mockUseWebSocket = vi.fn(() => ({
   send: vi.fn(),
   close: vi.fn(),
   lastMessage: null,
+  url: '/ws?token=token-123',
+  ready: true,
 }))
 
-vi.mock('@/hooks/useWebSocket', () => ({
-  useWebSocket: (...args: unknown[]) => mockUseWebSocket(...args),
+vi.mock('@/hooks/useAuthenticatedWebSocket', () => ({
+  useAuthenticatedWebSocket: (...args: unknown[]) => mockUseWebSocket(...args),
 }))
 
 vi.mock('@/hooks/useAuth', () => ({
@@ -55,9 +57,10 @@ describe('useSshTerminalStream', () => {
 
   it('subscribes to websocket stream and invokes callback', () => {
     const handler = vi.fn()
-    renderHook(() => useSshTerminalStream({ sessionId: 'sess-2', onEvent: handler }))
+    renderHook(() => useSshTerminalStream({ sessionId: 'sess-2', enabled: true, onEvent: handler }))
 
-    const [, options] = mockUseWebSocket.mock.calls[0] ?? []
+    const call = mockUseWebSocket.mock.calls[0] ?? []
+    const options = (call.length === 1 ? call[0] : call[1]) as Record<string, unknown> | undefined
     expect(options?.enabled).toBe(true)
 
     const rawMessage: RealtimeMessage<{

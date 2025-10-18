@@ -1,10 +1,8 @@
-import { useCallback, useMemo } from 'react'
-import { buildWebSocketUrl } from '@/lib/utils/websocket'
 import type { RealtimeMessage } from '@/types/realtime'
 import { REALTIME_STREAM_SSH_TERMINAL } from '@/types/realtime'
 import type { SshTerminalEvent } from '@/types/ssh'
-import { useAuth } from './useAuth'
-import { useWebSocket } from './useWebSocket'
+import { useCallback } from 'react'
+import { useAuthenticatedWebSocket } from './useAuthenticatedWebSocket'
 
 interface RawTerminalPayload extends Record<string, unknown> {
   session_id?: string
@@ -111,19 +109,6 @@ export function useSshTerminalStream({
   enabled = true,
   onEvent,
 }: UseSshTerminalStreamOptions) {
-  const { tokens, isAuthenticated } = useAuth({ autoInitialize: true })
-  const accessToken = tokens?.accessToken ?? ''
-
-  const websocketUrl = useMemo(() => {
-    if (!enabled || !isAuthenticated || !accessToken) {
-      return ''
-    }
-    return buildWebSocketUrl('/ws', {
-      token: accessToken,
-      streams: REALTIME_STREAM_SSH_TERMINAL,
-    })
-  }, [accessToken, enabled, isAuthenticated])
-
   const handleMessage = useCallback(
     (message: RealtimeMessage<RawTerminalPayload> | null) => {
       if (!message) {
@@ -138,8 +123,9 @@ export function useSshTerminalStream({
     [onEvent, sessionId]
   )
 
-  return useWebSocket<RealtimeMessage<RawTerminalPayload>>(websocketUrl, {
-    enabled: Boolean(websocketUrl),
+  return useAuthenticatedWebSocket<RealtimeMessage<RawTerminalPayload>>({
+    params: { streams: REALTIME_STREAM_SSH_TERMINAL },
+    enabled,
     autoReconnect: true,
     onMessage: handleMessage,
   })

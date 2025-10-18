@@ -134,3 +134,27 @@ async function refreshAccessToken(refreshToken: string): Promise<AuthTokens | nu
 }
 
 export { apiClient }
+
+const DEFAULT_REFRESH_THRESHOLD_MS = 60_000
+
+export async function ensureFreshAccessToken(
+  thresholdMs: number = DEFAULT_REFRESH_THRESHOLD_MS
+): Promise<AuthTokens | null> {
+  const tokens = getTokens()
+  if (!tokens) {
+    return null
+  }
+
+  const now = Date.now()
+  if (tokens.expiresAt - thresholdMs > now) {
+    return tokens
+  }
+
+  if (!tokens.refreshToken) {
+    clearTokens()
+    return null
+  }
+
+  const refreshed = await enqueueTokenRefresh(tokens.refreshToken)
+  return refreshed
+}
