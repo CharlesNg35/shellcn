@@ -275,7 +275,7 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
   )
 
   const sendTunnelPayload = useCallback(
-    (payload: string) => {
+    (payload: string | ArrayBuffer) => {
       if (tunnelState !== 'open') {
         return false
       }
@@ -298,7 +298,10 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
       if (!data) {
         return false
       }
-      return sendTunnelPayload(data)
+      // Send as binary for reliable terminal input delivery
+      const encoder = new TextEncoder()
+      const uint8Array = encoder.encode(data)
+      return sendTunnelPayload(uint8Array.buffer)
     },
     [sendTunnelPayload]
   )
@@ -866,23 +869,25 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
     >
       <div
         ref={containerRef}
-        className="h-full w-full"
+        className="h-full w-full p-2"
         style={{ backgroundColor: '#1e1e2e' }}
         role="presentation"
         data-testid="ssh-terminal-canvas"
       />
 
-      <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-slate-900/80 px-3 py-1 text-xs font-medium text-slate-100 shadow-sm">
-        <span
-          className={cn('h-2 w-2 rounded-full', {
-            'bg-emerald-400 animate-pulse': status === 'ready' && isConnected,
-            'bg-amber-400 animate-pulse': status === 'connecting',
-            'bg-rose-500': status === 'error' || !isConnected,
-            'bg-slate-500': status === 'closed',
-          })}
-        />
-        <span>{statusLabel}</span>
-      </div>
+      {/* Only show indicator while connecting, not when live */}
+      {status !== 'ready' && (
+        <div className="absolute right-3 top-3 flex items-center gap-2 rounded-full bg-slate-900/90 px-3 py-1 text-xs font-medium text-slate-100 shadow-lg backdrop-blur-sm">
+          <span
+            className={cn('h-2 w-2 rounded-full', {
+              'bg-amber-400 animate-pulse': status === 'connecting',
+              'bg-rose-500': status === 'error' || !isConnected,
+              'bg-slate-500': status === 'closed',
+            })}
+          />
+          <span>{statusLabel}</span>
+        </div>
+      )}
 
       {shouldShowOverlay && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950/80 text-sm text-slate-200">

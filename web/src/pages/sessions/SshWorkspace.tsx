@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 
 import { EmptyState } from '@/components/ui/EmptyState'
-import SshWorkspaceToolbar from '@/components/workspace/ssh/SshWorkspaceToolbar'
 import SshCommandPalette from '@/components/workspace/ssh/SshCommandPalette'
 import { PERMISSIONS } from '@/constants/permissions'
 import { useBreadcrumb } from '@/contexts/BreadcrumbContext'
@@ -22,7 +21,7 @@ import { useCommandPaletteState } from './ssh-workspace/useCommandPaletteState'
 import { useTerminalSearch } from './ssh-workspace/useTerminalSearch'
 import { useWorkspaceTelemetry } from './ssh-workspace/useWorkspaceTelemetry'
 import { useSessionRecording } from '@/hooks/useSessionRecording'
-import SshWorkspaceHeader from './ssh-workspace/SshWorkspaceHeader'
+import { SshWorkspaceUnifiedHeader } from './ssh-workspace/SshWorkspaceUnifiedHeader'
 import { SessionShareDialog } from './ssh-workspace/SessionShareDialog'
 import SshWorkspaceContent from './ssh-workspace/SshWorkspaceContent'
 import { SessionRecordingDialog } from './ssh-workspace/SessionRecordingDialog'
@@ -369,30 +368,27 @@ export function SshWorkspace() {
         isFullscreen && 'fixed inset-0 z-50 bg-background p-4 lg:p-6'
       )}
     >
-      <SshWorkspaceHeader
+      <SshWorkspaceUnifiedHeader
         session={session}
         participants={session.participants}
         currentUserId={currentUserId}
         canShare={canShareSession}
         onOpenShare={() => setShareDialogOpen(true)}
-        className="shadow-none"
-      />
-
-      <SshWorkspaceToolbar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onSelectTab={handleSelectTab}
+        canUseSftp={canUseSftp}
+        onOpenFileManager={handleOpenFileManager}
         layoutColumns={layoutColumns}
         layoutOptions={LAYOUT_OPTIONS}
         onLayoutChange={handleLayoutSelect}
         snippetGroups={snippetGroups}
-        loadingSnippets={snippetsLoading}
         disabledSnippets={snippetButtonDisabled}
         onExecuteSnippet={handleExecuteSnippet}
-        onOpenFileManager={handleOpenFileManager}
-        showFileManagerButton={canUseSftp}
         isFullscreen={isFullscreen}
         onToggleFullscreen={handleToggleFullscreen}
         onOpenCommandPalette={commandPalette.open}
         onOpenNewWindow={handleOpenNewWindow}
-        snippetsAvailable={snippetsAvailable}
         showSnippetsButton={canUseSnippets}
       />
 

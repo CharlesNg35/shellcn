@@ -611,6 +611,17 @@ func (s *stubSFTPClient) Truncate(path string, size int64) error {
 	return nil
 }
 
+func (s *stubSFTPClient) RealPath(path string) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	// For tests, just return the path as-is (already absolute in test data)
+	if path == "" || path == "." {
+		return "/", nil
+	}
+	return path, nil
+}
+
 type stubReadableFile struct {
 	Reader *bytes.Reader
 }

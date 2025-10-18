@@ -395,18 +395,18 @@ describe('SshWorkspace page', () => {
 
     expect(screen.getByText('Primary Server')).toBeInTheDocument()
     expect(await screen.findByTestId('ssh-terminal-mock')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /change layout/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /file manager/i })).toBeInTheDocument()
+    // Verify tabs are shown in unified header
+    expect(screen.getByText('Terminal')).toBeInTheDocument()
+    expect(screen.getByText('Files')).toBeInTheDocument()
+    // Verify command palette button is accessible
+    expect(screen.getByLabelText(/open command palette/i)).toBeInTheDocument()
   })
 
-  it('opens file manager tab when toolbar button is pressed', async () => {
+  it('opens file manager tab when Files tab is clicked', async () => {
     renderWorkspace()
 
-    fireEvent.click(screen.getByRole('button', { name: /file manager/i }))
-    expect(mockTabsStore.ensureTab).toHaveBeenCalledWith('sess-1', 'sftp', {
-      title: 'Files',
-      closable: true,
-    })
+    // Click the Files tab button
+    fireEvent.click(screen.getByText('Files'))
     expect(mockTabsStore.setActiveTab).toHaveBeenCalledWith('sess-1', 'sess-1:sftp')
     expect(await screen.findByTestId('sftp-workspace-mock')).toBeInTheDocument()
   })

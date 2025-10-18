@@ -83,7 +83,7 @@ export function SshWorkspaceContent({
       className="flex h-full flex-1 flex-col overflow-hidden"
     >
       <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background/60 shadow-inner">
-        <div className="flex-1 overflow-hidden p-4">
+        <div className="flex-1 overflow-hidden">
           {tabs.map((tab) => (
             <TabsContent key={tab.id} value={tab.id} className="h-full w-full" forceMount>
               {tab.type === 'terminal' ? (

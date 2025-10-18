@@ -88,6 +88,12 @@ func (s *stubSFTPClient) Remove(string) error          { return nil }
 func (s *stubSFTPClient) RemoveDirectory(string) error { return nil }
 func (s *stubSFTPClient) Rename(string, string) error  { return nil }
 func (s *stubSFTPClient) Truncate(string, int64) error { return nil }
+func (s *stubSFTPClient) RealPath(path string) (string, error) {
+	if path == "" || path == "." {
+		return "/", nil
+	}
+	return path, nil
+}
 
 type stubReadableFile struct {
 	io.ReadCloser
