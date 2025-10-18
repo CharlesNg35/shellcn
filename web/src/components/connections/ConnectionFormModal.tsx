@@ -200,6 +200,7 @@ export function ConnectionFormModal({
   const selectedIcon = watch('icon')
   const selectedColor = watch('color')
   const selectedTeamValue = watch('team_id')
+  const selectedFolderId = watch('folder_id')
 
   const effectiveTeamId = useMemo(
     () => denormalizeTeamValue(selectedTeamValue),
@@ -359,7 +360,20 @@ export function ConnectionFormModal({
 
   const isLoading =
     isSubmitting || create.isPending || update.isPending || (templateLoading && open && !!template)
-  const folderOptions = useMemo(() => flattenFolders(folders), [folders])
+  const folderOptions = useMemo(
+    () => flattenFolders(folders, effectiveTeamId ?? null),
+    [effectiveTeamId, folders]
+  )
+
+  useEffect(() => {
+    if (!selectedFolderId) {
+      return
+    }
+    const hasMatch = folderOptions.some((option) => option.id === selectedFolderId)
+    if (!hasMatch) {
+      setValue('folder_id', '', { shouldDirty: true })
+    }
+  }, [folderOptions, selectedFolderId, setValue])
 
   if (!protocol) {
     return null
@@ -666,16 +680,34 @@ type FlattenedFolder = {
   label: string
 }
 
-function flattenFolders(nodes: ConnectionFolderNode[], prefix: string[] = []): FlattenedFolder[] {
+function matchesTeam(folderTeamId: string | null | undefined, teamId: string | null): boolean {
+  const normalizedFolderTeam = folderTeamId ?? null
+  if (teamId === null) {
+    return normalizedFolderTeam === null
+  }
+  return normalizedFolderTeam === teamId
+}
+
+function flattenFolders(
+  nodes: ConnectionFolderNode[],
+  teamId: string | null,
+  prefix: string[] = []
+): FlattenedFolder[] {
   const result: FlattenedFolder[] = []
   nodes.forEach((node) => {
-    const parts = [...prefix, node.folder.name]
-    result.push({
-      id: node.folder.id,
-      label: parts.join(' / '),
-    })
+    const folderTeamId = node.folder.team_id ?? null
+    const matches = matchesTeam(folderTeamId, teamId)
+    const nextPrefix = matches ? [...prefix, node.folder.name] : prefix
+
+    if (matches) {
+      result.push({
+        id: node.folder.id,
+        label: nextPrefix.join(' / '),
+      })
+    }
+
     if (node.children?.length) {
-      result.push(...flattenFolders(node.children, parts))
+      result.push(...flattenFolders(node.children, teamId, nextPrefix))
     }
   })
   return result

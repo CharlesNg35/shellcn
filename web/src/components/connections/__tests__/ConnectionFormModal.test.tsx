@@ -5,7 +5,7 @@ import * as React from 'react'
 import { vi } from 'vitest'
 import { ConnectionFormModal } from '@/components/connections/ConnectionFormModal'
 import type { Protocol } from '@/types/protocols'
-import type { ConnectionRecord } from '@/types/connections'
+import type { ConnectionFolderNode, ConnectionRecord } from '@/types/connections'
 
 const mutateAsync = vi.fn()
 
@@ -190,6 +190,63 @@ const connectionRecord: ConnectionRecord = {
   folder: undefined,
 }
 
+const folderTree = [
+  {
+    folder: {
+      id: 'personal-root',
+      name: 'Personal Root',
+      parent_id: null,
+      team_id: null,
+      slug: 'personal-root',
+      description: '',
+      metadata: {},
+    },
+    connection_count: 0,
+    children: [
+      {
+        folder: {
+          id: 'personal-child',
+          name: 'Personal Child',
+          parent_id: 'personal-root',
+          team_id: null,
+          slug: 'personal-child',
+          description: '',
+          metadata: {},
+        },
+        connection_count: 0,
+        children: [],
+      },
+    ],
+  },
+  {
+    folder: {
+      id: 'team-root',
+      name: 'Team Root',
+      parent_id: null,
+      team_id: 'team-1',
+      slug: 'team-root',
+      description: '',
+      metadata: {},
+    },
+    connection_count: 0,
+    children: [
+      {
+        folder: {
+          id: 'team-child',
+          name: 'Team Child',
+          parent_id: 'team-root',
+          team_id: 'team-1',
+          slug: 'team-child',
+          description: '',
+          metadata: {},
+        },
+        connection_count: 0,
+        children: [],
+      },
+    ],
+  },
+] satisfies ConnectionFolderNode[]
+
 describe('ConnectionFormModal dynamic template', () => {
   beforeEach(() => {
     mutateAsync.mockReset()
@@ -258,5 +315,72 @@ describe('ConnectionFormModal dynamic template', () => {
     const payload = mutateAsync.mock.calls[0][0]
     expect(payload.fields).toEqual({ host: 'prod.internal', port: 22 })
     expect(payload.identity_id).toBe('identity-1')
+  })
+})
+
+describe('ConnectionFormModal folder filtering', () => {
+  it('shows only personal folders when no team is selected', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectionFormModal
+          open
+          onClose={vi.fn()}
+          protocol={protocol}
+          folders={folderTree}
+          onSuccess={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+
+    await screen.findByLabelText(/Connection name/i)
+
+    const folderSelect = screen.getByTestId('mock-select') as HTMLSelectElement
+    const optionLabels = Array.from(folderSelect.options).map((option) =>
+      option.textContent?.trim()
+    )
+
+    expect(optionLabels).toContain('Unassigned')
+    expect(optionLabels).toContain('Personal Root')
+    expect(optionLabels).toContain('Personal Root / Personal Child')
+    expect(optionLabels).not.toContain('Team Root')
+    expect(optionLabels).not.toContain('Team Root / Team Child')
+  })
+
+  it('filters folders to the selected team', async () => {
+    const user = userEvent.setup()
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectionFormModal
+          open
+          onClose={vi.fn()}
+          protocol={protocol}
+          folders={folderTree}
+          onSuccess={vi.fn()}
+          allowTeamAssignment
+          teams={[{ id: 'team-1', name: 'Team A' }]}
+        />
+      </QueryClientProvider>
+    )
+
+    await screen.findByLabelText(/Connection name/i)
+
+    const selects = screen.getAllByTestId('mock-select') as HTMLSelectElement[]
+    const folderSelect = selects[0]
+    const teamSelect = selects[selects.length - 1]
+
+    await user.selectOptions(teamSelect, 'team-1')
+
+    await waitFor(() => {
+      const optionLabels = Array.from(folderSelect.options).map((option) =>
+        option.textContent?.trim()
+      )
+      expect(optionLabels).toContain('Team Root')
+      expect(optionLabels).toContain('Team Root / Team Child')
+      expect(optionLabels).not.toContain('Personal Root')
+    })
   })
 })

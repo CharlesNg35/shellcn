@@ -5,6 +5,7 @@ import {
   Key,
   LayoutDashboard,
   Monitor,
+  Server,
   Settings,
   Shield,
   Users,
@@ -100,6 +101,13 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
           PERMISSIONS.SESSION.RECORDING.VIEW_ALL,
         ],
         featureId: 'sessions',
+      },
+      {
+        label: 'Protocol Settings',
+        path: '/settings/protocols/ssh',
+        icon: Server,
+        permission: PERMISSIONS.PROTOCOL.SSH.RECORD,
+        featureId: 'protocolSettings',
       },
       {
         label: 'Audit Logs',

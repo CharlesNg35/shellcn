@@ -69,6 +69,11 @@ const Security = lazy(() =>
 const SessionsPage = lazy(() =>
   import('@/pages/settings/Sessions').then((module) => ({ default: module.Sessions }))
 )
+const ProtocolSettingsPage = lazy(() =>
+  import('@/pages/settings/ProtocolSettings').then((module) => ({
+    default: module.ProtocolSettings,
+  }))
+)
 const ProtocolWorkspaceRoute = lazy(() =>
   import('@/pages/sessions/ProtocolWorkspaceRoute').then((module) => ({
     default: module.ProtocolWorkspaceRoute,
@@ -107,6 +112,7 @@ function AppRoutes() {
               <Route path="/settings/auth-providers" element={<AuthProviders />} />
               <Route path="/settings/security" element={<Security />} />
               <Route path="/settings/sessions" element={<SessionsPage />} />
+              <Route path="/settings/protocols/ssh" element={<ProtocolSettingsPage />} />
               <Route path="/active-sessions/:sessionId" element={<ProtocolWorkspaceRoute />} />
             </Route>
           </Route>
