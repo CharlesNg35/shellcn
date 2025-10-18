@@ -17,7 +17,7 @@ export function SftpWorkspaceTabs({
   onClose,
 }: SftpWorkspaceTabsProps) {
   return (
-    <div className="flex items-center gap-1 border-b border-border px-2">
+    <div className="flex items-center gap-1 px-2">
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId
         const isBrowser = tab.type === 'browser'
@@ -41,6 +41,7 @@ export function SftpWorkspaceTabs({
               <span className="max-w-[160px] truncate">{tab.title}</span>
               {tab.dirty && <span className="text-primary">•</span>}
             </Button>
+
             {!isBrowser && (
               <Button
                 variant="ghost"

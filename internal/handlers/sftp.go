@@ -201,6 +201,13 @@ func (h *SFTPHandler) List(c *gin.Context) {
 		return
 	}
 
+	// Resolve to absolute path
+	absPath, err := client.RealPath(cleanPath)
+	if err != nil {
+		response.Error(c, mapSFTPError(err))
+		return
+	}
+
 	entries, err := client.ReadDir(cleanPath)
 	if err != nil {
 		response.Error(c, mapSFTPError(err))
@@ -212,7 +219,7 @@ func (h *SFTPHandler) List(c *gin.Context) {
 		if entry == nil {
 			continue
 		}
-		dtos = append(dtos, toSFTPEntryDTO(cleanPath, entry))
+		dtos = append(dtos, toSFTPEntryDTO(absPath, entry))
 	}
 
 	sort.SliceStable(dtos, func(i, j int) bool {
@@ -223,7 +230,7 @@ func (h *SFTPHandler) List(c *gin.Context) {
 	})
 
 	response.Success(c, http.StatusOK, sftpListResponse{
-		Path:    cleanPath,
+		Path:    absPath,
 		Entries: dtos,
 	})
 }

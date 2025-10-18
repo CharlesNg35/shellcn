@@ -31,6 +31,7 @@ type Client interface {
 	RemoveDirectory(path string) error
 	Rename(oldPath, newPath string) error
 	Truncate(path string, size int64) error
+	RealPath(path string) (string, error)
 }
 
 // Provider yields SFTP clients and release callbacks tied to an active session.

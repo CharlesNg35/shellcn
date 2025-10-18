@@ -45,8 +45,9 @@ vi.mock('@/store/ssh-workspace-store', () => {
     sessions: {
       'sess-1': {
         sessionId: 'sess-1',
-        browserPath: '.',
-        showHidden: false,
+        browserPath: '',
+        homeDirectory: undefined,
+        showHidden: true,
         tabs: [],
         activeTabId: '',
         transfers: {},
@@ -58,6 +59,7 @@ vi.mock('@/store/ssh-workspace-store', () => {
   }
   const ensureSessionMock = vi.fn()
   const setBrowserPathMock = vi.fn()
+  const setHomeDirectoryMock = vi.fn()
   const setShowHiddenMock = vi.fn()
   const upsertTransferMock = vi.fn()
   const updateTransferMock = vi.fn()
@@ -71,6 +73,7 @@ vi.mock('@/store/ssh-workspace-store', () => {
     sessions: MockSessions
     ensureSession: typeof ensureSessionMock
     setBrowserPath: typeof setBrowserPathMock
+    setHomeDirectory: typeof setHomeDirectoryMock
     setShowHidden: typeof setShowHiddenMock
     upsertTransfer: typeof upsertTransferMock
     updateTransfer: typeof updateTransferMock
@@ -84,6 +87,7 @@ vi.mock('@/store/ssh-workspace-store', () => {
     sessions: storeState.sessions,
     ensureSession: ensureSessionMock,
     setBrowserPath: setBrowserPathMock,
+    setHomeDirectory: setHomeDirectoryMock,
     setShowHidden: setShowHiddenMock,
     upsertTransfer: upsertTransferMock,
     updateTransfer: updateTransferMock,
@@ -110,8 +114,9 @@ vi.mock('@/store/ssh-workspace-store', () => {
     storeState.sessions = {
       'sess-1': {
         sessionId: 'sess-1',
-        browserPath: '.',
-        showHidden: false,
+        browserPath: '',
+        homeDirectory: undefined,
+        showHidden: true,
         tabs: [],
         activeTabId: '',
         transfers: {},
@@ -123,6 +128,7 @@ vi.mock('@/store/ssh-workspace-store', () => {
     mockState.sessions = storeState.sessions
     ensureSessionMock.mockReset()
     setBrowserPathMock.mockReset()
+    setHomeDirectoryMock.mockReset()
     setShowHiddenMock.mockReset()
     upsertTransferMock.mockReset()
     updateTransferMock.mockReset()
@@ -137,6 +143,7 @@ vi.mock('@/store/ssh-workspace-store', () => {
     workspaceStoreMocks: {
       ensureSession: ensureSessionMock,
       setBrowserPath: setBrowserPathMock,
+      setHomeDirectory: setHomeDirectoryMock,
       setShowHidden: setShowHiddenMock,
       upsertTransfer: upsertTransferMock,
       updateTransfer: updateTransferMock,
@@ -312,7 +319,11 @@ describe('FileManager component', () => {
   })
 
   it('uploads files when a selection is made', async () => {
-    uploadMutateAsync.mockResolvedValueOnce({ path: 'upload.txt', uploadedBytes: 6, nextOffset: 6 })
+    uploadMutateAsync.mockResolvedValueOnce({
+      path: '/upload.txt',
+      uploadedBytes: 6,
+      nextOffset: 6,
+    })
     renderWithClient(<FileManager sessionId="sess-1" />)
 
     const fileInput = screen.getByTestId('sftp-upload-input') as HTMLInputElement
@@ -322,7 +333,7 @@ describe('FileManager component', () => {
 
     await waitFor(() => expect(uploadMutateAsync).toHaveBeenCalled())
     expect(uploadMutateAsync).toHaveBeenCalledWith({
-      path: 'upload.txt',
+      path: '/upload.txt',
       blob: file,
       options: {
         createParents: true,

@@ -4,6 +4,13 @@ import { cleanup } from '@testing-library/react'
 import { createElement } from 'react'
 import type { ChangeEvent } from 'react'
 
+// Polyfill ResizeObserver for Radix UI components
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
 vi.mock('@monaco-editor/react', () => ({
   __esModule: true,
   default: ({

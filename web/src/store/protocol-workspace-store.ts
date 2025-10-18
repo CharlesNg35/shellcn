@@ -16,6 +16,7 @@ export interface WorkspaceTab {
 export interface WorkspaceSessionState {
   sessionId: string
   browserPath: string
+  homeDirectory?: string
   showHidden: boolean
   tabs: WorkspaceTab[]
   activeTabId: string
@@ -51,6 +52,7 @@ interface WorkspaceStore {
   sessions: Record<string, WorkspaceSessionState>
   ensureSession: (sessionId: string) => WorkspaceSessionState
   setBrowserPath: (sessionId: string, path: string) => void
+  setHomeDirectory: (sessionId: string, path: string) => void
   setShowHidden: (sessionId: string, show: boolean) => void
   setActiveTab: (sessionId: string, tabId: string) => void
   openEditor: (sessionId: string, path: string, title?: string) => void
@@ -73,15 +75,21 @@ const generateId = () => `${Date.now().toString(36)}-${Math.random().toString(36
 
 const normalizePath = (value: string) => {
   const trimmed = value.trim()
-  if (!trimmed || trimmed === '.') {
-    return '.'
+  if (!trimmed) {
+    return ''
   }
-  if (trimmed === '/') {
-    return '/'
+  // Handle absolute paths
+  if (trimmed.startsWith('/')) {
+    const cleaned = trimmed.replace(/\/+/g, '/').replace(/\/+$/, '')
+    return cleaned || '/'
+  }
+  // Handle relative paths or legacy dot notation
+  if (trimmed === '.') {
+    return ''
   }
   const withoutDouble = trimmed.replace(/\/+/g, '/')
   const cleaned = withoutDouble.replace(/^\/+/, '').replace(/\/+$/, '')
-  return cleaned.length === 0 ? '.' : cleaned
+  return cleaned
 }
 
 const fileNameFromPath = (path: string) => {
@@ -102,8 +110,9 @@ export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
     const browserId = `${sessionId}:browser`
     const session: WorkspaceSessionState = {
       sessionId,
-      browserPath: '.',
-      showHidden: false,
+      browserPath: '',
+      homeDirectory: undefined,
+      showHidden: true,
       tabs: [
         {
           id: browserId,
@@ -137,6 +146,24 @@ export const useSshWorkspaceStore = create<WorkspaceStore>()((set, get) => ({
           [sessionId]: {
             ...session,
             browserPath: normalizePath(path),
+          },
+        },
+      }
+    })
+  },
+  setHomeDirectory: (sessionId, path) => {
+    set((state) => {
+      const session = state.sessions[sessionId]
+      if (!session || session.homeDirectory) {
+        // Only set once
+        return state
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...session,
+            homeDirectory: path,
           },
         },
       }

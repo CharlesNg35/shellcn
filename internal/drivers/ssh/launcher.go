@@ -113,6 +113,13 @@ func (w *sftpClientWrapper) Truncate(path string, size int64) error {
 	return w.client.Truncate(path, size)
 }
 
+func (w *sftpClientWrapper) RealPath(path string) (string, error) {
+	if w == nil || w.client == nil {
+		return "", errors.New("ssh: sftp client unavailable")
+	}
+	return w.client.RealPath(path)
+}
+
 type sftpFileAdapter struct {
 	File *pkgsftp.File
 }

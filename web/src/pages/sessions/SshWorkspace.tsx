@@ -295,10 +295,10 @@ export function SshWorkspace() {
     if (!session) {
       return
     }
-    // Navigate to dedicated file manager page
-    navigate(`/active-sessions/${sessionId}/files`)
+    const tab = ensureTab(sessionId, 'sftp', { title: 'Files', closable: true })
+    setActiveTab(sessionId, tab.id)
     logEvent('file_manager.open', { sessionId })
-  }, [logEvent, navigate, session, sessionId])
+  }, [ensureTab, logEvent, session, sessionId, setActiveTab])
 
   const handleToggleFullscreen = useCallback(() => {
     if (!sessionId) {

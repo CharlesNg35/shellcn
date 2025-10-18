@@ -45,7 +45,7 @@ describe('ssh workspace store', () => {
     store.setBrowserPath(SESSION_ID, ' /var//log/ ')
 
     const session = useSshWorkspaceStore.getState().sessions[SESSION_ID]
-    expect(session?.browserPath).toBe('var/log')
+    expect(session?.browserPath).toBe('/var/log')
   })
 
   it('opens editors and avoids duplicates', () => {
@@ -56,7 +56,7 @@ describe('ssh workspace store', () => {
     let session = useSshWorkspaceStore.getState().sessions[SESSION_ID]
     expect(session?.tabs).toHaveLength(2)
     const editorTab = session?.tabs.find((tab) => tab.type === 'editor')
-    expect(editorTab?.path).toBe('etc/hosts')
+    expect(editorTab?.path).toBe('/etc/hosts')
     expect(session?.activeTabId).toBe(editorTab?.id)
 
     // Opening the same file focuses existing tab without duplication
@@ -158,28 +158,28 @@ describe('ssh workspace store', () => {
     const store = useSshWorkspaceStore.getState()
     store.ensureSession(SESSION_ID)
     const listing: SftpListResult = {
-      path: '.',
+      path: '',
       entries: [],
     }
-    store.cacheDirectory(SESSION_ID, '.', listing)
+    store.cacheDirectory(SESSION_ID, '', listing)
 
-    const cached = store.getCachedDirectory(SESSION_ID, '.')
+    const cached = store.getCachedDirectory(SESSION_ID, '')
     expect(cached).toBe(listing)
     let session = useSshWorkspaceStore.getState().sessions[SESSION_ID]
-    expect(session?.directoryCacheOrder).toEqual(['.'])
+    expect(session?.directoryCacheOrder).toEqual([''])
 
-    store.clearDirectoryCache(SESSION_ID, '.')
-    expect(store.getCachedDirectory(SESSION_ID, '.')).toBeUndefined()
+    store.clearDirectoryCache(SESSION_ID, '')
+    expect(store.getCachedDirectory(SESSION_ID, '')).toBeUndefined()
 
-    store.cacheDirectory(SESSION_ID, '.', listing)
-    store.cacheDirectory(SESSION_ID, 'logs', { path: 'logs', entries: [] })
+    store.cacheDirectory(SESSION_ID, '', listing)
+    store.cacheDirectory(SESSION_ID, '/logs', { path: '/logs', entries: [] })
     // Access the root entry again to move it to the tail of the LRU list
-    expect(store.getCachedDirectory(SESSION_ID, '.')).toBe(listing)
+    expect(store.getCachedDirectory(SESSION_ID, '')).toBe(listing)
     session = useSshWorkspaceStore.getState().sessions[SESSION_ID]
-    expect(session?.directoryCacheOrder[session.directoryCacheOrder.length - 1]).toBe('.')
+    expect(session?.directoryCacheOrder[session.directoryCacheOrder.length - 1]).toBe('')
     store.clearDirectoryCache(SESSION_ID)
-    expect(store.getCachedDirectory(SESSION_ID, '.')).toBeUndefined()
-    expect(store.getCachedDirectory(SESSION_ID, 'logs')).toBeUndefined()
+    expect(store.getCachedDirectory(SESSION_ID, '')).toBeUndefined()
+    expect(store.getCachedDirectory(SESSION_ID, '/logs')).toBeUndefined()
     session = useSshWorkspaceStore.getState().sessions[SESSION_ID]
     expect(session?.directoryCacheOrder).toEqual([])
   })

@@ -103,6 +103,7 @@ export function FileManager({
 
   const ensureSession = useSshWorkspaceStore((state) => state.ensureSession)
   const setBrowserPath = useSshWorkspaceStore((state) => state.setBrowserPath)
+  const setHomeDirectory = useSshWorkspaceStore((state) => state.setHomeDirectory)
   const setShowHidden = useSshWorkspaceStore((state) => state.setShowHidden)
   const upsertTransfer = useSshWorkspaceStore((state) => state.upsertTransfer)
   const updateTransferState = useSshWorkspaceStore((state) => state.updateTransfer)
@@ -120,7 +121,8 @@ export function FileManager({
 
   const sessionSlice = useSshWorkspaceStore((state) => state.sessions[sessionId])
 
-  const browserPath = sessionSlice?.browserPath ?? '.'
+  const browserPath = sessionSlice?.browserPath ?? ''
+  const homeDirectory = sessionSlice?.homeDirectory
   const showHidden = sessionSlice?.showHidden ?? false
   const transferOrder = sessionSlice?.transferOrder ?? EMPTY_TRANSFER_ORDER
   const transfersMap = sessionSlice?.transfers ?? EMPTY_TRANSFERS_MAP
@@ -134,7 +136,7 @@ export function FileManager({
   useEffect(() => {
     if (initialPath) {
       const normalizedInitial = normalizePath(initialPath)
-      if (normalizedInitial !== '.' && browserPath === '.') {
+      if (normalizedInitial && !browserPath) {
         setBrowserPath(sessionId, normalizedInitial)
       }
     }
@@ -164,6 +166,17 @@ export function FileManager({
   const uploadMutation = useSftpUpload(sessionId)
   const deleteFileMutation = useSftpDeleteFile(sessionId)
   const deleteDirectoryMutation = useSftpDeleteDirectory(sessionId)
+
+  // Set home directory from first directory listing response
+  useEffect(() => {
+    if (data?.path && !homeDirectory) {
+      setHomeDirectory(sessionId, data.path)
+      // Also update browser path if it's not set yet
+      if (!browserPath) {
+        setBrowserPath(sessionId, data.path)
+      }
+    }
+  }, [data?.path, homeDirectory, sessionId, setHomeDirectory, browserPath, setBrowserPath])
 
   const entries = useMemo(() => {
     if (!data?.entries) {
@@ -500,12 +513,12 @@ export function FileManager({
     >
       <div className={cn('flex h-full flex-col gap-2', className)}>
         <FileManagerToolbar
-          isRootPath={browserPath === '.' || browserPath === '/'}
+          isRootPath={browserPath === '/'}
           isLoading={isLoading}
           showHidden={showHidden}
           onToggleHidden={(checked) => setShowHidden(sessionId, Boolean(checked))}
           onNavigateUp={handleGoUp}
-          onNavigateHome={() => navigateTo('.')}
+          onNavigateHome={() => navigateTo(homeDirectory || '')}
           onRefresh={handleRefresh}
           pathInput={pathInput}
           onPathInputChange={(value) => setPathInput(value)}

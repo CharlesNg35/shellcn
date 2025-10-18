@@ -2,36 +2,66 @@ import type { ActiveSessionParticipant } from '@/types/connections'
 
 export function normalizePath(path?: string): string {
   const trimmed = path?.trim()
-  if (!trimmed || trimmed === '.' || trimmed === '/') {
-    return '.'
+  if (!trimmed) {
+    return ''
   }
-  return trimmed.replace(/^\/+/, '').replace(/\/+$/, '')
+  // Handle absolute paths - keep them as-is after trimming trailing slashes
+  if (trimmed.startsWith('/')) {
+    const cleaned = trimmed.replace(/\/+$/, '')
+    return cleaned || '/'
+  }
+  // Handle relative paths - convert to empty string for default
+  if (trimmed === '.' || trimmed === '/') {
+    return ''
+  }
+  return trimmed.replace(/\/+$/, '')
 }
 
 export function displayPath(path: string): string {
-  if (!path || path === '.' || path === '/') {
+  const trimmed = path?.trim()
+  if (!trimmed) {
     return '/'
   }
-  return path.startsWith('/') ? path : `/${path}`
+  // Already absolute
+  if (trimmed.startsWith('/')) {
+    return trimmed
+  }
+  // Make absolute
+  return `/${trimmed}`
 }
 
 export function resolveChildPath(basePath: string, name: string): string {
-  const safeName = name.replace(/^\//, '')
-  if (!basePath || basePath === '.' || basePath === '/') {
-    return safeName
+  const safeName = name.replace(/^\/+/, '')
+  const base = basePath.trim()
+
+  // If base is empty, root, or dot notation, return name with leading slash
+  if (!base || base === '/' || base === '.') {
+    return `/${safeName}`
   }
-  return `${basePath.replace(/\/+$/, '')}/${safeName}`
+
+  // If base is absolute, append name
+  if (base.startsWith('/')) {
+    return `${base.replace(/\/+$/, '')}/${safeName}`
+  }
+
+  // Fallback: treat as relative (prepend slash)
+  return `/${base.replace(/\/+$/, '')}/${safeName}`
 }
 
 export function parentPath(path: string): string {
-  if (!path || path === '.' || path === '/') {
-    return '.'
+  const trimmed = path?.trim()
+  if (!trimmed || trimmed === '/') {
+    return '/'
   }
-  const normalized = path.replace(/\/+$/, '')
+
+  const normalized = trimmed.replace(/\/+$/, '')
   const slashIndex = normalized.lastIndexOf('/')
+
+  // If no slash or only leading slash, we're at root
   if (slashIndex <= 0) {
-    return '.'
+    return '/'
   }
+
   return normalized.slice(0, slashIndex)
 }
 
