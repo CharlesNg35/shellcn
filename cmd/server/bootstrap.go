@@ -249,7 +249,6 @@ func seedSSHProtocolDefaults(ctx context.Context, db *gorm.DB, cfg *app.Config) 
 		"protocol.ssh.terminal.font_family":      strings.TrimSpace(sshCfg.Terminal.FontFamily),
 		"protocol.ssh.terminal.font_size":        strconv.Itoa(max(sshCfg.Terminal.FontSize, 0)),
 		"protocol.ssh.terminal.scrollback_limit": strconv.Itoa(max(sshCfg.Terminal.Scrollback, 0)),
-		"protocol.ssh.terminal.enable_webgl":     strconv.FormatBool(sshCfg.Terminal.EnableWebGL),
 	}
 
 	for key, value := range defaults {

@@ -56,7 +56,6 @@ const preferenceSchema = z.object({
         .number()
         .min(200, 'Scrollback must be at least 200 lines')
         .max(10000, 'Scrollback must be at most 10000 lines'),
-      enable_webgl: z.boolean(),
     }),
     sftp: z.object({
       show_hidden_files: z.boolean(),
@@ -85,7 +84,6 @@ export function SSHPreferencesPanel({ className }: SSHPreferencesPanelProps) {
           copy_on_select: true,
           font_size: 14,
           scrollback_limit: 1000,
-          enable_webgl: true,
         },
         sftp: {
           show_hidden_files: false,
@@ -112,7 +110,6 @@ export function SSHPreferencesPanel({ className }: SSHPreferencesPanelProps) {
           copy_on_select: values.ssh.terminal.copy_on_select,
           font_size: values.ssh.terminal.font_size,
           scrollback_limit: values.ssh.terminal.scrollback_limit,
-          enable_webgl: values.ssh.terminal.enable_webgl,
         },
         sftp: {
           show_hidden_files: values.ssh.sftp.show_hidden_files,
@@ -277,31 +274,6 @@ export function SSHPreferencesPanel({ className }: SSHPreferencesPanelProps) {
                 </label>
                 <p className="text-xs text-muted-foreground">
                   Automatically copy highlighted text to your clipboard without pressing a shortcut.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-muted/10 px-3 py-2">
-              <Checkbox
-                id="pref-terminal-webgl"
-                checked={form.watch('ssh.terminal.enable_webgl')}
-                onCheckedChange={(checked) =>
-                  form.setValue('ssh.terminal.enable_webgl', Boolean(checked), {
-                    shouldDirty: true,
-                  })
-                }
-                disabled={isLoading || submitting}
-              />
-              <div className="space-y-1">
-                <label
-                  className="text-sm font-medium text-foreground"
-                  htmlFor="pref-terminal-webgl"
-                >
-                  Enable WebGL acceleration
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  Improves rendering performance on supported GPUs. Disable if you encounter
-                  graphical issues.
                 </p>
               </div>
             </div>

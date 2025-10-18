@@ -28,11 +28,10 @@ type SessionSettings struct {
 
 // TerminalSettings describes default terminal appearance.
 type TerminalSettings struct {
-	ThemeMode   string `json:"theme_mode"`
-	FontFamily  string `json:"font_family"`
-	FontSize    int    `json:"font_size"`
-	Scrollback  int    `json:"scrollback_limit"`
-	EnableWebGL bool   `json:"enable_webgl"`
+	ThemeMode  string `json:"theme_mode"`
+	FontFamily string `json:"font_family"`
+	FontSize   int    `json:"font_size"`
+	Scrollback int    `json:"scrollback_limit"`
 }
 
 // RecordingSettings captures recorder defaults and retention policy.
@@ -66,11 +65,10 @@ type SessionSettingsInput struct {
 
 // TerminalSettingsInput validates terminal preference defaults.
 type TerminalSettingsInput struct {
-	ThemeMode   string `json:"theme_mode" validate:"required,oneof=auto force_dark force_light"`
-	FontFamily  string `json:"font_family" validate:"required,max=128"`
-	FontSize    int    `json:"font_size" validate:"min=8,max=96"`
-	Scrollback  int    `json:"scrollback_limit" validate:"min=200,max=10000"`
-	EnableWebGL bool   `json:"enable_webgl"`
+	ThemeMode  string `json:"theme_mode" validate:"required,oneof=auto force_dark force_light"`
+	FontFamily string `json:"font_family" validate:"required,max=128"`
+	FontSize   int    `json:"font_size" validate:"min=8,max=96"`
+	Scrollback int    `json:"scrollback_limit" validate:"min=200,max=10000"`
 }
 
 // RecordingSettingsInput enumerates mutable recording toggles.
@@ -168,7 +166,6 @@ func (s *ProtocolSettingsService) UpdateSSHSettings(ctx context.Context, actor S
 			"protocol.ssh.terminal.font_family":        terminal.FontFamily,
 			"protocol.ssh.terminal.font_size":          fmt.Sprintf("%d", terminal.FontSize),
 			"protocol.ssh.terminal.scrollback_limit":   fmt.Sprintf("%d", terminal.Scrollback),
-			"protocol.ssh.terminal.enable_webgl":       fmt.Sprintf("%t", terminal.EnableWebGL),
 			"session_sharing.allow_default":            fmt.Sprintf("%t", collaboration.AllowSharing),
 			"session_sharing.restrict_write_to_admins": fmt.Sprintf("%t", collaboration.RestrictWriteToAdmins),
 		}
@@ -204,7 +201,6 @@ func (s *ProtocolSettingsService) UpdateSSHSettings(ctx context.Context, actor S
 				"terminal_font_family":                   terminal.FontFamily,
 				"terminal_font_size":                     terminal.FontSize,
 				"terminal_scrollback_limit":              terminal.Scrollback,
-				"terminal_enable_webgl":                  terminal.EnableWebGL,
 				"collaboration_allow_sharing":            collaboration.AllowSharing,
 				"collaboration_restrict_write_to_admins": collaboration.RestrictWriteToAdmins,
 			},
@@ -234,11 +230,10 @@ func loadSessionSettings(ctx context.Context, db *gorm.DB) SessionSettings {
 
 func loadTerminalSettings(ctx context.Context, db *gorm.DB) TerminalSettings {
 	settings := TerminalSettings{
-		ThemeMode:   "auto",
-		FontFamily:  "monospace",
-		FontSize:    14,
-		Scrollback:  1000,
-		EnableWebGL: true,
+		ThemeMode:  "auto",
+		FontFamily: "monospace",
+		FontSize:   14,
+		Scrollback: 1000,
 	}
 	if db == nil {
 		return settings
@@ -250,7 +245,6 @@ func loadTerminalSettings(ctx context.Context, db *gorm.DB) TerminalSettings {
 	}
 	settings.FontSize = clampInt(parseIntSetting(ctx, db, "protocol.ssh.terminal.font_size", settings.FontSize), 8, 96)
 	settings.Scrollback = clampInt(parseIntSetting(ctx, db, "protocol.ssh.terminal.scrollback_limit", settings.Scrollback), 200, 10000)
-	settings.EnableWebGL = parseBoolSetting(ctx, db, "protocol.ssh.terminal.enable_webgl", settings.EnableWebGL)
 	return settings
 }
 
@@ -288,11 +282,10 @@ func normaliseTerminalSettings(input TerminalSettingsInput) TerminalSettings {
 		font = "monospace"
 	}
 	return TerminalSettings{
-		ThemeMode:   normaliseThemeMode(input.ThemeMode),
-		FontFamily:  font,
-		FontSize:    clampInt(input.FontSize, 8, 96),
-		Scrollback:  clampInt(input.Scrollback, 200, 10000),
-		EnableWebGL: input.EnableWebGL,
+		ThemeMode:  normaliseThemeMode(input.ThemeMode),
+		FontFamily: font,
+		FontSize:   clampInt(input.FontSize, 8, 96),
+		Scrollback: clampInt(input.Scrollback, 200, 10000),
 	}
 }
 

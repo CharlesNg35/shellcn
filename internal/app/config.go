@@ -156,11 +156,10 @@ type SessionLifecycleConfig struct {
 
 // SSHTerminalConfig defines default terminal presentation options.
 type SSHTerminalConfig struct {
-	ThemeMode   string `mapstructure:"theme_mode"`
-	FontFamily  string `mapstructure:"font_family"`
-	FontSize    int    `mapstructure:"font_size"`
-	Scrollback  int    `mapstructure:"scrollback_limit"`
-	EnableWebGL bool   `mapstructure:"enable_webgl"`
+	ThemeMode  string `mapstructure:"theme_mode"`
+	FontFamily string `mapstructure:"font_family"`
+	FontSize   int    `mapstructure:"font_size"`
+	Scrollback int    `mapstructure:"scrollback_limit"`
 }
 
 // DatabaseProtocolConfig toggles database client support.
@@ -287,7 +286,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("protocols.ssh.terminal.font_family", "monospace")
 	v.SetDefault("protocols.ssh.terminal.font_size", 14)
 	v.SetDefault("protocols.ssh.terminal.scrollback_limit", 1000)
-	v.SetDefault("protocols.ssh.terminal.enable_webgl", true)
 	v.SetDefault("protocols.telnet.enabled", true)
 	v.SetDefault("protocols.sftp.enabled", true)
 	v.SetDefault("protocols.rdp.enabled", true)

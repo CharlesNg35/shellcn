@@ -458,7 +458,6 @@ const (
     "protocol.ssh.terminal.font_family"         → "monospace"
     "protocol.ssh.terminal.font_size"           → "14"
     "protocol.ssh.terminal.scrollback_limit"    → "1000"
-    "protocol.ssh.terminal.enable_webgl"        → "true"
     "session_sharing.allow_default" → "true"
     "session_sharing.restrict_write_to_admins" → "false"
 )

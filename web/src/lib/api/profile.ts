@@ -66,7 +66,6 @@ function normalisePreferences(payload?: Partial<UserPreferences>): UserPreferenc
           typeof terminal.scrollback_limit === 'number' && terminal.scrollback_limit >= 200
             ? terminal.scrollback_limit
             : 1000,
-        enable_webgl: terminal.enable_webgl !== false,
       },
       sftp: {
         show_hidden_files: Boolean(sftp.show_hidden_files),

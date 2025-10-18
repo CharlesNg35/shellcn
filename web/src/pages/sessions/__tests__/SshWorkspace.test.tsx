@@ -9,10 +9,20 @@ import { PERMISSIONS } from '@/constants/permissions'
 
 const mockSessionParticipants = vi.fn()
 const mockSessionParticipantMutations = vi.fn()
+const mockFetchConnectionById = vi.fn()
+const mockProtocolSettings = vi.fn()
 
 vi.mock('@/hooks/useSessionParticipants', () => ({
   useSessionParticipants: (...args: unknown[]) => mockSessionParticipants(...args),
   useSessionParticipantMutations: (...args: unknown[]) => mockSessionParticipantMutations(...args),
+}))
+
+vi.mock('@/lib/api/connections', () => ({
+  fetchConnectionById: (...args: unknown[]) => mockFetchConnectionById(...args),
+}))
+
+vi.mock('@/hooks/useProtocolSettings', () => ({
+  useSSHProtocolSettings: () => mockProtocolSettings(),
 }))
 
 const mockUseUsers = vi.fn()
@@ -317,6 +327,8 @@ describe('SshWorkspace page', () => {
     mockUsePermissions.mockReset()
     terminalMock.mockReset()
     sftpMock.mockReset()
+    mockFetchConnectionById.mockReset()
+    mockProtocolSettings.mockReset()
 
     mockSessionParticipants.mockReturnValue({
       data: {
@@ -333,6 +345,56 @@ describe('SshWorkspace page', () => {
       remove: { mutate: vi.fn(), isPending: false },
       grantWrite: { mutate: vi.fn(), isPending: false },
       relinquishWrite: { mutate: vi.fn(), isPending: false },
+    })
+
+    mockFetchConnectionById.mockResolvedValue({
+      id: 'conn-1',
+      name: 'Primary Server',
+      description: null,
+      protocol_id: 'ssh',
+      team_id: null,
+      owner_user_id: null,
+      settings: {},
+    })
+
+    mockProtocolSettings.mockReturnValue({
+      data: {
+        session: {
+          concurrent_limit: 0,
+          idle_timeout_minutes: 0,
+          enable_sftp: true,
+        },
+        terminal: {
+          theme_mode: 'auto',
+          font_family: 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace',
+          font_size: 14,
+          scrollback_limit: 1000,
+        },
+        recording: {
+          mode: 'optional',
+          storage: 'filesystem',
+          retention_days: 0,
+          require_consent: true,
+        },
+        collaboration: {
+          allow_sharing: true,
+          restrict_write_to_admins: false,
+        },
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+      refetch: vi.fn(),
+      update: {
+        mutate: vi.fn(),
+        mutateAsync: vi.fn(),
+        isPending: false,
+        isSuccess: false,
+        isError: false,
+        reset: vi.fn(),
+        data: undefined,
+      },
     })
 
     mockUseUsers.mockReturnValue({

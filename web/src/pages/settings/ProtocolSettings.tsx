@@ -39,7 +39,6 @@ const terminalSchema = z.object({
     .number()
     .min(200, 'Scrollback must be at least 200 lines')
     .max(10000, 'Scrollback must be at most 10000 lines'),
-  enable_webgl: z.boolean(),
 })
 
 const recordingSchema = z.object({
@@ -88,7 +87,6 @@ export function ProtocolSettings() {
         font_family: 'monospace',
         font_size: 14,
         scrollback_limit: 1000,
-        enable_webgl: true,
       },
       recording: {
         mode: 'optional',
@@ -118,7 +116,6 @@ export function ProtocolSettings() {
         font_family: data.terminal.font_family,
         font_size: data.terminal.font_size,
         scrollback_limit: data.terminal.scrollback_limit,
-        enable_webgl: data.terminal.enable_webgl,
       },
       recording: {
         mode: data.recording.mode,
@@ -146,7 +143,6 @@ export function ProtocolSettings() {
         font_family: values.terminal.font_family.trim(),
         font_size: values.terminal.font_size,
         scrollback_limit: values.terminal.scrollback_limit,
-        enable_webgl: values.terminal.enable_webgl,
       },
       recording: {
         mode: values.recording.mode,
@@ -417,26 +413,6 @@ function TerminalSettingsSection({ form, disabled, selectDisabled }: TerminalSec
           {errors.terminal?.scrollback_limit ? (
             <p className="text-xs text-rose-500">{errors.terminal.scrollback_limit.message}</p>
           ) : null}
-        </div>
-      </div>
-
-      <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-muted/10 px-3 py-2">
-        <Checkbox
-          id="terminal-webgl"
-          checked={form.watch('terminal.enable_webgl')}
-          onCheckedChange={(checked) =>
-            form.setValue('terminal.enable_webgl', Boolean(checked), { shouldDirty: true })
-          }
-          disabled={disabled}
-        />
-        <div className="space-y-1">
-          <label className="text-sm font-medium text-foreground" htmlFor="terminal-webgl">
-            Enable WebGL renderer
-          </label>
-          <p className="text-xs text-muted-foreground">
-            Improves rendering performance on supported browsers. Users can disable WebGL in their
-            personal preferences if necessary.
-          </p>
         </div>
       </div>
     </section>

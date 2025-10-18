@@ -16,7 +16,6 @@ interface SSHProtocolSettingsResponse {
     font_family?: string
     font_size?: number
     scrollback_limit?: number
-    enable_webgl?: boolean
   }
   recording?: {
     mode?: string
@@ -54,7 +53,6 @@ function normaliseTerminalSettings(payload?: SSHProtocolSettingsResponse['termin
       typeof payload?.scrollback_limit === 'number' && payload.scrollback_limit >= 200
         ? payload.scrollback_limit
         : 1000,
-    enable_webgl: payload?.enable_webgl !== false,
   }
 }
 

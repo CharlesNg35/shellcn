@@ -104,7 +104,6 @@ describe('ProtocolSettings', () => {
       font_family: 'monospace',
       font_size: 14,
       scrollback_limit: 1000,
-      enable_webgl: true,
     },
     recording: {
       mode: 'optional',

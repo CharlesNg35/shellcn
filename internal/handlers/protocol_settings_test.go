@@ -95,7 +95,6 @@ func TestProtocolSettingsHandler_GetAndUpdate(t *testing.T) {
 			"font_family":      "Fira Code",
 			"font_size":        14,
 			"scrollback_limit": 2000,
-			"enable_webgl":     true,
 		},
 		"recording": map[string]any{
 			"mode":            services.RecordingModeForced,
@@ -181,7 +180,6 @@ func TestProtocolSettingsHandler_Unauthorized(t *testing.T) {
 			"font_family":      "monospace",
 			"font_size":        14,
 			"scrollback_limit": 1000,
-			"enable_webgl":     true,
 		},
 		"recording": map[string]any{
 			"mode":            services.RecordingModeForced,

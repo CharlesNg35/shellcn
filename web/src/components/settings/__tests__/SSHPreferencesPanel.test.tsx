@@ -89,7 +89,6 @@ describe('SSHPreferencesPanel', () => {
         copy_on_select: true,
         font_size: 14,
         scrollback_limit: 1000,
-        enable_webgl: true,
       },
       sftp: {
         show_hidden_files: false,
@@ -134,7 +133,6 @@ describe('SSHPreferencesPanel', () => {
     fireEvent.change(scrollbackInput, { target: { value: '2000' } })
 
     await user.click(screen.getByLabelText('Copy on select'))
-    await user.click(screen.getByLabelText('Enable WebGL acceleration'))
     await user.click(screen.getByLabelText('Show hidden files by default'))
     await user.click(screen.getByLabelText('Open transfer queue automatically'))
     await user.click(screen.getByLabelText('Confirm before overwriting files'))
@@ -150,7 +148,6 @@ describe('SSHPreferencesPanel', () => {
             copy_on_select: false,
             font_size: 16,
             scrollback_limit: 2000,
-            enable_webgl: false,
           },
           sftp: {
             show_hidden_files: true,

@@ -35,11 +35,10 @@ func TestProtocolSettingsService_UpdateSSHSettings(t *testing.T) {
 			EnableSFTP:         true,
 		},
 		Terminal: TerminalSettingsInput{
-			ThemeMode:   "force_dark",
-			FontFamily:  "JetBrains Mono",
-			FontSize:    16,
-			Scrollback:  1500,
-			EnableWebGL: false,
+			ThemeMode:  "force_dark",
+			FontFamily: "JetBrains Mono",
+			FontSize:   16,
+			Scrollback: 1500,
 		},
 		Recording: RecordingSettingsInput{
 			Mode:           RecordingModeForced,
@@ -61,7 +60,6 @@ func TestProtocolSettingsService_UpdateSSHSettings(t *testing.T) {
 	require.Equal(t, "JetBrains Mono", settings.Terminal.FontFamily)
 	require.Equal(t, 16, settings.Terminal.FontSize)
 	require.Equal(t, 1500, settings.Terminal.Scrollback)
-	require.False(t, settings.Terminal.EnableWebGL)
 	require.True(t, settings.Collaboration.RestrictWriteToAdmins)
 
 	require.Equal(t, RecordingModeForced, settings.Recording.Mode)

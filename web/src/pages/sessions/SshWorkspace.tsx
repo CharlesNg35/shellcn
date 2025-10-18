@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -26,8 +27,32 @@ import { SessionShareDialog } from './ssh-workspace/SessionShareDialog'
 import SshWorkspaceContent from './ssh-workspace/SshWorkspaceContent'
 import { SessionRecordingDialog } from './ssh-workspace/SessionRecordingDialog'
 import { useSshSessionTunnelStore } from '@/store/ssh-session-tunnel-store'
+import { fetchConnectionById } from '@/lib/api/connections'
+import { useSSHProtocolSettings } from '@/hooks/useProtocolSettings'
+import type { TerminalAppearanceOptions } from '@/components/workspace/SshTerminal'
+import type { SSHTerminalSettings } from '@/types/protocol-settings'
 
 const LAYOUT_OPTIONS = [1, 2, 3, 4, 5]
+
+const FALLBACK_TERMINAL_SETTINGS: SSHTerminalSettings = {
+  theme_mode: 'auto',
+  font_family: 'monospace',
+  font_size: 14,
+  scrollback_limit: 1000,
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) {
+    return min
+  }
+  if (value < min) {
+    return min
+  }
+  if (value > max) {
+    return max
+  }
+  return value
+}
 
 function resolveDisplayName(user?: {
   first_name?: string | null
@@ -83,6 +108,41 @@ export function SshWorkspace() {
   const sessionTunnel = useSshSessionTunnelStore(
     useCallback((state) => state.tunnels[sessionId], [sessionId])
   )
+
+  const protocolSettingsQuery = useSSHProtocolSettings()
+  const connectionId = session?.connection_id
+  const connectionQuery = useQuery({
+    queryKey: ['connections', 'detail', connectionId, 'settings'],
+    queryFn: () => fetchConnectionById(connectionId!, 'settings'),
+    enabled: Boolean(connectionId),
+    staleTime: 60_000,
+  })
+
+  const terminalAppearance = useMemo<TerminalAppearanceOptions>(() => {
+    const defaults = protocolSettingsQuery.data?.terminal ?? FALLBACK_TERMINAL_SETTINGS
+    const override = connectionQuery.data?.settings?.terminal_config_override
+
+    const resolvedFontFamily =
+      typeof override?.font_family === 'string' && override.font_family.trim().length > 0
+        ? override.font_family.trim()
+        : defaults.font_family
+    const resolvedFontSize = clampNumber(Number(override?.font_size ?? defaults.font_size), 8, 96)
+    const overrideScrollback = Number(override?.scrollback_limit)
+    const resolvedScrollback = Math.max(
+      200,
+      Number.isFinite(overrideScrollback) ? overrideScrollback : defaults.scrollback_limit
+    )
+
+    return {
+      themeMode: defaults.theme_mode,
+      fontFamily: resolvedFontFamily,
+      fontSize: resolvedFontSize,
+      scrollbackLimit: resolvedScrollback,
+    }
+  }, [
+    connectionQuery.data?.settings?.terminal_config_override,
+    protocolSettingsQuery.data?.terminal,
+  ])
 
   const terminalRef = useRef<SshTerminalHandle | null>(null)
 
@@ -185,7 +245,11 @@ export function SshWorkspace() {
     return { active, total: transfers.length }
   }, [sessionTransfersState])
 
-  const telemetry = useWorkspaceTelemetry({ terminalRef, logEvent })
+  const telemetry = useWorkspaceTelemetry({
+    terminalRef,
+    logEvent,
+    defaultFontSize: terminalAppearance.fontSize,
+  })
 
   const performSearch = useCallback(
     (query: string, direction: 'next' | 'previous') =>
@@ -410,6 +474,7 @@ export function SshWorkspace() {
         onRecordingDetails={session ? handleRecordingDetails : undefined}
         transfers={transfersSummary}
         tunnel={tunnel}
+        terminalAppearance={terminalAppearance}
       />
 
       <SshCommandPalette

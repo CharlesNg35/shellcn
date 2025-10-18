@@ -176,7 +176,6 @@ function coerceTerminalConfig(
         : undefined,
     font_size: Number.isFinite(fontSize) && fontSize > 0 ? fontSize : undefined,
     scrollback_limit: Number.isFinite(scrollback) && scrollback >= 0 ? scrollback : undefined,
-    enable_webgl: raw.enable_webgl === undefined ? undefined : Boolean(raw.enable_webgl),
   }
 }
 

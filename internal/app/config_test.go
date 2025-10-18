@@ -47,7 +47,6 @@ func TestLoadConfigFromFile(t *testing.T) {
 	require.Equal(t, "Fira Code", cfg.Protocols.SSH.Terminal.FontFamily)
 	require.Equal(t, 16, cfg.Protocols.SSH.Terminal.FontSize)
 	require.Equal(t, 2000, cfg.Protocols.SSH.Terminal.Scrollback)
-	require.False(t, cfg.Protocols.SSH.Terminal.EnableWebGL)
 	require.False(t, cfg.Protocols.Telnet.Enabled)
 	require.True(t, cfg.Protocols.SFTP.Enabled)
 	require.True(t, cfg.Protocols.RDP.Enabled)

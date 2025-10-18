@@ -6,7 +6,6 @@ export interface TerminalPreferences {
   cursor_style: TerminalCursorStyle
   copy_on_select: boolean
   scrollback_limit: number
-  enable_webgl: boolean
 }
 
 export interface SftpPreferences {

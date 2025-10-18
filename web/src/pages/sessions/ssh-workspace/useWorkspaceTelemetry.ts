@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SshTerminalHandle } from '@/components/workspace/SshTerminal'
 import { TERMINAL_FONT_SIZE } from '@/constants/terminal'
 
 interface UseWorkspaceTelemetryParams {
   terminalRef: React.RefObject<SshTerminalHandle | null>
   logEvent: (action: string, details?: Record<string, unknown>) => void
+  defaultFontSize?: number
 }
 
 export interface WorkspaceTelemetryControls {
@@ -21,11 +22,24 @@ export interface WorkspaceTelemetryControls {
 export function useWorkspaceTelemetry({
   terminalRef,
   logEvent,
+  defaultFontSize,
 }: UseWorkspaceTelemetryParams): WorkspaceTelemetryControls {
   const lastEventTimestampRef = useRef<number | null>(null)
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
   const [lastActivityAt, setLastActivityAt] = useState<Date | null>(null)
-  const [fontSize, setFontSize] = useState<number>(TERMINAL_FONT_SIZE.DEFAULT)
+  const defaultFontSizeRef = useRef<number>(
+    Number.isFinite(defaultFontSize) && defaultFontSize
+      ? defaultFontSize
+      : TERMINAL_FONT_SIZE.DEFAULT
+  )
+  const [fontSize, setFontSize] = useState<number>(defaultFontSizeRef.current)
+
+  useEffect(() => {
+    if (Number.isFinite(defaultFontSize) && defaultFontSize) {
+      defaultFontSizeRef.current = defaultFontSize
+      setFontSize(defaultFontSize)
+    }
+  }, [defaultFontSize])
 
   const handleTerminalEvent = useCallback(() => {
     const now = performance.now()
@@ -56,7 +70,7 @@ export function useWorkspaceTelemetry({
   }, [applyFontSizeDelta])
 
   const zoomReset = useCallback(() => {
-    const next = terminalRef.current?.setFontSize(TERMINAL_FONT_SIZE.DEFAULT)
+    const next = terminalRef.current?.setFontSize(defaultFontSizeRef.current)
     if (next !== undefined) {
       setFontSize(next)
       logEvent('terminal.zoom.reset', { fontSize: next })

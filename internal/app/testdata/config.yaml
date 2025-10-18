@@ -57,7 +57,6 @@ protocols:
       font_family: Fira Code
       font_size: 16
       scrollback_limit: 2000
-      enable_webgl: false
   telnet:
     enabled: false
   sftp:

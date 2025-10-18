@@ -91,11 +91,10 @@ func (h *ProtocolSettingsHandler) UpdateSSHSettings(c *gin.Context) {
 			EnableSFTP:         payload.Session.EnableSFTP,
 		},
 		Terminal: services.TerminalSettingsInput{
-			ThemeMode:   payload.Terminal.ThemeMode,
-			FontFamily:  payload.Terminal.FontFamily,
-			FontSize:    payload.Terminal.FontSize,
-			Scrollback:  payload.Terminal.Scrollback,
-			EnableWebGL: payload.Terminal.EnableWebGL,
+			ThemeMode:  payload.Terminal.ThemeMode,
+			FontFamily: payload.Terminal.FontFamily,
+			FontSize:   payload.Terminal.FontSize,
+			Scrollback: payload.Terminal.Scrollback,
 		},
 		Recording: services.RecordingSettingsInput{
 			Mode:           payload.Recording.Mode,
@@ -137,11 +136,10 @@ type sessionSettingsPayload struct {
 }
 
 type terminalSettingsPayload struct {
-	ThemeMode   string `json:"theme_mode" binding:"required,oneof=auto force_dark force_light"`
-	FontFamily  string `json:"font_family" binding:"required,max=128"`
-	FontSize    int    `json:"font_size" binding:"min=8,max=96"`
-	Scrollback  int    `json:"scrollback_limit" binding:"min=200,max=10000"`
-	EnableWebGL bool   `json:"enable_webgl"`
+	ThemeMode  string `json:"theme_mode" binding:"required,oneof=auto force_dark force_light"`
+	FontFamily string `json:"font_family" binding:"required,max=128"`
+	FontSize   int    `json:"font_size" binding:"min=8,max=96"`
+	Scrollback int    `json:"scrollback_limit" binding:"min=200,max=10000"`
 }
 
 type recordingSettingsPayload struct {

@@ -1,6 +1,9 @@
 import { Suspense, lazy, type RefObject } from 'react'
 import { Tabs, TabsContent } from '@/components/ui/Tabs'
-import type { SshTerminalHandle } from '@/components/workspace/SshTerminal'
+import type {
+  SshTerminalHandle,
+  TerminalAppearanceOptions,
+} from '@/components/workspace/SshTerminal'
 import SshWorkspaceStatusBar from '@/components/workspace/ssh/SshWorkspaceStatusBar'
 import type { WorkspaceTab } from '@/store/ssh-session-tabs-store'
 import type { ActiveConnectionSession } from '@/types/connections'
@@ -56,6 +59,7 @@ interface SshWorkspaceContentProps {
     total: number
   }
   tunnel?: SessionTunnelEntry
+  terminalAppearance: TerminalAppearanceOptions
 }
 
 export function SshWorkspaceContent({
@@ -76,6 +80,7 @@ export function SshWorkspaceContent({
   onRecordingDetails,
   transfers,
   tunnel,
+  terminalAppearance,
 }: SshWorkspaceContentProps) {
   return (
     <Tabs
@@ -108,6 +113,7 @@ export function SshWorkspaceContent({
                     searchOverlay={search.overlay}
                     onSearchResolved={({ matched }) => search.onResolved(matched)}
                     activeTabId={activeTabId}
+                    appearance={terminalAppearance}
                   />
                 </Suspense>
               ) : (

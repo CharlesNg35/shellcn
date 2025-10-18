@@ -305,19 +305,6 @@ func newSSHTemplate() *drivers.ConnectionTemplate {
 							Path:   "terminal_config_override.scrollback_limit",
 						},
 					},
-					{
-						Key:     "terminal_enable_webgl",
-						Label:   "Enable WebGL renderer",
-						Type:    drivers.ConnectionFieldTypeBoolean,
-						Default: true,
-						Dependencies: []drivers.FieldDependency{
-							{Field: "terminal_override_enabled", Equals: true},
-						},
-						Binding: &drivers.ConnectionBinding{
-							Target: drivers.BindingTargetSettings,
-							Path:   "terminal_config_override.enable_webgl",
-						},
-					},
 				},
 			},
 		},

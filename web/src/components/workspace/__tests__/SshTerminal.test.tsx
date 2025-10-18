@@ -10,35 +10,58 @@ const loadAddonMock = vi.fn()
 const searchFindNextMock = vi.fn(() => true)
 const searchFindPreviousMock = vi.fn(() => true)
 
-class TerminalStub {
-  public loadAddon = loadAddonMock
-  public write = writeMock
-  public dispose = disposeMock
-  public focus = vi.fn()
-  public open = vi.fn()
-  public clear = vi.fn()
-  public cols = 80
-  public rows = 24
-  public options: { fontSize: number } = { fontSize: 14 }
-  public onData = vi.fn(() => ({ dispose: vi.fn() }))
-  public onResize = vi.fn(() => ({ dispose: vi.fn() }))
-  constructor(public readonly config: Record<string, unknown>) {}
-}
+const { TerminalStub, FitAddonStub, WebglAddonStub, SearchAddonStub } = vi.hoisted(() => {
+  class TerminalStub {
+    public loadAddon = loadAddonMock
+    public write = writeMock
+    public dispose = disposeMock
+    public focus = vi.fn()
+    public open = vi.fn()
+    public clear = vi.fn()
+    public refresh = vi.fn()
+    public cols = 80
+    public rows = 24
+    public options: {
+      fontSize: number
+      fontFamily?: string
+      scrollback?: number
+      theme?: Record<string, unknown>
+    } = { fontSize: 14 }
+    public onData = vi.fn(() => ({ dispose: vi.fn() }))
+    public onResize = vi.fn(() => ({ dispose: vi.fn() }))
+    constructor(public readonly config: Record<string, unknown>) {
+      if (typeof config.fontSize === 'number') {
+        this.options.fontSize = config.fontSize
+      }
+      if (typeof config.fontFamily === 'string') {
+        this.options.fontFamily = config.fontFamily
+      }
+      if (typeof config.scrollback === 'number') {
+        this.options.scrollback = config.scrollback
+      }
+      if (config.theme) {
+        this.options.theme = config.theme as Record<string, unknown>
+      }
+    }
+  }
 
-class FitAddonStub {
-  public fit = fitMock
-  public dispose = disposeMock
-}
+  class FitAddonStub {
+    public fit = fitMock
+    public dispose = disposeMock
+  }
 
-class WebglAddonStub {
-  public dispose = disposeMock
-}
+  class WebglAddonStub {
+    public dispose = disposeMock
+  }
 
-class SearchAddonStub {
-  public findNext = searchFindNextMock
-  public findPrevious = searchFindPreviousMock
-  public dispose = disposeMock
-}
+  class SearchAddonStub {
+    public findNext = searchFindNextMock
+    public findPrevious = searchFindPreviousMock
+    public dispose = disposeMock
+  }
+
+  return { TerminalStub, FitAddonStub, WebglAddonStub, SearchAddonStub }
+})
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: TerminalStub,

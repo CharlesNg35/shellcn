@@ -13,7 +13,6 @@ export interface SSHTerminalSettings {
   font_family: string
   font_size: number
   scrollback_limit: number
-  enable_webgl: boolean
 }
 
 export interface SSHRecordingSettings {
