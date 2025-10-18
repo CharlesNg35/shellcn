@@ -13,3 +13,5 @@ export interface RealtimeControlMessage {
 }
 
 export const REALTIME_STREAM_NOTIFICATIONS = 'notifications'
+export const REALTIME_STREAM_SFTP = 'ssh.sftp'
+export const REALTIME_STREAM_SSH_TERMINAL = 'ssh.terminal'

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import { Loader2, Plus, Search, Server, X } from 'lucide-react'
@@ -10,6 +10,7 @@ import { useConnections } from '@/hooks/useConnections'
 import { useConnectionFolders } from '@/hooks/useConnectionFolders'
 import { useTeams } from '@/hooks/useTeams'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useConnectionMutations } from '@/hooks/useConnectionMutations'
 import type { Protocol } from '@/types/protocols'
 import type { ActiveConnectionSession, ConnectionRecord } from '@/types/connections'
 import { ConnectionCard } from '@/components/connections/ConnectionCard'
@@ -39,6 +40,8 @@ export function Connections() {
   const [resourceModalOpen, setResourceModalOpen] = useState(false)
   const [connectionModalOpen, setConnectionModalOpen] = useState(false)
   const [selectedProtocolId, setSelectedProtocolId] = useState<string | null>(null)
+  const [formMode, setFormMode] = useState<'create' | 'edit'>('create')
+  const [editingConnection, setEditingConnection] = useState<ConnectionRecord | null>(null)
   const [shareModalOpen, setShareModalOpen] = useState(false)
   const [shareTargetConnection, setShareTargetConnection] = useState<ConnectionRecord | null>(null)
   const [showActiveOnly, setShowActiveOnly] = useState(false)
@@ -68,6 +71,17 @@ export function Connections() {
     PERMISSIONS.PERMISSION.MANAGE,
   ])
   const canShareConnections = hasPermission(PERMISSIONS.CONNECTION.SHARE)
+  const canEditConnections = hasAnyPermission([
+    PERMISSIONS.CONNECTION.UPDATE,
+    PERMISSIONS.CONNECTION.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
+  const canDeleteConnections = hasAnyPermission([
+    PERMISSIONS.CONNECTION.DELETE,
+    PERMISSIONS.CONNECTION.MANAGE,
+    PERMISSIONS.PERMISSION.MANAGE,
+  ])
+  const { remove: deleteConnectionMutation } = useConnectionMutations()
   const canViewConnections = hasAnyPermission([
     PERMISSIONS.CONNECTION.VIEW,
     PERMISSIONS.CONNECTION.VIEW_ALL,
@@ -282,6 +296,8 @@ export function Connections() {
   const hasError = protocolsError || connectionsError
 
   const handleStartCreateConnection = () => {
+    setFormMode('create')
+    setEditingConnection(null)
     setSelectedProtocolId(null)
     setResourceModalOpen(true)
   }
@@ -295,11 +311,14 @@ export function Connections() {
   const handleCloseConnectionModal = () => {
     setConnectionModalOpen(false)
     setSelectedProtocolId(null)
+    setEditingConnection(null)
+    setFormMode('create')
   }
-
-  const handleConnectionCreated = (connection: ConnectionRecord) => {
+  const handleConnectionFormSuccess = (connection: ConnectionRecord) => {
     setConnectionModalOpen(false)
     setSelectedProtocolId(null)
+    setEditingConnection(null)
+    setFormMode('create')
     setProtocolFilter(connection.protocol_id)
     const params = new URLSearchParams(searchParams)
     if (connection.folder_id) {
@@ -310,6 +329,18 @@ export function Connections() {
     setSearchParams(params, { replace: true })
   }
 
+  const handleOpenEditConnection = (connectionId: string) => {
+    const target = connections.find((conn) => conn.id === connectionId)
+    if (!target) {
+      return
+    }
+    setFormMode('edit')
+    setEditingConnection(target)
+    setSelectedProtocolId(target.protocol_id)
+    setResourceModalOpen(false)
+    setConnectionModalOpen(true)
+  }
+
   const handleOpenShareModal = (connectionId: string) => {
     const target = connections.find((conn) => conn.id === connectionId)
     if (!target) {
@@ -318,6 +349,18 @@ export function Connections() {
     setShareTargetConnection(target)
     setShareModalOpen(true)
   }
+
+  const handleDeleteConnection = useCallback(
+    (connectionId: string) => {
+      const target = connections.find((conn) => conn.id === connectionId)
+      const label = target?.name ?? 'this connection'
+      if (!window.confirm(`Delete ${label}? This action cannot be undone.`)) {
+        return
+      }
+      deleteConnectionMutation.mutate(connectionId)
+    },
+    [connections, deleteConnectionMutation]
+  )
 
   return (
     <div className="flex h-full flex-col space-y-6 p-6">
@@ -473,7 +516,7 @@ export function Connections() {
               showingActiveOnly={showActiveOnly}
             />
           ) : (
-            <div className="grid gap-4 pb-6 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className="grid gap-4 pb-6 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
               {filteredConnections.map((connection) => (
                 <ConnectionCard
                   key={connection.id}
@@ -481,7 +524,9 @@ export function Connections() {
                   protocol={protocolLookup[connection.protocol_id]}
                   protocolIcon={resolveProtocolIcon(protocolLookup[connection.protocol_id])}
                   teamName={connection.team_id ? teamLookup[connection.team_id] : undefined}
+                  onEdit={canEditConnections ? handleOpenEditConnection : undefined}
                   onShare={canShareConnections ? handleOpenShareModal : undefined}
+                  onDelete={canDeleteConnections ? handleDeleteConnection : undefined}
                   activeSessions={activeSessionsByConnection[connection.id]}
                   showActiveUsers={isAdmin}
                 />
@@ -511,7 +556,9 @@ export function Connections() {
         teamId={teamFilterValue ?? null}
         teams={teams}
         allowTeamAssignment={canAssignTeams}
-        onSuccess={handleConnectionCreated}
+        onSuccess={handleConnectionFormSuccess}
+        mode={formMode}
+        connection={editingConnection}
       />
 
       <ShareConnectionModal
@@ -648,37 +695,33 @@ function EmptyState({
 
 function LoadingState() {
   return (
-    <div className="grid gap-4 pb-6 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-      {Array.from({ length: 8 }).map((_, index) => (
+    <div className="grid gap-4 pb-6 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]">
+      {Array.from({ length: 10 }).map((_, index) => (
         <div
           key={`connection-skeleton-${index}`}
-          className="flex flex-col overflow-hidden rounded-lg border border-border/60 bg-card shadow-sm"
+          className="flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card"
         >
-          {/* Header skeleton */}
-          <div className="border-b border-border/40 bg-muted/30 p-4">
-            <div className="flex items-start gap-3">
-              <div className="h-12 w-12 animate-pulse rounded-lg bg-muted" />
+          {/* Content skeleton */}
+          <div className="flex-1 p-5">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="h-11 w-11 animate-pulse rounded-lg bg-muted" />
               <div className="flex-1 space-y-2">
                 <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-                <div className="h-3 w-48 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-40 animate-pulse rounded bg-muted" />
               </div>
             </div>
-          </div>
-          {/* Body skeleton */}
-          <div className="flex-1 space-y-3 p-4">
-            <div className="flex gap-2">
-              <div className="h-5 w-16 animate-pulse rounded bg-muted" />
-              <div className="h-5 w-20 animate-pulse rounded bg-muted" />
+            <div className="mb-4 flex gap-2">
+              <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+              <div className="h-3 w-16 animate-pulse rounded bg-muted" />
             </div>
-            <div className="h-3 w-full animate-pulse rounded bg-muted" />
-            <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+            <div className="space-y-2">
+              <div className="h-3 w-full animate-pulse rounded bg-muted" />
+              <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+            </div>
           </div>
           {/* Footer skeleton */}
-          <div className="border-t border-border/40 bg-muted/20 p-3">
-            <div className="flex gap-2">
-              <div className="h-9 flex-1 animate-pulse rounded bg-muted" />
-              <div className="h-9 w-9 animate-pulse rounded bg-muted" />
-            </div>
+          <div className="border-t border-border/40 bg-muted/10 p-3">
+            <div className="h-9 w-full animate-pulse rounded bg-muted" />
           </div>
         </div>
       ))}

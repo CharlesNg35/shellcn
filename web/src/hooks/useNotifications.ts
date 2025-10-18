@@ -1,12 +1,11 @@
 import { useCallback, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { notificationsApi } from '@/lib/api/notifications'
-import { buildWebSocketUrl } from '@/lib/utils/websocket'
 import type { NotificationEventData, NotificationPayload } from '@/types/notifications'
 import type { RealtimeMessage } from '@/types/realtime'
 import { REALTIME_STREAM_NOTIFICATIONS } from '@/types/realtime'
+import { useAuthenticatedWebSocket } from './useAuthenticatedWebSocket'
 import { useAuth } from './useAuth'
-import { useWebSocket } from './useWebSocket'
 
 export const NOTIFICATION_QUERY_KEY = ['notifications', 'list'] as const
 
@@ -31,7 +30,7 @@ function removeNotification(existing: NotificationPayload[], notificationId: str
 }
 
 export function useNotifications() {
-  const { isAuthenticated, tokens } = useAuth({ autoInitialize: true })
+  const { isAuthenticated } = useAuth({ autoInitialize: true })
   const queryClient = useQueryClient()
 
   const notificationsQuery = useQuery({
@@ -87,20 +86,9 @@ export function useNotifications() {
     [queryClient]
   )
 
-  const accessToken = tokens?.accessToken ?? ''
-
-  const websocketUrl = useMemo(() => {
-    if (!isAuthenticated || !accessToken) {
-      return ''
-    }
-    return buildWebSocketUrl('/ws', {
-      token: accessToken,
-      streams: REALTIME_STREAM_NOTIFICATIONS,
-    })
-  }, [accessToken, isAuthenticated])
-
-  const { isConnected } = useWebSocket<RealtimeMessage<NotificationEventData>>(websocketUrl, {
-    enabled: isAuthenticated && Boolean(websocketUrl),
+  const { isConnected } = useAuthenticatedWebSocket<RealtimeMessage<NotificationEventData>>({
+    params: { streams: REALTIME_STREAM_NOTIFICATIONS },
+    enabled: isAuthenticated,
     autoReconnect: true,
     onMessage: handleSocketMessage,
   })

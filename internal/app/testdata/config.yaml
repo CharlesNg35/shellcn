@@ -35,12 +35,28 @@ features:
   session_sharing:
     enabled: true
     max_shared_users: 8
+    allow_default: false
+    restrict_write_to_admins: true
   notifications:
     enabled: true
+  recording:
+    mode: forced
+    storage: s3
+    retention_days: 30
+    require_consent: false
+  sessions:
+    concurrent_limit_default: 4
+    idle_timeout: 45m
 
 protocols:
   ssh:
     enabled: true
+    enable_sftp_default: false
+    terminal:
+      theme_mode: force_dark
+      font_family: Fira Code
+      font_size: 16
+      scrollback_limit: 2000
   telnet:
     enabled: false
   sftp:

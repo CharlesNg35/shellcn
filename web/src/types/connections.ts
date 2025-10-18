@@ -36,17 +36,36 @@ export interface ConnectionShareSummary {
   entries: ConnectionShareEntry[]
 }
 
+export interface ConnectionTemplateMetadata {
+  driver_id?: string
+  version?: string
+  fields?: Record<string, unknown>
+  [key: string]: unknown
+}
+
 export interface ConnectionMetadata {
   icon?: string
   color?: string
   tags?: string[]
+  connection_template?: ConnectionTemplateMetadata
   [key: string]: unknown
 }
 
 export interface ConnectionSettings {
   host?: string
   port?: number
+  recording_enabled?: boolean
+  concurrent_limit?: number
+  idle_timeout_minutes?: number
+  enable_sftp?: boolean
+  terminal_config_override?: ConnectionTerminalConfigOverride
   [key: string]: unknown
+}
+
+export interface ConnectionTerminalConfigOverride {
+  font_family?: string
+  font_size?: number
+  scrollback_limit?: number
 }
 
 export interface ConnectionFolderSummary {
@@ -90,6 +109,23 @@ export interface ConnectionProtocolSummary {
   count: number
 }
 
+export interface ActiveSessionParticipant {
+  session_id: string
+  user_id: string
+  user_name?: string
+  role: string
+  access_mode: string
+  joined_at: string
+  is_owner?: boolean
+  is_write_holder?: boolean
+}
+
+export interface ActiveSessionCapabilities {
+  panes?: string[]
+  features?: Record<string, boolean>
+  [key: string]: unknown
+}
+
 export interface ActiveConnectionSession {
   id: string
   connection_id: string
@@ -103,4 +139,21 @@ export interface ActiveConnectionSession {
   host?: string
   port?: number
   metadata?: Record<string, unknown>
+  descriptor_id?: string
+  capabilities?: ActiveSessionCapabilities
+  template?: ConnectionTemplateMetadata
+  concurrent_limit?: number
+  owner_user_id?: string
+  owner_user_name?: string
+  write_holder?: string
+  participants?: Record<string, ActiveSessionParticipant>
+}
+
+export interface SessionParticipantsSummary {
+  session_id: string
+  connection_id: string
+  owner_user_id: string
+  owner_user_name?: string
+  write_holder?: string | null
+  participants: ActiveSessionParticipant[]
 }

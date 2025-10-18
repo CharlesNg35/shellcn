@@ -19,7 +19,7 @@ func TestRealtimeHandlerUnauthorizedWithoutToken(t *testing.T) {
 	jwtSvc, err := iauth.NewJWTService(iauth.JWTConfig{Secret: "test-secret"})
 	require.NoError(t, err)
 
-	handler := NewRealtimeHandler(hub, jwtSvc, realtime.StreamNotifications)
+	handler := NewRealtimeHandler(hub, jwtSvc, nil, realtime.StreamNotifications)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -38,12 +38,15 @@ func TestRealtimeHandlerRejectsUnknownStream(t *testing.T) {
 	jwtSvc, err := iauth.NewJWTService(iauth.JWTConfig{Secret: "test-secret"})
 	require.NoError(t, err)
 
-	handler := NewRealtimeHandler(hub, jwtSvc, realtime.StreamNotifications)
+	handler := NewRealtimeHandler(hub, jwtSvc, nil, realtime.StreamNotifications)
+
+	token, err := jwtSvc.GenerateAccessToken(iauth.AccessTokenInput{UserID: "user-1"})
+	require.NoError(t, err)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Params = gin.Params{gin.Param{Key: "stream", Value: "unknown"}}
-	c.Request = httptest.NewRequest(http.MethodGet, "/ws/unknown", nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/ws/unknown?token="+token, nil)
 
 	handler.Stream(c)
 

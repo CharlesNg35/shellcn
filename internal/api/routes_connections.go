@@ -15,5 +15,7 @@ func registerConnectionRoutes(api *gin.RouterGroup, handler *handlers.Connection
 		connections.POST("", middleware.RequirePermission(checker, "connection.create"), handler.Create)
 		connections.GET("/summary", middleware.RequirePermission(checker, "connection.view"), handler.Summary)
 		connections.GET("/:id", middleware.RequirePermission(checker, "connection.view"), handler.Get)
+		connections.PUT("/:id", middleware.RequirePermission(checker, "connection.view"), handler.Update)
+		connections.DELETE("/:id", middleware.RequirePermission(checker, "connection.view"), handler.Delete)
 	}
 }

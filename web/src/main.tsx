@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App.tsx'
 import './index.css'
+import '@xterm/xterm/css/xterm.css'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,3 +70,13 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>
 )
+
+if (typeof window !== 'undefined' && import.meta.env.MODE !== 'test') {
+  void import('@/lib/monitoring/registerWebVitals')
+    .then(({ registerWebVitals }) => registerWebVitals())
+    .catch((error) => {
+      if (import.meta.env.DEV) {
+        console.warn('Failed to initialise web vitals monitoring', error)
+      }
+    })
+}

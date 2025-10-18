@@ -4,6 +4,11 @@ import type {
   ProtocolCapabilities,
   ProtocolListResult,
   ProtocolPermission,
+  ConnectionTemplate,
+  ConnectionTemplateField,
+  ConnectionTemplateSection,
+  ConnectionTemplateFieldType,
+  ConnectionTemplateBinding,
 } from '@/types/protocols'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
@@ -27,6 +32,8 @@ interface ProtocolResponse {
   config_enabled: boolean
   available: boolean
   permissions?: ProtocolPermissionResponse[] | null
+  connection_template_version?: string | null
+  identity_required?: boolean
 }
 
 interface ProtocolCapabilitiesResponse {
@@ -152,6 +159,8 @@ function transformProtocol(raw: ProtocolResponse): Protocol {
     driverEnabled: raw.driver_enabled,
     configEnabled: raw.config_enabled,
     available: raw.available,
+    connectionTemplateVersion: raw.connection_template_version ?? undefined,
+    identityRequired: Boolean(raw.identity_required),
     permissions,
   }
 }
@@ -159,6 +168,56 @@ function transformProtocol(raw: ProtocolResponse): Protocol {
 interface ProtocolListResponse {
   protocols?: ProtocolResponse[]
   count?: number
+}
+
+interface ConnectionTemplateResponse {
+  driver_id: string
+  version: string
+  display_name: string
+  description?: string
+  protocols?: string[] | string | null
+  sections?: ConnectionTemplateSectionResponse[] | null
+  metadata?: Record<string, unknown> | string | null
+}
+
+interface ConnectionTemplateSectionResponse {
+  id: string
+  label: string
+  description?: string
+  fields?: ConnectionTemplateFieldResponse[] | null
+  metadata?: Record<string, unknown> | string | null
+}
+
+interface ConnectionTemplateFieldResponse {
+  key: string
+  label: string
+  type: string
+  required: boolean
+  default?: unknown
+  placeholder?: string
+  help_text?: string
+  options?: ConnectionTemplateOptionResponse[] | null
+  binding?: ConnectionTemplateBindingResponse | null
+  validation?: Record<string, unknown> | string | null
+  dependencies?: ConnectionTemplateDependencyResponse[] | null
+  metadata?: Record<string, unknown> | string | null
+}
+
+interface ConnectionTemplateOptionResponse {
+  value: string
+  label: string
+}
+
+interface ConnectionTemplateBindingResponse {
+  target?: string
+  path?: string
+  index?: number
+  property?: string
+}
+
+interface ConnectionTemplateDependencyResponse {
+  field: string
+  equals?: unknown
 }
 
 function transformProtocolList(
@@ -179,6 +238,92 @@ function transformProtocolList(
   return {
     data: transformed,
     count,
+  }
+}
+
+const PROTOCOL_TEMPLATE_ENDPOINT = (protocolId: string) =>
+  `/protocols/${protocolId}/connection-template`
+
+function parseRecordPayload(
+  value?: Record<string, unknown> | string | null
+): Record<string, unknown> | undefined {
+  if (!value) {
+    return undefined
+  }
+  if (typeof value === 'object') {
+    return value
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    try {
+      const parsed = JSON.parse(value)
+      if (parsed && typeof parsed === 'object') {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      return undefined
+    }
+  }
+  return undefined
+}
+
+function transformConnectionTemplateField(
+  field: ConnectionTemplateFieldResponse
+): ConnectionTemplateField {
+  return {
+    key: field.key,
+    label: field.label,
+    type: field.type as ConnectionTemplateFieldType,
+    required: Boolean(field.required),
+    default: field.default,
+    placeholder: field.placeholder,
+    helpText: field.help_text,
+    options: (field.options ?? undefined)?.map((option) => ({
+      value: option.value,
+      label: option.label,
+    })),
+    binding: field.binding
+      ? {
+          target: (field.binding.target ?? 'settings') as ConnectionTemplateBinding['target'],
+          path: field.binding.path ?? undefined,
+          index: field.binding.index ?? undefined,
+          property: field.binding.property ?? undefined,
+        }
+      : undefined,
+    validation: parseRecordPayload(field.validation),
+    dependencies: (field.dependencies ?? undefined)?.map((dependency) => ({
+      field: dependency.field,
+      equals: dependency.equals,
+    })),
+    metadata: parseRecordPayload(field.metadata),
+  }
+}
+
+function transformConnectionTemplateSection(
+  section: ConnectionTemplateSectionResponse
+): ConnectionTemplateSection {
+  return {
+    id: section.id,
+    label: section.label,
+    description: section.description,
+    fields: (section.fields ?? []).map(transformConnectionTemplateField),
+    metadata: parseRecordPayload(section.metadata),
+  }
+}
+
+function transformConnectionTemplateResponse(
+  raw?: ConnectionTemplateResponse | null
+): ConnectionTemplate | null {
+  if (!raw) {
+    return null
+  }
+  return {
+    driverId: raw.driver_id,
+    version: raw.version,
+    displayName: raw.display_name,
+    description: raw.description,
+    protocols: normalizeStringArrayPayload(raw.protocols),
+    sections: (raw.sections ?? []).map(transformConnectionTemplateSection),
+    metadata: parseRecordPayload(raw.metadata),
   }
 }
 
@@ -206,4 +351,19 @@ export async function fetchProtocolPermissions(protocolId: string): Promise<Prot
   return permissions
     .map((permission) => transformProtocolPermission(permission))
     .filter((permission): permission is ProtocolPermission => permission !== null)
+}
+
+export async function fetchConnectionTemplate(
+  protocolId: string
+): Promise<ConnectionTemplate | null> {
+  const response = await apiClient.get<
+    ApiResponse<{ template?: ConnectionTemplateResponse | null }>
+  >(PROTOCOL_TEMPLATE_ENDPOINT(protocolId))
+  const data = unwrapResponse(response)
+  if (!data || typeof data !== 'object') {
+    return null
+  }
+  return transformConnectionTemplateResponse(
+    (data as { template?: ConnectionTemplateResponse | null }).template
+  )
 }

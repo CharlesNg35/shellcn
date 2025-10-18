@@ -21,7 +21,6 @@ func setupModule(t *testing.T) *monitoring.Module {
 }
 
 func TestSummaryAggregatesMetrics(t *testing.T) {
-	t.Parallel()
 	setupModule(t)
 
 	monitoring.RecordAuthAttempt("success")
@@ -35,6 +34,7 @@ func TestSummaryAggregatesMetrics(t *testing.T) {
 	monitoring.RecordRealtimeFailure("notifications", "backpressure", "drop")
 	monitoring.RecordMaintenanceRun("session_cleanup", "success", "", time.Second)
 	monitoring.RecordProtocolLaunch("ssh", "success", "", 500*time.Millisecond)
+	monitoring.RecordWebVital("LCP", "good", 1200)
 
 	summary := monitoring.Snapshot()
 	require.Equal(t, uint64(2), summary.Auth.Success+summary.Auth.Failure)
@@ -42,11 +42,10 @@ func TestSummaryAggregatesMetrics(t *testing.T) {
 	require.GreaterOrEqual(t, summary.Realtime.Failures, uint64(1))
 	require.NotEmpty(t, summary.Maintenance.Jobs)
 	require.NotEmpty(t, summary.Protocols)
+	require.NotEmpty(t, summary.WebVitals)
 }
 
 func TestHealthManagerEvaluate(t *testing.T) {
-	t.Parallel()
-
 	manager := monitoring.NewHealthManager()
 	manager.RegisterReadiness(monitoring.NewCheck("database", func(ctx context.Context) monitoring.ProbeResult {
 		return monitoring.ProbeResult{Status: monitoring.StatusUp}
@@ -62,7 +61,6 @@ func TestHealthManagerEvaluate(t *testing.T) {
 }
 
 func TestMaintenanceCheck(t *testing.T) {
-	t.Parallel()
 	setupModule(t)
 
 	monitoring.RecordMaintenanceRun("session_cleanup", "success", "", time.Second)

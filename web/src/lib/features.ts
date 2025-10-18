@@ -102,6 +102,14 @@ export const FEATURE_MODULES: Record<string, FeatureModule> = {
     category: 'settings',
     description: 'Security settings, MFA, and policies',
   },
+  protocolSettings: {
+    id: 'protocolSettings',
+    name: 'Protocol Settings',
+    enabled: true,
+    category: 'settings',
+    permission: PERMISSIONS.PROTOCOL.SSH.RECORD,
+    description: 'Configure default SSH session policies and collaboration permissions',
+  },
 }
 
 /**

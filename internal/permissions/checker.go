@@ -127,6 +127,29 @@ func (c *Checker) GetUserPermissions(ctx context.Context, userID string) ([]stri
 	return ids, nil
 }
 
+// GetUserTeamIDs returns the team identifiers the user belongs to.
+func (c *Checker) GetUserTeamIDs(ctx context.Context, userID string) ([]string, error) {
+	ctx = ensureContext(ctx)
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("permission checker: user id is required")
+	}
+
+	grants, err := c.loadUserGrants(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(grants.TeamIDs) == 0 {
+		return nil, nil
+	}
+
+	ids := append([]string(nil), grants.TeamIDs...)
+	sort.Strings(ids)
+	return ids, nil
+}
+
 type userGrants struct {
 	ID          string
 	IsRoot      bool

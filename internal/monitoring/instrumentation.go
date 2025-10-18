@@ -55,6 +55,25 @@ func ObserveAPILatency(method, path, status string, duration time.Duration) {
 	module.metrics.apiLatency.WithLabelValues(method, path, status).Observe(duration.Seconds())
 }
 
+// RecordWebVital captures client-reported Web Vitals in seconds and updates runtime stats.
+func RecordWebVital(metric, rating string, value float64) {
+	module := ensureModule()
+	if module == nil {
+		return
+	}
+	metricID := strings.ToUpper(strings.TrimSpace(metric))
+	if metricID == "" {
+		metricID = "UNKNOWN"
+	}
+	ratingLabel := normalizeLabel(rating)
+	if ratingLabel == "" {
+		ratingLabel = "unknown"
+	}
+	normalized := normalizeVitalValue(metricID, value)
+	module.metrics.webVitals.WithLabelValues(metricID, ratingLabel).Observe(normalized)
+	module.stats.recordWebVital(metricID, ratingLabel, normalized)
+}
+
 // AdjustActiveSessions modifies the live session gauge by delta.
 func AdjustActiveSessions(delta int64) {
 	module := ensureModule()
@@ -216,6 +235,26 @@ func RecordProtocolLaunch(protocolID, result, message string, duration time.Dura
 	stats.record(result, strings.TrimSpace(message), duration)
 }
 
+// RecordSessionShareEvent tracks participant and sharing lifecycle events.
+func RecordSessionShareEvent(event string) {
+	module := ensureModule()
+	if module == nil {
+		return
+	}
+	label := normalizeLabel(event)
+	module.metrics.sessionShareEvents.WithLabelValues(label).Inc()
+}
+
+// RecordSessionRecordingEvent tracks recording lifecycle activity per session.
+func RecordSessionRecordingEvent(event string) {
+	module := ensureModule()
+	if module == nil {
+		return
+	}
+	label := normalizeLabel(event)
+	module.metrics.sessionRecordingEvents.WithLabelValues(label).Inc()
+}
+
 func normalizeLabel(value string) string {
 	value = strings.TrimSpace(strings.ToLower(value))
 	if value == "" {
@@ -246,4 +285,16 @@ func normalizePath(path string) string {
 		return "root"
 	}
 	return path
+}
+
+func normalizeVitalValue(metric string, value float64) float64 {
+	if value < 0 {
+		value = 0
+	}
+	switch metric {
+	case "CLS":
+		return value
+	default:
+		return value / 1000.0
+	}
 }

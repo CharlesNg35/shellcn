@@ -162,6 +162,26 @@
 - [x] Implement code splitting
 - [x] Final UI/UX polish
 
+### Phase 12: Multi-Protocol Launch & Workspace Revamp (Complete)
+
+#### Backend
+
+- [x] Add `POST /api/active-sessions` launch endpoint and tests
+- [x] Extend session metadata (template snapshot, capabilities, `sftp_enabled`)
+- [x] Update `SSHSessionHandler` to populate new metadata
+- [x] Update API documentation (`MODULES_API.md`, driver standards)
+
+#### Frontend
+
+- [x] Implement launch assistant hook & modal and replace launch CTAs
+- [x] Create protocol workspace registry & shared layout components
+- [x] Rename/migrate workspace stores to protocol-agnostic versions
+- [x] Update `App.tsx` to orchestrate workspace mounting via registry
+- [x] Migrate SSH workspace to descriptor pattern and honour `sftp_enabled`
+- [x] Generalise hooks (`useActiveSession`, `useActiveConnections`) and update Sidebar/Settings pages
+- [x] Surface template fields & version warnings in connection UI
+- [x] Refresh tests (launch modal, SSH/SFTP workspaces, session pages) and docs
+
 ## 2. Vault Module (Credentials, Encryption)
 
 ### Phase 1: Encryption & Data Foundation (Week 1)
@@ -251,7 +271,93 @@
 
 ## 4. SSH Module — Not Started
 
-### SFTP Module — Not Started
+### (SSH/SFTP Driver) & Terminal Foundations
+
+- [x] Finalize SSH/SFTP implementation plan (`specs/plans/2.ssh-sftp/SSH_SFTP_IMPLEMENTATION_PLAN.md`)
+- [x] Ship Go SSH driver (`internal/drivers/ssh`) with launcher + health check
+- [x] Enforce per-connection concurrent session limits at launch time
+- [x] Wire ActiveSessionService lifecycle updates (register, heartbeat, unregister) for SSH
+- [x] Expose SSH launch websocket endpoint and terminal streaming pipeline
+- [x] Add protocol-scoped permissions (`protocol:ssh.connect`, `protocol:ssh.share`, `protocol:ssh.record`, etc.) with tests
+- [x] Seed connection defaults (font, theme, enable_sftp flag) via migrations and config
+- [x] Cover driver unit tests and integration smoke test against mock SSH server
+- [x] Register `ssh` and `sftp` protocol descriptors backed by the new SSH driver (shared launcher)
+- [x] Replace simple `protocols.ssh` config with enriched struct (concurrency, idle timeout, sftp auto-enable, recording, sharing)
+
+### Session Lifecycle Foundations
+
+- [x] Create migrations for `connection_sessions`, `session_participants`, `session_messages`, and `session_records` with indexes
+- [x] Implement `SessionLifecycleService` coordinating DB rows, ActiveSessionService, and recorder hooks
+- [x] Build `SessionChatService` with persistence, HTML sanitization, and realtime broadcasts
+- [x] Extend ActiveSessionService for participant tracking, write-holder enforcement, and concurrent limit checks
+- [x] Emit audit + Prometheus metrics for session open/close, sharing, and recording events
+
+### SFTP File Manager
+
+- [x] Implement SFTP channel management inside SSH driver (lazy init, pooled reuse)
+- [x] Build REST handlers for file browse, download, upload, edit, delete, and metadata
+  - [x] Implement metadata lookup, inline read, and download endpoints
+  - [x] Add resumable upload, save, rename, and delete APIs
+- [x] Stream large downloads/uploads efficiently with resumable support and realtime transfer events
+- [x] Create frontend SFTP workspace (tabs, toolbar, queue panel, editor integration)
+- [x] Wire Zustand/React Query stores for cached directory navigation and live transfer updates
+- [x] Add drag/drop upload pipeline with resumable progress events
+- [x] Implement permission guard for SFTP interactions (`protocol:ssh.sftp`)
+- [x] Write frontend + backend tests for file operations and path sanitization
+
+### SSH Workspace UI
+
+- [x] Build `/active-sessions/:sessionId` workspace with tabbed sessions, SFTP tab, and per-session splitter layouts
+  - [x] Implement workspace route with terminal + SFTP tabs backed by shared Zustand store
+  - [x] Add splitter layout controls and persist per-session column selections
+- [x] Implement `layout-grid` splitter dropdown with 1–5 column support and persisted pane configs
+- [x] Add toolbar actions (Snippets, File Manager, Full Screen) with permissions + analytics
+- [x] Render bottom bar with zoom/search, latency, recording, and transfer indicators
+- [x] Integrate command palette (`Cmd/Ctrl+K`) and sidebar ↔ tab synchronization
+- [x] Support “Open in new window” workflow preserving session state tokens
+
+### Shared Session Collaboration (Protocol-Wide) - should work with ssh
+
+- [x] Extend session data model to support participants, access modes, and chat
+- [x] Deliver API for inviting/removing participants and toggling write access
+- [x] Broadcast realtime events for participant list, ownership changes, and chat
+- [x] Implement frontend participant panel, badges, and write-access UX
+- [x] Add audit logging + metrics for share lifecycle events
+- [x] Validate permission enforcement across owner, participant, and admin roles
+
+### Session Recording
+
+- [x] Introduce recorder service + storage abstraction (filesystem + S3)
+- [x] Stream SSH terminal output into recorder when enabled
+- [x] Persist recording metadata and retention policy rows
+- [x] Build admin toggles (global + per-connection) for recording enablement
+- [x] Surface recording status indicator + playback UI in frontend
+- [x] Implement cleanup job honoring retention settings
+- [x] Write integration test covering start/stop/download flows
+
+### Protocol Settings & Preferences
+
+- [x] Ship admin Protocol Settings page (`/settings/protocols`) with SSH defaults (concurrency, idle timeout, SFTP auto-enable)
+- [x] Add terminal appearance controls (theme, font, size, scrollback) with live preview
+- [x] Implement recording policy form (disabled/optional/forced, retention days, storage target, consent banner)
+- [x] Persist settings via new `/api/settings/protocols/ssh` endpoint + audit events
+- [x] Update connection create/edit flows to inherit admin defaults and allow overrides
+- [x] Expose user preferences for terminal appearance, SFTP behavior, and personal snippets
+
+### Performance Guardrails
+
+- [x] Enforce lazy loading for terminal, Monaco, and heavy UI bundles; keep initial SSH chunk <300 KB
+- [x] Batch terminal writes (≤120 fps) and use `requestIdleCallback` for low-priority UI updates
+- [x] Virtualize SFTP directory list and cache directory metadata with LRU invalidation
+- [x] Enable websocket compression and monitor client-side Web Vitals for regressions
+- [x] Add automated bundle analyzer + performance checks to CI gate (warn on regression)
+
+### Testing & Quality
+
+- [x] Expand backend unit tests (ActiveSessionService, SessionLifecycleService, SFTP handlers, recorder stores)
+- [x] Add WebSocket + shared session integration tests (launch, chat, write delegation)
+- [x] Instrument performance smoke tests to capture latency, throughput, and memory for heavy sessions
+- [x] Document QA checklist including bandwidth throttling, concurrency limit, and recording-policy scenarios
 
 ---
 

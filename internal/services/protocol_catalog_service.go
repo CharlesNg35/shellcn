@@ -110,6 +110,11 @@ func (s *ProtocolCatalogService) Sync(ctx context.Context, driverReg *drivers.Re
 				return err
 			}
 		}
+		if templater, ok := drv.(drivers.ConnectionTemplater); ok {
+			if err := s.persistConnectionTemplate(ctx, tx, drv.ID(), templater); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -191,6 +196,176 @@ func (s *ProtocolCatalogService) persistCredentialTemplate(ctx context.Context, 
 		DoUpdates: clause.AssignmentColumns([]string{"display_name", "description", "fields", "compatible_protocols", "deprecated_after", "metadata", "hash"}),
 	}).Create(&record).Error; err != nil {
 		return fmt.Errorf("protocol catalog service: upsert credential template for %s: %w", driverID, err)
+	}
+
+	return nil
+}
+
+func (s *ProtocolCatalogService) persistConnectionTemplate(ctx context.Context, tx *gorm.DB, fallbackDriverID string, templater drivers.ConnectionTemplater) error {
+	template, err := templater.ConnectionTemplate()
+	if err != nil {
+		return fmt.Errorf("protocol catalog service: connection template: %w", err)
+	}
+	if template == nil {
+		return nil
+	}
+
+	driverID := strings.TrimSpace(template.DriverID)
+	if driverID == "" {
+		driverID = fallbackDriverID
+	}
+	template.DriverID = driverID
+	version := strings.TrimSpace(template.Version)
+	if version == "" {
+		return fmt.Errorf("protocol catalog service: connection template for %s missing version", driverID)
+	}
+	if err := validateConnectionTemplate(template); err != nil {
+		return fmt.Errorf("protocol catalog service: connection template for %s invalid: %w", driverID, err)
+	}
+
+	protocols := models.NormalizeConnectionTemplateProtocols(template.Protocols, driverID)
+	template.Protocols = protocols
+
+	sectionsJSON, err := json.Marshal(template.Sections)
+	if err != nil {
+		return fmt.Errorf("protocol catalog service: marshal connection sections for %s: %w", driverID, err)
+	}
+
+	protocolsJSON, err := json.Marshal(protocols)
+	if err != nil {
+		return fmt.Errorf("protocol catalog service: marshal connection protocols for %s: %w", driverID, err)
+	}
+
+	var metadataJSON datatypes.JSON
+	if template.Metadata != nil {
+		metadataBytes, err := json.Marshal(template.Metadata)
+		if err != nil {
+			return fmt.Errorf("protocol catalog service: marshal connection metadata for %s: %w", driverID, err)
+		}
+		metadataJSON = metadataBytes
+	}
+
+	payload := map[string]any{
+		"driver_id":    driverID,
+		"version":      version,
+		"display_name": strings.TrimSpace(template.DisplayName),
+		"description":  strings.TrimSpace(template.Description),
+		"sections":     template.Sections,
+		"protocols":    protocols,
+		"metadata":     template.Metadata,
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("protocol catalog service: marshal connection template payload for %s: %w", driverID, err)
+	}
+	sum := sha256.Sum256(encoded)
+	hash := hex.EncodeToString(sum[:])
+
+	record := models.ConnectionTemplate{
+		DriverID:    driverID,
+		Version:     version,
+		DisplayName: strings.TrimSpace(template.DisplayName),
+		Description: strings.TrimSpace(template.Description),
+		Sections:    sectionsJSON,
+		Protocols:   datatypes.JSON(protocolsJSON),
+		Metadata:    metadataJSON,
+		Hash:        hash,
+	}
+
+	if err := tx.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "driver_id"}, {Name: "version"}},
+		DoUpdates: clause.AssignmentColumns([]string{"display_name", "description", "sections", "protocols", "metadata", "hash"}),
+	}).Create(&record).Error; err != nil {
+		return fmt.Errorf("protocol catalog service: upsert connection template for %s: %w", driverID, err)
+	}
+
+	if err := syncConnectionTemplateProtocols(ctx, tx, driverID, version, protocols); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateConnectionTemplate(template *drivers.ConnectionTemplate) error {
+	if template == nil {
+		return errors.New("template is nil")
+	}
+	driverID := strings.TrimSpace(template.DriverID)
+	protocols := models.NormalizeConnectionTemplateProtocols(template.Protocols, driverID)
+	if len(protocols) == 0 {
+		return errors.New("no protocols defined")
+	}
+	template.Protocols = protocols
+	if len(template.Sections) == 0 {
+		return errors.New("no sections defined")
+	}
+	seenKeys := make(map[string]struct{})
+	for _, section := range template.Sections {
+		if len(section.Fields) == 0 {
+			return fmt.Errorf("section %q has no fields", section.ID)
+		}
+		for _, field := range section.Fields {
+			key := strings.TrimSpace(field.Key)
+			if key == "" {
+				return fmt.Errorf("section %q contains field with empty key", section.ID)
+			}
+			if _, exists := seenKeys[key]; exists {
+				return fmt.Errorf("duplicate field key %q detected", key)
+			}
+			seenKeys[key] = struct{}{}
+			if field.Binding != nil {
+				binding := field.Binding
+				switch binding.Target {
+				case drivers.BindingTargetSettings, drivers.BindingTargetMetadata:
+					if strings.TrimSpace(binding.Path) == "" {
+						return fmt.Errorf("field %q missing binding path", key)
+					}
+				case drivers.BindingTargetConnectionTarget:
+					if strings.TrimSpace(binding.Property) == "" {
+						return fmt.Errorf("field %q missing binding property for target", key)
+					}
+					if binding.Index < 0 {
+						return fmt.Errorf("field %q has invalid binding index", key)
+					}
+				default:
+					if strings.TrimSpace(binding.Target) != "" {
+						return fmt.Errorf("field %q has unsupported binding target %q", key, binding.Target)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func syncConnectionTemplateProtocols(ctx context.Context, tx *gorm.DB, driverID, version string, protocols []string) error {
+	if tx == nil {
+		return nil
+	}
+
+	normalized := models.NormalizeConnectionTemplateProtocols(protocols, driverID)
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	if err := tx.WithContext(ctx).
+		Where("driver_id = ? AND protocol_id NOT IN ?", driverID, normalized).
+		Delete(&models.ConnectionTemplateProtocol{}).Error; err != nil {
+		return fmt.Errorf("protocol catalog service: prune protocol bindings for %s: %w", driverID, err)
+	}
+
+	for _, protocolID := range normalized {
+		record := models.ConnectionTemplateProtocol{
+			ProtocolID: protocolID,
+			DriverID:   driverID,
+			Version:    version,
+		}
+		if err := tx.WithContext(ctx).Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "protocol_id"}},
+			DoUpdates: clause.AssignmentColumns([]string{"driver_id", "version", "updated_at"}),
+		}).Create(&record).Error; err != nil {
+			return fmt.Errorf("protocol catalog service: upsert protocol binding %s: %w", protocolID, err)
+		}
 	}
 
 	return nil

@@ -49,7 +49,7 @@ const tabsTriggerVariants = cva(
 )
 
 const tabsContentVariants = cva(
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2'
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 data-[state=inactive]:hidden'
 )
 
 const Tabs = TabsPrimitive.Root
@@ -60,7 +60,7 @@ const TabsList = forwardRef<
 >(({ className, justify, dense, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
-    className={cn(tabsListVariants({ justify, dense }), className)}
+    className={cn(tabsListVariants({ justify, dense }), 'mb-2', className)}
     {...props}
   />
 ))

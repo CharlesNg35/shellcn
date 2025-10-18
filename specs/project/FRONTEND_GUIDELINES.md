@@ -18,6 +18,8 @@
 - **Zod** for validation schemas
 - **lucide-react** for icons
 - **class-variance-authority** for component variants
+- **@monaco-editor/react** for any rich text/code editing surfaces
+- **react-dropzone** for drag-and-drop and file uploads
 
 ---
 
@@ -159,6 +161,14 @@ Button.displayName = 'Button';
 - `PermissionGuard` accepts `PermissionId` values and optional `anyOf` / `allOf` arrays. Prefer colocating permission checks close to the UI they protect.
 - Utilities and configs (`navigation`, `features`, etc.) must use the same constants to stay in sync with backend definitions (`internal/permissions/core.go`). Update the shared constants whenever new permissions are introduced.
 - Never render an action (buttons, links, menu items, empty‑state CTAs, header actions, etc.) unless the current user has permission to execute it. Wrap privileged UI in `PermissionGuard` (or feature-aware components) and omit it entirely when the user lacks access.
+
+### 2.4 Use Proven Packages Instead of Hand-Rolled Widgets
+
+- Reach for `@monaco-editor/react` whenever we need an in-browser editor. Do not build textarea-based editors for configuration or code—Monaco delivers syntax highlighting, diffing, and accessibility with less maintenance.
+- Persist shared client state in Zustand stores and rely on React Query for server/cache orchestration. Avoid bespoke context providers or ad-hoc `useState` caches for workspace/session data.
+- For drag-and-drop, uploads, and other complex DOM interactions, adopt community packages such as `react-dropzone` rather than wiring raw `dragenter`/`drop` listeners repeatedly. This keeps behavior consistent and battle-tested.
+- When a new UX requirement appears, audit the existing stack first. If a capability fits one of these packages (or another maintained library), extend that shared implementation instead of reinventing it in a leaf component.
+- **Call it out during reviews:** if a PR reimplements state containers, editors, or uploaders without leveraging our approved packages, block it and point back to this section. Technical debt grows quickly when we skip well-supported tools.
 
 ---
 
@@ -976,7 +986,7 @@ export interface CreateIdentityRequest {
 export interface SSHConnection {
     id: string;
     name: string;
-    protocol: 'ssh-v1' | 'ssh-v2' | 'auto';
+    protocol: 'ssh' | 'auto';
     icon?: string;
     host: string;
     port: number;

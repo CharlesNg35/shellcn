@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-interface UseWebSocketOptions<TMessage = unknown> {
+export interface UseWebSocketOptions<TMessage = unknown> {
   onMessage?: (message: TMessage) => void
   onConnect?: () => void
   onDisconnect?: (event?: CloseEvent) => void

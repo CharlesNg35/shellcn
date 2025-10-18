@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { resendEmailVerification } from '@/lib/api/profile'
 import { toApiError } from '@/lib/api/http'
 import { toast } from '@/lib/utils/toast'
+import { LaunchConnectionProvider } from '@/contexts/LaunchConnectionContext'
 
 export function DashboardLayout() {
   const [isSidebarOpen, setSidebarOpen] = useState(false)
@@ -38,38 +39,40 @@ export function DashboardLayout() {
   }, [location.pathname])
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex flex-1 flex-col lg:pl-64">
-        <Header onToggleSidebar={() => setSidebarOpen(true)} />
-        <main className="flex flex-1 flex-col bg-muted/20">
-          <div className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
-            {needsEmailVerification ? (
-              <div className="flex flex-col gap-3 rounded-lg border border-amber-400/60 bg-amber-100/70 p-4 text-amber-900 shadow-sm">
-                <div>
-                  <p className="text-sm font-semibold">Verify your email address</p>
-                  <p className="text-sm text-amber-800/90">
-                    We sent a verification link to {user?.email}. Confirm your email to unlock all
-                    features.
-                  </p>
+    <LaunchConnectionProvider>
+      <div className="flex min-h-screen bg-background">
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex flex-1 flex-col lg:pl-64">
+          <Header onToggleSidebar={() => setSidebarOpen(true)} />
+          <main className="flex flex-1 flex-col bg-muted/20">
+            <div className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
+              {needsEmailVerification ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-amber-400/60 bg-amber-100/70 p-4 text-amber-900 shadow-sm">
+                  <div>
+                    <p className="text-sm font-semibold">Verify your email address</p>
+                    <p className="text-sm text-amber-800/90">
+                      We sent a verification link to {user?.email}. Confirm your email to unlock all
+                      features.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => resendMutation.mutate()}
+                      loading={resendMutation.isPending}
+                    >
+                      Resend verification email
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => resendMutation.mutate()}
-                    loading={resendMutation.isPending}
-                  >
-                    Resend verification email
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-            <Outlet />
-          </div>
-        </main>
+              ) : null}
+              <Outlet />
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </LaunchConnectionProvider>
   )
 }

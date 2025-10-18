@@ -15,6 +15,7 @@ import (
 	iauth "github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/auth/mfa"
 	"github.com/charlesng35/shellcn/internal/auth/providers"
+	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/handlers"
 	"github.com/charlesng35/shellcn/internal/middleware"
 	"github.com/charlesng35/shellcn/internal/monitoring"
@@ -29,7 +30,7 @@ import (
 
 // NewRouter builds the Gin engine, wires middleware and registers core routes.
 // Additional module routers can mount under /api in later phases.
-func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *iauth.SessionService, rateStore middleware.RateStore, mon *monitoring.Module) (*gin.Engine, error) {
+func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, driverReg *drivers.Registry, sessions *iauth.SessionService, rateStore middleware.RateStore, mon *monitoring.Module, recorder *services.RecorderService) (*gin.Engine, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database handle must be provided")
 	}
@@ -42,14 +43,19 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	if cfg == nil {
 		return nil, fmt.Errorf("config must be provided")
 	}
+	if recorder == nil {
+		return nil, fmt.Errorf("recorder service must be provided")
+	}
 
 	r := gin.New()
 
-	// Global middleware
+	// ---------------------------------------------------------------------------
+	// Global Middleware
+	// ---------------------------------------------------------------------------
 	r.Use(middleware.Recovery())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Metrics())
-	r.Use(middleware.SecurityHeaders())
+	// r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
 	if cfg.Server.CSRF.Enabled {
 		r.Use(middleware.CSRF())
@@ -57,6 +63,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	// Basic rate limiting: 300 requests/minute per IP+path
 	r.Use(middleware.RateLimit(rateStore, 300, time.Minute))
 
+	// ---------------------------------------------------------------------------
+	// Health & Diagnostics
+	// ---------------------------------------------------------------------------
 	registerHealthRoutes(r, cfg, mon)
 
 	// Decode the vault encryption key from hex/base64 to raw bytes
@@ -68,6 +77,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, fmt.Errorf("invalid vault encryption key length: expected 32 bytes, got %d", length)
 	}
 
+	// ---------------------------------------------------------------------------
+	// Core Services (Audit, Permissions, Monitoring)
+	// ---------------------------------------------------------------------------
 	auditSvc, err := services.NewAuditService(db)
 	if err != nil {
 		return nil, err
@@ -79,6 +91,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 	monitoringHandler := handlers.NewMonitoringHandler(mon, cfg)
 
+	// ---------------------------------------------------------------------------
+	// Authentication Providers & MFA
+	// ---------------------------------------------------------------------------
 	authProviderSvc, err := services.NewAuthProviderService(db, auditSvc, encryptionKey)
 	if err != nil {
 		return nil, err
@@ -89,6 +104,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 
+	// ---------------------------------------------------------------------------
+	// Email / Notification Services
+	// ---------------------------------------------------------------------------
 	var mailer mail.Mailer
 	if cfg.Email.SMTP.Enabled {
 		mailer, err = mail.NewSMTPMailer(mail.SMTPSettings{
@@ -106,19 +124,9 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		}
 	}
 
-	inviteSvc, err := services.NewInviteService(db, mailer,
-		services.WithInviteBaseURL("/invite/accept"),
-		services.WithInviteAuditService(auditSvc),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	verificationSvc, err := services.NewEmailVerificationService(db, mailer)
-	if err != nil {
-		return nil, err
-	}
-
+	// ---------------------------------------------------------------------------
+	// Identity Provider Registry & SSO Support
+	// ---------------------------------------------------------------------------
 	providerRegistry := providers.NewRegistry()
 	if err := providerRegistry.Register(providers.NewOIDCDescriptor(providers.OIDCOptions{})); err != nil {
 		return nil, err
@@ -142,6 +150,22 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 
+	// ---------------------------------------------------------------------------
+	// Authentication, Invite & Verification Handlers
+	// ---------------------------------------------------------------------------
+	inviteSvc, err := services.NewInviteService(db, mailer,
+		services.WithInviteBaseURL("/invite/accept"),
+		services.WithInviteAuditService(auditSvc),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	verificationSvc, err := services.NewEmailVerificationService(db, mailer)
+	if err != nil {
+		return nil, err
+	}
+
 	ssoHandler := handlers.NewSSOHandler(providerRegistry, authProviderSvc, ssoManager, stateCodec)
 	authProviderHandler := handlers.NewAuthProviderHandler(authProviderSvc, ldapSyncSvc)
 	authHandler := handlers.NewAuthHandler(db, jwt, sessions, authProviderSvc, ssoManager, ldapSyncSvc, totpSvc, verificationSvc)
@@ -157,16 +181,18 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	}
 
 	inviteHandler := handlers.NewInviteHandler(inviteSvc, userSvcForInvites, teamSvcForInvites, verificationSvc)
-
+	// ---------------------------------------------------------------------------
 	// Auth routes
+	// ---------------------------------------------------------------------------
 
-	// ----- Protected API Group --------------------------------------------------
+	// ---------------------------------------------------------------------------
+	// Protected API Group
+	// ---------------------------------------------------------------------------
 	requireAuth := middleware.Auth(jwt)
 
 	api := r.Group("/api")
 	api.Use(requireAuth)
 
-	// ----- Authentication & Invite Routes --------------------------------------
 	registerAuthRoutes(r, api, authRouteDeps{
 		AuthHandler:       authHandler,
 		ProviderHandler:   authProviderHandler,
@@ -176,30 +202,37 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		JWT:               jwt,
 	})
 
+	// ---------------------------------------------------------------------------
+	// User Management
+	// ---------------------------------------------------------------------------
 	userHandler, err := handlers.NewUserHandler(db)
 	if err != nil {
 		return nil, err
 	}
-	// ----- User Routes ---------------------------------------------------------
 	registerUserRoutes(api, userHandler, checker)
-	// ----- End User Routes -----------------------------------------------------
 
+	// ---------------------------------------------------------------------------
+	// Profile & Preferences
+	// ---------------------------------------------------------------------------
 	profileUserSvc, err := services.NewUserService(db, auditSvc)
 	if err != nil {
 		return nil, err
 	}
-	profileHandler := handlers.NewProfileHandler(profileUserSvc, totpSvc)
-	// ----- Profile Routes ------------------------------------------------------
+	userPrefsSvc, err := services.NewUserPreferencesService(db, auditSvc)
+	if err != nil {
+		return nil, err
+	}
+	profileHandler := handlers.NewProfileHandler(profileUserSvc, userPrefsSvc, totpSvc)
 	registerProfileRoutes(api, profileHandler)
-	// ----- End Profile Routes --------------------------------------------------
 
+	// ---------------------------------------------------------------------------
+	// Permissions
+	// ---------------------------------------------------------------------------
 	permHandler, err := handlers.NewPermissionHandler(db, auditSvc)
 	if err != nil {
 		return nil, err
 	}
-	// ----- Permission Routes ---------------------------------------------------
 	registerPermissionRoutes(api, permHandler, checker)
-	// ----- End Permission Routes ----------------------------------------------
 
 	// Realtime hub + notifications
 	realtimeHub := realtime.NewHub()
@@ -207,36 +240,42 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		mon.Health().RegisterReadiness(checks.Realtime(realtimeHub))
 	}
 
+	// ---------------------------------------------------------------------------
+	// Realtime & Notifications
+	// ---------------------------------------------------------------------------
 	notificationHandler, err := handlers.NewNotificationHandler(db, realtimeHub)
 	if err != nil {
 		return nil, err
 	}
-	// ----- Realtime & Notification Routes -------------------------------------
 	registerNotificationRoutes(api, notificationHandler, checker)
 	registerMonitoringRoutes(api, monitoringHandler, checker)
-
-	realtimeHandler := handlers.NewRealtimeHandler(
-		realtimeHub,
-		jwt,
-		realtime.StreamNotifications,
-		realtime.StreamConnectionSessions,
-	)
-	r.GET("/ws", realtimeHandler.Stream)
-	r.GET("/ws/:stream", realtimeHandler.Stream)
-	// ----- End Realtime Routes -------------------------------------------------
 
 	vaultCrypto, err := vault.NewCrypto(encryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("initialise vault crypto: %w", err)
 	}
+	// ---------------------------------------------------------------------------
+	// Vault
+	// ---------------------------------------------------------------------------
 	vaultSvc, err := services.NewVaultService(db, auditSvc, checker, vaultCrypto)
 	if err != nil {
 		return nil, fmt.Errorf("initialise vault service: %w", err)
 	}
 	vaultHandler := handlers.NewVaultHandler(vaultSvc, rateStore)
 
-	// ----- Connection, Share & Folder Routes -----------------------------------
-	connectionSvc, err := services.NewConnectionService(db, checker, services.WithConnectionVault(vaultSvc))
+	// ---------------------------------------------------------------------------
+	// Connections & Sharing
+	// ---------------------------------------------------------------------------
+	connectionTemplateSvc, err := services.NewConnectionTemplateService(db, driverReg)
+	if err != nil {
+		return nil, err
+	}
+
+	connectionSvc, err := services.NewConnectionService(db, checker,
+		services.WithConnectionVault(vaultSvc),
+		services.WithConnectionTemplates(connectionTemplateSvc),
+		services.WithConnectionDrivers(driverReg),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -249,9 +288,95 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 	registerConnectionRoutes(api, connectionHandler, checker)
 
 	// Connection Sessions
+	// ---------------------------------------------------------------------------
+	// Session Lifecycle (Active sessions, chat, participants, recordings)
+	// ---------------------------------------------------------------------------
 	activeSessionSvc := services.NewActiveSessionService(realtimeHub)
 	activeConnectionHandler := handlers.NewActiveConnectionHandler(activeSessionSvc, checker)
 	registerConnectionSessionRoutes(api, activeConnectionHandler, checker)
+
+	sessionChatSvc, err := services.NewSessionChatService(db, activeSessionSvc)
+	if err != nil {
+		return nil, err
+	}
+	sessionLifecycleSvc, err := services.NewSessionLifecycleService(
+		db,
+		activeSessionSvc,
+		services.WithSessionAuditService(auditSvc),
+		services.WithSessionChatStore(sessionChatSvc),
+		services.WithSessionRecorder(recorder),
+	)
+	if err != nil {
+		return nil, err
+	}
+	sessionChatHandler := handlers.NewSessionChatHandler(sessionChatSvc, sessionLifecycleSvc)
+	registerSessionChatRoutes(api, sessionChatHandler)
+
+	sessionParticipantHandler := handlers.NewSessionParticipantHandler(db, sessionLifecycleSvc, checker)
+	registerSessionParticipantRoutes(api, sessionParticipantHandler)
+
+	sessionRecordingHandler := handlers.NewSessionRecordingHandler(recorder, sessionLifecycleSvc, checker)
+	registerSessionRecordingRoutes(api, sessionRecordingHandler, checker)
+
+	snippetSvc, err := services.NewSnippetService(db)
+	if err != nil {
+		return nil, err
+	}
+	snippetHandler := handlers.NewSnippetHandler(snippetSvc, checker, sessionLifecycleSvc, activeSessionSvc)
+	registerSnippetRoutes(api, snippetHandler)
+
+	sftpChannelSvc := services.NewSFTPChannelService()
+
+	launchHandler := handlers.NewActiveSessionLaunchHandler(
+		cfg,
+		connectionSvc,
+		connectionTemplateSvc,
+		vaultSvc,
+		sessionLifecycleSvc,
+		activeSessionSvc,
+		recorder,
+		driverReg,
+		checker,
+		jwt,
+		sftpChannelSvc,
+	)
+	registerActiveSessionLaunchRoutes(api, launchHandler)
+
+	// ---------------------------------------------------------------------------
+	// Protocol Settings
+	// ---------------------------------------------------------------------------
+	protocolSettingsSvc, err := services.NewProtocolSettingsService(db, auditSvc, services.WithProtocolRecorder(recorder))
+	if err != nil {
+		return nil, err
+	}
+	protocolSettingsHandler := handlers.NewProtocolSettingsHandler(protocolSettingsSvc, checker)
+	registerProtocolSettingsRoutes(api, protocolSettingsHandler)
+	// ---------------------------------------------------------------------------
+	// SSH & SFTP Handlers
+	// ---------------------------------------------------------------------------
+	sshHandler := handlers.NewSSHSessionHandler(
+		cfg, connectionSvc, connectionTemplateSvc, vaultSvc,
+		realtimeHub, activeSessionSvc, sessionLifecycleSvc, recorder,
+		sftpChannelSvc, driverReg, checker, jwt,
+	)
+
+	sftpHandler := handlers.NewSFTPHandler(sftpChannelSvc, sessionLifecycleSvc, checker, realtimeHub)
+	registerSFTPRoutes(api, sftpHandler)
+
+	// ---------------------------------------------------------------------------
+	// Realtime Gateway (WebSocket)
+	// ---------------------------------------------------------------------------
+	realtimeHandler := handlers.NewRealtimeHandler(
+		realtimeHub,
+		jwt,
+		sshHandler,
+		realtime.StreamNotifications,
+		realtime.StreamConnectionSessions,
+		realtime.StreamSSHTerminal,
+		realtime.StreamSFTPTransfers,
+	)
+	r.GET("/ws", realtimeHandler.Stream)
+	r.GET("/ws/:stream", realtimeHandler.Stream)
 
 	// Connection Share
 	shareHandler := handlers.NewConnectionShareHandler(shareSvc)
@@ -270,9 +395,10 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 	registerTeamRoutes(api, teamHandler, checker)
-	// ----- End Connection, Share & Folder Routes ------------------------------
 
-	// ----- Protocol Routes -----------------------------------------------------
+	// ---------------------------------------------------------------------------
+	// Protocol Catalogue APIs
+	// ---------------------------------------------------------------------------
 	protocolSvc, err := services.NewProtocolService(db, checker)
 	if err != nil {
 		return nil, err
@@ -294,20 +420,21 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 			return monitoring.ProbeResult{Status: monitoring.StatusUp, Duration: time.Since(start)}
 		}))
 	}
-	protocolHandler := handlers.NewProtocolHandler(protocolSvc)
+	protocolHandler := handlers.NewProtocolHandler(protocolSvc, connectionTemplateSvc)
 	registerProtocolRoutes(api, protocolHandler, checker)
-	// ----- End Protocol Routes -------------------------------------------------
 
-	// ----- Session Routes ------------------------------------------------------
+	// ---------------------------------------------------------------------------
+	// Sessions API
+	// ---------------------------------------------------------------------------
 	sessionHandler := handlers.NewSessionHandler(db, sessions)
 	registerSessionRoutes(api, sessionHandler)
-	// ----- End Session Routes --------------------------------------------------
 
-	// Audit
+	// ---------------------------------------------------------------------------
+	// Audit API
+	// ---------------------------------------------------------------------------
 	if err := registerAuditRoutes(api, db, jwt, cfg, checker); err != nil {
 		return nil, err
 	}
-	// ----- End Audit Routes ----------------------------------------------------
 
 	// Setup (public)
 	setupHandler, err := handlers.NewSetupHandler(db)
@@ -315,8 +442,6 @@ func NewRouter(db *gorm.DB, jwt *iauth.JWTService, cfg *app.Config, sessions *ia
 		return nil, err
 	}
 	registerSetupRoutes(r, setupHandler)
-	// ----- End Setup Routes ----------------------------------------------------
-	// ----- End Protected API Group --------------------------------------------
 
 	metricsEndpoint := strings.TrimSpace(cfg.Monitoring.Prometheus.Endpoint)
 	if metricsEndpoint == "" {

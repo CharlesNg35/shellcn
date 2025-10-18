@@ -1,4 +1,4 @@
-# Core Module API Documentation
+# Modules API Documentation
 
 **Base URL:** `https://{host}:{port}` (default `http://localhost:8000`)
 **Version:** v1 (stabilised once backend reaches GA)
@@ -226,6 +226,13 @@ Response:
   ]
 }
 ```
+
+### 2.3 Profile & Preferences
+
+| Method | Path                       | Description                                                                | Permission    | Handler                            |
+| ------ | -------------------------- | -------------------------------------------------------------------------- | ------------- | ---------------------------------- |
+| GET    | `/api/profile/preferences` | Retrieve the authenticated user's saved terminal and SFTP preferences.     | Authenticated | `ProfileHandler.GetPreferences`    |
+| PUT    | `/api/profile/preferences` | Update the authenticated user's SSH terminal and SFTP preference defaults. | Authenticated | `ProfileHandler.UpdatePreferences` |
 
 ---
 
@@ -888,11 +895,55 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ### 8.1 Protocol Catalog
 
-| Method | Path                             | Description                                                           | Permission        | Handler                           |
-| ------ | -------------------------------- | --------------------------------------------------------------------- | ----------------- | --------------------------------- |
-| GET    | `/api/protocols`                 | Return the full driver catalog (driver + config enablement metadata). | `connection.view` | `ProtocolHandler.ListAll`         |
-| GET    | `/api/protocols/available`       | Return only protocols available to the calling user.                  | `connection.view` | `ProtocolHandler.ListForUser`     |
-| GET    | `/api/protocols/:id/permissions` | List permission metadata registered by the driver.                    | `connection.view` | `ProtocolHandler.ListPermissions` |
+| Method | Path                                     | Description                                                                                       | Permission        | Handler                                 |
+| ------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------- |
+| GET    | `/api/protocols`                         | Return the full driver catalog (driver + config enablement metadata).                             | `connection.view` | `ProtocolHandler.ListAll`               |
+| GET    | `/api/protocols/available`               | Return only protocols available to the calling user.                                              | `connection.view` | `ProtocolHandler.ListForUser`           |
+| GET    | `/api/protocols/:id/permissions`         | List permission metadata registered by the driver.                                                | `connection.view` | `ProtocolHandler.ListPermissions`       |
+| GET    | `/api/protocols/:id/connection-template` | Retrieve the latest connection template schema for a driver (field layout, defaults, validation). | `connection.view` | `ProtocolHandler.GetConnectionTemplate` |
+
+**Example — `GET /api/protocols/ssh/connection-template`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "template": {
+      "driver_id": "ssh",
+      "version": "2025-01-15",
+      "display_name": "SSH Connection",
+      "metadata": {
+        "requires_identity": true
+      },
+      "sections": [
+        {
+          "id": "endpoint",
+          "label": "Endpoint",
+          "fields": [
+            {
+              "key": "host",
+              "label": "Host",
+              "type": "target_host",
+              "required": true,
+              "placeholder": "server.example.com",
+              "validation": { "pattern": "^[a-zA-Z0-9._-]+$" },
+              "binding": { "target": "target", "index": 0, "property": "host" }
+            },
+            {
+              "key": "port",
+              "label": "Port",
+              "type": "target_port",
+              "default": 22,
+              "validation": { "min": 1, "max": 65535 },
+              "binding": { "target": "target", "index": 0, "property": "port" }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
 
 **ProtocolInfo Example**
 
@@ -930,16 +981,40 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 
 ### 8.2 Connections API
 
-| Method | Path                           | Description                                                    | Permission                 | Handler                            |
-| ------ | ------------------------------ | -------------------------------------------------------------- | -------------------------- | ---------------------------------- |
-| GET    | `/api/connections`             | List connections visible to the caller (supports filters).     | `connection.view`          | `ConnectionHandler.List`           |
-| GET    | `/api/connections/:id`         | Retrieve a specific connection with targets and share summary. | `connection.view`          | `ConnectionHandler.Get`            |
-| GET    | `/api/connections/summary`     | Aggregate counts grouped by protocol (supports team filters).  | `connection.view`          | `ConnectionHandler.Summary`        |
-| POST   | `/api/connections`             | Create a connection (metadata, folder, optional team).         | `connection.manage`        | `ConnectionHandler.Create`         |
-| GET    | `/api/connection-folders/tree` | Folder hierarchy plus connection counts.                       | `connection.folder.view`   | `ConnectionFolderHandler.ListTree` |
-| POST   | `/api/connection-folders`      | Create a new connection folder.                                | `connection.folder.manage` | `ConnectionFolderHandler.Create`   |
-| PATCH  | `/api/connection-folders/:id`  | Update folder metadata (name, parent, color, etc.).            | `connection.folder.manage` | `ConnectionFolderHandler.Update`   |
-| DELETE | `/api/connection-folders/:id`  | Delete a folder (children reassigned, connections unassigned). | `connection.folder.manage` | `ConnectionFolderHandler.Delete`   |
+| Method | Path                       | Description                                                                     | Permission          | Handler                     |
+| ------ | -------------------------- | ------------------------------------------------------------------------------- | ------------------- | --------------------------- |
+| GET    | `/api/connections`         | List connections visible to the caller (supports filters).                      | `connection.view`   | `ConnectionHandler.List`    |
+| GET    | `/api/connections/:id`     | Retrieve a specific connection with targets and share summary.                  | `connection.view`   | `ConnectionHandler.Get`     |
+| GET    | `/api/connections/summary` | Aggregate counts grouped by protocol (supports team filters).                   | `connection.view`   | `ConnectionHandler.Summary` |
+| POST   | `/api/connections`         | Create a connection (metadata, folder, optional team, dynamic template fields). | `connection.create` | `ConnectionHandler.Create`  |
+| PUT    | `/api/connections/:id`     | Update connection metadata, identity, or template-backed fields.                | `connection.view`\* | `ConnectionHandler.Update`  |
+
+**Request payload (create/update):**
+
+```json
+{
+  "name": "Production SSH",
+  "description": "Jump host for prod cluster",
+  "protocol_id": "ssh",
+  "folder_id": "fld_01J7ZP0X...",
+  "team_id": "team_01H5S4...",
+  "fields": {
+    "host": "prod.internal.example.com",
+    "port": 22,
+    "session_override_enabled": true,
+    "concurrent_limit": 2,
+    "enable_sftp": true
+  },
+  "identity_id": "idn_01J23...",
+  "grant_team_permissions": ["connection.launch"]
+}
+```
+
+`fields` is validated against the driver’s connection template. Missing optional keys fall back to template defaults; disabled or hidden fields (via dependency rules) are ignored server side.
+| GET | `/api/connection-folders/tree` | Folder hierarchy plus connection counts. | `connection.folder.view` | `ConnectionFolderHandler.ListTree` |
+| POST | `/api/connection-folders` | Create a new connection folder. | `connection.folder.manage` | `ConnectionFolderHandler.Create` |
+| PATCH | `/api/connection-folders/:id` | Update folder metadata (name, parent, color, etc.). | `connection.folder.manage` | `ConnectionFolderHandler.Update` |
+| DELETE | `/api/connection-folders/:id` | Delete a folder (children reassigned, connections unassigned). | `connection.folder.manage` | `ConnectionFolderHandler.Delete` |
 
 **Supported query parameters for `GET /api/connections`:**
 
@@ -951,6 +1026,23 @@ See `internal/models/auth_provider.go` for complete JSON shapes.
 - `page`, `per_page`: pagination controls (standard envelope).
 
 `GET /api/connection-folders/tree` accepts the same `team_id` semantics (team UUID or `personal`) to scope the returned hierarchy and connection counts.
+
+\* Update requires view permission for routing but enforces ownership or manage privileges server-side.
+
+### 8.3 Snippets API
+
+| Method | Path                | Description                                                       | Permission        | Handler                 |
+| ------ | ------------------- | ----------------------------------------------------------------- | ----------------- | ----------------------- |
+| GET    | `/api/snippets`     | List snippets filtered by scope (`global`, `connection`, `user`). | Scope-dependent\* | `SnippetHandler.List`   |
+| POST   | `/api/snippets`     | Create a snippet (global, connection-specific, or personal).      | Scope-dependent\* | `SnippetHandler.Create` |
+| PUT    | `/api/snippets/:id` | Update snippet metadata/command.                                  | Scope-dependent\* | `SnippetHandler.Update` |
+| DELETE | `/api/snippets/:id` | Remove a snippet.                                                 | Scope-dependent\* | `SnippetHandler.Delete` |
+
+\* **Scope-dependent permissions**:
+
+- **Personal snippets (`scope=user`)** – owner only (authenticated user matches `owner_id`).
+- **Connection snippets (`scope=connection`)** – requires `connection.manage` on the target connection plus `protocol:ssh.manage_snippets`.
+- **Global snippets (`scope=global`)** – requires `protocol:ssh.manage_snippets` (typically administrators).
 
 **Connection payload**
 
@@ -1039,7 +1131,207 @@ Content-Type: application/json
 
 The service automatically expands dependency permissions (e.g., `connection.view`) and ensures the grantor already holds each scope. Responses mirror `ConnectionShareDTO`, which aligns with `share_summary.entries`.
 
-### 8.4 Vault API
+### 8.4 Active Sessions & Chat
+
+| Method | Path                                                         | Description                                                                                            | Permission                                                    | Handler                                       |
+| POST   | `/api/active-sessions`                                       | Launch a connection via the multi-protocol assistant. Body accepts `connection_id`, optional `protocol_id`, and `fields_override`. Returns the active session payload, tunnel credentials, and workspace descriptor. | Authenticated (`connection.launch` + `protocol:<id>.connect`) | `ActiveSessionLaunchHandler.Launch`           |
+| GET    | `/api/active-sessions/:sessionID/participants`               | Retrieve active participants for a session, including owner and write-holder metadata.                 | Authenticated (session owner or participant)                  | `SessionParticipantHandler.ListParticipants`  |
+| POST   | `/api/active-sessions/:sessionID/participants`               | Invite a user to join the session as a participant. Requires owner or `protocol:ssh.share` permission. | Authenticated (session owner or share permission)             | `SessionParticipantHandler.AddParticipant`    |
+| POST   | `/api/active-sessions/:sessionID/participants/:userID/write` | Grant write access to a participant, transferring exclusive control.                                   | Authenticated (session owner or `protocol:ssh.grant_write`)   | `SessionParticipantHandler.GrantWrite`        |
+| DELETE | `/api/active-sessions/:sessionID/participants/:userID/write` | Relinquish a participant's write access (self, owner, or grant permission holders).                    | Authenticated (write holder, owner, or grant permission)      | `SessionParticipantHandler.RelinquishWrite`   |
+| DELETE | `/api/active-sessions/:sessionID/participants/:userID`       | Remove a participant from the session. Participants can remove themselves or owners can revoke access. | Authenticated (session owner/share permission or participant) | `SessionParticipantHandler.RemoveParticipant` |
+| GET    | `/api/active-sessions/:sessionID/chat`                       | Retrieve the most recent chat messages for a session. Supports `limit` (≤200) and optional `before`.   | Authenticated (session participant)                           | `SessionChatHandler.ListMessages`             |
+| POST   | `/api/active-sessions/:sessionID/chat`                       | Post a chat message for an active session (owner or joined participant).                               | Authenticated (session participant)                           | `SessionChatHandler.PostMessage`              |
+| GET    | `/api/active-sessions/:sessionID/recording/status`           | Inspect the recording state, including active flag, bytes captured, and finalized record metadata.     | Authenticated (session owner or participant)                  | `SessionRecordingHandler.Status`              |
+| POST   | `/api/active-sessions/:sessionID/recording/stop`             | Stop the active recording for the session.                                                             | Authenticated (session owner or `protocol:ssh.record`)        | `SessionRecordingHandler.Stop`                |
+| GET    | `/api/session-records/:recordID/download`                    | Stream the stored recording artifact (`*.cast.gz`) for offline playback or archival.                   | Authenticated (session owner or `protocol:ssh.record`)        | `SessionRecordingHandler.Download`            |
+
+Session access enforcement is handled by `SessionLifecycleService.AuthorizeSessionAccess`, which grants access to the session owner and any active participant (readers or writers). Requests from other users receive `403`.
+
+**Example — Launch Session:**
+
+```http
+POST /api/active-sessions
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "connection_id": "conn_01J9P9Q3STR",
+  "protocol_id": "ssh"
+}
+```
+
+Successful responses include the registered session, tunnel credentials for `GET /ws`, and the workspace descriptor id used by the frontend router:
+
+```json
+{
+  "success": true,
+  "data": {
+    "session": {
+      "id": "sess_01J9PA1R4HV",
+      "connection_id": "conn_01J9P9Q3STR",
+      "protocol_id": "ssh",
+      "descriptor_id": "workspace/ssh",
+      "metadata": {
+        "sftp_enabled": true,
+        "template": {
+          "driver_id": "ssh",
+          "version": "2025-01-15"
+        },
+        "capabilities": {
+          "panes": ["terminal", "files"]
+        }
+      }
+    },
+    "tunnel": {
+      "url": "/ws",
+      "protocol": "ssh",
+      "token": "<jwt>",
+      "params": {
+        "tunnel": "ssh",
+        "connection_id": "conn_01J9P9Q3STR",
+        "session_id": "sess_01J9PA1R4HV"
+      }
+    },
+    "descriptor": {
+      "id": "workspace/ssh",
+      "display_name": "SSH",
+      "protocol_id": "ssh",
+      "default_route": "/active-sessions/sess_01J9PA1R4HV"
+    }
+  }
+}
+```
+
+Recording status responses expose `recording_mode`, reflecting the effective policy (`disabled`, `optional`, `forced`, or runtime values such as `active`/`recorded` when policy data is unavailable). When a finalized artifact exists, the `record` object includes `retention_until` indicating the scheduled purge timestamp in addition to size, checksum, and duration metadata.
+
+**Example** — Post Chat Message:
+
+```http
+POST /api/active-sessions/sess_01JF5Q8ZF2K/chat
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "content": "Deploy window starts in 5 minutes."
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "msg_01JF5QDHJ2N",
+    "session_id": "sess_01JF5Q8ZF2K",
+    "author_id": "usr_01JF5N77SE0",
+    "content": "Deploy window starts in 5 minutes.",
+    "created_at": "2025-01-14T21:36:42.517Z"
+  }
+}
+```
+
+**Example** — List Chat Messages:
+
+```http
+GET /api/active-sessions/sess_01JF5Q8ZF2K/chat?limit=20&before=2025-01-14T21:40:00Z
+Authorization: Bearer <access-token>
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "msg_01JF5QDHJ2N",
+      "session_id": "sess_01JF5Q8ZF2K",
+      "author_id": "usr_01JF5N77SE0",
+      "content": "Deploy window starts in 5 minutes.",
+      "created_at": "2025-01-14T21:36:42.517Z"
+    },
+    {
+      "id": "msg_01JF5QKVZ9X",
+      "session_id": "sess_01JF5Q8ZF2K",
+      "author_id": "usr_01JF5NTBHB",
+      "content": "Copy that, putting servers into maintenance.",
+      "created_at": "2025-01-14T21:37:10.213Z"
+    }
+  ]
+}
+```
+
+### 8.5 SFTP File Manager API
+
+Vector for file management inside active SSH sessions. All routes require the caller to be joined to the session (owner or participant) and to hold `protocol:ssh.sftp` along with the baseline `connection.launch` / session sharing permissions enforced by the lifecycle service.
+
+| Method | Path                                                       | Description                                                              | Permission            | Handler                       |
+| ------ | ---------------------------------------------------------- | ------------------------------------------------------------------------ | --------------------- | ----------------------------- |
+| GET    | `/api/active-sessions/:id/sftp/list?path=/`                | List directory entries at `path` (defaults to `.`).                      | `protocol:ssh.sftp`   | `SFTPHandler.List`            |
+| GET    | `/api/active-sessions/:id/sftp/metadata?path=/etc/passwd`  | Retrieve stat metadata (size, mode, timestamps) for a file or directory. | `protocol:ssh.sftp`   | `SFTPHandler.Metadata`        |
+| GET    | `/api/active-sessions/:id/sftp/file?path=/etc/hosts`       | Inline-read a small file (≤5 MiB). Returns base64 by default.            | `protocol:ssh.sftp`   | `SFTPHandler.ReadFile`        |
+| GET    | `/api/active-sessions/:id/sftp/download?path=/var/log/app` | Stream a file with support for HTTP range requests.                      | `protocol:ssh.sftp`   | `SFTPHandler.Download`        |
+| POST   | `/api/active-sessions/:id/sftp/upload?path=/tmp/app.log`   | Upload/resume file data (chunked ≤64 MiB) using `Upload-Offset` header.  | `protocol:ssh.sftp`\* | `SFTPHandler.Upload`          |
+| PUT    | `/api/active-sessions/:id/sftp/file`                       | Replace file contents from JSON payload (base64 or UTF-8).               | `protocol:ssh.sftp`   | `SFTPHandler.SaveFile`        |
+| POST   | `/api/active-sessions/:id/sftp/rename`                     | Rename or move a file/directory, optional overwrite semantics.           | `protocol:ssh.sftp`   | `SFTPHandler.Rename`          |
+| DELETE | `/api/active-sessions/:id/sftp/file?path=/tmp/app.log`     | Delete a single file (idempotent).                                       | `protocol:ssh.sftp`   | `SFTPHandler.DeleteFile`      |
+| DELETE | `/api/active-sessions/:id/sftp/directory?path=/tmp/cache`  | Delete directory; supports `?recursive=true` for capped-depth removal.   | `protocol:ssh.sftp`   | `SFTPHandler.DeleteDirectory` |
+
+\* Uploads implicitly require `protocol:ssh.sftp` and session write access. Owners can delegate write mode via the session sharing API.
+
+**Upload semantics:**
+
+- Clients send raw binary data with `Content-Type: application/octet-stream` and the next byte position in either the `Upload-Offset` header or `offset` query parameter. Absent offsets default to `0`.
+- Each chunk must be ≤64 MiB. The handler returns `Upload-Offset` with the next byte position on success.
+- Optional `create_parents=true` ensures intermediate directories are created; `append=true` continues writing at end-of-file.
+- Progress events (`sftp.transfer.*`) are broadcast on the realtime stream `ssh.sftp` containing `{session_id, path, transfer_id, bytes_transferred, total_bytes, status}` for UI consumption.
+
+**Download semantics:**
+
+- Supports `Range: bytes=<start>-<end>` headers. Successful partial responses return `206` with `Content-Range` and emit transfer events mirroring uploads.
+- Responses set `Accept-Ranges: bytes` and sanitise filenames via RFC 5987 encoding when emitting `Content-Disposition`.
+
+**Save file payload:**
+
+```http
+PUT /api/active-sessions/sess_01JF5Q8ZF2K/sftp/file
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "path": "/etc/profile.d/custom.sh",
+  "encoding": "base64",             // or "utf-8"
+  "create_parents": true,
+  "content": "IyEgL2Jpbi9iYXNo..."
+}
+```
+
+**Rename payload:**
+
+```http
+POST /api/active-sessions/sess_01JF5Q8ZF2K/sftp/rename
+Authorization: Bearer <access-token>
+Content-Type: application/json
+
+{
+  "source": "/var/log/app.log",
+  "target": "/var/log/app-archived.log",
+  "overwrite": false
+}
+```
+
+**Realtime telemetry:** upload, download, save, and inline read operations trigger the following stream events on `ssh.sftp`:
+
+- `sftp.transfer.started`
+- `sftp.transfer.progress`
+- `sftp.transfer.completed`
+- `sftp.transfer.failed`
+
+Each payload includes `transfer_id`, `session_id`, `connection_id`, `user_id`, `direction` (`upload`, `download`, `save`), `path`, `bytes_transferred`, and optional `total_bytes` and `error` string.
+
+### 8.6 Vault API
 
 | Method | Path                               | Description                                                                   | Permission     | Handler                       |
 | ------ | ---------------------------------- | ----------------------------------------------------------------------------- | -------------- | ----------------------------- |
@@ -1083,7 +1375,7 @@ Content-Type: application/json
 
 Responses mirror `IdentityDTO`. Secrets are only included when `include=payload` is requested on the GET endpoint immediately after creation. Subsequent list operations return metadata only, ensuring vault contents remain encrypted unless explicitly requested.
 
-### 8.4 Notifications
+### 8.7 Notifications
 
 | Method | Path                            | Description                                      | Permission            | Handler                           |
 | ------ | ------------------------------- | ------------------------------------------------ | --------------------- | --------------------------------- |

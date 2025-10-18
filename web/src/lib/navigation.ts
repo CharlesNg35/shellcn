@@ -1,5 +1,15 @@
 import type { LucideIcon } from 'lucide-react'
-import { FileText, FolderKanban, Key, LayoutDashboard, Settings, Shield, Users } from 'lucide-react'
+import {
+  FileText,
+  FolderKanban,
+  Key,
+  LayoutDashboard,
+  Monitor,
+  Server,
+  Settings,
+  Shield,
+  Users,
+} from 'lucide-react'
 import { isFeatureEnabled } from './features'
 import { PERMISSIONS } from '@/constants/permissions'
 import type { PermissionId } from '@/constants/permissions'
@@ -78,6 +88,26 @@ export const NAVIGATION_GROUPS: NavigationGroup[] = [
         icon: Key,
         permission: PERMISSIONS.PERMISSION.MANAGE,
         featureId: 'authProviders',
+      },
+      {
+        label: 'Sessions',
+        path: '/settings/sessions',
+        icon: Monitor,
+        anyPermissions: [
+          PERMISSIONS.SESSION.ACTIVE.VIEW_TEAM,
+          PERMISSIONS.SESSION.ACTIVE.VIEW_ALL,
+          PERMISSIONS.SESSION.RECORDING.VIEW,
+          PERMISSIONS.SESSION.RECORDING.VIEW_TEAM,
+          PERMISSIONS.SESSION.RECORDING.VIEW_ALL,
+        ],
+        featureId: 'sessions',
+      },
+      {
+        label: 'Protocol Settings',
+        path: '/settings/protocols/ssh',
+        icon: Server,
+        permission: PERMISSIONS.PROTOCOL.SSH.RECORD,
+        featureId: 'protocolSettings',
       },
       {
         label: 'Audit Logs',

@@ -16,7 +16,6 @@ import (
 	testutil "github.com/charlesng35/shellcn/internal/database/testutil"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/services"
-	"github.com/charlesng35/shellcn/pkg/crypto"
 )
 
 type stubOIDCProvider struct {
@@ -41,7 +40,7 @@ func (s *stubOIDCProvider) Test(ctx context.Context) error { return nil }
 func TestSSOHandlerFlow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	db := testutil.MustOpenTestDB(t, testutil.WithSeedData())
 
 	auditSvc, err := services.NewAuditService(db)
 	require.NoError(t, err)
@@ -52,17 +51,6 @@ func TestSSOHandlerFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	ctx := context.Background()
-
-	require.NoError(t, db.Create(&models.AuthProvider{
-		Type:                     "local",
-		Name:                     "Local",
-		Enabled:                  true,
-		AllowRegistration:        true,
-		RequireEmailVerification: true,
-		AllowPasswordReset:       true,
-		Description:              "Local",
-		Icon:                     "key",
-	}).Error)
 
 	err = authProviderSvc.ConfigureOIDC(ctx, models.OIDCConfig{
 		Issuer:       "https://issuer.example.com",
@@ -125,16 +113,16 @@ func TestSSOHandlerFlow(t *testing.T) {
 	state := parsedLocation.Query().Get("state")
 	require.NotEmpty(t, state)
 
-	// Create local user to link identity
-	hashed, err := crypto.HashPassword("password")
+	userSvc, err := services.NewUserService(db, auditSvc)
 	require.NoError(t, err)
-	require.NoError(t, db.Create(&models.User{
-		Username:     "user",
-		Email:        "user@example.com",
-		Password:     hashed,
-		IsActive:     true,
-		AuthProvider: "oidc",
-	}).Error)
+
+	localUser, err := userSvc.Create(ctx, services.CreateUserInput{
+		Username: "user",
+		Email:    "user@example.com",
+		Password: "password",
+	})
+	require.NoError(t, err)
+	require.NoError(t, db.Model(localUser).Update("auth_provider", "oidc").Error)
 
 	// Callback request
 	callbackRecorder := httptest.NewRecorder()

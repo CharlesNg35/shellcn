@@ -69,6 +69,28 @@ export const PERMISSIONS = {
     VIEW: 'notification.view',
     MANAGE: 'notification.manage',
   },
+  SESSION: {
+    ACTIVE: {
+      VIEW_TEAM: 'session.active.view_team',
+      VIEW_ALL: 'session.active.view_all',
+    },
+    RECORDING: {
+      VIEW: 'session.recording.view',
+      VIEW_TEAM: 'session.recording.view_team',
+      VIEW_ALL: 'session.recording.view_all',
+      DELETE: 'session.recording.delete',
+    },
+  },
+  PROTOCOL: {
+    SSH: {
+      CONNECT: 'protocol:ssh.connect',
+      SFTP: 'protocol:ssh.sftp',
+      SHARE: 'protocol:ssh.share',
+      GRANT_WRITE: 'protocol:ssh.grant_write',
+      RECORD: 'protocol:ssh.record',
+      MANAGE_SNIPPETS: 'protocol:ssh.manage_snippets',
+    },
+  },
 } as const
 
 type PermissionTree = typeof PERMISSIONS
@@ -127,4 +149,16 @@ export const PERMISSION_IDS = [
   PERMISSIONS.SECURITY.AUDIT,
   PERMISSIONS.NOTIFICATION.VIEW,
   PERMISSIONS.NOTIFICATION.MANAGE,
+  PERMISSIONS.SESSION.ACTIVE.VIEW_TEAM,
+  PERMISSIONS.SESSION.ACTIVE.VIEW_ALL,
+  PERMISSIONS.SESSION.RECORDING.VIEW,
+  PERMISSIONS.SESSION.RECORDING.VIEW_TEAM,
+  PERMISSIONS.SESSION.RECORDING.VIEW_ALL,
+  PERMISSIONS.SESSION.RECORDING.DELETE,
+  PERMISSIONS.PROTOCOL.SSH.CONNECT,
+  PERMISSIONS.PROTOCOL.SSH.SFTP,
+  PERMISSIONS.PROTOCOL.SSH.SHARE,
+  PERMISSIONS.PROTOCOL.SSH.GRANT_WRITE,
+  PERMISSIONS.PROTOCOL.SSH.RECORD,
+  PERMISSIONS.PROTOCOL.SSH.MANAGE_SNIPPETS,
 ] as const satisfies ReadonlyArray<PermissionId>

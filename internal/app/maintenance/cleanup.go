@@ -24,11 +24,13 @@ const (
 	defaultAuditSpec          = "@daily"
 	defaultTokenSpec          = "@daily"
 	defaultVaultSpec          = "@weekly"
+	defaultRecordingSpec      = "@daily"
 
-	jobSessionCleanup = "session_cleanup"
-	jobAuditCleanup   = "audit_cleanup"
-	jobTokenCleanup   = "token_cleanup"
-	jobVaultCleanup   = "vault_cleanup"
+	jobSessionCleanup   = "session_cleanup"
+	jobAuditCleanup     = "audit_cleanup"
+	jobTokenCleanup     = "token_cleanup"
+	jobVaultCleanup     = "vault_cleanup"
+	jobRecordingCleanup = "recording_cleanup"
 )
 
 func recordMaintenance(job string, start time.Time, err error) {
@@ -53,11 +55,13 @@ type Cleaner struct {
 	enabled   bool
 	retention int
 
-	sessionSchedule string
-	auditSchedule   string
-	tokenSchedule   string
-	vaultSchedule   string
-	vault           *services.VaultService
+	sessionSchedule   string
+	auditSchedule     string
+	tokenSchedule     string
+	vaultSchedule     string
+	vault             *services.VaultService
+	recordingSchedule string
+	recordings        *services.RecorderService
 }
 
 // Option customises the Cleaner.
@@ -129,20 +133,33 @@ func WithVaultService(vault *services.VaultService, spec ...string) Option {
 	}
 }
 
+// WithRecorderService wires the recorder service for retention enforcement.
+func WithRecorderService(recorder *services.RecorderService, spec ...string) Option {
+	return func(cleaner *Cleaner) {
+		if recorder != nil {
+			cleaner.recordings = recorder
+		}
+		if len(spec) > 0 && spec[0] != "" {
+			cleaner.recordingSchedule = spec[0]
+		}
+	}
+}
+
 // NewCleaner constructs a Cleaner with sensible defaults. Any nil dependency results in
 // the corresponding cleanup job being skipped.
 func NewCleaner(db *gorm.DB, sessions *iauth.SessionService, audit *services.AuditService, opts ...Option) *Cleaner {
 	cleaner := &Cleaner{
-		db:              db,
-		sessions:        sessions,
-		audit:           audit,
-		now:             time.Now,
-		retention:       defaultAuditRetentionDays,
-		sessionSchedule: defaultSessionSpec,
-		auditSchedule:   defaultAuditSpec,
-		tokenSchedule:   defaultTokenSpec,
-		vaultSchedule:   defaultVaultSpec,
-		log:             logger.WithModule("maintenance"),
+		db:                db,
+		sessions:          sessions,
+		audit:             audit,
+		now:               time.Now,
+		retention:         defaultAuditRetentionDays,
+		sessionSchedule:   defaultSessionSpec,
+		auditSchedule:     defaultAuditSpec,
+		tokenSchedule:     defaultTokenSpec,
+		vaultSchedule:     defaultVaultSpec,
+		recordingSchedule: defaultRecordingSpec,
+		log:               logger.WithModule("maintenance"),
 	}
 
 	for _, opt := range opts {
@@ -154,7 +171,11 @@ func NewCleaner(db *gorm.DB, sessions *iauth.SessionService, audit *services.Aud
 	}
 
 	// Determine whether any job is enabled.
-	cleaner.enabled = cleaner.sessions != nil || cleaner.audit != nil || cleaner.db != nil || cleaner.vault != nil
+	cleaner.enabled = cleaner.sessions != nil ||
+		cleaner.audit != nil ||
+		cleaner.db != nil ||
+		cleaner.vault != nil ||
+		cleaner.recordings != nil
 
 	return cleaner
 }
@@ -221,6 +242,20 @@ func (c *Cleaner) Start() error {
 		}
 	}
 
+	if c.recordings != nil {
+		if _, err := c.cron.AddFunc(c.recordingSchedule, func() {
+			ctx := context.Background()
+			start := time.Now()
+			_, runErr := c.recordings.CleanupExpired(ctx, 250)
+			recordMaintenance(jobRecordingCleanup, start, runErr)
+			if runErr != nil {
+				c.log.Warn("recording cleanup failed", zap.Error(runErr))
+			}
+		}); err != nil {
+			return err
+		}
+	}
+
 	c.cron.Start()
 	return nil
 }
@@ -273,6 +308,15 @@ func (c *Cleaner) RunOnce(ctx context.Context) error {
 		start := time.Now()
 		_, err := c.vault.CleanupOrphans(ctx)
 		recordMaintenance(jobVaultCleanup, start, err)
+		if err != nil {
+			errs = multierr.Append(errs, err)
+		}
+	}
+
+	if c.recordings != nil {
+		start := time.Now()
+		_, err := c.recordings.CleanupExpired(ctx, 500)
+		recordMaintenance(jobRecordingCleanup, start, err)
 		if err != nil {
 			errs = multierr.Append(errs, err)
 		}

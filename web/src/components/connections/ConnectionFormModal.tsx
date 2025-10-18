@@ -18,9 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/Select'
-import type { Protocol } from '@/types/protocols'
-import type { ConnectionFolderNode, ConnectionRecord } from '@/types/connections'
-import type { TeamRecord } from '@/types/teams'
 import { resolveProtocolIcon } from '@/lib/utils/protocolIcons'
 import { useConnectionMutations } from '@/hooks/useConnectionMutations'
 import { ApiError, toApiError } from '@/lib/api/http'
@@ -36,6 +33,20 @@ import {
 } from '@/constants/connections'
 import { PERMISSIONS } from '@/constants/permissions'
 import { cn } from '@/lib/utils/cn'
+import type { Protocol } from '@/types/protocols'
+import type {
+  ConnectionFolderNode,
+  ConnectionRecord,
+  ConnectionTemplateMetadata,
+} from '@/types/connections'
+import type { TeamRecord } from '@/types/teams'
+import { useConnectionTemplate } from '@/hooks/useConnectionTemplate'
+import { ConnectionTemplateForm } from '@/components/connections/ConnectionTemplateForm'
+import {
+  isFieldVisible,
+  type TemplateValueMap,
+} from '@/components/connections/connectionTemplateHelpers'
+import type { ConnectionTemplate } from '@/types/protocols'
 
 const connectionSchema = z.object({
   name: z
@@ -66,6 +77,8 @@ interface ConnectionFormModalProps {
   teams?: TeamRecord[]
   allowTeamAssignment?: boolean
   onSuccess: (connection: ConnectionRecord) => void
+  mode?: 'create' | 'edit'
+  connection?: ConnectionRecord | null
 }
 
 export function ConnectionFormModal({
@@ -77,15 +90,22 @@ export function ConnectionFormModal({
   teams = [],
   allowTeamAssignment = false,
   onSuccess,
+  mode = 'create',
+  connection = null,
 }: ConnectionFormModalProps) {
-  const { create } = useConnectionMutations()
-  const [formError, setFormError] = useState<ApiError | null>(null)
-  const grantToggleInteractedRef = useRef(false)
-  const [autoGrantTeamPermissions, setAutoGrantTeamPermissions] = useState(false)
+  const { create, update } = useConnectionMutations()
   const { hasPermission } = usePermissions()
   const canCreateIdentity = hasPermission(PERMISSIONS.VAULT.CREATE)
+  const [formError, setFormError] = useState<ApiError | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [fieldValues, setFieldValues] = useState<TemplateValueMap>({})
   const [selectedIdentityId, setSelectedIdentityId] = useState<string | null>(null)
   const [identityModalOpen, setIdentityModalOpen] = useState(false)
+  const [autoGrantTeamPermissions, setAutoGrantTeamPermissions] = useState(false)
+  const grantToggleInteractedRef = useRef(false)
+  const formInitializedRef = useRef(false)
+
+  const { data: template, isLoading: templateLoading } = useConnectionTemplate(protocol?.id)
 
   const iconOptions = useMemo(() => {
     return getIconOptionsForProtocol(protocol?.id, protocol?.category)
@@ -94,17 +114,6 @@ export function ConnectionFormModal({
   const defaultIcon = useMemo(() => {
     return getDefaultIconForProtocol(protocol?.id, protocol?.category)
   }, [protocol?.category, protocol?.id])
-
-  const defaultValues = useMemo<ConnectionFormValues>(() => {
-    return {
-      name: '',
-      description: '',
-      folder_id: '',
-      team_id: normalizeTeamValue(teamId),
-      icon: defaultIcon ?? DEFAULT_CONNECTION_ICON_ID,
-      color: '',
-    }
-  }, [defaultIcon, teamId])
 
   const {
     register,
@@ -116,22 +125,82 @@ export function ConnectionFormModal({
     formState: { errors, isSubmitting },
   } = useForm<ConnectionFormValues>({
     resolver: zodResolver(connectionSchema),
-    defaultValues,
+    defaultValues: {
+      name: '',
+      description: '',
+      folder_id: '',
+      team_id: normalizeTeamValue(teamId),
+      icon: defaultIcon ?? DEFAULT_CONNECTION_ICON_ID,
+      color: '',
+    },
   })
 
-  useEffect(() => {
-    if (open) {
-      reset(defaultValues)
-      setFormError(null)
-      grantToggleInteractedRef.current = false
-      setAutoGrantTeamPermissions(false)
-      setSelectedIdentityId(null)
+  const templateMetadata = useMemo<ConnectionTemplateMetadata | undefined>(
+    () => extractTemplateMetadata(connection?.metadata),
+    [connection?.metadata]
+  )
+
+  const initialFieldValues = useMemo(() => {
+    if (!template) {
+      return {}
     }
-  }, [defaultValues, open, reset])
+    return buildInitialFieldValues(template, templateMetadata?.fields ?? {})
+  }, [template, templateMetadata?.fields])
+
+  useEffect(() => {
+    if (!open) {
+      setFormError(null)
+      setFieldErrors({})
+      setFieldValues({})
+      setSelectedIdentityId(null)
+      setAutoGrantTeamPermissions(false)
+      grantToggleInteractedRef.current = false
+      formInitializedRef.current = false
+      return
+    }
+    if (!protocol) {
+      return
+    }
+    if (templateLoading) {
+      return
+    }
+    if (formInitializedRef.current) {
+      return
+    }
+
+    const metadata = (connection?.metadata ?? {}) as Record<string, unknown>
+    const iconFromMetadata =
+      typeof metadata.icon === 'string' && metadata.icon.trim().length > 0
+        ? metadata.icon.trim()
+        : undefined
+    const colorFromMetadata =
+      typeof metadata.color === 'string' && metadata.color.trim().length > 0
+        ? metadata.color.trim()
+        : ''
+
+    const initialValues: ConnectionFormValues = {
+      name: connection?.name ?? '',
+      description: connection?.description ?? '',
+      folder_id: connection?.folder_id ?? '',
+      team_id: normalizeTeamValue(connection?.team_id ?? teamId),
+      icon: iconFromMetadata ?? defaultIcon ?? DEFAULT_CONNECTION_ICON_ID,
+      color: colorFromMetadata,
+    }
+
+    reset(initialValues)
+    setFieldValues(initialFieldValues)
+    setFieldErrors({})
+    setFormError(null)
+    grantToggleInteractedRef.current = false
+    setAutoGrantTeamPermissions(false)
+    setSelectedIdentityId(connection?.identity_id ?? null)
+    formInitializedRef.current = true
+  }, [open, protocol, templateLoading, reset, connection, teamId, defaultIcon, initialFieldValues])
 
   const selectedIcon = watch('icon')
   const selectedColor = watch('color')
   const selectedTeamValue = watch('team_id')
+  const selectedFolderId = watch('folder_id')
 
   const effectiveTeamId = useMemo(
     () => denormalizeTeamValue(selectedTeamValue),
@@ -154,82 +223,63 @@ export function ConnectionFormModal({
     return teams.find((team) => team.id === effectiveTeamId) ?? null
   }, [effectiveTeamId, teams])
 
-  const teamCapabilityAnalysis = useMemo(() => {
-    const result = {
-      missingPermissionIds: [] as string[],
-      messages: [] as string[],
-    }
-    if (!effectiveTeamId) {
-      return result
-    }
-    const capabilities = teamCapabilitiesQuery.data
-    if (!capabilities) {
-      return result
-    }
-    const granted = new Set(capabilities.permission_ids ?? [])
-
-    if (!granted.has('connection.launch')) {
-      result.missingPermissionIds.push('connection.launch')
-      result.messages.push(
-        'Team members will not be able to launch this connection without granting connection.launch.'
-      )
-    }
-    if (!granted.has('connection.manage')) {
-      result.messages.push(
-        'Team members will not be able to edit this connection (missing connection.manage).'
-      )
-    }
-    if (protocol) {
-      const connectPermissionId = `protocol:${protocol.id}.connect`
-      if (!granted.has(connectPermissionId)) {
-        result.missingPermissionIds.push(connectPermissionId)
-        result.messages.push(
-          `Team currently lacks ${protocol.name} protocol access (missing ${connectPermissionId}).`
-        )
+  const { missingPermissionIds: missingTeamPermissionIds, messages: teamCapabilityWarnings } =
+    useMemo(() => {
+      if (!effectiveTeamId) {
+        return { missingPermissionIds: [], messages: [] as string[] }
       }
-    }
-    return result
-  }, [effectiveTeamId, teamCapabilitiesQuery.data, protocol])
-
-  const missingTeamPermissionIds = teamCapabilityAnalysis.missingPermissionIds
-  const teamCapabilityWarnings = teamCapabilityAnalysis.messages
-
-  const handleAutoGrantToggle = (checked: boolean) => {
-    grantToggleInteractedRef.current = true
-    setAutoGrantTeamPermissions(checked)
-  }
+      const capabilities = teamCapabilitiesQuery.data
+      if (!capabilities) {
+        return { missingPermissionIds: [], messages: [] as string[] }
+      }
+      return extractTeamCapabilityWarnings(capabilities)
+    }, [effectiveTeamId, teamCapabilitiesQuery.data])
 
   useEffect(() => {
     if (!open) {
       return
     }
     if (missingTeamPermissionIds.length === 0) {
-      return
-    }
-    if (!grantToggleInteractedRef.current) {
-      setAutoGrantTeamPermissions(true)
-    }
-  }, [missingTeamPermissionIds.length, open])
-
-  useEffect(() => {
-    if (missingTeamPermissionIds.length === 0) {
       grantToggleInteractedRef.current = false
       setAutoGrantTeamPermissions(false)
     }
-  }, [missingTeamPermissionIds.length])
+  }, [missingTeamPermissionIds.length, open])
 
-  useEffect(() => {
-    if (!selectedIcon) {
-      setValue('icon', defaultIcon ?? DEFAULT_CONNECTION_ICON_ID, { shouldValidate: false })
+  const requiresIdentity = useMemo(() => {
+    if (protocol?.identityRequired !== undefined) {
+      return protocol.identityRequired
     }
-  }, [defaultIcon, selectedIcon, setValue])
+    return Boolean(template?.metadata?.requires_identity ?? templateMetadata?.requires_identity)
+  }, [protocol?.identityRequired, template?.metadata, templateMetadata?.requires_identity])
+
+  const handleAutoGrantToggle = (next: boolean) => {
+    grantToggleInteractedRef.current = true
+    setAutoGrantTeamPermissions(next)
+  }
+
+  const handleFieldChange = (key: string, value: unknown) => {
+    setFieldValues((previous) => ({
+      ...previous,
+      [key]: value,
+    }))
+    setFieldErrors((previous) => {
+      if (!previous[key]) {
+        return previous
+      }
+      const rest = { ...previous }
+      delete rest[key]
+      return rest
+    })
+  }
 
   const onSubmit: SubmitHandler<ConnectionFormValues> = async (values) => {
     setFormError(null)
+    setFieldErrors({})
     if (!protocol) {
       return
     }
-    if (!selectedIdentityId) {
+
+    if (requiresIdentity && !selectedIdentityId) {
       setFormError(
         new ApiError({
           code: 'validation.identity_required',
@@ -237,6 +287,19 @@ export function ConnectionFormModal({
         })
       )
       return
+    }
+
+    let sanitizedFields: Record<string, unknown> | undefined
+    if (template) {
+      const { errors: templateErrors, sanitized } = validateTemplateSubmission(
+        template,
+        fieldValues
+      )
+      if (Object.keys(templateErrors).length > 0) {
+        setFieldErrors(templateErrors)
+        return
+      }
+      sanitizedFields = sanitized
     }
 
     try {
@@ -260,6 +323,10 @@ export function ConnectionFormModal({
         identity_id: selectedIdentityId,
       }
 
+      if (sanitizedFields && Object.keys(sanitizedFields).length > 0) {
+        payload.fields = sanitizedFields
+      }
+
       if (effectiveTeamId && autoGrantTeamPermissions && missingTeamPermissionIds.length > 0) {
         const uniquePermissions = Array.from(new Set(missingTeamPermissionIds))
         if (uniquePermissions.length > 0) {
@@ -267,8 +334,23 @@ export function ConnectionFormModal({
         }
       }
 
-      const connection = await create.mutateAsync(payload)
-      onSuccess(connection)
+      let savedConnection: ConnectionRecord
+      if (mode === 'edit' && connection) {
+        const updatePayload = {
+          name: payload.name,
+          description: payload.description,
+          folder_id: payload.folder_id,
+          team_id: payload.team_id,
+          metadata: payload.metadata,
+          fields: payload.fields,
+          identity_id: payload.identity_id,
+        }
+        savedConnection = await update.mutateAsync({ id: connection.id, payload: updatePayload })
+      } else {
+        savedConnection = await create.mutateAsync(payload)
+      }
+
+      onSuccess(savedConnection)
       onClose()
     } catch (error) {
       const apiError = toApiError(error)
@@ -276,22 +358,43 @@ export function ConnectionFormModal({
     }
   }
 
-  const isLoading = isSubmitting || create.isPending
-  const folderOptions = useMemo(() => flattenFolders(folders), [folders])
+  const isLoading =
+    isSubmitting || create.isPending || update.isPending || (templateLoading && open && !!template)
+  const folderOptions = useMemo(
+    () => flattenFolders(folders, effectiveTeamId ?? null),
+    [effectiveTeamId, folders]
+  )
+
+  useEffect(() => {
+    if (!selectedFolderId) {
+      return
+    }
+    const hasMatch = folderOptions.some((option) => option.id === selectedFolderId)
+    if (!hasMatch) {
+      setValue('folder_id', '', { shouldDirty: true })
+    }
+  }, [folderOptions, selectedFolderId, setValue])
 
   if (!protocol) {
     return null
   }
 
   const Icon = resolveProtocolIcon(protocol)
+  const modalTitle =
+    mode === 'edit' && connection ? `Edit ${connection.name}` : `Configure ${protocol.name}`
+  const submitLabel = mode === 'edit' ? 'Save changes' : 'Create Connection'
 
   return (
     <>
       <Modal
         open={open}
         onClose={onClose}
-        title={`Configure ${protocol.name}`}
-        description="Provide a name and optional folder to keep things organized."
+        title={modalTitle}
+        description={
+          mode === 'edit'
+            ? 'Update the connection details, access, and configuration.'
+            : 'Provide connection metadata and protocol-specific configuration.'
+        }
         size="lg"
       >
         <div className="flex flex-col gap-6">
@@ -313,6 +416,7 @@ export function ConnectionFormModal({
               placeholder="Production SSH"
               {...register('name')}
               error={errors.name?.message}
+              disabled={isLoading}
             />
 
             <Textarea
@@ -321,6 +425,7 @@ export function ConnectionFormModal({
               rows={3}
               {...register('description')}
               error={errors.description?.message}
+              disabled={isLoading}
             />
 
             <div className="grid gap-3">
@@ -333,7 +438,7 @@ export function ConnectionFormModal({
                       <button
                         key={id}
                         type="button"
-                        onClick={() => setValue('icon', id, { shouldValidate: true })}
+                        onClick={() => setValue('icon', id, { shouldDirty: true })}
                         className={cn(
                           'flex h-12 items-center justify-center gap-2 rounded-lg border text-sm transition-colors',
                           isActive
@@ -341,6 +446,7 @@ export function ConnectionFormModal({
                             : 'border-border text-muted-foreground hover:border-border/80 hover:bg-muted/40'
                         )}
                         aria-pressed={isActive}
+                        disabled={isLoading}
                       >
                         <OptionIcon className="h-4 w-4" />
                         <span className="truncate">{label}</span>
@@ -359,7 +465,8 @@ export function ConnectionFormModal({
                   label="Default"
                   color=""
                   isActive={!selectedColor}
-                  onSelect={() => setValue('color', '', { shouldValidate: true })}
+                  onSelect={() => setValue('color', '', { shouldDirty: true })}
+                  disabled={isLoading}
                 />
                 {CONNECTION_COLOR_OPTIONS.map((option) => (
                   <ColorSwatch
@@ -367,7 +474,8 @@ export function ConnectionFormModal({
                     label={option.label}
                     color={option.value}
                     isActive={selectedColor === option.value}
-                    onSelect={() => setValue('color', option.value, { shouldValidate: true })}
+                    onSelect={() => setValue('color', option.value, { shouldDirty: true })}
+                    disabled={isLoading}
                   />
                 ))}
               </div>
@@ -381,7 +489,11 @@ export function ConnectionFormModal({
                 name="folder_id"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value ?? ''}
+                    onValueChange={field.onChange}
+                    disabled={isLoading}
+                  >
                     <SelectTrigger id="connection-folder" className="h-10 w-full justify-between">
                       <SelectValue placeholder="Unassigned" />
                     </SelectTrigger>
@@ -418,6 +530,7 @@ export function ConnectionFormModal({
                     <Select
                       value={field.value && field.value.length ? field.value : ''}
                       onValueChange={field.onChange}
+                      disabled={isLoading}
                     >
                       <SelectTrigger id="connection-team" className="h-10 w-full justify-between">
                         <SelectValue placeholder="Personal workspace" />
@@ -461,6 +574,7 @@ export function ConnectionFormModal({
                               checked={autoGrantTeamPermissions}
                               onCheckedChange={(value) => handleAutoGrantToggle(value === true)}
                               className="mt-1"
+                              disabled={isLoading}
                             />
                             <div className="space-y-1 text-xs text-muted-foreground">
                               <p className="font-medium text-foreground">
@@ -497,43 +611,61 @@ export function ConnectionFormModal({
                 protocolId={protocol.id}
                 allowInlineCreate={canCreateIdentity}
                 onCreateIdentity={() => setIdentityModalOpen(true)}
+                disabled={isLoading}
               />
               <p className="text-xs text-muted-foreground">
-                Connections reference vault identities to securely access remote resources. Select
-                an existing credential or create a connection-scoped identity.
+                Connections reference vault identities to securely access remote resources.
               </p>
             </div>
 
-            <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-3 py-2">
-              <p className="text-xs text-muted-foreground">
-                Additional protocol-specific fields are coming soon. You can revisit this connection
-                later to add advanced settings.
-              </p>
-            </div>
+            {template ? (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Protocol configuration</p>
+                  <p className="text-xs text-muted-foreground">
+                    Provide the fields required by the {template.displayName.toLowerCase()} schema.
+                  </p>
+                </div>
+                <ConnectionTemplateForm
+                  template={template}
+                  values={fieldValues}
+                  errors={fieldErrors}
+                  disabled={isLoading}
+                  onChange={handleFieldChange}
+                />
+              </div>
+            ) : templateLoading ? (
+              <div className="rounded-lg border border-border/60 bg-muted/10 px-4 py-5 text-xs text-muted-foreground">
+                Loading protocol template…
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-4 py-5 text-xs text-muted-foreground">
+                This protocol does not declare additional configuration fields.
+              </div>
+            )}
 
             {formError ? (
-              <div className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              <div className="rounded-md border border-rose-500/60 bg-rose-500/10 px-3 py-2 text-sm text-rose-500">
                 {formError.message}
               </div>
             ) : null}
 
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
+            <div className="flex items-center justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>
                 Cancel
               </Button>
-              <Button type="submit" loading={isLoading}>
-                Create Connection
+              <Button type="submit" disabled={isLoading}>
+                {submitLabel}
               </Button>
             </div>
           </form>
         </div>
       </Modal>
+
       <IdentityFormModal
         open={identityModalOpen}
         onClose={() => setIdentityModalOpen(false)}
         mode="create"
-        defaultScope="connection"
-        connectionId={null}
         onSuccess={(identity) => {
           setSelectedIdentityId(identity.id)
           setIdentityModalOpen(false)
@@ -543,9 +675,298 @@ export function ConnectionFormModal({
   )
 }
 
-interface FolderOption {
+type FlattenedFolder = {
   id: string
   label: string
+}
+
+function matchesTeam(folderTeamId: string | null | undefined, teamId: string | null): boolean {
+  const normalizedFolderTeam = folderTeamId ?? null
+  if (teamId === null) {
+    return normalizedFolderTeam === null
+  }
+  return normalizedFolderTeam === teamId
+}
+
+function flattenFolders(
+  nodes: ConnectionFolderNode[],
+  teamId: string | null,
+  prefix: string[] = []
+): FlattenedFolder[] {
+  const result: FlattenedFolder[] = []
+  nodes.forEach((node) => {
+    const folderTeamId = node.folder.team_id ?? null
+    const matches = matchesTeam(folderTeamId, teamId)
+    const nextPrefix = matches ? [...prefix, node.folder.name] : prefix
+
+    if (matches) {
+      result.push({
+        id: node.folder.id,
+        label: nextPrefix.join(' / '),
+      })
+    }
+
+    if (node.children?.length) {
+      result.push(...flattenFolders(node.children, teamId, nextPrefix))
+    }
+  })
+  return result
+}
+
+function sanitizeId(value?: string | null | undefined): string | null | undefined {
+  if (typeof value !== 'string') {
+    return value
+  }
+  const trimmed = value.trim()
+  if (!trimmed || trimmed === '__no_folders__') {
+    return null
+  }
+  return trimmed
+}
+
+function normalizeTeamValue(value?: string | null): string {
+  if (!value) {
+    return ''
+  }
+  return value
+}
+
+function denormalizeTeamValue(value?: string | null): string | null {
+  if (!value) {
+    return null
+  }
+  if (value === '__no_teams__') {
+    return null
+  }
+  return value
+}
+
+function extractTeamCapabilityWarnings(capabilities: { permission_ids?: string[] }): {
+  missingPermissionIds: string[]
+  messages: string[]
+} {
+  const granted = new Set(
+    (capabilities.permission_ids ?? []).map((permission) => permission.trim())
+  )
+  const required = ['connection.launch']
+  const missing: string[] = []
+  const messages: string[] = []
+
+  required.forEach((permissionId) => {
+    if (!granted.has(permissionId)) {
+      missing.push(permissionId)
+      messages.push(`Team is missing the ${permissionId} permission.`)
+    }
+  })
+
+  return {
+    missingPermissionIds: missing,
+    messages,
+  }
+}
+
+type TemplateValidationResult = {
+  errors: Record<string, string>
+  sanitized: Record<string, unknown>
+}
+
+function validateTemplateSubmission(
+  template: ConnectionTemplate,
+  rawValues: TemplateValueMap
+): TemplateValidationResult {
+  const errors: Record<string, string> = {}
+  const sanitized: Record<string, unknown> = {}
+  const workingValues: TemplateValueMap = { ...rawValues }
+
+  template.sections.forEach((section) => {
+    section.fields.forEach((field) => {
+      const visible = isFieldVisible(field, workingValues)
+      if (!visible) {
+        return
+      }
+
+      const raw = rawValues[field.key]
+      const { value, error } = coerceFieldValueForSubmit(field.type, raw, field)
+      if (error) {
+        errors[field.key] = error
+        workingValues[field.key] = raw
+        return
+      }
+
+      workingValues[field.key] = value
+
+      if (value === undefined) {
+        if (field.required) {
+          errors[field.key] = `${field.label} is required`
+        }
+        return
+      }
+
+      if (!validateAgainstFieldRules(field, value)) {
+        errors[field.key] = buildValidationMessage(field)
+        return
+      }
+
+      sanitized[field.key] = value
+    })
+  })
+
+  return { errors, sanitized }
+}
+
+function coerceFieldValueForSubmit(
+  type: string,
+  raw: unknown,
+  field: ConnectionTemplate['sections'][number]['fields'][number]
+): { value: unknown; error?: string } {
+  if (raw === null || raw === undefined || raw === '') {
+    if (field.default !== undefined) {
+      return { value: field.default }
+    }
+    return { value: undefined }
+  }
+
+  switch (type) {
+    case 'boolean':
+      return { value: Boolean(raw) }
+    case 'number':
+    case 'target_port': {
+      const numeric = typeof raw === 'number' ? raw : Number(raw)
+      if (!Number.isFinite(numeric)) {
+        return { value: undefined, error: `${field.label} must be a number` }
+      }
+      return { value: numeric }
+    }
+    case 'json': {
+      if (typeof raw === 'object') {
+        return { value: raw }
+      }
+      if (typeof raw === 'string') {
+        if (!raw.trim()) {
+          return { value: undefined }
+        }
+        try {
+          const parsed = JSON.parse(raw)
+          return { value: parsed }
+        } catch {
+          return { value: undefined, error: `${field.label} must be valid JSON` }
+        }
+      }
+      return { value: undefined, error: `${field.label} must be valid JSON` }
+    }
+    default: {
+      const text = typeof raw === 'string' ? raw.trim() : String(raw)
+      if (!text) {
+        return { value: undefined }
+      }
+      return { value: text }
+    }
+  }
+}
+
+function validateAgainstFieldRules(
+  field: ConnectionTemplate['sections'][number]['fields'][number],
+  value: unknown
+): boolean {
+  const validation = field.validation ?? {}
+  if (value === undefined) {
+    return !field.required
+  }
+
+  if (typeof value === 'string') {
+    if (typeof validation.pattern === 'string' && validation.pattern.length > 0) {
+      try {
+        const regex = new RegExp(validation.pattern)
+        if (!regex.test(value)) {
+          return false
+        }
+      } catch {
+        // ignore invalid patterns
+      }
+    }
+    if (isFiniteNumber(validation.min_length) && value.length < Number(validation.min_length)) {
+      return false
+    }
+    if (isFiniteNumber(validation.max_length) && value.length > Number(validation.max_length)) {
+      return false
+    }
+  }
+
+  if (typeof value === 'number') {
+    if (isFiniteNumber(validation.min) && value < Number(validation.min)) {
+      return false
+    }
+    if (isFiniteNumber(validation.max) && value > Number(validation.max)) {
+      return false
+    }
+  }
+
+  if (field.type === 'select' && field.options?.length) {
+    const allowed = field.options.map((option) => option.value)
+    if (!allowed.includes(String(value))) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function buildValidationMessage(
+  field: ConnectionTemplate['sections'][number]['fields'][number]
+): string {
+  if (field.validation?.pattern) {
+    return `${field.label} has an invalid format`
+  }
+  if (isFiniteNumber(field.validation?.min) || isFiniteNumber(field.validation?.max)) {
+    return `${field.label} is out of range`
+  }
+  return `${field.label} is invalid`
+}
+
+function isFiniteNumber(value: unknown): boolean {
+  if (typeof value === 'number') {
+    return Number.isFinite(value)
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return Number.isFinite(Number(value))
+  }
+  return false
+}
+
+function buildInitialFieldValues(
+  template: ConnectionTemplate,
+  existingFields: Record<string, unknown>
+): TemplateValueMap {
+  const result: TemplateValueMap = {}
+  template.sections.forEach((section) => {
+    section.fields.forEach((field) => {
+      const existing = existingFields[field.key]
+      if (existing !== undefined) {
+        result[field.key] = existing
+      } else if (field.default !== undefined) {
+        result[field.key] = field.default
+      } else if (field.type === 'boolean') {
+        result[field.key] = false
+      } else {
+        result[field.key] = undefined
+      }
+    })
+  })
+
+  return result
+}
+
+function extractTemplateMetadata(
+  metadata?: ConnectionRecord['metadata']
+): ConnectionTemplateMetadata | undefined {
+  if (!metadata || typeof metadata !== 'object') {
+    return undefined
+  }
+  const templateMetadata = metadata.connection_template
+  if (templateMetadata && typeof templateMetadata === 'object') {
+    return templateMetadata as ConnectionTemplateMetadata
+  }
+  return undefined
 }
 
 interface ColorSwatchProps {
@@ -553,69 +974,28 @@ interface ColorSwatchProps {
   color: string
   isActive: boolean
   onSelect: () => void
+  disabled?: boolean
 }
 
-function ColorSwatch({ label, color, isActive, onSelect }: ColorSwatchProps) {
+function ColorSwatch({ label, color, isActive, onSelect, disabled }: ColorSwatchProps) {
   return (
     <button
       type="button"
       onClick={onSelect}
       className={cn(
-        'flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+        'flex h-9 items-center gap-2 rounded-md border px-3 text-sm transition-colors',
         isActive
           ? 'border-primary bg-primary/10 text-primary'
-          : 'border-border text-muted-foreground hover:bg-muted/40'
+          : 'border-border text-muted-foreground hover:border-border/80 hover:bg-muted/40'
       )}
       aria-pressed={isActive}
+      disabled={disabled}
     >
       <span
-        className="h-3 w-3 rounded-full border border-border/40"
+        className="inline-block h-4 w-4 rounded-full border border-border/70"
         style={{ backgroundColor: color || 'transparent' }}
       />
-      {label}
+      <span className="truncate">{label}</span>
     </button>
   )
-}
-
-function flattenFolders(nodes: ConnectionFolderNode[], depth = 0): FolderOption[] {
-  const options: FolderOption[] = []
-  const indent = depth > 0 ? `${'  '.repeat(depth)}` : ''
-
-  for (const node of nodes) {
-    if (node.folder.id === 'unassigned') {
-      if (node.children) {
-        options.push(...flattenFolders(node.children, depth))
-      }
-      continue
-    }
-    options.push({
-      id: node.folder.id,
-      label: `${indent}${node.folder.name}`,
-    })
-    if (node.children?.length) {
-      options.push(...flattenFolders(node.children, depth + 1))
-    }
-  }
-
-  return options
-}
-
-function sanitizeId(value?: string | null) {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
-}
-
-function normalizeTeamValue(teamId?: string | null) {
-  if (!teamId || teamId === 'personal') {
-    return ''
-  }
-  return teamId
-}
-
-function denormalizeTeamValue(teamId?: string | null) {
-  const trimmed = teamId?.trim()
-  if (!trimmed || trimmed === 'personal') {
-    return null
-  }
-  return trimmed
 }

@@ -25,8 +25,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.EmailVerification{},
 		&models.CacheEntry{},
 		&models.ConnectionProtocol{},
+		&models.ConnectionTemplate{},
 		&models.Connection{},
 		&models.ConnectionTarget{},
+		&models.ConnectionTemplateProtocol{},
 		&models.ResourcePermission{},
 		&models.Notification{},
 		&models.SystemSetting{},
@@ -35,6 +37,11 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.CredentialTemplate{},
 		&models.CredentialVersion{},
 		&models.VaultKeyMetadata{},
+		&models.Snippet{},
+		&models.ConnectionSession{},
+		&models.ConnectionSessionParticipant{},
+		&models.ConnectionSessionMessage{},
+		&models.ConnectionSessionRecord{},
 	)
 }
 
@@ -97,6 +104,7 @@ func SeedData(db *gorm.DB) error {
 		"connection.launch",
 		"connection.folder.view",
 		"vault.use_shared",
+		"session.recording.view",
 	}); err != nil {
 		return err
 	}

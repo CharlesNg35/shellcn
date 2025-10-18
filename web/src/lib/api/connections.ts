@@ -8,6 +8,7 @@ import type {
   ConnectionShareSummary,
   ConnectionSharePrincipal,
   ConnectionProtocolSummary,
+  ConnectionSettings,
 } from '@/types/connections'
 import { apiClient } from './client'
 import { unwrapResponse } from './http'
@@ -24,7 +25,19 @@ export interface ConnectionCreatePayload {
   folder_id?: string | null
   metadata?: Record<string, unknown>
   settings?: Record<string, unknown>
+  fields?: Record<string, unknown>
   grant_team_permissions?: string[]
+  identity_id?: string | null
+}
+
+export interface ConnectionUpdatePayload {
+  name: string
+  description?: string
+  team_id?: string | null
+  folder_id?: string | null
+  metadata?: Record<string, unknown>
+  settings?: Record<string, unknown>
+  fields?: Record<string, unknown>
   identity_id?: string | null
 }
 
@@ -109,6 +122,61 @@ function coerceObject<T extends Record<string, unknown>>(
     }
   }
   return value as T
+}
+
+function normaliseConnectionSettings(
+  value?: Record<string, unknown> | string | null
+): ConnectionSettings | undefined {
+  const settings = coerceObject<ConnectionSettings>(value)
+  if (!settings) {
+    return undefined
+  }
+  const normalised: ConnectionSettings = { ...settings }
+  if (Object.prototype.hasOwnProperty.call(settings, 'recording_enabled')) {
+    normalised.recording_enabled = Boolean(settings.recording_enabled)
+  }
+  if (Object.prototype.hasOwnProperty.call(settings, 'concurrent_limit')) {
+    const limit = Number(settings.concurrent_limit)
+    normalised.concurrent_limit = Number.isFinite(limit) && limit >= 0 ? limit : undefined
+  }
+  if (Object.prototype.hasOwnProperty.call(settings, 'idle_timeout_minutes')) {
+    const timeout = Number(settings.idle_timeout_minutes)
+    normalised.idle_timeout_minutes = Number.isFinite(timeout) && timeout >= 0 ? timeout : undefined
+  }
+  if (Object.prototype.hasOwnProperty.call(settings, 'enable_sftp')) {
+    normalised.enable_sftp = Boolean(settings.enable_sftp)
+  }
+  const terminalOverride = settings.terminal_config_override
+  if (terminalOverride) {
+    if (typeof terminalOverride === 'string') {
+      try {
+        const parsed = JSON.parse(terminalOverride) as Record<string, unknown>
+        normalised.terminal_config_override = coerceTerminalConfig(parsed)
+      } catch {
+        normalised.terminal_config_override = undefined
+      }
+    } else if (typeof terminalOverride === 'object') {
+      normalised.terminal_config_override = coerceTerminalConfig(
+        terminalOverride as Record<string, unknown>
+      )
+    }
+  }
+  return normalised
+}
+
+function coerceTerminalConfig(
+  raw: Record<string, unknown>
+): ConnectionSettings['terminal_config_override'] {
+  const fontSize = Number(raw.font_size)
+  const scrollback = Number(raw.scrollback_limit)
+  return {
+    font_family:
+      typeof raw.font_family === 'string' && raw.font_family.trim().length > 0
+        ? raw.font_family.trim()
+        : undefined,
+    font_size: Number.isFinite(fontSize) && fontSize > 0 ? fontSize : undefined,
+    scrollback_limit: Number.isFinite(scrollback) && scrollback >= 0 ? scrollback : undefined,
+  }
 }
 
 function transformTargets(targets?: ConnectionTargetResponse[]): ConnectionTarget[] {
@@ -256,7 +324,7 @@ function transformConnection(raw: ConnectionResponse): ConnectionRecord {
     owner_user_id: raw.owner_user_id ?? null,
     folder_id: raw.folder_id ?? null,
     metadata: coerceObject(raw.metadata),
-    settings: coerceObject(raw.settings),
+    settings: normaliseConnectionSettings(raw.settings),
     identity_id: raw.identity_id ?? null,
     last_used_at: raw.last_used_at ?? null,
     targets: transformTargets(raw.targets),
@@ -301,7 +369,9 @@ export interface ConnectionSharePayload {
 
 export interface FetchActiveConnectionSessionsParams {
   protocol_id?: string
+  protocol_ids?: string[]
   team_id?: string
+  scope?: 'personal' | 'team' | 'all'
 }
 
 export async function fetchConnections(
@@ -352,6 +422,23 @@ export async function createConnection(
   )
   const data = unwrapResponse(response)
   return transformConnection(data)
+}
+
+export async function updateConnection(
+  id: string,
+  payload: ConnectionUpdatePayload
+): Promise<ConnectionRecord> {
+  const response = await apiClient.put<ApiResponse<ConnectionResponse>>(
+    `${CONNECTIONS_ENDPOINT}/${id}`,
+    payload
+  )
+  const data = unwrapResponse(response)
+  return transformConnection(data)
+}
+
+export async function deleteConnection(id: string): Promise<void> {
+  const response = await apiClient.delete<ApiResponse<null>>(`${CONNECTIONS_ENDPOINT}/${id}`)
+  unwrapResponse(response)
 }
 
 export async function fetchConnectionShares(connectionId: string): Promise<ConnectionShare[]> {

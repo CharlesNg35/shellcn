@@ -11,6 +11,7 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/models"
 	apperrors "github.com/charlesng35/shellcn/pkg/errors"
 )
@@ -115,9 +116,11 @@ type ListConnectionsResult struct {
 
 // ConnectionService orchestrates read operations for connections.
 type ConnectionService struct {
-	db      *gorm.DB
-	checker PermissionChecker
-	vault   *VaultService
+	db        *gorm.DB
+	checker   PermissionChecker
+	vault     *VaultService
+	templates *ConnectionTemplateService
+	drivers   *drivers.Registry
 }
 
 // ConnectionServiceOption configures optional behaviours for the connection service.
@@ -130,6 +133,20 @@ func WithConnectionVault(vault *VaultService) ConnectionServiceOption {
 	}
 }
 
+// WithConnectionTemplates attaches a connection template service for schema validation.
+func WithConnectionTemplates(templates *ConnectionTemplateService) ConnectionServiceOption {
+	return func(s *ConnectionService) {
+		s.templates = templates
+	}
+}
+
+// WithConnectionDrivers attaches the driver registry for configuration validation.
+func WithConnectionDrivers(reg *drivers.Registry) ConnectionServiceOption {
+	return func(s *ConnectionService) {
+		s.drivers = reg
+	}
+}
+
 // CreateConnectionInput describes the fields needed to create a connection.
 type CreateConnectionInput struct {
 	Name           string
@@ -139,8 +156,21 @@ type CreateConnectionInput struct {
 	FolderID       *string
 	Metadata       map[string]any
 	Settings       map[string]any
+	Fields         map[string]any
 	IdentityID     *string
 	InlineIdentity *InlineIdentityInput
+}
+
+// UpdateConnectionInput describes editable fields for an existing connection.
+type UpdateConnectionInput struct {
+	Name        string
+	Description string
+	TeamID      *string
+	FolderID    *string
+	Metadata    map[string]any
+	Settings    map[string]any
+	Fields      map[string]any
+	IdentityID  *string
 }
 
 // InlineIdentityInput captures inline credential data submitted during connection creation.
@@ -153,6 +183,86 @@ type InlineIdentityInput struct {
 type connectionIdentityPlan struct {
 	identityID *string
 	after      func(ctx context.Context, tx *gorm.DB, connectionID string) error
+}
+
+func cloneAnyMap(src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return nil
+	}
+	copy := make(map[string]any, len(src))
+	for k, v := range src {
+		copy[k] = v
+	}
+	return copy
+}
+
+func mergeAnyMaps(dst map[string]any, src map[string]any) map[string]any {
+	if len(src) == 0 {
+		return dst
+	}
+	if dst == nil {
+		dst = make(map[string]any, len(src))
+	}
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
+}
+
+func (s *ConnectionService) validateDriverConfig(ctx context.Context, protocolID string, settings map[string]any, targets []models.ConnectionTarget) error {
+	if s == nil || s.drivers == nil {
+		return nil
+	}
+	protocolID = strings.TrimSpace(protocolID)
+	if protocolID == "" {
+		return nil
+	}
+
+	driver, ok := s.drivers.Get(protocolID)
+	if !ok {
+		return nil
+	}
+	validator, ok := driver.(drivers.Validator)
+	if !ok {
+		return nil
+	}
+
+	cfg := cloneAnyMap(settings)
+	if cfg == nil {
+		cfg = map[string]any{}
+	}
+
+	if len(targets) > 0 {
+		entries := make([]map[string]any, 0, len(targets))
+		for _, target := range targets {
+			entry := map[string]any{
+				"host":     strings.TrimSpace(target.Host),
+				"port":     target.Port,
+				"ordering": target.Ordering,
+			}
+			labels := decodeJSONMapString(target.Labels)
+			if len(labels) > 0 {
+				entry["labels"] = labels
+			}
+			entries = append(entries, entry)
+		}
+		cfg["targets"] = entries
+	}
+
+	return validator.ValidateConfig(ctx, cfg)
+}
+
+func cloneTargets(src []models.ConnectionTarget) []models.ConnectionTarget {
+	if len(src) == 0 {
+		return nil
+	}
+	cloned := make([]models.ConnectionTarget, len(src))
+	for i, target := range src {
+		cloned[i] = target
+		cloned[i].BaseModel = models.BaseModel{}
+		cloned[i].ConnectionID = ""
+	}
+	return cloned
 }
 
 // NewConnectionService constructs a ConnectionService.
@@ -207,6 +317,43 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 		return nil, apperrors.NewBadRequest("vault integration is required for inline identities")
 	}
 
+	metadataMap := cloneAnyMap(input.Metadata)
+	settingsMap := cloneAnyMap(nil)
+	var targets []models.ConnectionTarget
+
+	if s.templates != nil {
+		template, err := s.templates.Resolve(ctx, protocolID)
+		if err != nil {
+			return nil, err
+		}
+		if template != nil {
+			materialised, err := s.templates.Materialise(template, input.Fields)
+			if err != nil {
+				return nil, err
+			}
+			if materialised != nil {
+				if len(materialised.Settings) > 0 {
+					settingsMap = mergeAnyMaps(settingsMap, materialised.Settings)
+				}
+				if len(materialised.Metadata) > 0 {
+					metadataMap = mergeAnyMaps(metadataMap, materialised.Metadata)
+				}
+				targets = cloneTargets(materialised.Targets)
+				metadataMap = mergeAnyMaps(metadataMap, map[string]any{
+					"connection_template": map[string]any{
+						"driver_id": template.DriverID,
+						"version":   template.Version,
+						"fields":    materialised.Fields,
+					},
+				})
+			}
+		}
+	}
+
+	if len(input.Settings) > 0 {
+		settingsMap = mergeAnyMaps(settingsMap, input.Settings)
+	}
+
 	connection := models.Connection{
 		Name:        name,
 		Description: strings.TrimSpace(input.Description),
@@ -224,25 +371,38 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 		connection.IdentityID = plan.identityID
 	}
 
-	if input.Metadata != nil {
-		data, marshalErr := json.Marshal(input.Metadata)
+	if len(metadataMap) > 0 {
+		data, marshalErr := json.Marshal(metadataMap)
 		if marshalErr != nil {
 			return nil, apperrors.NewBadRequest("invalid metadata payload")
 		}
 		connection.Metadata = datatypes.JSON(data)
 	}
 
-	if input.Settings != nil {
-		data, marshalErr := json.Marshal(input.Settings)
+	if len(settingsMap) > 0 {
+		data, marshalErr := json.Marshal(settingsMap)
 		if marshalErr != nil {
 			return nil, apperrors.NewBadRequest("invalid settings payload")
 		}
 		connection.Settings = datatypes.JSON(data)
 	}
 
+	if err := s.validateDriverConfig(ctx, protocolID, settingsMap, targets); err != nil {
+		return nil, err
+	}
+
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&connection).Error; err != nil {
 			return fmt.Errorf("connection service: create connection: %w", err)
+		}
+
+		if len(targets) > 0 {
+			for i := range targets {
+				targets[i].ConnectionID = connection.ID
+			}
+			if err := tx.Create(&targets).Error; err != nil {
+				return fmt.Errorf("connection service: create connection targets: %w", err)
+			}
 		}
 
 		if plan != nil && plan.after != nil {
@@ -264,6 +424,220 @@ func (s *ConnectionService) Create(ctx context.Context, userID string, input Cre
 		return nil, err
 	}
 	return &dto, nil
+}
+
+// Update modifies an existing connection when the caller is authorised.
+func (s *ConnectionService) Update(ctx context.Context, userID, connectionID string, input UpdateConnectionInput) (*ConnectionDTO, error) {
+	ctx = ensureContext(ctx)
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, apperrors.ErrUnauthorized
+	}
+
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return nil, apperrors.NewBadRequest("connection name is required")
+	}
+
+	var connection models.Connection
+	if err := s.db.WithContext(ctx).First(&connection, "id = ?", strings.TrimSpace(connectionID)).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apperrors.ErrNotFound
+		}
+		return nil, fmt.Errorf("connection service: load connection: %w", err)
+	}
+
+	allowed := connection.OwnerUserID == userID
+	if !allowed && s.checker != nil {
+		ok, err := s.checker.CheckResource(ctx, userID, connectionResourceType, connectionID, "connection.manage")
+		if err != nil {
+			return nil, err
+		}
+		allowed = ok
+	}
+	if !allowed {
+		canManage, err := s.canManageConnections(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		allowed = canManage
+	}
+	if !allowed {
+		return nil, apperrors.ErrForbidden
+	}
+
+	existingMetadata := decodeJSONMap(connection.Metadata)
+
+	metadataMap := cloneAnyMap(existingMetadata)
+	if input.Metadata != nil {
+		metadataMap = cloneAnyMap(input.Metadata)
+	}
+
+	settingsMap := cloneAnyMap(nil)
+	if input.Settings != nil {
+		settingsMap = mergeAnyMaps(settingsMap, input.Settings)
+	}
+
+	shouldUpdateMetadata := input.Metadata != nil
+	shouldUpdateSettings := input.Settings != nil
+	templateUsed := false
+	var targets []models.ConnectionTarget
+
+	if s.templates != nil {
+		template, err := s.templates.Resolve(ctx, connection.ProtocolID)
+		if err != nil {
+			return nil, err
+		}
+		if template != nil {
+			materialised, err := s.templates.Materialise(template, input.Fields)
+			if err != nil {
+				return nil, err
+			}
+			templateUsed = true
+			settingsMap = cloneAnyMap(materialised.Settings)
+			if input.Settings != nil {
+				settingsMap = mergeAnyMaps(settingsMap, input.Settings)
+			}
+			metadataMap = mergeAnyMaps(metadataMap, materialised.Metadata)
+			metadataMap = mergeAnyMaps(metadataMap, map[string]any{
+				"connection_template": map[string]any{
+					"driver_id": template.DriverID,
+					"version":   template.Version,
+					"fields":    materialised.Fields,
+				},
+			})
+			shouldUpdateMetadata = true
+			shouldUpdateSettings = true
+			targets = cloneTargets(materialised.Targets)
+		}
+	}
+
+	if err := s.validateDriverConfig(ctx, connection.ProtocolID, settingsMap, targets); err != nil {
+		return nil, err
+	}
+
+	updates := map[string]any{
+		"name":        name,
+		"description": strings.TrimSpace(input.Description),
+	}
+
+	if input.TeamID != nil {
+		updates["team_id"] = normalizeOptionalID(input.TeamID)
+	}
+	if input.FolderID != nil {
+		updates["folder_id"] = normalizeOptionalID(input.FolderID)
+	}
+	if input.IdentityID != nil {
+		updates["identity_id"] = normalizeOptionalID(input.IdentityID)
+	}
+
+	if shouldUpdateMetadata {
+		if len(metadataMap) == 0 {
+			updates["metadata"] = nil
+		} else {
+			data, err := json.Marshal(metadataMap)
+			if err != nil {
+				return nil, apperrors.NewBadRequest("invalid metadata payload")
+			}
+			updates["metadata"] = datatypes.JSON(data)
+		}
+	}
+
+	if shouldUpdateSettings {
+		if len(settingsMap) == 0 {
+			updates["settings"] = nil
+		} else {
+			data, err := json.Marshal(settingsMap)
+			if err != nil {
+				return nil, apperrors.NewBadRequest("invalid settings payload")
+			}
+			updates["settings"] = datatypes.JSON(data)
+		}
+	}
+
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.Connection{}).Where("id = ?", connection.ID).Updates(updates).Error; err != nil {
+			return fmt.Errorf("connection service: update connection: %w", err)
+		}
+		if templateUsed {
+			if err := tx.Where("connection_id = ?", connection.ID).Delete(&models.ConnectionTarget{}).Error; err != nil {
+				return fmt.Errorf("connection service: clear connection targets: %w", err)
+			}
+			if len(targets) > 0 {
+				for i := range targets {
+					targets[i].ConnectionID = connection.ID
+				}
+				if err := tx.Create(&targets).Error; err != nil {
+					return fmt.Errorf("connection service: upsert connection targets: %w", err)
+				}
+			}
+		}
+		if err := tx.Preload("Folder").First(&connection, "id = ?", connection.ID).Error; err != nil {
+			return fmt.Errorf("connection service: reload connection: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	dto, err := mapConnection(ctx, s.db, connection, false, false)
+	if err != nil {
+		return nil, err
+	}
+	return &dto, nil
+}
+
+// Delete removes a connection when the caller is authorised.
+func (s *ConnectionService) Delete(ctx context.Context, userID, connectionID string) error {
+	ctx = ensureContext(ctx)
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return apperrors.ErrUnauthorized
+	}
+
+	connectionID = strings.TrimSpace(connectionID)
+	if connectionID == "" {
+		return apperrors.NewBadRequest("connection id is required")
+	}
+
+	var connection models.Connection
+	if err := s.db.WithContext(ctx).First(&connection, "id = ?", connectionID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return apperrors.ErrNotFound
+		}
+		return fmt.Errorf("connection service: load connection: %w", err)
+	}
+
+	allowed := connection.OwnerUserID == userID
+	if !allowed && s.checker != nil {
+		for _, permissionID := range []string{"connection.manage", "connection.delete"} {
+			ok, err := s.checker.CheckResource(ctx, userID, connectionResourceType, connectionID, permissionID)
+			if err != nil {
+				return err
+			}
+			if ok {
+				allowed = true
+				break
+			}
+		}
+	}
+	if !allowed {
+		canDelete, err := s.canDeleteConnections(ctx, userID)
+		if err != nil {
+			return err
+		}
+		allowed = canDelete
+	}
+	if !allowed {
+		return apperrors.ErrForbidden
+	}
+
+	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&models.Connection{}, "id = ?", connection.ID).Error; err != nil {
+			return fmt.Errorf("connection service: delete connection: %w", err)
+		}
+		return nil
+	})
 }
 
 // ListVisible returns connections accessible to the supplied user, applying optional filters.
@@ -596,6 +970,44 @@ func (s *ConnectionService) canCreateConnections(ctx context.Context, userID str
 		return true, nil
 	}
 	for _, id := range []string{"connection.create", "connection.manage", "permission.manage"} {
+		ok, err := s.checker.Check(ctx, userID, id)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *ConnectionService) canManageConnections(ctx context.Context, userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return true, nil
+	}
+	if s.checker == nil {
+		return true, nil
+	}
+	for _, id := range []string{"connection.manage", "permission.manage"} {
+		ok, err := s.checker.Check(ctx, userID, id)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *ConnectionService) canDeleteConnections(ctx context.Context, userID string) (bool, error) {
+	if strings.TrimSpace(userID) == "" {
+		return true, nil
+	}
+	if s.checker == nil {
+		return true, nil
+	}
+	for _, id := range []string{"connection.delete", "connection.manage", "permission.manage"} {
 		ok, err := s.checker.Check(ctx, userID, id)
 		if err != nil {
 			return false, err

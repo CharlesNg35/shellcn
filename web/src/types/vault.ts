@@ -42,6 +42,32 @@ export type CredentialFieldType = 'string' | 'secret' | 'file' | 'enum' | 'boole
 
 export type CredentialFieldInputMode = 'text' | 'file' | 'select' | 'password' | 'textarea' | string
 
+export type CredentialFieldComparable = string | number | boolean
+
+export interface CredentialFieldVisibilityRule {
+  field: string
+  equals?: CredentialFieldComparable | CredentialFieldComparable[]
+  not_equals?: CredentialFieldComparable | CredentialFieldComparable[]
+  in?: CredentialFieldComparable[]
+  not_in?: CredentialFieldComparable[]
+  exists?: boolean
+  not_exists?: boolean
+  truthy?: boolean
+  falsy?: boolean
+  mode?: 'all' | 'any'
+}
+
+export interface CredentialFieldMetadata {
+  section?: string
+  hint?: string
+  visibility?: CredentialFieldVisibilityRule | CredentialFieldVisibilityRule[]
+  visibility_mode?: 'all' | 'any'
+  required_when?: CredentialFieldVisibilityRule | CredentialFieldVisibilityRule[]
+  multiline?: boolean
+  allow_file_import?: boolean
+  [key: string]: unknown
+}
+
 export interface CredentialField {
   name: string
   type: CredentialFieldType
@@ -52,7 +78,9 @@ export interface CredentialField {
   default_value?: unknown
   input_modes?: CredentialFieldInputMode[]
   options?: Array<string | Record<string, unknown>>
-  metadata?: Record<string, unknown>
+  metadata?: CredentialFieldMetadata
+  validation?: Record<string, unknown>
+  key?: string
   [key: string]: unknown
 }
 

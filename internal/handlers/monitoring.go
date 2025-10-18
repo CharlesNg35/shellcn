@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"math"
 	"net/http"
 	"strings"
 
@@ -27,6 +28,15 @@ func NewMonitoringHandler(module *monitoring.Module, cfg *app.Config) *Monitorin
 	return &MonitoringHandler{module: module, cfg: cfg}
 }
 
+type webVitalPayload struct {
+	Metric         string  `json:"metric"`
+	Name           string  `json:"name"`
+	Value          float64 `json:"value"`
+	Rating         string  `json:"rating"`
+	NavigationType string  `json:"navigation_type"`
+	Delta          float64 `json:"delta"`
+}
+
 // Summary returns aggregated monitoring statistics and configuration hints.
 func (h *MonitoringHandler) Summary(c *gin.Context) {
 	snapshot := monitoring.Snapshot()
@@ -46,5 +56,45 @@ func (h *MonitoringHandler) Summary(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    response,
+	})
+}
+
+// RecordVitals ingests client-side Web Vitals and forwards them to the monitoring module.
+func (h *MonitoringHandler) RecordVitals(c *gin.Context) {
+	if h == nil || h.module == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"success": false,
+			"error":   "monitoring module is disabled",
+		})
+		return
+	}
+
+	var payload struct {
+		Metrics []webVitalPayload `json:"metrics"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil || len(payload.Metrics) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   "invalid metrics payload",
+		})
+		return
+	}
+
+	accepted := 0
+	for _, metric := range payload.Metrics {
+		name := strings.TrimSpace(metric.Metric)
+		if name == "" {
+			name = strings.TrimSpace(metric.Name)
+		}
+		if name == "" || math.IsNaN(metric.Value) || math.IsInf(metric.Value, 0) {
+			continue
+		}
+		monitoring.RecordWebVital(name, metric.Rating, metric.Value)
+		accepted++
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"success": true,
+		"count":   accepted,
 	})
 }

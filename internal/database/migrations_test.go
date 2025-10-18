@@ -48,3 +48,30 @@ func TestAutoMigrateCreatesVaultTables(t *testing.T) {
 		require.True(t, migrator.HasTable(table), "expected table for %T to exist", table)
 	}
 }
+
+func TestAutoMigrateCreatesSessionTables(t *testing.T) {
+	db := openTestDB(t)
+
+	require.NoError(t, AutoMigrate(db))
+
+	migrator := db.Migrator()
+	tables := []interface{}{
+		&models.ConnectionSession{},
+		&models.ConnectionSessionParticipant{},
+		&models.ConnectionSessionMessage{},
+		&models.ConnectionSessionRecord{},
+	}
+
+	for _, table := range tables {
+		require.True(t, migrator.HasTable(table), "expected table for %T to exist", table)
+	}
+}
+
+func TestAutoMigrateCreatesSnippetTable(t *testing.T) {
+	db := openTestDB(t)
+
+	require.NoError(t, AutoMigrate(db))
+
+	migrator := db.Migrator()
+	require.True(t, migrator.HasTable(&models.Snippet{}), "expected snippets table to exist")
+}

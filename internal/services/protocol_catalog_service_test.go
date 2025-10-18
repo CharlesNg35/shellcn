@@ -17,17 +17,19 @@ import (
 
 type mockDriver struct {
 	drivers.BaseDriver
-	caps        drivers.Capabilities
-	healthError error
-	template    *drivers.CredentialTemplate
+	caps               drivers.Capabilities
+	healthError        error
+	credentialTemplate *drivers.CredentialTemplate
+	connectionTemplate *drivers.ConnectionTemplate
 }
 
-func newMockDriver(desc drivers.Descriptor, caps drivers.Capabilities, healthErr error, template *drivers.CredentialTemplate) *mockDriver {
+func newMockDriver(desc drivers.Descriptor, caps drivers.Capabilities, healthErr error, credTemplate *drivers.CredentialTemplate, connTemplate *drivers.ConnectionTemplate) *mockDriver {
 	return &mockDriver{
-		BaseDriver:  drivers.NewBaseDriver(desc),
-		caps:        caps,
-		healthError: healthErr,
-		template:    template,
+		BaseDriver:         drivers.NewBaseDriver(desc),
+		caps:               caps,
+		healthError:        healthErr,
+		credentialTemplate: credTemplate,
+		connectionTemplate: connTemplate,
 	}
 }
 
@@ -41,7 +43,11 @@ func (m *mockDriver) Capabilities(ctx context.Context) (drivers.Capabilities, er
 func (m *mockDriver) HealthCheck(ctx context.Context) error { return m.healthError }
 
 func (m *mockDriver) CredentialTemplate() (*drivers.CredentialTemplate, error) {
-	return m.template, nil
+	return m.credentialTemplate, nil
+}
+
+func (m *mockDriver) ConnectionTemplate() (*drivers.ConnectionTemplate, error) {
+	return m.connectionTemplate, nil
 }
 
 func TestProtocolCatalogSyncPersistsRecords(t *testing.T) {
@@ -83,11 +89,40 @@ func TestProtocolCatalogSyncPersistsRecords(t *testing.T) {
 				"supports_otp": false,
 			},
 		},
+		&drivers.ConnectionTemplate{
+			DriverID:    "ssh",
+			Version:     "2025-01-15",
+			DisplayName: "SSH Connection",
+			Description: "Connection schema for SSH",
+			Sections: []drivers.ConnectionSection{
+				{
+					ID:    "endpoint",
+					Label: "Endpoint",
+					Fields: []drivers.ConnectionField{
+						{
+							Key:      "host",
+							Label:    "Host",
+							Type:     drivers.ConnectionFieldTypeString,
+							Required: true,
+							Binding: &drivers.ConnectionBinding{
+								Target:   drivers.BindingTargetConnectionTarget,
+								Index:    0,
+								Property: "host",
+							},
+						},
+					},
+				},
+			},
+			Metadata: map[string]any{
+				"requires_identity": true,
+			},
+		},
 	))
 	driverReg.MustRegister(newMockDriver(
 		drivers.Descriptor{ID: "rdp", Module: "rdp", Title: "Remote Desktop", SortOrder: 2},
 		drivers.Capabilities{Desktop: true},
 		errors.New("rdp driver offline"),
+		nil,
 		nil,
 	))
 
@@ -131,6 +166,12 @@ func TestProtocolCatalogSyncPersistsRecords(t *testing.T) {
 	require.NotEmpty(t, template.Hash)
 	require.NotNil(t, template.DeprecatedAfter)
 	require.True(t, template.DeprecatedAfter.After(time.Now().Add(24*time.Hour)))
+
+	var connTemplates []models.ConnectionTemplate
+	require.NoError(t, db.Find(&connTemplates).Error)
+	require.Len(t, connTemplates, 1)
+	require.Equal(t, "ssh", connTemplates[0].DriverID)
+	require.Equal(t, "2025-01-15", connTemplates[0].Version)
 }
 
 type fkRow struct {

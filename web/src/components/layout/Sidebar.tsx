@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   ChevronDown,
   ChevronRight,
@@ -18,6 +18,9 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { PermissionGuard } from '@/components/permissions/PermissionGuard'
 import { useActiveConnections } from '@/hooks/useActiveConnections'
 import { PERMISSIONS } from '@/constants/permissions'
+import { useSshWorkspaceTabsStore } from '@/store/ssh-session-tabs-store'
+import { useLaunchConnectionContext } from '@/contexts/LaunchConnectionContext'
+import { getWorkspaceDescriptor } from '@/workspaces/protocolWorkspaceRegistry'
 
 interface SidebarProps {
   isOpen?: boolean
@@ -26,7 +29,13 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   const { hasPermission, hasAnyPermission, hasAllPermissions } = usePermissions()
+  const launchContext = useLaunchConnectionContext()
+  const openSession = useSshWorkspaceTabsStore((state) => state.openSession)
+  const ensureTab = useSshWorkspaceTabsStore((state) => state.ensureTab)
+  const focusSession = useSshWorkspaceTabsStore((state) => state.focusSession)
+  const setActiveTab = useSshWorkspaceTabsStore((state) => state.setActiveTab)
 
   const canViewConnections = hasAnyPermission([
     PERMISSIONS.CONNECTION.VIEW,
@@ -227,36 +236,74 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                     : undefined
 
                   return (
-                    <NavLink
-                      key={item.connectionId}
-                      to={`/connections/${item.connectionId}`}
-                      className={({ isActive }) =>
-                        cn(
-                          'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition',
-                          isActive
-                            ? 'bg-primary text-primary-foreground shadow'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                        )
-                      }
-                      title={adminTooltip ?? latestSeenLabel ?? undefined}
-                    >
-                      <span className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                    <div key={item.connectionId} className="rounded-md border border-border/40 p-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void launchContext.openById(item.connectionId)
+                          onClose?.()
+                        }}
+                        className="flex w-full items-center justify-between rounded-md px-2 py-1 text-left text-sm font-medium text-foreground transition hover:bg-muted"
+                        title={adminTooltip ?? latestSeenLabel ?? undefined}
+                      >
                         <span className="truncate">{item.connectionName}</span>
-                      </span>
-                      <span className="flex items-center gap-2">
-                        {latestSeenLabel && (
-                          <span className="hidden text-[11px] text-muted-foreground sm:inline">
-                            {latestSeenLabel}
-                          </span>
-                        )}
-                        {item.sessionCount > 1 && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            {item.sessionCount}
-                          </Badge>
-                        )}
-                      </span>
-                    </NavLink>
+                        <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                          {item.sessionCount}
+                          {latestSeenLabel && (
+                            <Badge variant="outline" className="text-[10px] font-semibold">
+                              {latestSeenLabel}
+                            </Badge>
+                          )}
+                        </span>
+                      </button>
+
+                      <div className="mt-2 space-y-1">
+                        {item.sessions.map((sessionRecord) => {
+                          const sessionActive = location.pathname.startsWith(
+                            `/active-sessions/${sessionRecord.id}`
+                          )
+                          return (
+                            <button
+                              key={sessionRecord.id}
+                              type="button"
+                              className={cn(
+                                'w-full rounded-md px-2 py-1 text-left text-xs transition',
+                                sessionActive
+                                  ? 'bg-primary text-primary-foreground shadow'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                              )}
+                              onClick={() => {
+                                const descriptorForSession = getWorkspaceDescriptor(
+                                  sessionRecord.descriptor_id ?? sessionRecord.protocol_id
+                                )
+                                openSession({
+                                  sessionId: sessionRecord.id,
+                                  connectionId: sessionRecord.connection_id,
+                                  connectionName: sessionRecord.connection_name,
+                                })
+                                const terminalTab = ensureTab(sessionRecord.id, 'terminal', {
+                                  title: 'Terminal',
+                                  closable: false,
+                                })
+                                focusSession(sessionRecord.id)
+                                setActiveTab(sessionRecord.id, terminalTab.id)
+                                navigate(descriptorForSession.defaultRoute(sessionRecord.id))
+                                onClose?.()
+                              }}
+                            >
+                              <span className="block truncate font-medium">
+                                {sessionRecord.user_name?.trim() || sessionRecord.user_id}
+                              </span>
+                              <span className="block truncate text-[10px] text-muted-foreground">
+                                {sessionRecord.connection_name ??
+                                  sessionRecord.host ??
+                                  sessionRecord.connection_id}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   )
                 })}
               </div>
@@ -269,9 +316,6 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
             <button
               type="button"
               onClick={() => {
-                if (isSettingsRouteActive) {
-                  return
-                }
                 setSettingsOpen((open) => !open)
               }}
               className="flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:bg-muted/60"

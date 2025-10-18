@@ -18,12 +18,13 @@ import (
 // ProfileHandler exposes current-user account management endpoints.
 type ProfileHandler struct {
 	users *services.UserService
+	prefs *services.UserPreferencesService
 	totp  *mfa.TOTPService
 }
 
 // NewProfileHandler configures a profile handler with required services.
-func NewProfileHandler(users *services.UserService, totp *mfa.TOTPService) *ProfileHandler {
-	return &ProfileHandler{users: users, totp: totp}
+func NewProfileHandler(users *services.UserService, prefs *services.UserPreferencesService, totp *mfa.TOTPService) *ProfileHandler {
+	return &ProfileHandler{users: users, prefs: prefs, totp: totp}
 }
 
 type updateProfileRequest struct {
@@ -48,6 +49,26 @@ type mfaSetupResponse struct {
 	OTPAuthURL string   `json:"otpauth_url"`
 	QRCode     string   `json:"qr_code"`
 	Backup     []string `json:"backup_codes"`
+}
+
+type updatePreferencesRequest struct {
+	SSH sshPreferencesRequest `json:"ssh" validate:"required"`
+}
+
+type sshPreferencesRequest struct {
+	Terminal sshTerminalPreferencesRequest `json:"terminal" validate:"required"`
+	SFTP     sshSFTPPreferencesRequest     `json:"sftp" validate:"required"`
+}
+
+type sshTerminalPreferencesRequest struct {
+	FontFamily   string `json:"font_family" validate:"omitempty,max=128"`
+	CursorStyle  string `json:"cursor_style" validate:"omitempty,oneof=block underline beam bar line vertical"`
+	CopyOnSelect bool   `json:"copy_on_select"`
+}
+
+type sshSFTPPreferencesRequest struct {
+	ShowHiddenFiles bool `json:"show_hidden_files"`
+	AutoOpenQueue   bool `json:"auto_open_queue"`
 }
 
 // Update modifies the authenticated user's profile details.
@@ -79,6 +100,71 @@ func (h *ProfileHandler) Update(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusOK, marshalProfileUser(user))
+}
+
+// GetPreferences returns the current user's preference profile.
+func (h *ProfileHandler) GetPreferences(c *gin.Context) {
+	if h.prefs == nil {
+		response.Error(c, appErrors.ErrInternalServer)
+		return
+	}
+
+	v, ok := c.Get("userID")
+	if !ok {
+		response.Error(c, appErrors.ErrUnauthorized)
+		return
+	}
+	userID, _ := v.(string)
+
+	prefs, err := h.prefs.Get(requestContext(c), userID)
+	if err != nil {
+		respondUserError(c, err, "retrieved preferences")
+		return
+	}
+
+	response.Success(c, http.StatusOK, prefs)
+}
+
+// UpdatePreferences applies updated preference values for the current user.
+func (h *ProfileHandler) UpdatePreferences(c *gin.Context) {
+	if h.prefs == nil {
+		response.Error(c, appErrors.ErrInternalServer)
+		return
+	}
+
+	var body updatePreferencesRequest
+	if !bindAndValidate(c, &body) {
+		return
+	}
+
+	v, ok := c.Get("userID")
+	if !ok {
+		response.Error(c, appErrors.ErrUnauthorized)
+		return
+	}
+	userID, _ := v.(string)
+
+	payload := services.UserPreferences{
+		SSH: services.SSHPreferences{
+			Terminal: services.SSHTerminalPreferences{
+				FontFamily:   strings.TrimSpace(body.SSH.Terminal.FontFamily),
+				CursorStyle:  body.SSH.Terminal.CursorStyle,
+				CopyOnSelect: body.SSH.Terminal.CopyOnSelect,
+			},
+			SFTP: services.SSHSFTPPreferences{
+				ShowHiddenFiles: body.SSH.SFTP.ShowHiddenFiles,
+				AutoOpenQueue:   body.SSH.SFTP.AutoOpenQueue,
+			},
+		},
+	}
+
+	updated, err := h.prefs.Update(requestContext(c), userID, payload)
+	if err != nil {
+		respondUserError(c, err, "updated preferences")
+		return
+	}
+
+	response.Success(c, http.StatusOK, updated)
 }
 
 // ChangePassword updates the authenticated user's password after verifying the current value.

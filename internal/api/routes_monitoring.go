@@ -15,4 +15,5 @@ func registerMonitoringRoutes(api *gin.RouterGroup, handler *handlers.Monitoring
 
 	group := api.Group("/monitoring")
 	group.GET("/summary", middleware.RequirePermission(checker, "monitoring.view"), handler.Summary)
+	group.POST("/vitals", handler.RecordVitals)
 }

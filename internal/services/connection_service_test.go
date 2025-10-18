@@ -9,6 +9,7 @@ import (
 	"gorm.io/datatypes"
 
 	"github.com/charlesng35/shellcn/internal/database/testutil"
+	"github.com/charlesng35/shellcn/internal/drivers"
 	"github.com/charlesng35/shellcn/internal/models"
 )
 
@@ -158,6 +159,88 @@ func TestConnectionServiceGetVisibleRespectsPermissions(t *testing.T) {
 	require.Equal(t, private.ID, dto.ID)
 	require.Equal(t, "ssh", dto.ProtocolID)
 	require.Equal(t, "critical", dto.Metadata["tag"])
+}
+
+func TestConnectionServiceCreateWithTemplate(t *testing.T) {
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+
+	user := models.User{
+		BaseModel: models.BaseModel{ID: "creator-1"},
+		Username:  "creator",
+		Email:     "creator@example.com",
+		Password:  "secret",
+	}
+	require.NoError(t, db.Create(&user).Error)
+
+	sections := []map[string]any{
+		{
+			"id":    "endpoint",
+			"label": "Endpoint",
+			"fields": []map[string]any{
+				{
+					"key":      "host",
+					"label":    "Host",
+					"type":     "string",
+					"required": true,
+					"binding": map[string]any{
+						"target":   "target",
+						"index":    0,
+						"property": "host",
+					},
+				},
+				{
+					"key":     "port",
+					"label":   "Port",
+					"type":    "target_port",
+					"default": 22,
+					"binding": map[string]any{
+						"target":   "target",
+						"index":    0,
+						"property": "port",
+					},
+				},
+			},
+		},
+	}
+	sectionsJSON, err := json.Marshal(sections)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&models.ConnectionTemplate{
+		DriverID:    "ssh",
+		Version:     "2025-01-15",
+		DisplayName: "SSH Connection",
+		Sections:    datatypes.JSON(sectionsJSON),
+	}).Error)
+
+	templateSvc, err := NewConnectionTemplateService(db, drivers.NewRegistry())
+	require.NoError(t, err)
+
+	svc, err := NewConnectionService(db, &mockPermissionChecker{
+		grants: map[string]bool{
+			"connection.create": true,
+			"connection.view":   true,
+		},
+	}, WithConnectionTemplates(templateSvc))
+	require.NoError(t, err)
+
+	dto, err := svc.Create(context.Background(), user.ID, CreateConnectionInput{
+		Name:        "Dynamic SSH",
+		Description: "",
+		ProtocolID:  "ssh",
+		Fields: map[string]any{
+			"host": "host.internal",
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, dto)
+	require.Equal(t, "Dynamic SSH", dto.Name)
+	require.Equal(t, "ssh", dto.ProtocolID)
+	require.Contains(t, dto.Metadata, "connection_template")
+
+	var storedTargets []models.ConnectionTarget
+	require.NoError(t, db.Where("connection_id = ?", dto.ID).Find(&storedTargets).Error)
+	require.Len(t, storedTargets, 1)
+	require.Equal(t, "host.internal", storedTargets[0].Host)
+	require.Equal(t, 22, storedTargets[0].Port)
 }
 
 func TestConnectionServiceCountByFolder(t *testing.T) {

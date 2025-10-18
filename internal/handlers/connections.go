@@ -98,6 +98,7 @@ func (h *ConnectionHandler) Create(c *gin.Context) {
 		FolderID:       payload.FolderID,
 		Metadata:       payload.Metadata,
 		Settings:       payload.Settings,
+		Fields:         payload.Fields,
 		IdentityID:     payload.IdentityID,
 		InlineIdentity: inlineIdentity,
 	})
@@ -121,6 +122,37 @@ func (h *ConnectionHandler) Create(c *gin.Context) {
 	}
 
 	response.Success(c, http.StatusCreated, connection)
+}
+
+// Update modifies an existing connection with provided payload.
+func (h *ConnectionHandler) Update(c *gin.Context) {
+	userID := c.GetString(middleware.CtxUserIDKey)
+	if userID == "" {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+
+	var payload updateConnectionPayload
+	if !bindAndValidate(c, &payload) {
+		return
+	}
+
+	ctx := requestContext(c)
+	connection, err := h.svc.Update(ctx, userID, c.Param("id"), services.UpdateConnectionInput{
+		Name:        payload.Name,
+		Description: payload.Description,
+		TeamID:      payload.TeamID,
+		FolderID:    payload.FolderID,
+		Metadata:    payload.Metadata,
+		Settings:    payload.Settings,
+		Fields:      payload.Fields,
+		IdentityID:  payload.IdentityID,
+	})
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.Success(c, http.StatusOK, connection)
 }
 
 // Summary returns connection counts grouped by protocol for the authenticated user.
@@ -171,6 +203,23 @@ func (h *ConnectionHandler) Get(c *gin.Context) {
 	response.Success(c, http.StatusOK, connection)
 }
 
+// Delete removes a connection when authorised.
+func (h *ConnectionHandler) Delete(c *gin.Context) {
+	userID := c.GetString(middleware.CtxUserIDKey)
+	if userID == "" {
+		response.Error(c, errors.ErrUnauthorized)
+		return
+	}
+
+	ctx := requestContext(c)
+	if err := h.svc.Delete(ctx, userID, c.Param("id")); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
 func parseIncludes(includeParam string) (bool, bool) {
 	if includeParam == "" {
 		return true, false
@@ -216,9 +265,21 @@ type createConnectionPayload struct {
 	FolderID             *string                `json:"folder_id"`
 	Metadata             map[string]any         `json:"metadata"`
 	Settings             map[string]any         `json:"settings"`
+	Fields               map[string]any         `json:"fields"`
 	GrantTeamPermissions []string               `json:"grant_team_permissions"`
 	IdentityID           *string                `json:"identity_id"`
 	InlineIdentity       *inlineIdentityPayload `json:"inline_identity"`
+}
+
+type updateConnectionPayload struct {
+	Name        string         `json:"name" binding:"required"`
+	Description string         `json:"description"`
+	TeamID      *string        `json:"team_id"`
+	FolderID    *string        `json:"folder_id"`
+	Metadata    map[string]any `json:"metadata"`
+	Settings    map[string]any `json:"settings"`
+	Fields      map[string]any `json:"fields"`
+	IdentityID  *string        `json:"identity_id"`
 }
 
 type inlineIdentityPayload struct {

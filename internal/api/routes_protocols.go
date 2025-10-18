@@ -14,5 +14,6 @@ func registerProtocolRoutes(api *gin.RouterGroup, handler *handlers.ProtocolHand
 		group.GET("", middleware.RequirePermission(checker, "connection.view"), handler.ListAll)
 		group.GET("/available", middleware.RequirePermission(checker, "connection.view"), handler.ListForUser)
 		group.GET("/:id/permissions", middleware.RequirePermission(checker, "connection.view"), handler.ListPermissions)
+		group.GET("/:id/connection-template", middleware.RequirePermission(checker, "connection.view"), handler.GetConnectionTemplate)
 	}
 }

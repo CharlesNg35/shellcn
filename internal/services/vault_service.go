@@ -375,6 +375,25 @@ func (s *VaultService) AuthorizeIdentityUse(ctx context.Context, viewer ViewerCo
 	return identity, nil
 }
 
+// LoadIdentitySecret returns the decrypted payload for an identity when the viewer has usage permission.
+func (s *VaultService) LoadIdentitySecret(ctx context.Context, viewer ViewerContext, identityID string) (map[string]any, error) {
+	identity, err := s.AuthorizeIdentityUse(ctx, viewer, identityID)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.TrimSpace(identity.EncryptedPayload) == "" {
+		return nil, apperrors.NewBadRequest("identity payload is empty")
+	}
+
+	secret, err := s.decryptPayload(identity.EncryptedPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	return secret, nil
+}
+
 // CreateIdentity stores a new encrypted identity and returns the persisted record.
 func (s *VaultService) CreateIdentity(ctx context.Context, viewer ViewerContext, input CreateIdentityInput) (dto IdentityDTO, err error) {
 	ctx = ensureContext(ctx)

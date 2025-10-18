@@ -40,7 +40,7 @@ func TestProtocolHandlerListAll(t *testing.T) {
 
 	svc, err := services.NewProtocolService(db, nil)
 	require.NoError(t, err)
-	handler := NewProtocolHandler(svc)
+	handler := NewProtocolHandler(svc, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/protocols", nil)
 	rec := httptest.NewRecorder()
@@ -64,7 +64,7 @@ func TestProtocolHandlerListForUser(t *testing.T) {
 	}}
 	svc, err := services.NewProtocolService(db, checker)
 	require.NoError(t, err)
-	handler := NewProtocolHandler(svc)
+	handler := NewProtocolHandler(svc, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/protocols/available", nil)
 	rec := httptest.NewRecorder()
@@ -85,7 +85,7 @@ func TestProtocolHandlerListPermissions(t *testing.T) {
 
 	svc, err := services.NewProtocolService(db, nil)
 	require.NoError(t, err)
-	handler := NewProtocolHandler(svc)
+	handler := NewProtocolHandler(svc, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/protocols/ssh/permissions", nil)
 	rec := httptest.NewRecorder()
@@ -94,6 +94,50 @@ func TestProtocolHandlerListPermissions(t *testing.T) {
 	ctx.Params = gin.Params{{Key: "id", Value: "ssh"}}
 
 	handler.ListPermissions(ctx)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestProtocolHandlerGetConnectionTemplate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	db := testutil.MustOpenTestDB(t, testutil.WithAutoMigrate())
+	ensureHandlerProtocolPermissions(t)
+
+	insertProtocolRecord(t, db, models.ConnectionProtocol{ProtocolID: "ssh", Name: "SSH", Module: "ssh", DriverEnabled: true, ConfigEnabled: true}, drivers.Capabilities{Terminal: true})
+
+	sections := []map[string]any{
+		{
+			"id":     "endpoint",
+			"label":  "Endpoint",
+			"fields": []map[string]any{{"key": "host", "label": "Host", "type": "string", "required": true}},
+		},
+	}
+	sectionsJSON, err := json.Marshal(sections)
+	require.NoError(t, err)
+	metadataJSON, err := json.Marshal(map[string]any{"requires_identity": true})
+	require.NoError(t, err)
+
+	require.NoError(t, db.Create(&models.ConnectionTemplate{
+		DriverID:    "ssh",
+		Version:     "1.0.0",
+		DisplayName: "SSH Connection",
+		Sections:    datatypes.JSON(sectionsJSON),
+		Metadata:    datatypes.JSON(metadataJSON),
+	}).Error)
+
+	templateSvc, err := services.NewConnectionTemplateService(db, drivers.NewRegistry())
+	require.NoError(t, err)
+	svc, err := services.NewProtocolService(db, nil)
+	require.NoError(t, err)
+	handler := NewProtocolHandler(svc, templateSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/protocols/ssh/connection-template", nil)
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Request = req
+	ctx.Params = gin.Params{{Key: "id", Value: "ssh"}}
+
+	handler.GetConnectionTemplate(ctx)
 
 	require.Equal(t, http.StatusOK, rec.Code)
 }

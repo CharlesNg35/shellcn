@@ -16,3 +16,10 @@ func registerConnectionSessionRoutes(api *gin.RouterGroup, handler *handlers.Act
 	connections := api.Group("/connections")
 	connections.GET("/active", middleware.RequirePermission(checker, "connection.view"), handler.ListActive)
 }
+
+func registerActiveSessionLaunchRoutes(api *gin.RouterGroup, handler *handlers.ActiveSessionLaunchHandler) {
+	if handler == nil {
+		return
+	}
+	api.POST("/active-sessions", handler.Launch)
+}

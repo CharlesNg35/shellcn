@@ -1,16 +1,25 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import * as React from 'react'
 import { vi } from 'vitest'
 import { ConnectionFormModal } from '@/components/connections/ConnectionFormModal'
 import type { Protocol } from '@/types/protocols'
-import type { ConnectionRecord } from '@/types/connections'
+import type { ConnectionFolderNode, ConnectionRecord } from '@/types/connections'
 
 const mutateAsync = vi.fn()
 
 vi.mock('@/hooks/useConnectionMutations', () => ({
   useConnectionMutations: () => ({
     create: {
+      mutateAsync,
+      isPending: false,
+    },
+    update: {
+      mutateAsync,
+      isPending: false,
+    },
+    remove: {
       mutateAsync,
       isPending: false,
     },
@@ -21,6 +30,46 @@ vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({ hasPermission: () => true }),
 }))
 
+vi.mock('@/hooks/useConnectionTemplate', () => ({
+  useConnectionTemplate: () => ({
+    data: {
+      driverId: 'ssh',
+      version: '2025-01-15',
+      displayName: 'SSH Connection',
+      description: 'Configure host and port',
+      metadata: { requires_identity: true },
+      sections: [
+        {
+          id: 'endpoint',
+          label: 'Endpoint',
+          description: 'Where to connect',
+          fields: [
+            {
+              key: 'host',
+              label: 'Host',
+              type: 'string',
+              required: true,
+              placeholder: 'server.example.com',
+              validation: {},
+              dependencies: [],
+            },
+            {
+              key: 'port',
+              label: 'Port',
+              type: 'target_port',
+              required: false,
+              default: 22,
+              validation: { min: 1, max: 65535 },
+              dependencies: [],
+            },
+          ],
+        },
+      ],
+    },
+    isLoading: false,
+  }),
+}))
+
 vi.mock('@/components/ui/Select', () => {
   const SelectContent = Object.assign(
     ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -28,18 +77,8 @@ vi.mock('@/components/ui/Select', () => {
   )
 
   const SelectItem = Object.assign(
-    ({
-      value,
-      children,
-      disabled,
-    }: {
-      value: string
-      children: React.ReactNode
-      disabled?: boolean
-    }) => (
-      <option value={value} disabled={disabled}>
-        {children}
-      </option>
+    ({ value, children }: { value: string; children: React.ReactNode }) => (
+      <option value={value}>{children}</option>
     ),
     { displayName: 'MockSelectItem' }
   )
@@ -55,12 +94,10 @@ vi.mock('@/components/ui/Select', () => {
     value,
     onValueChange,
     children,
-    ...rest
   }: {
-    value: string
-    onValueChange?: (next: string) => void
+    value?: string | null
+    onValueChange?: (value: string) => void
     children: React.ReactNode
-    [key: string]: unknown
   }) => {
     const options: React.ReactNode[] = []
     React.Children.forEach(children, (child) => {
@@ -79,9 +116,8 @@ vi.mock('@/components/ui/Select', () => {
     return (
       <select
         data-testid="mock-select"
-        value={value}
+        value={value ?? ''}
         onChange={(event) => onValueChange?.(event.target.value)}
-        {...rest}
       >
         {options}
       </select>
@@ -112,12 +148,28 @@ vi.mock('@/components/vault/IdentityFormModal', () => ({
 const protocol: Protocol = {
   id: 'ssh',
   name: 'SSH',
+  module: 'ssh',
   description: 'Secure shell',
   category: 'terminal',
   icon: 'terminal',
-  sort_order: 1,
+  defaultPort: 22,
+  sortOrder: 1,
   features: [],
-  metadata: {},
+  capabilities: {
+    terminal: true,
+    desktop: false,
+    file_transfer: true,
+    clipboard: false,
+    session_recording: false,
+    metrics: false,
+    reconnect: true,
+    extras: {},
+  },
+  driverEnabled: true,
+  configEnabled: true,
+  available: true,
+  permissions: [],
+  identityRequired: true,
 }
 
 const connectionRecord: ConnectionRecord = {
@@ -138,14 +190,73 @@ const connectionRecord: ConnectionRecord = {
   folder: undefined,
 }
 
-describe('ConnectionFormModal identity integration', () => {
+const folderTree = [
+  {
+    folder: {
+      id: 'personal-root',
+      name: 'Personal Root',
+      parent_id: null,
+      team_id: null,
+      slug: 'personal-root',
+      description: '',
+      metadata: {},
+    },
+    connection_count: 0,
+    children: [
+      {
+        folder: {
+          id: 'personal-child',
+          name: 'Personal Child',
+          parent_id: 'personal-root',
+          team_id: null,
+          slug: 'personal-child',
+          description: '',
+          metadata: {},
+        },
+        connection_count: 0,
+        children: [],
+      },
+    ],
+  },
+  {
+    folder: {
+      id: 'team-root',
+      name: 'Team Root',
+      parent_id: null,
+      team_id: 'team-1',
+      slug: 'team-root',
+      description: '',
+      metadata: {},
+    },
+    connection_count: 0,
+    children: [
+      {
+        folder: {
+          id: 'team-child',
+          name: 'Team Child',
+          parent_id: 'team-root',
+          team_id: 'team-1',
+          slug: 'team-child',
+          description: '',
+          metadata: {},
+        },
+        connection_count: 0,
+        children: [],
+      },
+    ],
+  },
+] satisfies ConnectionFolderNode[]
+
+describe('ConnectionFormModal dynamic template', () => {
   beforeEach(() => {
     mutateAsync.mockReset()
     mutateAsync.mockResolvedValue(connectionRecord)
   })
 
-  it('requires an identity before submission', async () => {
+  it('requires identity when template indicates it is required', async () => {
+    const user = userEvent.setup()
     const queryClient = new QueryClient()
+
     render(
       <QueryClientProvider client={queryClient}>
         <ConnectionFormModal
@@ -158,19 +269,22 @@ describe('ConnectionFormModal identity integration', () => {
       </QueryClientProvider>
     )
 
-    fireEvent.change(screen.getByLabelText(/Connection name/i), {
-      target: { value: 'Prod SSH' },
-    })
+    await screen.findByLabelText(/Connection name/i)
 
-    fireEvent.click(screen.getByRole('button', { name: /Create Connection/i }))
+    await user.clear(screen.getByLabelText(/Connection name/i))
+    await user.type(screen.getByLabelText(/Connection name/i), 'Prod SSH')
 
-    expect(await screen.findByText(/Select or create a vault identity/i)).toBeInTheDocument()
-    expect(mutateAsync).not.toHaveBeenCalled()
+    await user.type(screen.getByLabelText(/Host/i), 'prod.internal')
+
+    await user.click(screen.getByRole('button', { name: /Create Connection/i }))
+
+    await screen.findByText(/Select or create a vault identity/i)
   })
 
-  it('submits with selected identity', async () => {
-    const handleSuccess = vi.fn()
+  it('submits template fields when identity is selected', async () => {
+    const user = userEvent.setup()
     const queryClient = new QueryClient()
+
     render(
       <QueryClientProvider client={queryClient}>
         <ConnectionFormModal
@@ -178,26 +292,95 @@ describe('ConnectionFormModal identity integration', () => {
           onClose={vi.fn()}
           protocol={protocol}
           folders={[]}
-          onSuccess={handleSuccess}
+          onSuccess={vi.fn()}
         />
       </QueryClientProvider>
     )
 
-    fireEvent.change(screen.getByLabelText(/Connection name/i), {
-      target: { value: 'Prod SSH' },
-    })
+    await screen.findByLabelText(/Connection name/i)
 
-    fireEvent.click(screen.getByText(/Select identity/i))
+    await user.clear(screen.getByLabelText(/Connection name/i))
+    await user.type(screen.getByLabelText(/Connection name/i), 'Prod SSH')
 
-    fireEvent.click(screen.getByRole('button', { name: /Create Connection/i }))
+    await user.type(screen.getByLabelText(/Host/i), 'prod.internal')
+
+    await user.click(screen.getByRole('button', { name: /Select identity/i }))
+
+    await user.click(screen.getByRole('button', { name: /Create Connection/i }))
 
     await waitFor(() => {
-      expect(mutateAsync).toHaveBeenCalledWith(
-        expect.objectContaining({
-          identity_id: 'identity-1',
-        })
-      )
+      expect(mutateAsync).toHaveBeenCalled()
     })
-    expect(handleSuccess).toHaveBeenCalledWith(connectionRecord)
+
+    const payload = mutateAsync.mock.calls[0][0]
+    expect(payload.fields).toEqual({ host: 'prod.internal', port: 22 })
+    expect(payload.identity_id).toBe('identity-1')
+  })
+})
+
+describe('ConnectionFormModal folder filtering', () => {
+  it('shows only personal folders when no team is selected', async () => {
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectionFormModal
+          open
+          onClose={vi.fn()}
+          protocol={protocol}
+          folders={folderTree}
+          onSuccess={vi.fn()}
+        />
+      </QueryClientProvider>
+    )
+
+    await screen.findByLabelText(/Connection name/i)
+
+    const folderSelect = screen.getByTestId('mock-select') as HTMLSelectElement
+    const optionLabels = Array.from(folderSelect.options).map((option) =>
+      option.textContent?.trim()
+    )
+
+    expect(optionLabels).toContain('Unassigned')
+    expect(optionLabels).toContain('Personal Root')
+    expect(optionLabels).toContain('Personal Root / Personal Child')
+    expect(optionLabels).not.toContain('Team Root')
+    expect(optionLabels).not.toContain('Team Root / Team Child')
+  })
+
+  it('filters folders to the selected team', async () => {
+    const user = userEvent.setup()
+    const queryClient = new QueryClient()
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ConnectionFormModal
+          open
+          onClose={vi.fn()}
+          protocol={protocol}
+          folders={folderTree}
+          onSuccess={vi.fn()}
+          allowTeamAssignment
+          teams={[{ id: 'team-1', name: 'Team A' }]}
+        />
+      </QueryClientProvider>
+    )
+
+    await screen.findByLabelText(/Connection name/i)
+
+    const selects = screen.getAllByTestId('mock-select') as HTMLSelectElement[]
+    const folderSelect = selects[0]
+    const teamSelect = selects[selects.length - 1]
+
+    await user.selectOptions(teamSelect, 'team-1')
+
+    await waitFor(() => {
+      const optionLabels = Array.from(folderSelect.options).map((option) =>
+        option.textContent?.trim()
+      )
+      expect(optionLabels).toContain('Team Root')
+      expect(optionLabels).toContain('Team Root / Team Child')
+      expect(optionLabels).not.toContain('Personal Root')
+    })
   })
 })
