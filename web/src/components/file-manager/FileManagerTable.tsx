@@ -1,10 +1,10 @@
 import { format } from 'date-fns'
-import { Download, MoreVertical, Trash2 } from 'lucide-react'
-import type { ReactNode, RefObject } from 'react'
+import { Download, Trash2, File, FolderOpen } from 'lucide-react'
+import type { RefObject } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/Button'
 import type { SftpEntry } from '@/types/sftp'
-import { displayPath, formatBytes } from './utils'
+import { formatBytes } from './utils'
 import { cn } from '@/lib/utils/cn'
 
 interface FileManagerTableProps {
@@ -13,13 +13,12 @@ interface FileManagerTableProps {
   onDownload: (entry: SftpEntry) => void
   onDelete: (entry: SftpEntry) => void
   canWrite: boolean
-  renderIcon: (entry: SftpEntry) => ReactNode
   scrollContainerRef: RefObject<HTMLElement | null>
 }
 
-const ROW_HEIGHT = 56
+const ROW_HEIGHT = 48
 const GRID_TEMPLATE_CLASS =
-  'grid-cols-[minmax(220px,2.5fr)_minmax(120px,1fr)_minmax(160px,1fr)_minmax(120px,1fr)_minmax(140px,1fr)]'
+  'grid-cols-[minmax(280px,3fr)_minmax(100px,0.8fr)_minmax(140px,1.2fr)_minmax(100px,0.8fr)_80px]'
 
 export function FileManagerTable({
   entries,
@@ -27,7 +26,6 @@ export function FileManagerTable({
   onDownload,
   onDelete,
   canWrite,
-  renderIcon,
   scrollContainerRef,
 }: FileManagerTableProps) {
   const virtualizer = useVirtualizer({
@@ -47,11 +45,14 @@ export function FileManagerTable({
 
   return (
     <div role="table" aria-rowcount={entries.length} className="min-w-full text-sm">
-      <div role="rowgroup" className="sticky top-0 z-10 bg-muted/70 backdrop-blur">
+      <div
+        role="rowgroup"
+        className="sticky top-0 z-10 border-b border-border/50 bg-muted/50 backdrop-blur-sm"
+      >
         <div
           role="row"
           className={cn(
-            'grid items-center px-4 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground',
+            'grid items-center gap-3 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground',
             GRID_TEMPLATE_CLASS
           )}
         >
@@ -59,7 +60,7 @@ export function FileManagerTable({
           <span role="columnheader">Size</span>
           <span role="columnheader">Modified</span>
           <span role="columnheader">Mode</span>
-          <span role="columnheader" className="text-right">
+          <span role="columnheader" className="text-center">
             Actions
           </span>
         </div>
@@ -73,46 +74,53 @@ export function FileManagerTable({
               key={entry.path}
               role="row"
               className={cn(
-                'group absolute left-0 right-0 grid cursor-pointer border-b border-border/80 bg-background/40 hover:bg-muted/40',
+                'group absolute left-0 right-0 grid cursor-pointer items-center gap-3 border-b border-border/40 bg-background/60 px-4 transition-colors hover:bg-accent/50',
                 GRID_TEMPLATE_CLASS
               )}
               style={{ transform: `translateY(${virtualRow.start}px)`, height: virtualRow.size }}
               onDoubleClick={() => onActivate(entry)}
             >
-              <div role="cell" className="flex items-center gap-3 px-4 py-2">
-                {renderIcon(entry)}
-                <div className="flex flex-col">
-                  <span
-                    className={cn('font-medium text-foreground', { 'text-primary': isDirectory })}
-                  >
-                    {entry.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{displayPath(entry.path)}</span>
-                </div>
+              <div role="cell" className="flex min-w-0 items-center gap-2.5">
+                {isDirectory ? (
+                  <FolderOpen className="h-4 w-4 flex-shrink-0 text-blue-500" aria-hidden />
+                ) : (
+                  <File className="h-4 w-4 flex-shrink-0 text-slate-400" aria-hidden />
+                )}
+                <span
+                  className={cn(
+                    'truncate text-sm font-medium',
+                    isDirectory ? 'text-foreground' : 'text-foreground'
+                  )}
+                  title={entry.name}
+                >
+                  {entry.name}
+                </span>
               </div>
-              <div role="cell" className="px-4 py-2 text-muted-foreground">
-                {isDirectory ? '—' : formatBytes(entry.size)}
+              <div role="cell" className="text-xs text-muted-foreground">
+                {isDirectory ? '—' : formatBytes(entry.size ?? 0)}
               </div>
-              <div role="cell" className="px-4 py-2 text-muted-foreground">
-                {format(entry.modifiedAt, 'yyyy-MM-dd HH:mm')}
+              <div role="cell" className="text-xs text-muted-foreground">
+                {entry.modifiedAt ? format(new Date(entry.modifiedAt), 'MMM dd, yyyy HH:mm') : '—'}
               </div>
-              <div role="cell" className="px-4 py-2 text-muted-foreground">
-                {entry.mode}
+              <div role="cell" className="font-mono text-[11px] text-muted-foreground">
+                {entry.mode || '—'}
               </div>
-              <div role="cell" className="px-4 py-2">
-                <div className="flex justify-end gap-1 opacity-0 transition group-hover:opacity-100">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Download"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onDownload(entry)
-                    }}
-                    disabled={isDirectory}
-                  >
-                    <Download className="h-4 w-4" aria-hidden />
-                  </Button>
+              <div role="cell" className="flex items-center justify-center">
+                <div className="flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+                  {!isDirectory && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Download"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onDownload(entry)
+                      }}
+                      className="h-7 w-7"
+                    >
+                      <Download className="h-3.5 w-3.5" aria-hidden />
+                    </Button>
+                  )}
                   {canWrite && (
                     <Button
                       variant="ghost"
@@ -122,13 +130,11 @@ export function FileManagerTable({
                         event.stopPropagation()
                         onDelete(entry)
                       }}
+                      className="h-7 w-7 hover:text-destructive"
                     >
-                      <Trash2 className="h-4 w-4 text-destructive" aria-hidden />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" aria-label="More actions" disabled>
-                    <MoreVertical className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  </Button>
                 </div>
               </div>
             </div>

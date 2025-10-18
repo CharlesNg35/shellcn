@@ -535,9 +535,8 @@ func (h *SSHSessionHandler) ServeTunnel(c *gin.Context, claims *iauth.Claims) {
 			OnHeartbeat: func() {
 				if h.lifecycle != nil {
 					_ = h.lifecycle.Heartbeat(context.Background(), sessionID)
-				} else if h.activeSessions != nil {
-					h.activeSessions.Heartbeat(sessionID)
 				}
+				// Note: lifecycle service handles activeSessions heartbeat internally
 			},
 			OnEvent: func(event string, payload any) {
 				if h.recordings != nil && (event == "stdout" || event == "stderr") {
@@ -628,6 +627,7 @@ func (h *SSHSessionHandler) upgradeConnection(c *gin.Context) (*websocket.Conn, 
 		ReadBufferSize:    4096,
 		WriteBufferSize:   4096,
 		EnableCompression: true,
+		Subprotocols:      []string{"shellcn.ssh.v1"},
 		CheckOrigin: func(r *http.Request) bool {
 			origin := strings.TrimSpace(r.Header.Get("Origin"))
 			if origin == "" {

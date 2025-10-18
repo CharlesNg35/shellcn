@@ -36,14 +36,17 @@ export function parentPath(path: string): string {
 }
 
 export function formatBytes(value: number): string {
-  if (!Number.isFinite(value)) {
+  if (!Number.isFinite(value) || value === undefined || value === null) {
     return '—'
+  }
+  if (value === 0) {
+    return '0 B'
   }
   const absValue = Math.abs(value)
   if (absValue < 1024) {
     return `${value} B`
   }
-  const units = ['KB', 'MB', 'GB', 'TB']
+  const units = ['KiB', 'MiB', 'GiB', 'TiB']
   let index = -1
   let size = absValue
   do {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { ArrowUp, FileText, Folder, Home, Loader2, RefreshCcw, Upload } from 'lucide-react'
+import { ArrowUp, Home, Loader2, RefreshCcw, Upload } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/EmptyState'
@@ -477,13 +477,6 @@ export function FileManager({
     clearSessionTransfers(sessionId)
   }, [clearSessionTransfers, sessionId])
 
-  const renderEntryIcon = useCallback((entry: SftpEntry) => {
-    if (entry.isDir) {
-      return <Folder className="h-5 w-5 text-primary" aria-hidden />
-    }
-    return <FileText className="h-5 w-5 text-muted-foreground" aria-hidden />
-  }, [])
-
   const { getRootProps, isDragActive, isDragReject, isDragAccept } = useDropzone({
     noClick: true,
     noKeyboard: true,
@@ -604,7 +597,6 @@ export function FileManager({
                     onDownload={handleDownload}
                     onDelete={handleDeleteEntry}
                     canWrite={canWrite}
-                    renderIcon={renderEntryIcon}
                     scrollContainerRef={scrollContainerRef}
                   />
                 )}

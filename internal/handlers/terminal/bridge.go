@@ -171,7 +171,7 @@ func readPump(conn *websocket.Conn, streams Streams, sessionID string, outbound 
 			if handled := processControlMessage(streams, sessionID, payload, callbacks); handled {
 				continue
 			}
-			payload = []byte(strings.TrimRight(string(payload), "\r\n"))
+			// Don't trim raw terminal input - xterm sends proper control characters
 		}
 
 		if len(payload) == 0 || stdin == nil {
