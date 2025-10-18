@@ -8,6 +8,7 @@ import type { SessionRecordingStatus } from '@/types/session-recording'
 import type { TerminalSearchControls } from './useTerminalSearch'
 import type { WorkspaceTelemetryControls } from './useWorkspaceTelemetry'
 import type { SessionTunnelEntry } from '@/store/ssh-session-tunnel-store'
+import { cn } from '@/lib/utils/cn'
 
 const LazySshTerminal = lazy(() =>
   import('@/components/workspace/SshTerminal').then((module) => ({ default: module.SshTerminal }))
@@ -82,10 +83,20 @@ export function SshWorkspaceContent({
       onValueChange={onSelectTab}
       className="flex h-full flex-1 flex-col overflow-hidden"
     >
-      <div className="flex flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background/60 shadow-inner">
+      <div
+        className={cn(
+          'flex flex-1 flex-col overflow-hidden bg-background/60 shadow-inner',
+          activeTabId.includes('terminal') && 'border border-border rounded-xl'
+        )}
+      >
         <div className="flex-1 overflow-hidden">
           {tabs.map((tab) => (
-            <TabsContent key={tab.id} value={tab.id} className="h-full w-full" forceMount>
+            <TabsContent
+              key={tab.id}
+              value={tab.id}
+              className="h-full w-full overflow-hidden"
+              forceMount
+            >
               {tab.type === 'terminal' ? (
                 <Suspense fallback={<TerminalFallback />}>
                   <LazySshTerminal

@@ -14,6 +14,12 @@ import { useSshTerminalStream } from '@/hooks/useSshTerminalStream'
 import type { SshTerminalEvent } from '@/types/ssh'
 import { buildWebSocketUrl } from '@/lib/utils/websocket'
 import type { SessionTunnelEntry } from '@/store/ssh-session-tunnel-store'
+import { TERMINAL_FONT_SIZE } from '@/constants/terminal'
+
+import { Terminal } from '@xterm/xterm'
+import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
+import { WebglAddon } from '@xterm/addon-webgl'
 
 interface SshTerminalProps {
   sessionId: string
@@ -39,10 +45,10 @@ export interface SshTerminalHandle {
   clear: () => void
 }
 
-type TerminalCtor = typeof import('@xterm/xterm').Terminal
-type FitAddonCtor = typeof import('@xterm/addon-fit').FitAddon
-type WebglAddonCtor = typeof import('@xterm/addon-webgl').WebglAddon
-type SearchAddonCtor = typeof import('@xterm/addon-search').SearchAddon
+type TerminalCtor = typeof Terminal
+type FitAddonCtor = typeof FitAddon
+type WebglAddonCtor = typeof WebglAddon
+type SearchAddonCtor = typeof SearchAddon
 
 function isStreamData(event: SshTerminalEvent) {
   const name = event.event.toLowerCase()
@@ -83,7 +89,7 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
   const [isTerminalReady, setTerminalReady] = useState(false)
   const [status, setStatus] = useState<'connecting' | 'ready' | 'closed' | 'error'>('connecting')
   const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined)
-  const [fontSize, setFontSize] = useState<number>(14)
+  const [fontSize, setFontSize] = useState<number>(TERMINAL_FONT_SIZE.DEFAULT)
   const [tunnelState, setTunnelState] = useState<'idle' | 'connecting' | 'open' | 'failed'>(
     tunnel ? 'connecting' : 'idle'
   )
@@ -586,11 +592,6 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
   useEffect(() => {
     let disposed = false
     ;(async () => {
-      const [{ Terminal }, { FitAddon }, { SearchAddon }] = await Promise.all([
-        import('@xterm/xterm'),
-        import('@xterm/addon-fit'),
-        import('@xterm/addon-search'),
-      ])
       if (disposed) {
         return
       }
@@ -599,7 +600,7 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
         allowProposedApi: true,
         convertEol: true,
         cursorBlink: true,
-        fontSize: 13,
+        fontSize: TERMINAL_FONT_SIZE.DEFAULT,
         lineHeight: 1.2,
         fontFamily: 'JetBrains Mono, Menlo, Monaco, Consolas, "Courier New", monospace',
         fontWeight: '400',
@@ -630,7 +631,8 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
           brightWhite: '#a6adc8',
         },
       })
-      const initialFontSize = terminal.options.fontSize ?? 13
+
+      const initialFontSize = terminal.options.fontSize ?? TERMINAL_FONT_SIZE.DEFAULT
       setFontSize(initialFontSize)
       onFontSizeChange?.(initialFontSize)
 
@@ -642,7 +644,6 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
       searchAddonRef.current = searchAddon
 
       try {
-        const { WebglAddon } = await import('@xterm/addon-webgl')
         if (!disposed) {
           const webglAddon = new WebglAddon()
           terminal.loadAddon(webglAddon)
@@ -752,10 +753,19 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
         if (!terminal) {
           return fontSize
         }
-        const next = Math.max(8, Math.min(32, (terminal.options.fontSize ?? fontSize) + delta))
+        const next = Math.max(
+          TERMINAL_FONT_SIZE.MIN,
+          Math.min(TERMINAL_FONT_SIZE.MAX, (terminal.options.fontSize ?? fontSize) + delta)
+        )
         terminal.options.fontSize = next
         setFontSize(next)
         onFontSizeChange?.(next)
+
+        // Force terminal to refresh with new font size
+        requestAnimationFrame(() => {
+          terminal.refresh(0, terminal.rows - 1)
+        })
+
         return next
       },
       setFontSize: (next: number) => {
@@ -763,10 +773,16 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
         if (!terminal) {
           return fontSize
         }
-        const bounded = Math.max(8, Math.min(32, next))
+        const bounded = Math.max(TERMINAL_FONT_SIZE.MIN, Math.min(TERMINAL_FONT_SIZE.MAX, next))
         terminal.options.fontSize = bounded
         setFontSize(bounded)
         onFontSizeChange?.(bounded)
+
+        // Force terminal to refresh with new font size
+        requestAnimationFrame(() => {
+          terminal.refresh(0, terminal.rows - 1)
+        })
+
         return bounded
       },
       getFontSize: () => terminalRef.current?.options.fontSize ?? fontSize,
@@ -869,7 +885,7 @@ export const SshTerminal = forwardRef<SshTerminalHandle, SshTerminalProps>(funct
     >
       <div
         ref={containerRef}
-        className="h-full w-full p-2"
+        className="h-full w-full overflow-hidden p-2"
         style={{ backgroundColor: '#1e1e2e' }}
         role="presentation"
         data-testid="ssh-terminal-canvas"

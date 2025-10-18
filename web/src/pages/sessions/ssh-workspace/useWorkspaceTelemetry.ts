@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import type { SshTerminalHandle } from '@/components/workspace/SshTerminal'
+import { TERMINAL_FONT_SIZE } from '@/constants/terminal'
 
 interface UseWorkspaceTelemetryParams {
   terminalRef: React.RefObject<SshTerminalHandle | null>
@@ -24,7 +25,7 @@ export function useWorkspaceTelemetry({
   const lastEventTimestampRef = useRef<number | null>(null)
   const [latencyMs, setLatencyMs] = useState<number | null>(null)
   const [lastActivityAt, setLastActivityAt] = useState<Date | null>(null)
-  const [fontSize, setFontSize] = useState(14)
+  const [fontSize, setFontSize] = useState<number>(TERMINAL_FONT_SIZE.DEFAULT)
 
   const handleTerminalEvent = useCallback(() => {
     const now = performance.now()
@@ -55,7 +56,7 @@ export function useWorkspaceTelemetry({
   }, [applyFontSizeDelta])
 
   const zoomReset = useCallback(() => {
-    const next = terminalRef.current?.setFontSize(14)
+    const next = terminalRef.current?.setFontSize(TERMINAL_FONT_SIZE.DEFAULT)
     if (next !== undefined) {
       setFontSize(next)
       logEvent('terminal.zoom.reset', { fontSize: next })
