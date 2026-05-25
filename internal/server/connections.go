@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"golang.org/x/crypto/ssh"
 
 	"github.com/charlesng/shellcn/internal/audit"
 	"github.com/charlesng/shellcn/internal/models"
@@ -27,11 +25,6 @@ type connectionWriteRequest struct {
 	Transport string            `json:"transport"`
 	Config    map[string]any    `json:"config"`
 	Recording map[string]string `json:"recording"`
-}
-
-type verificationAcceptRequest struct {
-	Kind string         `json:"kind"`
-	Data map[string]any `json:"data"`
 }
 
 func (s *Server) toConnectionDTO(c models.Connection) connectionDTO {
@@ -125,72 +118,6 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 	s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
 	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(updated))
-}
-
-func (s *Server) handleAcceptConnectionVerification(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	user, _ := userFrom(ctx)
-	conn, err := s.deps.Store.Connections.Get(ctx, chi.URLParam(r, "id"))
-	if err != nil {
-		writeError(w, s.deps.Logger, err)
-		return
-	}
-	if !s.canManageConnection(ctx, user, conn) {
-		s.auditConnEvent(ctx, user, conn.ID, "connection.verification.accept", plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
-		writeError(w, s.deps.Logger, plugin.ErrForbidden)
-		return
-	}
-	var req verificationAcceptRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
-		return
-	}
-	updated, err := s.acceptVerification(ctx, conn, req)
-	if err != nil {
-		s.auditConnEvent(ctx, user, conn.ID, "connection.verification.accept", plugin.RiskWrite, models.AuditError, err)
-		writeError(w, s.deps.Logger, err)
-		return
-	}
-	s.auditConnEvent(ctx, user, conn.ID, "connection.verification.accept", plugin.RiskWrite, models.AuditAllowed, nil)
-	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(updated))
-}
-
-func (s *Server) acceptVerification(ctx context.Context, conn models.Connection, req verificationAcceptRequest) (models.Connection, error) {
-	switch req.Kind {
-	case "host_key":
-		line, _ := req.Data["knownHostsLine"].(string)
-		line = strings.TrimSpace(line)
-		if line == "" {
-			return models.Connection{}, plugin.ErrInvalidInput
-		}
-		if _, _, _, _, rest, err := ssh.ParseKnownHosts([]byte(line + "\n")); err != nil || len(strings.TrimSpace(string(rest))) != 0 {
-			return models.Connection{}, plugin.ErrInvalidInput
-		}
-		cfg := map[string]any{}
-		for k, v := range conn.Config {
-			cfg[k] = v
-		}
-		existing, _ := cfg["known_hosts"].(string)
-		if existing == "" {
-			cfg["known_hosts"] = line
-		} else if !knownHostsContains(existing, line) {
-			cfg["known_hosts"] = strings.TrimSpace(existing) + "\n" + line
-		}
-		return s.deps.Connections.Update(ctx, conn, service.ConnectionInput{
-			Name: conn.Name, Transport: conn.Transport, Config: cfg, Recording: conn.Recording,
-		})
-	default:
-		return models.Connection{}, plugin.ErrNotSupported
-	}
-}
-
-func knownHostsContains(existing, line string) bool {
-	for _, cur := range strings.Split(existing, "\n") {
-		if strings.TrimSpace(cur) == line {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) {

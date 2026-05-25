@@ -73,14 +73,12 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "10.0.0.1"},
 			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Default: 22, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
 			{Key: "user", Label: "Username", Type: plugin.FieldText, Required: true, Default: "root"},
-			{Key: "known_hosts", Label: "Known hosts", Type: plugin.FieldTextarea, Help: "OpenSSH known_hosts lines for this target."},
 		}},
 		{Name: "Auth", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "password", Options: []plugin.Option{
 				{Label: "Password", Value: "password"},
 				{Label: "Private key", Value: "private_key"},
 				{Label: "Stored credential", Value: "credential"},
-				{Label: "SSH agent", Value: "agent"},
 			}},
 			{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialSSHPrivateKey, plugin.CredentialSSHPassword}, Protocols: []string{protocol}, Required: true,

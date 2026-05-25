@@ -2,11 +2,8 @@ package sshsftp
 
 import (
 	"context"
-	"net"
 	"sync"
 	"testing"
-
-	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/charlesng/shellcn/internal/plugin"
 )
@@ -15,7 +12,6 @@ func TestOpenTerminalAndSFTPLazilyShareClient(t *testing.T) {
 	srv := newSSHServer(t)
 	defer srv.Close()
 	cfg := srv.config()
-	cfg["known_hosts"] = knownhosts.Line([]string{knownhosts.Normalize(net.JoinHostPort(srv.Host, srv.Port))}, srv.PublicKey)
 
 	sess, err := Connect(context.Background(), plugin.ConnectConfig{Config: cfg, Net: pluginNet{}})
 	if err != nil {
@@ -64,7 +60,6 @@ func TestFilesystemIsLazyAndReused(t *testing.T) {
 	srv := newSSHServer(t)
 	defer srv.Close()
 	cfg := srv.config()
-	cfg["known_hosts"] = knownhosts.Line([]string{knownhosts.Normalize(net.JoinHostPort(srv.Host, srv.Port))}, srv.PublicKey)
 
 	sess, err := Connect(context.Background(), plugin.ConnectConfig{Config: cfg, Net: pluginNet{}})
 	if err != nil {

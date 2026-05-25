@@ -215,7 +215,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
         class="flex items-center justify-center gap-2 py-12 text-sm text-surface-400"
       >
         <span
-          class="h-4 w-4 animate-spin rounded-full border-2 border-surface-300 border-t-primary-500 dark:border-surface-700"
+          class="h-4 w-4 animate-spin rounded-full border-2 border-surface-200 border-t-primary-500 dark:border-surface-800 dark:border-t-primary-500"
           role="status"
           aria-label="Loading"
         />

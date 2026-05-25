@@ -32,9 +32,19 @@ export const btnGhost =
   "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800";
 
 const overlay =
-  "mt-1 overflow-hidden rounded-md border border-surface-200 bg-surface-0 py-1 shadow-lg dark:border-surface-700 dark:bg-surface-900";
+  "mt-1.5 origin-top overflow-hidden rounded-lg border border-surface-200 bg-surface-0 p-1 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5";
+// Rounded, inset option rows with a clear selected state in BOTH themes (the old
+// selected style had no dark override → a bright light-blue bar in dark mode).
 const option =
-  "cursor-pointer px-3 py-1.5 text-sm text-surface-700 data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:bg-primary-50 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800";
+  "cursor-pointer rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
+// Smooth dropdown open/close — applied via each overlay component's transition pt.
+const overlayTransition = {
+  enterFromClass: "opacity-0 scale-95",
+  enterActiveClass: "transition duration-100 ease-out",
+  enterToClass: "opacity-100 scale-100",
+  leaveActiveClass: "transition duration-75 ease-in",
+  leaveToClass: "opacity-0",
+};
 
 export const primeVuePassthrough = {
   inputtext: { root: inputBase },
@@ -56,6 +66,7 @@ export const primeVuePassthrough = {
       "flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
     dropdown: "px-2 text-surface-400",
     overlay,
+    transition: overlayTransition,
     listContainer: "max-h-60 overflow-auto",
     option,
     emptyMessage: "px-3 py-2 text-sm text-surface-400",
@@ -68,6 +79,7 @@ export const primeVuePassthrough = {
       "flex min-h-8 flex-wrap items-center gap-1 px-2.5 py-1 text-left text-surface-800 dark:text-surface-100",
     dropdown: "px-2 text-surface-400",
     overlay,
+    transition: overlayTransition,
     listContainer: "max-h-60 overflow-auto",
     option,
     emptyMessage: "px-3 py-2 text-sm text-surface-400",

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -143,28 +142,6 @@ func TestConnectionRecordingPolicy(t *testing.T) {
 	if r := h.do(t, http.MethodPost, "/api/connections", "op",
 		strings.NewReader(`{"name":"r3","protocol":"tester","config":{"host":"h"},"recording":{"terminal":"always"}}`)); r.Status != http.StatusBadRequest {
 		t.Errorf("invalid recording policy: want 400, got %d (%s)", r.Status, r.Body)
-	}
-}
-
-func TestAcceptHostKeyVerificationAppendsKnownHosts(t *testing.T) {
-	h := newHarness(t)
-
-	create := `{"name":"ssh1","protocol":"ssh","transport":"direct","config":{"host":"127.0.0.1","port":22,"user":"root","auth":"password","password":"pw"}}`
-	resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(create))
-	if resp.Status != http.StatusCreated {
-		t.Fatalf("create ssh: want 201, got %d (%s)", resp.Status, resp.Body)
-	}
-	id := createConnID(t, resp)
-
-	line := "127.0.0.1 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINs5nBd+rrO7NGD2kriLzWmPSM7w/PNjxbT04w+4Rv35"
-	body := `{"kind":"host_key","data":{"knownHostsLine":` + strconv.Quote(line) + `}}`
-	resp = h.do(t, http.MethodPost, "/api/connections/"+id+"/verification", "op", strings.NewReader(body))
-	if resp.Status != http.StatusOK {
-		t.Fatalf("accept verification: want 200, got %d (%s)", resp.Status, resp.Body)
-	}
-	conn, _ := h.store.Connections.Get(context.Background(), id)
-	if got, _ := conn.Config["known_hosts"].(string); got != line {
-		t.Fatalf("known_hosts not persisted: %q", got)
 	}
 }
 

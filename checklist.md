@@ -79,7 +79,7 @@ link, with email as a best-effort extra when SMTP is enabled._
 
 ## Phase 3 — M2 · SSH/SFTP reference plugin
 
-_Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP session and file-route code. `ssh` exposes Terminal, Files, Tunnels, and Snippets; `sftp` exposes the same generic file browser only. SSH uses strict host-key verification via `known_hosts`, returns generic `VerificationRequired{kind:"host_key"}` on unknown/changed keys, and the core can persist accepted host-key lines through the generic verification endpoint. SFTP opens lazily over the same SSH client, guarded by the session mutex. Terminal streaming is real xterm.js ↔ `ssh.shell` with resize control frames; file browser routes implement list/read/download/upload/mkdir/rename/delete with core-streamed downloads and audit/authz wrapper coverage. The shipped placeholder `noop` plugin was removed; server e2e now uses an internal test-only plugin._
+_Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP session and file-route code. `ssh` exposes Terminal, Files, Tunnels, and Snippets; `sftp` exposes the same generic file browser only. SSH/SFTP auth supports password, private key, and stored credential without extra trust or SSH-agent configuration. SFTP opens lazily over the same SSH client, guarded by the session mutex. Terminal streaming is real xterm.js ↔ `ssh.shell` with resize control frames; file browser routes implement list/read/download/upload/mkdir/rename/delete with core-streamed downloads and audit/authz wrapper coverage. The shipped placeholder `noop` plugin was removed; server e2e now uses an internal test-only plugin._
 
 - [x] 3.1 SSH session and Connect
 - [x] 3.2 SSH routes and manifest
