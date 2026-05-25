@@ -1,13 +1,18 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
+	"github.com/charlesng/shellcn/internal/audit"
 	"github.com/charlesng/shellcn/internal/auth"
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/internal/service"
 )
 
 type loginRequest struct {
@@ -71,4 +76,69 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
 	sess, _ := sessionFrom(r.Context())
 	writeJSON(w, http.StatusOK, sessionDTO{User: toUserDTO(user), CSRFToken: sess.CSRFToken})
+}
+
+func (s *Server) auditAccountEvent(ctx context.Context, user models.User, event string, result models.AuditResult, err error) {
+	s.deps.Audit.Record(ctx, audit.Event{
+		User: user, Event: event, RouteID: event, Risk: string(plugin.RiskWrite), Result: result, Err: err,
+	})
+}
+
+type updateProfileRequest struct {
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+}
+
+// handleUpdateProfile lets the signed-in user edit their own display name and
+// email. Username, roles, and enabled state are not editable here.
+func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := userFrom(ctx)
+	var req updateProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
+		return
+	}
+	updated, err := s.deps.Users.UpdateProfile(ctx, user.ID, strings.TrimSpace(req.Email), strings.TrimSpace(req.DisplayName))
+	if err != nil {
+		s.auditAccountEvent(ctx, user, "account.profile.update", models.AuditError, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	s.auditAccountEvent(ctx, user, "account.profile.update", models.AuditAllowed, nil)
+	writeJSON(w, http.StatusOK, toUserDTO(updated))
+}
+
+type changePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+// handleChangePassword changes the signed-in user's own password after verifying
+// the current one.
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := userFrom(ctx)
+	var req changePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		writeError(w, s.deps.Logger, fmt.Errorf("%w: password must be at least 8 characters", plugin.ErrInvalidInput))
+		return
+	}
+	err := s.deps.Users.ChangePassword(ctx, user.ID, req.CurrentPassword, req.NewPassword)
+	if errors.Is(err, service.ErrWrongPassword) {
+		s.auditAccountEvent(ctx, user, "account.password.change", models.AuditDenied, err)
+		writeError(w, s.deps.Logger, fmt.Errorf("%w: current password is incorrect", plugin.ErrInvalidInput))
+		return
+	}
+	if err != nil {
+		s.auditAccountEvent(ctx, user, "account.password.change", models.AuditError, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	s.auditAccountEvent(ctx, user, "account.password.change", models.AuditAllowed, nil)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

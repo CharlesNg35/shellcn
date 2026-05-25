@@ -97,6 +97,24 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"resource references unknown action", "references unknown action", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Resources = []plugin.ResourceType{{Kind: "k", Title: "K", List: plugin.DataSource{RouteID: "x.list"}, ActionIDs: []string{"ghost"}}}
 		}},
+		{"credential ref missing selector", "missing Credential selector", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef})
+		}},
+		{"credential ref unknown kind", "unknown credential kind", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
+				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"made_up"}},
+			})
+		}},
+		{"credential ref incompatible protocol", "incompatible with protocol", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
+				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialKubeconfig}, Protocols: []string{"ssh"}},
+			})
+		}},
 	}
 
 	for _, tc := range tests {

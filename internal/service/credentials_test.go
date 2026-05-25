@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/secrets"
 	"github.com/charlesng/shellcn/internal/service"
 	"github.com/charlesng/shellcn/internal/store"
@@ -131,6 +132,7 @@ func TestCredentialListUsableFilters(t *testing.T) {
 	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "ssh-key", Kind: "ssh_private_key", Protocols: []string{"ssh"}, Secret: "a"})
 	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "db-pw", Kind: "db_password", Protocols: []string{"postgres"}, Secret: "b"})
 	anyCred, _ := svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "wildcard", Kind: "api_token", Secret: "c"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "kube", Kind: "kubeconfig", Secret: "d"})
 
 	// Filter by kind.
 	got, err := svc.ListUsable(ctx, "u", []string{"ssh_private_key"}, "")
@@ -147,8 +149,11 @@ func TestCredentialListUsableFilters(t *testing.T) {
 	for _, c := range got {
 		kinds[c.Kind] = true
 	}
-	if !kinds["db_password"] || !kinds["api_token"] || kinds["ssh_private_key"] {
+	if !kinds["db_password"] || kinds["api_token"] || kinds["ssh_private_key"] {
 		t.Errorf("protocol filter wrong: %+v", got)
+	}
+	if kinds["kubeconfig"] {
+		t.Errorf("incompatible wildcard kind should not match postgres: %+v", got)
 	}
 
 	// A summary never leaks anything secret.
@@ -156,6 +161,27 @@ func TestCredentialListUsableFilters(t *testing.T) {
 		if c.ID == anyCred.ID && c.Name != "wildcard" {
 			t.Errorf("summary corrupted: %+v", c)
 		}
+	}
+}
+
+func TestCredentialCreateValidatesKindAndProtocolCompatibility(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newCredentialService(t)
+
+	if _, err := svc.Create(ctx, service.NewCredentialInput{
+		OwnerID: "u", Name: "bad", Kind: "kubeconfig", Protocols: []string{"ssh"}, Secret: "x",
+	}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("kubeconfig scoped to ssh: want ErrInvalidInput, got %v", err)
+	}
+	if _, err := svc.Create(ctx, service.NewCredentialInput{
+		OwnerID: "u", Name: "bad", Kind: "made_up", Secret: "x",
+	}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unknown kind: want ErrInvalidInput, got %v", err)
+	}
+	if _, err := svc.Create(ctx, service.NewCredentialInput{
+		OwnerID: "u", Name: "empty", Kind: "ssh_password",
+	}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("empty secret on create: want ErrInvalidInput, got %v", err)
 	}
 }
 

@@ -112,7 +112,27 @@ export type CredentialKind =
   | "ssh_password"
   | "db_password"
   | "api_token"
+  | "tls_client_cert"
+  | "kubeconfig"
+  | "cloud_access_key"
+  | "service_account_json"
+  | "basic_auth"
+  | "bearer_token"
+  | "vnc_password"
+  | "rdp_password"
+  | "smb_password"
+  | "snmp_community"
+  | "snmp_v3"
   | (string & {});
+
+export interface CredentialKindInfo {
+  kind: CredentialKind;
+  label: string;
+  secretLabel: string;
+  secretMultiline?: boolean;
+  identityLabel?: string;
+  compatibleProtocols?: string[];
+}
 
 // Describes which reusable credentials a `credential_ref` field accepts. The
 // field carries only the chosen credential's id — never secret material.
@@ -323,7 +343,7 @@ export interface CredentialSummary {
   name: string;
   kind: CredentialKind;
   ownerId?: string;
-  username?: string;
+  identity?: string;
   protocols?: string[];
   updatedAt?: string;
 }

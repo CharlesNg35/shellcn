@@ -60,7 +60,7 @@
                 "ssh_private_key"
               ],
               "protocols": [
-                "sample"
+                "ssh"
               ],
               "required": true
             }

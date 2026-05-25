@@ -16,6 +16,10 @@ func (s *Server) handleListPlugins(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.deps.Plugins.Summaries())
 }
 
+func (s *Server) handleListCredentialKinds(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, plugin.CredentialKinds())
+}
+
 func (s *Server) handleGetPlugin(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	proj, ok := s.deps.Plugins.Projection(name)

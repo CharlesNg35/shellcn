@@ -2,9 +2,12 @@ package server_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/charlesng/shellcn/internal/plugin"
 )
 
 func createCredID(t *testing.T, h *harness, userID, body string) string {
@@ -48,6 +51,45 @@ func TestCredentialCreateRotateAuthz(t *testing.T) {
 	// admin may delete it.
 	if resp := h.do(t, http.MethodDelete, "/api/credentials/"+id, "admin", nil); resp.Status != http.StatusOK {
 		t.Errorf("admin delete: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+}
+
+func TestCredentialKindsEndpoint(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodGet, "/api/credential-kinds", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("credential kinds: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	var out []plugin.CredentialKindInfo
+	if err := json.Unmarshal(resp.Body, &out); err != nil {
+		t.Fatalf("decode credential kinds: %v", err)
+	}
+	seen := map[plugin.CredentialKind]bool{}
+	for _, kind := range out {
+		seen[kind.Kind] = true
+		if kind.Label == "" || kind.SecretLabel == "" {
+			t.Fatalf("credential kind missing labels: %+v", kind)
+		}
+	}
+	if !seen[plugin.CredentialKubeconfig] || !seen[plugin.CredentialSSHPassword] {
+		t.Fatalf("credential catalog missing expected kinds: %+v", seen)
+	}
+}
+
+func TestCredentialCreateRejectsUnknownAndIncompatibleKinds(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodPost, "/api/credentials", "op",
+		strings.NewReader(`{"name":"bad","kind":"kubeconfig","protocols":["ssh"],"secret":"x"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("kubeconfig scoped to ssh: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+
+	resp = h.do(t, http.MethodPost, "/api/credentials", "op",
+		strings.NewReader(`{"name":"bad","kind":"made_up","secret":"x"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("unknown kind: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 

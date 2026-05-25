@@ -10,12 +10,16 @@ import SkeletonList from "../components/SkeletonList.vue";
 import CredentialFormDialog from "../components/CredentialFormDialog.vue";
 import ShareDialog from "../components/ShareDialog.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
-import type { CredentialSummary } from "../types/projection";
+import type {
+  CredentialKindInfo,
+  CredentialSummary,
+} from "../types/projection";
 
 const auth = useAuthStore();
 const notify = useNotify();
 
 const items = ref<CredentialSummary[]>([]);
+const kinds = ref<CredentialKindInfo[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
@@ -27,27 +31,34 @@ const showDelete = ref(false);
 const deleteTarget = ref<CredentialSummary | null>(null);
 const deleting = ref(false);
 
-const kindLabels: Record<string, string> = {
-  ssh_private_key: "SSH private key",
-  ssh_password: "SSH password",
-  tls_client_cert: "TLS client cert",
-  db_password: "Database password",
-  api_token: "API token",
-};
-
 function canManage(c: CredentialSummary): boolean {
   return auth.isAdmin || c.ownerId === auth.user?.id;
 }
 
+function kindInfo(kind: string): CredentialKindInfo | undefined {
+  return kinds.value.find((k) => k.kind === kind);
+}
+
 function kindLabel(kind: string): string {
-  return kindLabels[kind] ?? kind;
+  return kindInfo(kind)?.label ?? kind;
+}
+
+function identityLabel(c: CredentialSummary): string {
+  const label = kindInfo(c.kind)?.identityLabel;
+  if (!label || !c.identity) return "—";
+  return `${label}: ${c.identity}`;
 }
 
 async function load(): Promise<void> {
   loading.value = true;
   error.value = null;
   try {
-    items.value = await api.get<CredentialSummary[]>("/credentials");
+    const [nextItems, nextKinds] = await Promise.all([
+      api.get<CredentialSummary[]>("/credentials"),
+      api.get<CredentialKindInfo[]>("/credential-kinds"),
+    ]);
+    items.value = nextItems;
+    kinds.value = nextKinds;
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -143,9 +154,9 @@ const hasItems = computed(() => items.value.length > 0);
           {{ kindLabel((data as CredentialSummary).kind) }}
         </template>
       </Column>
-      <Column field="username" header="Username">
+      <Column header="Identity">
         <template #body="{ data }">
-          {{ (data as CredentialSummary).username || "—" }}
+          {{ identityLabel(data as CredentialSummary) }}
         </template>
       </Column>
       <Column header="Protocols">

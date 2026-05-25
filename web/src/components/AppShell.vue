@@ -281,22 +281,33 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
         </RouterLink>
 
         <div
-          class="flex items-center gap-2.5 border-t border-surface-200 px-4 py-2.5 dark:border-surface-800"
+          class="flex items-center gap-1 border-t border-surface-200 px-2 py-2 dark:border-surface-800"
         >
-          <span
-            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-200 text-surface-600 dark:bg-surface-800 dark:text-surface-300"
+          <RouterLink
+            :to="{ name: 'profile' }"
+            class="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-surface-200 dark:hover:bg-surface-800"
+            :class="
+              route.name === 'profile'
+                ? 'bg-primary-50 dark:bg-primary-950/40'
+                : ''
+            "
+            title="Your profile"
           >
-            <AppIcon :icon="{ type: 'name', value: 'user' }" :size="15" />
-          </span>
-          <span
-            class="min-w-0 flex-1 truncate text-sm text-surface-700 dark:text-surface-200"
-            :title="userLabel"
-          >
-            {{ userLabel }}
-          </span>
+            <span
+              class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-200 text-surface-600 dark:bg-surface-800 dark:text-surface-300"
+            >
+              <AppIcon :icon="{ type: 'name', value: 'user' }" :size="15" />
+            </span>
+            <span
+              class="min-w-0 flex-1 truncate text-sm text-surface-700 dark:text-surface-200"
+              :title="userLabel"
+            >
+              {{ userLabel }}
+            </span>
+          </RouterLink>
           <button
             type="button"
-            class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
+            class="shrink-0 rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
             title="Sign out"
             aria-label="Sign out"
             @click="onLogout"

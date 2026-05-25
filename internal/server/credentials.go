@@ -23,9 +23,17 @@ const (
 type credentialWriteRequest struct {
 	Name      string   `json:"name"`
 	Kind      string   `json:"kind"`
+	Identity  string   `json:"identity"`
 	Username  string   `json:"username"`
 	Protocols []string `json:"protocols"`
 	Secret    string   `json:"secret"`
+}
+
+func (r credentialWriteRequest) principal() string {
+	if strings.TrimSpace(r.Identity) != "" {
+		return r.Identity
+	}
+	return r.Username
 }
 
 func canManageCredential(user models.User, cred models.Credential) bool {
@@ -48,13 +56,9 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Kind) == "" {
-		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
-		return
-	}
 	cred, err := s.deps.Credentials.Create(ctx, service.NewCredentialInput{
 		OwnerID: user.ID, Name: req.Name, Kind: req.Kind,
-		Username: req.Username, Protocols: req.Protocols, Secret: req.Secret,
+		Identity: req.principal(), Protocols: req.Protocols, Secret: req.Secret,
 	})
 	if err != nil {
 		s.auditCredEvent(ctx, user, "", credCreateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -84,12 +88,8 @@ func (s *Server) handleUpdateCredential(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.Kind) == "" {
-		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
-		return
-	}
 	updated, err := s.deps.Credentials.Update(ctx, cred.ID, service.UpdateCredentialInput{
-		Name: req.Name, Kind: req.Kind, Username: req.Username,
+		Name: req.Name, Kind: req.Kind, Identity: req.principal(),
 		Protocols: req.Protocols, Secret: req.Secret,
 	})
 	if err != nil {

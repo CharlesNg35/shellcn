@@ -51,6 +51,13 @@ function canDelete(u: AdminUser): boolean {
   return true;
 }
 
+// Root admin edits anyone; a regular admin edits non-admin users and their own
+// account, but not other admins (the backend enforces this too).
+function canEdit(u: AdminUser): boolean {
+  if (auth.user?.protected) return true;
+  return !u.roles.includes("admin") || u.id === auth.user?.id;
+}
+
 function openCreate(): void {
   editingUser.value = null;
   showUserForm.value = true;
@@ -171,6 +178,7 @@ async function revokeInvite(): Promise<void> {
                     />
                   </RouterLink>
                   <button
+                    v-if="canEdit(data as AdminUser)"
                     type="button"
                     class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
                     title="Edit"

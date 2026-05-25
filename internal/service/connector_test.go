@@ -17,7 +17,7 @@ type credentialRefPlugin struct{}
 func (credentialRefPlugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion,
-		Name:       "cref",
+		Name:       "http-api",
 		Version:    "0",
 		Title:      "Credential Ref",
 		Layout:     plugin.LayoutTabs,
@@ -25,7 +25,10 @@ func (credentialRefPlugin) Manifest() plugin.Manifest {
 			plugin.TransportDirect,
 		},
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{
-			{Key: "api_credential", Label: "API Credential", Type: plugin.FieldCredentialRef},
+			{
+				Key: "api_credential", Label: "API Credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}},
+			},
 		}}}},
 		Tabs: []plugin.Tab{{Key: "main", Label: "Main", Panel: plugin.PanelTable}},
 	}
@@ -60,7 +63,7 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 		models.User{ID: "u1"},
 		models.Connection{
 			ID:        "c1",
-			Protocol:  "cref",
+			Protocol:  "http-api",
 			Transport: string(plugin.TransportDirect),
 			OwnerID:   "u1",
 			Config:    map[string]any{"api_credential": cred.ID},

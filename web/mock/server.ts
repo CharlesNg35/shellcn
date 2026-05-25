@@ -19,6 +19,137 @@ function readJSON<T>(file: string): T {
 
 const nonPluginFixtures = new Set(["connections.json", "credentials.json"]);
 
+const credentialKinds = [
+  {
+    kind: "ssh_private_key",
+    label: "SSH private key",
+    secretLabel: "Private key",
+    secretMultiline: true,
+    identityLabel: "Username",
+    compatibleProtocols: ["ssh", "sftp"],
+  },
+  {
+    kind: "ssh_password",
+    label: "SSH password",
+    secretLabel: "Password",
+    identityLabel: "Username",
+    compatibleProtocols: ["ssh", "sftp"],
+  },
+  {
+    kind: "tls_client_cert",
+    label: "TLS client certificate",
+    secretLabel: "Certificate and private key",
+    secretMultiline: true,
+    compatibleProtocols: ["docker", "ftps", "webdav", "proxmox", "kubernetes"],
+  },
+  {
+    kind: "db_password",
+    label: "Database password",
+    secretLabel: "Password",
+    identityLabel: "Database user",
+    compatibleProtocols: [
+      "postgresql",
+      "postgres",
+      "mysql",
+      "mariadb",
+      "mssql",
+    ],
+  },
+  {
+    kind: "api_token",
+    label: "API token",
+    secretLabel: "Token",
+    identityLabel: "Token name / subject",
+    compatibleProtocols: [
+      "proxmox",
+      "kubernetes",
+      "docker",
+      "github",
+      "gitlab",
+    ],
+  },
+  {
+    kind: "kubeconfig",
+    label: "Kubeconfig",
+    secretLabel: "Kubeconfig YAML",
+    secretMultiline: true,
+    identityLabel: "Context / user",
+    compatibleProtocols: ["kubernetes", "helm", "argocd", "flux"],
+  },
+  {
+    kind: "cloud_access_key",
+    label: "Cloud access key",
+    secretLabel: "Secret access key",
+    identityLabel: "Access key ID",
+    compatibleProtocols: ["aws", "gcp", "azure", "s3"],
+  },
+  {
+    kind: "service_account_json",
+    label: "Service account JSON",
+    secretLabel: "JSON key",
+    secretMultiline: true,
+    identityLabel: "Service account",
+    compatibleProtocols: ["gcp", "kubernetes", "grafana"],
+  },
+  {
+    kind: "basic_auth",
+    label: "Basic auth",
+    secretLabel: "Password",
+    identityLabel: "Username",
+    compatibleProtocols: ["http-api", "graphql", "webdav"],
+  },
+  {
+    kind: "bearer_token",
+    label: "Bearer token",
+    secretLabel: "Token",
+    identityLabel: "Token name / subject",
+    compatibleProtocols: ["http-api", "graphql", "grpc", "prometheus"],
+  },
+  {
+    kind: "vnc_password",
+    label: "VNC password",
+    secretLabel: "Password",
+    compatibleProtocols: ["vnc"],
+  },
+  {
+    kind: "rdp_password",
+    label: "RDP password",
+    secretLabel: "Password",
+    identityLabel: "Username",
+    compatibleProtocols: ["rdp"],
+  },
+  {
+    kind: "smb_password",
+    label: "SMB password",
+    secretLabel: "Password",
+    identityLabel: "Username",
+    compatibleProtocols: ["smb"],
+  },
+  {
+    kind: "snmp_community",
+    label: "SNMP community",
+    secretLabel: "Community string",
+    compatibleProtocols: ["snmp"],
+  },
+  {
+    kind: "snmp_v3",
+    label: "SNMPv3 credentials",
+    secretLabel: "Auth/privacy material",
+    secretMultiline: true,
+    identityLabel: "Security name",
+    compatibleProtocols: ["snmp"],
+  },
+];
+
+function credentialKindSupports(kind: string, protocol: string): boolean {
+  const info = credentialKinds.find((k) => k.kind === kind);
+  return Boolean(
+    info &&
+    (!info.compatibleProtocols.length ||
+      info.compatibleProtocols.includes(protocol)),
+  );
+}
+
 function pluginNames(): string[] {
   return readdirSync(fixturesDir)
     .filter((f) => f.endsWith(".json") && !nonPluginFixtures.has(f))
@@ -331,6 +462,10 @@ function handleHTTP(
       };
     });
     return send(res, 200, summaries);
+  }
+
+  if (path === "/api/credential-kinds" && method === "GET") {
+    return send(res, 200, credentialKinds);
   }
 
   const pluginMatch = path.match(/^\/api\/plugins\/([^/]+)$/);
@@ -673,6 +808,8 @@ function handleHTTP(
       const protocols = c.protocols as string[] | undefined;
       if (kinds && kinds.length > 0 && !kinds.includes(String(c.kind)))
         return false;
+      if (protocol && !credentialKindSupports(String(c.kind), protocol))
+        return false;
       if (protocol && protocols && !protocols.includes(protocol)) return false;
       return true;
     });
@@ -686,7 +823,7 @@ function handleHTTP(
         name: body.name,
         kind: body.kind,
         ownerId: "u-demo",
-        username: body.username,
+        identity: body.identity ?? body.username,
         protocols: body.protocols,
         updatedAt: new Date().toISOString(),
       };
@@ -704,7 +841,7 @@ function handleHTTP(
         const body = raw as Json;
         cred.name = body.name ?? cred.name;
         cred.kind = body.kind ?? cred.kind;
-        cred.username = body.username;
+        cred.identity = body.identity ?? body.username;
         cred.protocols = body.protocols;
         cred.updatedAt = new Date().toISOString();
         send(res, 200, cred);

@@ -58,7 +58,7 @@ test("create a credential from the credentials view", async ({ page }) => {
 
   await page.getByRole("button", { name: /New credential/ }).click();
   await page.locator("#cred-name").fill("e2e-cred");
-  await page.locator('input[type="password"]').fill("s3cret-value");
+  await page.locator("textarea").fill("s3cret-value");
   await page.getByRole("button", { name: "Create credential" }).click();
 
   await expect(
@@ -84,7 +84,7 @@ test("create a credential and select it from a connection credential_ref", async
   await page.goto("/credentials");
   await page.getByRole("button", { name: /New credential/ }).click();
   await page.locator("#cred-name").fill("e2e-selectable-cred");
-  await page.locator('input[type="password"]').fill("s3cret-value");
+  await page.locator("textarea").fill("s3cret-value");
   await page.getByRole("button", { name: "Create credential" }).click();
   await expect(
     page.getByRole("cell", { name: "e2e-selectable-cred", exact: true }),
@@ -97,7 +97,7 @@ test("create a credential and select it from a connection credential_ref", async
   await page.getByRole("combobox", { name: "Password" }).click();
   await page.getByText("Stored credential", { exact: true }).click();
   await page.getByText("Select a credential").click();
-  await page.getByText("e2e-selectable-cred · ssh_password").click();
+  await page.getByText("e2e-selectable-cred · ssh_private_key").click();
   await page.getByRole("button", { name: /Create connection/ }).click();
 
   await expect(page.locator("aside")).toContainText("e2e-credential-conn");

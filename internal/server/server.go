@@ -119,12 +119,16 @@ func (s *Server) routes() chi.Router {
 			pr.Use(s.requireAuth)
 			pr.Post("/auth/logout", s.handleLogout)
 			pr.Get("/auth/me", s.handleMe)
+			// Self-service account management (any authenticated user).
+			pr.Put("/auth/me", s.handleUpdateProfile)
+			pr.Post("/auth/me/password", s.handleChangePassword)
 
 			pr.Get("/plugins", s.handleListPlugins)
 			pr.Get("/plugins/{name}", s.handleGetPlugin)
 
 			pr.Get("/connections", s.handleListConnections)
 			pr.Get("/credentials", s.handleListCredentials)
+			pr.Get("/credential-kinds", s.handleListCredentialKinds)
 
 			if s.deps.Connections != nil {
 				pr.Post("/connections", s.handleCreateConnection)

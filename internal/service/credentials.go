@@ -43,13 +43,17 @@ type NewCredentialInput struct {
 	OwnerID   string
 	Name      string
 	Kind      string
-	Username  string
+	Identity  string
 	Protocols []string
 	Secret    string
 }
 
 // Create encrypts the secret material and persists the credential.
 func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (models.Credential, error) {
+	normalized, err := normalizeCredentialInput(in.Name, in.Kind, in.Identity, in.Protocols, true, in.Secret)
+	if err != nil {
+		return models.Credential{}, err
+	}
 	enc, err := s.vault.Encrypt(ctx, []byte(in.Secret))
 	if err != nil {
 		return models.Credential{}, fmt.Errorf("encrypt credential: %w", err)
@@ -57,11 +61,11 @@ func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (
 	now := time.Now()
 	cred := models.Credential{
 		ID:              uuid.NewString(),
-		Name:            in.Name,
-		Kind:            in.Kind,
+		Name:            normalized.name,
+		Kind:            normalized.kind,
 		OwnerID:         in.OwnerID,
-		Username:        in.Username,
-		Protocols:       in.Protocols,
+		Username:        normalized.identity,
+		Protocols:       normalized.protocols,
 		EncryptedSecret: enc,
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -77,7 +81,7 @@ func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (
 type UpdateCredentialInput struct {
 	Name      string
 	Kind      string
-	Username  string
+	Identity  string
 	Protocols []string
 	Secret    string
 }
@@ -90,10 +94,14 @@ func (s *CredentialService) Update(ctx context.Context, id string, in UpdateCred
 	if err != nil {
 		return models.Credential{}, err
 	}
-	cred.Name = in.Name
-	cred.Kind = in.Kind
-	cred.Username = in.Username
-	cred.Protocols = in.Protocols
+	normalized, err := normalizeCredentialInput(in.Name, in.Kind, in.Identity, in.Protocols, false, in.Secret)
+	if err != nil {
+		return models.Credential{}, err
+	}
+	cred.Name = normalized.name
+	cred.Kind = normalized.kind
+	cred.Username = normalized.identity
+	cred.Protocols = normalized.protocols
 	if strings.TrimSpace(in.Secret) != "" {
 		enc, err := s.vault.Encrypt(ctx, []byte(in.Secret))
 		if err != nil {
@@ -106,6 +114,50 @@ func (s *CredentialService) Update(ctx context.Context, id string, in UpdateCred
 		return models.Credential{}, err
 	}
 	return cred, nil
+}
+
+type normalizedCredentialInput struct {
+	name      string
+	kind      string
+	identity  string
+	protocols []string
+}
+
+func normalizeCredentialInput(name, kind, identity string, protocols []string, requireSecret bool, secret string) (normalizedCredentialInput, error) {
+	out := normalizedCredentialInput{
+		name:     strings.TrimSpace(name),
+		kind:     strings.TrimSpace(kind),
+		identity: strings.TrimSpace(identity),
+	}
+	if out.name == "" {
+		return normalizedCredentialInput{}, fmt.Errorf("%w: credential name is required", plugin.ErrInvalidInput)
+	}
+	if out.kind == "" {
+		return normalizedCredentialInput{}, fmt.Errorf("%w: credential kind is required", plugin.ErrInvalidInput)
+	}
+	info, ok := plugin.CredentialKindLookup(plugin.CredentialKind(out.kind))
+	if !ok {
+		return normalizedCredentialInput{}, fmt.Errorf("%w: unknown credential kind %q", plugin.ErrInvalidInput, out.kind)
+	}
+	if requireSecret && strings.TrimSpace(secret) == "" {
+		return normalizedCredentialInput{}, fmt.Errorf("%w: secret material is required", plugin.ErrInvalidInput)
+	}
+	if info.IdentityLabel == "" && out.identity != "" {
+		return normalizedCredentialInput{}, fmt.Errorf("%w: credential kind %q does not use identity metadata", plugin.ErrInvalidInput, out.kind)
+	}
+	seen := map[string]bool{}
+	for _, protocol := range protocols {
+		protocol = strings.TrimSpace(protocol)
+		if protocol == "" || seen[protocol] {
+			continue
+		}
+		if !plugin.CredentialKindSupportsProtocol(plugin.CredentialKind(out.kind), protocol) {
+			return normalizedCredentialInput{}, fmt.Errorf("%w: credential kind %q is not compatible with protocol %q", plugin.ErrInvalidInput, out.kind, protocol)
+		}
+		seen[protocol] = true
+		out.protocols = append(out.protocols, protocol)
+	}
+	return out, nil
 }
 
 // Delete removes a credential. Callers must enforce the not-referenced
@@ -200,9 +252,14 @@ func (s *CredentialService) ListUsable(ctx context.Context, userID string, kinds
 		if len(kinds) > 0 && !slices.Contains(kinds, cred.Kind) {
 			return
 		}
-		// Empty Protocols means the credential works with any compatible protocol.
-		if protocol != "" && len(cred.Protocols) > 0 && !slices.Contains(cred.Protocols, protocol) {
-			return
+		if protocol != "" {
+			if !plugin.CredentialKindSupportsProtocol(plugin.CredentialKind(cred.Kind), protocol) {
+				return
+			}
+			// Empty Protocols means the credential works with any compatible protocol.
+			if len(cred.Protocols) > 0 && !slices.Contains(cred.Protocols, protocol) {
+				return
+			}
 		}
 		out = append(out, cred.Summary())
 	}

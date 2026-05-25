@@ -9,7 +9,7 @@ type Credential struct {
 	Name      string
 	Kind      string   `gorm:"index"` // ssh_private_key, ssh_password, tls_client_cert, db_password, api_token, …
 	OwnerID   string   `gorm:"index"`
-	Username  string   // optional non-secret metadata
+	Username  string   // optional identity/principal metadata; column name kept for existing databases
 	Protocols []string `gorm:"serializer:json"` // allowed protocols; empty = any compatible
 	// EncryptedSecret is opaque ciphertext; the store never sees plaintext.
 	EncryptedSecret []byte
@@ -26,7 +26,7 @@ type CredentialSummary struct {
 	Name      string    `json:"name"`
 	Kind      string    `json:"kind"`
 	OwnerID   string    `json:"ownerId,omitempty"`
-	Username  string    `json:"username,omitempty"`
+	Identity  string    `json:"identity,omitempty"`
 	Protocols []string  `json:"protocols,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt,omitzero"`
 }
@@ -38,7 +38,7 @@ func (c Credential) Summary() CredentialSummary {
 		Name:      c.Name,
 		Kind:      c.Kind,
 		OwnerID:   c.OwnerID,
-		Username:  c.Username,
+		Identity:  c.Username,
 		Protocols: c.Protocols,
 		UpdatedAt: c.UpdatedAt,
 	}

@@ -50,6 +50,11 @@ function testRouter(): Router {
             component: () => import("./views/CredentialsView.vue"),
           },
           {
+            path: "profile",
+            name: "profile",
+            component: () => import("./views/ProfileView.vue"),
+          },
+          {
             path: "recordings",
             name: "recordings",
             component: () => import("./views/RecordingsView.vue"),

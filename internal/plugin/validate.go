@@ -55,8 +55,36 @@ func Validate(m Manifest, routes []Route) error {
 	streamsByID := validateStreams(m, routesByID, add)
 	validateLayout(m, routesByID, actionIDs, add)
 	validateRecording(m, streamsByID, add)
+	validateCredentialSelectors(m.Config, add)
 
 	return errors.Join(errs...)
+}
+
+func validateCredentialSelectors(schema Schema, add func(string, ...any)) {
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			if field.Type != FieldCredentialRef {
+				continue
+			}
+			if field.Credential == nil {
+				add("credential_ref field %q is missing Credential selector", field.Key)
+				continue
+			}
+			if len(field.Credential.Kinds) == 0 {
+				add("credential_ref field %q declares no accepted credential kinds", field.Key)
+			}
+			for _, kind := range field.Credential.Kinds {
+				if _, ok := CredentialKindLookup(kind); !ok {
+					add("credential_ref field %q declares unknown credential kind %q", field.Key, kind)
+				}
+				for _, protocol := range field.Credential.Protocols {
+					if !CredentialKindSupportsProtocol(kind, protocol) {
+						add("credential_ref field %q declares kind %q incompatible with protocol %q", field.Key, kind, protocol)
+					}
+				}
+			}
+		}
+	}
 }
 
 // validateRoutes checks route shape and returns the set of route ids.

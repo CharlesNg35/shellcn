@@ -102,7 +102,7 @@ describe("projection contract", () => {
       id: "cred-prod-key",
       name: "Production deploy key",
       kind: "ssh_private_key",
-      username: "deploy",
+      identity: "deploy",
       protocols: ["ssh"],
     };
 
