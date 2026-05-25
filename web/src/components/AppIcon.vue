@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import DOMPurify from "dompurify";
 import type { Icon } from "../types/projection";
 import { glyphs, FALLBACK_GLYPH } from "./icons/glyphs";
 
@@ -14,6 +15,9 @@ const props = withDefaults(
 
 const imgFailed = ref(false);
 
+// Bound inline SVG markup so a hostile manifest can't ship a huge payload.
+const MAX_SVG_BYTES = 64 * 1024;
+
 const kind = computed(() => {
   const t = props.icon?.type;
   const v = props.icon?.value;
@@ -25,12 +29,23 @@ const kind = computed(() => {
     return safe ? "image" : "glyph";
   }
   if (t === "emoji") return "emoji";
+  if (t === "svg") return safeSvg.value ? "svg" : "glyph";
   return "glyph";
 });
 
 const glyphBody = computed(() => {
   const name = props.icon?.type === "name" ? props.icon.value : props.fallback;
   return glyphs[name] ?? glyphs[props.fallback] ?? glyphs[FALLBACK_GLYPH];
+});
+
+// Sanitize raw inline SVG (svg profile only — no HTML/MathML, scripts and event
+// handlers stripped) before it is ever injected into the DOM.
+const safeSvg = computed(() => {
+  const v = props.icon?.type === "svg" ? props.icon.value : "";
+  if (!v || v.length > MAX_SVG_BYTES) return "";
+  return DOMPurify.sanitize(v, {
+    USE_PROFILES: { svg: true, svgFilters: true },
+  });
 });
 </script>
 
@@ -49,13 +64,20 @@ const glyphBody = computed(() => {
     aria-hidden="true"
     v-html="glyphBody"
   />
-  <!-- eslint-enable vue/no-v-html -->
   <span
     v-else-if="kind === 'emoji'"
     :style="{ fontSize: `${size}px`, lineHeight: 1 }"
     role="img"
-    >{{ icon?.value }}</span
   >
+    {{ icon?.value }}
+  </span>
+  <span
+    v-else-if="kind === 'svg'"
+    class="app-icon-svg inline-flex"
+    :style="{ width: `${size}px`, height: `${size}px` }"
+    aria-hidden="true"
+    v-html="safeSvg"
+  />
   <img
     v-else-if="kind === 'image'"
     :src="icon?.value"
@@ -67,3 +89,10 @@ const glyphBody = computed(() => {
     @error="imgFailed = true"
   />
 </template>
+
+<style scoped>
+.app-icon-svg :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+</style>

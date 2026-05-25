@@ -1,0 +1,250 @@
+{
+  "apiVersion": 1,
+  "name": "sample",
+  "version": "0.1.0",
+  "title": "Sample",
+  "description": "A representative plugin used by the golden test.",
+  "icon": {
+    "type": "svg",
+    "value": "\u003csvg viewBox=\"0 0 1 1\"\u003e\u003c/svg\u003e"
+  },
+  "config": {
+    "groups": [
+      {
+        "name": "Basic",
+        "fields": [
+          {
+            "key": "host",
+            "label": "Host",
+            "type": "text",
+            "required": true,
+            "placeholder": "10.0.0.1"
+          },
+          {
+            "key": "port",
+            "label": "Port",
+            "type": "number",
+            "default": 22,
+            "validators": [
+              {
+                "type": "min",
+                "value": 1
+              },
+              {
+                "type": "max",
+                "value": 65535
+              }
+            ]
+          },
+          {
+            "key": "password",
+            "label": "Password",
+            "type": "password",
+            "secret": true,
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "auth",
+                  "op": "eq",
+                  "value": "password"
+                }
+              ]
+            }
+          },
+          {
+            "key": "credential_id",
+            "label": "Credential",
+            "type": "credential_ref",
+            "credential": {
+              "kinds": [
+                "ssh_private_key"
+              ],
+              "protocols": [
+                "sample"
+              ],
+              "required": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "capabilities": [
+    "terminal",
+    "filesystem"
+  ],
+  "supportedTransports": [
+    "direct"
+  ],
+  "layout": "sidebar_tree",
+  "tabs": [
+    {
+      "key": "terminal",
+      "label": "Terminal",
+      "icon": {
+        "type": "name",
+        "value": "terminal"
+      },
+      "panel": "terminal",
+      "source": {
+        "routeId": "sample.shell",
+        "method": "WS"
+      }
+    },
+    {
+      "key": "files",
+      "label": "Files",
+      "icon": {
+        "type": "name",
+        "value": "folder"
+      },
+      "panel": "file_browser",
+      "source": {
+        "routeId": "sample.files.list",
+        "params": {
+          "path": "/"
+        }
+      },
+      "config": {
+        "deleteRouteId": "sample.files.delete",
+        "downloadRouteId": "sample.files.download",
+        "mkdirRouteId": "sample.files.mkdir",
+        "multipleUpload": true,
+        "pathParam": "path",
+        "readRouteId": "sample.files.read",
+        "renameRouteId": "sample.files.rename",
+        "uploadRouteId": "sample.files.upload",
+        "writable": true
+      }
+    }
+  ],
+  "tree": [
+    {
+      "key": "containers",
+      "label": "Containers",
+      "source": {
+        "routeId": "sample.list"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "kind": "container",
+      "title": "Containers",
+      "list": {
+        "routeId": "sample.list"
+      },
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name",
+          "sortable": true,
+          "type": "text"
+        }
+      ],
+      "actionIds": [
+        "sample.start"
+      ],
+      "detail": {
+        "header": {
+          "title": "Container",
+          "actionIds": [
+            "sample.start"
+          ]
+        },
+        "tabs": [
+          {
+            "key": "logs",
+            "label": "Logs",
+            "panel": "log_stream",
+            "source": {
+              "routeId": "sample.logs",
+              "method": "WS"
+            }
+          },
+          {
+            "key": "config",
+            "label": "Config",
+            "panel": "form",
+            "source": {
+              "routeId": "sample.form"
+            },
+            "config": {
+              "params": {
+                "id": "${resource.uid}"
+              },
+              "submitLabel": "Apply",
+              "submitMethod": "PATCH",
+              "submitRouteId": "sample.form.save"
+            }
+          },
+          {
+            "key": "editor",
+            "label": "Editor",
+            "panel": "code_editor",
+            "source": {
+              "routeId": "sample.doc"
+            },
+            "config": {
+              "language": "yaml",
+              "saveMethod": "PUT",
+              "saveParams": {
+                "id": "${resource.uid}"
+              },
+              "saveRouteId": "sample.doc.save"
+            }
+          },
+          {
+            "key": "query",
+            "label": "Query",
+            "panel": "query_editor",
+            "source": {
+              "routeId": "sample.query",
+              "method": "WS"
+            },
+            "config": {
+              "cancelRouteId": "sample.query.cancel",
+              "initialQuery": "select * from ${resource.name} limit 100"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "sample.start",
+      "label": "Start",
+      "icon": {
+        "type": "name",
+        "value": "play"
+      },
+      "routeId": "sample.start",
+      "method": "POST",
+      "risk": "write",
+      "requiresConfirm": true,
+      "confirmText": "Start it?",
+      "input": {
+        "groups": [
+          {
+            "name": "opts",
+            "fields": [
+              {
+                "key": "force",
+                "label": "Force",
+                "type": "toggle"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "streams": [
+    {
+      "id": "sample.shell",
+      "kind": "terminal",
+      "routeId": "sample.shell"
+    }
+  ]
+}

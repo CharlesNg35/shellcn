@@ -2,7 +2,7 @@
 // Mirrors the Go manifest projection. Carries no server-only fields
 // (handlers, raw mount paths, permission keys, audit-event names).
 
-export type IconType = "name" | "url" | "base64" | "emoji";
+export type IconType = "name" | "url" | "base64" | "emoji" | "svg";
 
 export interface Icon {
   type: IconType;
@@ -124,6 +124,40 @@ export interface DataSource {
   routeId: string;
   method?: Method;
   params?: Record<string, string>;
+}
+
+export interface FileBrowserConfig {
+  pathParam?: string;
+  readRouteId?: string;
+  downloadRouteId?: string;
+  uploadRouteId?: string;
+  mkdirRouteId?: string;
+  renameRouteId?: string;
+  deleteRouteId?: string;
+  writable?: boolean;
+  multipleUpload?: boolean;
+  maxUploadBytes?: number;
+  uploadFieldName?: string;
+}
+
+export interface FormPanelConfig {
+  submitRouteId?: string;
+  submitMethod?: Exclude<Method, "GET" | "WS">;
+  submitLabel?: string;
+  params?: Record<string, string>;
+}
+
+export interface CodeEditorConfig {
+  language?: string;
+  saveRouteId?: string;
+  saveMethod?: Exclude<Method, "GET" | "WS">;
+  saveParams?: Record<string, string>;
+}
+
+export interface QueryEditorConfig {
+  initialQuery?: string;
+  cancelRouteId?: string;
+  cancelParams?: Record<string, string>;
 }
 
 export type ColumnType =

@@ -18,7 +18,7 @@ add plugins.
 - **Tests are a gate** — no step is `✅` without its tests; no phase is done
   without its e2e. See [`TESTING.md`](TESTING.md) for the layers and CI gates.
 - **Icons are structured** — every icon field uses the `Icon{ Type, Value }` type
-  (`name`/`url`/`base64`/`emoji`), v2 §5.1.
+  (`name`/`url`/`base64`/`emoji`/`svg`; inline `svg` is DOMPurify-sanitized), v2 §5.1.
 - **Lazy-load by default** — code-split heavy panels, fetch projections/data on
   demand, connect sessions lazily (v2 §12.1). First paint stays constant.
 - **Panel set grows** — `graph`/`trace`/`kv`/`http_client` land with their plugin

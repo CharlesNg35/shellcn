@@ -70,6 +70,8 @@ describe("projection contract", () => {
           return `img:${icon.value}`;
         case "emoji":
           return icon.value;
+        case "svg":
+          return `svg:${icon.value}`;
         default: {
           const _exhaustive: never = icon.type;
           return _exhaustive;
@@ -81,6 +83,7 @@ describe("projection contract", () => {
       ["url", "img:https://x/i.svg"],
       ["base64", "img:data:image/svg+xml;base64,AAA"],
       ["emoji", "🐳"],
+      ["svg", "svg:<svg/>"],
     ];
     expect(render({ type: "name", value: "db" })).toBe("glyph:db");
     expect(render({ type: "url", value: "https://x/i.svg" })).toBe(
@@ -90,7 +93,8 @@ describe("projection contract", () => {
       render({ type: "base64", value: "data:image/svg+xml;base64,AAA" }),
     ).toBe("img:data:image/svg+xml;base64,AAA");
     expect(render({ type: "emoji", value: "🐳" })).toBe("🐳");
-    expect(cases).toHaveLength(4);
+    expect(render({ type: "svg", value: "<svg/>" })).toBe("svg:<svg/>");
+    expect(cases).toHaveLength(5);
   });
 
   it("models reusable credential summaries without secret values", () => {

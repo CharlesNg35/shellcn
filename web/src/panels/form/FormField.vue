@@ -5,8 +5,11 @@ import InputNumber from "primevue/inputnumber";
 import Password from "primevue/password";
 import Textarea from "primevue/textarea";
 import Select from "primevue/select";
+import MultiSelect from "primevue/multiselect";
 import ToggleSwitch from "primevue/toggleswitch";
 import Button from "primevue/button";
+import FileUpload from "primevue/fileupload";
+import type { FileUploadSelectEvent } from "primevue/fileupload";
 import type { Field } from "../../types/projection";
 import CredentialSelect from "./CredentialSelect.vue";
 
@@ -31,6 +34,11 @@ function update(value: unknown): void {
 function startReplace(): void {
   editingSecret.value = true;
   update("");
+}
+
+function updateFiles(event: FileUploadSelectEvent): void {
+  const files = Array.isArray(event.files) ? event.files : [event.files];
+  update(files.filter((file): file is File => file instanceof File));
 }
 </script>
 
@@ -71,10 +79,32 @@ function startReplace(): void {
       @update:model-value="update"
     />
 
+    <MultiSelect
+      v-else-if="field.type === 'multiselect'"
+      :model-value="(modelValue as unknown[]) ?? []"
+      :options="field.options"
+      option-label="label"
+      option-value="value"
+      display="chip"
+      filter
+      :max-selected-labels="3"
+      :placeholder="field.placeholder ?? 'Select…'"
+      @update:model-value="update"
+    />
+
     <ToggleSwitch
       v-else-if="field.type === 'toggle'"
       :model-value="Boolean(modelValue)"
       @update:model-value="update"
+    />
+
+    <FileUpload
+      v-else-if="field.type === 'file'"
+      mode="basic"
+      custom-upload
+      :multiple="true"
+      choose-label="Choose file"
+      @select="updateFiles"
     />
 
     <Textarea
@@ -97,6 +127,13 @@ function startReplace(): void {
     <InputNumber
       v-else-if="field.type === 'number'"
       :model-value="(modelValue as number) ?? null"
+      @update:model-value="update"
+    />
+
+    <InputText
+      v-else-if="field.type === 'duration'"
+      :model-value="(modelValue as string) ?? ''"
+      :placeholder="field.placeholder ?? '30s, 5m, 1h'"
       @update:model-value="update"
     />
 

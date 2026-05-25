@@ -102,6 +102,8 @@ function applyEvent(ev: ResourceEvent): void {
   const idx = rows.value.findIndex((r) => r.ref?.uid === ev.ref.uid);
   if (ev.type === "deleted") {
     if (idx >= 0) rows.value.splice(idx, 1);
+  } else if (ev.type === "added" && idx < 0 && ev.resource) {
+    rows.value.unshift({ ...(ev.resource as Row), ref: ev.ref });
   } else if (idx >= 0 && ev.resource) {
     rows.value[idx] = { ...rows.value[idx], ...(ev.resource as Row) };
   }
@@ -159,6 +161,14 @@ onUnmounted(() => {
       <span v-if="total != null" class="text-xs text-surface-400"
         >{{ total }} total</span
       >
+      <button
+        type="button"
+        :disabled="loading"
+        class="ml-auto rounded-md border border-surface-300 px-3 py-1 text-sm hover:bg-surface-100 disabled:opacity-50 dark:border-surface-700 dark:hover:bg-surface-800"
+        @click="load(true)"
+      >
+        Refresh
+      </button>
     </div>
 
     <div class="min-h-0 flex-1 overflow-hidden">

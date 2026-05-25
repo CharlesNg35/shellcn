@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 1 (M0) complete: declarative renderer on fixtures, all four fixtures render end-to-end (unit + e2e green); Phase 2 (M1 core runtime) next._
+_Last updated: 2026-05-25 — Phase 2 (M1) complete: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, Casbin authz, session/channel/transport runtime, chi server + route wrapper, audit + telemetry) proven end-to-end by the `noop` plugin (Go race tests + lint green; binary builds & serves). Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Phase 3 (M2 SSH/SFTP) next._
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -29,16 +29,16 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 
 ## Phase 2 — M1 · Core runtime
 
-- [ ] 2.1 Package skeleton and plugin contract types
-- [ ] 2.2 Manifest validator and browser projection
-- [ ] 2.3 GORM models and store repositories
-- [ ] 2.4 Secret vault
-- [ ] 2.5 Authentication and sessions
-- [ ] 2.6 Authorization with Casbin
-- [ ] 2.7 Session, channel, and transport runtime
-- [ ] 2.8 chi server and route wrapper
-- [ ] 2.9 Audit and telemetry
-- [ ] 2.10 Noop plugin and end-to-end validation
+- [x] 2.1 Package skeleton and plugin contract types
+- [x] 2.2 Manifest validator and browser projection
+- [x] 2.3 GORM models and store repositories
+- [x] 2.4 Secret vault
+- [x] 2.5 Authentication and sessions
+- [x] 2.6 Authorization with Casbin
+- [x] 2.7 Session, channel, and transport runtime
+- [x] 2.8 chi server and route wrapper
+- [x] 2.9 Audit and telemetry
+- [x] 2.10 Noop plugin and end-to-end validation
 
 ## Phase 3 — M2 · SSH/SFTP reference plugin
 

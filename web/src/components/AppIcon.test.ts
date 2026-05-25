@@ -50,6 +50,42 @@ describe("AppIcon", () => {
     ).toBe(true);
   });
 
+  it("renders sanitized inline svg markup", () => {
+    const w = mount(AppIcon, {
+      props: {
+        icon: {
+          type: "svg",
+          value: '<svg viewBox="0 0 24 24"><circle r="8"/></svg>',
+        },
+      },
+    });
+    const html = w.html();
+    expect(html).toContain("<svg");
+    expect(html).toContain("circle");
+  });
+
+  it("strips scripts/handlers from inline svg (XSS guard)", () => {
+    const w = mount(AppIcon, {
+      props: {
+        icon: {
+          type: "svg",
+          value:
+            '<svg onload="alert(1)"><script>alert(2)</script><circle r="8"/></svg>',
+        },
+      },
+    });
+    const html = w.html();
+    expect(html).not.toContain("onload");
+    expect(html).not.toContain("<script");
+    expect(html).not.toContain("alert");
+  });
+
+  it("falls back to a glyph for empty svg markup", () => {
+    const w = mount(AppIcon, { props: { icon: { type: "svg", value: "" } } });
+    // empty value → no icon at all (treated as not provided)
+    expect(w.find("svg").exists()).toBe(false);
+  });
+
   it("renders nothing when no icon is provided", () => {
     const w = mount(AppIcon, { props: { icon: null } });
     expect(w.find("svg").exists()).toBe(false);

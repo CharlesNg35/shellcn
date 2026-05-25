@@ -78,6 +78,18 @@ function withQuery(base: string, sp: URLSearchParams): string {
   return qs ? `${base}?${qs}` : base;
 }
 
+export function routeURL(
+  connectionId: string,
+  routeId: string,
+  ctx: ResolveContext = {},
+  params: Record<string, string> = {},
+): string {
+  return withQuery(
+    routePath(connectionId, routeId),
+    queryParams(resolveParams(params, ctx)),
+  );
+}
+
 async function getJSON<T>(url: string): Promise<T> {
   const res = await fetch(url);
   if (!res.ok) throw new ApiError(res.status, res.statusText);
@@ -132,6 +144,75 @@ export async function runAction(
     method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
+  });
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  return (await res.json()) as ActionResult;
+}
+
+function isFile(value: unknown): value is File {
+  return typeof File !== "undefined" && value instanceof File;
+}
+
+function bodyHasFile(body: unknown): boolean {
+  if (isFile(body)) return true;
+  if (Array.isArray(body)) return body.some(bodyHasFile);
+  if (!body || typeof body !== "object") return false;
+  return Object.values(body).some(bodyHasFile);
+}
+
+function appendFormValue(form: FormData, key: string, value: unknown): void {
+  if (value === undefined || value === null) return;
+  if (isFile(value)) {
+    form.append(key, value, value.name);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) appendFormValue(form, key, item);
+    return;
+  }
+  if (typeof value === "object") {
+    form.append(key, JSON.stringify(value));
+    return;
+  }
+  form.append(key, String(value));
+}
+
+export async function runFormAction(
+  connectionId: string,
+  routeId: string,
+  ctx: ResolveContext = {},
+  body: Record<string, unknown> = {},
+  params: Record<string, string> = {},
+  method = "POST",
+): Promise<ActionResult> {
+  if (!bodyHasFile(body)) {
+    return runAction(connectionId, routeId, ctx, body, params, method);
+  }
+  const form = new FormData();
+  for (const [key, value] of Object.entries(body)) {
+    appendFormValue(form, key, value);
+  }
+  const res = await fetch(routeURL(connectionId, routeId, ctx, params), {
+    method,
+    body: form,
+  });
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  return (await res.json()) as ActionResult;
+}
+
+export async function uploadFiles(
+  connectionId: string,
+  routeId: string,
+  ctx: ResolveContext = {},
+  files: File[],
+  params: Record<string, string> = {},
+  fieldName = "files",
+): Promise<ActionResult> {
+  const body = new FormData();
+  for (const file of files) body.append(fieldName, file, file.name);
+  const res = await fetch(routeURL(connectionId, routeId, ctx, params), {
+    method: "POST",
+    body,
   });
   if (!res.ok) throw new ApiError(res.status, res.statusText);
   return (await res.json()) as ActionResult;

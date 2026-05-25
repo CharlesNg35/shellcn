@@ -8,12 +8,25 @@ const props = defineProps<PanelProps>();
 
 const cpu = ref<number | null>(null);
 const mem = ref<number | null>(null);
+const cpuHistory = ref<number[]>([]);
+const memHistory = ref<number[]>([]);
+
+function push(history: typeof cpuHistory, value: number): void {
+  history.value.push(Math.max(0, Math.min(100, value)));
+  if (history.value.length > 60) history.value.shift();
+}
 
 function onFrame(frame: string): void {
   try {
     const m = JSON.parse(frame) as { cpu?: number; mem?: number };
-    if (typeof m.cpu === "number") cpu.value = m.cpu;
-    if (typeof m.mem === "number") mem.value = m.mem;
+    if (typeof m.cpu === "number") {
+      cpu.value = m.cpu;
+      push(cpuHistory, m.cpu);
+    }
+    if (typeof m.mem === "number") {
+      mem.value = m.mem;
+      push(memHistory, m.mem);
+    }
   } catch {
     /* ignore */
   }
@@ -27,8 +40,8 @@ const { status } = useStream(
 );
 
 const metrics = [
-  { label: "CPU", value: cpu, color: "bg-primary-500" },
-  { label: "Memory", value: mem, color: "bg-emerald-500" },
+  { label: "CPU", value: cpu, history: cpuHistory, color: "bg-primary-500" },
+  { label: "Memory", value: mem, history: memHistory, color: "bg-emerald-500" },
 ];
 </script>
 
@@ -52,6 +65,14 @@ const metrics = [
             class="h-full transition-all"
             :class="m.color"
             :style="{ width: `${m.value.value ?? 0}%` }"
+          />
+        </div>
+        <div class="mt-4 flex h-16 items-end gap-0.5">
+          <span
+            v-for="(point, i) in m.history.value"
+            :key="i"
+            class="min-w-1 flex-1 rounded-t bg-surface-300 dark:bg-surface-700"
+            :style="{ height: `${Math.max(point, 2)}%` }"
           />
         </div>
       </div>

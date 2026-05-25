@@ -1,0 +1,128 @@
+package service_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+
+	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng/shellcn/internal/secrets"
+	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng/shellcn/internal/store"
+)
+
+func newCredentialService(t *testing.T) (*service.CredentialService, *store.Store) {
+	t.Helper()
+	key, _ := secrets.GenerateMasterKey()
+	vault, err := secrets.NewVault(key)
+	if err != nil {
+		t.Fatalf("vault: %v", err)
+	}
+	st := store.NewMemory()
+	return service.NewCredentialService(st.Credentials, st.CredentialGrants, vault), st
+}
+
+func TestCredentialCreateEncryptsAtRest(t *testing.T) {
+	ctx := context.Background()
+	svc, st := newCredentialService(t)
+
+	cred, err := svc.Create(ctx, service.NewCredentialInput{
+		OwnerID: "owner", Name: "ops", Kind: "ssh_password", Protocols: []string{"ssh"}, Secret: "hunter2",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Stored material is ciphertext, never the plaintext.
+	stored, _ := st.Credentials.Get(ctx, cred.ID)
+	if len(stored.EncryptedSecret) == 0 {
+		t.Fatal("no encrypted secret stored")
+	}
+	if string(stored.EncryptedSecret) == "hunter2" || containsBytes(stored.EncryptedSecret, "hunter2") {
+		t.Error("plaintext leaked into stored credential")
+	}
+	// The summary never carries secret material.
+	sum := stored.Summary()
+	if sum.ID != cred.ID || sum.Kind != "ssh_password" {
+		t.Errorf("summary wrong: %+v", sum)
+	}
+}
+
+func TestCredentialResolveOwnerAndGrant(t *testing.T) {
+	ctx := context.Background()
+	svc, st := newCredentialService(t)
+	cred, _ := svc.Create(ctx, service.NewCredentialInput{OwnerID: "owner", Name: "k", Kind: "ssh_password", Secret: "topsecret"})
+
+	// Owner resolves the plaintext for connect-time injection.
+	pt, err := svc.Resolve(ctx, "owner", cred.ID)
+	if err != nil || string(pt) != "topsecret" {
+		t.Fatalf("owner resolve: pt=%q err=%v", pt, err)
+	}
+
+	// A stranger is forbidden.
+	if _, err := svc.Resolve(ctx, "stranger", cred.ID); !errors.Is(err, models.ErrForbidden) {
+		t.Errorf("stranger resolve: want ErrForbidden, got %v", err)
+	}
+
+	// After a use-grant, the grantee resolves it (still never readable as a value to the client).
+	_ = st.CredentialGrants.Create(ctx, &models.CredentialGrant{ID: "cg1", CredentialID: cred.ID, SubjectID: "stranger", Access: models.AccessUse})
+	pt, err = svc.Resolve(ctx, "stranger", cred.ID)
+	if err != nil || string(pt) != "topsecret" {
+		t.Errorf("granted resolve: pt=%q err=%v", pt, err)
+	}
+}
+
+func TestCredentialResolveNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newCredentialService(t)
+	if _, err := svc.Resolve(ctx, "owner", "ghost"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("missing credential: want ErrNotFound, got %v", err)
+	}
+}
+
+func TestCredentialListUsableFilters(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newCredentialService(t)
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "ssh-key", Kind: "ssh_private_key", Protocols: []string{"ssh"}, Secret: "a"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "db-pw", Kind: "db_password", Protocols: []string{"postgres"}, Secret: "b"})
+	anyCred, _ := svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "wildcard", Kind: "api_token", Secret: "c"})
+
+	// Filter by kind.
+	got, err := svc.ListUsable(ctx, "u", []string{"ssh_private_key"}, "")
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 1 || got[0].Kind != "ssh_private_key" {
+		t.Errorf("kind filter: %+v", got)
+	}
+
+	// Filter by protocol — the wildcard (empty Protocols) always matches.
+	got, _ = svc.ListUsable(ctx, "u", nil, "postgres")
+	kinds := map[string]bool{}
+	for _, c := range got {
+		kinds[c.Kind] = true
+	}
+	if !kinds["db_password"] || !kinds["api_token"] || kinds["ssh_private_key"] {
+		t.Errorf("protocol filter wrong: %+v", got)
+	}
+
+	// A summary never leaks anything secret.
+	for _, c := range got {
+		if c.ID == anyCred.ID && c.Name != "wildcard" {
+			t.Errorf("summary corrupted: %+v", c)
+		}
+	}
+}
+
+func containsBytes(haystack []byte, needle string) bool {
+	return len(needle) > 0 && len(haystack) >= len(needle) && indexOfBytes(haystack, needle) >= 0
+}
+
+func indexOfBytes(h []byte, n string) int {
+	for i := 0; i+len(n) <= len(h); i++ {
+		if string(h[i:i+len(n)]) == n {
+			return i
+		}
+	}
+	return -1
+}

@@ -6,6 +6,8 @@ import {
   interpolate,
   queryParams,
   resolveParams,
+  runFormAction,
+  uploadFiles,
   routePath,
   watch,
 } from "./dataSource";
@@ -90,6 +92,50 @@ describe("dataSource resolver", () => {
     expect(routePath("conn-1", "docker.container.list")).toBe(
       "/api/connections/conn-1/x/docker.container.list",
     );
+  });
+
+  it("posts file uploads as multipart without forcing a JSON content type", async () => {
+    const fetchMock = installFetch(() => ({ body: { ok: true } }));
+    const file = new File(["hello"], "hello.txt", { type: "text/plain" });
+
+    await uploadFiles(
+      "conn",
+      "ssh.sftp.upload",
+      {},
+      [file],
+      { path: "/" },
+      "files",
+    );
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain("/api/connections/conn/x/ssh.sftp.upload?p.path=%2F");
+    expect(init?.method).toBe("POST");
+    expect(init?.headers).toBeUndefined();
+    expect(init?.body).toBeInstanceOf(FormData);
+    expect((init?.body as FormData).getAll("files")).toEqual([file]);
+  });
+
+  it("promotes action bodies with files to multipart form data", async () => {
+    const fetchMock = installFetch(() => ({ body: { ok: true } }));
+    const file = new File(["cert"], "client.pem");
+
+    await runFormAction(
+      "conn",
+      "cert.upload",
+      {},
+      { name: "client", cert: [file], metadata: { rotate: true } },
+      { id: "c1" },
+      "PATCH",
+    );
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain("/api/connections/conn/x/cert.upload?p.id=c1");
+    expect(init?.method).toBe("PATCH");
+    expect(init?.headers).toBeUndefined();
+    const body = init?.body as FormData;
+    expect(body.get("name")).toBe("client");
+    expect(body.getAll("cert")).toEqual([file]);
+    expect(body.get("metadata")).toBe('{"rotate":true}');
   });
 
   it("follows NextCursor across pages", async () => {

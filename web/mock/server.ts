@@ -5,7 +5,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
-import { listData, badgeData, docData } from "./datasets.ts";
+import { listData, badgeData, docData, actionData } from "./datasets.ts";
 
 const fixturesDir = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -37,6 +37,11 @@ function readBody(req: IncomingMessage): Promise<unknown> {
     let raw = "";
     req.on("data", (c) => (raw += c));
     req.on("end", () => {
+      if (String(req.headers["content-type"] ?? "").includes("multipart/")) {
+        const files = [...raw.matchAll(/filename="([^"]+)"/g)].map((m) => m[1]);
+        resolve({ files });
+        return;
+      }
       try {
         resolve(raw ? JSON.parse(raw) : {});
       } catch {
@@ -220,8 +225,10 @@ function handleHTTP(
       if (data) return send(res, 200, paginate(data, url));
       return send(res, 200, { items: [], nextCursor: "", total: 0 });
     }
-    // Actions (POST/PUT/PATCH/DELETE) — acknowledge.
-    void readBody(req).then(() => send(res, 200, { ok: true, routeId }));
+    void readBody(req).then((body) => {
+      const action = actionData(routeId, params, body);
+      send(res, 200, action ?? { ok: true, routeId });
+    });
     return;
   }
 

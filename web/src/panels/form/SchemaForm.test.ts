@@ -88,6 +88,36 @@ describe("SchemaForm", () => {
     );
   });
 
+  it("renders multiselect and duration fields without falling back to plain text", async () => {
+    const w = mount(SchemaForm, {
+      props: {
+        schema: {
+          groups: [
+            {
+              name: "Advanced",
+              fields: [
+                {
+                  key: "roles",
+                  label: "Roles",
+                  type: "multiselect",
+                  options: [
+                    { label: "Read", value: "read" },
+                    { label: "Write", value: "write" },
+                  ],
+                },
+                { key: "ttl", label: "TTL", type: "duration" },
+              ],
+            },
+          ],
+        },
+        submitLabel: "Save",
+      },
+    });
+    await flushPromises();
+    expect(w.findComponent({ name: "MultiSelect" }).exists()).toBe(true);
+    expect(w.find('input[placeholder="30s, 5m, 1h"]').exists()).toBe(true);
+  });
+
   it("omits hidden conditional fields from submit payloads", async () => {
     const w = mount(SchemaForm, {
       props: {

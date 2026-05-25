@@ -113,7 +113,18 @@
       "icon": { "type": "name", "value": "folder" },
       "panel": "file_browser",
       "source": { "routeId": "ssh.sftp.list", "params": { "path": "/" } },
-      "config": { "pathParam": "path", "readRouteId": "ssh.sftp.read" }
+      "config": {
+        "pathParam": "path",
+        "readRouteId": "ssh.sftp.read",
+        "downloadRouteId": "ssh.sftp.download",
+        "uploadRouteId": "ssh.sftp.upload",
+        "mkdirRouteId": "ssh.sftp.mkdir",
+        "renameRouteId": "ssh.sftp.rename",
+        "deleteRouteId": "ssh.sftp.delete",
+        "writable": true,
+        "multipleUpload": true,
+        "maxUploadBytes": 52428800
+      }
     },
     {
       "key": "tunnels",

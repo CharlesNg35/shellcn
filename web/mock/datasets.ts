@@ -374,6 +374,70 @@ function fsRead(path: string): unknown {
   return { path, encoding: "utf8", content: "" };
 }
 
+function parentDir(path: string): string {
+  const clean = path.replace(/\/+$/, "");
+  const i = clean.lastIndexOf("/");
+  return i <= 0 ? "/" : clean.slice(0, i);
+}
+
+function baseName(path: string): string {
+  return path.split("/").filter(Boolean).at(-1) ?? "";
+}
+
+function childPath(parent: string, name: string): string {
+  return parent === "/" ? `/${name}` : `${parent}/${name}`;
+}
+
+function bodyRecord(body: unknown): Record<string, unknown> {
+  return body && typeof body === "object"
+    ? (body as Record<string, unknown>)
+    : {};
+}
+
+function safeName(value: unknown): string {
+  return typeof value === "string"
+    ? value.split("/").filter(Boolean).join("")
+    : "";
+}
+
+function addFsEntry(
+  dir: string,
+  name: string,
+  entry: Omit<FsNode["entries"][number], "name">,
+): void {
+  const node = (fs[dir] ??= { entries: [] });
+  node.entries = node.entries.filter((e) => e.name !== name);
+  node.entries.push({ name, ...entry });
+}
+
+function removeFsEntry(path: string): void {
+  const dir = parentDir(path);
+  const name = baseName(path);
+  const node = fs[dir];
+  if (node) node.entries = node.entries.filter((e) => e.name !== name);
+  for (const key of Object.keys(fs)) {
+    if (key === path || key.startsWith(`${path}/`)) delete fs[key];
+  }
+  delete fileContents[path];
+}
+
+function renameFsEntry(path: string, name: string): void {
+  const dir = parentDir(path);
+  const node = fs[dir];
+  const entry = node?.entries.find((e) => e.name === baseName(path));
+  if (!entry) return;
+  const nextPath = childPath(dir, name);
+  entry.name = name;
+  if (fs[path]) {
+    fs[nextPath] = fs[path];
+    delete fs[path];
+  }
+  if (fileContents[path] !== undefined) {
+    fileContents[nextPath] = fileContents[path];
+    delete fileContents[path];
+  }
+}
+
 const lists: Record<string, (params: Record<string, string>) => Item[]> = {
   "ssh.sftp.list": (p) => fsList(p.path ?? "/"),
   "docker.container.list": () => containers,
@@ -484,7 +548,7 @@ export function docData(
   routeId: string,
   params: Record<string, string>,
 ): unknown {
-  if (routeId === "ssh.sftp.read") {
+  if (routeId === "ssh.sftp.read" || routeId === "ssh.sftp.download") {
     return fsRead(params.path ?? "/");
   }
   if (routeId === "docker.container.inspect") {
@@ -522,6 +586,41 @@ export function docData(
         },
       ],
     };
+  }
+  return undefined;
+}
+
+export function actionData(
+  routeId: string,
+  params: Record<string, string>,
+  body: unknown,
+): unknown {
+  const payload = bodyRecord(body);
+  if (routeId === "ssh.sftp.mkdir") {
+    const name = safeName(payload.name);
+    if (name) {
+      const dir = params.path ?? "/";
+      addFsEntry(dir, name, { isDir: true });
+      fs[childPath(dir, name)] = { entries: [] };
+    }
+    return { ok: true, routeId };
+  }
+  if (routeId === "ssh.sftp.rename") {
+    const name = safeName(payload.name);
+    if (name) renameFsEntry(params.path ?? "/", name);
+    return { ok: true, routeId };
+  }
+  if (routeId === "ssh.sftp.delete") {
+    removeFsEntry(params.path ?? String(payload.path ?? ""));
+    return { ok: true, routeId };
+  }
+  if (routeId === "ssh.sftp.upload") {
+    const names = Array.isArray(payload.files) ? payload.files : [];
+    for (const item of names) {
+      const name = safeName(item);
+      if (name) addFsEntry(params.path ?? "/", name, { isDir: false, size: 0 });
+    }
+    return { ok: true, routeId };
   }
   return undefined;
 }

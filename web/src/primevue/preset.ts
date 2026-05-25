@@ -26,6 +26,20 @@ export const primeVuePassthrough = {
     emptyMessage: "px-3 py-2 text-sm text-surface-400",
   },
 
+  multiselect: {
+    root: "inline-flex w-full items-center justify-between rounded-md border border-surface-300 bg-surface-0 text-sm transition-colors dark:border-surface-700 dark:bg-surface-950",
+    labelContainer: "min-w-0 flex-1 overflow-hidden",
+    label:
+      "flex min-h-8 flex-wrap items-center gap-1 px-2.5 py-1 text-left text-surface-800 dark:text-surface-100",
+    dropdown: "px-2 text-surface-400",
+    overlay,
+    listContainer: "max-h-60 overflow-auto",
+    option,
+    emptyMessage: "px-3 py-2 text-sm text-surface-400",
+    chipItem:
+      "rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-800",
+  },
+
   toggleswitch: {
     root: "relative inline-flex h-5 w-9 cursor-pointer",
     input: "absolute inset-0 z-10 cursor-pointer opacity-0",

@@ -3,7 +3,7 @@ import { ref } from "vue";
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import { useToast } from "primevue/usetoast";
-import { runAction } from "../api/dataSource";
+import { runFormAction } from "../api/dataSource";
 import type { Action, ResourceRef, RiskLevel } from "../types/projection";
 import AppIcon from "../components/AppIcon.vue";
 import SchemaForm from "./form/SchemaForm.vue";
@@ -53,11 +53,11 @@ async function execute(
   busy.value = true;
   error.value = null;
   try {
-    await runAction(
+    await runFormAction(
       props.connectionId,
       action.routeId,
       { resource: props.resource },
-      body,
+      body ?? {},
       actionParams(action),
       action.method ?? "POST",
     );
