@@ -51,7 +51,7 @@ func configSchema() plugin.Schema {
 				{Label: "Stored credential", Value: "credential"},
 			}},
 			{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-				Kinds: []plugin.CredentialKind{plugin.CredentialSSHPrivateKey, plugin.CredentialSSHPassword}, Protocols: []string{"sftp"}, Required: true,
+				Kinds: []plugin.CredentialKind{sshsftp.CredentialSSHPrivateKey, sshsftp.CredentialSSHPassword}, Protocols: []string{"sftp"}, Required: true,
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "private_key", Label: "Private key", Type: plugin.FieldTextarea, Required: true, Secret: true, Help: "PEM-encoded private key.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "private_key"}}}},

@@ -20,9 +20,31 @@ var validMethods = map[Method]bool{
 // Validate checks a manifest + its routes at registration, returning an
 // aggregate of all actionable problems found (not just the first).
 func Validate(m Manifest, routes []Route) error {
+	return ValidateWithCredentialKinds(m, routes, mustCredentialKindSet(builtInCredentialKindCatalog))
+}
+
+// ValidateWithCredentialKinds checks a manifest against an existing credential
+// catalog. Plugin-declared kinds are added to a local copy before credential_ref
+// selectors are validated, so a plugin may use the kinds it declares.
+func ValidateWithCredentialKinds(m Manifest, routes []Route, existing CredentialKindCatalog) error {
 	var errs []error
 	add := func(format string, args ...any) {
 		errs = append(errs, fmt.Errorf(format, args...))
+	}
+	if existing == nil {
+		existing = mustCredentialKindSet(builtInCredentialKindCatalog)
+	}
+	catalog, err := newCredentialKindSet(credentialKindDefinitions(existing.CredentialKinds()))
+	if err != nil {
+		add("credential kind catalog is invalid: %v", err)
+		catalog = mustCredentialKindSet(nil)
+	}
+	declaredCredentialKinds := map[CredentialKind]bool{}
+	for _, info := range m.CredentialKinds {
+		if err := catalog.add(info); err != nil {
+			add("%v", err)
+		}
+		declaredCredentialKinds[normalizeCredentialKindInfo(info).Kind] = true
 	}
 
 	if m.APIVersion != CurrentAPIVersion {
@@ -55,12 +77,18 @@ func Validate(m Manifest, routes []Route) error {
 	streamsByID := validateStreams(m, routesByID, add)
 	validateLayout(m, routesByID, actionIDs, add)
 	validateRecording(m, streamsByID, add)
-	validateCredentialSelectors(m.Config, add)
+	usedCredentialKinds := validateCredentialSelectors(m.Config, catalog, add)
+	for kind := range declaredCredentialKinds {
+		if !usedCredentialKinds[kind] {
+			add("credential kind %q is declared but not used by any credential_ref selector", kind)
+		}
+	}
 
 	return errors.Join(errs...)
 }
 
-func validateCredentialSelectors(schema Schema, add func(string, ...any)) {
+func validateCredentialSelectors(schema Schema, catalog CredentialKindCatalog, add func(string, ...any)) map[CredentialKind]bool {
+	used := map[CredentialKind]bool{}
 	for _, group := range schema.Groups {
 		for _, field := range group.Fields {
 			if field.Type != FieldCredentialRef {
@@ -74,17 +102,14 @@ func validateCredentialSelectors(schema Schema, add func(string, ...any)) {
 				add("credential_ref field %q declares no accepted credential kinds", field.Key)
 			}
 			for _, kind := range field.Credential.Kinds {
-				if _, ok := CredentialKindLookup(kind); !ok {
+				used[kind] = true
+				if _, ok := catalog.CredentialKindLookup(kind); !ok {
 					add("credential_ref field %q declares unknown credential kind %q", field.Key, kind)
-				}
-				for _, protocol := range field.Credential.Protocols {
-					if !CredentialKindSupportsProtocol(kind, protocol) {
-						add("credential_ref field %q declares kind %q incompatible with protocol %q", field.Key, kind, protocol)
-					}
 				}
 			}
 		}
 	}
+	return used
 }
 
 // validateRoutes checks route shape and returns the set of route ids.

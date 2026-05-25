@@ -4,6 +4,7 @@ import { RouterView, useRouter } from "vue-router";
 import { useToast } from "primevue/usetoast";
 import { setApiErrorHandler, type ApiError } from "./api/client";
 import { useAuthStore } from "./stores/auth";
+import AppLogo from "./components/AppLogo.vue";
 import AppToast from "./components/AppToast.vue";
 
 const toast = useToast();
@@ -45,10 +46,7 @@ onUnmounted(() => setApiErrorHandler(null));
     v-if="!auth.ready"
     class="flex h-full flex-col items-center justify-center gap-[18px] bg-surface-50 dark:bg-surface-950"
   >
-    <span
-      class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-600 font-mono text-lg font-semibold text-white"
-      >&gt;_</span
-    >
+    <AppLogo :size="44" class="text-primary-600" />
     <span
       class="h-[22px] w-[22px] animate-spin rounded-full border-[2.5px] border-surface-200 border-t-primary-500 dark:border-surface-800 dark:border-t-primary-500"
       role="status"

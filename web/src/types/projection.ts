@@ -106,24 +106,8 @@ export interface Option {
   value: string | number | boolean;
 }
 
-// Open union: plugins may declare their own credential kinds.
-export type CredentialKind =
-  | "ssh_private_key"
-  | "ssh_password"
-  | "db_password"
-  | "api_token"
-  | "tls_client_cert"
-  | "kubeconfig"
-  | "cloud_access_key"
-  | "service_account_json"
-  | "basic_auth"
-  | "bearer_token"
-  | "vnc_password"
-  | "rdp_password"
-  | "smb_password"
-  | "snmp_community"
-  | "snmp_v3"
-  | (string & {});
+// Credential kinds are registry data, not a frontend enum.
+export type CredentialKind = string;
 
 export interface CredentialKindInfo {
   kind: CredentialKind;
@@ -364,6 +348,7 @@ export interface PluginProjection {
   icon: Icon;
   config: Schema;
   capabilities: string[];
+  credentialKinds?: CredentialKindInfo[];
   supportedTransports: Transport[];
   agent?: AgentProfile;
   layout: Layout;

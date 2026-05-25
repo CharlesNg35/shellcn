@@ -236,13 +236,13 @@ func newHarness(t *testing.T) *harness {
 	st := store.NewMemory()
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
-	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault)
 
 	reg := plugin.NewRegistry()
 	reg.MustRegister(testPlugin{})
 	reg.MustRegister(boomPlugin{})
 	reg.MustRegister(internalPlugin{})
 	reg.MustRegister(shellssh.New())
+	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 
 	pol, err := policy.New()
 	if err != nil {

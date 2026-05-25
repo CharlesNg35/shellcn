@@ -124,7 +124,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 
 	metrics := telemetry.NewMetrics()
 	tunnels := transport.NewRegistry()
-	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault)
+	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 	creds.SetSecretAccessHook(metrics.IncSecretAccess)
 	connector := service.NewConnector(reg, creds, vault, tunnels)
 	connector.SetSecretAccessHook(metrics.IncSecretAccess)

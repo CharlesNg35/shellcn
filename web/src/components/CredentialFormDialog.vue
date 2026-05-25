@@ -72,10 +72,7 @@ const compatibleProtocols = computed(
 const protocolOptions = computed(() => {
   const selectorProtocols = props.selector?.protocols ?? [];
   const allowed = conns.plugins.filter((p) => {
-    if (
-      compatibleProtocols.value.length &&
-      !compatibleProtocols.value.includes(p.name)
-    ) {
+    if (!compatibleProtocols.value.includes(p.name)) {
       return false;
     }
     return !selectorProtocols.length || selectorProtocols.includes(p.name);

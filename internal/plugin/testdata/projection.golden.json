@@ -73,6 +73,15 @@
     "terminal",
     "filesystem"
   ],
+  "credentialKinds": [
+    {
+      "kind": "ssh_private_key",
+      "label": "SSH private key",
+      "secretLabel": "Private key",
+      "secretMultiline": true,
+      "identityLabel": "Username"
+    }
+  ],
   "supportedTransports": [
     "direct"
   ],

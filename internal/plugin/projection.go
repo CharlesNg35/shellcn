@@ -50,6 +50,7 @@ type Projection struct {
 	Icon                Icon                   `json:"icon"`
 	Config              Schema                 `json:"config"`
 	Capabilities        []Capability           `json:"capabilities"`
+	CredentialKinds     []CredentialKindInfo   `json:"credentialKinds,omitempty"`
 	SupportedTransports []Transport            `json:"supportedTransports"`
 	Agent               *ProjectedAgentProfile `json:"agent,omitempty"`
 	Layout              Layout                 `json:"layout"`
@@ -73,6 +74,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 		Icon:                m.Icon,
 		Config:              m.Config,
 		Capabilities:        nonNil(m.Capabilities),
+		CredentialKinds:     nonNil(m.CredentialKinds),
 		SupportedTransports: nonNil(m.SupportedTransports),
 		Layout:              m.Layout,
 		Tabs:                m.Tabs,

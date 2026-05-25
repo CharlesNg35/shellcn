@@ -6,6 +6,7 @@ import { useWorkspaceStore } from "../stores/workspace";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
 import AppIcon from "./AppIcon.vue";
+import AppLogo from "./AppLogo.vue";
 import ConnectionFormDialog from "./ConnectionFormDialog.vue";
 import { searchInputClass } from "../primevue/preset";
 import type { ConnectionSummary } from "../types/projection";
@@ -88,11 +89,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
           :to="{ name: 'home' }"
           class="flex items-center gap-2 font-semibold text-surface-900 dark:text-surface-0"
         >
-          <span
-            class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 text-white"
-          >
-            <AppIcon :icon="{ type: 'name', value: 'terminal' }" :size="16" />
-          </span>
+          <AppLogo :size="28" class="shrink-0 text-primary-600" />
           ShellCN
         </RouterLink>
         <button

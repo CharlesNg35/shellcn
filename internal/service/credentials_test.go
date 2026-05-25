@@ -12,6 +12,64 @@ import (
 	"github.com/charlesng/shellcn/internal/store"
 )
 
+type credentialCatalogPlugin struct{}
+
+const (
+	testCredentialSSHPrivateKey plugin.CredentialKind = "ssh_private_key"
+	testCredentialSSHPassword   plugin.CredentialKind = "ssh_password"
+	testCredentialKubeconfig    plugin.CredentialKind = "kubeconfig"
+)
+
+func (credentialCatalogPlugin) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion, Name: "catalog", Title: "Catalog",
+		Layout:              plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		CredentialKinds: []plugin.CredentialKindInfo{
+			{
+				Kind: testCredentialSSHPrivateKey, Label: "SSH private key", SecretLabel: "Private key",
+				SecretMultiline: true, IdentityLabel: "Username",
+			},
+			{
+				Kind: testCredentialSSHPassword, Label: "SSH password", SecretLabel: "Password",
+				IdentityLabel: "Username",
+			},
+			{
+				Kind: testCredentialKubeconfig, Label: "Kubeconfig", SecretLabel: "Kubeconfig YAML",
+				SecretMultiline: true, IdentityLabel: "Context / user",
+			},
+		},
+		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{
+			{
+				Key: "ssh_credential", Label: "SSH credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{
+					Kinds: []plugin.CredentialKind{testCredentialSSHPrivateKey, testCredentialSSHPassword}, Protocols: []string{"ssh"},
+				},
+			},
+			{
+				Key: "db_credential", Label: "Database credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{"postgres"}},
+			},
+			{
+				Key: "api_credential", Label: "API credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}, Protocols: []string{"http-api"}},
+			},
+			{
+				Key: "kube_credential", Label: "Kube credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{testCredentialKubeconfig}, Protocols: []string{"kubernetes"}},
+			},
+		}}}},
+	}
+}
+
+func (credentialCatalogPlugin) Routes() []plugin.Route {
+	return []plugin.Route{{ID: "catalog.list", Method: plugin.MethodGet, Permission: "catalog.read", Risk: plugin.RiskSafe, Handle: func(*plugin.RequestContext) (any, error) { return nil, nil }}}
+}
+
+func (credentialCatalogPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session, error) {
+	return nil, nil
+}
+
 func newCredentialService(t *testing.T) (*service.CredentialService, *store.Store) {
 	t.Helper()
 	key, _ := secrets.GenerateMasterKey()
@@ -20,7 +78,9 @@ func newCredentialService(t *testing.T) (*service.CredentialService, *store.Stor
 		t.Fatalf("vault: %v", err)
 	}
 	st := store.NewMemory()
-	return service.NewCredentialService(st.Credentials, st.CredentialGrants, vault), st
+	reg := plugin.NewRegistry()
+	reg.MustRegister(credentialCatalogPlugin{})
+	return service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg)), st
 }
 
 func TestCredentialCreateEncryptsAtRest(t *testing.T) {

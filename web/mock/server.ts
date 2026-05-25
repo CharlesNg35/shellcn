@@ -19,69 +19,60 @@ function readJSON<T>(file: string): T {
 
 const nonPluginFixtures = new Set(["connections.json", "credentials.json"]);
 
-const credentialKinds = [
-  {
-    kind: "ssh_private_key",
-    label: "SSH private key",
-    secretLabel: "Private key",
-    secretMultiline: true,
-    identityLabel: "Username",
-    compatibleProtocols: ["ssh", "sftp"],
-  },
-  {
-    kind: "ssh_password",
-    label: "SSH password",
-    secretLabel: "Password",
-    identityLabel: "Username",
-    compatibleProtocols: ["ssh", "sftp"],
-  },
-  {
-    kind: "tls_client_cert",
-    label: "TLS client certificate",
-    secretLabel: "Certificate and private key",
-    secretMultiline: true,
-    compatibleProtocols: ["docker", "ftps", "webdav", "proxmox", "kubernetes"],
-  },
+interface CredentialKindInfo {
+  kind: string;
+  label: string;
+  secretLabel: string;
+  secretMultiline?: boolean;
+  identityLabel?: string;
+  compatibleProtocols?: string[];
+}
+
+interface CredentialField {
+  type?: string;
+  credential?: {
+    kinds?: string[];
+    protocols?: string[];
+  };
+}
+
+interface PluginFixture {
+  name: string;
+  title: string;
+  icon: unknown;
+  description: string;
+  credentialKinds?: CredentialKindInfo[];
+  config?: {
+    groups?: Array<{
+      fields?: CredentialField[];
+    }>;
+  };
+}
+
+const builtInCredentialKinds: CredentialKindInfo[] = [
   {
     kind: "db_password",
     label: "Database password",
     secretLabel: "Password",
     identityLabel: "Database user",
-    compatibleProtocols: [
-      "postgresql",
-      "postgres",
-      "mysql",
-      "mariadb",
-      "mssql",
-    ],
   },
   {
     kind: "api_token",
     label: "API token",
     secretLabel: "Token",
     identityLabel: "Token name / subject",
-    compatibleProtocols: [
-      "proxmox",
-      "kubernetes",
-      "docker",
-      "github",
-      "gitlab",
-    ],
   },
   {
-    kind: "kubeconfig",
-    label: "Kubeconfig",
-    secretLabel: "Kubeconfig YAML",
+    kind: "tls_client_cert",
+    label: "TLS client certificate",
+    secretLabel: "Certificate and private key",
     secretMultiline: true,
-    identityLabel: "Context / user",
-    compatibleProtocols: ["kubernetes", "helm", "argocd", "flux"],
   },
   {
     kind: "cloud_access_key",
     label: "Cloud access key",
     secretLabel: "Secret access key",
     identityLabel: "Access key ID",
-    compatibleProtocols: ["aws", "gcp", "azure", "s3"],
   },
   {
     kind: "service_account_json",
@@ -89,65 +80,57 @@ const credentialKinds = [
     secretLabel: "JSON key",
     secretMultiline: true,
     identityLabel: "Service account",
-    compatibleProtocols: ["gcp", "kubernetes", "grafana"],
   },
   {
     kind: "basic_auth",
     label: "Basic auth",
     secretLabel: "Password",
     identityLabel: "Username",
-    compatibleProtocols: ["http-api", "graphql", "webdav"],
   },
   {
     kind: "bearer_token",
     label: "Bearer token",
     secretLabel: "Token",
     identityLabel: "Token name / subject",
-    compatibleProtocols: ["http-api", "graphql", "grpc", "prometheus"],
-  },
-  {
-    kind: "vnc_password",
-    label: "VNC password",
-    secretLabel: "Password",
-    compatibleProtocols: ["vnc"],
-  },
-  {
-    kind: "rdp_password",
-    label: "RDP password",
-    secretLabel: "Password",
-    identityLabel: "Username",
-    compatibleProtocols: ["rdp"],
-  },
-  {
-    kind: "smb_password",
-    label: "SMB password",
-    secretLabel: "Password",
-    identityLabel: "Username",
-    compatibleProtocols: ["smb"],
-  },
-  {
-    kind: "snmp_community",
-    label: "SNMP community",
-    secretLabel: "Community string",
-    compatibleProtocols: ["snmp"],
-  },
-  {
-    kind: "snmp_v3",
-    label: "SNMPv3 credentials",
-    secretLabel: "Auth/privacy material",
-    secretMultiline: true,
-    identityLabel: "Security name",
-    compatibleProtocols: ["snmp"],
   },
 ];
 
+function credentialKinds(): CredentialKindInfo[] {
+  const byKind = new Map<string, CredentialKindInfo>();
+  const supports = new Map<string, Set<string>>();
+  const addDefinition = (info: CredentialKindInfo): void => {
+    if (!byKind.has(info.kind)) {
+      const definition = { ...info };
+      delete definition.compatibleProtocols;
+      byKind.set(info.kind, definition);
+    }
+  };
+  for (const info of builtInCredentialKinds) addDefinition(info);
+  for (const name of pluginNames()) {
+    const plugin = readJSON<PluginFixture>(`${name}.json`);
+    for (const info of plugin.credentialKinds ?? []) addDefinition(info);
+    for (const group of plugin.config?.groups ?? []) {
+      for (const field of group.fields ?? []) {
+        if (field.type !== "credential_ref" || !field.credential) continue;
+        const protocols = field.credential.protocols?.length
+          ? field.credential.protocols
+          : [plugin.name];
+        for (const kind of field.credential.kinds ?? []) {
+          if (!supports.has(kind)) supports.set(kind, new Set<string>());
+          for (const protocol of protocols) supports.get(kind)?.add(protocol);
+        }
+      }
+    }
+  }
+  return [...byKind.values()].map((info) => ({
+    ...info,
+    compatibleProtocols: [...(supports.get(info.kind) ?? [])].sort(),
+  }));
+}
+
 function credentialKindSupports(kind: string, protocol: string): boolean {
-  const info = credentialKinds.find((k) => k.kind === kind);
-  return Boolean(
-    info &&
-    (!info.compatibleProtocols.length ||
-      info.compatibleProtocols.includes(protocol)),
-  );
+  const info = credentialKinds().find((k) => k.kind === kind);
+  return Boolean(info && (info.compatibleProtocols ?? []).includes(protocol));
 }
 
 function pluginNames(): string[] {
@@ -465,7 +448,7 @@ function handleHTTP(
   }
 
   if (path === "/api/credential-kinds" && method === "GET") {
-    return send(res, 200, credentialKinds);
+    return send(res, 200, credentialKinds());
   }
 
   const pluginMatch = path.match(/^\/api\/plugins\/([^/]+)$/);

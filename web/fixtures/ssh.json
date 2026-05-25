@@ -6,6 +6,21 @@
   "description": "Secure Shell — terminal, files, tunnels, snippets.",
   "icon": { "type": "name", "value": "terminal" },
   "capabilities": ["terminal", "filesystem", "tunnel"],
+  "credentialKinds": [
+    {
+      "kind": "ssh_private_key",
+      "label": "SSH private key",
+      "secretLabel": "Private key",
+      "secretMultiline": true,
+      "identityLabel": "Username"
+    },
+    {
+      "kind": "ssh_password",
+      "label": "SSH password",
+      "secretLabel": "Password",
+      "identityLabel": "Username"
+    }
+  ],
   "supportedTransports": ["direct"],
   "layout": "tabs",
   "config": {

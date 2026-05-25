@@ -58,7 +58,7 @@ test("create a credential from the credentials view", async ({ page }) => {
 
   await page.getByRole("button", { name: /New credential/ }).click();
   await page.locator("#cred-name").fill("e2e-cred");
-  await page.locator("textarea").fill("s3cret-value");
+  await page.locator('input[type="password"]').first().fill("s3cret-value");
   await page.getByRole("button", { name: "Create credential" }).click();
 
   await expect(
@@ -83,6 +83,8 @@ test("create a credential and select it from a connection credential_ref", async
 }) => {
   await page.goto("/credentials");
   await page.getByRole("button", { name: /New credential/ }).click();
+  await page.getByRole("combobox", { name: "Database password" }).click();
+  await page.getByRole("option", { name: "SSH private key" }).click();
   await page.locator("#cred-name").fill("e2e-selectable-cred");
   await page.locator("textarea").fill("s3cret-value");
   await page.getByRole("button", { name: "Create credential" }).click();

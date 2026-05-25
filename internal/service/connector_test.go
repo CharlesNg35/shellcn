@@ -44,9 +44,9 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	st := store.NewMemory()
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
-	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault)
 	reg := plugin.NewRegistry()
 	reg.MustRegister(credentialRefPlugin{})
+	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 
 	cred, err := creds.Create(ctx, service.NewCredentialInput{
 		OwnerID: "u1",

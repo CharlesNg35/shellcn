@@ -6,7 +6,7 @@ import Password from "primevue/password";
 import Button from "primevue/button";
 import { useAuthStore } from "../stores/auth";
 import { ApiError } from "../api/client";
-import AppIcon from "../components/AppIcon.vue";
+import AppLogo from "../components/AppLogo.vue";
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -41,11 +41,7 @@ async function onSubmit(): Promise<void> {
   >
     <div class="w-full max-w-sm">
       <div class="mb-8 flex flex-col items-center gap-3 text-center">
-        <span
-          class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-600 text-white"
-        >
-          <AppIcon :icon="{ type: 'name', value: 'terminal' }" :size="24" />
-        </span>
+        <AppLogo :size="48" class="text-primary-600" />
         <h1
           class="text-xl font-semibold tracking-tight text-surface-900 dark:text-surface-0"
         >

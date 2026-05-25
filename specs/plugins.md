@@ -5,6 +5,14 @@ product and architecture backlog: adding a plugin should mean adding one Go
 package that declares a manifest, routes, resources, actions, streams, and
 session behavior without requiring frontend-specific code.
 
+Credential kinds follow the same ownership rule. Core keeps only broad reusable
+shapes such as database passwords, API tokens, TLS client certs, cloud keys,
+service account JSON, basic auth, and bearer tokens. Protocol-specific kinds
+such as SSH private keys/passwords, kubeconfig, VNC/RDP/SMB passwords, and SNMP
+material are declared by the plugin that owns them. Protocol compatibility is
+derived from registered plugin `credential_ref` selectors; it is not maintained
+as a hardcoded list on the kind itself.
+
 ## Priority Legend
 
 - `P0`: MVP foundation.

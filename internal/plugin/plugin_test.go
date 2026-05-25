@@ -108,12 +108,26 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"made_up"}},
 			})
 		}},
-		{"credential ref incompatible protocol", "incompatible with protocol", func(m *plugin.Manifest, _ *[]plugin.Route) {
+		{"credential kind duplicates existing catalog", "duplicate credential kind", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.CredentialKinds = []plugin.CredentialKindInfo{{Kind: plugin.CredentialDBPassword, Label: "Database password", SecretLabel: "Password"}}
 			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
 				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
-				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialKubeconfig}, Protocols: []string{"ssh"}},
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}},
 			})
+		}},
+		{"credential kind protocol list is derived", "must not declare CompatibleProtocols", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.CredentialKinds = []plugin.CredentialKindInfo{{
+				Kind: "custom_password", Label: "Custom password", SecretLabel: "Password", CompatibleProtocols: []string{"x"},
+			}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
+				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"custom_password"}},
+			})
+		}},
+		{"credential kind declared but unused", "declared but not used", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.CredentialKinds = []plugin.CredentialKindInfo{{Kind: "custom_password", Label: "Custom password", SecretLabel: "Password"}}
 		}},
 	}
 
@@ -136,6 +150,43 @@ func TestValidateAcceptsGoodManifest(t *testing.T) {
 	m, routes := sampleManifest()
 	if err := plugin.Validate(m, routes); err != nil {
 		t.Errorf("valid manifest rejected: %v", err)
+	}
+}
+
+func TestRegistryDerivesCredentialKindProtocolsFromSelectors(t *testing.T) {
+	m, routes := sampleManifest()
+	reg := plugin.NewRegistry()
+	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	info, ok := reg.CredentialKindLookup(testCredentialSSHPrivateKey)
+	if !ok {
+		t.Fatal("ssh private key kind not registered")
+	}
+	if len(info.CompatibleProtocols) != 1 || info.CompatibleProtocols[0] != "ssh" {
+		t.Fatalf("derived protocols = %+v, want [ssh]", info.CompatibleProtocols)
+	}
+	if !reg.CredentialKindSupportsProtocol(testCredentialSSHPrivateKey, "ssh") {
+		t.Fatal("ssh private key should support ssh")
+	}
+	if reg.CredentialKindSupportsProtocol(testCredentialSSHPrivateKey, "postgres") {
+		t.Fatal("ssh private key should not support postgres")
+	}
+}
+
+func TestRegistryRejectsDuplicatePluginCredentialKind(t *testing.T) {
+	m, routes := sampleManifest()
+	reg := plugin.NewRegistry()
+	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("register first plugin: %v", err)
+	}
+	dup := m
+	dup.Name = "duplicate"
+	for i := range routes {
+		routes[i].ID = "duplicate." + routes[i].ID
+	}
+	if err := reg.Register(&stubPlugin{manifest: dup, routes: routes}); err == nil || !contains(err.Error(), "duplicate credential kind") {
+		t.Fatalf("duplicate credential kind error = %v", err)
 	}
 }
 

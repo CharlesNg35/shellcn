@@ -46,6 +46,14 @@ const overlayTransition = {
   leaveToClass: "opacity-0",
 };
 
+// Shared checkbox visuals (standalone Checkbox + MultiSelect option/header checks).
+const checkbox = {
+  root: "relative inline-flex h-4 w-4 shrink-0",
+  input: "absolute inset-0 cursor-pointer opacity-0",
+  box: "flex h-4 w-4 items-center justify-center rounded border border-surface-300 bg-surface-0 transition-colors dark:border-surface-600 dark:bg-surface-950 data-[p-checked=true]:border-primary-500 data-[p-checked=true]:bg-primary-500 data-[p-checked=true]:text-white",
+  icon: "h-3 w-3 text-white",
+};
+
 export const primeVuePassthrough = {
   inputtext: { root: inputBase },
   textarea: { root: `${inputBase} min-h-20 font-mono` },
@@ -72,19 +80,54 @@ export const primeVuePassthrough = {
     emptyMessage: "px-3 py-2 text-sm text-surface-400",
   },
 
+  // Standalone Checkbox (also reused inside MultiSelect rows).
+  checkbox,
   multiselect: {
     root: `inline-flex w-full items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
     labelContainer: "min-w-0 flex-1 overflow-hidden",
     label:
-      "flex min-h-8 flex-wrap items-center gap-1 px-2.5 py-1 text-left text-surface-800 dark:text-surface-100",
+      "flex min-h-9 flex-wrap items-center gap-1.5 px-2 py-1.5 text-left text-surface-500 dark:text-surface-400",
     dropdown: "px-2 text-surface-400",
     overlay,
     transition: overlayTransition,
-    listContainer: "max-h-60 overflow-auto",
-    option,
+    header:
+      "flex items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800",
+    pcHeaderCheckbox: checkbox,
+    listContainer: "max-h-60 overflow-auto p-1",
+    // MultiSelect options are a checkbox + label row, so they need inline flex
+    // layout (the plain Select `option` style stacked them).
+    option:
+      "flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800",
+    optionLabel: "min-w-0 flex-1 truncate",
+    pcOptionCheckbox: checkbox,
     emptyMessage: "px-3 py-2 text-sm text-surface-400",
-    chipItem:
-      "rounded bg-surface-100 px-1.5 py-0.5 text-xs dark:bg-surface-800",
+    // Selected values render as inline chips (label + remove icon side by side).
+    pcChip: {
+      root: "inline-flex items-center gap-1 rounded bg-surface-100 py-0.5 pl-2 pr-1 text-xs text-surface-700 dark:bg-surface-800 dark:text-surface-200",
+      removeIcon:
+        "h-3.5 w-3.5 cursor-pointer text-surface-400 transition-colors hover:text-surface-700 dark:hover:text-surface-200",
+    },
+  },
+
+  autocomplete: {
+    root: "relative block w-full",
+    pcInputText: { root: inputBase },
+    dropdown:
+      "absolute right-0 top-0 flex h-full items-center px-2 text-surface-400",
+    overlay,
+    transition: overlayTransition,
+    listContainer: "max-h-60 overflow-auto p-1",
+    option,
+    optionLabel: "min-w-0 flex-1 truncate",
+    emptyMessage: "px-3 py-2 text-sm text-surface-400",
+  },
+
+  fileupload: {
+    root: "inline-flex",
+    basicContent: "inline-flex items-center gap-2",
+    pcChooseButton: {
+      root: "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-surface-300 bg-surface-0 px-3 py-1.5 text-sm font-medium text-surface-700 transition-colors hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200 dark:hover:bg-surface-800",
+    },
   },
 
   toggleswitch: {

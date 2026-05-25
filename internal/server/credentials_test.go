@@ -66,14 +66,21 @@ func TestCredentialKindsEndpoint(t *testing.T) {
 		t.Fatalf("decode credential kinds: %v", err)
 	}
 	seen := map[plugin.CredentialKind]bool{}
+	var sshPassword plugin.CredentialKindInfo
 	for _, kind := range out {
 		seen[kind.Kind] = true
+		if kind.Kind == plugin.CredentialKind("ssh_password") {
+			sshPassword = kind
+		}
 		if kind.Label == "" || kind.SecretLabel == "" {
 			t.Fatalf("credential kind missing labels: %+v", kind)
 		}
 	}
-	if !seen[plugin.CredentialKubeconfig] || !seen[plugin.CredentialSSHPassword] {
+	if !seen[plugin.CredentialDBPassword] || !seen[plugin.CredentialKind("ssh_password")] {
 		t.Fatalf("credential catalog missing expected kinds: %+v", seen)
+	}
+	if len(sshPassword.CompatibleProtocols) != 1 || sshPassword.CompatibleProtocols[0] != "ssh" {
+		t.Fatalf("ssh compatible protocols = %+v, want [ssh]", sshPassword.CompatibleProtocols)
 	}
 }
 

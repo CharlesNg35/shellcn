@@ -81,6 +81,9 @@ type Manifest struct {
 
 	Config       Schema
 	Capabilities []Capability
+	// CredentialKinds declares reusable credential kinds owned by this plugin.
+	// Shared cross-protocol kinds may still come from the core catalog.
+	CredentialKinds []CredentialKindInfo
 
 	SupportedTransports []Transport
 	Agent               *AgentProfile

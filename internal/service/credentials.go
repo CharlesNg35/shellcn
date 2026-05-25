@@ -24,12 +24,34 @@ type CredentialService struct {
 	creds          store.CredentialStore
 	grants         store.CredentialGrantStore
 	vault          secrets.SecretStore
+	kinds          plugin.CredentialKindCatalog
 	onSecretAccess func()
 }
 
+type CredentialServiceOption func(*CredentialService)
+
+// WithCredentialKindCatalog makes credential validation use the effective
+// plugin registry catalog instead of only the core built-in kinds.
+func WithCredentialKindCatalog(kinds plugin.CredentialKindCatalog) CredentialServiceOption {
+	return func(s *CredentialService) {
+		if kinds != nil {
+			s.kinds = kinds
+		}
+	}
+}
+
 // NewCredentialService wires the dependencies.
-func NewCredentialService(creds store.CredentialStore, grants store.CredentialGrantStore, vault secrets.SecretStore) *CredentialService {
-	return &CredentialService{creds: creds, grants: grants, vault: vault}
+func NewCredentialService(creds store.CredentialStore, grants store.CredentialGrantStore, vault secrets.SecretStore, opts ...CredentialServiceOption) *CredentialService {
+	svc := &CredentialService{
+		creds:  creds,
+		grants: grants,
+		vault:  vault,
+		kinds:  plugin.NewRegistry(),
+	}
+	for _, opt := range opts {
+		opt(svc)
+	}
+	return svc
 }
 
 // SetSecretAccessHook registers a callback for successful secret decryptions.
@@ -50,7 +72,7 @@ type NewCredentialInput struct {
 
 // Create encrypts the secret material and persists the credential.
 func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (models.Credential, error) {
-	normalized, err := normalizeCredentialInput(in.Name, in.Kind, in.Identity, in.Protocols, true, in.Secret)
+	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Identity, in.Protocols, true, in.Secret)
 	if err != nil {
 		return models.Credential{}, err
 	}
@@ -94,7 +116,7 @@ func (s *CredentialService) Update(ctx context.Context, id string, in UpdateCred
 	if err != nil {
 		return models.Credential{}, err
 	}
-	normalized, err := normalizeCredentialInput(in.Name, in.Kind, in.Identity, in.Protocols, false, in.Secret)
+	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Identity, in.Protocols, false, in.Secret)
 	if err != nil {
 		return models.Credential{}, err
 	}
@@ -123,7 +145,7 @@ type normalizedCredentialInput struct {
 	protocols []string
 }
 
-func normalizeCredentialInput(name, kind, identity string, protocols []string, requireSecret bool, secret string) (normalizedCredentialInput, error) {
+func (s *CredentialService) normalizeCredentialInput(name, kind, identity string, protocols []string, requireSecret bool, secret string) (normalizedCredentialInput, error) {
 	out := normalizedCredentialInput{
 		name:     strings.TrimSpace(name),
 		kind:     strings.TrimSpace(kind),
@@ -135,7 +157,7 @@ func normalizeCredentialInput(name, kind, identity string, protocols []string, r
 	if out.kind == "" {
 		return normalizedCredentialInput{}, fmt.Errorf("%w: credential kind is required", plugin.ErrInvalidInput)
 	}
-	info, ok := plugin.CredentialKindLookup(plugin.CredentialKind(out.kind))
+	info, ok := s.kinds.CredentialKindLookup(plugin.CredentialKind(out.kind))
 	if !ok {
 		return normalizedCredentialInput{}, fmt.Errorf("%w: unknown credential kind %q", plugin.ErrInvalidInput, out.kind)
 	}
@@ -151,7 +173,7 @@ func normalizeCredentialInput(name, kind, identity string, protocols []string, r
 		if protocol == "" || seen[protocol] {
 			continue
 		}
-		if !plugin.CredentialKindSupportsProtocol(plugin.CredentialKind(out.kind), protocol) {
+		if !s.kinds.CredentialKindSupportsProtocol(plugin.CredentialKind(out.kind), protocol) {
 			return normalizedCredentialInput{}, fmt.Errorf("%w: credential kind %q is not compatible with protocol %q", plugin.ErrInvalidInput, out.kind, protocol)
 		}
 		seen[protocol] = true
@@ -195,6 +217,9 @@ func (s *CredentialService) EnsureUsableFor(ctx context.Context, userID, credent
 	}
 	if len(kinds) > 0 && !slices.Contains(kinds, cred.Kind) {
 		return fmt.Errorf("%w: credential %q is kind %q", plugin.ErrInvalidInput, credentialID, cred.Kind)
+	}
+	if protocol != "" && !s.kinds.CredentialKindSupportsProtocol(plugin.CredentialKind(cred.Kind), protocol) {
+		return fmt.Errorf("%w: credential kind %q is not compatible with protocol %q", plugin.ErrInvalidInput, cred.Kind, protocol)
 	}
 	if protocol != "" && len(cred.Protocols) > 0 && !slices.Contains(cred.Protocols, protocol) {
 		return fmt.Errorf("%w: credential %q is not valid for protocol %q", plugin.ErrInvalidInput, credentialID, protocol)
@@ -253,7 +278,7 @@ func (s *CredentialService) ListUsable(ctx context.Context, userID string, kinds
 			return
 		}
 		if protocol != "" {
-			if !plugin.CredentialKindSupportsProtocol(plugin.CredentialKind(cred.Kind), protocol) {
+			if !s.kinds.CredentialKindSupportsProtocol(plugin.CredentialKind(cred.Kind), protocol) {
 				return
 			}
 			// Empty Protocols means the credential works with any compatible protocol.
