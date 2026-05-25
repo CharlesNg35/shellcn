@@ -37,7 +37,7 @@ add plugins.
 | 2     | M1                 | Core runtime                          |
 | 2b    | M1.5               | Platform management (auth UI, connection/credential CRUD, sharing) — v2 §12.2 |
 | 2c    | M1.6               | Session recording foundation (plugin-declared, opt-in) — v2 §9.5 |
-| —     | M-Admin            | Admin/audit/observability UI (later, additive) — v2 §12.2 |
+| 2d    | M-Admin            | Administration foundation (config, users, invitations) — v2 §12.2 |
 | 3     | M2                 | SSH/SFTP reference plugin             |
 | 4     | M3                 | Docker + agent transport validation/hardening (L4) |
 | 5     | M4                 | Proxmox (VNC)                         |

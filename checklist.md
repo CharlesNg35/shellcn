@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Transport tunnel registry + `cmd/agent` reverse-tunnel binary + enrollment endpoints implemented (gateway↔agent yamux tunnel, token single-use/connection-scoped). Phase 2b (M1.5 platform management) complete: connection/credential CRUD + sharing-grant + user-lookup endpoints (schema-validated, write-only secrets, owner/manage/admin authz, audited); auth gate + CSRF + single error interceptor; manifest-driven connection create/edit/delete via the generic `SchemaForm`; credentials view + reusable `ShareDialog`/`ConfirmDialog`. Partial M-Admin landed: typed bootstrap config (`internal/config`, Viper; SMTP in config, not a table), admin user CRUD with root-admin protection, email/link invitations (`internal/email`, best-effort SMTP), and a Users view (users + invitations tabs, accept page). Phase 2c (M1.6 session recording foundation) complete — see its section below. **Next: Phase 3 (M2 SSH/SFTP).**_
+_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit hardening: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Transport tunnel registry + `cmd/agent` reverse-tunnel binary + enrollment endpoints implemented (gateway↔agent yamux tunnel, token single-use/connection-scoped). Phase 2b (M1.5 platform management) complete: connection/credential CRUD + sharing-grant + user-lookup endpoints (strict schema validation, write-only secrets, owner/manage/admin authz, audited); auth gate + CSRF + single error interceptor; manifest-driven connection create/edit/delete via the generic `SchemaForm`; credentials view + reusable `ShareDialog`/`ConfirmDialog`. Phase 2d M-Admin foundation complete: typed bootstrap config (`internal/config`, Viper; SMTP in config, not a table), admin user CRUD with root-admin/peer-admin protections, atomic single-use email/link invitations (`internal/email`, best-effort SMTP), and a Users view (users + invitations tabs, accept page). Phase 2c (M1.6 session recording foundation) complete — see its section below. **Next: Phase 3 (M2 SSH/SFTP).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -62,10 +62,11 @@ _Done — recording is a generic, plugin-declared, off-by-default platform capab
 - [x] 2c.5 Desktop/graphical recording framework
 - [x] 2c.6 Recording APIs and frontend management UI
 
-## Phase 2d — M-Admin · Administration (partial)
+## Phase 2d — M-Admin · Administration foundation
 
 _Done — user/role management + invitations + the config foundation they need
-(spec [v2 §12.2](specs/v2.md), [v2 §9.1](specs/v2.md)). SMTP is bootstrap config
+(spec [v2 §12.2](specs/v2.md), [v2 §9.1](specs/v2.md), steps
+[phase-2d](specs/plans/phase-2d-m-admin/)). SMTP is bootstrap config
 (`config.email.*`), not a stored table; invitations always yield a copyable
 link, with email as a best-effort extra when SMTP is enabled._
 
