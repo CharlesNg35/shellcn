@@ -79,11 +79,11 @@ defineExpose({ submit: onSubmit });
 </script>
 
 <template>
-  <form class="flex flex-col gap-6" @submit.prevent="onSubmit">
+  <form class="flex min-w-0 flex-col gap-6" @submit.prevent="onSubmit">
     <fieldset
       v-for="group in groups"
       :key="group.name"
-      class="flex flex-col gap-4"
+      class="flex min-w-0 flex-col gap-4"
     >
       <legend
         class="text-xs font-semibold uppercase tracking-wide text-surface-400"

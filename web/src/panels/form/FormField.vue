@@ -43,7 +43,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 </script>
 
 <template>
-  <div class="flex flex-col gap-1">
+  <div class="flex min-w-0 flex-col gap-1">
     <label class="text-sm font-medium text-surface-700 dark:text-surface-200">
       {{ field.label }}
       <span v-if="field.required" class="text-red-500">*</span>

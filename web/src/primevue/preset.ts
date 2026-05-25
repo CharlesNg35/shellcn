@@ -36,7 +36,7 @@ const overlay =
 // Rounded, inset option rows with a clear selected state in BOTH themes (the old
 // selected style had no dark override → a bright light-blue bar in dark mode).
 const option =
-  "cursor-pointer rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
+  "cursor-pointer truncate rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
 // Smooth dropdown open/close — applied via each overlay component's transition pt.
 const overlayTransition = {
   enterFromClass: "opacity-0 scale-95",
@@ -69,13 +69,15 @@ export const primeVuePassthrough = {
   },
 
   select: {
-    root: `inline-flex w-full items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
+    // min-w-0 lets the flex-1 label actually shrink so `truncate` can ellipsize
+    // a long selected value instead of overflowing/pushing the dropdown icon out.
+    root: `flex w-full min-w-0 items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
     label:
-      "flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
-    dropdown: "px-2 text-surface-400",
+      "min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
+    dropdown: "shrink-0 px-2 text-surface-400",
     overlay,
     transition: overlayTransition,
-    listContainer: "max-h-60 overflow-auto",
+    listContainer: "max-h-60 overflow-auto p-1",
     option,
     emptyMessage: "px-3 py-2 text-sm text-surface-400",
   },
@@ -83,11 +85,11 @@ export const primeVuePassthrough = {
   // Standalone Checkbox (also reused inside MultiSelect rows).
   checkbox,
   multiselect: {
-    root: `inline-flex w-full items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
+    root: `flex w-full items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
     labelContainer: "min-w-0 flex-1 overflow-hidden",
     label:
       "flex min-h-9 flex-wrap items-center gap-1.5 px-2 py-1.5 text-left text-surface-500 dark:text-surface-400",
-    dropdown: "px-2 text-surface-400",
+    dropdown: "shrink-0 px-2 text-surface-400",
     overlay,
     transition: overlayTransition,
     header:
