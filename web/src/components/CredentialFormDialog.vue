@@ -43,6 +43,8 @@ const replacing = ref(true);
 const errors = ref<Record<string, string>>({});
 const busy = ref(false);
 const kindCatalog = ref<CredentialKindInfo[]>([]);
+const catalogLoading = ref(false);
+const catalogError = ref<string | null>(null);
 
 const selectorKinds = computed(() =>
   props.lockedKind ? [props.lockedKind] : (props.selector?.kinds ?? []),
@@ -94,9 +96,17 @@ const identityLabel = computed(() => selectedKind.value?.identityLabel ?? "");
 const showIdentity = computed(() => identityLabel.value !== "");
 
 async function loadKindCatalog(): Promise<void> {
-  if (kindCatalog.value.length) return;
-  const catalog = await api.get<CredentialKindInfo[]>("/credential-kinds");
-  kindCatalog.value = Array.isArray(catalog) ? catalog : [];
+  if (kindCatalog.value.length || catalogLoading.value) return;
+  catalogLoading.value = true;
+  catalogError.value = null;
+  try {
+    const catalog = await api.get<CredentialKindInfo[]>("/credential-kinds");
+    kindCatalog.value = Array.isArray(catalog) ? catalog : [];
+  } catch (e) {
+    catalogError.value = (e as Error).message;
+  } finally {
+    catalogLoading.value = false;
+  }
 }
 
 function firstAllowedKind(): string {
@@ -142,6 +152,7 @@ watch(
   async (open) => {
     if (!open) return;
     await loadKindCatalog();
+    if (catalogError.value) return;
     errors.value = {};
     secret.value = "";
     if (props.credential) {
@@ -170,6 +181,7 @@ watch(kind, normalizeForKind);
 
 function validate(): boolean {
   const next: Record<string, string> = {};
+  if (catalogLoading.value || catalogError.value) return false;
   if (!name.value.trim()) next.name = "A name is required.";
   if (!kind.value) next.kind = "A kind is required.";
   if (!isEdit.value && !secret.value.trim())
@@ -226,7 +238,17 @@ async function save(): Promise<void> {
     @update:visible="emit('update:visible', $event)"
   >
     <div class="flex flex-col gap-4">
-      <div class="flex flex-col gap-1.5">
+      <div v-if="catalogLoading" class="flex flex-col gap-3">
+        <div
+          v-for="i in 5"
+          :key="i"
+          class="h-10 animate-pulse rounded-md bg-surface-100 dark:bg-surface-800"
+        />
+      </div>
+      <p v-else-if="catalogError" class="text-sm text-red-500">
+        {{ catalogError }}
+      </p>
+      <div v-else class="flex flex-col gap-1.5">
         <label
           for="cred-name"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -242,7 +264,10 @@ async function save(): Promise<void> {
         <p v-if="errors.name" class="text-xs text-red-500">{{ errors.name }}</p>
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div
+        v-if="!catalogLoading && !catalogError"
+        class="flex flex-col gap-1.5"
+      >
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
@@ -264,7 +289,10 @@ async function save(): Promise<void> {
         </div>
       </div>
 
-      <div v-if="showIdentity" class="flex flex-col gap-1.5">
+      <div
+        v-if="!catalogLoading && !catalogError && showIdentity"
+        class="flex flex-col gap-1.5"
+      >
         <label
           for="cred-identity"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -279,7 +307,10 @@ async function save(): Promise<void> {
         />
       </div>
 
-      <div v-if="!scopedToSelector" class="flex flex-col gap-1.5">
+      <div
+        v-if="!catalogLoading && !catalogError && !scopedToSelector"
+        class="flex flex-col gap-1.5"
+      >
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
@@ -296,7 +327,10 @@ async function save(): Promise<void> {
         />
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div
+        v-if="!catalogLoading && !catalogError"
+        class="flex flex-col gap-1.5"
+      >
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
@@ -349,7 +383,7 @@ async function save(): Promise<void> {
         </Button>
         <Button
           type="button"
-          :disabled="busy"
+          :disabled="busy || catalogLoading || Boolean(catalogError)"
           :pt="{ root: btnPrimary }"
           @click="save"
         >

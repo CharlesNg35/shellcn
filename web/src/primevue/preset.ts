@@ -125,15 +125,22 @@ export const primeVuePassthrough = {
     },
   },
 
-  tabs: { root: "shrink-0" },
+  tabs: { root: "flex min-h-0 flex-col" },
   tablist: {
     root: "shrink-0 border-b border-surface-200 dark:border-surface-800",
     content: "flex",
-    tabList: "flex gap-1 px-3",
+    tabList: "flex gap-1",
+    // We indicate the active tab with a per-tab underline, so hide PrimeVue's
+    // sliding active bar (it would render unstyled in unstyled mode).
+    activeBar: "hidden",
   },
-  tab: "flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-sm text-surface-500 transition-colors hover:text-surface-800 data-[p-active=true]:border-primary-500 data-[p-active=true]:text-surface-900 dark:hover:text-surface-200 dark:data-[p-active=true]:text-surface-0",
-  tabpanels: { root: "min-h-0 flex-1 overflow-hidden" },
-  tabpanel: { root: "h-full" },
+  // Object form (not a bare string): a string under a global pt component key is
+  // ignored, which left tabs completely unstyled.
+  tab: {
+    root: "-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-surface-500 transition-colors hover:text-surface-800 data-[p-active=true]:border-primary-500 data-[p-active=true]:text-surface-900 dark:hover:text-surface-200 dark:data-[p-active=true]:text-surface-0",
+  },
+  tabpanels: { root: "min-h-0 flex-1 overflow-auto pt-4" },
+  tabpanel: { root: "h-full focus-visible:outline-none" },
 
   datatable: {
     root: "flex h-full flex-col text-sm",

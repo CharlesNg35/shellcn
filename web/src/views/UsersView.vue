@@ -104,15 +104,19 @@ async function revokeInvite(): Promise<void> {
       Users &amp; access
     </h1>
 
-    <Tabs :value="tab" @update:value="tab = String($event)">
+    <Tabs
+      :value="tab"
+      :pt="{ root: 'flex min-h-0 flex-1 flex-col' }"
+      @update:value="tab = String($event)"
+    >
       <TabList>
         <Tab value="users">Users</Tab>
         <Tab value="invitations">Invitations</Tab>
       </TabList>
       <TabPanels>
         <!-- Users -->
-        <TabPanel value="users">
-          <div class="mb-3 flex justify-end">
+        <TabPanel value="users" class="flex h-full flex-col">
+          <div class="mb-3 flex shrink-0 justify-end">
             <button
               type="button"
               class="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
@@ -122,100 +126,102 @@ async function revokeInvite(): Promise<void> {
               New user
             </button>
           </div>
-          <DataTable :value="users" scrollable scroll-height="flex">
-            <Column field="username" header="Username">
-              <template #body="{ data }">
-                <span class="flex items-center gap-1.5">
-                  {{ (data as AdminUser).username }}
+          <div class="min-h-0 flex-1">
+            <DataTable :value="users" scrollable scroll-height="flex">
+              <Column field="username" header="Username">
+                <template #body="{ data }">
+                  <span class="flex items-center gap-1.5">
+                    {{ (data as AdminUser).username }}
+                    <span
+                      v-if="(data as AdminUser).protected"
+                      class="rounded bg-primary-50 px-1.5 py-0.5 text-xs text-primary-600 dark:bg-primary-950/40 dark:text-primary-300"
+                      >root</span
+                    >
+                  </span>
+                </template>
+              </Column>
+              <Column field="email" header="Email">
+                <template #body="{ data }">
+                  {{ (data as AdminUser).email || "—" }}
+                </template>
+              </Column>
+              <Column header="Roles">
+                <template #body="{ data }">
+                  <span class="capitalize text-surface-500">{{
+                    (data as AdminUser).roles.join(", ")
+                  }}</span>
+                </template>
+              </Column>
+              <Column header="Status">
+                <template #body="{ data }">
                   <span
-                    v-if="(data as AdminUser).protected"
-                    class="rounded bg-primary-50 px-1.5 py-0.5 text-xs text-primary-600 dark:bg-primary-950/40 dark:text-primary-300"
-                    >root</span
-                  >
-                </span>
-              </template>
-            </Column>
-            <Column field="email" header="Email">
-              <template #body="{ data }">
-                {{ (data as AdminUser).email || "—" }}
-              </template>
-            </Column>
-            <Column header="Roles">
-              <template #body="{ data }">
-                <span class="capitalize text-surface-500">{{
-                  (data as AdminUser).roles.join(", ")
-                }}</span>
-              </template>
-            </Column>
-            <Column header="Status">
-              <template #body="{ data }">
-                <span
-                  :class="
-                    (data as AdminUser).disabled
-                      ? 'text-amber-600'
-                      : 'text-emerald-600'
-                  "
-                >
-                  {{ (data as AdminUser).disabled ? "Disabled" : "Active" }}
-                </span>
-              </template>
-            </Column>
-            <Column header="" :pt="{ bodyCell: 'text-right' }">
-              <template #body="{ data }">
-                <div class="flex items-center justify-end gap-1">
-                  <RouterLink
-                    :to="{
-                      name: 'recordings',
-                      query: { user: (data as AdminUser).id },
-                    }"
-                    class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
-                    title="View recordings"
-                    :aria-label="`View recordings for ${(data as AdminUser).username}`"
-                  >
-                    <AppIcon
-                      :icon="{ type: 'name', value: 'video' }"
-                      :size="16"
-                    />
-                  </RouterLink>
-                  <button
-                    v-if="canEdit(data as AdminUser)"
-                    type="button"
-                    class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
-                    title="Edit"
-                    :aria-label="`Edit ${(data as AdminUser).username}`"
-                    @click="openEdit(data as AdminUser)"
-                  >
-                    <AppIcon
-                      :icon="{ type: 'name', value: 'pencil' }"
-                      :size="16"
-                    />
-                  </button>
-                  <button
-                    v-if="canDelete(data as AdminUser)"
-                    type="button"
-                    class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
-                    title="Delete"
-                    :aria-label="`Delete ${(data as AdminUser).username}`"
-                    @click="
-                      deleteTarget = data as AdminUser;
-                      showDeleteUser = true;
+                    :class="
+                      (data as AdminUser).disabled
+                        ? 'text-amber-600'
+                        : 'text-emerald-600'
                     "
                   >
-                    <AppIcon
-                      :icon="{ type: 'name', value: 'trash' }"
-                      :size="16"
-                    />
-                  </button>
-                </div>
-              </template>
-            </Column>
-            <template #empty>No users.</template>
-          </DataTable>
+                    {{ (data as AdminUser).disabled ? "Disabled" : "Active" }}
+                  </span>
+                </template>
+              </Column>
+              <Column header="" :pt="{ bodyCell: 'text-right' }">
+                <template #body="{ data }">
+                  <div class="flex items-center justify-end gap-1">
+                    <RouterLink
+                      :to="{
+                        name: 'recordings',
+                        query: { user: (data as AdminUser).id },
+                      }"
+                      class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+                      title="View recordings"
+                      :aria-label="`View recordings for ${(data as AdminUser).username}`"
+                    >
+                      <AppIcon
+                        :icon="{ type: 'name', value: 'video' }"
+                        :size="16"
+                      />
+                    </RouterLink>
+                    <button
+                      v-if="canEdit(data as AdminUser)"
+                      type="button"
+                      class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+                      title="Edit"
+                      :aria-label="`Edit ${(data as AdminUser).username}`"
+                      @click="openEdit(data as AdminUser)"
+                    >
+                      <AppIcon
+                        :icon="{ type: 'name', value: 'pencil' }"
+                        :size="16"
+                      />
+                    </button>
+                    <button
+                      v-if="canDelete(data as AdminUser)"
+                      type="button"
+                      class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+                      title="Delete"
+                      :aria-label="`Delete ${(data as AdminUser).username}`"
+                      @click="
+                        deleteTarget = data as AdminUser;
+                        showDeleteUser = true;
+                      "
+                    >
+                      <AppIcon
+                        :icon="{ type: 'name', value: 'trash' }"
+                        :size="16"
+                      />
+                    </button>
+                  </div>
+                </template>
+              </Column>
+              <template #empty>No users.</template>
+            </DataTable>
+          </div>
         </TabPanel>
 
         <!-- Invitations -->
-        <TabPanel value="invitations">
-          <div class="mb-3 flex justify-end">
+        <TabPanel value="invitations" class="flex h-full flex-col">
+          <div class="mb-3 flex shrink-0 justify-end">
             <button
               type="button"
               class="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
@@ -225,50 +231,52 @@ async function revokeInvite(): Promise<void> {
               Invite user
             </button>
           </div>
-          <DataTable :value="invitations" scrollable scroll-height="flex">
-            <Column field="email" header="Email" />
-            <Column header="Role">
-              <template #body="{ data }">
-                <span class="capitalize text-surface-500">{{
-                  (data as InvitationSummary).role
-                }}</span>
-              </template>
-            </Column>
-            <Column header="Status">
-              <template #body="{ data }">
-                <span class="capitalize">{{
-                  (data as InvitationSummary).status
-                }}</span>
-              </template>
-            </Column>
-            <Column header="Expires">
-              <template #body="{ data }">
-                {{
-                  new Date(
-                    (data as InvitationSummary).expiresAt,
-                  ).toLocaleDateString()
-                }}
-              </template>
-            </Column>
-            <Column header="" :pt="{ bodyCell: 'text-right' }">
-              <template #body="{ data }">
-                <button
-                  v-if="(data as InvitationSummary).status === 'pending'"
-                  type="button"
-                  class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
-                  title="Revoke"
-                  :aria-label="`Revoke ${(data as InvitationSummary).email}`"
-                  @click="
-                    revokeTarget = data as InvitationSummary;
-                    showRevoke = true;
-                  "
-                >
-                  <AppIcon :icon="{ type: 'name', value: 'x' }" :size="16" />
-                </button>
-              </template>
-            </Column>
-            <template #empty>No invitations.</template>
-          </DataTable>
+          <div class="min-h-0 flex-1">
+            <DataTable :value="invitations" scrollable scroll-height="flex">
+              <Column field="email" header="Email" />
+              <Column header="Role">
+                <template #body="{ data }">
+                  <span class="capitalize text-surface-500">{{
+                    (data as InvitationSummary).role
+                  }}</span>
+                </template>
+              </Column>
+              <Column header="Status">
+                <template #body="{ data }">
+                  <span class="capitalize">{{
+                    (data as InvitationSummary).status
+                  }}</span>
+                </template>
+              </Column>
+              <Column header="Expires">
+                <template #body="{ data }">
+                  {{
+                    new Date(
+                      (data as InvitationSummary).expiresAt,
+                    ).toLocaleDateString()
+                  }}
+                </template>
+              </Column>
+              <Column header="" :pt="{ bodyCell: 'text-right' }">
+                <template #body="{ data }">
+                  <button
+                    v-if="(data as InvitationSummary).status === 'pending'"
+                    type="button"
+                    class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+                    title="Revoke"
+                    :aria-label="`Revoke ${(data as InvitationSummary).email}`"
+                    @click="
+                      revokeTarget = data as InvitationSummary;
+                      showRevoke = true;
+                    "
+                  >
+                    <AppIcon :icon="{ type: 'name', value: 'x' }" :size="16" />
+                  </button>
+                </template>
+              </Column>
+              <template #empty>No invitations.</template>
+            </DataTable>
+          </div>
         </TabPanel>
       </TabPanels>
     </Tabs>
