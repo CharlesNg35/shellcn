@@ -1,0 +1,32 @@
+# ShellCN example configuration.
+# Copy to config.yaml for local development, or to config/config.yaml if you
+# prefer keeping runtime config under a config directory.
+
+server:
+  addr: ":8081"
+  log_level: info
+
+database:
+  driver: sqlite
+  dsn: shellcn.db
+
+secrets:
+  # Production must set a stable 32-byte base64 key via this field,
+  # SHELLCN_MASTER_KEY, or SHELLCN_MASTER_KEY_FILE.
+  master_key: ""
+  master_key_file: ""
+
+email:
+  enabled: false
+  host: ""
+  port: 587
+  from: ""
+  username: ""
+  password: ""
+  use_tls: false
+
+recordings:
+  dir: recordings
+  retention_days: 0
+  cleanup_interval: 1h
+  max_chunk_bytes: 8388608

@@ -5,17 +5,48 @@ import { installFetch } from "../../test/fetchMock";
 
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
+    cols = 80;
+    rows = 24;
     open() {}
     write() {}
     onData() {}
+    loadAddon() {}
+    focus() {}
     dispose() {}
   },
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
+vi.mock("@xterm/addon-fit", () => ({
+  FitAddon: class {
+    fit() {}
+  },
+}));
+vi.mock("@xterm/addon-web-links", () => ({ WebLinksAddon: class {} }));
+vi.mock("@xterm/addon-webgl", () => ({
+  WebglAddon: class {
+    onContextLoss() {}
+    dispose() {}
+  },
+}));
 vi.mock("monaco-editor", () => ({
   editor: { create: () => ({ getValue: () => "", dispose() {} }) },
 }));
-vi.mock("@novnc/novnc", () => ({ default: class {} }));
+vi.mock("@novnc/novnc", () => ({
+  default: class {
+    scaleViewport = false;
+    clipViewport = false;
+    background = "";
+    addEventListener() {}
+    disconnect() {}
+  },
+}));
+
+class FakeResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal("ResizeObserver", FakeResizeObserver);
 
 class FakeWS {
   static instances: FakeWS[] = [];

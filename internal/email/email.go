@@ -45,8 +45,9 @@ func (m *Mailer) Send(to, subject, body string) error {
 	if !m.Enabled() {
 		return ErrNotConfigured
 	}
-	if strings.ContainsAny(to, "\r\n") || strings.ContainsAny(subject, "\r\n") {
-		return fmt.Errorf("email: invalid recipient or subject")
+	if strings.ContainsAny(to, "\r\n") || strings.ContainsAny(subject, "\r\n") ||
+		strings.ContainsAny(m.cfg.From, "\r\n") {
+		return fmt.Errorf("email: invalid recipient, subject, or sender")
 	}
 
 	msg := []byte("From: " + m.cfg.From + "\r\n" +

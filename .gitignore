@@ -34,6 +34,8 @@ web/.vite/
 .env
 .env.local
 .env.*.local
+/config.yaml
+/config/config.yaml
 *.key
 *.pem
 

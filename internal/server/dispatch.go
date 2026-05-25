@@ -284,6 +284,16 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 		return
 	}
 
+	// Enforce the route's declared input schema on the WS query params up front —
+	// the same contract HTTP routes get — so a malformed request is rejected
+	// before any upstream session or recording is opened.
+	vc := plugin.NewRequestContext(ctx, res.user, nil, res.params, r.URL.Query(), nil)
+	if err := vc.ValidateSchema(res.route.Input); err != nil {
+		s.auditEvent(ctx, res, models.AuditError, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+
 	// Decide recording before opening the upstream session, so a forced policy
 	// that cannot start denies the stream up front.
 	pending, err := s.prepareRecording(ctx, r, res)

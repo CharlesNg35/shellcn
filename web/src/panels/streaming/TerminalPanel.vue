@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
+import type { Terminal } from "@xterm/xterm";
+import type { FitAddon } from "@xterm/addon-fit";
 import { useStream } from "../../composables/useStream";
 import RecordingControls from "../../components/recordings/RecordingControls.vue";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
@@ -18,8 +20,10 @@ const showRecording = computed(
 const container = ref<HTMLElement | null>(null);
 const failed = ref(false);
 const pending: string[] = [];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- xterm Terminal type loaded lazily
-let term: any = null;
+let term: Terminal | null = null;
+let fit: FitAddon | null = null;
+let resizeObserver: ResizeObserver | null = null;
+let resizeTimer: ReturnType<typeof setTimeout> | undefined;
 
 function write(data: string): void {
   if (term) term.write(data);
@@ -33,20 +37,65 @@ const { status, send } = useStream(
   write,
 );
 
+// Fit the grid to the container; debounced so a burst of resize events settles
+// before we re-measure. Live cols/rows propagation to the PTY is wired by the
+// protocol plugin (M2 SSH) — this keeps the local view correct in the meantime.
+function applyFit(): void {
+  if (!fit || !term) return;
+  try {
+    fit.fit();
+  } catch {
+    /* container not measurable yet */
+  }
+}
+
+function scheduleFit(): void {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(applyFit, 100);
+}
+
 async function mountTerminal(): Promise<void> {
   if (!container.value) return;
   try {
-    const { Terminal } = await import("@xterm/xterm");
-    await import("@xterm/xterm/css/xterm.css");
+    const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
+      import("@xterm/xterm"),
+      import("@xterm/addon-fit"),
+      import("@xterm/addon-web-links"),
+      import("@xterm/xterm/css/xterm.css"),
+    ]);
     term = new Terminal({
       convertEol: true,
+      cursorBlink: true,
       fontSize: 13,
+      scrollback: 5000,
+      // Render an offscreen line for assistive tech (terminals are otherwise opaque).
+      screenReaderMode: true,
       theme: { background: "#0b0f17" },
     });
+    fit = new FitAddon();
+    term.loadAddon(fit);
+    term.loadAddon(new WebLinksAddon());
     term.open(container.value);
-    pending.forEach((d) => term.write(d));
+
+    // WebGL renderer for fast large-output scrolling; fall back to the DOM
+    // renderer (and never throw) if the GPU context is lost or unavailable.
+    try {
+      const { WebglAddon } = await import("@xterm/addon-webgl");
+      const webgl = new WebglAddon();
+      webgl.onContextLoss(() => webgl.dispose());
+      term.loadAddon(webgl);
+    } catch {
+      /* no WebGL — DOM renderer is the default fallback */
+    }
+
+    applyFit();
+    pending.forEach((d) => term!.write(d));
     pending.length = 0;
     term.onData((d: string) => send(d));
+    term.focus();
+
+    resizeObserver = new ResizeObserver(scheduleFit);
+    resizeObserver.observe(container.value);
   } catch {
     failed.value = true;
   }
@@ -55,11 +104,16 @@ async function mountTerminal(): Promise<void> {
 onMounted(mountTerminal);
 
 onUnmounted(() => {
+  clearTimeout(resizeTimer);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
   try {
     term?.dispose();
   } catch {
     /* already disposed */
   }
+  term = null;
+  fit = null;
 });
 </script>
 
@@ -77,9 +131,14 @@ onUnmounted(() => {
       />
     </div>
     <StubBanner :status="status" />
-    <p v-if="failed" class="p-4 text-sm text-surface-400">
+    <p v-if="failed" class="p-4 text-sm text-surface-400" role="alert">
       Terminal preview unavailable in this environment.
     </p>
-    <div ref="container" class="min-h-0 flex-1 overflow-hidden p-2" />
+    <div
+      ref="container"
+      role="application"
+      aria-label="Terminal session"
+      class="min-h-0 flex-1 overflow-hidden p-2"
+    />
   </div>
 </template>

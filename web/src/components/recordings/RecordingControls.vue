@@ -33,9 +33,14 @@ const typeLabel = computed(() =>
     <span
       v-if="recording"
       class="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2 py-0.5 font-medium text-red-600 dark:text-red-400"
+      role="status"
+      :aria-label="`Recording this ${typeLabel} session`"
       :title="`Recording this ${typeLabel} session`"
     >
-      <span class="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+      <span
+        class="h-2 w-2 animate-pulse rounded-full bg-red-500"
+        aria-hidden="true"
+      />
       REC
     </span>
 
@@ -61,6 +66,8 @@ const typeLabel = computed(() =>
       Stop
     </button>
 
-    <span v-if="failed" class="text-amber-500">Recording error</span>
+    <span v-if="failed" class="text-amber-500" role="alert"
+      >Recording error</span
+    >
   </div>
 </template>

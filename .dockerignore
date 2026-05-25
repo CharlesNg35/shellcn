@@ -1,0 +1,45 @@
+.git
+.github
+
+# Local config and secrets
+.env
+.env.*
+config.yaml
+config/
+*.key
+*.pem
+
+# Build/test artifacts
+bin/
+dist/
+build/
+coverage.out
+*.test
+*.out
+tmp/
+temp/
+*.tmp
+
+# Runtime data
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+data/
+recordings/
+logs/
+*.log
+
+# Frontend local artifacts
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Editor/OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

@@ -15,7 +15,15 @@ const props = defineProps<PanelProps>();
 const loaded = ref(false);
 const status = ref("connecting");
 const container = ref<HTMLElement | null>(null);
-let rfb: { disconnect?: () => void } | null = null;
+
+interface RfbLike {
+  scaleViewport: boolean;
+  clipViewport: boolean;
+  background: string;
+  disconnect(): void;
+  addEventListener(type: string, listener: (e: CustomEvent) => void): void;
+}
+let rfb: RfbLike | null = null;
 
 const descriptor = computed(
   () => (props.config?._recording as RecordingDescriptor | undefined) ?? null,
@@ -67,7 +75,7 @@ onMounted(async () => {
       target: HTMLElement,
       url: string,
       opts?: Record<string, unknown>,
-    ) => { disconnect?: () => void };
+    ) => RfbLike;
     const stream = await prepareStream(props.connectionId, props.source, {
       resource: props.resource,
     });
@@ -75,17 +83,40 @@ onMounted(async () => {
       shared: true,
       repeaterID: props.config?.repeaterID,
     });
-    status.value = "ready";
-    loaded.value = true;
-    if (forced.value) {
-      const recordingStarted = await beginCapture();
-      if (!recordingStarted) {
-        status.value = "recording-failed";
-        loaded.value = false;
-        rfb?.disconnect?.();
-        rfb = null;
+    // Scale the framebuffer to fit the panel rather than clipping/scrolling.
+    rfb.scaleViewport = true;
+    rfb.clipViewport = false;
+    rfb.background = "#000";
+
+    // Ready is driven by the protocol handshake, not by object construction.
+    rfb.addEventListener("connect", async () => {
+      status.value = "ready";
+      loaded.value = true;
+      if (forced.value) {
+        const recordingStarted = await beginCapture();
+        if (!recordingStarted) {
+          status.value = "recording-failed";
+          loaded.value = false;
+          rfb?.disconnect();
+          rfb = null;
+        }
       }
-    }
+    });
+    rfb.addEventListener("disconnect", (e) => {
+      recorder.stop();
+      loaded.value = false;
+      // Preserve a more specific terminal state (auth/recording) if already set.
+      if (status.value === "ready" || status.value === "connecting") {
+        status.value = e.detail?.clean ? "disconnected" : "connection-lost";
+      }
+    });
+    rfb.addEventListener("securityfailure", () => {
+      status.value = "auth-failed";
+      loaded.value = false;
+    });
+    rfb.addEventListener("credentialsrequired", () => {
+      status.value = "credentials-required";
+    });
   } catch (e) {
     status.value = (e as Error).message || "unavailable";
     loaded.value = false;
@@ -94,7 +125,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   recorder.stop();
-  rfb?.disconnect?.();
+  rfb?.disconnect();
   rfb = null;
   loaded.value = false;
 });
@@ -109,8 +140,13 @@ onUnmounted(() => {
       <span
         v-if="recorder.recording.value"
         class="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2 py-0.5 font-medium text-red-400"
+        role="status"
+        aria-label="Recording this desktop session"
       >
-        <span class="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+        <span
+          class="h-2 w-2 animate-pulse rounded-full bg-red-500"
+          aria-hidden="true"
+        />
         REC
       </span>
       <button
@@ -142,6 +178,7 @@ onUnmounted(() => {
       <p
         v-if="status === 'recording-unsupported'"
         class="p-4 text-sm text-amber-400"
+        role="alert"
       >
         This connection requires recording, but your browser cannot capture the
         session. Connection blocked.
@@ -149,8 +186,30 @@ onUnmounted(() => {
       <p
         v-else-if="status === 'recording-failed'"
         class="p-4 text-sm text-amber-400"
+        role="alert"
       >
         Recording could not start. Connection blocked.
+      </p>
+      <p
+        v-else-if="status === 'auth-failed'"
+        class="p-4 text-sm text-red-400"
+        role="alert"
+      >
+        Authentication with the remote desktop failed.
+      </p>
+      <p
+        v-else-if="status === 'credentials-required'"
+        class="p-4 text-sm text-amber-400"
+        role="alert"
+      >
+        The remote desktop requires credentials that were not provided.
+      </p>
+      <p
+        v-else-if="status === 'connection-lost'"
+        class="p-4 text-sm text-red-400"
+        role="alert"
+      >
+        Connection to the remote desktop was lost.
       </p>
       <p v-else-if="!loaded" class="p-4 text-sm text-surface-400">
         Remote desktop session is waiting for a VNC route.

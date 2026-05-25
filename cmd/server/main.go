@@ -172,18 +172,23 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		})
 	}
 
-	// Retention cleanup runs only when an admin has opted in (retention_days > 0).
-	if cfg.Recordings.RetentionEnabled() {
-		stopCleanup := make(chan struct{})
-		defer close(stopCleanup)
-		go func() {
-			t := time.NewTicker(cfg.Recordings.CleanupEvery())
-			defer t.Stop()
-			for {
-				select {
-				case <-stopCleanup:
-					return
-				case <-t.C:
+	// Background maintenance: always reap abandoned chunked (browser-capture)
+	// recordings so partial blobs from vanished sessions don't leak; additionally
+	// sweep expired recordings when an admin has opted into retention.
+	stopCleanup := make(chan struct{})
+	defer close(stopCleanup)
+	go func() {
+		t := time.NewTicker(cfg.Recordings.CleanupEvery())
+		defer t.Stop()
+		for {
+			select {
+			case <-stopCleanup:
+				return
+			case <-t.C:
+				// 24h is a safe backstop: it frees genuinely abandoned captures
+				// without cutting off legitimately long-running sessions.
+				recEngine.ReapStaleChunked(context.Background(), 24*time.Hour)
+				if cfg.Recordings.RetentionEnabled() {
 					if n, err := recordings.Cleanup(context.Background(), time.Now()); err != nil {
 						logger.Warn("recording cleanup failed", "err", err)
 					} else if n > 0 {
@@ -191,8 +196,8 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 					}
 				}
 			}
-		}()
-	}
+		}
+	}()
 
 	// Reflect live session/channel counts into the gauges.
 	stopMetrics := make(chan struct{})
