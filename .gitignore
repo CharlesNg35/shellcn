@@ -6,6 +6,7 @@ bin/
 *.so
 *.dylib
 shellcn
+/server
 
 # Build artifacts
 dist/

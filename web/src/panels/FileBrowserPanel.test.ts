@@ -1,0 +1,185 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mount, flushPromises } from "@vue/test-utils";
+import { nextTick } from "vue";
+import { installFetch } from "../test/fetchMock";
+import FileBrowserPanel from "./FileBrowserPanel.vue";
+
+const rootEntries = [
+  { name: "etc", path: "/etc", isDir: true },
+  {
+    name: "README.md",
+    path: "/README.md",
+    isDir: false,
+    size: 100,
+    mime: "text/markdown",
+  },
+];
+
+beforeEach(() => {
+  installFetch((url) => {
+    const u = new URL(url, "http://h");
+    if (url.includes("sftp.list")) {
+      const path = u.searchParams.get("p.path");
+      if (path === "/etc")
+        return {
+          body: {
+            items: [
+              {
+                name: "hosts",
+                path: "/etc/hosts",
+                isDir: false,
+                mime: "text/plain",
+              },
+            ],
+            nextCursor: "",
+          },
+        };
+      return { body: { items: rootEntries, nextCursor: "" } };
+    }
+    if (url.includes("sftp.read")) {
+      return {
+        body: {
+          path: "/README.md",
+          mime: "text/plain",
+          encoding: "utf8",
+          content: "# Hello",
+        },
+      };
+    }
+    return { body: {} };
+  });
+});
+afterEach(() => {
+  document.body.innerHTML = "";
+  vi.unstubAllGlobals();
+});
+
+function writableConfig() {
+  return {
+    pathParam: "path",
+    readRouteId: "ssh.sftp.read",
+    downloadRouteId: "ssh.sftp.download",
+    uploadRouteId: "ssh.sftp.upload",
+    mkdirRouteId: "ssh.sftp.mkdir",
+    renameRouteId: "ssh.sftp.rename",
+    deleteRouteId: "ssh.sftp.delete",
+    writable: true,
+  };
+}
+
+function bodyButton(text: string): HTMLButtonElement | undefined {
+  return [...document.body.querySelectorAll("button")].find(
+    (b) => b.textContent?.trim() === text,
+  ) as HTMLButtonElement | undefined;
+}
+
+function panelButton(w: ReturnType<typeof mount>, text: string) {
+  return w.findAll("button").find((b) => b.text().trim() === text)!;
+}
+
+async function setBodyInput(placeholder: string, value: string): Promise<void> {
+  const input = document.body.querySelector(
+    `input[placeholder="${placeholder}"]`,
+  ) as HTMLInputElement;
+  input.value = value;
+  input.dispatchEvent(new Event("input"));
+  await nextTick();
+}
+
+describe("FileBrowserPanel", () => {
+  it("lists a directory (dirs first) and previews a selected text file", async () => {
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+      },
+    });
+    await flushPromises();
+    const items = w.findAll("li button");
+    expect(items[0].text()).toContain("etc"); // directory sorts first
+    expect(w.text()).toContain("README.md");
+
+    const file = items.find((b) => b.text().includes("README.md"));
+    await file!.trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("# Hello");
+  });
+
+  it("navigates into a directory", async () => {
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+      },
+    });
+    await flushPromises();
+    await w.get('[aria-label="Open etc"]').trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("hosts");
+  });
+
+  it("wires declared file operations to route IDs and path params", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method && init.method !== "GET") {
+        return { body: { ok: true } };
+      }
+      return { body: { items: rootEntries, nextCursor: "" } };
+    });
+
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: writableConfig(),
+      },
+    });
+    await flushPromises();
+
+    await panelButton(w, "New folder").trigger("click");
+    await setBodyInput("Folder name", "logs");
+    bodyButton("Create")!.click();
+    await flushPromises();
+
+    const mkdir = calls.find((c) => c.url.includes("ssh.sftp.mkdir"))!;
+    expect(mkdir.url).toContain("p.path=%2F");
+    expect(mkdir.init?.method).toBe("POST");
+    expect(JSON.parse(String(mkdir.init?.body))).toEqual({ name: "logs" });
+
+    const file = w
+      .findAll("li button")
+      .find((b) => b.text().includes("README.md"));
+    await file!.trigger("click");
+    await flushPromises();
+    expect(w.get("a").attributes("href")).toContain(
+      "/api/connections/c1/x/ssh.sftp.download?p.path=%2FREADME.md",
+    );
+
+    await panelButton(w, "Rename").trigger("click");
+    await setBodyInput("Name", "NOTES.md");
+    bodyButton("Rename")!.click();
+    await flushPromises();
+
+    const rename = calls.find((c) => c.url.includes("ssh.sftp.rename"))!;
+    expect(rename.url).toContain("p.path=%2FREADME.md");
+    expect(rename.init?.method).toBe("PATCH");
+    expect(JSON.parse(String(rename.init?.body))).toEqual({ name: "NOTES.md" });
+
+    const fileAgain = w
+      .findAll("li button")
+      .find((b) => b.text().includes("README.md"));
+    await fileAgain!.trigger("click");
+    await panelButton(w, "Delete").trigger("click");
+    bodyButton("Delete")!.click();
+    await flushPromises();
+
+    const del = calls.find((c) => c.url.includes("ssh.sftp.delete"))!;
+    expect(del.url).toContain("p.path=%2FREADME.md");
+    expect(del.init?.method).toBe("DELETE");
+    expect(JSON.parse(String(del.init?.body))).toEqual({ path: "/README.md" });
+  });
+});

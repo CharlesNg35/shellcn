@@ -1,0 +1,22 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - misspell
+    - revive
+    - unconvert
+  exclusions:
+    rules:
+      # The project standard is minimal comments (comment only a non-obvious
+      # why), so don't force a doc comment on every exported symbol. Other
+      # revive checks (incl. name stuttering) stay on.
+      - linters:
+          - revive
+        text: "exported: .* should have comment"
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports

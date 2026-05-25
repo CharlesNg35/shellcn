@@ -1,0 +1,51 @@
+[
+  {
+    "id": "ssh-prod-web",
+    "name": "prod-web-01",
+    "protocol": "ssh",
+    "icon": { "type": "name", "value": "terminal" },
+    "transport": "direct",
+    "online": true
+  },
+  {
+    "id": "ssh-bastion",
+    "name": "bastion",
+    "protocol": "ssh",
+    "icon": { "type": "name", "value": "terminal" },
+    "transport": "direct",
+    "online": true
+  },
+  {
+    "id": "docker-local",
+    "name": "docker-local",
+    "protocol": "docker",
+    "icon": { "type": "emoji", "value": "🐳" },
+    "transport": "direct",
+    "online": true
+  },
+  {
+    "id": "docker-edge",
+    "name": "edge-host (agent)",
+    "protocol": "docker",
+    "icon": { "type": "emoji", "value": "🐳" },
+    "transport": "agent",
+    "online": false,
+    "status": "pending"
+  },
+  {
+    "id": "proxmox-dc1",
+    "name": "pve-dc1",
+    "protocol": "proxmox",
+    "icon": { "type": "url", "value": "https://www.proxmox.com/favicon.ico" },
+    "transport": "direct",
+    "online": true
+  },
+  {
+    "id": "postgres-main",
+    "name": "main-db",
+    "protocol": "postgres",
+    "icon": { "type": "name", "value": "database" },
+    "transport": "direct",
+    "online": true
+  }
+]

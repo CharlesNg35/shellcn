@@ -1,0 +1,311 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import { useConnectionsStore } from "../stores/connections";
+import { useWorkspaceStore } from "../stores/workspace";
+import { useAuthStore } from "../stores/auth";
+import { useTheme } from "../composables/useTheme";
+import AppIcon from "./AppIcon.vue";
+import ConnectionFormDialog from "./ConnectionFormDialog.vue";
+import type { ConnectionSummary } from "../types/projection";
+
+const conns = useConnectionsStore();
+const ws = useWorkspaceStore();
+const auth = useAuthStore();
+const route = useRoute();
+const router = useRouter();
+const { isDark, toggle: toggleTheme } = useTheme();
+
+const userLabel = computed(
+  () => auth.user?.displayName || auth.user?.username || "",
+);
+
+async function onLogout(): Promise<void> {
+  await auth.logout();
+  await router.push({ name: "login" });
+}
+
+const query = ref("");
+const error = ref<string | null>(null);
+
+onMounted(async () => {
+  if (conns.loaded) return;
+  try {
+    await conns.load();
+  } catch (e) {
+    error.value = (e as Error).message;
+  }
+});
+
+const activeId = computed(() =>
+  route.name === "connection" ? String(route.params.id) : null,
+);
+
+const filtered = computed(() => {
+  const q = query.value.trim().toLowerCase();
+  if (!q) return conns.connections;
+  return conns.connections.filter((c) =>
+    `${c.name} ${c.protocol}`.toLowerCase().includes(q),
+  );
+});
+
+const recent = computed(() =>
+  ws.recent
+    .map((id) => conns.byId(id))
+    .filter((c): c is ConnectionSummary => Boolean(c)),
+);
+
+function dotClass(c: ConnectionSummary): string {
+  if (c.transport === "agent" && !c.online) return "bg-amber-400";
+  return c.online === false ? "bg-surface-400" : "bg-emerald-400";
+}
+
+function go(c: ConnectionSummary): void {
+  ws.open(c.id);
+  router.push({ name: "connection", params: { id: c.id } });
+}
+
+const showCreate = ref(false);
+
+function onConnectionSaved(payload: { id: string; created: boolean }): void {
+  if (payload.created) {
+    ws.open(payload.id);
+    void router.push({ name: "connection", params: { id: payload.id } });
+  }
+}
+</script>
+
+<template>
+  <div
+    class="flex h-full bg-surface-0 text-surface-700 dark:bg-surface-950 dark:text-surface-200"
+  >
+    <aside
+      class="flex w-64 shrink-0 flex-col border-r border-surface-200 bg-surface-50 dark:border-surface-800 dark:bg-surface-900"
+    >
+      <div class="flex items-center justify-between px-4 py-3.5">
+        <RouterLink
+          :to="{ name: 'home' }"
+          class="flex items-center gap-2 font-semibold text-surface-900 dark:text-surface-0"
+        >
+          <span
+            class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 text-white"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'terminal' }" :size="16" />
+          </span>
+          ShellCN
+        </RouterLink>
+        <button
+          type="button"
+          class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          :title="isDark ? 'Switch to light' : 'Switch to dark'"
+          @click="toggleTheme"
+        >
+          {{ isDark ? "☀" : "☾" }}
+        </button>
+      </div>
+
+      <div class="px-3 pb-2">
+        <label class="relative block">
+          <span
+            class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-surface-400"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'search' }" :size="15" />
+          </span>
+          <input
+            v-model="query"
+            type="search"
+            placeholder="Search connections"
+            class="w-full rounded-md border border-surface-200 bg-surface-0 py-1.5 pl-8 pr-2 text-sm outline-none placeholder:text-surface-400 focus:border-primary-400 dark:border-surface-700 dark:bg-surface-950"
+          />
+        </label>
+      </div>
+
+      <nav class="flex-1 overflow-y-auto px-2 pb-3">
+        <p v-if="error" class="px-2 py-4 text-sm text-red-500">{{ error }}</p>
+
+        <template v-if="recent.length && !query">
+          <p
+            class="px-2 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-surface-400"
+          >
+            Recent
+          </p>
+          <button
+            v-for="c in recent"
+            :key="`recent-${c.id}`"
+            type="button"
+            class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-200 dark:hover:bg-surface-800"
+            :class="
+              activeId === c.id
+                ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-950/40 dark:text-primary-200'
+                : ''
+            "
+            @click="go(c)"
+          >
+            <AppIcon :icon="c.icon" :size="16" class="text-surface-500" />
+            <span
+              class="flex-1 truncate text-surface-800 dark:text-surface-100"
+              >{{ c.name }}</span
+            >
+            <span class="h-2 w-2 rounded-full" :class="dotClass(c)" />
+          </button>
+        </template>
+
+        <div class="flex items-center justify-between px-2 pb-1 pt-3">
+          <p
+            class="text-xs font-medium uppercase tracking-wide text-surface-400"
+          >
+            Connections
+          </p>
+          <button
+            type="button"
+            class="rounded p-1 text-surface-400 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
+            title="Add connection"
+            aria-label="Add connection"
+            @click="showCreate = true"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
+          </button>
+        </div>
+        <button
+          v-for="c in filtered"
+          :key="c.id"
+          type="button"
+          class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-200 dark:hover:bg-surface-800"
+          :class="
+            activeId === c.id
+              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
+              : ''
+          "
+          @click="go(c)"
+        >
+          <AppIcon :icon="c.icon" :size="16" class="text-surface-500" />
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span class="truncate text-surface-800 dark:text-surface-100">{{
+              c.name
+            }}</span>
+            <span class="truncate text-xs text-surface-400">{{
+              c.protocol
+            }}</span>
+          </span>
+          <span
+            class="h-2 w-2 rounded-full"
+            :class="dotClass(c)"
+            :title="c.status ?? (c.online ? 'online' : 'offline')"
+          />
+        </button>
+        <p
+          v-if="conns.loaded && !filtered.length && query"
+          class="px-2 py-4 text-sm text-surface-400"
+        >
+          No connections match.
+        </p>
+        <div
+          v-else-if="conns.loaded && !conns.connections.length"
+          class="px-2 py-4 text-sm text-surface-400"
+        >
+          <p class="mb-2">No connections yet.</p>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
+            @click="showCreate = true"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="13" />
+            Add connection
+          </button>
+        </div>
+      </nav>
+
+      <div class="border-t border-surface-200 dark:border-surface-800">
+        <RouterLink
+          v-if="auth.isAdmin"
+          :to="{ name: 'users' }"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          :class="
+            route.name === 'users'
+              ? 'font-medium text-primary-700 dark:text-primary-200'
+              : ''
+          "
+        >
+          <AppIcon :icon="{ type: 'name', value: 'users' }" :size="16" />
+          Users
+        </RouterLink>
+        <RouterLink
+          :to="{ name: 'credentials' }"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          :class="
+            route.name === 'credentials'
+              ? 'font-medium text-primary-700 dark:text-primary-200'
+              : ''
+          "
+        >
+          <AppIcon :icon="{ type: 'name', value: 'key' }" :size="16" />
+          Credentials
+        </RouterLink>
+        <RouterLink
+          :to="{ name: 'recordings' }"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          :class="
+            route.name === 'recordings'
+              ? 'font-medium text-primary-700 dark:text-primary-200'
+              : ''
+          "
+        >
+          <AppIcon :icon="{ type: 'name', value: 'video' }" :size="16" />
+          Recordings
+        </RouterLink>
+        <RouterLink
+          :to="{ name: 'settings' }"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          :class="
+            route.name === 'settings'
+              ? 'font-medium text-primary-700 dark:text-primary-200'
+              : ''
+          "
+        >
+          <AppIcon :icon="{ type: 'name', value: 'settings' }" :size="16" />
+          Settings
+        </RouterLink>
+
+        <div
+          class="flex items-center gap-2.5 border-t border-surface-200 px-4 py-2.5 dark:border-surface-800"
+        >
+          <span
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-200 text-surface-600 dark:bg-surface-800 dark:text-surface-300"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'user' }" :size="15" />
+          </span>
+          <span
+            class="min-w-0 flex-1 truncate text-sm text-surface-700 dark:text-surface-200"
+            :title="userLabel"
+          >
+            {{ userLabel }}
+          </span>
+          <button
+            type="button"
+            class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
+            title="Sign out"
+            aria-label="Sign out"
+            @click="onLogout"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'log-out' }" :size="16" />
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="min-w-0 flex-1 overflow-hidden">
+      <!-- Keep each connection's workspace alive (bounded LRU) so terminals,
+           consoles and log streams resume exactly as left when navigating back. -->
+      <RouterView v-slot="{ Component }">
+        <KeepAlive :max="6">
+          <component :is="Component" :key="route.fullPath" />
+        </KeepAlive>
+      </RouterView>
+    </main>
+
+    <ConnectionFormDialog
+      v-model:visible="showCreate"
+      @saved="onConnectionSaved"
+    />
+  </div>
+</template>

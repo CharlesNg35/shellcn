@@ -18,7 +18,7 @@ add plugins.
 - **Tests are a gate** — no step is `✅` without its tests; no phase is done
   without its e2e. See [`TESTING.md`](TESTING.md) for the layers and CI gates.
 - **Icons are structured** — every icon field uses the `Icon{ Type, Value }` type
-  (`name`/`url`/`base64`/`emoji`), v2 §5.1.
+  (`name`/`url`/`base64`/`emoji`/`svg`; inline `svg` is DOMPurify-sanitized), v2 §5.1.
 - **Lazy-load by default** — code-split heavy panels, fetch projections/data on
   demand, connect sessions lazily (v2 §12.1). First paint stays constant.
 - **Panel set grows** — `graph`/`trace`/`kv`/`http_client` land with their plugin
@@ -35,8 +35,11 @@ add plugins.
 | 0     | —                  | Bootstrap                             |
 | 1     | M0                 | Declarative UI on fixtures (priority) |
 | 2     | M1                 | Core runtime                          |
+| 2b    | M1.5               | Platform management (auth UI, connection/credential CRUD, sharing) — v2 §12.2 |
+| 2c    | M1.6               | Session recording foundation (plugin-declared, opt-in) — v2 §9.5 |
+| —     | M-Admin            | Admin/audit/observability UI (later, additive) — v2 §12.2 |
 | 3     | M2                 | SSH/SFTP reference plugin             |
-| 4     | M3                 | Docker + agent transport (L4)         |
+| 4     | M3                 | Docker + agent transport validation/hardening (L4) |
 | 5     | M4                 | Proxmox (VNC)                         |
 | 6     | M5                 | PostgreSQL                            |
 | 7     | M6                 | Kubernetes (L7 agent)                 |

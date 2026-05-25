@@ -1,0 +1,375 @@
+{
+  "apiVersion": 1,
+  "name": "proxmox",
+  "version": "0.1.0",
+  "title": "Proxmox VE",
+  "description": "Proxmox cluster \u2014 nodes, VMs, LXC, storage.",
+  "icon": {
+    "type": "url",
+    "value": "https://www.proxmox.com/favicon.ico"
+  },
+  "capabilities": ["virtualization", "console", "snapshots"],
+  "supportedTransports": ["direct"],
+  "layout": "sidebar_tree",
+  "config": {
+    "groups": [
+      {
+        "name": "Basic",
+        "fields": [
+          {
+            "key": "host",
+            "label": "Host",
+            "type": "text",
+            "required": true,
+            "placeholder": "pve.example.com"
+          },
+          {
+            "key": "port",
+            "label": "Port",
+            "type": "number",
+            "default": 8006
+          },
+          {
+            "key": "realm",
+            "label": "Realm",
+            "type": "select",
+            "default": "pam",
+            "options": [
+              {
+                "label": "PAM",
+                "value": "pam"
+              },
+              {
+                "label": "PVE",
+                "value": "pve"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Auth",
+        "fields": [
+          {
+            "key": "user",
+            "label": "Username",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "credential_id",
+            "label": "API token credential",
+            "type": "credential_ref",
+            "credential": {
+              "kinds": ["api_token"],
+              "protocols": ["proxmox"]
+            },
+            "help": "Reuse a stored Proxmox API token without copying the secret into this connection."
+          },
+          {
+            "key": "token_id",
+            "label": "API token id",
+            "type": "text",
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "credential_id",
+                  "op": "empty"
+                }
+              ]
+            }
+          },
+          {
+            "key": "token_secret",
+            "label": "API token secret",
+            "type": "password",
+            "secret": true,
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "credential_id",
+                  "op": "empty"
+                }
+              ]
+            }
+          },
+          {
+            "key": "verify_tls",
+            "label": "Verify TLS certificate",
+            "type": "toggle",
+            "default": true
+          }
+        ]
+      }
+    ]
+  },
+  "tree": [
+    {
+      "key": "nodes",
+      "label": "Nodes",
+      "icon": {
+        "type": "name",
+        "value": "server"
+      },
+      "source": {
+        "routeId": "proxmox.node.list"
+      }
+    },
+    {
+      "key": "storage",
+      "label": "Storage",
+      "icon": {
+        "type": "name",
+        "value": "database"
+      },
+      "source": {
+        "routeId": "proxmox.storage.list"
+      }
+    },
+    {
+      "key": "network",
+      "label": "Network",
+      "icon": {
+        "type": "name",
+        "value": "share"
+      },
+      "source": {
+        "routeId": "proxmox.network.list"
+      }
+    },
+    {
+      "key": "datacenter",
+      "label": "Datacenter",
+      "icon": {
+        "type": "name",
+        "value": "globe"
+      },
+      "source": {
+        "routeId": "proxmox.datacenter.list"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "kind": "vm",
+      "title": "Virtual machines",
+      "list": {
+        "routeId": "proxmox.vm.list"
+      },
+      "columns": [
+        {
+          "key": "vmid",
+          "label": "VMID",
+          "sortable": true,
+          "type": "number"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "sortable": true
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "type": "badge"
+        },
+        {
+          "key": "cpu",
+          "label": "CPU",
+          "type": "number"
+        },
+        {
+          "key": "mem",
+          "label": "Memory",
+          "type": "bytes"
+        }
+      ],
+      "actionIds": [
+        "proxmox.vm.start",
+        "proxmox.vm.stop",
+        "proxmox.vm.reboot",
+        "proxmox.vm.snapshot"
+      ],
+      "detail": {
+        "header": {
+          "title": "${resource.name}",
+          "statusField": "status",
+          "actionIds": [
+            "proxmox.vm.start",
+            "proxmox.vm.stop",
+            "proxmox.vm.reboot"
+          ]
+        },
+        "tabs": [
+          {
+            "key": "overview",
+            "label": "Overview",
+            "panel": "metrics",
+            "source": {
+              "routeId": "proxmox.vm.stats",
+              "method": "WS",
+              "params": {
+                "node": "${resource.namespace}",
+                "vmid": "${resource.uid}"
+              }
+            }
+          },
+          {
+            "key": "console",
+            "label": "Console",
+            "panel": "remote_desktop",
+            "source": {
+              "routeId": "proxmox.vm.vnc",
+              "method": "WS",
+              "params": {
+                "node": "${resource.namespace}",
+                "vmid": "${resource.uid}"
+              }
+            }
+          },
+          {
+            "key": "hardware",
+            "label": "Hardware",
+            "panel": "form",
+            "source": {
+              "routeId": "proxmox.vm.config",
+              "params": {
+                "node": "${resource.namespace}",
+                "vmid": "${resource.uid}"
+              }
+            }
+          },
+          {
+            "key": "snapshots",
+            "label": "Snapshots",
+            "panel": "table",
+            "source": {
+              "routeId": "proxmox.vm.snapshots.list",
+              "params": {
+                "node": "${resource.namespace}",
+                "vmid": "${resource.uid}"
+              }
+            }
+          },
+          {
+            "key": "backups",
+            "label": "Backups",
+            "panel": "table",
+            "source": {
+              "routeId": "proxmox.vm.backups.list",
+              "params": {
+                "node": "${resource.namespace}",
+                "vmid": "${resource.uid}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "proxmox.vm.start",
+      "label": "Start",
+      "icon": {
+        "type": "name",
+        "value": "play"
+      },
+      "routeId": "proxmox.vm.start",
+      "method": "POST",
+      "params": {
+        "node": "${resource.namespace}",
+        "vmid": "${resource.uid}"
+      },
+      "risk": "write",
+      "requiresConfirm": false
+    },
+    {
+      "id": "proxmox.vm.stop",
+      "label": "Stop",
+      "icon": {
+        "type": "name",
+        "value": "stop"
+      },
+      "routeId": "proxmox.vm.stop",
+      "method": "POST",
+      "params": {
+        "node": "${resource.namespace}",
+        "vmid": "${resource.uid}"
+      },
+      "risk": "destructive",
+      "requiresConfirm": true,
+      "confirmText": "Force-stop this VM?"
+    },
+    {
+      "id": "proxmox.vm.reboot",
+      "label": "Reboot",
+      "icon": {
+        "type": "name",
+        "value": "refresh"
+      },
+      "routeId": "proxmox.vm.reboot",
+      "method": "POST",
+      "params": {
+        "node": "${resource.namespace}",
+        "vmid": "${resource.uid}"
+      },
+      "risk": "write",
+      "requiresConfirm": false
+    },
+    {
+      "id": "proxmox.vm.snapshot",
+      "label": "Snapshot",
+      "icon": {
+        "type": "name",
+        "value": "camera"
+      },
+      "routeId": "proxmox.vm.snapshot.create",
+      "method": "POST",
+      "params": {
+        "node": "${resource.namespace}",
+        "vmid": "${resource.uid}"
+      },
+      "risk": "write",
+      "requiresConfirm": false,
+      "input": {
+        "groups": [
+          {
+            "name": "Snapshot",
+            "fields": [
+              {
+                "key": "name",
+                "label": "Name",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "description",
+                "label": "Description",
+                "type": "textarea"
+              },
+              {
+                "key": "vmstate",
+                "label": "Include RAM",
+                "type": "toggle",
+                "default": false
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "streams": [
+    {
+      "id": "proxmox.vm.vnc",
+      "kind": "desktop",
+      "routeId": "proxmox.vm.vnc"
+    },
+    {
+      "id": "proxmox.vm.stats",
+      "kind": "metrics",
+      "routeId": "proxmox.vm.stats"
+    }
+  ]
+}
