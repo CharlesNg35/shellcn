@@ -24,8 +24,7 @@ const protocols = computed(() => conns.plugins.length);
       Infrastructure access gateway
     </h1>
     <p class="max-w-md text-surface-500">
-      Select a connection from the sidebar to open its workspace. Every protocol
-      renders from its manifest — no per-plugin UI.
+      Select a connection from the sidebar to open its workspace.
     </p>
     <p class="text-sm text-surface-400">
       {{ count }} connection{{ count === 1 ? "" : "s" }} ·

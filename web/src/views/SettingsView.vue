@@ -29,14 +29,9 @@ onMounted(async () => {
     <div
       class="flex items-center justify-between rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
     >
-      <div>
-        <p class="font-medium text-surface-800 dark:text-surface-100">
-          Appearance
-        </p>
-        <p class="text-sm text-surface-400">
-          Toggle between light and dark theme.
-        </p>
-      </div>
+      <p class="font-medium text-surface-800 dark:text-surface-100">
+        Appearance
+      </p>
       <button
         type="button"
         class="rounded-md border border-surface-200 px-3 py-1.5 text-sm hover:bg-surface-100 dark:border-surface-700 dark:hover:bg-surface-800"

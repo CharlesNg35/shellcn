@@ -186,9 +186,6 @@ async function save(): Promise<void> {
           :placeholder="'Any compatible protocol'"
           @update:model-value="protocols = $event"
         />
-        <p class="text-xs text-surface-400">
-          Leave empty to allow any compatible protocol.
-        </p>
       </div>
 
       <div class="flex flex-col gap-1.5">

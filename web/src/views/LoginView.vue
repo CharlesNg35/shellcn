@@ -51,9 +51,6 @@ async function onSubmit(): Promise<void> {
         >
           Sign in to ShellCN
         </h1>
-        <p class="text-sm text-surface-500">
-          Your infrastructure access gateway.
-        </p>
       </div>
 
       <form

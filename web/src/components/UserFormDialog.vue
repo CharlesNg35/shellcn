@@ -199,12 +199,7 @@ async function save(): Promise<void> {
         v-if="isEdit"
         class="flex items-center justify-between gap-3 text-sm text-surface-700 dark:text-surface-200"
       >
-        <span>
-          Disabled
-          <span class="block text-xs text-surface-400">
-            A disabled account cannot sign in.
-          </span>
-        </span>
+        <span>Disabled</span>
         <ToggleSwitch
           :model-value="disabled"
           :disabled="protectedUser"

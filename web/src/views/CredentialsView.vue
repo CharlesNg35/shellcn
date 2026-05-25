@@ -103,10 +103,6 @@ const hasItems = computed(() => items.value.length > 0);
         <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
           Credentials
         </h1>
-        <p class="text-sm text-surface-500">
-          Reusable secret material a connection references by ID — the value is
-          never shown.
-        </p>
       </div>
       <button
         type="button"

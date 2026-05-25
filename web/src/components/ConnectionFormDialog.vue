@@ -197,10 +197,6 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
             option-value="value"
             @update:model-value="transport = $event"
           />
-          <p class="text-xs text-surface-400">
-            Agent connections finish setup with an install command after they
-            are created.
-          </p>
         </div>
 
         <SchemaForm
