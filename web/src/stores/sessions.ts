@@ -52,6 +52,10 @@ export const useSessionsStore = defineStore("sessions", () => {
     });
   }
 
+  function has(key: string): boolean {
+    return channels.has(key);
+  }
+
   function subscribe(key: string, fn: Listener): () => void {
     const channel = channels.get(key);
     if (!channel) return () => {};
@@ -90,6 +94,7 @@ export const useSessionsStore = defineStore("sessions", () => {
     statuses,
     generation,
     ensure,
+    has,
     subscribe,
     send,
     buffer,

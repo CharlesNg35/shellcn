@@ -68,7 +68,7 @@ function go(c: ConnectionSummary): void {
           class="flex items-center gap-2 font-semibold text-surface-900 dark:text-surface-0"
         >
           <span
-            class="flex h-7 w-7 items-center justify-center rounded-md bg-primary-500 text-white"
+            class="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-600 text-white"
           >
             <AppIcon :icon="{ type: 'name', value: 'terminal' }" :size="16" />
           </span>
@@ -115,7 +115,9 @@ function go(c: ConnectionSummary): void {
             type="button"
             class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-200 dark:hover:bg-surface-800"
             :class="
-              activeId === c.id ? 'bg-surface-200 dark:bg-surface-800' : ''
+              activeId === c.id
+                ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-950/40 dark:text-primary-200'
+                : ''
             "
             @click="go(c)"
           >
@@ -138,7 +140,11 @@ function go(c: ConnectionSummary): void {
           :key="c.id"
           type="button"
           class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-200 dark:hover:bg-surface-800"
-          :class="activeId === c.id ? 'bg-surface-200 dark:bg-surface-800' : ''"
+          :class="
+            activeId === c.id
+              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
+              : ''
+          "
           @click="go(c)"
         >
           <AppIcon :icon="c.icon" :size="16" class="text-surface-500" />
@@ -174,7 +180,13 @@ function go(c: ConnectionSummary): void {
     </aside>
 
     <main class="min-w-0 flex-1 overflow-hidden">
-      <RouterView />
+      <!-- Keep each connection's workspace alive (bounded LRU) so terminals,
+           consoles and log streams resume exactly as left when navigating back. -->
+      <RouterView v-slot="{ Component }">
+        <KeepAlive :max="6">
+          <component :is="Component" :key="route.fullPath" />
+        </KeepAlive>
+      </RouterView>
     </main>
 
     <AppToast />

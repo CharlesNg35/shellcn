@@ -22,9 +22,9 @@ const error = ref<string | null>(null);
 
 const riskClass: Record<RiskLevel, string> = {
   safe: "border border-surface-300 text-surface-700 hover:bg-surface-100 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800",
-  write: "bg-primary-500 text-white hover:bg-primary-600",
-  destructive: "bg-red-500 text-white hover:bg-red-600",
-  privileged: "bg-amber-500 text-white hover:bg-amber-600",
+  write: "bg-primary-600 text-white hover:bg-primary-700",
+  destructive: "bg-red-600 text-white hover:bg-red-700",
+  privileged: "bg-amber-600 text-white hover:bg-amber-700",
 };
 
 function trigger(action: Action): void {

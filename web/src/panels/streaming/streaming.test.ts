@@ -74,4 +74,16 @@ describe("streaming stub panels", () => {
       expect(() => w.unmount()).not.toThrow();
     });
   }
+
+  it("reuses the open channel on remount (stream survives navigation away/back)", async () => {
+    const first = mount(TerminalPanel, { props });
+    await flushPromises();
+    expect(FakeWS.instances).toHaveLength(1);
+    first.unmount(); // navigate away — channel must persist
+
+    const second = mount(TerminalPanel, { props });
+    await flushPromises();
+    expect(FakeWS.instances).toHaveLength(1); // no new socket — resumed
+    second.unmount();
+  });
 });

@@ -69,6 +69,31 @@ projection — **adding a plugin requires zero frontend changes.**
   authn → authz → validate → audit → handler.
 - **Lazy-load** heavy panels/data; first paint stays constant regardless of catalog size.
 
+## Frontend & UX (use the stack, don't reinvent)
+
+- **Use the committed libraries; do not hand-roll what they provide.** UI is built
+  with **PrimeVue** (unstyled mode + a Tailwind **pass-through preset** in
+  `web/src/primevue/preset.ts`) and **VueUse** composables. Reach for:
+  - `DataTable` + `Column` (tables, sorting, virtual scroll), `Tree` (lazy
+    hierarchies), `Tabs`/`TabList`/`Tab`/`TabPanels`/`TabPanel`, `Dialog`
+    (modals — built-in focus trap/Escape/aria-modal), `Toast` + `useToast`
+    (feedback), and the form inputs (`InputText`, `Password`, `Textarea`,
+    `Select`, `ToggleSwitch`, `InputNumber`).
+  - Custom components only when no maintained lib fits — and justify it.
+- **Verify the component/composable API via `context7` + websearch before wiring
+  it** (same rule as "Verify before you build").
+- **UX is a first-class requirement — follow best practices:**
+  - **Accessible by default** (WAI-ARIA): correct roles, labels, keyboard
+    operability, visible `focus-visible` rings, focus management in dialogs.
+  - **Perceived performance:** skeleton/loading states (not bare spinners),
+    optimistic where safe, lazy-load heavy panels.
+  - **Clear states:** meaningful empty states, actionable errors (retry), and
+    **action feedback via toasts** (success/failure) — never silent.
+  - **Motion:** subtle transitions that respect `prefers-reduced-motion`.
+  - **Theming:** dark/light via surface/primary tokens; sufficient contrast.
+  - **Generic & manifest-driven:** UX patterns live in the core renderer/panels,
+    never per-plugin.
+
 ## Commands
 
 - `make build` — vite build → embed → `go build` (single binary)

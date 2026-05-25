@@ -3,8 +3,6 @@ import { computed, ref, watch } from "vue";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
-import TabPanels from "primevue/tabpanels";
-import TabPanel from "primevue/tabpanel";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import AppIcon from "../components/AppIcon.vue";
@@ -84,6 +82,10 @@ const detailResource = computed(() => {
   return ref ? resourceByKind.value.get(ref.kind) : undefined;
 });
 
+const activeTab = computed(() =>
+  projection.value?.tabs?.find((t) => t.key === view.value.activeTab),
+);
+
 function onSelectGroup(key: string): void {
   ws.selectGroup(props.id, key);
 }
@@ -130,31 +132,34 @@ function onEnrolled(): void {
       />
 
       <template v-else-if="projection">
-        <!-- Flat tab layout -->
-        <Tabs
-          v-if="projection.layout === 'tabs'"
-          :value="view.activeTab ?? ''"
-          lazy
-          class="h-full"
-          @update:value="ws.setActiveTab(id, String($event))"
-        >
-          <TabList>
-            <Tab v-for="t in projection.tabs" :key="t.key" :value="t.key">
-              <AppIcon :icon="t.icon" :size="15" />
-              {{ t.label }}
-            </Tab>
-          </TabList>
-          <TabPanels>
-            <TabPanel v-for="t in projection.tabs" :key="t.key" :value="t.key">
+        <!-- Flat tab layout. The tab bar is PrimeVue; content is rendered through
+             KeepAlive (not PrimeVue's lazy TabPanels) so switching tabs HIDES a
+             panel instead of destroying it — terminals/streams stay alive. -->
+        <div v-if="projection.layout === 'tabs'" class="flex h-full flex-col">
+          <Tabs
+            :value="view.activeTab ?? ''"
+            @update:value="ws.setActiveTab(id, String($event))"
+          >
+            <TabList>
+              <Tab v-for="t in projection.tabs" :key="t.key" :value="t.key">
+                <AppIcon :icon="t.icon" :size="15" />
+                {{ t.label }}
+              </Tab>
+            </TabList>
+          </Tabs>
+          <div class="min-h-0 flex-1 overflow-hidden">
+            <KeepAlive :max="10">
               <PanelHost
-                :panel="t.panel"
+                v-if="activeTab"
+                :key="`${id}:${activeTab.key}`"
+                :panel="activeTab.panel"
                 :connection-id="id"
-                :source="t.source"
-                :config="t.config"
+                :source="activeTab.source"
+                :config="activeTab.config"
               />
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
+            </KeepAlive>
+          </div>
+        </div>
 
         <!-- Hierarchical sidebar-tree layout -->
         <div v-else class="flex h-full">

@@ -96,7 +96,7 @@ onUnmounted(stopPolling);
     <button
       v-if="!enrollment && status !== 'online'"
       type="button"
-      class="self-start rounded-md bg-primary-500 px-4 py-2 text-sm font-medium text-white"
+      class="self-start rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
       @click="enroll"
     >
       Generate install command

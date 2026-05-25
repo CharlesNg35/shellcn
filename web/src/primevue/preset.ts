@@ -49,7 +49,7 @@ export const primeVuePassthrough = {
     },
   },
 
-  tabs: { root: "flex h-full flex-col" },
+  tabs: { root: "shrink-0" },
   tablist: {
     root: "shrink-0 border-b border-surface-200 dark:border-surface-800",
     content: "flex",

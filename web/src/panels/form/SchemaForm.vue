@@ -84,7 +84,7 @@ function onSubmit(): void {
       <button
         type="submit"
         :disabled="busy"
-        class="rounded-md bg-primary-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        class="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
       >
         {{ busy ? "Working…" : submitLabel }}
       </button>

@@ -3,8 +3,6 @@ import { computed, ref, watch } from "vue";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
-import TabPanels from "primevue/tabpanels";
-import TabPanel from "primevue/tabpanel";
 import { interpolate } from "../api/dataSource";
 import type {
   Action,
@@ -47,6 +45,10 @@ const status = computed(() => {
   return f ? props.row[f] : undefined;
 });
 
+const current = computed(() =>
+  props.detail.tabs.find((t) => t.key === activeTab.value),
+);
+
 const headerActions = computed(() =>
   (props.detail.header.actionIds ?? [])
     .map((id) => props.actions.find((a) => a.id === id))
@@ -81,29 +83,29 @@ const headerActions = computed(() =>
       </div>
     </header>
 
-    <Tabs
-      :value="activeTab"
-      lazy
-      class="min-h-0 flex-1"
-      @update:value="activeTab = String($event)"
-    >
+    <Tabs :value="activeTab" @update:value="activeTab = String($event)">
       <TabList>
         <Tab v-for="tab in detail.tabs" :key="tab.key" :value="tab.key">
           <AppIcon :icon="tab.icon" :size="14" />
           {{ tab.label }}
         </Tab>
       </TabList>
-      <TabPanels>
-        <TabPanel v-for="tab in detail.tabs" :key="tab.key" :value="tab.key">
-          <PanelHost
-            :panel="tab.panel"
-            :connection-id="connectionId"
-            :source="tab.source"
-            :config="tab.config"
-            :resource="resource"
-          />
-        </TabPanel>
-      </TabPanels>
     </Tabs>
+
+    <!-- KeepAlive (not lazy TabPanels) so a resource's console/logs stay alive
+         when switching between its detail tabs. -->
+    <div class="min-h-0 flex-1 overflow-hidden">
+      <KeepAlive :max="8">
+        <PanelHost
+          v-if="current"
+          :key="`${row.ref?.uid}:${current.key}`"
+          :panel="current.panel"
+          :connection-id="connectionId"
+          :source="current.source"
+          :config="current.config"
+          :resource="resource"
+        />
+      </KeepAlive>
+    </div>
   </div>
 </template>

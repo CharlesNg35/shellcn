@@ -169,6 +169,17 @@ export interface StreamHandle {
   url: string;
 }
 
+// Stable channel identity for a stream — computed WITHOUT minting a ticket, so a
+// caller can check for an already-open channel before requesting a new one.
+export function channelKey(
+  connectionId: string,
+  ds: DataSource,
+  ctx: ResolveContext = {},
+): string {
+  const params = resolveParams(ds.params, ctx);
+  return `${connectionId}:${ds.routeId}:${new URLSearchParams(params).toString()}`;
+}
+
 // Resolves params, mints a single-use ticket, and returns the wss URL + a stable
 // channel key. The caller hands the URL to the sessions store, which owns the
 // socket lifecycle (so streams survive component remounts).
@@ -179,7 +190,7 @@ export async function prepareStream(
 ): Promise<StreamHandle> {
   const params = resolveParams(ds.params, ctx);
   const ticket = await requestTicket(connectionId, ds.routeId, params);
-  const key = `${connectionId}:${ds.routeId}:${new URLSearchParams(params).toString()}`;
+  const key = channelKey(connectionId, ds, ctx);
   return { key, url: streamUrl(connectionId, ds.routeId, params, ticket) };
 }
 
