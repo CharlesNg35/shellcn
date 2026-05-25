@@ -60,7 +60,7 @@ describe("CredentialSelect", () => {
     expect(credentialCall).toContain("protocol=ssh");
   });
 
-  it("offers one locked create action for each selector kind", async () => {
+  it("opens one create dialog scoped to the manifest selector", async () => {
     const wrapper = mount(CredentialSelect, {
       props: {
         protocol: "ssh",
@@ -72,17 +72,18 @@ describe("CredentialSelect", () => {
     });
     await flushPromises();
 
-    expect(wrapper.text()).toContain("New ssh private key");
-    expect(wrapper.text()).toContain("New ssh password");
+    expect(wrapper.text()).toContain("New credential");
+    expect(wrapper.text()).not.toContain("New ssh private key");
+    expect(wrapper.text()).not.toContain("New ssh password");
 
-    await wrapper.findAll("button")[1].trigger("click");
+    await wrapper.find("button").trigger("click");
     await flushPromises();
 
     const dialog = wrapper.findComponent(CredentialFormDialog);
-    expect(dialog.props("lockedKind")).toBe("ssh_password");
     expect(dialog.props("selector")).toMatchObject({
-      kinds: ["ssh_password"],
+      kinds: ["ssh_private_key", "ssh_password"],
       protocols: ["ssh"],
     });
+    expect(dialog.props("protocol")).toBe("ssh");
   });
 });

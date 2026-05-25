@@ -12,7 +12,6 @@ import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import type {
-  CredentialKind,
   CredentialKindInfo,
   CredentialSelector,
   CredentialSummary,
@@ -23,7 +22,6 @@ const props = defineProps<{
   credential?: CredentialSummary | null;
   selector?: CredentialSelector;
   protocol?: string;
-  lockedKind?: CredentialKind;
 }>();
 const emit = defineEmits<{
   "update:visible": [value: boolean];
@@ -46,15 +44,11 @@ const kindCatalog = ref<CredentialKindInfo[]>([]);
 const catalogLoading = ref(false);
 const catalogError = ref<string | null>(null);
 
-const selectorKinds = computed(() =>
-  props.lockedKind ? [props.lockedKind] : (props.selector?.kinds ?? []),
-);
+const selectorKinds = computed(() => props.selector?.kinds ?? []);
 const scopedToSelector = computed(
   () =>
     !isEdit.value &&
-    (Boolean(props.lockedKind) ||
-      selectorKinds.value.length > 0 ||
-      Boolean(props.protocol)),
+    (selectorKinds.value.length > 0 || Boolean(props.protocol)),
 );
 const kindOptions = computed(() => {
   const allowed = new Set(selectorKinds.value);
@@ -63,7 +57,7 @@ const kindOptions = computed(() => {
     .map((k) => ({ label: k.label, value: k.kind }));
 });
 const showKindSelect = computed(
-  () => !props.lockedKind && !scopedToSelector.value,
+  () => !scopedToSelector.value || kindOptions.value.length > 1,
 );
 const kindDisplayLabel = computed(
   () =>
@@ -110,7 +104,6 @@ async function loadKindCatalog(): Promise<void> {
 }
 
 function firstAllowedKind(): string {
-  if (props.lockedKind) return props.lockedKind;
   const current = kindOptions.value.find(
     (option) => option.value === kind.value,
   );
@@ -130,9 +123,6 @@ function defaultProtocols(): string[] {
 }
 
 function normalizeForKind(): void {
-  if (props.lockedKind && kind.value !== props.lockedKind) {
-    kind.value = props.lockedKind;
-  }
   if (
     kindOptions.value.length &&
     !kindOptions.value.some((k) => k.value === kind.value)
@@ -167,7 +157,7 @@ watch(
       replacing.value = false;
     } else {
       name.value = "";
-      kind.value = props.lockedKind ?? firstAllowedKind();
+      kind.value = firstAllowedKind();
       identity.value = "";
       protocols.value = defaultProtocols();
       replacing.value = true;

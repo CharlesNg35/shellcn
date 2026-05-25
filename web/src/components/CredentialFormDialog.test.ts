@@ -115,7 +115,6 @@ describe("CredentialFormDialog", () => {
         visible: true,
         selector: { kinds: ["kubeconfig"], protocols: ["kubernetes"] },
         protocol: "kubernetes",
-        lockedKind: "kubeconfig",
       },
     });
     await flushPromises();
@@ -126,7 +125,7 @@ describe("CredentialFormDialog", () => {
     wrapper.unmount();
   });
 
-  it("locks inline creation to the passed kind even when the field accepts multiple kinds", async () => {
+  it("lets inline creation choose only from the selector's supported kinds", async () => {
     installFetch((url) =>
       url.includes("/credential-kinds")
         ? { body: credentialKinds }
@@ -140,14 +139,22 @@ describe("CredentialFormDialog", () => {
           protocols: ["ssh", "kubernetes"],
         },
         protocol: "kubernetes",
-        lockedKind: "kubeconfig",
       },
     });
     await flushPromises();
 
-    expect(document.body.textContent).toContain("Kubeconfig");
-    expect(document.body.textContent).not.toContain("SSH password");
-    expect(wrapper.findComponent({ name: "Select" }).exists()).toBe(false);
+    const kindSelects = wrapper
+      .findAllComponents({ name: "Select" })
+      .filter((select) =>
+        (select.props("options") as Array<{ value: string }> | undefined)?.some(
+          (option) => option.value === "ssh_password",
+        ),
+      );
+    expect(kindSelects).toHaveLength(1);
+    expect(kindSelects[0].props("options")).toEqual([
+      { label: "SSH password", value: "ssh_password" },
+      { label: "Kubeconfig", value: "kubeconfig" },
+    ]);
     wrapper.unmount();
   });
 

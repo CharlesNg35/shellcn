@@ -5,8 +5,6 @@ import { api } from "../../api/client";
 import CredentialFormDialog from "../../components/CredentialFormDialog.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import type {
-  CredentialKind,
-  CredentialKindInfo,
   CredentialSelector,
   CredentialSummary,
 } from "../../types/projection";
@@ -22,20 +20,6 @@ const options = ref<CredentialSummary[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const showCreate = ref(false);
-const createKind = ref<CredentialKind | undefined>();
-const kindCatalog = ref<CredentialKindInfo[]>([]);
-const kindLoading = ref(false);
-const createKinds = computed<CredentialKind[]>(() => props.selector.kinds);
-const createSelector = computed<CredentialSelector>(() => ({
-  ...props.selector,
-  kinds: createKind.value ? [createKind.value] : props.selector.kinds,
-}));
-const createButtons = computed(() =>
-  createKinds.value.map((kind) => ({
-    kind,
-    label: `New ${kindLabel(kind).toLowerCase()}`,
-  })),
-);
 
 const choices = computed(() =>
   options.value.map((c) => ({
@@ -43,21 +27,6 @@ const choices = computed(() =>
     label: `${c.name} · ${c.kind}${c.identity ? ` (${c.identity})` : ""}`,
   })),
 );
-
-function kindLabel(kind: CredentialKind): string {
-  return kindCatalog.value.find((k) => k.kind === kind)?.label ?? kind;
-}
-
-async function loadKindCatalog(): Promise<void> {
-  if (kindCatalog.value.length || kindLoading.value) return;
-  kindLoading.value = true;
-  try {
-    const catalog = await api.get<CredentialKindInfo[]>("/credential-kinds");
-    kindCatalog.value = Array.isArray(catalog) ? catalog : [];
-  } finally {
-    kindLoading.value = false;
-  }
-}
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -78,11 +47,6 @@ async function load(): Promise<void> {
   }
 }
 
-function openCreate(kind?: CredentialKind): void {
-  createKind.value = kind ?? createKinds.value[0];
-  showCreate.value = true;
-}
-
 async function onCreated(credential?: CredentialSummary): Promise<void> {
   await load();
   if (credential?.id) {
@@ -90,10 +54,7 @@ async function onCreated(credential?: CredentialSummary): Promise<void> {
   }
 }
 
-onMounted(() => {
-  void load();
-  void loadKindCatalog();
-});
+onMounted(load);
 </script>
 
 <template>
@@ -116,28 +77,14 @@ onMounted(() => {
         No matching credentials yet.
       </p>
       <span v-else />
-      <div class="flex shrink-0 flex-wrap justify-end gap-1.5">
-        <button
-          v-if="createButtons.length <= 1"
-          type="button"
-          class="inline-flex items-center gap-1 text-xs font-medium text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-          @click="openCreate(createKinds[0])"
-        >
-          <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="12" />
-          New credential
-        </button>
-        <button
-          v-for="button in createButtons"
-          v-else
-          :key="button.kind"
-          type="button"
-          class="inline-flex items-center gap-1 rounded border border-primary-200 px-1.5 py-0.5 text-xs font-medium text-primary-600 transition-colors hover:border-primary-300 hover:bg-primary-50 dark:border-primary-900 dark:text-primary-400 dark:hover:bg-primary-950/30"
-          @click="openCreate(button.kind)"
-        >
-          <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="12" />
-          {{ button.label }}
-        </button>
-      </div>
+      <button
+        type="button"
+        class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+        @click="showCreate = true"
+      >
+        <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="12" />
+        New credential
+      </button>
     </div>
 
     <!-- Create a credential without leaving the connection form; on save the
@@ -146,9 +93,8 @@ onMounted(() => {
     <CredentialFormDialog
       v-if="showCreate"
       v-model:visible="showCreate"
-      :selector="createSelector"
+      :selector="selector"
       :protocol="protocol"
-      :locked-kind="createKind"
       @saved="onCreated"
     />
   </div>
