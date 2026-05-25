@@ -19,14 +19,20 @@ import (
 // lists the non-secret summaries a user may select from. Secret values never
 // leave this layer toward the client.
 type CredentialService struct {
-	creds  store.CredentialStore
-	grants store.CredentialGrantStore
-	vault  secrets.SecretStore
+	creds          store.CredentialStore
+	grants         store.CredentialGrantStore
+	vault          secrets.SecretStore
+	onSecretAccess func()
 }
 
 // NewCredentialService wires the dependencies.
 func NewCredentialService(creds store.CredentialStore, grants store.CredentialGrantStore, vault secrets.SecretStore) *CredentialService {
 	return &CredentialService{creds: creds, grants: grants, vault: vault}
+}
+
+// SetSecretAccessHook registers a callback for successful secret decryptions.
+func (s *CredentialService) SetSecretAccessHook(fn func()) {
+	s.onSecretAccess = fn
 }
 
 // NewCredentialInput describes a credential to create (secret in plaintext;
@@ -87,7 +93,14 @@ func (s *CredentialService) Resolve(ctx context.Context, userID, credentialID st
 	if !ok {
 		return nil, fmt.Errorf("credential %q: %w", credentialID, models.ErrForbidden)
 	}
-	return s.vault.Decrypt(ctx, cred.EncryptedSecret)
+	secret, err := s.vault.Decrypt(ctx, cred.EncryptedSecret)
+	if err != nil {
+		return nil, err
+	}
+	if s.onSecretAccess != nil {
+		s.onSecretAccess()
+	}
+	return secret, nil
 }
 
 // ListUsable returns the non-secret summaries the user may select for a

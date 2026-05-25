@@ -66,6 +66,7 @@ func TestStoreSuite(t *testing.T) {
 			t.Run("grants", func(t *testing.T) { testGrants(t, f.open(t)) })
 			t.Run("credentialReference", func(t *testing.T) { testCredentialReference(t, f.open(t)) })
 			t.Run("audit", func(t *testing.T) { testAudit(t, f.open(t)) })
+			t.Run("policies", func(t *testing.T) { testPolicies(t, f.open(t)) })
 		})
 	}
 }
@@ -269,5 +270,29 @@ func testAudit(t *testing.T, s *store.Store) {
 	limited, _ := s.Audit.List(ctx, store.AuditFilter{UserID: "u1", Limit: 2})
 	if len(limited) != 2 {
 		t.Errorf("limit: want 2, got %d", len(limited))
+	}
+}
+
+func testPolicies(t *testing.T, s *store.Store) {
+	ctx := context.Background()
+	rule := &models.PolicyRule{
+		ID: "p1", Role: "auditor", Permission: "audit.read", Risk: "safe", CreatedAt: time.Now(),
+	}
+	if err := s.Policies.Create(ctx, rule); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	list, err := s.Policies.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != 1 || list[0].Role != "auditor" || list[0].Permission != "audit.read" || list[0].Risk != "safe" {
+		t.Fatalf("unexpected policies: %+v", list)
+	}
+	if err := s.Policies.Delete(ctx, "p1"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	list, _ = s.Policies.List(ctx)
+	if len(list) != 0 {
+		t.Fatalf("delete did not remove policy: %+v", list)
 	}
 }

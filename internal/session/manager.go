@@ -1,6 +1,6 @@
 // Package session is the in-memory session + channel registry. A session is a
 // live, authenticated runtime for one connection; channels are the tracked
-// streams inside it. Single-instance by design (v1 is not horizontally scaled).
+// streams inside it. State lives in memory and is not shared across instances.
 package session
 
 import (

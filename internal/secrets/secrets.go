@@ -1,5 +1,6 @@
 // Package secrets encrypts inline connection secrets and reusable credential
-// material at rest behind a SecretStore interface (OpenBao drop-in later).
+// material at rest behind a SecretStore interface, so the backend (local vault,
+// KMS, …) is swappable without touching callers.
 package secrets
 
 import (

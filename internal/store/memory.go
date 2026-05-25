@@ -21,6 +21,7 @@ func NewMemory() *Store {
 		Snippets:         &memSnippetStore{m: map[string]models.Snippet{}},
 		Preferences:      &memPreferenceStore{m: map[string]models.Preference{}},
 		Enrollments:      &memEnrollmentStore{m: map[string]models.AgentEnrollment{}},
+		Policies:         &memPolicyStore{m: map[string]models.PolicyRule{}},
 	}
 }
 
@@ -369,6 +370,36 @@ func (s *memAuditStore) List(_ context.Context, f AuditFilter) ([]models.AuditEn
 type memSnippetStore struct {
 	mu sync.RWMutex
 	m  map[string]models.Snippet
+}
+
+type memPolicyStore struct {
+	mu sync.RWMutex
+	m  map[string]models.PolicyRule
+}
+
+func (s *memPolicyStore) Create(_ context.Context, p *models.PolicyRule) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[p.ID] = *p
+	return nil
+}
+
+func (s *memPolicyStore) Delete(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, id)
+	return nil
+}
+
+func (s *memPolicyStore) List(_ context.Context) ([]models.PolicyRule, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]models.PolicyRule, 0, len(s.m))
+	for _, p := range s.m {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
 }
 
 func (s *memSnippetStore) Create(_ context.Context, sn *models.Snippet) error {

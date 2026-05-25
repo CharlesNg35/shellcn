@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -39,10 +40,19 @@ func (fakeSess) Close() error { return nil }
 
 type testPlugin struct{}
 
+var schemaOnlyCalls atomic.Int32
+
 func (testPlugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion, Name: "tester", Version: "0", Title: "Tester",
-		Layout: plugin.LayoutTabs, SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		Layout:              plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
+		Agent: &plugin.AgentProfile{
+			Proxy: plugin.ProxyTarget{Mode: plugin.AgentTCP, Address: "127.0.0.1:1", Risk: plugin.RiskPrivileged},
+			Install: []plugin.InstallArtifact{
+				{Label: "Docker", Kind: "docker", Template: "run {{.ConnectURL}} {{.Token}}"},
+			},
+		},
 		Tabs:    []plugin.Tab{{Key: "items", Label: "Items", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "t.list"}}},
 		Streams: []plugin.Stream{{ID: "t.ws", Kind: plugin.StreamTerminal, RouteID: "t.ws"}},
 	}
@@ -72,6 +82,16 @@ func (testPlugin) Routes() []plugin.Route {
 					return nil, err
 				}
 				return map[string]string{"name": body.Name}, nil
+			},
+		},
+		{
+			ID: "t.schema", Method: plugin.MethodPost, Permission: "t.write", Risk: plugin.RiskWrite, AuditEvent: "t.schema",
+			Input: &plugin.Schema{Groups: []plugin.Group{{Name: "Input", Fields: []plugin.Field{
+				{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+			}}}},
+			Handle: func(*plugin.RequestContext) (any, error) {
+				schemaOnlyCalls.Add(1)
+				return map[string]bool{"ok": true}, nil
 			},
 		},
 		{
@@ -158,14 +178,17 @@ func newHarness(t *testing.T) *harness {
 	}
 	sessMgr := session.New(session.Options{})
 	t.Cleanup(sessMgr.Shutdown)
-	connector := service.NewConnector(reg, creds, vault, transport.EmptyTunnelRegistry{})
+	tunnels := transport.NewRegistry()
+	connector := service.NewConnector(reg, creds, vault, tunnels)
 	authMgr := auth.NewSessionManager(time.Hour)
+	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 
 	srv := server.New(server.Deps{
 		Plugins: reg, Store: st, Sessions: sessMgr,
 		Auth: auth.NewLocalAuthenticator(st.Users), SessionMgr: authMgr,
 		Tickets: auth.NewTicketStore(time.Minute), Policy: pol,
 		Connector: connector, Credentials: creds, Audit: audit.NewWriter(st.Audit),
+		Enrollments: enrollments, Tunnels: tunnels,
 	})
 
 	ts := httptest.NewServer(srv.Handler())
@@ -344,6 +367,68 @@ func TestMultipartRejectedWithoutFileInputSchema(t *testing.T) {
 	if resp := h.doReq(t, req, "op"); resp.Status != http.StatusBadRequest {
 		t.Fatalf("multipart without file input schema: want 400, got %d", resp.Status)
 	}
+}
+
+func TestWrapperValidatesDeclaredInputSchemaBeforeHandler(t *testing.T) {
+	h := newHarness(t)
+	schemaOnlyCalls.Store(0)
+
+	resp := h.do(t, http.MethodPost, "/api/connections/c-op/x/t.schema", "op", strings.NewReader(`{}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("schema invalid input: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+	if got := schemaOnlyCalls.Load(); got != 0 {
+		t.Fatalf("handler ran despite invalid declared input: calls=%d", got)
+	}
+
+	resp = h.do(t, http.MethodPost, "/api/connections/c-op/x/t.schema", "op", strings.NewReader(`{"name":"release"}`))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("schema valid input: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if got := schemaOnlyCalls.Load(); got != 1 {
+		t.Fatalf("handler call count = %d, want 1", got)
+	}
+}
+
+func TestDeniedAuthorizationIsAudited(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodDelete, "/api/connections/c-view/x/t.danger", "viewer", nil)
+	if resp.Status != http.StatusForbidden {
+		t.Fatalf("viewer destructive: want 403, got %d", resp.Status)
+	}
+
+	rows, err := h.store.Audit.List(context.Background(), store.AuditFilter{ConnectionID: "c-view"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if row.RouteID == "t.danger" && row.Result == models.AuditDenied {
+			return
+		}
+	}
+	t.Fatalf("missing denied audit row for t.danger: %+v", rows)
+}
+
+func TestAgentEnrollmentIsAudited(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodPost, "/api/connections/c-op/agent/enrollments", "op", nil)
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create enrollment: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	if !strings.Contains(string(resp.Body), "SHELLCN") && !strings.Contains(string(resp.Body), "agent/connect") {
+		t.Fatalf("enrollment response missing install artifact: %s", resp.Body)
+	}
+
+	rows, err := h.store.Audit.List(context.Background(), store.AuditFilter{ConnectionID: "c-op"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range rows {
+		if row.RouteID == "agent.enrollment.create" && row.Result == models.AuditAllowed && row.Risk == string(plugin.RiskPrivileged) {
+			return
+		}
+	}
+	t.Fatalf("missing agent enrollment audit row: %+v", rows)
 }
 
 func TestAdminCanAccessAnyConnection(t *testing.T) {

@@ -52,16 +52,24 @@ func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 	ctx := context.Background()
 	svc, st := newCredentialService(t)
 	cred, _ := svc.Create(ctx, service.NewCredentialInput{OwnerID: "owner", Name: "k", Kind: "ssh_password", Secret: "topsecret"})
+	secretAccesses := 0
+	svc.SetSecretAccessHook(func() { secretAccesses++ })
 
 	// Owner resolves the plaintext for connect-time injection.
 	pt, err := svc.Resolve(ctx, "owner", cred.ID)
 	if err != nil || string(pt) != "topsecret" {
 		t.Fatalf("owner resolve: pt=%q err=%v", pt, err)
 	}
+	if secretAccesses != 1 {
+		t.Fatalf("secret access hook calls = %d, want 1", secretAccesses)
+	}
 
 	// A stranger is forbidden.
 	if _, err := svc.Resolve(ctx, "stranger", cred.ID); !errors.Is(err, models.ErrForbidden) {
 		t.Errorf("stranger resolve: want ErrForbidden, got %v", err)
+	}
+	if secretAccesses != 1 {
+		t.Fatalf("forbidden resolve should not count secret access, got %d", secretAccesses)
 	}
 
 	// After a use-grant, the grantee resolves it (still never readable as a value to the client).
@@ -69,6 +77,9 @@ func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 	pt, err = svc.Resolve(ctx, "stranger", cred.ID)
 	if err != nil || string(pt) != "topsecret" {
 		t.Errorf("granted resolve: pt=%q err=%v", pt, err)
+	}
+	if secretAccesses != 2 {
+		t.Fatalf("secret access hook calls = %d, want 2", secretAccesses)
 	}
 }
 

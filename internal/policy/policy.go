@@ -1,9 +1,10 @@
-// Package policy enforces RBAC (role → allowed action risk) plus per-connection
-// ownership/sharing grants. v1 uses embedded Casbin; OPA is a later, additive
-// option. Risk levels come from route metadata — never client-supplied.
+// Package policy enforces RBAC (role → allowed permission/risk) plus per-connection
+// ownership/sharing grants, using embedded Casbin. Risk levels come from route
+// metadata — never client-supplied.
 package policy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -12,38 +13,39 @@ import (
 
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/internal/store"
 )
 
 // ErrForbidden is the deny-by-default authorization failure.
 var ErrForbidden = errors.New("policy: forbidden")
 
-// rbacModel maps a role (sub) to the action risks it may perform (act). "*"
+// rbacModel maps a role (sub) to route permission (obj) + risk (act). "*"
 // means all. Roles are checked individually, so the user's effective set is the
 // union of their roles' grants.
 const rbacModel = `
 [request_definition]
-r = sub, act
+r = sub, obj, act
 
 [policy_definition]
-p = sub, act
+p = sub, obj, act
 
 [policy_effect]
 e = some(where (p.eft == allow))
 
 [matchers]
-m = r.sub == p.sub && (p.act == "*" || r.act == p.act)
+m = r.sub == p.sub && (p.obj == "*" || p.obj == r.obj) && (p.act == "*" || p.act == r.act)
 `
 
 // defaultPolicies seed the built-in roles. admin does everything; operator runs
 // all operational risk levels; viewer is read-only (safe).
 func defaultPolicies() [][]string {
 	return [][]string{
-		{string(models.RoleAdmin), "*"},
-		{string(models.RoleOperator), string(plugin.RiskSafe)},
-		{string(models.RoleOperator), string(plugin.RiskWrite)},
-		{string(models.RoleOperator), string(plugin.RiskDestructive)},
-		{string(models.RoleOperator), string(plugin.RiskPrivileged)},
-		{string(models.RoleViewer), string(plugin.RiskSafe)},
+		{string(models.RoleAdmin), "*", "*"},
+		{string(models.RoleOperator), "*", string(plugin.RiskSafe)},
+		{string(models.RoleOperator), "*", string(plugin.RiskWrite)},
+		{string(models.RoleOperator), "*", string(plugin.RiskDestructive)},
+		{string(models.RoleOperator), "*", string(plugin.RiskPrivileged)},
+		{string(models.RoleViewer), "*", string(plugin.RiskSafe)},
 	}
 }
 
@@ -70,14 +72,42 @@ func New() (*Enforcer, error) {
 
 // AddRolePolicy grants a role an additional risk level (extensibility hook).
 func (en *Enforcer) AddRolePolicy(role models.Role, risk plugin.RiskLevel) error {
-	_, err := en.e.AddPolicy(string(role), string(risk))
+	return en.AddRolePermissionPolicy(role, "*", risk)
+}
+
+// AddRolePermissionPolicy grants a role a route permission/risk pair.
+func (en *Enforcer) AddRolePermissionPolicy(role models.Role, permission string, risk plugin.RiskLevel) error {
+	if permission == "" {
+		permission = "*"
+	}
+	_, err := en.e.AddPolicy(string(role), permission, string(risk))
 	return err
 }
 
-// roleAllowsRisk reports whether any of the user's roles permits the risk.
-func (en *Enforcer) roleAllowsRisk(roles []models.Role, risk plugin.RiskLevel) bool {
+// LoadStorePolicies loads additive policy rows from the control-plane store.
+func (en *Enforcer) LoadStorePolicies(ctx context.Context, policies store.PolicyStore) error {
+	if policies == nil {
+		return nil
+	}
+	rows, err := policies.List(ctx)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if err := en.AddRolePermissionPolicy(row.Role, row.Permission, plugin.RiskLevel(row.Risk)); err != nil {
+			return fmt.Errorf("load policy %q: %w", row.ID, err)
+		}
+	}
+	return nil
+}
+
+// roleAllows reports whether any of the user's roles permits the permission/risk.
+func (en *Enforcer) roleAllows(roles []models.Role, permission string, risk plugin.RiskLevel) bool {
+	if permission == "" {
+		permission = "*"
+	}
 	for _, role := range roles {
-		ok, err := en.e.Enforce(string(role), string(risk))
+		ok, err := en.e.Enforce(string(role), permission, string(risk))
 		if err == nil && ok {
 			return true
 		}
@@ -88,8 +118,9 @@ func (en *Enforcer) roleAllowsRisk(roles []models.Role, risk plugin.RiskLevel) b
 // AccessInput is everything an authorization decision needs. The caller (the
 // route wrapper) resolves the connection + the user's grant before calling.
 type AccessInput struct {
-	User models.User
-	Risk plugin.RiskLevel
+	User       models.User
+	Permission string
+	Risk       plugin.RiskLevel
 
 	// Connection context. ConnectionID == "" means a non-connection route (e.g.
 	// the plugin catalog), which only needs the role/risk gate.
@@ -100,14 +131,14 @@ type AccessInput struct {
 }
 
 // Authorize applies both gates (deny-by-default):
-//  1. the user's role must permit the route's risk, and
+//  1. the user's role must permit the route's permission/risk, and
 //  2. for connection routes, the user must own it, hold a grant, or be admin.
 func (en *Enforcer) Authorize(in AccessInput) error {
 	if in.User.Disabled {
 		return fmt.Errorf("%w: account disabled", ErrForbidden)
 	}
-	if !en.roleAllowsRisk(in.User.Roles, in.Risk) {
-		return fmt.Errorf("%w: role may not perform %q actions", ErrForbidden, in.Risk)
+	if !en.roleAllows(in.User.Roles, in.Permission, in.Risk) {
+		return fmt.Errorf("%w: role may not perform %q/%q actions", ErrForbidden, in.Permission, in.Risk)
 	}
 	if in.ConnectionID != "" && !en.canAccessConnection(in) {
 		return fmt.Errorf("%w: no access to connection %q", ErrForbidden, in.ConnectionID)

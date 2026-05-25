@@ -97,19 +97,38 @@ func run(logger *slog.Logger, addr, dbPath string, dev bool) error {
 	if err != nil {
 		return err
 	}
+	if err := pol.LoadStorePolicies(context.Background(), st.Policies); err != nil {
+		return fmt.Errorf("load policies: %w", err)
+	}
 
 	sessions := session.New(session.Options{})
 	defer sessions.Shutdown()
 
-	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault)
-	connector := service.NewConnector(reg, creds, vault, transport.EmptyTunnelRegistry{})
-
 	metrics := telemetry.NewMetrics()
+	tunnels := transport.NewRegistry()
+	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault)
+	creds.SetSecretAccessHook(metrics.IncSecretAccess)
+	connector := service.NewConnector(reg, creds, vault, tunnels)
+	connector.SetSecretAccessHook(metrics.IncSecretAccess)
+	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
+
 	health := telemetry.NewHealth()
 	health.Register("store", func(ctx context.Context) error {
 		_, err := st.Users.Count(ctx)
 		return err
 	})
+	for _, plg := range reg.All() {
+		checker, ok := plg.(plugin.HealthChecker)
+		if !ok {
+			continue
+		}
+		name := plg.Manifest().Name
+		health.Register("plugin:"+name, func(ctx context.Context) error {
+			err := checker.HealthCheck(ctx)
+			metrics.SetPluginHealth(name, err == nil)
+			return err
+		})
+	}
 
 	// Reflect live session/channel counts into the gauges.
 	stopMetrics := make(chan struct{})
@@ -147,6 +166,8 @@ func run(logger *slog.Logger, addr, dbPath string, dev bool) error {
 		Policy:      pol,
 		Connector:   connector,
 		Credentials: creds,
+		Enrollments: enrollments,
+		Tunnels:     tunnels,
 		Audit:       audit.NewWriter(st.Audit),
 		Metrics:     metrics,
 		Health:      health,

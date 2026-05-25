@@ -36,7 +36,7 @@ func TestDirectDial(t *testing.T) {
 }
 
 func TestBuildDirect(t *testing.T) {
-	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "direct"}, transport.EmptyTunnelRegistry{})
+	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "direct"}, transport.NewRegistry())
 	if err != nil {
 		t.Fatalf("build direct: %v", err)
 	}
@@ -44,15 +44,37 @@ func TestBuildDirect(t *testing.T) {
 		t.Fatal("nil transport")
 	}
 	// Empty transport string defaults to direct.
-	if _, err := transport.Build(models.Connection{ID: "c2"}, transport.EmptyTunnelRegistry{}); err != nil {
+	if _, err := transport.Build(models.Connection{ID: "c2"}, transport.NewRegistry()); err != nil {
 		t.Errorf("empty transport should default to direct: %v", err)
 	}
 }
 
-func TestBuildAgentUnavailableInM1(t *testing.T) {
-	_, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, transport.EmptyTunnelRegistry{})
+func TestBuildAgentUnavailableWithoutTunnel(t *testing.T) {
+	_, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, transport.NewRegistry())
 	if !errors.Is(err, transport.ErrAgentUnavailable) {
 		t.Errorf("agent with no tunnel: want ErrAgentUnavailable, got %v", err)
+	}
+}
+
+func TestRegistryRegisterResolveRemove(t *testing.T) {
+	reg := transport.NewRegistry()
+	if _, ok := reg.Dialer("c1"); ok {
+		t.Error("empty registry should have no dialer")
+	}
+	reg.Register("c1", func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("via tunnel") })
+
+	// An agent-mode connection now resolves through the registered dialer.
+	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg)
+	if err != nil {
+		t.Fatalf("build agent with registered tunnel: %v", err)
+	}
+	if _, derr := nt.DialContext(context.Background(), "tcp", "x"); derr == nil || derr.Error() != "via tunnel" {
+		t.Errorf("expected dial through tunnel, got %v", derr)
+	}
+
+	reg.Remove("c1")
+	if _, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg); !errors.Is(err, transport.ErrAgentUnavailable) {
+		t.Errorf("after Remove: want ErrAgentUnavailable, got %v", err)
 	}
 }
 

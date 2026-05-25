@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/textproto"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -175,6 +176,275 @@ func (rc *RequestContext) Bind(dst any) error {
 		return fmt.Errorf("%w: %v", ErrInvalidInput, err)
 	}
 	return nil
+}
+
+// ValidateSchema applies the manifest-declared input schema at the core wrapper
+// before the handler runs. Handlers still call Bind for typed decoding.
+func (rc *RequestContext) ValidateSchema(schema *Schema) error {
+	if schema == nil {
+		return nil
+	}
+	values, err := rc.inputValues()
+	if err != nil {
+		return err
+	}
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			if !visible(field.VisibleWhen, values) {
+				continue
+			}
+			value, exists := values[field.Key]
+			if field.Type == FieldFile {
+				if field.Required && len(rc.Uploads(field.Key)) == 0 {
+					return fmt.Errorf("%w: %s is required", ErrInvalidInput, field.Key)
+				}
+				continue
+			}
+			if field.Required && emptyValue(value, !exists) {
+				return fmt.Errorf("%w: %s is required", ErrInvalidInput, field.Key)
+			}
+			if !exists || emptyValue(value, false) {
+				continue
+			}
+			if err := validateFieldValue(field, value); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (rc *RequestContext) inputValues() (map[string]any, error) {
+	if rc.form != nil {
+		return formValues(rc.form), nil
+	}
+	if len(rc.body) == 0 {
+		return map[string]any{}, nil
+	}
+	var values map[string]any
+	if err := json.Unmarshal(rc.body, &values); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
+	if values == nil {
+		values = map[string]any{}
+	}
+	return values, nil
+}
+
+func validateFieldValue(field Field, value any) error {
+	switch field.Type {
+	case FieldText, FieldPassword, FieldTextarea, FieldDuration, FieldCredentialRef:
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("%w: %s must be a string", ErrInvalidInput, field.Key)
+		}
+	case FieldNumber:
+		if _, ok := numberValue(value); !ok {
+			return fmt.Errorf("%w: %s must be a number", ErrInvalidInput, field.Key)
+		}
+	case FieldToggle:
+		if _, ok := value.(bool); !ok {
+			return fmt.Errorf("%w: %s must be a boolean", ErrInvalidInput, field.Key)
+		}
+	case FieldMultiSelect:
+		if _, ok := value.([]any); !ok {
+			return fmt.Errorf("%w: %s must be a list", ErrInvalidInput, field.Key)
+		}
+	}
+	if len(field.Options) > 0 && (field.Type == FieldSelect || field.Type == FieldMultiSelect) {
+		if err := validateOptions(field, value); err != nil {
+			return err
+		}
+	}
+	for _, v := range field.Validators {
+		if err := validateRule(field, v, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateOptions(field Field, value any) error {
+	allowed := map[string]bool{}
+	for _, option := range field.Options {
+		allowed[fmt.Sprint(option.Value)] = true
+	}
+	if field.Type == FieldMultiSelect {
+		items, _ := value.([]any)
+		for _, item := range items {
+			if !allowed[fmt.Sprint(item)] {
+				return fmt.Errorf("%w: %s has an invalid option", ErrInvalidInput, field.Key)
+			}
+		}
+		return nil
+	}
+	if !allowed[fmt.Sprint(value)] {
+		return fmt.Errorf("%w: %s has an invalid option", ErrInvalidInput, field.Key)
+	}
+	return nil
+}
+
+func validateRule(field Field, rule Validator, value any) error {
+	msg := rule.Message
+	if msg == "" {
+		msg = fmt.Sprintf("%s failed %s validation", field.Key, rule.Type)
+	}
+	fail := func() error { return fmt.Errorf("%w: %s", ErrInvalidInput, msg) }
+	switch rule.Type {
+	case ValidatorMin:
+		minVal, ok := numberValue(rule.Value)
+		if !ok {
+			return nil
+		}
+		if n, ok := numberValue(value); ok && n < minVal {
+			return fail()
+		}
+		if s, ok := value.(string); ok && float64(len(s)) < minVal {
+			return fail()
+		}
+	case ValidatorMax:
+		maxVal, ok := numberValue(rule.Value)
+		if !ok {
+			return nil
+		}
+		if n, ok := numberValue(value); ok && n > maxVal {
+			return fail()
+		}
+		if s, ok := value.(string); ok && float64(len(s)) > maxVal {
+			return fail()
+		}
+	case ValidatorRegex:
+		pattern, ok := rule.Value.(string)
+		if !ok {
+			return nil
+		}
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return fmt.Errorf("%w: invalid regex for %s", ErrInvalidInput, field.Key)
+		}
+		s, ok := value.(string)
+		if !ok || !re.MatchString(s) {
+			return fail()
+		}
+	case ValidatorOneOf:
+		for _, item := range asList(rule.Value) {
+			if fmt.Sprint(item) == fmt.Sprint(value) {
+				return nil
+			}
+		}
+		return fail()
+	}
+	return nil
+}
+
+func numberValue(value any) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case json.Number:
+		n, err := v.Float64()
+		return n, err == nil
+	default:
+		return 0, false
+	}
+}
+
+func visible(cond *Condition, values map[string]any) bool {
+	if cond == nil {
+		return true
+	}
+	if len(cond.AllOf) > 0 {
+		for _, rule := range cond.AllOf {
+			if !matchRule(rule, values[rule.Field]) {
+				return false
+			}
+		}
+		return true
+	}
+	if len(cond.AnyOf) > 0 {
+		for _, rule := range cond.AnyOf {
+			if matchRule(rule, values[rule.Field]) {
+				return true
+			}
+		}
+		return false
+	}
+	return true
+}
+
+func matchRule(rule Rule, value any) bool {
+	switch rule.Op {
+	case OpEq:
+		return fmt.Sprint(value) == fmt.Sprint(rule.Value)
+	case OpNeq:
+		return fmt.Sprint(value) != fmt.Sprint(rule.Value)
+	case OpIn:
+		for _, item := range asList(rule.Value) {
+			if fmt.Sprint(value) == fmt.Sprint(item) {
+				return true
+			}
+		}
+		return false
+	case OpNin:
+		for _, item := range asList(rule.Value) {
+			if fmt.Sprint(value) == fmt.Sprint(item) {
+				return false
+			}
+		}
+		return true
+	case OpEmpty:
+		return emptyValue(value, value == nil)
+	case OpNotEmpty:
+		return !emptyValue(value, value == nil)
+	default:
+		return false
+	}
+}
+
+func asList(value any) []any {
+	switch v := value.(type) {
+	case []any:
+		return v
+	case []string:
+		out := make([]any, 0, len(v))
+		for _, item := range v {
+			out = append(out, item)
+		}
+		return out
+	case []int:
+		out := make([]any, 0, len(v))
+		for _, item := range v {
+			out = append(out, item)
+		}
+		return out
+	case []float64:
+		out := make([]any, 0, len(v))
+		for _, item := range v {
+			out = append(out, item)
+		}
+		return out
+	default:
+		return []any{value}
+	}
+}
+
+func emptyValue(value any, missing bool) bool {
+	if missing || value == nil {
+		return true
+	}
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v) == ""
+	case []any:
+		return len(v) == 0
+	default:
+		return false
+	}
 }
 
 func formValues(values url.Values) map[string]any {

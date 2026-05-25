@@ -30,8 +30,8 @@ type ticket struct {
 }
 
 // TicketStore mints and redeems single-use, short-lived WS tickets. Browsers
-// can't set Authorization on a WS upgrade, so tickets are mandatory (not
-// optional). In-memory by design (single-instance v1).
+// can't set Authorization on a WS upgrade, so tickets are mandatory. The store
+// is in-memory and not shared across instances.
 type TicketStore struct {
 	mu      sync.Mutex
 	tickets map[string]ticket

@@ -19,6 +19,7 @@ import (
 	"github.com/charlesng/shellcn/internal/session"
 	"github.com/charlesng/shellcn/internal/store"
 	"github.com/charlesng/shellcn/internal/telemetry"
+	"github.com/charlesng/shellcn/internal/transport"
 )
 
 // Deps are the server's injected dependencies (wired once in cmd/server).
@@ -32,6 +33,8 @@ type Deps struct {
 	Policy      *policy.Enforcer
 	Connector   *service.Connector
 	Credentials *service.CredentialService
+	Enrollments *service.EnrollmentService
+	Tunnels     *transport.Registry
 	Audit       audit.Sink
 	Metrics     *telemetry.Metrics
 	Health      *telemetry.Health
@@ -84,6 +87,14 @@ func (s *Server) routes() chi.Router {
 	r.Route("/api", func(api chi.Router) {
 		// Auth (login is public; the rest require a session).
 		api.Post("/auth/login", s.handleLogin)
+
+		// The agent connect endpoint authenticates with its enrollment token in
+		// the handshake (it is not a browser session), so it sits outside the
+		// session-guarded group.
+		if s.deps.Enrollments != nil && s.deps.Tunnels != nil {
+			api.Get("/agent/connect", s.handleAgentConnect)
+		}
+
 		api.Group(func(pr chi.Router) {
 			pr.Use(s.requireAuth)
 			pr.Post("/auth/logout", s.handleLogout)
@@ -95,6 +106,10 @@ func (s *Server) routes() chi.Router {
 			pr.Get("/credentials", s.handleListCredentials)
 
 			pr.Post("/connections/{id}/tickets", s.handleMintTicket)
+			if s.deps.Enrollments != nil {
+				pr.Post("/connections/{id}/agent/enrollments", s.handleCreateEnrollment)
+				pr.Get("/connections/{id}/agent/state", s.handleAgentState)
+			}
 			pr.HandleFunc("/connections/{id}/x/{routeID}", s.handleRoute)
 		})
 	})

@@ -23,15 +23,21 @@ const (
 // and wires the transport for the connection's mode. Secret material lives only
 // in the returned ConnectConfig — it is never serialized back to the client.
 type Connector struct {
-	plugins *plugin.Registry
-	creds   *CredentialService
-	vault   secrets.SecretStore
-	tunnels transport.TunnelRegistry
+	plugins        *plugin.Registry
+	creds          *CredentialService
+	vault          secrets.SecretStore
+	tunnels        transport.TunnelRegistry
+	onSecretAccess func()
 }
 
 // NewConnector wires the dependencies.
 func NewConnector(plugins *plugin.Registry, creds *CredentialService, vault secrets.SecretStore, tunnels transport.TunnelRegistry) *Connector {
 	return &Connector{plugins: plugins, creds: creds, vault: vault, tunnels: tunnels}
+}
+
+// SetSecretAccessHook registers a callback for successful inline secret decryptions.
+func (c *Connector) SetSecretAccessHook(fn func()) {
+	c.onSecretAccess = fn
 }
 
 // Plugin resolves the plugin singleton for a connection's protocol.
@@ -56,6 +62,9 @@ func (c *Connector) Build(ctx context.Context, user models.User, conn models.Con
 	}
 	for k, v := range inline {
 		cfg[k] = v
+	}
+	if len(inline) > 0 && c.onSecretAccess != nil {
+		c.onSecretAccess()
 	}
 
 	// Resolve a referenced reusable credential (authorized for this user).

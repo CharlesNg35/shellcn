@@ -1,12 +1,14 @@
 package policy_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/policy"
+	"github.com/charlesng/shellcn/internal/store"
 )
 
 func newEnforcer(t *testing.T) *policy.Enforcer {
@@ -136,5 +138,44 @@ func TestAddRolePolicy(t *testing.T) {
 	}
 	if err := en.Authorize(in); err != nil {
 		t.Errorf("custom role should now allow safe: %v", err)
+	}
+}
+
+func TestPermissionSpecificPolicy(t *testing.T) {
+	en := newEnforcer(t)
+	const custom models.Role = "file-uploader"
+	if err := en.AddRolePermissionPolicy(custom, "file.upload", plugin.RiskWrite); err != nil {
+		t.Fatalf("add policy: %v", err)
+	}
+
+	allowed := policy.AccessInput{
+		User:       user("u", custom),
+		Permission: "file.upload",
+		Risk:       plugin.RiskWrite,
+	}
+	if err := en.Authorize(allowed); err != nil {
+		t.Fatalf("permission-specific policy should allow matching route: %v", err)
+	}
+
+	denied := allowed
+	denied.Permission = "file.delete"
+	if err := en.Authorize(denied); !errors.Is(err, policy.ErrForbidden) {
+		t.Fatalf("different permission should be denied: %v", err)
+	}
+}
+
+func TestLoadStorePolicies(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	if err := st.Policies.Create(ctx, &models.PolicyRule{ID: "p1", Role: "auditor", Permission: "audit.read", Risk: string(plugin.RiskSafe)}); err != nil {
+		t.Fatalf("create policy: %v", err)
+	}
+	en := newEnforcer(t)
+	if err := en.LoadStorePolicies(ctx, st.Policies); err != nil {
+		t.Fatalf("load policies: %v", err)
+	}
+	in := policy.AccessInput{User: user("u", "auditor"), Permission: "audit.read", Risk: plugin.RiskSafe}
+	if err := en.Authorize(in); err != nil {
+		t.Fatalf("stored policy should authorize matching route: %v", err)
 	}
 }

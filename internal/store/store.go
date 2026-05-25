@@ -99,6 +99,13 @@ type EnrollmentStore interface {
 	UpdateStatus(ctx context.Context, id string, status models.AgentEnrollmentStatus) error
 }
 
+// PolicyStore persists additive authorization policies loaded into Casbin.
+type PolicyStore interface {
+	Create(ctx context.Context, p *models.PolicyRule) error
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context) ([]models.PolicyRule, error)
+}
+
 // Store aggregates every repository plus lifecycle controls.
 type Store struct {
 	Users            UserStore
@@ -110,6 +117,7 @@ type Store struct {
 	Snippets         SnippetStore
 	Preferences      PreferenceStore
 	Enrollments      EnrollmentStore
+	Policies         PolicyStore
 
 	close func() error
 }

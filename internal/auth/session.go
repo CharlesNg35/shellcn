@@ -28,8 +28,8 @@ type Session struct {
 
 func (s Session) expired() bool { return time.Now().After(s.ExpiresAt) }
 
-// SessionManager is an in-memory platform session registry (single-instance, by
-// design — v1 is not horizontally scaled). Sessions are revocable on logout.
+// SessionManager is an in-memory platform session registry. Sessions are
+// revocable on logout; the registry is not shared across instances.
 type SessionManager struct {
 	mu       sync.RWMutex
 	sessions map[string]Session

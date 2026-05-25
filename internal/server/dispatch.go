@@ -67,16 +67,17 @@ func (s *Server) resolve(r *http.Request) (resolved, error) {
 		return resolved{}, plugin.ErrNotFound
 	}
 
+	res := resolved{user: user, conn: conn, plg: plg, route: route, params: pParams(r)}
 	if err := s.authorize(ctx, user, conn, route); err != nil {
-		return resolved{}, err
+		return res, err
 	}
-	return resolved{user: user, conn: conn, plg: plg, route: route, params: pParams(r)}, nil
+	return res, nil
 }
 
 // authorize resolves the user's grant on the connection and applies policy.
 func (s *Server) authorize(ctx context.Context, user models.User, conn models.Connection, route plugin.Route) error {
 	in := policy.AccessInput{
-		User: user, Risk: route.Risk,
+		User: user, Permission: route.Permission, Risk: route.Risk,
 		ConnectionID: conn.ID, OwnerID: conn.OwnerID,
 	}
 	if conn.OwnerID != user.ID {
@@ -149,6 +150,12 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, res resolved)
 		return
 	}
 	defer cleanup()
+
+	if err := rc.ValidateSchema(res.route.Input); err != nil {
+		s.auditEvent(ctx, res, models.AuditError, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
 
 	start := time.Now()
 	result, herr := res.route.Handle(rc)

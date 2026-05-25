@@ -13,12 +13,12 @@ var (
 	ErrInvalidCredentials = errors.New("auth: invalid credentials")
 	// ErrAccountDisabled is returned when the account exists but is disabled.
 	ErrAccountDisabled = errors.New("auth: account disabled")
-	// ErrNotImplemented is returned by stubbed authenticators (e.g. OIDC in v1).
+	// ErrNotImplemented is returned by an authenticator that is not yet available.
 	ErrNotImplemented = errors.New("auth: not implemented")
 )
 
-// Authenticator verifies a principal and returns the authenticated user.
-// Local accounts ship in v1; OIDC implements the same interface later.
+// Authenticator verifies a principal and returns the authenticated user. Local
+// accounts and OIDC implement the same interface.
 type Authenticator interface {
 	Authenticate(ctx context.Context, username, password string) (models.User, error)
 }
@@ -61,15 +61,15 @@ func (a *LocalAuthenticator) Authenticate(ctx context.Context, username, passwor
 	return user, nil
 }
 
-// OIDCAuthenticator is the day-one interface placeholder; v1 ships local only.
+// OIDCAuthenticator holds the OIDC interface in place; it has no implementation.
 type OIDCAuthenticator struct{}
 
-// Authenticate always reports not-implemented in v1.
+// Authenticate always reports not-implemented.
 func (OIDCAuthenticator) Authenticate(context.Context, string, string) (models.User, error) {
 	return models.User{}, ErrNotImplemented
 }
 
-// MFAVerifier is the optional second-factor hook (TOTP). Interface only in v1.
+// MFAVerifier is the optional second-factor (TOTP) hook.
 type MFAVerifier interface {
 	Verify(ctx context.Context, userID, code string) (bool, error)
 }

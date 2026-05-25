@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 2 (M1) complete: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, Casbin authz, session/channel/transport runtime, chi server + route wrapper, audit + telemetry) proven end-to-end by the `noop` plugin (Go race tests + lint green; binary builds & serves). Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Phase 3 (M2 SSH/SFTP) next._
+_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Phase 3 (M2 SSH/SFTP) next; `cmd/agent` remains Phase 4 scope._
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.

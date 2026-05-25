@@ -241,6 +241,24 @@ func (s *gormAuditStore) List(ctx context.Context, f AuditFilter) ([]models.Audi
 
 type gormSnippetStore struct{ db *gorm.DB }
 
+type gormPolicyStore struct{ db *gorm.DB }
+
+func (s *gormPolicyStore) Create(ctx context.Context, p *models.PolicyRule) error {
+	return s.db.WithContext(ctx).Create(p).Error
+}
+
+func (s *gormPolicyStore) Delete(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&models.PolicyRule{}, "id = ?", id).Error
+}
+
+func (s *gormPolicyStore) List(ctx context.Context) ([]models.PolicyRule, error) {
+	var list []models.PolicyRule
+	if err := s.db.WithContext(ctx).Order("created_at ASC, id ASC").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (s *gormSnippetStore) Create(ctx context.Context, sn *models.Snippet) error {
 	return s.db.WithContext(ctx).Create(sn).Error
 }
