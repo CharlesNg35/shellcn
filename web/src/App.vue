@@ -38,6 +38,25 @@ onUnmounted(() => setApiErrorHandler(null));
 </script>
 
 <template>
-  <RouterView />
+  <!-- Session bootstrap gate: a branded loader covers the brief window between
+       mount and the first route resolving (auth /me), so there's no blank flash
+       or premature login flicker. Hands off seamlessly from the index.html splash. -->
+  <div
+    v-if="!auth.ready"
+    class="flex h-full flex-col items-center justify-center gap-[18px] bg-surface-50 dark:bg-surface-950"
+  >
+    <span
+      class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-600 font-mono text-lg font-semibold text-white"
+      >&gt;_</span
+    >
+    <span
+      class="h-[22px] w-[22px] animate-spin rounded-full border-[2.5px] border-surface-200 border-t-primary-500 dark:border-surface-800 dark:border-t-primary-500"
+      role="status"
+      aria-label="Loading"
+    />
+  </div>
+  <template v-else>
+    <RouterView />
+  </template>
   <AppToast />
 </template>

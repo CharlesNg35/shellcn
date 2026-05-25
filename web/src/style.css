@@ -58,11 +58,19 @@ body {
   margin: 0;
 }
 
-/* Accessible keyboard focus for interactive elements (mouse clicks stay clean). */
+/* Accessible keyboard focus for general interactive elements (buttons, links,
+   tree nodes). Form controls render their own hugging ring in the preset, so we
+   exclude them here — otherwise focus shows a doubled outline + ring. */
 :focus-visible {
   outline: 2px solid var(--p-primary-500, #3b82f6);
   outline-offset: 2px;
   border-radius: 4px;
+}
+input:focus-visible,
+textarea:focus-visible,
+[data-pc-name="select"]:focus-visible,
+[data-pc-name="multiselect"]:focus-visible {
+  outline: none;
 }
 
 /* Respect users who prefer reduced motion. */

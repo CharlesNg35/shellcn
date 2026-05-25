@@ -6,6 +6,7 @@ import InputText from "primevue/inputtext";
 import { installFetch } from "../test/fetchMock";
 import { useConnectionsStore } from "../stores/connections";
 import ConnectionFormDialog from "./ConnectionFormDialog.vue";
+import ProtocolPicker from "./ProtocolPicker.vue";
 import SchemaForm from "../panels/form/SchemaForm.vue";
 import type { PluginProjection } from "../types/projection";
 
@@ -66,7 +67,9 @@ describe("ConnectionFormDialog", () => {
     await flushPromises();
 
     // Choosing a protocol fetches and renders its config schema.
-    await wrapper.findComponent(Select).vm.$emit("update:modelValue", "tester");
+    await wrapper
+      .findComponent(ProtocolPicker)
+      .vm.$emit("update:modelValue", "tester");
     await flushPromises();
     const form = wrapper.findComponent(SchemaForm);
     expect(form.exists()).toBe(true);
@@ -121,13 +124,16 @@ describe("ConnectionFormDialog", () => {
 
     const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
     await flushPromises();
-    await wrapper.findComponent(Select).vm.$emit("update:modelValue", "tester");
+    await wrapper
+      .findComponent(ProtocolPicker)
+      .vm.$emit("update:modelValue", "tester");
     await flushPromises();
 
-    // Dialog content is teleported, so assert via the component tree: a single
-    // transport mode hides that select, leaving protocol + one recording select.
+    // Dialog content is teleported, so assert via the component tree: the
+    // protocol is a card picker (not a Select) and a single transport hides that
+    // select, leaving just the one recording-policy select.
     const selects = wrapper.findAllComponents(Select);
-    expect(selects).toHaveLength(2);
+    expect(selects).toHaveLength(1);
     const recordingSelect = selects[selects.length - 1];
     recordingSelect.vm.$emit("update:modelValue", "auto");
     await flushPromises();
@@ -151,9 +157,12 @@ describe("ConnectionFormDialog", () => {
     ];
     const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
     await flushPromises();
-    await wrapper.findComponent(Select).vm.$emit("update:modelValue", "tester");
+    await wrapper
+      .findComponent(ProtocolPicker)
+      .vm.$emit("update:modelValue", "tester");
     await flushPromises();
-    // Only the protocol select — no recording select for an unsupported plugin.
-    expect(wrapper.findAllComponents(Select)).toHaveLength(1);
+    // Protocol is a card picker and there's no recording select for an
+    // unsupported plugin, so no Select is rendered at all.
+    expect(wrapper.findAllComponents(Select)).toHaveLength(0);
   });
 });

@@ -221,7 +221,6 @@ async function save(): Promise<void> {
           :feedback="false"
           toggle-mask
           :input-props="{ autocomplete: 'new-password' }"
-          :pt="{ root: 'w-full', pcInputText: { root: 'w-full' } }"
           @update:model-value="secret = $event ?? ''"
         />
         <p v-if="errors.secret" class="text-xs text-red-500">

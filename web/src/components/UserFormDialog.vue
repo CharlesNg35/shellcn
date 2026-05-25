@@ -188,7 +188,6 @@ async function save(): Promise<void> {
           :feedback="false"
           toggle-mask
           :input-props="{ autocomplete: 'new-password' }"
-          :pt="{ root: 'w-full', pcInputText: { root: 'w-full' } }"
         />
         <p v-if="errors.password" class="text-xs text-red-500">
           {{ errors.password }}

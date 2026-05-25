@@ -108,7 +108,6 @@ async function onSubmit(): Promise<void> {
             autocomplete="username"
             autofocus
             required
-            :pt="{ root: 'w-full' }"
           />
         </div>
 
@@ -125,7 +124,6 @@ async function onSubmit(): Promise<void> {
             :feedback="false"
             toggle-mask
             :input-props="{ autocomplete: 'new-password', required: true }"
-            :pt="{ root: 'w-full', pcInputText: { root: 'w-full' } }"
           />
         </div>
 

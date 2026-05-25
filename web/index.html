@@ -5,10 +5,35 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ShellCN</title>
+    <!-- Render-blocking splash styles: present at first paint in dev and prod
+         (the bundled app CSS is injected too late in dev to style the splash). -->
+    <link rel="stylesheet" href="/boot.css" />
+    <!-- Apply the stored/system theme before first paint so neither the splash
+         nor the app flashes the wrong scheme (mirrors useTheme's logic). -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("shellcn.theme");
+          var dark =
+            t === "dark" ||
+            (t !== "light" &&
+              window.matchMedia &&
+              matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
   </head>
 
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <!-- Pre-mount splash: shown until Vue mounts and replaces #app, so the SPA
+           never flashes a blank page on first load. -->
+      <div id="boot-splash">
+        <div class="boot-mark">&gt;_</div>
+        <div class="boot-spin" role="status" aria-label="Loading"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

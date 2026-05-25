@@ -7,6 +7,7 @@ import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
 import AppIcon from "./AppIcon.vue";
 import ConnectionFormDialog from "./ConnectionFormDialog.vue";
+import { searchInputClass } from "../primevue/preset";
 import type { ConnectionSummary } from "../types/projection";
 
 const conns = useConnectionsStore();
@@ -115,7 +116,8 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
             v-model="query"
             type="search"
             placeholder="Search connections"
-            class="w-full rounded-md border border-surface-200 bg-surface-0 py-1.5 pl-8 pr-2 text-sm outline-none placeholder:text-surface-400 focus:border-primary-400 dark:border-surface-700 dark:bg-surface-950"
+            aria-label="Search connections"
+            :class="searchInputClass"
           />
         </label>
       </div>
@@ -193,25 +195,37 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
             :title="c.status ?? (c.online ? 'online' : 'offline')"
           />
         </button>
+        <!-- Loading: skeleton rows while the catalog is fetched. -->
+        <div v-if="!conns.loaded && !error" class="space-y-1.5 px-1 pt-1">
+          <div
+            v-for="n in 5"
+            :key="n"
+            class="h-9 animate-pulse rounded-md bg-surface-200/60 dark:bg-surface-800/60"
+          />
+        </div>
         <p
-          v-if="conns.loaded && !filtered.length && query"
-          class="px-2 py-4 text-sm text-surface-400"
+          v-else-if="conns.loaded && !filtered.length && query"
+          class="px-2 py-6 text-center text-sm text-surface-400"
         >
-          No connections match.
+          No connections match “{{ query }}”.
         </p>
+        <!-- Empty: a single create affordance lives in the header (+), so this
+             stays purely informational. -->
         <div
           v-else-if="conns.loaded && !conns.connections.length"
-          class="px-2 py-4 text-sm text-surface-400"
+          class="flex flex-col items-center gap-1.5 px-4 py-10 text-center"
         >
-          <p class="mb-2">No connections yet.</p>
-          <button
-            type="button"
-            class="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
-            @click="showCreate = true"
+          <span
+            class="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-surface-100 text-surface-400 dark:bg-surface-800"
           >
-            <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="13" />
-            Add connection
-          </button>
+            <AppIcon :icon="{ type: 'name', value: 'server' }" :size="18" />
+          </span>
+          <p class="text-sm font-medium text-surface-600 dark:text-surface-300">
+            No connections yet
+          </p>
+          <p class="text-xs text-surface-400">
+            Use the + above to add your first one.
+          </p>
         </div>
       </nav>
 

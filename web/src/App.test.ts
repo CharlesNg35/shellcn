@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory, type Router } from "vue-router";
-import { createPinia } from "pinia";
+import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "./test/fetchMock";
+import { useAuthStore } from "./stores/auth";
 import App from "./App.vue";
 
 const connections = [
@@ -78,11 +79,18 @@ afterEach(() => {
 
 describe("App shell", () => {
   it("renders the shell and the loaded connections", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    // App gates the shell behind a session-ready bootstrap; mark it authenticated.
+    const auth = useAuthStore();
+    auth.user = { id: "u", username: "op", roles: ["viewer"] };
+    auth.ready = true;
+
     const router = testRouter();
     router.push("/");
     await router.isReady();
     const wrapper = mount(App, {
-      global: { plugins: [createPinia(), router] },
+      global: { plugins: [pinia, router] },
     });
     await flushPromises();
 

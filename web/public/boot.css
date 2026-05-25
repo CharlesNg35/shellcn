@@ -1,0 +1,56 @@
+/* Boot splash styling. Loaded as a render-blocking <link> in index.html so the
+   pre-mount splash is painted styled in BOTH dev (Vite injects app CSS via JS,
+   too late for first paint) and the production build. Standalone literal colors —
+   the app's design tokens aren't defined yet at this point. Removed from the DOM
+   when Vue mounts and replaces #app. */
+#boot-splash,
+#boot-splash * {
+  /* Match the app's border-box model so the spinner/mark sizes are identical to
+     the App.vue loader (which inherits Tailwind's global border-box). */
+  box-sizing: border-box;
+}
+#boot-splash {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: #f8fafc;
+}
+.dark #boot-splash {
+  background: #020617;
+}
+#boot-splash .boot-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #2563eb;
+  color: #fff;
+  font:
+    600 18px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+#boot-splash .boot-spin {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid #e2e8f0; /* light track (surface-200) */
+  border-top-color: #3b82f6; /* primary accent */
+  border-radius: 50%;
+  animation: boot-spin 0.7s linear infinite;
+}
+.dark #boot-splash .boot-spin {
+  border-color: #1e293b; /* dark track (surface-800) */
+  border-top-color: #3b82f6;
+}
+@keyframes boot-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

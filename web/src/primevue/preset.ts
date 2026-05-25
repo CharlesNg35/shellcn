@@ -1,8 +1,23 @@
 // Tailwind pass-through classes for PrimeVue's unstyled components. This is the
 // single place component styling lives; panels use PrimeVue components and
 // inherit these classes.
-const inputBase =
-  "w-full rounded-md border border-surface-300 bg-surface-0 px-2.5 py-1.5 text-sm text-surface-800 outline-none transition-colors focus:border-primary-400 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-100";
+
+// Shared field building blocks — composed below and re-exported so hand-rolled
+// inputs (search boxes, etc.) reuse the exact same look instead of duplicating it.
+export const fieldSurface =
+  "rounded-md border border-surface-300 bg-surface-0 dark:border-surface-700 dark:bg-surface-950";
+const focusRing =
+  "focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30";
+const focusWithinRing =
+  "focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/30";
+
+const inputBase = `w-full ${fieldSurface} px-2.5 py-1.5 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 ${focusRing} dark:text-surface-100`;
+
+// A standalone text input matching the PrimeVue inputs (for plain <input>s).
+export const inputClass = inputBase;
+
+// A search box with room for a leading icon — shared by the sidebar and pickers.
+export const searchInputClass = `w-full ${fieldSurface} py-1.5 pl-9 pr-3 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 ${focusRing} dark:text-surface-100`;
 
 const overlay =
   "mt-1 overflow-hidden rounded-md border border-surface-200 bg-surface-0 py-1 shadow-lg dark:border-surface-700 dark:bg-surface-900";
@@ -13,10 +28,18 @@ export const primeVuePassthrough = {
   inputtext: { root: inputBase },
   textarea: { root: `${inputBase} min-h-20 font-mono` },
   inputnumber: { root: "w-full", pcInputText: { root: inputBase } },
-  password: { root: "w-full", pcInputText: { root: inputBase } },
+  password: {
+    root: "relative block w-full",
+    // Leave room on the right for the absolutely-positioned show/hide toggle.
+    pcInputText: { root: `${inputBase} pr-9` },
+    maskIcon:
+      "absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-surface-400 transition-colors hover:text-surface-600 dark:hover:text-surface-300",
+    unmaskIcon:
+      "absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-surface-400 transition-colors hover:text-surface-600 dark:hover:text-surface-300",
+  },
 
   select: {
-    root: "inline-flex w-full items-center justify-between rounded-md border border-surface-300 bg-surface-0 text-sm transition-colors dark:border-surface-700 dark:bg-surface-950",
+    root: `inline-flex w-full items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
     label:
       "flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
     dropdown: "px-2 text-surface-400",
@@ -27,7 +50,7 @@ export const primeVuePassthrough = {
   },
 
   multiselect: {
-    root: "inline-flex w-full items-center justify-between rounded-md border border-surface-300 bg-surface-0 text-sm transition-colors dark:border-surface-700 dark:bg-surface-950",
+    root: `inline-flex w-full items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
     labelContainer: "min-w-0 flex-1 overflow-hidden",
     label:
       "flex min-h-8 flex-wrap items-center gap-1 px-2.5 py-1 text-left text-surface-800 dark:text-surface-100",
@@ -52,14 +75,27 @@ export const primeVuePassthrough = {
   },
 
   dialog: {
-    mask: "fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4",
-    root: "w-full max-w-md rounded-lg bg-surface-0 shadow-xl dark:bg-surface-900",
+    mask: "fixed inset-0 z-50 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm",
+    root: "w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5",
     header:
-      "flex items-center justify-between border-b border-surface-200 px-5 py-3 dark:border-surface-800",
-    title: "text-base font-semibold text-surface-900 dark:text-surface-0",
+      "flex items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800",
+    title:
+      "text-base font-semibold tracking-tight text-surface-900 dark:text-surface-0",
     content: "p-5",
+    footer:
+      "flex items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800",
     pcCloseButton: {
-      root: "rounded p-1 text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800",
+      root: "rounded-md p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200",
+    },
+    // Smooth fade + scale on open/close (neutralized under prefers-reduced-motion
+    // by the global rule in style.css).
+    transition: {
+      enterFromClass: "opacity-0 scale-95",
+      enterActiveClass: "transition duration-200 ease-out",
+      enterToClass: "opacity-100 scale-100",
+      leaveFromClass: "opacity-100 scale-100",
+      leaveActiveClass: "transition duration-150 ease-in",
+      leaveToClass: "opacity-0 scale-95",
     },
   },
 

@@ -8,6 +8,7 @@ import { api, ApiError } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import SchemaForm from "../panels/form/SchemaForm.vue";
+import ProtocolPicker from "./ProtocolPicker.vue";
 import AppIcon from "./AppIcon.vue";
 import type {
   ConnectionDetail,
@@ -28,6 +29,9 @@ const notify = useNotify();
 
 const isEdit = computed(() => Boolean(props.connectionId));
 const protocol = ref("");
+const selectedPlugin = computed(
+  () => conns.plugins.find((p) => p.name === protocol.value) ?? null,
+);
 const projection = ref<PluginProjection | null>(null);
 const name = ref("");
 const nameError = ref<string | null>(null);
@@ -39,9 +43,6 @@ const loading = ref(false);
 const busy = ref(false);
 const formRef = ref<{ submit: () => void } | null>(null);
 
-const pluginChoices = computed(() =>
-  conns.plugins.map((p) => ({ label: p.title, value: p.name })),
-);
 const transportChoices = computed(() =>
   (projection.value?.supportedTransports ?? ["direct"]).map((t) => ({
     label: t === "agent" ? "Agent" : "Direct",
@@ -86,6 +87,17 @@ async function selectPlugin(nextProtocol: string): Promise<void> {
   projection.value = await conns.projection(nextProtocol);
   transport.value = projection.value.supportedTransports[0] ?? "direct";
   recordingModel.value = {};
+}
+
+// Return to the protocol picker (the breadcrumb "back"), discarding the
+// protocol-specific config but keeping the name the user may have typed.
+function clearProtocol(): void {
+  protocol.value = "";
+  projection.value = null;
+  configModel.value = {};
+  secretsSet.value = {};
+  recordingModel.value = {};
+  nameError.value = null;
 }
 
 async function loadForEdit(id: string): Promise<void> {
@@ -182,24 +194,58 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
     </p>
 
     <div v-else class="flex flex-col gap-5">
-      <!-- Protocol picker (create only; fixed on edit). -->
-      <div v-if="!isEdit" class="flex flex-col gap-1.5">
+      <!-- Step 1: pick a protocol (create only, until one is chosen). -->
+      <div v-if="!isEdit && !protocol" class="flex flex-col gap-1.5">
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
           Protocol <span class="text-red-500">*</span>
         </label>
-        <Select
+        <ProtocolPicker
           :model-value="protocol"
-          :options="pluginChoices"
-          option-label="label"
-          option-value="value"
-          placeholder="Choose a protocol"
+          :plugins="conns.plugins"
           @update:model-value="selectPlugin"
         />
       </div>
 
+      <!-- Loading the chosen protocol's configuration. -->
+      <div
+        v-else-if="!projection"
+        class="flex items-center justify-center gap-2 py-12 text-sm text-surface-400"
+      >
+        <span
+          class="h-4 w-4 animate-spin rounded-full border-2 border-surface-300 border-t-primary-500 dark:border-surface-700"
+          role="status"
+          aria-label="Loading"
+        />
+        Loading configuration…
+      </div>
+
       <template v-if="projection">
+        <!-- Breadcrumb: the chosen protocol, with a way back to the picker. -->
+        <nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-sm">
+          <button
+            v-if="!isEdit"
+            type="button"
+            class="rounded font-medium text-primary-600 transition-colors hover:text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60 dark:text-primary-400 dark:hover:text-primary-300"
+            @click="clearProtocol"
+          >
+            Protocols
+          </button>
+          <span v-if="!isEdit" class="text-surface-400" aria-hidden="true"
+            >/</span
+          >
+          <span
+            class="inline-flex items-center gap-1.5 font-medium text-surface-900 dark:text-surface-100"
+          >
+            <AppIcon
+              :icon="selectedPlugin?.icon ?? projection.icon"
+              :size="15"
+            />
+            {{ selectedPlugin?.title ?? projection.title }}
+          </span>
+        </nav>
+
         <div class="flex flex-col gap-1.5">
           <label
             for="conn-name"
@@ -267,22 +313,19 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
                 Browser capture. Not compliance-grade.
               </span>
             </div>
-            <Select
-              :model-value="policyFor(cap.class)"
-              :options="policyChoices"
-              option-label="label"
-              option-value="value"
-              :aria-label="`Recording for ${recordingLabel(cap.class)}`"
-              :pt="{ root: 'w-36' }"
-              @update:model-value="setPolicy(cap.class, $event)"
-            />
+            <div class="w-36 shrink-0">
+              <Select
+                :model-value="policyFor(cap.class)"
+                :options="policyChoices"
+                option-label="label"
+                option-value="value"
+                :aria-label="`Recording for ${recordingLabel(cap.class)}`"
+                @update:model-value="setPolicy(cap.class, $event)"
+              />
+            </div>
           </div>
         </fieldset>
       </template>
-
-      <p v-else-if="!isEdit" class="text-sm text-surface-400">
-        Pick a protocol to configure the connection.
-      </p>
     </div>
 
     <template #footer>
