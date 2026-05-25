@@ -335,6 +335,32 @@ export interface UserSummary {
   displayName?: string;
 }
 
+// Admin account management.
+export interface AdminUser {
+  id: string;
+  username: string;
+  email?: string;
+  displayName?: string;
+  roles: string[];
+  disabled: boolean;
+  protected: boolean;
+}
+
+export interface InvitationSummary {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface InviteResult {
+  invitation: InvitationSummary;
+  link: string;
+  emailSent: boolean;
+}
+
 // The edit/detail read: non-secret config plus a per-secret-field presence map
 // ("set" / "not set"). Secret values are never carried back.
 export interface ConnectionDetail {

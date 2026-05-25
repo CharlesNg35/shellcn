@@ -133,6 +133,43 @@ const mockUsers: Json[] = [
   { id: "u-bob", username: "bob", displayName: "Bob Reyes" },
 ];
 
+let adminUsersState: Json[] | null = null;
+function adminUsers(): Json[] {
+  if (!adminUsersState) {
+    adminUsersState = [
+      {
+        id: "u-demo",
+        username: "demo",
+        email: "demo@example.com",
+        displayName: "Demo User",
+        roles: ["admin"],
+        disabled: false,
+        protected: true,
+      },
+      {
+        id: "u-alice",
+        username: "alice",
+        email: "",
+        displayName: "Alice Ng",
+        roles: ["operator"],
+        disabled: false,
+        protected: false,
+      },
+      {
+        id: "u-bob",
+        username: "bob",
+        email: "",
+        displayName: "Bob Reyes",
+        roles: ["viewer"],
+        disabled: false,
+        protected: false,
+      },
+    ];
+  }
+  return adminUsersState;
+}
+let invitationsState: Json[] = [];
+
 function uid(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -140,6 +177,8 @@ function uid(prefix: string): string {
 function resetControlPlaneState(): void {
   connectionsState = null;
   credentialsState = null;
+  adminUsersState = null;
+  invitationsState = [];
   for (const key of Object.keys(grantsState)) delete grantsState[key];
   agentOnlineAt.clear();
 }
@@ -243,6 +282,109 @@ function handleHTTP(
             .includes(q),
       ),
     );
+  }
+
+  // --- admin: users, invitations, email status ---
+  if (path === "/api/admin/email" && method === "GET") {
+    return send(res, 200, { enabled: false });
+  }
+  if (path === "/api/admin/users" && method === "GET") {
+    return send(res, 200, adminUsers());
+  }
+  if (path === "/api/admin/users" && method === "POST") {
+    return void readBody(req).then((raw) => {
+      const body = raw as Json;
+      const u: Json = {
+        id: uid("u"),
+        username: body.username,
+        email: body.email ?? "",
+        displayName: body.displayName ?? "",
+        roles: [body.role],
+        disabled: false,
+        protected: false,
+      };
+      adminUsers().push(u);
+      send(res, 201, u);
+    });
+  }
+  const adminUserMatch = path.match(/^\/api\/admin\/users\/([^/]+)$/);
+  if (adminUserMatch) {
+    const id = adminUserMatch[1];
+    const u = adminUsers().find((x) => x.id === id);
+    if (!u) return send(res, 404, { error: "unknown user" });
+    if (method === "PUT") {
+      return void readBody(req).then((raw) => {
+        const body = raw as Json;
+        u.email = body.email ?? u.email;
+        u.displayName = body.displayName ?? u.displayName;
+        u.roles = [body.role];
+        u.disabled = Boolean(body.disabled);
+        send(res, 200, u);
+      });
+    }
+    if (method === "DELETE") {
+      adminUsersState = adminUsers().filter((x) => x.id !== id);
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  if (path === "/api/admin/invitations" && method === "GET") {
+    return send(res, 200, invitationsState);
+  }
+  if (path === "/api/admin/invitations" && method === "POST") {
+    return void readBody(req).then((raw) => {
+      const body = raw as Json;
+      const token = uid("invtok");
+      const inv: Json = {
+        id: uid("inv"),
+        email: body.email,
+        role: body.role,
+        status: "pending",
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 72 * 3600_000).toISOString(),
+        _token: token,
+      };
+      invitationsState.push(inv);
+      const link = `http://${req.headers.host ?? "localhost"}/invite/${token}`;
+      send(res, 201, { invitation: inv, link, emailSent: false });
+    });
+  }
+  const inviteRevokeMatch = path.match(/^\/api\/admin\/invitations\/([^/]+)$/);
+  if (inviteRevokeMatch && method === "DELETE") {
+    const inv = invitationsState.find((i) => i.id === inviteRevokeMatch[1]);
+    if (inv) inv.status = "revoked";
+    return send(res, 200, { ok: true });
+  }
+
+  // --- public: invitation accept ---
+  const acceptMatch = path.match(/^\/api\/invitations\/([^/]+)\/accept$/);
+  if (acceptMatch && method === "POST") {
+    const inv = invitationsState.find(
+      (i) => i._token === acceptMatch[1] && i.status === "pending",
+    );
+    if (!inv) return send(res, 404, { error: "invalid invitation" });
+    return void readBody(req).then((raw) => {
+      const body = raw as Json;
+      inv.status = "accepted";
+      adminUsers().push({
+        id: uid("u"),
+        username: body.username,
+        email: inv.email,
+        displayName: "",
+        roles: [inv.role],
+        disabled: false,
+        protected: false,
+      });
+      send(res, 201, { username: body.username });
+    });
+  }
+  const inviteLookupMatch = path.match(/^\/api\/invitations\/([^/]+)$/);
+  if (inviteLookupMatch && method === "GET") {
+    const inv = invitationsState.find(
+      (i) => i._token === inviteLookupMatch[1] && i.status === "pending",
+    );
+    if (!inv) return send(res, 404, { error: "invalid invitation" });
+    return send(res, 200, { email: inv.email, role: inv.role });
   }
 
   if (path === "/api/connections" && method === "GET") {

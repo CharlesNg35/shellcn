@@ -10,6 +10,11 @@ const router = createRouter({
       component: () => import("../views/LoginView.vue"),
     },
     {
+      path: "/invite/:token",
+      name: "accept-invite",
+      component: () => import("../views/AcceptInviteView.vue"),
+    },
+    {
       path: "/",
       component: () => import("../components/AppShell.vue"),
       children: [
@@ -17,6 +22,11 @@ const router = createRouter({
           path: "",
           name: "home",
           component: () => import("../views/HomeView.vue"),
+        },
+        {
+          path: "users",
+          name: "users",
+          component: () => import("../views/UsersView.vue"),
         },
         {
           path: "c/:id",
@@ -40,11 +50,14 @@ const router = createRouter({
   ],
 });
 
+// Public routes need no session (login + invitation acceptance).
+const publicRoutes = new Set(["login", "accept-invite"]);
+
 // Gate every route behind an established session; bootstrap runs once.
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
   await auth.ensureReady();
-  if (to.name !== "login" && !auth.isAuthenticated) {
+  if (!publicRoutes.has(String(to.name)) && !auth.isAuthenticated) {
     const redirect =
       to.fullPath !== "/" ? { redirect: to.fullPath } : undefined;
     return { name: "login", query: redirect };

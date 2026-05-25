@@ -21,6 +21,7 @@ import (
 	"github.com/charlesng/shellcn/internal/audit"
 	"github.com/charlesng/shellcn/internal/auth"
 	"github.com/charlesng/shellcn/internal/config"
+	"github.com/charlesng/shellcn/internal/email"
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/policy"
@@ -128,6 +129,17 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	connector.SetSecretAccessHook(metrics.IncSecretAccess)
 	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
+	users := service.NewUserService(st.Users)
+	mailer := email.New(email.SMTP{
+		Enabled:  cfg.Email.Enabled,
+		Host:     cfg.Email.Host,
+		Port:     cfg.Email.Port,
+		From:     cfg.Email.From,
+		Username: cfg.Email.Username,
+		Password: cfg.Email.Password,
+		UseTLS:   cfg.Email.UseTLS,
+	})
+	invitations := service.NewInvitationService(st.Invitations, users, mailer)
 
 	health := telemetry.NewHealth()
 	health.Register("store", func(ctx context.Context) error {
@@ -185,6 +197,8 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		Connections: connections,
 		Credentials: creds,
 		Enrollments: enrollments,
+		Users:       users,
+		Invitations: invitations,
 		Tunnels:     tunnels,
 		Audit:       audit.NewWriter(st.Audit),
 		Metrics:     metrics,
@@ -245,6 +259,7 @@ func bootstrapAdmin(ctx context.Context, logger *slog.Logger, st *store.Store) e
 		Username:    "admin",
 		DisplayName: "Administrator",
 		Roles:       []models.Role{models.RoleAdmin},
+		Protected:   true,
 	}
 	if err := st.Users.Create(ctx, admin, hash); err != nil {
 		return fmt.Errorf("create admin: %w", err)

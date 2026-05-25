@@ -8,6 +8,7 @@ export interface AuthUser {
   displayName?: string;
   email?: string;
   roles: string[];
+  protected?: boolean;
 }
 
 interface SessionDTO {

@@ -20,6 +20,7 @@ type Config struct {
 	Server   ServerConfig   `mapstructure:"server"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Secrets  SecretsConfig  `mapstructure:"secrets"`
+	Email    EmailConfig    `mapstructure:"email"`
 }
 
 type ServerConfig struct {
@@ -35,6 +36,18 @@ type DatabaseConfig struct {
 type SecretsConfig struct {
 	MasterKey     string `mapstructure:"master_key"`
 	MasterKeyFile string `mapstructure:"master_key_file"`
+}
+
+// EmailConfig is the outbound SMTP configuration used for account invitations.
+// Disabled by default; when off, invites are shared via their copyable link.
+type EmailConfig struct {
+	Enabled  bool   `mapstructure:"enabled"`
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	From     string `mapstructure:"from"`
+	Username string `mapstructure:"username"`
+	Password string `mapstructure:"password"`
+	UseTLS   bool   `mapstructure:"use_tls"` // implicit TLS (e.g. port 465); else STARTTLS
 }
 
 // Load reads config.yaml from the current directory, ./config, or any extra
@@ -79,6 +92,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.log_level", "info")
 	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.dsn", "shellcn.db")
+	v.SetDefault("email.enabled", false)
+	v.SetDefault("email.port", 587)
+	v.SetDefault("email.use_tls", false)
 }
 
 func (c *Config) SlogLevel() slog.Level {

@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Transport tunnel registry + `cmd/agent` reverse-tunnel binary + enrollment endpoints implemented (gateway↔agent yamux tunnel, token single-use/connection-scoped). Phase 2b (M1.5 platform management) complete: connection/credential CRUD + sharing-grant + user-lookup endpoints (schema-validated, write-only secrets, owner/manage/admin authz, audited); auth gate + CSRF + single error interceptor; manifest-driven connection create/edit/delete via the generic `SchemaForm`; credentials view + reusable `ShareDialog`/`ConfirmDialog`. **Next: Phase 2c (M1.6 session recording foundation), then Phase 3 (M2 SSH/SFTP).**_
+_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Transport tunnel registry + `cmd/agent` reverse-tunnel binary + enrollment endpoints implemented (gateway↔agent yamux tunnel, token single-use/connection-scoped). Phase 2b (M1.5 platform management) complete: connection/credential CRUD + sharing-grant + user-lookup endpoints (schema-validated, write-only secrets, owner/manage/admin authz, audited); auth gate + CSRF + single error interceptor; manifest-driven connection create/edit/delete via the generic `SchemaForm`; credentials view + reusable `ShareDialog`/`ConfirmDialog`. Partial M-Admin landed: typed bootstrap config (`internal/config`, Viper; SMTP in config, not a table), admin user CRUD with root-admin protection, email/link invitations (`internal/email`, best-effort SMTP), and a Users view (users + invitations tabs, accept page). **Next: Phase 2c (M1.6 session recording foundation), then Phase 3 (M2 SSH/SFTP).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -51,8 +51,6 @@ _Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps
 - [x] 2b.5 Frontend — connection management UI (manifest-driven create/edit/delete + transport selector)
 - [x] 2b.6 Frontend — credential management + sharing UI (create/rotate/delete, grant use/manage)
 
-> **M-Admin (later, additive — v2 §12.2):** user/role management + role assignment, policy-rule admin (`role+permission+risk`), audit-log view + per-connection activity, light status page (health/plugin-health/session counts), agent re-enroll/rotate + history. _Operate-it surfaces, not blockers for first real use; backend-only M1 behaviors need no UI._
-
 ## Phase 2c — M1.6 · Session recording foundation
 
 _Planned (spec [v2 §9.5](specs/v2.md), steps [phase-2c](specs/plans/phase-2c-m1.6-session-recording/)). Recording is plugin-declared and off by default; connection create/edit shows auto-record options only when the selected plugin supports recording._
@@ -63,6 +61,20 @@ _Planned (spec [v2 §9.5](specs/v2.md), steps [phase-2c](specs/plans/phase-2c-m1
 - [ ] 2c.4 Terminal asciicast recorder and playback
 - [ ] 2c.5 Desktop/graphical recording framework
 - [ ] 2c.6 Recording APIs and frontend management UI
+
+## Phase 2d — M-Admin · Administration (partial)
+
+_Done — user/role management + invitations + the config foundation they need
+(spec [v2 §12.2](specs/v2.md), [v2 §9.1](specs/v2.md)). SMTP is bootstrap config
+(`config.email.*`), not a stored table; invitations always yield a copyable
+link, with email as a best-effort extra when SMTP is enabled._
+
+- [x] 2d.1 Backend — typed bootstrap config (`internal/config`, Viper: `config.yaml` + `SHELLCN_*` env + flag overrides; master key unified)
+- [x] 2d.2 Backend — admin user CRUD (`/api/admin/users`) with root-admin protection (root never deleted/locked out; only root deletes admins); audited
+- [x] 2d.3 Backend — invitations create/list/revoke (`/api/admin/invitations`) + public lookup/accept (`/api/invitations/{token}`, single-use); config-driven SMTP via `internal/email`
+- [x] 2d.4 Frontend — Users view (Users · Invitations tabs): create/edit/delete users, invite → copyable link, revoke, public accept page, admin-only nav + email status in Settings
+
+> **Still M-Admin (later):** policy-rule admin (`role+permission+risk`), audit-log view + per-connection activity, light status page (health/plugin-health/session counts), agent re-enroll/rotate + history.
 
 ## Phase 3 — M2 · SSH/SFTP reference plugin
 

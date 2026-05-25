@@ -217,6 +217,19 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
 
       <div class="border-t border-surface-200 dark:border-surface-800">
         <RouterLink
+          v-if="auth.isAdmin"
+          :to="{ name: 'users' }"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          :class="
+            route.name === 'users'
+              ? 'font-medium text-primary-700 dark:text-primary-200'
+              : ''
+          "
+        >
+          <AppIcon :icon="{ type: 'name', value: 'users' }" :size="16" />
+          Users
+        </RouterLink>
+        <RouterLink
           :to="{ name: 'credentials' }"
           class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
           :class="

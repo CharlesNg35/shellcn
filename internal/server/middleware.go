@@ -55,6 +55,19 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 	})
 }
 
+// requireAdmin gates a route group to platform admins (used for user/role and
+// invitation management). It runs inside the authenticated group.
+func (s *Server) requireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, _ := userFrom(r.Context())
+		if !user.HasRole(models.RoleAdmin) {
+			writeError(w, s.deps.Logger, plugin.ErrForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func isStateChanging(method string) bool {
 	switch method {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:

@@ -22,6 +22,7 @@ func NewMemory() *Store {
 		Preferences:      &memPreferenceStore{m: map[string]models.Preference{}},
 		Enrollments:      &memEnrollmentStore{m: map[string]models.AgentEnrollment{}},
 		Policies:         &memPolicyStore{m: map[string]models.PolicyRule{}},
+		Invitations:      &memInvitationStore{m: map[string]models.Invitation{}},
 	}
 }
 
@@ -502,6 +503,67 @@ func (s *memPreferenceStore) Delete(_ context.Context, userID, key string) error
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.m, prefKey(userID, key))
+	return nil
+}
+
+type memInvitationStore struct {
+	mu sync.RWMutex
+	m  map[string]models.Invitation
+}
+
+func (s *memInvitationStore) Create(_ context.Context, i *models.Invitation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[i.ID] = *i
+	return nil
+}
+
+func (s *memInvitationStore) Get(_ context.Context, id string) (models.Invitation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	i, ok := s.m[id]
+	if !ok {
+		return models.Invitation{}, ErrNotFound
+	}
+	return i, nil
+}
+
+func (s *memInvitationStore) GetByTokenHash(_ context.Context, tokenHash string) (models.Invitation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, i := range s.m {
+		if i.TokenHash == tokenHash {
+			return i, nil
+		}
+	}
+	return models.Invitation{}, ErrNotFound
+}
+
+func (s *memInvitationStore) List(_ context.Context) ([]models.Invitation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]models.Invitation, 0, len(s.m))
+	for _, i := range s.m {
+		out = append(out, i)
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].CreatedAt.After(out[b].CreatedAt) })
+	return out, nil
+}
+
+func (s *memInvitationStore) Update(_ context.Context, i *models.Invitation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[i.ID]; !ok {
+		return ErrNotFound
+	}
+	s.m[i.ID] = *i
+	return nil
+}
+
+func (s *memInvitationStore) Delete(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, id)
 	return nil
 }
 

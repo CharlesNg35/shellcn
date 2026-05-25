@@ -20,6 +20,7 @@ type userDTO struct {
 	DisplayName string        `json:"displayName,omitempty"`
 	Email       string        `json:"email,omitempty"`
 	Roles       []models.Role `json:"roles"`
+	Protected   bool          `json:"protected"`
 }
 
 type sessionDTO struct {
@@ -32,7 +33,7 @@ func toUserDTO(u models.User) userDTO {
 	if roles == nil {
 		roles = []models.Role{}
 	}
-	return userDTO{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, Roles: roles}
+	return userDTO{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName, Email: u.Email, Roles: roles, Protected: u.Protected}
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {

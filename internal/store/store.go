@@ -108,6 +108,16 @@ type PolicyStore interface {
 	List(ctx context.Context) ([]models.PolicyRule, error)
 }
 
+// InvitationStore persists account invitations (only the token hash is stored).
+type InvitationStore interface {
+	Create(ctx context.Context, i *models.Invitation) error
+	Get(ctx context.Context, id string) (models.Invitation, error)
+	GetByTokenHash(ctx context.Context, tokenHash string) (models.Invitation, error)
+	List(ctx context.Context) ([]models.Invitation, error)
+	Update(ctx context.Context, i *models.Invitation) error
+	Delete(ctx context.Context, id string) error
+}
+
 // Store aggregates every repository plus lifecycle controls.
 type Store struct {
 	Users            UserStore
@@ -120,6 +130,7 @@ type Store struct {
 	Preferences      PreferenceStore
 	Enrollments      EnrollmentStore
 	Policies         PolicyStore
+	Invitations      InvitationStore
 
 	close func() error
 }

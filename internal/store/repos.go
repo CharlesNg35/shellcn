@@ -328,6 +328,46 @@ func (s *gormPreferenceStore) Delete(ctx context.Context, userID, key string) er
 	return s.db.WithContext(ctx).Delete(&models.Preference{}, "user_id = ? AND pref_key = ?", userID, key).Error
 }
 
+type gormInvitationStore struct{ db *gorm.DB }
+
+func (s *gormInvitationStore) Create(ctx context.Context, i *models.Invitation) error {
+	return s.db.WithContext(ctx).Create(i).Error
+}
+
+func (s *gormInvitationStore) Get(ctx context.Context, id string) (models.Invitation, error) {
+	var i models.Invitation
+	if err := s.db.WithContext(ctx).First(&i, "id = ?", id).Error; err != nil {
+		return models.Invitation{}, normNotFound(err)
+	}
+	return i, nil
+}
+
+func (s *gormInvitationStore) GetByTokenHash(ctx context.Context, tokenHash string) (models.Invitation, error) {
+	var i models.Invitation
+	if err := s.db.WithContext(ctx).First(&i, "token_hash = ?", tokenHash).Error; err != nil {
+		return models.Invitation{}, normNotFound(err)
+	}
+	return i, nil
+}
+
+func (s *gormInvitationStore) List(ctx context.Context) ([]models.Invitation, error) {
+	var list []models.Invitation
+	if err := s.db.WithContext(ctx).Order("created_at DESC").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormInvitationStore) Update(ctx context.Context, i *models.Invitation) error {
+	res := s.db.WithContext(ctx).Model(&models.Invitation{}).Where("id = ?", i.ID).
+		Select("status", "accepted_at").Updates(i)
+	return rowsOrNotFound(res)
+}
+
+func (s *gormInvitationStore) Delete(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&models.Invitation{}, "id = ?", id).Error
+}
+
 type gormEnrollmentStore struct{ db *gorm.DB }
 
 func (s *gormEnrollmentStore) Create(ctx context.Context, e *models.AgentEnrollment) error {

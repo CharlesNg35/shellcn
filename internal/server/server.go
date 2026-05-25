@@ -35,6 +35,8 @@ type Deps struct {
 	Connections *service.ConnectionService
 	Credentials *service.CredentialService
 	Enrollments *service.EnrollmentService
+	Users       *service.UserService
+	Invitations *service.InvitationService
 	Tunnels     *transport.Registry
 	Audit       audit.Sink
 	Metrics     *telemetry.Metrics
@@ -96,6 +98,12 @@ func (s *Server) routes() chi.Router {
 			api.Get("/agent/connect", s.handleAgentConnect)
 		}
 
+		// Invitation acceptance is public (the invitee has no session yet).
+		if s.deps.Invitations != nil {
+			api.Get("/invitations/{token}", s.handleInvitationLookup)
+			api.Post("/invitations/{token}/accept", s.handleAcceptInvitation)
+		}
+
 		api.Group(func(pr chi.Router) {
 			pr.Use(s.requireAuth)
 			pr.Post("/auth/logout", s.handleLogout)
@@ -135,6 +143,23 @@ func (s *Server) routes() chi.Router {
 			if s.deps.Enrollments != nil {
 				pr.Post("/connections/{id}/agent/enrollments", s.handleCreateEnrollment)
 				pr.Get("/connections/{id}/agent/state", s.handleAgentState)
+			}
+
+			// Admin-only: user/role + invitation management.
+			if s.deps.Users != nil {
+				pr.Group(func(ar chi.Router) {
+					ar.Use(s.requireAdmin)
+					ar.Get("/admin/users", s.handleAdminListUsers)
+					ar.Post("/admin/users", s.handleAdminCreateUser)
+					ar.Put("/admin/users/{id}", s.handleAdminUpdateUser)
+					ar.Delete("/admin/users/{id}", s.handleAdminDeleteUser)
+					if s.deps.Invitations != nil {
+						ar.Get("/admin/email", s.handleAdminEmailStatus)
+						ar.Get("/admin/invitations", s.handleAdminListInvitations)
+						ar.Post("/admin/invitations", s.handleAdminCreateInvitation)
+						ar.Delete("/admin/invitations/{id}", s.handleAdminRevokeInvitation)
+					}
+				})
 			}
 			pr.HandleFunc("/connections/{id}/x/{routeID}", s.handleRoute)
 		})

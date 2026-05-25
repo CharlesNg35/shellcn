@@ -16,6 +16,7 @@ import (
 
 	"github.com/charlesng/shellcn/internal/audit"
 	"github.com/charlesng/shellcn/internal/auth"
+	"github.com/charlesng/shellcn/internal/email"
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/policy"
@@ -195,6 +196,8 @@ func newHarness(t *testing.T) *harness {
 	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	authMgr := auth.NewSessionManager(time.Hour)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
+	users := service.NewUserService(st.Users)
+	invitations := service.NewInvitationService(st.Invitations, users, email.New(email.SMTP{}))
 
 	srv := server.New(server.Deps{
 		Plugins: reg, Store: st, Sessions: sessMgr,
@@ -202,6 +205,7 @@ func newHarness(t *testing.T) *harness {
 		Tickets: auth.NewTicketStore(time.Minute), Policy: pol,
 		Connector: connector, Connections: connections, Credentials: creds, Audit: audit.NewWriter(st.Audit),
 		Enrollments: enrollments, Tunnels: tunnels,
+		Users: users, Invitations: invitations,
 	})
 
 	ts := httptest.NewServer(srv.Handler())

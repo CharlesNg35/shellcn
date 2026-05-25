@@ -25,8 +25,10 @@ type User struct {
 	Roles        []Role `gorm:"serializer:json"`
 	PasswordHash string `gorm:"column:password_hash" json:"-"`
 	Disabled     bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// Protected marks the root admin, which can never be deleted.
+	Protected bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func (User) TableName() string { return "users" }
