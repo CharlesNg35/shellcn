@@ -28,7 +28,9 @@ function seed(): void {
     }
   }
 }
-watch(() => props.schema, seed, { immediate: true });
+// Re-seed when the schema OR the incoming values change, so an edit form whose
+// modelValue arrives asynchronously (after the schema) doesn't render blank.
+watch([() => props.schema, () => props.modelValue], seed, { immediate: true });
 
 function set(field: Field, value: unknown): void {
   values[field.key] = value;

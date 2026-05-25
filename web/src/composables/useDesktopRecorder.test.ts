@@ -63,7 +63,8 @@ beforeEach(() => {
   vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
   (
     HTMLCanvasElement.prototype as unknown as { captureStream: () => unknown }
-  ).captureStream = () => ({}) as MediaStream;
+  ).captureStream = () =>
+    ({ getTracks: () => [] }) as unknown as MediaStream;
 });
 
 afterEach(() => vi.unstubAllGlobals());

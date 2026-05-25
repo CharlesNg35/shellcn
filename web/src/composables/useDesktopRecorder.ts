@@ -27,10 +27,20 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
   const recording = ref(false);
   const failed = ref(false);
   let recorder: MediaRecorder | null = null;
+  let stream: MediaStream | null = null;
   let recordingID = "";
   let index = 0;
   let chain: Promise<void> = Promise.resolve();
   let uploadFailed = false;
+
+  // Release the captured canvas stream so the browser stops the capture track;
+  // MediaRecorder.stop() alone leaves the track live.
+  function stopTracks(): void {
+    if (stream) {
+      for (const track of stream.getTracks()) track.stop();
+      stream = null;
+    }
+  }
 
   async function start(canvas: CapturableCanvas, fps = 5): Promise<boolean> {
     if (recording.value) return true;
@@ -48,7 +58,7 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
       index = 0;
       chain = Promise.resolve();
       uploadFailed = false;
-      const stream = canvas.captureStream(fps);
+      stream = canvas.captureStream(fps);
       recorder = new MediaRecorder(stream, { mimeType: MIME });
       recorder.ondataavailable = (e: BlobEvent) => {
         if (uploadFailed) return;
@@ -78,6 +88,7 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
           .finally(() => {
             if (recordingID === id) recordingID = "";
           });
+        stopTracks();
       };
       recorder.start(TIMESLICE_MS);
       recording.value = true;
@@ -85,6 +96,7 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
     } catch {
       const id = recordingID;
       recordingID = "";
+      stopTracks();
       if (id) await recordingsApi.abort(id).catch(() => undefined);
       failed.value = true;
       return false;

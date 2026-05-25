@@ -177,6 +177,7 @@ onUnmounted(() => {
       <DataTable
         v-else
         :value="rows"
+        data-key="ref.uid"
         lazy
         removable-sort
         :sort-field="sortField"
