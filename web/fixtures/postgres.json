@@ -1,0 +1,217 @@
+{
+  "apiVersion": 1,
+  "name": "postgres",
+  "version": "0.1.0",
+  "title": "PostgreSQL",
+  "description": "PostgreSQL \u2014 schema browser, query editor.",
+  "icon": {
+    "type": "name",
+    "value": "database"
+  },
+  "capabilities": ["sql", "schema"],
+  "supportedTransports": ["direct", "agent"],
+  "agent": {
+    "modes": ["tcp"],
+    "riskNote": "Database access proxied over the agent tunnel."
+  },
+  "layout": "sidebar_tree",
+  "config": {
+    "groups": [
+      {
+        "name": "Basic",
+        "fields": [
+          {
+            "key": "host",
+            "label": "Host",
+            "type": "text",
+            "required": true,
+            "placeholder": "db.example.com"
+          },
+          {
+            "key": "port",
+            "label": "Port",
+            "type": "number",
+            "default": 5432
+          },
+          {
+            "key": "database",
+            "label": "Database",
+            "type": "text",
+            "required": true,
+            "default": "postgres"
+          },
+          {
+            "key": "user",
+            "label": "Username",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "credential_id",
+            "label": "Saved credential",
+            "type": "credential_ref",
+            "credential": {
+              "kinds": ["db_password"],
+              "protocols": ["postgres"]
+            },
+            "help": "Reuse a stored database password without copying it into this connection."
+          },
+          {
+            "key": "password",
+            "label": "Password",
+            "type": "password",
+            "secret": true,
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "credential_id",
+                  "op": "empty"
+                }
+              ]
+            },
+            "help": "Used only when no saved credential is selected."
+          }
+        ]
+      },
+      {
+        "name": "Safety",
+        "fields": [
+          {
+            "key": "read_only",
+            "label": "Read-only mode",
+            "type": "toggle",
+            "default": true,
+            "help": "Block UPDATE/DELETE/TRUNCATE/DROP."
+          },
+          {
+            "key": "query_timeout",
+            "label": "Query timeout",
+            "type": "duration",
+            "default": "30s"
+          },
+          {
+            "key": "row_limit",
+            "label": "Row limit",
+            "type": "number",
+            "default": 1000
+          }
+        ]
+      }
+    ]
+  },
+  "tree": [
+    {
+      "key": "databases",
+      "label": "Databases",
+      "icon": {
+        "type": "name",
+        "value": "database"
+      },
+      "source": {
+        "routeId": "postgres.database.list"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "kind": "table",
+      "title": "Tables",
+      "list": {
+        "routeId": "postgres.table.list",
+        "params": {
+          "schema": "${resource.namespace}"
+        }
+      },
+      "columns": [
+        {
+          "key": "name",
+          "label": "Table",
+          "sortable": true
+        },
+        {
+          "key": "schema",
+          "label": "Schema"
+        },
+        {
+          "key": "rows",
+          "label": "Rows",
+          "type": "number",
+          "sortable": true
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "type": "bytes"
+        }
+      ],
+      "actionIds": ["postgres.table.truncate"],
+      "detail": {
+        "header": {
+          "title": "${resource.namespace}.${resource.name}",
+          "actionIds": ["postgres.table.truncate"]
+        },
+        "tabs": [
+          {
+            "key": "data",
+            "label": "Data",
+            "panel": "query_editor",
+            "source": {
+              "routeId": "postgres.query",
+              "method": "WS"
+            },
+            "config": {
+              "language": "sql",
+              "initialQuery": "SELECT * FROM ${resource.namespace}.${resource.name} LIMIT 100;"
+            }
+          },
+          {
+            "key": "schema",
+            "label": "Schema",
+            "panel": "table",
+            "source": {
+              "routeId": "postgres.table.columns",
+              "params": {
+                "schema": "${resource.namespace}",
+                "table": "${resource.name}"
+              }
+            }
+          },
+          {
+            "key": "indexes",
+            "label": "Indexes",
+            "panel": "table",
+            "source": {
+              "routeId": "postgres.table.indexes",
+              "params": {
+                "schema": "${resource.namespace}",
+                "table": "${resource.name}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "postgres.table.truncate",
+      "label": "Truncate",
+      "icon": {
+        "type": "name",
+        "value": "trash"
+      },
+      "routeId": "postgres.table.truncate",
+      "method": "POST",
+      "risk": "destructive",
+      "requiresConfirm": true,
+      "confirmText": "Truncate this table? All rows will be deleted."
+    }
+  ],
+  "streams": [
+    {
+      "id": "postgres.query",
+      "kind": "logs",
+      "routeId": "postgres.query"
+    }
+  ]
+}

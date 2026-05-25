@@ -22,12 +22,12 @@ Early development. Work proceeds **UI-first** through the phased plan — see
 
 ## Develop
 
-Requires Go 1.25+ and Node 20+.
+Requires Go 1.25+ and Node 24.11+.
 
 ```sh
-make build      # vite build → embed → single binary (./shellcn)
+make build      # vite build → embed → single binary (bin/shellcn)
 make dev-web    # Vite dev server (HMR)
-make dev-api    # Go API server (--dev, proxies /api)
+make dev-api    # Go API server (--dev; paired with Vite /api proxy)
 make test       # Go + frontend tests
 make lint       # golangci-lint + gofumpt + frontend lint
 ```

@@ -1,0 +1,134 @@
+{
+  "apiVersion": 1,
+  "name": "ssh",
+  "version": "0.1.0",
+  "title": "SSH",
+  "description": "Secure Shell — terminal, files, tunnels, snippets.",
+  "icon": { "type": "name", "value": "terminal" },
+  "capabilities": ["terminal", "filesystem", "tunnel"],
+  "supportedTransports": ["direct"],
+  "layout": "tabs",
+  "config": {
+    "groups": [
+      {
+        "name": "Basic",
+        "fields": [
+          {
+            "key": "host",
+            "label": "Host",
+            "type": "text",
+            "required": true,
+            "placeholder": "10.0.0.1"
+          },
+          {
+            "key": "port",
+            "label": "Port",
+            "type": "number",
+            "default": 22,
+            "validators": [
+              { "type": "min", "value": 1 },
+              { "type": "max", "value": 65535 }
+            ]
+          },
+          {
+            "key": "user",
+            "label": "Username",
+            "type": "text",
+            "required": true,
+            "default": "root"
+          }
+        ]
+      },
+      {
+        "name": "Auth",
+        "fields": [
+          {
+            "key": "auth",
+            "label": "Authentication",
+            "type": "select",
+            "required": true,
+            "default": "password",
+            "options": [
+              { "label": "Password", "value": "password" },
+              { "label": "Private key", "value": "private_key" },
+              { "label": "Stored credential", "value": "credential" }
+            ]
+          },
+          {
+            "key": "credential_id",
+            "label": "Credential",
+            "type": "credential_ref",
+            "credential": {
+              "kinds": ["ssh_private_key", "ssh_password"],
+              "protocols": ["ssh"],
+              "required": true
+            },
+            "visibleWhen": {
+              "allOf": [{ "field": "auth", "op": "eq", "value": "credential" }]
+            }
+          },
+          {
+            "key": "password",
+            "label": "Password",
+            "type": "password",
+            "secret": true,
+            "visibleWhen": {
+              "allOf": [{ "field": "auth", "op": "eq", "value": "password" }]
+            }
+          },
+          {
+            "key": "private_key",
+            "label": "Private key",
+            "type": "textarea",
+            "secret": true,
+            "help": "PEM-encoded private key.",
+            "visibleWhen": {
+              "allOf": [{ "field": "auth", "op": "eq", "value": "private_key" }]
+            }
+          },
+          {
+            "key": "passphrase",
+            "label": "Key passphrase",
+            "type": "password",
+            "secret": true,
+            "visibleWhen": {
+              "allOf": [{ "field": "auth", "op": "eq", "value": "private_key" }]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "tabs": [
+    {
+      "key": "terminal",
+      "label": "Terminal",
+      "icon": { "type": "name", "value": "terminal" },
+      "panel": "terminal",
+      "source": { "routeId": "ssh.shell", "method": "WS" }
+    },
+    {
+      "key": "files",
+      "label": "Files",
+      "icon": { "type": "name", "value": "folder" },
+      "panel": "file_browser",
+      "source": { "routeId": "ssh.sftp.list", "params": { "path": "/" } },
+      "config": { "pathParam": "path", "readRouteId": "ssh.sftp.read" }
+    },
+    {
+      "key": "tunnels",
+      "label": "Tunnels",
+      "icon": { "type": "name", "value": "share" },
+      "panel": "table",
+      "source": { "routeId": "ssh.tunnel.list" }
+    },
+    {
+      "key": "snippets",
+      "label": "Snippets",
+      "icon": { "type": "name", "value": "code" },
+      "panel": "table",
+      "source": { "routeId": "ssh.snippet.list" }
+    }
+  ],
+  "streams": [{ "id": "ssh.shell", "kind": "terminal", "routeId": "ssh.shell" }]
+}

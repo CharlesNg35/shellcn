@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 0 complete; Phase 1 (M0) next._
+_Last updated: 2026-05-25 — Phase 1 (M0) complete: declarative renderer on fixtures, all four fixtures render end-to-end (unit + e2e green); Phase 2 (M1 core runtime) next._
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -19,13 +19,13 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 
 ## Phase 1 — M0 · Declarative UI on fixtures (priority)
 
-- [ ] 1.1 Define the projection contract (TypeScript)
-- [ ] 1.2 Author fixture manifests and mock dev server
-- [ ] 1.3 App shell, stores, and routing
-- [ ] 1.4 Manifest renderer and panel dispatch
-- [ ] 1.5 DataSource resolver
-- [ ] 1.6 Declarative panels
-- [ ] 1.7 Stub streaming panels
+- [x] 1.1 Define the projection contract (TypeScript)
+- [x] 1.2 Author fixture manifests and mock dev server
+- [x] 1.3 App shell, stores, and routing
+- [x] 1.4 Manifest renderer and panel dispatch
+- [x] 1.5 DataSource resolver
+- [x] 1.6 Declarative panels
+- [x] 1.7 Stub streaming panels
 
 ## Phase 2 — M1 · Core runtime
 

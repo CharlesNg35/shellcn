@@ -1,4 +1,4 @@
-.PHONY: help install build build-go build-web test test-web test-cover lint lint-go lint-web fmt fmt-go fmt-web tidy run dev dev-web dev-api dev-server clean tools
+.PHONY: help install build build-go build-web ensure-web-dist test test-web test-cover lint lint-go lint-web fmt fmt-go fmt-web tidy run dev dev-web dev-api dev-server clean tools
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
@@ -35,13 +35,16 @@ build-web:
 	@cd $(WEB_DIR) && pnpm build
 	@echo "✓ Frontend built at $(WEB_DIST)"
 
+ensure-web-dist:
+	@if [ ! -f "$(WEB_DIST)/index.html" ]; then $(MAKE) build-web; fi
+
 build-go:
 	@echo "Building Go binary..."
 	@mkdir -p $(BIN_DIR)
 	@CGO_ENABLED=0 go build -ldflags "$(GO_LDFLAGS)" -o $(BIN_DIR)/$(APP_NAME) ./cmd/server
 	@echo "✓ Binary at $(BIN_DIR)/$(APP_NAME)"
 
-test: test-web
+test: test-web ensure-web-dist
 	@echo "Running Go tests..."
 	@go test -race $(PKG)
 

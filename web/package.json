@@ -2,6 +2,7 @@
   "name": "shellcn-web",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@10.33.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -29,6 +30,7 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
     "@types/node": "^24.12.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/test-utils": "^2.4.10",
     "@vue/tsconfig": "^0.9.1",
@@ -44,6 +46,7 @@
     "typescript-eslint": "^8.59.4",
     "vite": "^8.0.12",
     "vitest": "^4.1.7",
-    "vue-tsc": "^3.2.8"
+    "vue-tsc": "^3.2.8",
+    "ws": "^8.21.0"
   }
 }

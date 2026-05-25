@@ -1,0 +1,364 @@
+{
+  "apiVersion": 1,
+  "name": "docker",
+  "version": "0.1.0",
+  "title": "Docker",
+  "description": "Docker host \u2014 containers, images, volumes, networks.",
+  "icon": {
+    "type": "emoji",
+    "value": "\ud83d\udc33"
+  },
+  "capabilities": ["containers", "images", "volumes", "networks"],
+  "supportedTransports": ["direct", "agent"],
+  "agent": {
+    "modes": ["unix"],
+    "riskNote": "Docker socket access is root-equivalent (privileged)."
+  },
+  "layout": "sidebar_tree",
+  "config": {
+    "groups": [
+      {
+        "name": "Basic",
+        "fields": [
+          {
+            "key": "host",
+            "label": "Docker host",
+            "type": "text",
+            "required": true,
+            "default": "unix:///var/run/docker.sock",
+            "placeholder": "tcp://10.0.0.1:2375"
+          },
+          {
+            "key": "tls",
+            "label": "Use TLS",
+            "type": "toggle",
+            "default": false
+          },
+          {
+            "key": "ca_cert",
+            "label": "CA certificate",
+            "type": "textarea",
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "tls",
+                  "op": "eq",
+                  "value": true
+                }
+              ]
+            },
+            "help": "PEM-encoded CA certificate used to verify the Docker host."
+          },
+          {
+            "key": "credential_id",
+            "label": "TLS credential",
+            "type": "credential_ref",
+            "credential": {
+              "kinds": ["tls_client_cert"],
+              "protocols": ["docker"]
+            },
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "tls",
+                  "op": "eq",
+                  "value": true
+                }
+              ]
+            },
+            "help": "Reusable client certificate/key for TLS-protected Docker APIs."
+          },
+          {
+            "key": "client_cert",
+            "label": "Client certificate",
+            "type": "textarea",
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "tls",
+                  "op": "eq",
+                  "value": true
+                },
+                {
+                  "field": "credential_id",
+                  "op": "empty"
+                }
+              ]
+            }
+          },
+          {
+            "key": "client_key",
+            "label": "Client key",
+            "type": "textarea",
+            "secret": true,
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "tls",
+                  "op": "eq",
+                  "value": true
+                },
+                {
+                  "field": "credential_id",
+                  "op": "empty"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "tree": [
+    {
+      "key": "containers",
+      "label": "Containers",
+      "icon": {
+        "type": "name",
+        "value": "box"
+      },
+      "source": {
+        "routeId": "docker.container.list"
+      },
+      "badge": {
+        "source": {
+          "routeId": "docker.container.count"
+        },
+        "severity": "info"
+      }
+    },
+    {
+      "key": "images",
+      "label": "Images",
+      "icon": {
+        "type": "name",
+        "value": "layers"
+      },
+      "source": {
+        "routeId": "docker.image.list"
+      }
+    },
+    {
+      "key": "volumes",
+      "label": "Volumes",
+      "icon": {
+        "type": "name",
+        "value": "database"
+      },
+      "source": {
+        "routeId": "docker.volume.list"
+      }
+    },
+    {
+      "key": "networks",
+      "label": "Networks",
+      "icon": {
+        "type": "name",
+        "value": "share"
+      },
+      "source": {
+        "routeId": "docker.network.list"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "kind": "container",
+      "title": "Containers",
+      "list": {
+        "routeId": "docker.container.list"
+      },
+      "watch": {
+        "routeId": "docker.container.watch",
+        "method": "WS"
+      },
+      "columns": [
+        {
+          "key": "name",
+          "label": "Name",
+          "sortable": true
+        },
+        {
+          "key": "image",
+          "label": "Image"
+        },
+        {
+          "key": "state",
+          "label": "State",
+          "type": "badge",
+          "sortable": true
+        },
+        {
+          "key": "status",
+          "label": "Status"
+        },
+        {
+          "key": "ports",
+          "label": "Ports"
+        }
+      ],
+      "actionIds": [
+        "docker.container.start",
+        "docker.container.stop",
+        "docker.container.restart",
+        "docker.container.remove"
+      ],
+      "detail": {
+        "header": {
+          "title": "${resource.name}",
+          "statusField": "state",
+          "actionIds": [
+            "docker.container.start",
+            "docker.container.stop",
+            "docker.container.restart",
+            "docker.container.remove"
+          ]
+        },
+        "tabs": [
+          {
+            "key": "overview",
+            "label": "Overview",
+            "panel": "metrics",
+            "source": {
+              "routeId": "docker.container.stats",
+              "method": "WS",
+              "params": {
+                "id": "${resource.uid}"
+              }
+            }
+          },
+          {
+            "key": "terminal",
+            "label": "Terminal",
+            "panel": "terminal",
+            "source": {
+              "routeId": "docker.container.exec",
+              "method": "WS",
+              "params": {
+                "id": "${resource.uid}"
+              }
+            }
+          },
+          {
+            "key": "logs",
+            "label": "Logs",
+            "panel": "log_stream",
+            "source": {
+              "routeId": "docker.container.logs",
+              "method": "WS",
+              "params": {
+                "id": "${resource.uid}"
+              }
+            }
+          },
+          {
+            "key": "inspect",
+            "label": "Inspect",
+            "panel": "code_editor",
+            "source": {
+              "routeId": "docker.container.inspect",
+              "params": {
+                "id": "${resource.uid}"
+              }
+            },
+            "config": {
+              "language": "json",
+              "readOnly": true
+            }
+          },
+          {
+            "key": "env",
+            "label": "Env",
+            "panel": "table",
+            "source": {
+              "routeId": "docker.container.env",
+              "params": {
+                "id": "${resource.uid}"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "docker.container.start",
+      "label": "Start",
+      "icon": {
+        "type": "name",
+        "value": "play"
+      },
+      "routeId": "docker.container.start",
+      "method": "POST",
+      "params": {
+        "id": "${resource.uid}"
+      },
+      "risk": "write",
+      "requiresConfirm": false
+    },
+    {
+      "id": "docker.container.stop",
+      "label": "Stop",
+      "icon": {
+        "type": "name",
+        "value": "stop"
+      },
+      "routeId": "docker.container.stop",
+      "method": "POST",
+      "params": {
+        "id": "${resource.uid}"
+      },
+      "risk": "write",
+      "requiresConfirm": false
+    },
+    {
+      "id": "docker.container.restart",
+      "label": "Restart",
+      "icon": {
+        "type": "name",
+        "value": "refresh"
+      },
+      "routeId": "docker.container.restart",
+      "method": "POST",
+      "params": {
+        "id": "${resource.uid}"
+      },
+      "risk": "write",
+      "requiresConfirm": false
+    },
+    {
+      "id": "docker.container.remove",
+      "label": "Remove",
+      "icon": {
+        "type": "name",
+        "value": "trash"
+      },
+      "routeId": "docker.container.remove",
+      "method": "DELETE",
+      "params": {
+        "id": "${resource.uid}"
+      },
+      "risk": "destructive",
+      "requiresConfirm": true,
+      "confirmText": "Remove this container? This cannot be undone."
+    }
+  ],
+  "streams": [
+    {
+      "id": "docker.container.logs",
+      "kind": "logs",
+      "routeId": "docker.container.logs"
+    },
+    {
+      "id": "docker.container.exec",
+      "kind": "terminal",
+      "routeId": "docker.container.exec"
+    },
+    {
+      "id": "docker.container.stats",
+      "kind": "metrics",
+      "routeId": "docker.container.stats"
+    }
+  ]
+}
