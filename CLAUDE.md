@@ -13,10 +13,16 @@ invariants, code style, verification rules) and applies here in full. Read it.
   using them — never from memory.** Prefer existing maintained packages over
   building from scratch.
 - **Minimal comments; small, focused components** (no god-components). DX matters.
+  Comment only a non-obvious _why_. **Never** put spec/section references
+  (e.g. `(v2 §14)`), task/PR references, or narration of _what_ the code does in
+  source files — that metadata rots and belongs in the PR/docs, not the code.
 - Work the plan in [`specs/plans/`](specs/plans/) **in phase order** (UI-first).
   Architecture lives in [`specs/v2.md`](specs/v2.md).
 - After each step: **update [`checklist.md`](checklist.md)** and set the step
   file's `Status`. **Tests gate every step** ([`specs/plans/TESTING.md`](specs/plans/TESTING.md)).
+- **After implementing anything, always run `make fmt`, then `make lint` and
+  `make test` — all must pass before finishing.** Don't hand off unformatted code
+  or failing tests/lint.
 - Don't violate the architecture invariants in AGENTS.md (stateless plugins,
   manifest-driven frontend, secrets encrypted above the store, routes carry
   permission/risk/audit, lazy-load).

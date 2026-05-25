@@ -1,3 +1,4 @@
+// Package web embeds the built frontend assets and serves them from the binary.
 package web
 
 import (
