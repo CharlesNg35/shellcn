@@ -95,6 +95,56 @@ func TestConnectionCRUDRoundTrip(t *testing.T) {
 	}
 }
 
+func TestConnectionRecordingPolicy(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	// Default: no recording field → recording stays off (nil/empty policy).
+	resp := h.do(t, http.MethodPost, "/api/connections", "op",
+		strings.NewReader(`{"name":"r1","protocol":"tester","config":{"host":"h"}}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	id := createConnID(t, resp)
+	conn, _ := h.store.Connections.Get(ctx, id)
+	if len(conn.Recording) != 0 {
+		t.Fatalf("recording must default to off, got %v", conn.Recording)
+	}
+
+	// Supported class accepts an explicit policy.
+	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "op",
+		strings.NewReader(`{"name":"r1","config":{"host":"h"},"recording":{"terminal":"auto"}}`))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("set terminal=auto: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	conn, _ = h.store.Connections.Get(ctx, id)
+	if conn.Recording["terminal"] != "auto" {
+		t.Fatalf("recording policy not persisted: %v", conn.Recording)
+	}
+
+	// An update that omits recording preserves the stored policy.
+	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "op",
+		strings.NewReader(`{"name":"r1-renamed","config":{"host":"h"}}`))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("omit recording: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	conn, _ = h.store.Connections.Get(ctx, id)
+	if conn.Recording["terminal"] != "auto" {
+		t.Fatalf("omitting recording must preserve policy, got %v", conn.Recording)
+	}
+
+	// A class the plugin does not declare is rejected (noop records nothing).
+	if r := h.do(t, http.MethodPost, "/api/connections", "op",
+		strings.NewReader(`{"name":"r2","protocol":"noop","config":{},"recording":{"terminal":"auto"}}`)); r.Status != http.StatusBadRequest {
+		t.Errorf("unsupported recording class: want 400, got %d (%s)", r.Status, r.Body)
+	}
+	// Invalid policy value is rejected.
+	if r := h.do(t, http.MethodPost, "/api/connections", "op",
+		strings.NewReader(`{"name":"r3","protocol":"tester","config":{"host":"h"},"recording":{"terminal":"always"}}`)); r.Status != http.StatusBadRequest {
+		t.Errorf("invalid recording policy: want 400, got %d (%s)", r.Status, r.Body)
+	}
+}
+
 func TestConnectionCreateValidation(t *testing.T) {
 	h := newHarness(t)
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { RouterLink } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
@@ -155,6 +156,20 @@ async function revokeInvite(): Promise<void> {
             <Column header="" :pt="{ bodyCell: 'text-right' }">
               <template #body="{ data }">
                 <div class="flex items-center justify-end gap-1">
+                  <RouterLink
+                    :to="{
+                      name: 'recordings',
+                      query: { user: (data as AdminUser).id },
+                    }"
+                    class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+                    title="View recordings"
+                    :aria-label="`View recordings for ${(data as AdminUser).username}`"
+                  >
+                    <AppIcon
+                      :icon="{ type: 'name', value: 'video' }"
+                      :size="16"
+                    />
+                  </RouterLink>
                   <button
                     type="button"
                     class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"

@@ -27,14 +27,15 @@ func (s *Server) handleGetPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 type connectionDTO struct {
-	ID        string       `json:"id"`
-	Name      string       `json:"name"`
-	Protocol  string       `json:"protocol"`
-	Icon      *plugin.Icon `json:"icon,omitempty"`
-	Transport string       `json:"transport"`
-	Online    bool         `json:"online"`
-	Status    string       `json:"status,omitempty"`
-	CanManage bool         `json:"canManage"`
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Protocol  string            `json:"protocol"`
+	Icon      *plugin.Icon      `json:"icon,omitempty"`
+	Transport string            `json:"transport"`
+	Online    bool              `json:"online"`
+	Status    string            `json:"status,omitempty"`
+	CanManage bool              `json:"canManage"`
+	Recording map[string]string `json:"recording,omitempty"`
 }
 
 func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {

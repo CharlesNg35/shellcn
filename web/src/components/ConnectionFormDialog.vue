@@ -13,6 +13,7 @@ import type {
   ConnectionDetail,
   ConnectionSummary,
   PluginProjection,
+  RecordingClass,
   Transport,
 } from "../types/projection";
 
@@ -33,6 +34,7 @@ const nameError = ref<string | null>(null);
 const transport = ref<Transport>("direct");
 const configModel = ref<Record<string, unknown>>({});
 const secretsSet = ref<Record<string, boolean>>({});
+const recordingModel = ref<Record<string, string>>({});
 const loading = ref(false);
 const busy = ref(false);
 const formRef = ref<{ submit: () => void } | null>(null);
@@ -47,6 +49,27 @@ const transportChoices = computed(() =>
   })),
 );
 
+// Shown only when the plugin declares support; never inferred from a panel type.
+const recordingClasses = computed(() => projection.value?.recording ?? []);
+const recordingLabels: Record<RecordingClass, string> = {
+  terminal: "Terminal session",
+  desktop: "Desktop / screen",
+};
+const policyChoices = [
+  { label: "Off", value: "disabled" },
+  { label: "On demand", value: "manual" },
+  { label: "Always", value: "auto" },
+];
+function recordingLabel(c: RecordingClass): string {
+  return recordingLabels[c] ?? c;
+}
+function policyFor(c: RecordingClass): string {
+  return recordingModel.value[c] ?? "disabled";
+}
+function setPolicy(c: RecordingClass, value: string): void {
+  recordingModel.value = { ...recordingModel.value, [c]: value };
+}
+
 function reset(): void {
   protocol.value = "";
   projection.value = null;
@@ -55,12 +78,14 @@ function reset(): void {
   transport.value = "direct";
   configModel.value = {};
   secretsSet.value = {};
+  recordingModel.value = {};
 }
 
 async function selectPlugin(nextProtocol: string): Promise<void> {
   protocol.value = nextProtocol;
   projection.value = await conns.projection(nextProtocol);
   transport.value = projection.value.supportedTransports[0] ?? "direct";
+  recordingModel.value = {};
 }
 
 async function loadForEdit(id: string): Promise<void> {
@@ -73,6 +98,7 @@ async function loadForEdit(id: string): Promise<void> {
     secretsSet.value = Object.fromEntries(
       Object.entries(detail.secrets ?? {}).map(([k, v]) => [k, v === "set"]),
     );
+    recordingModel.value = { ...(detail.recording ?? {}) };
     protocol.value = detail.protocol;
     projection.value = await conns.projection(detail.protocol);
   } finally {
@@ -106,7 +132,12 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
     if (isEdit.value && props.connectionId) {
       const updated = await api.put<ConnectionDetail>(
         `/connections/${props.connectionId}`,
-        { name: name.value.trim(), transport: transport.value, config },
+        {
+          name: name.value.trim(),
+          transport: transport.value,
+          config,
+          recording: recordingModel.value,
+        },
       );
       await conns.refresh();
       notify.success("Connection updated", updated.name);
@@ -117,6 +148,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
         protocol: protocol.value,
         transport: transport.value,
         config,
+        recording: recordingModel.value,
       });
       await conns.refresh();
       notify.success("Connection created", created.name);
@@ -208,6 +240,44 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           :protocol="protocol"
           @submit="onConfig"
         />
+
+        <fieldset
+          v-if="recordingClasses.length"
+          class="flex flex-col gap-3 rounded-md border border-surface-200 p-3 dark:border-surface-700"
+        >
+          <legend
+            class="flex items-center gap-1.5 px-1 text-sm font-medium text-surface-700 dark:text-surface-200"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'video' }" :size="14" />
+            Recording Policy
+          </legend>
+          <div
+            v-for="cap in recordingClasses"
+            :key="cap.class"
+            class="flex items-center justify-between gap-3"
+          >
+            <div class="flex min-w-0 flex-col">
+              <span class="text-sm text-surface-700 dark:text-surface-200">{{
+                recordingLabel(cap.class)
+              }}</span>
+              <span
+                v-if="!cap.authoritative"
+                class="text-xs text-amber-600 dark:text-amber-400"
+              >
+                Browser capture. Not compliance-grade.
+              </span>
+            </div>
+            <Select
+              :model-value="policyFor(cap.class)"
+              :options="policyChoices"
+              option-label="label"
+              option-value="value"
+              :aria-label="`Recording for ${recordingLabel(cap.class)}`"
+              :pt="{ root: 'w-36' }"
+              @update:model-value="setPolicy(cap.class, $event)"
+            />
+          </div>
+        </fieldset>
       </template>
 
       <p v-else-if="!isEdit" class="text-sm text-surface-400">

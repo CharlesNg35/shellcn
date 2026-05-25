@@ -36,6 +36,56 @@ export type PanelType = KnownPanelType | (string & {});
 
 export type StreamKind = "terminal" | "logs" | "desktop" | "metrics" | "file";
 
+// Recording (plugin-declared capability + per-connection policy)
+
+export type RecordingClass = "terminal" | "desktop";
+
+export type RecordingFormat = "asciicast_v2" | "webm_canvas";
+
+export type RecordingPolicy = "disabled" | "manual" | "auto";
+
+// What a plugin can record for one stream class. The browser never sees the
+// server-only stream binding — only which classes/formats are offered.
+export interface RecordingCapability {
+  class: RecordingClass;
+  formats: RecordingFormat[];
+  authoritative: boolean;
+  inputCapture: boolean;
+}
+
+export type RecordingStatus =
+  | "pending"
+  | "active"
+  | "finalized"
+  | "failed"
+  | "discarded";
+
+export interface RecordingSummary {
+  id: string;
+  userId: string;
+  username?: string;
+  connectionId: string;
+  connectionName?: string;
+  protocol: string;
+  class: RecordingClass;
+  format: RecordingFormat;
+  authoritative: boolean;
+  status: RecordingStatus;
+  title?: string;
+  startedAt: string;
+  endedAt?: string;
+  durationMs: number;
+  size: number;
+}
+
+export interface RecordingFilters {
+  user?: string;
+  connection?: string;
+  protocol?: string;
+  class?: RecordingClass;
+  status?: RecordingStatus;
+}
+
 // Schema & declarative form
 
 export type FieldType =
@@ -301,6 +351,7 @@ export interface PluginProjection {
   resources?: ResourceType[];
   actions?: Action[];
   streams?: Stream[];
+  recording?: RecordingCapability[];
 }
 
 // Connection instances (stored configs the user reaches the plugin through)
@@ -314,6 +365,7 @@ export interface ConnectionSummary {
   online?: boolean;
   status?: string;
   canManage?: boolean;
+  recording?: Record<string, string>;
 }
 
 export type GrantAccess = "use" | "manage";
@@ -371,6 +423,7 @@ export interface ConnectionDetail {
   ownerId: string;
   config: Record<string, unknown>;
   secrets: Record<string, string>;
+  recording?: Record<string, string>;
 }
 
 // Lists, pagination, watch

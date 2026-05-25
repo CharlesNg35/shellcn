@@ -1,8 +1,78 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import type { Component } from "vue";
+import { computed, ref, useAttrs } from "vue";
 import DOMPurify from "dompurify";
+import {
+  Box,
+  Camera,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Code2,
+  Copy,
+  Database,
+  Download,
+  Folder,
+  Globe,
+  KeyRound,
+  Layers,
+  List,
+  LogOut,
+  Pencil,
+  Play,
+  Plus,
+  RefreshCw,
+  Search,
+  Server,
+  Share2,
+  SlidersHorizontal,
+  Square,
+  Terminal,
+  Trash2,
+  User,
+  Users,
+  Video,
+  X,
+} from "@lucide/vue";
 import type { Icon } from "../types/projection";
-import { glyphs, FALLBACK_GLYPH } from "./icons/glyphs";
+
+defineOptions({ inheritAttrs: false });
+
+const FALLBACK_ICON = "circle";
+const attrs = useAttrs();
+
+const iconComponents: Record<string, Component> = {
+  box: Box,
+  camera: Camera,
+  "chevron-down": ChevronDown,
+  "chevron-right": ChevronRight,
+  circle: Circle,
+  code: Code2,
+  copy: Copy,
+  database: Database,
+  download: Download,
+  folder: Folder,
+  globe: Globe,
+  key: KeyRound,
+  layers: Layers,
+  list: List,
+  "log-out": LogOut,
+  pencil: Pencil,
+  play: Play,
+  plus: Plus,
+  refresh: RefreshCw,
+  search: Search,
+  server: Server,
+  settings: SlidersHorizontal,
+  share: Share2,
+  stop: Square,
+  terminal: Terminal,
+  trash: Trash2,
+  user: User,
+  users: Users,
+  video: Video,
+  x: X,
+};
 
 const props = withDefaults(
   defineProps<{
@@ -10,7 +80,7 @@ const props = withDefaults(
     size?: number;
     fallback?: string;
   }>(),
-  { icon: null, size: 18, fallback: FALLBACK_GLYPH },
+  { icon: null, size: 18, fallback: FALLBACK_ICON },
 );
 
 const imgFailed = ref(false);
@@ -33,9 +103,13 @@ const kind = computed(() => {
   return "glyph";
 });
 
-const glyphBody = computed(() => {
+const glyphComponent = computed(() => {
   const name = props.icon?.type === "name" ? props.icon.value : props.fallback;
-  return glyphs[name] ?? glyphs[props.fallback] ?? glyphs[FALLBACK_GLYPH];
+  return (
+    iconComponents[name] ??
+    iconComponents[props.fallback] ??
+    iconComponents[FALLBACK_ICON]
+  );
 });
 
 // Sanitize raw inline SVG (svg profile only — no HTML/MathML, scripts and event
@@ -50,44 +124,46 @@ const safeSvg = computed(() => {
 </script>
 
 <template>
-  <!-- eslint-disable vue/no-v-html -- glyphBody is a static, trusted SVG path set -->
-  <svg
-    v-if="kind === 'glyph'"
-    :width="size"
-    :height="size"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-    v-html="glyphBody"
-  />
   <span
-    v-else-if="kind === 'emoji'"
-    :style="{ fontSize: `${size}px`, lineHeight: 1 }"
-    role="img"
-  >
-    {{ icon?.value }}
-  </span>
-  <span
-    v-else-if="kind === 'svg'"
-    class="app-icon-svg inline-flex"
+    v-if="kind !== 'none'"
+    v-bind="attrs"
+    class="inline-flex shrink-0 items-center justify-center"
     :style="{ width: `${size}px`, height: `${size}px` }"
-    aria-hidden="true"
-    v-html="safeSvg"
-  />
-  <img
-    v-else-if="kind === 'image'"
-    :src="icon?.value"
-    :width="size"
-    :height="size"
-    alt=""
-    class="object-contain"
-    :style="{ maxWidth: `${size}px`, maxHeight: `${size}px` }"
-    @error="imgFailed = true"
-  />
+  >
+    <component
+      :is="glyphComponent"
+      v-if="kind === 'glyph'"
+      :size="size"
+      :stroke-width="2"
+      aria-hidden="true"
+    />
+    <span
+      v-else-if="kind === 'emoji'"
+      :style="{ fontSize: `${size}px`, lineHeight: 1 }"
+      role="img"
+    >
+      {{ icon?.value }}
+    </span>
+    <!-- eslint-disable vue/no-v-html -- safeSvg is sanitized with DOMPurify's SVG profile. -->
+    <span
+      v-else-if="kind === 'svg'"
+      class="app-icon-svg inline-flex"
+      :style="{ width: `${size}px`, height: `${size}px` }"
+      aria-hidden="true"
+      v-html="safeSvg"
+    />
+    <!-- eslint-enable vue/no-v-html -->
+    <img
+      v-else-if="kind === 'image'"
+      :src="icon?.value"
+      :width="size"
+      :height="size"
+      alt=""
+      class="object-contain"
+      :style="{ maxWidth: `${size}px`, maxHeight: `${size}px` }"
+      @error="imgFailed = true"
+    />
+  </span>
 </template>
 
 <style scoped>

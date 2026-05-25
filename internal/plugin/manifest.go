@@ -91,9 +91,23 @@ type Manifest struct {
 	Resources []ResourceType
 	Actions   []Action
 	Streams   []Stream
+
+	// Recording declares which stream classes this plugin can record. Empty means
+	// the plugin supports no recording (the default).
+	Recording []RecordingCapability
 }
 
 // SupportsTransport reports whether the manifest declares the given transport.
 func (m Manifest) SupportsTransport(t Transport) bool {
 	return slices.Contains(m.SupportedTransports, t)
+}
+
+// StreamByRoute returns the declared stream served by a WS route, if any.
+func (m Manifest) StreamByRoute(routeID string) (Stream, bool) {
+	for _, s := range m.Streams {
+		if s.RouteID == routeID {
+			return s, true
+		}
+	}
+	return Stream{}, false
 }

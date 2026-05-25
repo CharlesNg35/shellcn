@@ -246,5 +246,15 @@
       "kind": "terminal",
       "routeId": "sample.shell"
     }
+  ],
+  "recording": [
+    {
+      "class": "terminal",
+      "formats": [
+        "asciicast_v2"
+      ],
+      "authoritative": true,
+      "inputCapture": false
+    }
   ]
 }

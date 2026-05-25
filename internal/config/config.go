@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	// Auto-load a .env file when present (local development convenience).
 	_ "github.com/joho/godotenv/autoload"
@@ -17,10 +18,11 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Secrets  SecretsConfig  `mapstructure:"secrets"`
-	Email    EmailConfig    `mapstructure:"email"`
+	Server     ServerConfig     `mapstructure:"server"`
+	Database   DatabaseConfig   `mapstructure:"database"`
+	Secrets    SecretsConfig    `mapstructure:"secrets"`
+	Email      EmailConfig      `mapstructure:"email"`
+	Recordings RecordingsConfig `mapstructure:"recordings"`
 }
 
 type ServerConfig struct {
@@ -48,6 +50,28 @@ type EmailConfig struct {
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 	UseTLS   bool   `mapstructure:"use_tls"` // implicit TLS (e.g. port 465); else STARTTLS
+}
+
+// RecordingsConfig controls session-recording storage and retention. Retention
+// is OFF by default (RetentionDays == 0 keeps recordings forever); an admin opts
+// in by setting a positive retention here. The cleanup job only runs when
+// retention is enabled.
+type RecordingsConfig struct {
+	Dir             string `mapstructure:"dir"`              // blob storage root directory
+	RetentionDays   int    `mapstructure:"retention_days"`   // 0 = disabled (keep forever)
+	CleanupInterval string `mapstructure:"cleanup_interval"` // how often to sweep expired recordings
+	MaxChunkBytes   int64  `mapstructure:"max_chunk_bytes"`  // per-chunk cap for desktop uploads
+}
+
+// RetentionEnabled reports whether expiry/cleanup is active.
+func (c RecordingsConfig) RetentionEnabled() bool { return c.RetentionDays > 0 }
+
+// CleanupEvery parses CleanupInterval, falling back to a sane default.
+func (c RecordingsConfig) CleanupEvery() time.Duration {
+	if d, err := time.ParseDuration(c.CleanupInterval); err == nil && d > 0 {
+		return d
+	}
+	return time.Hour
 }
 
 // Load reads config.yaml from the current directory, ./config, or any extra
@@ -95,6 +119,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("email.enabled", false)
 	v.SetDefault("email.port", 587)
 	v.SetDefault("email.use_tls", false)
+	v.SetDefault("recordings.dir", "recordings")
+	v.SetDefault("recordings.retention_days", 0) // disabled: keep recordings forever
+	v.SetDefault("recordings.cleanup_interval", "1h")
+	v.SetDefault("recordings.max_chunk_bytes", 8<<20)
 }
 
 func (c *Config) SlogLevel() slog.Level {

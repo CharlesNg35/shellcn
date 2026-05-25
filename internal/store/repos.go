@@ -124,7 +124,7 @@ func (s *gormConnectionStore) List(ctx context.Context) ([]models.Connection, er
 
 func (s *gormConnectionStore) Update(ctx context.Context, c *models.Connection) error {
 	res := s.db.WithContext(ctx).Model(&models.Connection{}).Where("id = ?", c.ID).
-		Select("name", "protocol", "transport", "shared", "config", "secrets").Updates(c)
+		Select("name", "protocol", "transport", "shared", "config", "secrets", "recording", "retention_days").Updates(c)
 	return rowsOrNotFound(res)
 }
 
@@ -366,6 +366,70 @@ func (s *gormInvitationStore) Update(ctx context.Context, i *models.Invitation) 
 
 func (s *gormInvitationStore) Delete(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&models.Invitation{}, "id = ?", id).Error
+}
+
+type gormRecordingStore struct{ db *gorm.DB }
+
+func (s *gormRecordingStore) Create(ctx context.Context, r *models.Recording) error {
+	return s.db.WithContext(ctx).Create(r).Error
+}
+
+func (s *gormRecordingStore) Get(ctx context.Context, id string) (models.Recording, error) {
+	var r models.Recording
+	if err := s.db.WithContext(ctx).First(&r, "id = ?", id).Error; err != nil {
+		return models.Recording{}, normNotFound(err)
+	}
+	return r, nil
+}
+
+func (s *gormRecordingStore) Update(ctx context.Context, r *models.Recording) error {
+	res := s.db.WithContext(ctx).Model(&models.Recording{}).Where("id = ?", r.ID).
+		Select("status", "title", "ended_at", "duration_ms", "size", "checksum", "storage_key", "error", "expires_at").
+		Updates(r)
+	return rowsOrNotFound(res)
+}
+
+func (s *gormRecordingStore) Delete(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&models.Recording{}, "id = ?", id).Error
+}
+
+func (s *gormRecordingStore) List(ctx context.Context, f RecordingFilter) ([]models.Recording, error) {
+	q := s.db.WithContext(ctx).Model(&models.Recording{}).Order("started_at DESC")
+	if f.UserID != "" {
+		q = q.Where("user_id = ?", f.UserID)
+	}
+	if f.ConnectionID != "" {
+		q = q.Where("connection_id = ?", f.ConnectionID)
+	}
+	if f.Protocol != "" {
+		q = q.Where("protocol = ?", f.Protocol)
+	}
+	if f.Class != "" {
+		q = q.Where("class = ?", f.Class)
+	}
+	if f.Format != "" {
+		q = q.Where("format = ?", f.Format)
+	}
+	if f.Status != "" {
+		q = q.Where("status = ?", f.Status)
+	}
+	if !f.Since.IsZero() {
+		q = q.Where("started_at >= ?", f.Since)
+	}
+	if !f.Until.IsZero() {
+		q = q.Where("started_at <= ?", f.Until)
+	}
+	if !f.ExpiredBefore.IsZero() {
+		q = q.Where("expires_at IS NOT NULL AND expires_at <= ?", f.ExpiredBefore)
+	}
+	if f.Limit > 0 {
+		q = q.Limit(f.Limit)
+	}
+	var list []models.Recording
+	if err := q.Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 type gormEnrollmentStore struct{ db *gorm.DB }

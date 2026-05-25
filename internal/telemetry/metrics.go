@@ -14,13 +14,16 @@ import (
 type Metrics struct {
 	reg *prometheus.Registry
 
-	sessionsOpen  prometheus.Gauge
-	channelsOpen  prometheus.Gauge
-	wsConnections prometheus.Gauge
-	actionLatency *prometheus.HistogramVec
-	authzFailures prometheus.Counter
-	secretAccess  prometheus.Counter
-	pluginHealth  *prometheus.GaugeVec
+	sessionsOpen    prometheus.Gauge
+	channelsOpen    prometheus.Gauge
+	wsConnections   prometheus.Gauge
+	actionLatency   *prometheus.HistogramVec
+	authzFailures   prometheus.Counter
+	secretAccess    prometheus.Counter
+	pluginHealth    *prometheus.GaugeVec
+	recordingsOpen  prometheus.Gauge
+	recordingBytes  prometheus.Counter
+	recordingFailed prometheus.Counter
 }
 
 // NewMetrics registers the collectors on a fresh registry.
@@ -35,13 +38,17 @@ func NewMetrics() *Metrics {
 			Help:    "Route handler latency.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"risk", "result"}),
-		authzFailures: prometheus.NewCounter(prometheus.CounterOpts{Name: "shellcn_authz_failures_total", Help: "Failed authorizations."}),
-		secretAccess:  prometheus.NewCounter(prometheus.CounterOpts{Name: "shellcn_secret_access_total", Help: "Secret decryptions."}),
-		pluginHealth:  prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "shellcn_plugin_healthy", Help: "1 if a plugin's last health check passed, else 0."}, []string{"plugin"}),
+		authzFailures:   prometheus.NewCounter(prometheus.CounterOpts{Name: "shellcn_authz_failures_total", Help: "Failed authorizations."}),
+		secretAccess:    prometheus.NewCounter(prometheus.CounterOpts{Name: "shellcn_secret_access_total", Help: "Secret decryptions."}),
+		pluginHealth:    prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "shellcn_plugin_healthy", Help: "1 if a plugin's last health check passed, else 0."}, []string{"plugin"}),
+		recordingsOpen:  prometheus.NewGauge(prometheus.GaugeOpts{Name: "shellcn_recordings_active", Help: "Active session recordings."}),
+		recordingBytes:  prometheus.NewCounter(prometheus.CounterOpts{Name: "shellcn_recording_bytes_total", Help: "Bytes written to recordings."}),
+		recordingFailed: prometheus.NewCounter(prometheus.CounterOpts{Name: "shellcn_recording_failures_total", Help: "Recordings that failed to capture."}),
 	}
 	m.reg.MustRegister(
 		m.sessionsOpen, m.channelsOpen, m.wsConnections,
 		m.actionLatency, m.authzFailures, m.secretAccess, m.pluginHealth,
+		m.recordingsOpen, m.recordingBytes, m.recordingFailed,
 	)
 	return m
 }
@@ -72,6 +79,16 @@ func (m *Metrics) IncAuthzFailure() { m.authzFailures.Inc() }
 
 // IncSecretAccess counts a secret decryption.
 func (m *Metrics) IncSecretAccess() { m.secretAccess.Inc() }
+
+// RecordingStarted / RecordingFinished track active recordings.
+func (m *Metrics) RecordingStarted()  { m.recordingsOpen.Inc() }
+func (m *Metrics) RecordingFinished() { m.recordingsOpen.Dec() }
+
+// AddRecordingBytes counts bytes written to recordings.
+func (m *Metrics) AddRecordingBytes(n int) { m.recordingBytes.Add(float64(n)) }
+
+// RecordingFailed counts a recording that failed to capture.
+func (m *Metrics) RecordingFailed() { m.recordingFailed.Inc() }
 
 // SetPluginHealth records a plugin's latest health state.
 func (m *Metrics) SetPluginHealth(plugin string, healthy bool) {

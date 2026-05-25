@@ -20,6 +20,7 @@ import (
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/policy"
+	"github.com/charlesng/shellcn/internal/recording"
 	"github.com/charlesng/shellcn/internal/secrets"
 	"github.com/charlesng/shellcn/internal/server"
 	"github.com/charlesng/shellcn/internal/service"
@@ -66,8 +67,15 @@ func (testPlugin) Manifest() plugin.Manifest {
 				{Label: "Docker", Kind: "docker", Template: "run {{.ConnectURL}} {{.Token}}"},
 			},
 		},
-		Tabs:    []plugin.Tab{{Key: "items", Label: "Items", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "t.list"}}},
-		Streams: []plugin.Stream{{ID: "t.ws", Kind: plugin.StreamTerminal, RouteID: "t.ws"}},
+		Tabs: []plugin.Tab{{Key: "items", Label: "Items", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "t.list"}}},
+		Streams: []plugin.Stream{
+			{ID: "t.ws", Kind: plugin.StreamTerminal, RouteID: "t.ws"},
+			{ID: "t.desk", Kind: plugin.StreamDesktop, RouteID: "t.desk"},
+		},
+		Recording: []plugin.RecordingCapability{
+			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}, StreamIDs: []string{"t.ws"}, Authoritative: true},
+			{Class: plugin.RecordingDesktop, Formats: []plugin.RecordingFormat{plugin.FormatWebMCanvas}, StreamIDs: []string{"t.desk"}},
+		},
 	}
 }
 
@@ -136,6 +144,10 @@ func (testPlugin) Routes() []plugin.Route {
 				return nil
 			},
 		},
+		{
+			ID: "t.desk", Method: plugin.MethodWS, Permission: "t.read", Risk: plugin.RiskPrivileged, AuditEvent: "t.desk",
+			Stream: func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil },
+		},
 	}
 }
 
@@ -194,6 +206,13 @@ func newHarness(t *testing.T) *harness {
 	tunnels := transport.NewRegistry()
 	connector := service.NewConnector(reg, creds, vault, tunnels)
 	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
+	recBlobs, err := recording.NewLocalBlobStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("blob store: %v", err)
+	}
+	recEngine := recording.NewEngine(recording.Options{Store: st.Recordings, Blobs: recBlobs})
+	recEngine.Register(plugin.FormatAsciicastV2, recording.NewAsciicastRecorder)
+	recordings := service.NewRecordingService(st.Recordings, recBlobs)
 	authMgr := auth.NewSessionManager(time.Hour)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 	users := service.NewUserService(st.Users)
@@ -206,6 +225,7 @@ func newHarness(t *testing.T) *harness {
 		Connector: connector, Connections: connections, Credentials: creds, Audit: audit.NewWriter(st.Audit),
 		Enrollments: enrollments, Tunnels: tunnels,
 		Users: users, Invitations: invitations,
+		Recording: recEngine, Recordings: recordings,
 	})
 
 	ts := httptest.NewServer(srv.Handler())
@@ -625,6 +645,50 @@ func TestWSHappyPathEcho(t *testing.T) {
 	}
 	if string(data) != "ping" {
 		t.Errorf("echo mismatch: got %q", data)
+	}
+}
+
+func TestWSStreamRecordedWhenPolicyForced(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	// A connection whose terminal stream is force-recorded (no plugin-specific code).
+	resp := h.do(t, http.MethodPost, "/api/connections", "op",
+		strings.NewReader(`{"name":"rec","protocol":"tester","config":{"host":"h"},"recording":{"terminal":"auto"}}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create: %d (%s)", resp.Status, resp.Body)
+	}
+	id := createConnID(t, resp)
+
+	tok := h.mintTicket(t, "op", id, "t.ws", nil)
+	c, err := h.dialWS(t, "op", "/api/connections/"+id+"/x/t.ws?ticket="+tok)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	wctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	_ = c.Write(wctx, websocket.MessageText, []byte("ping"))
+	_, _, _ = c.Read(wctx)
+	_ = c.CloseNow()
+
+	// The recording finalizes when serveStream returns; poll briefly for it.
+	var recs []models.Recording
+	for range 50 {
+		recs, _ = h.store.Recordings.List(ctx, store.RecordingFilter{ConnectionID: id})
+		if len(recs) == 1 && recs[0].Status == models.RecordingFinalized {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(recs) != 1 {
+		t.Fatalf("want 1 recording, got %d", len(recs))
+	}
+	r := recs[0]
+	if r.Status != models.RecordingFinalized {
+		t.Fatalf("recording not finalized: %s", r.Status)
+	}
+	if r.Class != "terminal" || r.Format != "asciicast_v2" || r.UserID != "op" {
+		t.Errorf("unexpected recording metadata: %+v", r)
 	}
 }
 

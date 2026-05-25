@@ -91,6 +91,10 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 			RouteID: "sample.start", Confirm: true, ConfirmText: "Start it?",
 		}},
 		Streams: []plugin.Stream{{ID: "sample.shell", Kind: plugin.StreamTerminal, RouteID: "sample.shell"}},
+		Recording: []plugin.RecordingCapability{{
+			Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2},
+			StreamIDs: []string{"sample.shell"}, Authoritative: true,
+		}},
 	}
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
@@ -192,5 +196,21 @@ func TestProjectionMatchesContract(t *testing.T) {
 	}
 	if _, leaked := a["auditEvent"]; leaked {
 		t.Error("audit event leaked into projection")
+	}
+
+	// Recording capability is projected, but the server-only stream binding is not.
+	recs, ok := raw["recording"].([]any)
+	if !ok || len(recs) != 1 {
+		t.Fatalf("want 1 recording capability, got %v", raw["recording"])
+	}
+	rec := recs[0].(map[string]any)
+	if rec["class"] != "terminal" {
+		t.Errorf("recording class: want terminal, got %v", rec["class"])
+	}
+	if _, leaked := rec["streamIds"]; leaked {
+		t.Error("recording streamIds (server-only) leaked into projection")
+	}
+	if _, leaked := rec["StreamIDs"]; leaked {
+		t.Error("recording StreamIDs (server-only) leaked into projection")
 	}
 }

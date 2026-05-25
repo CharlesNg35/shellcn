@@ -242,6 +242,18 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
           Credentials
         </RouterLink>
         <RouterLink
+          :to="{ name: 'recordings' }"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          :class="
+            route.name === 'recordings'
+              ? 'font-medium text-primary-700 dark:text-primary-200'
+              : ''
+          "
+        >
+          <AppIcon :icon="{ type: 'name', value: 'video' }" :size="16" />
+          Recordings
+        </RouterLink>
+        <RouterLink
           :to="{ name: 'settings' }"
           class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
           :class="

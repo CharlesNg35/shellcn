@@ -17,11 +17,13 @@ import DetailView from "../panels/DetailView.vue";
 import ConnectionFormDialog from "../components/ConnectionFormDialog.vue";
 import ShareDialog from "../components/ShareDialog.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { recordingForStream } from "../composables/useRecordingControl";
 import type {
   PluginProjection,
   ResourceRef,
   ResourceType,
   Row,
+  Tab as TabDef,
 } from "../types/projection";
 
 const props = defineProps<{ id: string }>();
@@ -117,6 +119,19 @@ const detailResource = computed(() => {
 const activeTab = computed(() =>
   projection.value?.tabs?.find((t) => t.key === view.value.activeTab),
 );
+
+// Merge a recording descriptor into a stream tab's config so the panel can show
+// recording state/controls — kept in the generic renderer, not per plugin.
+function tabConfig(tab: TabDef): Record<string, unknown> {
+  const base = tab.config ?? {};
+  if (!projection.value || !tab.source) return base;
+  const rec = recordingForStream(
+    projection.value,
+    connection.value,
+    tab.source.routeId,
+  );
+  return rec ? { ...base, _recording: rec } : base;
+}
 
 function onSelectGroup(key: string): void {
   ws.selectGroup(props.id, key);
@@ -217,7 +232,7 @@ function onEnrolled(): void {
                 :panel="activeTab.panel"
                 :connection-id="id"
                 :source="activeTab.source"
-                :config="activeTab.config"
+                :config="tabConfig(activeTab)"
               />
             </KeepAlive>
           </div>

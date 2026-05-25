@@ -52,8 +52,9 @@ func Validate(m Manifest, routes []Route) error {
 
 	routesByID := validateRoutes(routes, add)
 	actionIDs := validateActions(m, routesByID, add)
-	validateStreams(m, routesByID, add)
+	streamsByID := validateStreams(m, routesByID, add)
 	validateLayout(m, routesByID, actionIDs, add)
+	validateRecording(m, streamsByID, add)
 
 	return errors.Join(errs...)
 }
@@ -112,18 +113,19 @@ func validateActions(m Manifest, routes map[string]Route, add func(string, ...an
 	return ids
 }
 
-// validateStreams checks stream ids reference existing WS routes.
-func validateStreams(m Manifest, routes map[string]Route, add func(string, ...any)) {
-	seen := make(map[string]bool, len(m.Streams))
+// validateStreams checks stream ids reference existing WS routes and returns the
+// declared streams indexed by id (for recording validation).
+func validateStreams(m Manifest, routes map[string]Route, add func(string, ...any)) map[string]Stream {
+	seen := make(map[string]Stream, len(m.Streams))
 	for _, s := range m.Streams {
 		if s.ID == "" {
 			add("a stream is missing an ID")
 			continue
 		}
-		if seen[s.ID] {
+		if _, dup := seen[s.ID]; dup {
 			add("duplicate stream ID %q", s.ID)
 		}
-		seen[s.ID] = true
+		seen[s.ID] = s
 		switch {
 		case s.RouteID == "":
 			add("stream %q is missing a RouteID", s.ID)
@@ -133,6 +135,66 @@ func validateStreams(m Manifest, routes map[string]Route, add func(string, ...an
 			add("stream %q references non-WS route %q", s.ID, s.RouteID)
 		}
 	}
+	return seen
+}
+
+// validateRecording checks recording declarations: known classes (no dupes),
+// class/format compatibility, and that StreamIDs reference declared streams whose
+// kind matches the class. It rejects shapes that could enable unsupported
+// recording, but never asserts a default policy (recording stays off by default).
+func validateRecording(m Manifest, streams map[string]Stream, add func(string, ...any)) {
+	seenClass := map[RecordingClass]bool{}
+	for _, c := range m.Recording {
+		switch c.Class {
+		case RecordingTerminal, RecordingDesktop:
+		default:
+			add("recording capability has invalid class %q", c.Class)
+			continue
+		}
+		if seenClass[c.Class] {
+			add("duplicate recording class %q", c.Class)
+		}
+		seenClass[c.Class] = true
+
+		if len(c.Formats) == 0 {
+			add("recording class %q declares no formats", c.Class)
+		}
+		for _, f := range c.Formats {
+			if !recordingFormatValidForClass(c.Class, f) {
+				add("recording class %q does not support format %q", c.Class, f)
+			}
+		}
+
+		wantKind := streamKindForClass(c.Class)
+		for _, id := range c.StreamIDs {
+			s, ok := streams[id]
+			if !ok {
+				add("recording class %q references unknown stream %q", c.Class, id)
+				continue
+			}
+			if s.Kind != wantKind {
+				add("recording class %q references stream %q with incompatible kind %q", c.Class, id, s.Kind)
+			}
+		}
+	}
+}
+
+func recordingFormatValidForClass(class RecordingClass, f RecordingFormat) bool {
+	switch class {
+	case RecordingTerminal:
+		return terminalFormats[f]
+	case RecordingDesktop:
+		return desktopFormats[f]
+	default:
+		return false
+	}
+}
+
+func streamKindForClass(class RecordingClass) StreamKind {
+	if class == RecordingDesktop {
+		return StreamDesktop
+	}
+	return StreamTerminal
 }
 
 // validateLayout checks every DataSource RouteID and ActionID reference resolves.

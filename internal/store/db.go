@@ -19,7 +19,7 @@ func allModels() []any {
 		&models.User{}, &models.Connection{}, &models.Credential{}, &models.Grant{},
 		&models.CredentialGrant{}, &models.AuditEntry{}, &models.Snippet{},
 		&models.Preference{}, &models.AgentEnrollment{}, &models.PolicyRule{},
-		&models.Invitation{},
+		&models.Invitation{}, &models.Recording{},
 	}
 }
 
@@ -99,6 +99,7 @@ func newGormStore(db *gorm.DB) *Store {
 		Enrollments:      &gormEnrollmentStore{db: db},
 		Policies:         &gormPolicyStore{db: db},
 		Invitations:      &gormInvitationStore{db: db},
+		Recordings:       &gormRecordingStore{db: db},
 		close: func() error {
 			sqlDB, err := db.DB()
 			if err != nil {

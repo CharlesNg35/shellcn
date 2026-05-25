@@ -3,7 +3,7 @@ import { mount } from "@vue/test-utils";
 import AppIcon from "./AppIcon.vue";
 
 describe("AppIcon", () => {
-  it("renders a built-in glyph as inline svg", () => {
+  it("renders a named Lucide icon as inline svg", () => {
     const w = mount(AppIcon, {
       props: { icon: { type: "name", value: "terminal" } },
     });
@@ -33,7 +33,7 @@ describe("AppIcon", () => {
     expect(w.find("img").exists()).toBe(true);
   });
 
-  it("falls back to a glyph for an unsafe url or unknown name", () => {
+  it("falls back to a Lucide icon for an unsafe url or unknown name", () => {
     expect(
       mount(AppIcon, {
         props: { icon: { type: "url", value: "javascript:alert(1)" } },
@@ -80,7 +80,7 @@ describe("AppIcon", () => {
     expect(html).not.toContain("alert");
   });
 
-  it("falls back to a glyph for empty svg markup", () => {
+  it("renders nothing for empty svg markup", () => {
     const w = mount(AppIcon, { props: { icon: { type: "svg", value: "" } } });
     // empty value → no icon at all (treated as not provided)
     expect(w.find("svg").exists()).toBe(false);

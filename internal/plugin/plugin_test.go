@@ -121,6 +121,77 @@ func TestValidateAcceptsGoodManifest(t *testing.T) {
 	}
 }
 
+// recordingBase is a minimal manifest with a terminal + desktop stream, used to
+// exercise recording-declaration validation.
+func recordingBase() (plugin.Manifest, []plugin.Route) {
+	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion, Name: "rec", Title: "Rec",
+		Layout: plugin.LayoutTabs, SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		Streams: []plugin.Stream{
+			{ID: "rec.shell", Kind: plugin.StreamTerminal, RouteID: "rec.shell"},
+			{ID: "rec.screen", Kind: plugin.StreamDesktop, RouteID: "rec.screen"},
+		},
+	}
+	routes := []plugin.Route{
+		{ID: "rec.shell", Method: plugin.MethodWS, Permission: "rec.shell", Risk: plugin.RiskPrivileged, Stream: stream},
+		{ID: "rec.screen", Method: plugin.MethodWS, Permission: "rec.screen", Risk: plugin.RiskPrivileged, Stream: stream},
+	}
+	return m, routes
+}
+
+func TestValidateRecordingAccepts(t *testing.T) {
+	m, routes := recordingBase()
+	m.Recording = []plugin.RecordingCapability{
+		{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}, StreamIDs: []string{"rec.shell"}, Authoritative: true},
+		{Class: plugin.RecordingDesktop, Formats: []plugin.RecordingFormat{plugin.FormatWebMCanvas}, StreamIDs: []string{"rec.screen"}},
+	}
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("valid terminal+desktop recording rejected: %v", err)
+	}
+}
+
+func TestValidateRecordingRejects(t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+		caps []plugin.RecordingCapability
+	}{
+		{"invalid class", "invalid class", []plugin.RecordingCapability{
+			{Class: "weird", Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}},
+		}},
+		{"duplicate class", "duplicate recording class", []plugin.RecordingCapability{
+			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}, StreamIDs: []string{"rec.shell"}},
+			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}},
+		}},
+		{"no formats", "declares no formats", []plugin.RecordingCapability{
+			{Class: plugin.RecordingTerminal, StreamIDs: []string{"rec.shell"}},
+		}},
+		{"format/class mismatch", "does not support format", []plugin.RecordingCapability{
+			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatWebMCanvas}, StreamIDs: []string{"rec.shell"}},
+		}},
+		{"unknown stream", "references unknown stream", []plugin.RecordingCapability{
+			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}, StreamIDs: []string{"ghost"}},
+		}},
+		{"stream kind mismatch", "incompatible kind", []plugin.RecordingCapability{
+			{Class: plugin.RecordingDesktop, Formats: []plugin.RecordingFormat{plugin.FormatWebMCanvas}, StreamIDs: []string{"rec.shell"}},
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			m, routes := recordingBase()
+			m.Recording = tc.caps
+			err := plugin.Validate(m, routes)
+			if err == nil {
+				t.Fatalf("expected validation error containing %q", tc.want)
+			}
+			if !contains(err.Error(), tc.want) {
+				t.Errorf("error %q does not contain %q", err.Error(), tc.want)
+			}
+		})
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(sub) == 0 || (len(s) >= len(sub) && indexOf(s, sub) >= 0)
 }

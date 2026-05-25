@@ -39,6 +39,9 @@ type ConnectionInput struct {
 	Protocol  string
 	Transport string
 	Config    map[string]any
+	// Recording is the per-class policy (class -> disabled|manual|auto). A nil map
+	// on update preserves the stored policy; on create it means recording is off.
+	Recording map[string]string
 }
 
 // ConnectionDetail is the edit/detail read: non-secret config plus a per-secret
@@ -51,6 +54,7 @@ type ConnectionDetail struct {
 	OwnerID   string            `json:"ownerId"`
 	Config    map[string]any    `json:"config"`
 	Secrets   map[string]string `json:"secrets"`
+	Recording map[string]string `json:"recording"`
 }
 
 // secretPlaceholder stands in for a retained (untouched) secret while validating
@@ -77,6 +81,10 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 	if err := s.checkCredentialRefs(ctx, ownerID, in.Protocol, m.Config, in.Config); err != nil {
 		return models.Connection{}, err
 	}
+	recording, err := resolveRecordingPolicy(m, in.Recording, nil)
+	if err != nil {
+		return models.Connection{}, err
+	}
 
 	config, plain := splitSecrets(m.Config, in.Config)
 	enc, err := secrets.EncryptMap(ctx, s.vault, plain)
@@ -93,6 +101,7 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 		Transport: transport,
 		Config:    config,
 		Secrets:   enc,
+		Recording: recording,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -132,6 +141,10 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	if err := s.checkCredentialRefs(ctx, existing.OwnerID, existing.Protocol, m.Config, in.Config); err != nil {
 		return models.Connection{}, err
 	}
+	recording, err := resolveRecordingPolicy(m, in.Recording, existing.Recording)
+	if err != nil {
+		return models.Connection{}, err
+	}
 
 	config, plain := splitSecrets(m.Config, in.Config)
 	enc := map[string][]byte{}
@@ -151,6 +164,7 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	existing.Transport = transport
 	existing.Config = config
 	existing.Secrets = enc
+	existing.Recording = recording
 	existing.UpdatedAt = time.Now()
 	if err := s.conns.Update(ctx, &existing); err != nil {
 		return models.Connection{}, err
@@ -198,11 +212,43 @@ func (s *ConnectionService) Detail(conn models.Connection) ConnectionDetail {
 	if config == nil {
 		config = map[string]any{}
 	}
+	recording := conn.Recording
+	if recording == nil {
+		recording = map[string]string{}
+	}
 	return ConnectionDetail{
 		ID: conn.ID, Name: conn.Name, Protocol: conn.Protocol,
 		Transport: conn.Transport, OwnerID: conn.OwnerID,
-		Config: config, Secrets: state,
+		Config: config, Secrets: state, Recording: recording,
 	}
+}
+
+// resolveRecordingPolicy validates a submitted per-class policy against the
+// plugin's declared recording classes. A nil submitted map preserves prior (used
+// on update so a projection refresh never silently changes recording). Only
+// supported classes are kept, and unsupported classes or policies are rejected.
+func resolveRecordingPolicy(m plugin.Manifest, submitted, prior map[string]string) (map[string]string, error) {
+	if submitted == nil {
+		return prior, nil
+	}
+	out := map[string]string{}
+	for class, pol := range submitted {
+		rc := plugin.RecordingClass(class)
+		if !m.SupportsRecordingClass(rc) {
+			return nil, fmt.Errorf("%w: plugin %q does not support recording class %q", plugin.ErrInvalidInput, m.Name, class)
+		}
+		if !plugin.ValidRecordingPolicy(plugin.RecordingPolicy(pol)) {
+			return nil, fmt.Errorf("%w: invalid recording policy %q", plugin.ErrInvalidInput, pol)
+		}
+		// Disabled is the default; storing it is redundant noise.
+		if plugin.RecordingPolicy(pol) != plugin.PolicyDisabled {
+			out[class] = pol
+		}
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return out, nil
 }
 
 // checkCredentialRefs ensures every referenced credential is usable by ownerID

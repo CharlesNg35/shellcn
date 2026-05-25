@@ -61,6 +61,10 @@ projection — **adding a plugin requires zero frontend changes.**
   `Session` (mutex-guard lazily-opened sub-clients).
 - Plugins ship **manifest + route handlers only** — never UI, HTTP plumbing,
   auth, or storage.
+- Plugins are **wired in one place:** add a first-party plugin by appending its
+  constructor to `all()` in `plugins/registry.go`; `cmd/server` calls
+  `plugins.Register(reg)`. No per-plugin edits to `main.go`, the router, or the
+  frontend.
 - The **frontend never special-cases a plugin** — it renders whatever the
   manifest projection declares (panels, tabs, tree, actions).
 - **Secrets** are encrypted above the store (store sees ciphertext); never

@@ -15,6 +15,7 @@ import (
 	"github.com/charlesng/shellcn/internal/auth"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/policy"
+	"github.com/charlesng/shellcn/internal/recording"
 	"github.com/charlesng/shellcn/internal/service"
 	"github.com/charlesng/shellcn/internal/session"
 	"github.com/charlesng/shellcn/internal/store"
@@ -24,24 +25,27 @@ import (
 
 // Deps are the server's injected dependencies (wired once in cmd/server).
 type Deps struct {
-	Plugins     *plugin.Registry
-	Store       *store.Store
-	Sessions    *session.Manager
-	Auth        auth.Authenticator
-	SessionMgr  *auth.SessionManager
-	Tickets     *auth.TicketStore
-	Policy      *policy.Enforcer
-	Connector   *service.Connector
-	Connections *service.ConnectionService
-	Credentials *service.CredentialService
-	Enrollments *service.EnrollmentService
-	Users       *service.UserService
-	Invitations *service.InvitationService
-	Tunnels     *transport.Registry
-	Audit       audit.Sink
-	Metrics     *telemetry.Metrics
-	Health      *telemetry.Health
-	Logger      *slog.Logger
+	Plugins           *plugin.Registry
+	Store             *store.Store
+	Sessions          *session.Manager
+	Auth              auth.Authenticator
+	SessionMgr        *auth.SessionManager
+	Tickets           *auth.TicketStore
+	Policy            *policy.Enforcer
+	Connector         *service.Connector
+	Connections       *service.ConnectionService
+	Credentials       *service.CredentialService
+	Enrollments       *service.EnrollmentService
+	Users             *service.UserService
+	Invitations       *service.InvitationService
+	Tunnels           *transport.Registry
+	Recordings        *service.RecordingService
+	Recording         *recording.Engine
+	RecordingMaxChunk int64
+	Audit             audit.Sink
+	Metrics           *telemetry.Metrics
+	Health            *telemetry.Health
+	Logger            *slog.Logger
 
 	// StaticFS is the embedded web/dist (nil in dev mode, where Vite serves the UI).
 	StaticFS fs.FS
@@ -137,6 +141,23 @@ func (s *Server) routes() chi.Router {
 				pr.Get("/credentials/{id}/grants", s.handleListCredentialGrants)
 				pr.Post("/credentials/{id}/grants", s.handleCreateCredentialGrant)
 				pr.Delete("/credentials/{id}/grants/{grantId}", s.handleDeleteCredentialGrant)
+			}
+
+			if s.deps.Recordings != nil {
+				pr.Get("/recordings", s.handleListRecordings)
+				pr.Get("/recordings/{id}", s.handleGetRecording)
+				pr.Get("/recordings/{id}/content", s.handleRecordingContent)
+				pr.Delete("/recordings/{id}", s.handleDeleteRecording)
+				if s.deps.Connections != nil {
+					pr.Get("/connections/{id}/recordings", s.handleListConnectionRecordings)
+				}
+				if s.deps.Recording != nil {
+					pr.Post("/connections/{id}/recordings/control", s.handleManualRecordingControl)
+					pr.Post("/connections/{id}/recordings/desktop", s.handleStartDesktopRecording)
+					pr.Post("/recordings/{id}/chunks", s.handleUploadChunk)
+					pr.Post("/recordings/{id}/finalize", s.handleFinalizeRecording)
+					pr.Post("/recordings/{id}/abort", s.handleAbortRecording)
+				}
 			}
 
 			pr.Post("/connections/{id}/tickets", s.handleMintTicket)

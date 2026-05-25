@@ -17,6 +17,7 @@ import (
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/policy"
+	"github.com/charlesng/shellcn/internal/recording"
 	"github.com/charlesng/shellcn/internal/session"
 )
 
@@ -235,6 +236,16 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 		return
 	}
 
+	// Decide recording before opening the upstream session, so a forced policy
+	// that cannot start denies the stream up front.
+	pending, err := s.prepareRecording(ctx, r, res)
+	if err != nil {
+		s.auditEvent(ctx, res, models.AuditError, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	defer pending.Finish()
+
 	handle, err := s.acquireSession(ctx, res)
 	if err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
@@ -255,7 +266,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	streamCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	conn := websocket.NetConn(streamCtx, c, websocket.MessageText)
-	client := &wsClientStream{Conn: conn, ctx: streamCtx}
+	client := pending.Attach(&wsClientStream{Conn: conn, ctx: streamCtx})
 
 	rc := plugin.NewRequestContext(streamCtx, res.user, handle.Session(), res.params, r.URL.Query(), nil)
 	if err := res.route.Stream(rc, client); err != nil {
@@ -263,6 +274,20 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 		return
 	}
 	_ = c.Close(websocket.StatusNormalClosure, "")
+}
+
+// prepareRecording resolves the stream's recording decision from plugin
+// capability + connection policy. A nil engine yields a no-op Pending.
+func (s *Server) prepareRecording(ctx context.Context, r *http.Request, res resolved) (*recording.Pending, error) {
+	manifest, ok := s.deps.Plugins.Manifest(res.conn.Protocol)
+	if !ok {
+		return s.deps.Recording.Prepare(ctx, recording.StreamInfo{})
+	}
+	stream, _ := manifest.StreamByRoute(res.route.ID)
+	return s.deps.Recording.Prepare(ctx, recording.StreamInfo{
+		User: res.user, Connection: res.conn, Manifest: manifest, Route: res.route,
+		StreamID: stream.ID, Params: res.params, RemoteAddr: r.RemoteAddr,
+	})
 }
 
 func auditResult(err error) models.AuditResult {

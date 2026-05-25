@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/charlesng/shellcn/internal/models"
 )
@@ -69,6 +70,31 @@ type AuditStore interface {
 	List(ctx context.Context, f AuditFilter) ([]models.AuditEntry, error)
 }
 
+// RecordingStore persists session-recording metadata (the blobs live elsewhere).
+type RecordingStore interface {
+	Create(ctx context.Context, r *models.Recording) error
+	Get(ctx context.Context, id string) (models.Recording, error)
+	Update(ctx context.Context, r *models.Recording) error
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context, f RecordingFilter) ([]models.Recording, error)
+}
+
+// RecordingFilter narrows a recording query. Zero-value fields are ignored.
+type RecordingFilter struct {
+	UserID       string
+	ConnectionID string
+	Protocol     string
+	Class        string
+	Format       string
+	Status       string
+	Since        time.Time
+	Until        time.Time
+	// ExpiredBefore selects recordings whose ExpiresAt is set and at/before it
+	// (used by retention cleanup). Ignored when zero.
+	ExpiredBefore time.Time
+	Limit         int
+}
+
 // AuditFilter narrows an audit query.
 type AuditFilter struct {
 	UserID       string
@@ -131,6 +157,7 @@ type Store struct {
 	Enrollments      EnrollmentStore
 	Policies         PolicyStore
 	Invitations      InvitationStore
+	Recordings       RecordingStore
 
 	close func() error
 }

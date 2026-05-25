@@ -1,10 +1,19 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useStream } from "../../composables/useStream";
+import RecordingControls from "../../components/recordings/RecordingControls.vue";
+import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import type { PanelProps } from "../types";
 import StubBanner from "./StubBanner.vue";
 
 const props = defineProps<PanelProps>();
+
+const recording = computed(
+  () => (props.config?._recording as RecordingDescriptor | undefined) ?? null,
+);
+const showRecording = computed(
+  () => recording.value && recording.value.policy !== "disabled",
+);
 
 const container = ref<HTMLElement | null>(null);
 const failed = ref(false);
@@ -56,6 +65,17 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full flex-col bg-[#0b0f17]">
+    <div
+      v-if="showRecording && source"
+      class="flex items-center justify-end border-b border-white/5 px-3 py-1.5"
+    >
+      <RecordingControls
+        :connection-id="connectionId"
+        :source="source"
+        :resource="resource"
+        :descriptor="recording!"
+      />
+    </div>
     <StubBanner :status="status" />
     <p v-if="failed" class="p-4 text-sm text-surface-400">
       Terminal preview unavailable in this environment.

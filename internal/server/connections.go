@@ -20,16 +20,18 @@ const (
 )
 
 type connectionWriteRequest struct {
-	Name      string         `json:"name"`
-	Protocol  string         `json:"protocol"`
-	Transport string         `json:"transport"`
-	Config    map[string]any `json:"config"`
+	Name      string            `json:"name"`
+	Protocol  string            `json:"protocol"`
+	Transport string            `json:"transport"`
+	Config    map[string]any    `json:"config"`
+	Recording map[string]string `json:"recording"`
 }
 
 func (s *Server) toConnectionDTO(c models.Connection) connectionDTO {
 	dto := connectionDTO{
 		ID: c.ID, Name: c.Name, Protocol: c.Protocol,
 		Transport: c.Transport, Online: c.Transport != string(plugin.TransportAgent),
+		Recording: c.Recording,
 	}
 	if dto.Transport == string(plugin.TransportAgent) {
 		dto.Status = "pending"
@@ -58,7 +60,8 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	conn, err := s.deps.Connections.Create(ctx, user.ID, service.ConnectionInput{
-		Name: req.Name, Protocol: req.Protocol, Transport: req.Transport, Config: req.Config,
+		Name: req.Name, Protocol: req.Protocol, Transport: req.Transport,
+		Config: req.Config, Recording: req.Recording,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, "", connCreateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -106,7 +109,7 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	updated, err := s.deps.Connections.Update(ctx, conn, service.ConnectionInput{
-		Name: req.Name, Transport: req.Transport, Config: req.Config,
+		Name: req.Name, Transport: req.Transport, Config: req.Config, Recording: req.Recording,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditError, err)

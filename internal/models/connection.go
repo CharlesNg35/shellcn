@@ -28,6 +28,12 @@ type Connection struct {
 	// The store only ever sees ciphertext; encryption happens in the service layer.
 	Secrets map[string][]byte `gorm:"serializer:json"`
 
+	// Recording is the per-class recording policy (class -> disabled|manual|auto).
+	// Absent/empty means recording is off, which is the default.
+	Recording map[string]string `gorm:"serializer:json"`
+	// RetentionDays caps how long this connection's recordings are kept; 0 = keep.
+	RetentionDays int
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

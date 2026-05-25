@@ -51,6 +51,14 @@ function readBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
+function readRawBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (c) => chunks.push(Buffer.from(c)));
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+  });
+}
+
 function encodeCursor(offset: number): string {
   return Buffer.from(String(offset)).toString("base64url");
 }
@@ -127,6 +135,8 @@ function credentials(): Json[] {
 }
 
 const grantsState: Record<string, Json[]> = {};
+let recordingsState: Json[] | null = null;
+const recordingBlobs: Record<string, Buffer[]> = {};
 const mockUsers: Json[] = [
   { id: "u-demo", username: "demo", displayName: "Demo User" },
   { id: "u-alice", username: "alice", displayName: "Alice Ng" },
@@ -177,10 +187,72 @@ function uid(prefix: string): string {
 function resetControlPlaneState(): void {
   connectionsState = null;
   credentialsState = null;
+  recordingsState = null;
   adminUsersState = null;
   invitationsState = [];
   for (const key of Object.keys(grantsState)) delete grantsState[key];
+  for (const key of Object.keys(recordingBlobs)) delete recordingBlobs[key];
   agentOnlineAt.clear();
+}
+
+function recordings(): Json[] {
+  if (!recordingsState) {
+    const now = Date.now();
+    recordingsState = [
+      {
+        id: "rec-demo-terminal",
+        userId: "u-demo",
+        username: "demo",
+        connectionId: "ssh-prod-web",
+        connectionName: "prod-web-01",
+        protocol: "ssh",
+        class: "terminal",
+        format: "asciicast_v2",
+        authoritative: true,
+        status: "finalized",
+        title: "prod-web-01 terminal",
+        startedAt: new Date(now - 120_000).toISOString(),
+        endedAt: new Date(now - 80_000).toISOString(),
+        durationMs: 40_000,
+        size: 155,
+      },
+      {
+        id: "rec-demo-desktop",
+        userId: "u-demo",
+        username: "demo",
+        connectionId: "proxmox-lab",
+        connectionName: "lab-pve",
+        protocol: "proxmox",
+        class: "desktop",
+        format: "webm_canvas",
+        authoritative: false,
+        status: "active",
+        title: "VM console",
+        startedAt: new Date(now - 30_000).toISOString(),
+        durationMs: 0,
+        size: 0,
+      },
+    ];
+    recordingBlobs["rec-demo-terminal"] = [
+      Buffer.from(
+        '{"version":2,"width":80,"height":24,"timestamp":1700000000,"title":"prod-web-01 terminal"}\n[0.1,"o","Connected to prod-web-01\\r\\n$ uptime\\r\\n"]\n[1.2,"o"," 15:58 up 12 days\\r\\n$ "]\n',
+      ),
+    ];
+  }
+  return recordingsState;
+}
+
+function filteredRecordings(url: URL, connectionId = ""): Json[] {
+  return recordings().filter((r) => {
+    if (connectionId && r.connectionId !== connectionId) return false;
+    for (const key of ["user", "protocol", "class", "status"] as const) {
+      const v = url.searchParams.get(key);
+      const field = key === "user" ? "userId" : key;
+      if (v && r[field] !== v) return false;
+    }
+    const conn = url.searchParams.get("connection");
+    return !(conn && r.connectionId !== conn);
+  });
 }
 
 function pluginIcon(protocol: string): unknown {
@@ -404,6 +476,7 @@ function handleHTTP(
         online: transport !== "agent",
         status: transport === "agent" ? "pending" : undefined,
         canManage: true,
+        recording: body.recording ?? {},
       };
       connections().push(conn);
       send(res, 201, conn);
@@ -424,6 +497,7 @@ function handleHTTP(
         ownerId: "u-demo",
         config: (conn.config as Json) ?? {},
         secrets: {},
+        recording: (conn.recording as Json) ?? {},
       });
     }
     if (method === "PUT") {
@@ -432,6 +506,7 @@ function handleHTTP(
         conn.name = body.name ?? conn.name;
         conn.transport = body.transport ?? conn.transport;
         conn.config = body.config ?? {};
+        conn.recording = body.recording ?? conn.recording ?? {};
         send(res, 200, {
           id,
           name: conn.name,
@@ -440,6 +515,7 @@ function handleHTTP(
           ownerId: "u-demo",
           config: conn.config,
           secrets: {},
+          recording: conn.recording,
         });
       });
     }
@@ -480,6 +556,113 @@ function handleHTTP(
     grantsState[key] = (grantsState[key] ?? []).filter(
       (g) => g.id !== grantDeleteMatch[3],
     );
+    return send(res, 200, { ok: true });
+  }
+
+  if (path === "/api/recordings" && method === "GET") {
+    return send(res, 200, filteredRecordings(url));
+  }
+  const connectionRecordingsMatch = path.match(
+    /^\/api\/connections\/([^/]+)\/recordings$/,
+  );
+  if (connectionRecordingsMatch && method === "GET") {
+    return send(
+      res,
+      200,
+      filteredRecordings(url, connectionRecordingsMatch[1]),
+    );
+  }
+  const desktopRecordingMatch = path.match(
+    /^\/api\/connections\/([^/]+)\/recordings\/desktop$/,
+  );
+  if (desktopRecordingMatch && method === "POST") {
+    return void readBody(req).then((raw) => {
+      const body = raw as Json;
+      const conn = connections().find((c) => c.id === desktopRecordingMatch[1]);
+      const rec: Json = {
+        id: uid("rec"),
+        userId: "u-demo",
+        username: "demo",
+        connectionId: desktopRecordingMatch[1],
+        connectionName: conn?.name ?? desktopRecordingMatch[1],
+        protocol: conn?.protocol ?? "unknown",
+        class: "desktop",
+        format: body.format ?? "webm_canvas",
+        authoritative: false,
+        status: "active",
+        startedAt: new Date().toISOString(),
+        durationMs: 0,
+        size: 0,
+      };
+      recordings().unshift(rec);
+      recordingBlobs[String(rec.id)] = [];
+      send(res, 201, rec);
+    });
+  }
+  const recordingMatch = path.match(/^\/api\/recordings\/([^/]+)$/);
+  if (recordingMatch) {
+    const id = recordingMatch[1];
+    const rec = recordings().find((r) => r.id === id);
+    if (!rec) return send(res, 404, { error: "unknown recording" });
+    if (method === "GET") return send(res, 200, rec);
+    if (method === "DELETE") {
+      recordingsState = recordings().filter((r) => r.id !== id);
+      delete recordingBlobs[id];
+      return send(res, 200, { ok: true });
+    }
+  }
+  const recordingContentMatch = path.match(
+    /^\/api\/recordings\/([^/]+)\/content$/,
+  );
+  if (recordingContentMatch && method === "GET") {
+    const id = recordingContentMatch[1];
+    const rec = recordings().find((r) => r.id === id);
+    if (!rec) return send(res, 404, { error: "unknown recording" });
+    const body = Buffer.concat(recordingBlobs[id] ?? []);
+    res.statusCode = 200;
+    res.setHeader(
+      "Content-Type",
+      rec.format === "webm_canvas" ? "video/webm" : "application/x-asciicast",
+    );
+    res.end(body);
+    return;
+  }
+  const recordingChunkMatch = path.match(
+    /^\/api\/recordings\/([^/]+)\/chunks$/,
+  );
+  if (recordingChunkMatch && method === "POST") {
+    const id = recordingChunkMatch[1];
+    if (!recordings().some((r) => r.id === id))
+      return send(res, 404, { error: "unknown recording" });
+    return void readRawBody(req).then((body) => {
+      recordingBlobs[id] ??= [];
+      recordingBlobs[id].push(body);
+      send(res, 200, {
+        ok: true,
+        index: Number(url.searchParams.get("index")),
+      });
+    });
+  }
+  const recordingFinalizeMatch = path.match(
+    /^\/api\/recordings\/([^/]+)\/finalize$/,
+  );
+  if (recordingFinalizeMatch && method === "POST") {
+    const id = recordingFinalizeMatch[1];
+    const rec = recordings().find((r) => r.id === id);
+    if (!rec) return send(res, 404, { error: "unknown recording" });
+    rec.status = "finalized";
+    rec.endedAt = new Date().toISOString();
+    rec.size = Buffer.concat(recordingBlobs[id] ?? []).length;
+    send(res, 200, rec);
+    return;
+  }
+  const recordingAbortMatch = path.match(/^\/api\/recordings\/([^/]+)\/abort$/);
+  if (recordingAbortMatch && method === "POST") {
+    const id = recordingAbortMatch[1];
+    const rec = recordings().find((r) => r.id === id);
+    if (!rec) return send(res, 404, { error: "unknown recording" });
+    rec.status = "discarded";
+    delete recordingBlobs[id];
     return send(res, 200, { ok: true });
   }
 

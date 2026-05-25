@@ -29,6 +29,15 @@ type ProjectedAction struct {
 	Input           *Schema           `json:"input,omitempty"`
 }
 
+// ProjectedRecording tells the browser which recording options a plugin offers
+// for a class, without leaking the server-only stream binding (StreamIDs).
+type ProjectedRecording struct {
+	Class         RecordingClass    `json:"class"`
+	Formats       []RecordingFormat `json:"formats"`
+	Authoritative bool              `json:"authoritative"`
+	InputCapture  bool              `json:"inputCapture"`
+}
+
 // Projection is the render-only contract served to the browser. It mirrors
 // projection.ts PluginProjection and excludes handler funcs, raw mount paths,
 // permission keys, audit-event names, and any server-only route internals.
@@ -49,6 +58,7 @@ type Projection struct {
 	Resources           []ResourceType         `json:"resources,omitempty"`
 	Actions             []ProjectedAction      `json:"actions,omitempty"`
 	Streams             []Stream               `json:"streams,omitempty"`
+	Recording           []ProjectedRecording   `json:"recording,omitempty"`
 }
 
 // BuildProjection derives the browser projection from a validated manifest and
@@ -75,6 +85,18 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 		p.Agent = &ProjectedAgentProfile{
 			Modes:    []string{string(m.Agent.Proxy.Mode)},
 			RiskNote: string(m.Agent.Proxy.Risk),
+		}
+	}
+
+	if len(m.Recording) > 0 {
+		p.Recording = make([]ProjectedRecording, 0, len(m.Recording))
+		for _, c := range m.Recording {
+			p.Recording = append(p.Recording, ProjectedRecording{
+				Class:         c.Class,
+				Formats:       c.Formats,
+				Authoritative: c.Authoritative,
+				InputCapture:  c.InputCapture,
+			})
 		}
 	}
 

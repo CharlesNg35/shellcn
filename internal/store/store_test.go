@@ -67,6 +67,7 @@ func TestStoreSuite(t *testing.T) {
 			t.Run("credentialReference", func(t *testing.T) { testCredentialReference(t, f.open(t)) })
 			t.Run("audit", func(t *testing.T) { testAudit(t, f.open(t)) })
 			t.Run("policies", func(t *testing.T) { testPolicies(t, f.open(t)) })
+			t.Run("recordings", func(t *testing.T) { testRecordings(t, f.open(t)) })
 		})
 	}
 }
@@ -270,6 +271,71 @@ func testAudit(t *testing.T, s *store.Store) {
 	limited, _ := s.Audit.List(ctx, store.AuditFilter{UserID: "u1", Limit: 2})
 	if len(limited) != 2 {
 		t.Errorf("limit: want 2, got %d", len(limited))
+	}
+}
+
+func testRecordings(t *testing.T, s *store.Store) {
+	ctx := context.Background()
+	now := time.Now().Truncate(time.Second)
+	past := now.Add(-time.Hour)
+	future := now.Add(time.Hour)
+
+	r := &models.Recording{
+		ID: "rec1", UserID: "u1", Username: "alice", ConnectionID: "c1", ConnectionName: "prod",
+		Protocol: "ssh", RouteID: "ssh.shell", StreamID: "ssh.shell", Class: "terminal",
+		Format: "asciicast_v2", Authoritative: true, Status: models.RecordingActive,
+		StartedAt: now, StorageKey: "c1/rec1.cast",
+	}
+	if err := s.Recordings.Create(ctx, r); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	got, err := s.Recordings.Get(ctx, "rec1")
+	if err != nil || got.Format != "asciicast_v2" || got.Class != "terminal" || !got.Authoritative {
+		t.Fatalf("get round-trip: %+v err=%v", got, err)
+	}
+
+	ended := now.Add(5 * time.Second)
+	got.Status = models.RecordingFinalized
+	got.EndedAt = &ended
+	got.Size = 4096
+	got.Checksum = "abc123"
+	got.ExpiresAt = &past
+	if err := s.Recordings.Update(ctx, &got); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	reloaded, _ := s.Recordings.Get(ctx, "rec1")
+	if reloaded.Status != models.RecordingFinalized || reloaded.Size != 4096 || reloaded.Checksum != "abc123" {
+		t.Fatalf("update not persisted: %+v", reloaded)
+	}
+
+	// A second, non-expired recording for another user/connection.
+	if err := s.Recordings.Create(ctx, &models.Recording{
+		ID: "rec2", UserID: "u2", ConnectionID: "c2", Protocol: "ssh", Class: "terminal",
+		Format: "asciicast_v2", Status: models.RecordingFinalized, StartedAt: now.Add(time.Minute),
+		ExpiresAt: &future, StorageKey: "c2/rec2.cast",
+	}); err != nil {
+		t.Fatalf("create rec2: %v", err)
+	}
+
+	// Filter by user.
+	if mine, _ := s.Recordings.List(ctx, store.RecordingFilter{UserID: "u1"}); len(mine) != 1 || mine[0].ID != "rec1" {
+		t.Fatalf("filter by user: %+v", mine)
+	}
+	// Filter by connection.
+	if byConn, _ := s.Recordings.List(ctx, store.RecordingFilter{ConnectionID: "c2"}); len(byConn) != 1 || byConn[0].ID != "rec2" {
+		t.Fatalf("filter by connection: %+v", byConn)
+	}
+	// Expiry filter selects only the past-due one.
+	expired, _ := s.Recordings.List(ctx, store.RecordingFilter{ExpiredBefore: now})
+	if len(expired) != 1 || expired[0].ID != "rec1" {
+		t.Fatalf("expired filter: want [rec1], got %+v", expired)
+	}
+
+	if err := s.Recordings.Delete(ctx, "rec1"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if _, err := s.Recordings.Get(ctx, "rec1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("get deleted: want ErrNotFound, got %v", err)
 	}
 }
 

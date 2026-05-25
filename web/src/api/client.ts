@@ -17,6 +17,9 @@ let csrfToken = "";
 export function setCsrfToken(token: string): void {
   csrfToken = token;
 }
+export function getCsrfToken(): string {
+  return csrfToken;
+}
 
 // One app-installed hook that runs on every API error (401→re-login, etc.).
 export type ApiErrorHandler = (err: ApiError) => void;

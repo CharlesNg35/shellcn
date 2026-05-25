@@ -25,6 +25,7 @@ import (
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/policy"
+	"github.com/charlesng/shellcn/internal/recording"
 	"github.com/charlesng/shellcn/internal/secrets"
 	"github.com/charlesng/shellcn/internal/server"
 	"github.com/charlesng/shellcn/internal/service"
@@ -32,7 +33,7 @@ import (
 	"github.com/charlesng/shellcn/internal/store"
 	"github.com/charlesng/shellcn/internal/telemetry"
 	"github.com/charlesng/shellcn/internal/transport"
-	"github.com/charlesng/shellcn/plugins/noop"
+	"github.com/charlesng/shellcn/plugins"
 	"github.com/charlesng/shellcn/web"
 )
 
@@ -108,7 +109,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	}
 
 	reg := plugin.NewRegistry()
-	reg.MustRegister(noop.New())
+	plugins.Register(reg)
 
 	pol, err := policy.New()
 	if err != nil {
@@ -129,6 +130,18 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	connector.SetSecretAccessHook(metrics.IncSecretAccess)
 	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
+
+	auditWriter := audit.NewWriter(st.Audit)
+	recBlobs, err := recording.NewLocalBlobStore(cfg.Recordings.Dir)
+	if err != nil {
+		return fmt.Errorf("recording storage: %w", err)
+	}
+	recEngine := recording.NewEngine(recording.Options{
+		Store: st.Recordings, Blobs: recBlobs, Audit: auditWriter,
+		Metrics: metrics, DefaultRetentionDays: cfg.Recordings.RetentionDays,
+	})
+	recEngine.Register(plugin.FormatAsciicastV2, recording.NewAsciicastRecorder)
+	recordings := service.NewRecordingService(st.Recordings, recBlobs)
 	users := service.NewUserService(st.Users)
 	mailer := email.New(email.SMTP{
 		Enabled:  cfg.Email.Enabled,
@@ -159,6 +172,28 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		})
 	}
 
+	// Retention cleanup runs only when an admin has opted in (retention_days > 0).
+	if cfg.Recordings.RetentionEnabled() {
+		stopCleanup := make(chan struct{})
+		defer close(stopCleanup)
+		go func() {
+			t := time.NewTicker(cfg.Recordings.CleanupEvery())
+			defer t.Stop()
+			for {
+				select {
+				case <-stopCleanup:
+					return
+				case <-t.C:
+					if n, err := recordings.Cleanup(context.Background(), time.Now()); err != nil {
+						logger.Warn("recording cleanup failed", "err", err)
+					} else if n > 0 {
+						logger.Info("recording cleanup removed expired recordings", "count", n)
+					}
+				}
+			}
+		}()
+	}
+
 	// Reflect live session/channel counts into the gauges.
 	stopMetrics := make(chan struct{})
 	defer close(stopMetrics)
@@ -186,26 +221,29 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	}
 
 	srv := server.New(server.Deps{
-		Plugins:     reg,
-		Store:       st,
-		Sessions:    sessions,
-		Auth:        auth.NewLocalAuthenticator(st.Users),
-		SessionMgr:  auth.NewSessionManager(0),
-		Tickets:     auth.NewTicketStore(0),
-		Policy:      pol,
-		Connector:   connector,
-		Connections: connections,
-		Credentials: creds,
-		Enrollments: enrollments,
-		Users:       users,
-		Invitations: invitations,
-		Tunnels:     tunnels,
-		Audit:       audit.NewWriter(st.Audit),
-		Metrics:     metrics,
-		Health:      health,
-		Logger:      logger,
-		StaticFS:    staticFS,
-		Dev:         dev,
+		Plugins:           reg,
+		Store:             st,
+		Sessions:          sessions,
+		Auth:              auth.NewLocalAuthenticator(st.Users),
+		SessionMgr:        auth.NewSessionManager(0),
+		Tickets:           auth.NewTicketStore(0),
+		Policy:            pol,
+		Connector:         connector,
+		Connections:       connections,
+		Credentials:       creds,
+		Enrollments:       enrollments,
+		Users:             users,
+		Invitations:       invitations,
+		Tunnels:           tunnels,
+		Recording:         recEngine,
+		Recordings:        recordings,
+		RecordingMaxChunk: cfg.Recordings.MaxChunkBytes,
+		Audit:             auditWriter,
+		Metrics:           metrics,
+		Health:            health,
+		Logger:            logger,
+		StaticFS:          staticFS,
+		Dev:               dev,
 	})
 
 	httpServer := &http.Server{

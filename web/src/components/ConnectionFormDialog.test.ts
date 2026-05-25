@@ -91,4 +91,69 @@ describe("ConnectionFormDialog", () => {
       created: true,
     });
   });
+
+  it("shows recording options only for plugins that declare support", async () => {
+    let posted: Record<string, unknown> | null = null;
+    const recordable: PluginProjection = {
+      ...projection,
+      recording: [
+        {
+          class: "terminal",
+          formats: ["asciicast_v2"],
+          authoritative: true,
+          inputCapture: false,
+        },
+      ],
+    };
+    installFetch((url, init) => {
+      if (url.endsWith("/api/plugins/tester")) return { body: recordable };
+      if (url.endsWith("/api/connections") && init?.method === "POST") {
+        posted = JSON.parse(String(init.body));
+        return { status: 201, body: { id: "conn-rec", name: posted?.name } };
+      }
+      return { body: [] };
+    });
+
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      { name: "tester", title: "Tester", icon: { type: "name", value: "box" } },
+    ];
+
+    const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
+    await flushPromises();
+    await wrapper.findComponent(Select).vm.$emit("update:modelValue", "tester");
+    await flushPromises();
+
+    // Dialog content is teleported, so assert via the component tree: a single
+    // transport mode hides that select, leaving protocol + one recording select.
+    const selects = wrapper.findAllComponents(Select);
+    expect(selects).toHaveLength(2);
+    const recordingSelect = selects[selects.length - 1];
+    recordingSelect.vm.$emit("update:modelValue", "auto");
+    await flushPromises();
+
+    wrapper.findAllComponents(InputText)[0].vm.$emit("update:modelValue", "r1");
+    await flushPromises();
+    wrapper.findComponent(SchemaForm).vm.$emit("submit", { host: "10.0.0.1" });
+    await flushPromises();
+
+    expect(posted).toMatchObject({ recording: { terminal: "auto" } });
+  });
+
+  it("omits the recording section when the plugin declares no support", async () => {
+    installFetch((url) => {
+      if (url.endsWith("/api/plugins/tester")) return { body: projection };
+      return { body: [] };
+    });
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      { name: "tester", title: "Tester", icon: { type: "name", value: "box" } },
+    ];
+    const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
+    await flushPromises();
+    await wrapper.findComponent(Select).vm.$emit("update:modelValue", "tester");
+    await flushPromises();
+    // Only the protocol select — no recording select for an unsupported plugin.
+    expect(wrapper.findAllComponents(Select)).toHaveLength(1);
+  });
 });

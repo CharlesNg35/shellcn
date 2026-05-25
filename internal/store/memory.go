@@ -23,6 +23,7 @@ func NewMemory() *Store {
 		Enrollments:      &memEnrollmentStore{m: map[string]models.AgentEnrollment{}},
 		Policies:         &memPolicyStore{m: map[string]models.PolicyRule{}},
 		Invitations:      &memInvitationStore{m: map[string]models.Invitation{}},
+		Recordings:       &memRecordingStore{m: map[string]models.Recording{}},
 	}
 }
 
@@ -623,4 +624,98 @@ func (s *memEnrollmentStore) UpdateStatus(_ context.Context, id string, status m
 	e.UpdatedAt = time.Now()
 	s.m[id] = e
 	return nil
+}
+
+type memRecordingStore struct {
+	mu sync.RWMutex
+	m  map[string]models.Recording
+}
+
+func (s *memRecordingStore) Create(_ context.Context, r *models.Recording) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[r.ID]; ok {
+		return models.ErrConflict
+	}
+	s.m[r.ID] = *r
+	return nil
+}
+
+func (s *memRecordingStore) Get(_ context.Context, id string) (models.Recording, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	r, ok := s.m[id]
+	if !ok {
+		return models.Recording{}, ErrNotFound
+	}
+	return r, nil
+}
+
+func (s *memRecordingStore) Update(_ context.Context, r *models.Recording) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prev, ok := s.m[r.ID]
+	if !ok {
+		return ErrNotFound
+	}
+	prev.Status = r.Status
+	prev.Title = r.Title
+	prev.EndedAt = r.EndedAt
+	prev.DurationMS = r.DurationMS
+	prev.Size = r.Size
+	prev.Checksum = r.Checksum
+	prev.StorageKey = r.StorageKey
+	prev.Error = r.Error
+	prev.ExpiresAt = r.ExpiresAt
+	prev.UpdatedAt = time.Now()
+	s.m[r.ID] = prev
+	return nil
+}
+
+func (s *memRecordingStore) Delete(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, id)
+	return nil
+}
+
+func (s *memRecordingStore) List(_ context.Context, f RecordingFilter) ([]models.Recording, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []models.Recording
+	for _, r := range s.m {
+		if !recordingMatches(r, f) {
+			continue
+		}
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt.After(out[j].StartedAt) })
+	if f.Limit > 0 && len(out) > f.Limit {
+		out = out[:f.Limit]
+	}
+	return out, nil
+}
+
+func recordingMatches(r models.Recording, f RecordingFilter) bool {
+	switch {
+	case f.UserID != "" && r.UserID != f.UserID:
+		return false
+	case f.ConnectionID != "" && r.ConnectionID != f.ConnectionID:
+		return false
+	case f.Protocol != "" && r.Protocol != f.Protocol:
+		return false
+	case f.Class != "" && r.Class != f.Class:
+		return false
+	case f.Format != "" && r.Format != f.Format:
+		return false
+	case f.Status != "" && string(r.Status) != f.Status:
+		return false
+	case !f.Since.IsZero() && r.StartedAt.Before(f.Since):
+		return false
+	case !f.Until.IsZero() && r.StartedAt.After(f.Until):
+		return false
+	case !f.ExpiredBefore.IsZero() && (r.ExpiresAt == nil || r.ExpiresAt.After(f.ExpiredBefore)):
+		return false
+	}
+	return true
 }

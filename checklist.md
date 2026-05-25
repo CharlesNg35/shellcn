@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Transport tunnel registry + `cmd/agent` reverse-tunnel binary + enrollment endpoints implemented (gateway↔agent yamux tunnel, token single-use/connection-scoped). Phase 2b (M1.5 platform management) complete: connection/credential CRUD + sharing-grant + user-lookup endpoints (schema-validated, write-only secrets, owner/manage/admin authz, audited); auth gate + CSRF + single error interceptor; manifest-driven connection create/edit/delete via the generic `SchemaForm`; credentials view + reusable `ShareDialog`/`ConfirmDialog`. Partial M-Admin landed: typed bootstrap config (`internal/config`, Viper; SMTP in config, not a table), admin user CRUD with root-admin protection, email/link invitations (`internal/email`, best-effort SMTP), and a Users view (users + invitations tabs, accept page). **Next: Phase 2c (M1.6 session recording foundation), then Phase 3 (M2 SSH/SFTP).**_
+_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Transport tunnel registry + `cmd/agent` reverse-tunnel binary + enrollment endpoints implemented (gateway↔agent yamux tunnel, token single-use/connection-scoped). Phase 2b (M1.5 platform management) complete: connection/credential CRUD + sharing-grant + user-lookup endpoints (schema-validated, write-only secrets, owner/manage/admin authz, audited); auth gate + CSRF + single error interceptor; manifest-driven connection create/edit/delete via the generic `SchemaForm`; credentials view + reusable `ShareDialog`/`ConfirmDialog`. Partial M-Admin landed: typed bootstrap config (`internal/config`, Viper; SMTP in config, not a table), admin user CRUD with root-admin protection, email/link invitations (`internal/email`, best-effort SMTP), and a Users view (users + invitations tabs, accept page). Phase 2c (M1.6 session recording foundation) complete — see its section below. **Next: Phase 3 (M2 SSH/SFTP).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -53,14 +53,14 @@ _Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps
 
 ## Phase 2c — M1.6 · Session recording foundation
 
-_Planned (spec [v2 §9.5](specs/v2.md), steps [phase-2c](specs/plans/phase-2c-m1.6-session-recording/)). Recording is plugin-declared and off by default; connection create/edit shows auto-record options only when the selected plugin supports recording._
+_Done — recording is a generic, plugin-declared, off-by-default platform capability (spec [v2 §9.5](specs/v2.md), steps [phase-2c](specs/plans/phase-2c-m1.6-session-recording/)). Plugins declare recordable stream classes (`terminal`/`desktop`) + formats via `RecordingCapability`; connections carry a per-class policy (`disabled`/`manual`/`auto`=forced). The core stream wrapper taps recordable WS streams (forced denies the stream up front if it can't start; manual start/stops; bounded buffering never blocks the live stream). Terminal → asciicast v2; desktop → browser `webm_canvas` chunk uploads (non-authoritative). Metadata in a new `Recording` model + `RecordingStore`; bytes in a replaceable `BlobStore` (local FS default). Role-aware list/get/content/delete APIs (admin all + per-user drill-down; non-admins only their own recordings), retention OFF by default (`config.recordings`), cleanup job when enabled. Frontend: Recordings view + asciinema/WebM players, per-panel REC state + manual start/stop, connection create/edit policy options only when the plugin declares support._
 
-- [ ] 2c.1 Recording manifest contract + connection policy
-- [ ] 2c.2 Recording storage, metadata, retention, and authorization
-- [ ] 2c.3 Core stream recording wrapper and lifecycle
-- [ ] 2c.4 Terminal asciicast recorder and playback
-- [ ] 2c.5 Desktop/graphical recording framework
-- [ ] 2c.6 Recording APIs and frontend management UI
+- [x] 2c.1 Recording manifest contract + connection policy
+- [x] 2c.2 Recording storage, metadata, retention, and authorization
+- [x] 2c.3 Core stream recording wrapper and lifecycle
+- [x] 2c.4 Terminal asciicast recorder and playback
+- [x] 2c.5 Desktop/graphical recording framework
+- [x] 2c.6 Recording APIs and frontend management UI
 
 ## Phase 2d — M-Admin · Administration (partial)
 
