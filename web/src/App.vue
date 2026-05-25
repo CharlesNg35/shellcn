@@ -15,7 +15,7 @@ const auth = useAuthStore();
 // to the caller for inline handling so feedback isn't duplicated.
 onMounted(() => {
   setApiErrorHandler((err: ApiError) => {
-    if (err.status === 401) {
+    if (err.status === 401 && err.authRequired) {
       if (router.currentRoute.value.name !== "login") {
         auth.clear();
         void router.push({

@@ -6,7 +6,6 @@ import { useStream } from "../../composables/useStream";
 import RecordingControls from "../../components/recordings/RecordingControls.vue";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import type { PanelProps } from "../types";
-import StubBanner from "./StubBanner.vue";
 
 const props = defineProps<PanelProps>();
 
@@ -138,7 +137,13 @@ onUnmounted(() => {
         :descriptor="recording!"
       />
     </div>
-    <StubBanner :status="status" />
+    <p
+      v-if="status === 'error' || status === 'closed'"
+      class="border-b border-red-300/40 bg-red-50 px-3 py-1.5 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300"
+      role="alert"
+    >
+      Terminal stream {{ status }}.
+    </p>
     <p v-if="failed" class="p-4 text-sm text-surface-400" role="alert">
       Terminal preview unavailable in this environment.
     </p>

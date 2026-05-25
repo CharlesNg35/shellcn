@@ -263,7 +263,10 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           <p v-if="nameError" class="text-xs text-red-500">{{ nameError }}</p>
         </div>
 
-        <div v-if="transportChoices.length > 1" class="flex min-w-0 flex-col gap-1.5">
+        <div
+          v-if="transportChoices.length > 1"
+          class="flex min-w-0 flex-col gap-1.5"
+        >
           <label
             class="text-sm font-medium text-surface-700 dark:text-surface-200"
           >

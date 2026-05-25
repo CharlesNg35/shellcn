@@ -51,12 +51,6 @@ const filtered = computed(() => {
   );
 });
 
-const recent = computed(() =>
-  ws.recent
-    .map((id) => conns.byId(id))
-    .filter((c): c is ConnectionSummary => Boolean(c)),
-);
-
 function dotClass(c: ConnectionSummary): string {
   if (c.transport === "agent" && !c.online) return "bg-amber-400";
   return c.online === false ? "bg-surface-400" : "bg-emerald-400";
@@ -121,33 +115,6 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
 
       <nav class="flex-1 overflow-y-auto px-2 pb-3">
         <p v-if="error" class="px-2 py-4 text-sm text-red-500">{{ error }}</p>
-
-        <template v-if="recent.length && !query">
-          <p
-            class="px-2 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-surface-400"
-          >
-            Recent
-          </p>
-          <button
-            v-for="c in recent"
-            :key="`recent-${c.id}`"
-            type="button"
-            class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-200 dark:hover:bg-surface-800"
-            :class="
-              activeId === c.id
-                ? 'bg-primary-50 font-medium text-primary-700 dark:bg-primary-950/40 dark:text-primary-200'
-                : ''
-            "
-            @click="go(c)"
-          >
-            <AppIcon :icon="c.icon" :size="16" class="text-surface-500" />
-            <span
-              class="flex-1 truncate text-surface-800 dark:text-surface-100"
-              >{{ c.name }}</span
-            >
-            <span class="h-2 w-2 rounded-full" :class="dotClass(c)" />
-          </button>
-        </template>
 
         <div class="flex items-center justify-between px-2 pb-1 pt-3">
           <p

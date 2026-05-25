@@ -242,25 +242,32 @@ func (s *CredentialService) ensureUsableCredential(ctx context.Context, userID s
 // the user may use the credential. The value is for the plugin's ConnectConfig
 // only and must never be serialized back to the client.
 func (s *CredentialService) Resolve(ctx context.Context, userID, credentialID string) ([]byte, error) {
+	_, secret, err := s.ResolveWithMetadata(ctx, userID, credentialID)
+	return secret, err
+}
+
+// ResolveWithMetadata returns non-secret credential metadata plus decrypted
+// material for connect-time injection after the same use check as Resolve.
+func (s *CredentialService) ResolveWithMetadata(ctx context.Context, userID, credentialID string) (models.Credential, []byte, error) {
 	cred, err := s.creds.Get(ctx, credentialID)
 	if err != nil {
-		return nil, err
+		return models.Credential{}, nil, err
 	}
 	ok, err := s.canUse(ctx, userID, cred)
 	if err != nil {
-		return nil, err
+		return models.Credential{}, nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("credential %q: %w", credentialID, models.ErrForbidden)
+		return models.Credential{}, nil, fmt.Errorf("credential %q: %w", credentialID, models.ErrForbidden)
 	}
 	secret, err := s.vault.Decrypt(ctx, cred.EncryptedSecret)
 	if err != nil {
-		return nil, err
+		return models.Credential{}, nil, err
 	}
 	if s.onSecretAccess != nil {
 		s.onSecretAccess()
 	}
-	return secret, nil
+	return cred, secret, nil
 }
 
 // ListUsable returns the non-secret summaries the user may select for a

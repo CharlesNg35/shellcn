@@ -49,10 +49,11 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 
 	cred, err := creds.Create(ctx, service.NewCredentialInput{
-		OwnerID: "u1",
-		Name:    "token",
-		Kind:    "api_token",
-		Secret:  "secret-token",
+		OwnerID:  "u1",
+		Name:     "token",
+		Kind:     "api_token",
+		Identity: "svc-api",
+		Secret:   "secret-token",
 	})
 	if err != nil {
 		t.Fatalf("create credential: %v", err)
@@ -74,6 +75,9 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	}
 	if got := cfg.Config["_api_credential_secret"]; got != "secret-token" {
 		t.Fatalf("resolved credential secret = %#v, want secret-token", got)
+	}
+	if got := cfg.Config["_api_credential_identity"]; got != "svc-api" {
+		t.Fatalf("resolved credential identity = %#v, want svc-api", got)
 	}
 	if got := cfg.Config["api_credential"]; got != cred.ID {
 		t.Fatalf("credential id field should remain stored id, got %#v", got)

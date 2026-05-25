@@ -62,3 +62,8 @@ func writeError(w http.ResponseWriter, log *slog.Logger, err error) {
 	}
 	writeJSON(w, status, errorEnvelope{Error: msg})
 }
+
+func writeAuthRequired(w http.ResponseWriter, log *slog.Logger, err error) {
+	w.Header().Set("X-ShellCN-Auth", "required")
+	writeError(w, log, err)
+}

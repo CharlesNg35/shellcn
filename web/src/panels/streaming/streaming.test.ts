@@ -52,6 +52,7 @@ class FakeWS {
   static instances: FakeWS[] = [];
   closed = false;
   readonly url: string;
+  private handlers: Record<string, ((ev: unknown) => void)[]> = {};
   constructor(url: string) {
     this.url = url;
     FakeWS.instances.push(this);
@@ -60,7 +61,12 @@ class FakeWS {
   close() {
     this.closed = true;
   }
-  addEventListener() {}
+  addEventListener(type: string, fn: (ev: unknown) => void) {
+    (this.handlers[type] ??= []).push(fn);
+  }
+  emit(type: string, ev?: unknown) {
+    for (const fn of this.handlers[type] ?? []) fn(ev);
+  }
 }
 
 import TerminalPanel from "./TerminalPanel.vue";
@@ -88,7 +94,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 const panels = [
-  { name: "terminal", comp: TerminalPanel, banner: true },
+  { name: "terminal", comp: TerminalPanel, banner: false },
   { name: "logs", comp: LogStreamPanel, banner: true },
   { name: "metrics", comp: MetricsPanel, banner: true },
   { name: "remote desktop", comp: RemoteDesktopPanel, banner: true },
@@ -110,11 +116,26 @@ describe("streaming stub panels", () => {
     const first = mount(TerminalPanel, { props });
     await flushPromises();
     expect(FakeWS.instances).toHaveLength(1);
+    FakeWS.instances[0].emit("open");
     first.unmount(); // navigate away — channel must persist
 
     const second = mount(TerminalPanel, { props });
     await flushPromises();
     expect(FakeWS.instances).toHaveLength(1); // no new socket — resumed
+    second.unmount();
+  });
+
+  it("replaces a failed channel with a fresh ticket on remount", async () => {
+    const first = mount(TerminalPanel, { props });
+    await flushPromises();
+    expect(FakeWS.instances).toHaveLength(1);
+    FakeWS.instances[0].emit("error");
+    first.unmount();
+
+    const second = mount(TerminalPanel, { props });
+    await flushPromises();
+    expect(FakeWS.instances).toHaveLength(2);
+    expect(FakeWS.instances[0].closed).toBe(true);
     second.unmount();
   });
 });

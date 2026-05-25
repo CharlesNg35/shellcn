@@ -14,8 +14,9 @@ import (
 // CredentialField is the legacy/default config key holding a referenced
 // credential id; CredentialSecret is the matching resolved plaintext key.
 const (
-	CredentialField  = "credential_id"
-	CredentialSecret = "_credential_secret"
+	CredentialField    = "credential_id"
+	CredentialSecret   = "_credential_secret"
+	CredentialIdentity = "_credential_identity"
 )
 
 // Connector assembles a plugin.ConnectConfig for a connection: it decrypts inline
@@ -79,11 +80,14 @@ func (c *Connector) Build(ctx context.Context, user models.User, conn models.Con
 					if err := c.creds.EnsureUsableFor(ctx, user.ID, credID, credentialSelectorKinds(field.Credential), conn.Protocol); err != nil {
 						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
 					}
-					material, err := c.creds.Resolve(ctx, user.ID, credID)
+					cred, material, err := c.creds.ResolveWithMetadata(ctx, user.ID, credID)
 					if err != nil {
 						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
 					}
 					cfg[credentialSecretKey(key)] = string(material)
+					if cred.Username != "" {
+						cfg[credentialIdentityKey(key)] = cred.Username
+					}
 				}
 			}
 		}
@@ -107,4 +111,11 @@ func credentialSecretKey(key string) string {
 		return CredentialSecret
 	}
 	return "_" + key + "_secret"
+}
+
+func credentialIdentityKey(key string) string {
+	if key == CredentialField {
+		return CredentialIdentity
+	}
+	return "_" + key + "_identity"
 }

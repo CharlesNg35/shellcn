@@ -9,7 +9,7 @@ test("renders the app shell", async ({ page }) => {
   await expect(page.locator("#app")).toContainText("ShellCN");
 });
 
-test("SSH (tabs): terminal stub, files preview, tables", async ({ page }) => {
+test("SSH (tabs): terminal stream, files preview, tables", async ({ page }) => {
   await page.goto("/");
   await page
     .getByRole("button", { name: /prod-web-01/ })
@@ -17,8 +17,9 @@ test("SSH (tabs): terminal stub, files preview, tables", async ({ page }) => {
     .click();
   await expect(page).toHaveURL(/\/c\/ssh-prod-web/);
 
-  // Terminal tab renders the stub banner (real streaming validated at M2).
-  await expect(page.locator("main")).toContainText("Stub panel");
+  await expect(page.locator("main")).toContainText(
+    "Connected to mock shell. Type and press enter.",
+  );
 
   // Files tab: list + type-based preview.
   await page.getByRole("tab", { name: "Files" }).click();

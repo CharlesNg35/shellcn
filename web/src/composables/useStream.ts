@@ -34,8 +34,12 @@ export function useStream(
     try {
       const existing = channelKey(connectionId, source, ctx);
       if (store.has(existing)) {
-        attach(existing); // resume an already-open stream — no new ticket
-        return;
+        const current = store.status(existing);
+        if (current === "open" || current === "connecting") {
+          attach(existing); // resume an already-open stream — no new ticket
+          return;
+        }
+        store.close(existing);
       }
       const handle = await prepareStream(connectionId, source, ctx);
       store.ensure(handle.key, () => new WebSocket(handle.url) as never);

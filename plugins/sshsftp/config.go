@@ -95,6 +95,9 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 			opts.PrivateKey = secret
 		}
 	}
+	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); opts.Auth == "credential" && identity != "" {
+		opts.User = identity
+	}
 	return opts, nil
 }
 

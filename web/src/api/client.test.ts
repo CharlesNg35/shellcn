@@ -35,6 +35,33 @@ describe("api client", () => {
     expect(seen).toEqual([403]);
   });
 
+  it("marks only platform-auth 401 responses as auth-required", async () => {
+    installFetch(() => ({
+      status: 401,
+      headers: { "X-ShellCN-Auth": "required" },
+      body: { error: "unauthorized" },
+    }));
+
+    await expect(api.get("/auth/me")).rejects.toMatchObject({
+      status: 401,
+      authRequired: true,
+    });
+  });
+
+  it("does not mark plugin route 401 responses as auth-required", async () => {
+    installFetch(() => ({
+      status: 401,
+      body: { error: "unauthorized: ssh handshake failed" },
+    }));
+
+    await expect(
+      api.get("/connections/c/x/ssh.sftp.list"),
+    ).rejects.toMatchObject({
+      status: 401,
+      authRequired: false,
+    });
+  });
+
   it("surfaces a network failure as status 0", async () => {
     vi.stubGlobal(
       "fetch",

@@ -42,6 +42,25 @@ func TestConnectRejectsUnsupportedAgentAuth(t *testing.T) {
 	}
 }
 
+func TestCredentialIdentityOverridesConnectionUser(t *testing.T) {
+	opts, err := parseConnectOptions(plugin.ConnectConfig{Config: map[string]any{
+		"host":                 "example.test",
+		"user":                 "root",
+		"auth":                 "credential",
+		"_credential_secret":   "pw",
+		"_credential_identity": "ubuntu",
+	}})
+	if err != nil {
+		t.Fatalf("parseConnectOptions: %v", err)
+	}
+	if opts.User != "ubuntu" {
+		t.Fatalf("user = %q, want credential identity", opts.User)
+	}
+	if opts.Password != "pw" || opts.PrivateKey != "pw" {
+		t.Fatal("credential secret was not injected into auth material")
+	}
+}
+
 type pluginNet struct{}
 
 func (pluginNet) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {

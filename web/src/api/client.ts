@@ -4,10 +4,12 @@ export const API_BASE = "/api";
 
 export class ApiError extends Error {
   readonly status: number;
+  readonly authRequired: boolean;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, authRequired = false) {
     super(message);
     this.status = status;
+    this.authRequired = authRequired;
     this.name = "ApiError";
   }
 }
@@ -38,7 +40,11 @@ async function responseError(res: Response): Promise<ApiError> {
   } catch {
     // body was not JSON; keep statusText
   }
-  return new ApiError(res.status, message);
+  return new ApiError(
+    res.status,
+    message,
+    res.headers.get("X-ShellCN-Auth") === "required",
+  );
 }
 
 export async function apiFetch(

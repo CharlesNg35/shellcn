@@ -86,6 +86,10 @@ func (testPlugin) Routes() []plugin.Route {
 			Handle: func(*plugin.RequestContext) (any, error) { return plugin.Page[string]{Items: []string{"a", "b"}}, nil },
 		},
 		{
+			ID: "t.unauth", Method: plugin.MethodGet, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.unauth",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, plugin.ErrUnauthorized },
+		},
+		{
 			ID: "t.echoparam", Method: plugin.MethodGet, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.echoparam",
 			Path:   "/echo/{name}",
 			Handle: func(rc *plugin.RequestContext) (any, error) { return map[string]string{"name": rc.Param("name")}, nil },
@@ -691,6 +695,40 @@ func TestDisabledUserExistingSessionRejected(t *testing.T) {
 	}
 	if resp := h.do(t, http.MethodGet, "/api/connections", "viewer", nil); resp.Status != http.StatusUnauthorized {
 		t.Fatalf("disabled user with existing session: want 401, got %d (%s)", resp.Status, resp.Body)
+	}
+}
+
+func TestPlatformAuth401IsMarked(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodGet, "/api/connections", "", nil)
+	if resp.Status != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated request: want 401, got %d (%s)", resp.Status, resp.Body)
+	}
+	req, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/connections", nil)
+	raw, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = raw.Body.Close() }()
+	if got := raw.Header.Get("X-ShellCN-Auth"); got != "required" {
+		t.Fatalf("X-ShellCN-Auth = %q, want required", got)
+	}
+}
+
+func TestPluginRoute401IsNotMarkedAsPlatformAuth(t *testing.T) {
+	h := newHarness(t)
+	req, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/connections/c-op/x/t.unauth", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: h.sessions["op"].ID})
+	raw, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = raw.Body.Close() }()
+	if raw.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("plugin route unauthorized: want 401, got %d", raw.StatusCode)
+	}
+	if got := raw.Header.Get("X-ShellCN-Auth"); got != "" {
+		t.Fatalf("X-ShellCN-Auth = %q, want empty", got)
 	}
 }
 
