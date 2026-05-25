@@ -59,6 +59,7 @@ function writableConfig() {
     pathParam: "path",
     readRouteId: "ssh.sftp.read",
     downloadRouteId: "ssh.sftp.download",
+    writeRouteId: "ssh.sftp.write",
     uploadRouteId: "ssh.sftp.upload",
     mkdirRouteId: "ssh.sftp.mkdir",
     renameRouteId: "ssh.sftp.rename",
@@ -128,6 +129,16 @@ describe("FileBrowserPanel", () => {
       if (init?.method && init.method !== "GET") {
         return { body: { ok: true } };
       }
+      if (url.includes("sftp.read")) {
+        return {
+          body: {
+            path: "/README.md",
+            mime: "text/plain",
+            encoding: "utf8",
+            content: "# Hello",
+          },
+        };
+      }
       return { body: { items: rootEntries, nextCursor: "" } };
     });
 
@@ -173,6 +184,23 @@ describe("FileBrowserPanel", () => {
       .findAll("li button")
       .find((b) => b.text().includes("README.md"));
     await fileAgain!.trigger("click");
+    await flushPromises();
+    const editor = w.get("textarea");
+    await editor.setValue("# Updated");
+    await panelButton(w, "Save").trigger("click");
+    await flushPromises();
+
+    const write = calls.find((c) => c.url.includes("ssh.sftp.write"))!;
+    expect(write.url).toContain("p.path=%2FREADME.md");
+    expect(write.init?.method).toBe("PUT");
+    expect(JSON.parse(String(write.init?.body))).toEqual({
+      content: "# Updated",
+    });
+
+    const fileForDelete = w
+      .findAll("li button")
+      .find((b) => b.text().includes("README.md"));
+    await fileForDelete!.trigger("click");
     await panelButton(w, "Delete").trigger("click");
     bodyButton("Delete")!.click();
     await flushPromises();

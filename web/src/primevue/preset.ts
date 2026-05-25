@@ -19,6 +19,18 @@ export const inputClass = inputBase;
 // A search box with room for a leading icon — shared by the sidebar and pickers.
 export const searchInputClass = `w-full ${fieldSurface} py-1.5 pl-9 pr-3 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 ${focusRing} dark:text-surface-100`;
 
+// The dialog box surface — single source for every modal so width is the only
+// per-dialog difference (avoids repeating the box classes in each component).
+export const dialogRoot = (maxWidth = "max-w-md"): string =>
+  `w-full ${maxWidth} overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5`;
+
+// Shared button looks, reused across dialogs/action bars instead of re-listing
+// the same utility chains.
+export const btnPrimary =
+  "inline-flex items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50";
+export const btnGhost =
+  "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800";
+
 const overlay =
   "mt-1 overflow-hidden rounded-md border border-surface-200 bg-surface-0 py-1 shadow-lg dark:border-surface-700 dark:bg-surface-900";
 const option =
@@ -76,7 +88,7 @@ export const primeVuePassthrough = {
 
   dialog: {
     mask: "fixed inset-0 z-50 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm",
-    root: "w-full max-w-md overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5",
+    root: dialogRoot(),
     header:
       "flex items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800",
     title:
@@ -87,15 +99,17 @@ export const primeVuePassthrough = {
     pcCloseButton: {
       root: "rounded-md p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200",
     },
-    // Smooth fade + scale on open/close (neutralized under prefers-reduced-motion
-    // by the global rule in style.css).
+    // Natural rise + fade + subtle scale on open/close. The enter easing is a
+    // gentle ease-out (cubic-bezier) so the dialog settles rather than snapping;
+    // the global prefers-reduced-motion rule neutralizes it.
     transition: {
-      enterFromClass: "opacity-0 scale-95",
-      enterActiveClass: "transition duration-200 ease-out",
-      enterToClass: "opacity-100 scale-100",
-      leaveFromClass: "opacity-100 scale-100",
+      enterFromClass: "opacity-0 translate-y-2 scale-[0.97]",
+      enterActiveClass:
+        "transition duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+      enterToClass: "opacity-100 translate-y-0 scale-100",
+      leaveFromClass: "opacity-100 translate-y-0 scale-100",
       leaveActiveClass: "transition duration-150 ease-in",
-      leaveToClass: "opacity-0 scale-95",
+      leaveToClass: "opacity-0 translate-y-1 scale-[0.98]",
     },
   },
 

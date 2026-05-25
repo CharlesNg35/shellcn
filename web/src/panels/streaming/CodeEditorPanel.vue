@@ -15,8 +15,7 @@ const useFallback = ref(false);
 const saving = ref(false);
 const saveError = ref<string | null>(null);
 const saved = ref(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco editor loaded lazily
-let editor: any = null;
+let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
 const editorConfig = computed(
   () => props.config as CodeEditorConfig | undefined,
 );
@@ -53,7 +52,7 @@ async function mountEditor(): Promise<void> {
   try {
     const monaco = await import("monaco-editor");
     editor?.dispose();
-    editor = monaco.editor.create(container.value, {
+    const ed = monaco.editor.create(container.value, {
       value: text.value,
       language: language.value,
       readOnly: !editable.value,
@@ -61,8 +60,9 @@ async function mountEditor(): Promise<void> {
       automaticLayout: true,
       scrollBeyondLastLine: false,
     });
-    editor.onDidChangeModelContent?.(() => {
-      text.value = editor.getValue();
+    editor = ed;
+    ed.onDidChangeModelContent(() => {
+      text.value = ed.getValue();
       saved.value = false;
     });
   } catch {

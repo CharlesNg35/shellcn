@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit hardening: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Transport tunnel registry + `cmd/agent` reverse-tunnel binary + enrollment endpoints implemented (gateway↔agent yamux tunnel, token single-use/connection-scoped). Phase 2b (M1.5 platform management) complete: connection/credential CRUD + sharing-grant + user-lookup endpoints (strict schema validation, write-only secrets, owner/manage/admin authz, audited); auth gate + CSRF + single error interceptor; manifest-driven connection create/edit/delete via the generic `SchemaForm`; credentials view + reusable `ShareDialog`/`ConfirmDialog`. Phase 2d M-Admin foundation complete: typed bootstrap config (`internal/config`, Viper; SMTP in config, not a table), admin user CRUD with root-admin/peer-admin protections, atomic single-use email/link invitations (`internal/email`, best-effort SMTP), and a Users view (users + invitations tabs, accept page). Phase 2c (M1.6 session recording foundation) complete — see its section below. **Next: Phase 3 (M2 SSH/SFTP).**_
+_Last updated: 2026-05-25 — Phase 3 (M2 SSH/SFTP) complete. Core runtime and platform management remain complete; the shipped placeholder `noop` plugin has been removed. SSH/SFTP are now real first-party plugins: `ssh` provides terminal + SFTP files + tunnels + snippets, `sftp` provides file-only access, and both share the same SSH/SFTP session + route implementation. **Next: Phase 4 (M3 Docker + agent transport).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -79,10 +79,12 @@ link, with email as a best-effort extra when SMTP is enabled._
 
 ## Phase 3 — M2 · SSH/SFTP reference plugin
 
-- [ ] 3.1 SSH session and Connect
-- [ ] 3.2 SSH routes and manifest
-- [ ] 3.3 Wire the real terminal panel
-- [ ] 3.4 Wire the real file browser panel
+_Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP session and file-route code. `ssh` exposes Terminal, Files, Tunnels, and Snippets; `sftp` exposes the same generic file browser only. SSH uses strict host-key verification via `known_hosts`, returns generic `VerificationRequired{kind:"host_key"}` on unknown/changed keys, and the core can persist accepted host-key lines through the generic verification endpoint. SFTP opens lazily over the same SSH client, guarded by the session mutex. Terminal streaming is real xterm.js ↔ `ssh.shell` with resize control frames; file browser routes implement list/read/download/upload/mkdir/rename/delete with core-streamed downloads and audit/authz wrapper coverage. The shipped placeholder `noop` plugin was removed; server e2e now uses an internal test-only plugin._
+
+- [x] 3.1 SSH session and Connect
+- [x] 3.2 SSH routes and manifest
+- [x] 3.3 Wire the real terminal panel
+- [x] 3.4 Wire the real file browser panel
 
 ## Phase 4 — M3 · Docker + agent transport
 

@@ -24,7 +24,7 @@ test("SSH (tabs): terminal stub, files preview, tables", async ({ page }) => {
   await page.getByRole("tab", { name: "Files" }).click();
   await expect(page.locator("main")).toContainText("README.md");
   await page.getByRole("button", { name: /README\.md/ }).click();
-  await expect(page.locator("main")).toContainText("# Project");
+  await expect(page.locator("textarea")).toHaveValue(/# Project/);
 
   // Tunnels tab: a table panel.
   await page.getByRole("tab", { name: "Tunnels" }).click();

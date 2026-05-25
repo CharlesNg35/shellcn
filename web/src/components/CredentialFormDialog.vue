@@ -10,6 +10,7 @@ import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
+import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import type { CredentialSummary } from "../types/projection";
 
 const props = defineProps<{
@@ -119,7 +120,7 @@ async function save(): Promise<void> {
     :header="isEdit ? 'Edit credential' : 'New credential'"
     :closable="!busy"
     :pt="{
-      root: 'w-full max-w-md rounded-lg bg-surface-0 shadow-xl dark:bg-surface-900',
+      root: dialogRoot(),
       content: 'max-h-[70vh] overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"
@@ -234,9 +235,7 @@ async function save(): Promise<void> {
         <Button
           type="button"
           :disabled="busy"
-          :pt="{
-            root: 'rounded-md px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-800',
-          }"
+          :pt="{ root: btnGhost }"
           @click="emit('update:visible', false)"
         >
           Cancel
@@ -244,9 +243,7 @@ async function save(): Promise<void> {
         <Button
           type="button"
           :disabled="busy"
-          :pt="{
-            root: 'rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50',
-          }"
+          :pt="{ root: btnPrimary }"
           @click="save"
         >
           {{ busy ? "Saving…" : isEdit ? "Save changes" : "Create credential" }}

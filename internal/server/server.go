@@ -130,6 +130,7 @@ func (s *Server) routes() chi.Router {
 				pr.Post("/connections", s.handleCreateConnection)
 				pr.Get("/connections/{id}", s.handleConnectionDetail)
 				pr.Put("/connections/{id}", s.handleUpdateConnection)
+				pr.Post("/connections/{id}/verification", s.handleAcceptConnectionVerification)
 				pr.Delete("/connections/{id}", s.handleDeleteConnection)
 			}
 			if s.deps.Credentials != nil {

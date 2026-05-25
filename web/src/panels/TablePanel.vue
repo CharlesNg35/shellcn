@@ -14,6 +14,7 @@ import type {
 } from "../types/projection";
 import type { PanelProps } from "./types";
 import { formatBytes } from "./file/fileTypes";
+import { inputClass } from "../primevue/preset";
 import SkeletonList from "../components/SkeletonList.vue";
 
 const props = defineProps<PanelProps>();
@@ -151,13 +152,16 @@ onUnmounted(() => {
     <div
       class="flex items-center gap-3 border-b border-surface-200 px-4 py-2 dark:border-surface-800"
     >
-      <input
-        v-model="filterText"
-        type="search"
-        placeholder="Filter…"
-        class="w-56 rounded-md border border-surface-300 bg-surface-0 px-2.5 py-1 text-sm outline-none focus:border-primary-400 dark:border-surface-700 dark:bg-surface-950"
-        @input="onFilter"
-      />
+      <div class="w-56">
+        <input
+          v-model="filterText"
+          type="search"
+          placeholder="Filter…"
+          aria-label="Filter rows"
+          :class="inputClass"
+          @input="onFilter"
+        />
+      </div>
       <span v-if="total != null" class="text-xs text-surface-400"
         >{{ total }} total</span
       >

@@ -180,6 +180,7 @@ export interface FileBrowserConfig {
   pathParam?: string;
   readRouteId?: string;
   downloadRouteId?: string;
+  writeRouteId?: string;
   uploadRouteId?: string;
   mkdirRouteId?: string;
   renameRouteId?: string;

@@ -117,6 +117,7 @@
         "pathParam": "path",
         "readRouteId": "ssh.sftp.read",
         "downloadRouteId": "ssh.sftp.download",
+        "writeRouteId": "ssh.sftp.write",
         "uploadRouteId": "ssh.sftp.upload",
         "mkdirRouteId": "ssh.sftp.mkdir",
         "renameRouteId": "ssh.sftp.rename",

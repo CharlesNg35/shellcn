@@ -4,6 +4,7 @@ import Dialog from "primevue/dialog";
 import { recordingsApi } from "../../api/recordings";
 import CastPlayer from "./CastPlayer.vue";
 import VideoPlayer from "./VideoPlayer.vue";
+import { dialogRoot } from "../../primevue/preset";
 import type { RecordingSummary } from "../../types/projection";
 
 const props = defineProps<{
@@ -28,7 +29,7 @@ const title = computed(
     modal
     :header="title"
     :pt="{
-      root: 'w-full max-w-4xl rounded-lg bg-surface-0 shadow-xl dark:bg-surface-900',
+      root: dialogRoot('max-w-4xl'),
       content: 'p-4',
     }"
     @update:visible="$emit('update:visible', $event)"

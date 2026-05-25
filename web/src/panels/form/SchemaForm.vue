@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import type { Field, Schema } from "../../types/projection";
 import FormField from "./FormField.vue";
 import { isVisible, validateField } from "./condition";
@@ -20,9 +20,13 @@ const emit = defineEmits<{
 const values = reactive<Record<string, unknown>>({});
 const errors = ref<Record<string, string>>({});
 
+// A plugin may declare a config schema with no groups. Normalize so every
+// consumer iterates safely.
+const groups = computed(() => props.schema?.groups ?? []);
+
 function seed(): void {
-  for (const group of props.schema.groups) {
-    for (const field of group.fields) {
+  for (const group of groups.value) {
+    for (const field of group.fields ?? []) {
       const incoming = props.modelValue?.[field.key];
       values[field.key] = incoming !== undefined ? incoming : field.default;
     }
@@ -54,8 +58,8 @@ function isBlank(value: unknown): boolean {
 function onSubmit(): void {
   const next: Record<string, string> = {};
   const payload: Record<string, unknown> = {};
-  for (const group of props.schema.groups) {
-    for (const field of visibleFields(group.fields)) {
+  for (const group of groups.value) {
+    for (const field of visibleFields(group.fields ?? [])) {
       const value = values[field.key];
       // A write-only secret that is already set and left untouched is kept by
       // the backend — never require or resubmit it.
@@ -77,7 +81,7 @@ defineExpose({ submit: onSubmit });
 <template>
   <form class="flex flex-col gap-6" @submit.prevent="onSubmit">
     <fieldset
-      v-for="group in schema.groups"
+      v-for="group in groups"
       :key="group.name"
       class="flex flex-col gap-4"
     >

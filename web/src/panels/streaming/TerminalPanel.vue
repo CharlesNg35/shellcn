@@ -24,6 +24,7 @@ let term: Terminal | null = null;
 let fit: FitAddon | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+let lastSize = "";
 
 function write(data: string): void {
   if (term) term.write(data);
@@ -44,6 +45,13 @@ function applyFit(): void {
   if (!fit || !term) return;
   try {
     fit.fit();
+    const size = `${term.cols}x${term.rows}`;
+    if (size !== lastSize) {
+      lastSize = size;
+      send(
+        `\0${JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows })}`,
+      );
+    }
   } catch {
     /* container not measurable yet */
   }

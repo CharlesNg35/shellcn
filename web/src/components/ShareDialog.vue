@@ -8,6 +8,7 @@ import { api, ApiError } from "../api/client";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
 import ConfirmDialog from "./ConfirmDialog.vue";
+import { dialogRoot, btnPrimary } from "../primevue/preset";
 import type { GrantAccess, ShareGrant, UserSummary } from "../types/projection";
 
 const props = defineProps<{
@@ -133,7 +134,7 @@ async function revoke(): Promise<void> {
     modal
     :header="`Share “${resourceName}”`"
     :pt="{
-      root: 'w-full max-w-md rounded-lg bg-surface-0 shadow-xl dark:bg-surface-900',
+      root: dialogRoot(),
       content: 'max-h-[70vh] overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"
@@ -179,9 +180,7 @@ async function revoke(): Promise<void> {
         <Button
           type="button"
           :disabled="busy || !subject"
-          :pt="{
-            root: 'rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50',
-          }"
+          :pt="{ root: btnPrimary }"
           @click="add"
         >
           Add

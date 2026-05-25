@@ -5,6 +5,7 @@ import Dialog from "primevue/dialog";
 import FileUpload from "primevue/fileupload";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
 import InputText from "primevue/inputtext";
+import Textarea from "primevue/textarea";
 import { useToast } from "primevue/usetoast";
 import {
   fetchDoc,
@@ -32,6 +33,7 @@ const fileConfig = computed(
 const pathParam = computed(() => fileConfig.value?.pathParam ?? "path");
 const readRouteId = computed(() => fileConfig.value?.readRouteId);
 const downloadRouteId = computed(() => fileConfig.value?.downloadRouteId);
+const writeRouteId = computed(() => fileConfig.value?.writeRouteId);
 const uploadRouteId = computed(() => fileConfig.value?.uploadRouteId);
 const mkdirRouteId = computed(() => fileConfig.value?.mkdirRouteId);
 const renameRouteId = computed(() => fileConfig.value?.renameRouteId);
@@ -52,6 +54,7 @@ const listError = ref<string | null>(null);
 
 const selected = ref<FileEntry | null>(null);
 const content = ref<FileContent | null>(null);
+const editContent = ref("");
 const loadingContent = ref(false);
 const mutating = ref(false);
 const mkdirOpen = ref(false);
@@ -90,6 +93,17 @@ const canRename = computed(
 const canDelete = computed(
   () =>
     writable.value && Boolean(deleteRouteId.value) && Boolean(selected.value),
+);
+const canEdit = computed(
+  () =>
+    writable.value &&
+    Boolean(writeRouteId.value) &&
+    content.value?.encoding === "utf8" &&
+    selected.value &&
+    !selected.value.isDir,
+);
+const dirty = computed(
+  () => canEdit.value && editContent.value !== (content.value?.content ?? ""),
 );
 const downloadHref = computed(() => {
   if (!downloadRouteId.value || !selected.value || selected.value.isDir)
@@ -133,6 +147,7 @@ async function loadList(path: string): Promise<void> {
 async function selectEntry(entry: FileEntry): Promise<void> {
   selected.value = entry;
   content.value = null;
+  editContent.value = "";
   if (entry.isDir) return;
   if (!readRouteId.value) return;
   loadingContent.value = true;
@@ -145,8 +160,42 @@ async function selectEntry(entry: FileEntry): Promise<void> {
       },
       operationCtx.value,
     );
+    editContent.value = content.value.content ?? "";
   } finally {
     loadingContent.value = false;
+  }
+}
+
+async function saveFile(): Promise<void> {
+  const routeId = writeRouteId.value;
+  const entry = selected.value;
+  if (!routeId || !entry || !dirty.value) return;
+  mutating.value = true;
+  try {
+    await runAction(
+      props.connectionId,
+      routeId,
+      operationCtx.value,
+      { content: editContent.value },
+      operationParams(entry.path),
+      "PUT",
+    );
+    if (content.value) {
+      content.value = {
+        ...content.value,
+        content: editContent.value,
+        size: editContent.value.length,
+        truncated: false,
+      };
+    }
+    notifySuccess("Saved.");
+    await loadList(cwd.value);
+    const updated = entries.value.find((e) => e.path === entry.path);
+    if (updated) await selectEntry(updated);
+  } catch (e) {
+    notifyError(e);
+  } finally {
+    mutating.value = false;
   }
 }
 
@@ -404,7 +453,26 @@ watch(
       </div>
 
       <div class="min-w-0 flex-1">
+        <div v-if="canEdit" class="flex h-full flex-col">
+          <div
+            class="flex items-center justify-end border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+          >
+            <Button
+              type="button"
+              label="Save"
+              :disabled="!dirty || mutating"
+              @click="saveFile"
+            />
+          </div>
+          <Textarea
+            v-model="editContent"
+            class="h-full min-h-0 w-full flex-1 resize-none rounded-none border-0 p-4 font-mono text-xs leading-relaxed"
+            spellcheck="false"
+            :disabled="mutating"
+          />
+        </div>
         <FilePreview
+          v-else
           :name="selected?.name ?? ''"
           :content="content"
           :loading="loadingContent"

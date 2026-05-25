@@ -10,8 +10,7 @@ test("add a connection from a protocol and open it", async ({ page }) => {
   await page.getByRole("button", { name: "Add connection" }).click();
 
   // Pick a protocol → its config schema renders.
-  await page.getByText("Choose a protocol").click();
-  await page.getByText("SSH", { exact: true }).click();
+  await page.getByRole("radio", { name: /^SSH/ }).click();
 
   await page.locator("#conn-name").fill("e2e-box");
   await page.getByPlaceholder("10.0.0.1").fill("10.0.0.9");
@@ -41,8 +40,7 @@ test("edit a connection and persist the change", async ({ page }) => {
 test("delete a connection after confirmation", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Add connection" }).click();
-  await page.getByText("Choose a protocol").click();
-  await page.getByText("SSH", { exact: true }).click();
+  await page.getByRole("radio", { name: /^SSH/ }).click();
   await page.locator("#conn-name").fill("e2e-delete-me");
   await page.getByPlaceholder("10.0.0.1").fill("10.0.0.8");
   await page.getByRole("button", { name: /Create connection/ }).click();
@@ -93,8 +91,7 @@ test("create a credential and select it from a connection credential_ref", async
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Add connection" }).click();
-  await page.getByText("Choose a protocol").click();
-  await page.getByText("SSH", { exact: true }).click();
+  await page.getByRole("radio", { name: /^SSH/ }).click();
   await page.locator("#conn-name").fill("e2e-credential-conn");
   await page.getByPlaceholder("10.0.0.1").fill("10.0.0.7");
   await page.getByRole("combobox", { name: "Password" }).click();

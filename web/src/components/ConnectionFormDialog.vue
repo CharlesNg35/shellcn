@@ -10,6 +10,7 @@ import { useNotify } from "../composables/useNotify";
 import SchemaForm from "../panels/form/SchemaForm.vue";
 import ProtocolPicker from "./ProtocolPicker.vue";
 import AppIcon from "./AppIcon.vue";
+import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import type {
   ConnectionDetail,
   ConnectionSummary,
@@ -184,7 +185,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
     :header="isEdit ? 'Edit connection' : 'Add connection'"
     :closable="!busy"
     :pt="{
-      root: 'w-full max-w-lg rounded-lg bg-surface-0 shadow-xl dark:bg-surface-900',
+      root: dialogRoot('max-w-lg'),
       content: 'max-h-[70vh] overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"
@@ -333,9 +334,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
         <Button
           type="button"
           :disabled="busy"
-          :pt="{
-            root: 'rounded-md px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-800',
-          }"
+          :pt="{ root: btnGhost }"
           @click="close"
         >
           Cancel
@@ -343,9 +342,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
         <Button
           type="button"
           :disabled="busy || !projection"
-          :pt="{
-            root: 'flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50',
-          }"
+          :pt="{ root: btnPrimary }"
           @click="requestSubmit"
         >
           <AppIcon

@@ -7,6 +7,7 @@ import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
+import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import type { InviteResult } from "../types/projection";
 
 const props = defineProps<{ visible: boolean }>();
@@ -82,7 +83,7 @@ async function copyLink(): Promise<void> {
     modal
     header="Invite a user"
     :pt="{
-      root: 'w-full max-w-md rounded-lg bg-surface-0 shadow-xl dark:bg-surface-900',
+      root: dialogRoot(),
       content: 'p-5',
     }"
     @update:visible="emit('update:visible', $event)"
@@ -156,9 +157,7 @@ async function copyLink(): Promise<void> {
           v-if="!result"
           type="button"
           :disabled="busy"
-          :pt="{
-            root: 'rounded-md px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-800',
-          }"
+          :pt="{ root: btnGhost }"
           @click="emit('update:visible', false)"
         >
           Cancel
@@ -167,9 +166,7 @@ async function copyLink(): Promise<void> {
           v-if="!result"
           type="button"
           :disabled="busy"
-          :pt="{
-            root: 'rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50',
-          }"
+          :pt="{ root: btnPrimary }"
           @click="invite"
         >
           {{ busy ? "Creating…" : "Create invitation" }}
@@ -177,9 +174,7 @@ async function copyLink(): Promise<void> {
         <Button
           v-else
           type="button"
-          :pt="{
-            root: 'rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700',
-          }"
+          :pt="{ root: btnPrimary }"
           @click="emit('update:visible', false)"
         >
           Done

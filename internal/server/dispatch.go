@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -221,7 +223,39 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, res resolved)
 		return
 	}
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
+	if dl, ok := result.(*plugin.Download); ok {
+		s.writeDownload(w, dl)
+		return
+	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) writeDownload(w http.ResponseWriter, dl *plugin.Download) {
+	if dl == nil || dl.Body == nil {
+		writeError(w, s.deps.Logger, plugin.ErrNotFound)
+		return
+	}
+	defer func() { _ = dl.Body.Close() }()
+	name := path.Base(dl.Name)
+	if name == "." || name == "/" || name == "" {
+		name = "download"
+	}
+	mimeType := dl.MIME
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	if dl.Size >= 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", dl.Size))
+	}
+	if !dl.ModTime.IsZero() {
+		w.Header().Set("Last-Modified", dl.ModTime.UTC().Format(http.TimeFormat))
+	}
+	w.WriteHeader(http.StatusOK)
+	if _, err := io.Copy(w, dl.Body); err != nil && s.deps.Logger != nil {
+		s.deps.Logger.Warn("download stream failed", "err", err)
+	}
 }
 
 func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolved, sess plugin.Session) (*plugin.RequestContext, func(), error) {
@@ -244,14 +278,21 @@ func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolve
 				files[field] = append(files[field], plugin.NewUploadedFile(field, header))
 			}
 		}
-		return plugin.NewMultipartRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), r.MultipartForm.Value, files), cleanup, nil
+		return plugin.NewMultipartRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), r.MultipartForm.Value, files).WithSnippets(s.snippetStore()), cleanup, nil
 	}
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxJSONBody))
 	if err != nil {
 		return nil, func() {}, plugin.ErrInvalidInput
 	}
-	return plugin.NewRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), body), func() {}, nil
+	return plugin.NewRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), body).WithSnippets(s.snippetStore()), func() {}, nil
+}
+
+func (s *Server) snippetStore() plugin.SnippetStore {
+	if s.deps.Store == nil {
+		return nil
+	}
+	return s.deps.Store.Snippets
 }
 
 func isMultipart(r *http.Request) bool {

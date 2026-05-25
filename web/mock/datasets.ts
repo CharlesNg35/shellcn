@@ -614,6 +614,10 @@ export function actionData(
     removeFsEntry(params.path ?? String(payload.path ?? ""));
     return { ok: true, routeId };
   }
+  if (routeId === "ssh.sftp.write") {
+    fileContents[params.path ?? "/"] = String(payload.content ?? "");
+    return { ok: true, routeId };
+  }
   if (routeId === "ssh.sftp.upload") {
     const names = Array.isArray(payload.files) ? payload.files : [];
     for (const item of names) {

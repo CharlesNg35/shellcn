@@ -289,6 +289,7 @@ func checkPanelConfigRoutes(ctx string, tab Tab, checkRouteID, checkWriteRouteID
 	case PanelFileBrowser:
 		checkRouteID(ctx+" readRouteId", route("readRouteId"))
 		checkRouteID(ctx+" downloadRouteId", route("downloadRouteId"))
+		checkWriteRouteID(ctx+" writeRouteId", route("writeRouteId"))
 		checkMultipartRouteID(ctx+" uploadRouteId", route("uploadRouteId"))
 		checkWriteRouteID(ctx+" mkdirRouteId", route("mkdirRouteId"))
 		checkWriteRouteID(ctx+" renameRouteId", route("renameRouteId"))

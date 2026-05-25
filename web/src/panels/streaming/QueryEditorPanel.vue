@@ -32,8 +32,7 @@ const running = ref(false);
 const error = ref<string | null>(null);
 const container = ref<HTMLElement | null>(null);
 const useFallback = ref(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco editor loaded lazily
-let editor: any = null;
+let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
 
 function onFrame(frame: string): void {
   try {
