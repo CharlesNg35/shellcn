@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Phase 3 (M2 SSH/SFTP) next; `cmd/agent` remains Phase 4 scope._
+_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Transport tunnel registry + `cmd/agent` reverse-tunnel binary + enrollment endpoints implemented (gateway↔agent yamux tunnel, token single-use/connection-scoped). Phase 2b (M1.5 platform management) complete: connection/credential CRUD + sharing-grant + user-lookup endpoints (schema-validated, write-only secrets, owner/manage/admin authz, audited); auth gate + CSRF + single error interceptor; manifest-driven connection create/edit/delete via the generic `SchemaForm`; credentials view + reusable `ShareDialog`/`ConfirmDialog`. **Next: Phase 2c (M1.6 session recording foundation), then Phase 3 (M2 SSH/SFTP).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -40,6 +40,30 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 - [x] 2.9 Audit and telemetry
 - [x] 2.10 Noop plugin and end-to-end validation
 
+## Phase 2b — M1.5 · Platform management (make it usable)
+
+_Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps [phase-2b](specs/plans/phase-2b-m1.5-platform-management/)). Connection/credential CRUD + sharing endpoints with authn→authz→audit; auth gate + global error UX; manifest-driven connection create/edit/delete; credential management + sharing UI. All secrets write-only end to end._
+
+- [x] 2b.1 Backend — connection CRUD endpoints (schema-validated, secret-encrypted, authz'd)
+- [x] 2b.2 Backend — credential CRUD + rotation (write-only secret material)
+- [x] 2b.3 Backend — sharing grants endpoints (connection + credential; use/manage)
+- [x] 2b.4 Frontend — auth/session gate + global error/authz UX (login, CSRF, 401→login, logout)
+- [x] 2b.5 Frontend — connection management UI (manifest-driven create/edit/delete + transport selector)
+- [x] 2b.6 Frontend — credential management + sharing UI (create/rotate/delete, grant use/manage)
+
+> **M-Admin (later, additive — v2 §12.2):** user/role management + role assignment, policy-rule admin (`role+permission+risk`), audit-log view + per-connection activity, light status page (health/plugin-health/session counts), agent re-enroll/rotate + history. _Operate-it surfaces, not blockers for first real use; backend-only M1 behaviors need no UI._
+
+## Phase 2c — M1.6 · Session recording foundation
+
+_Planned (spec [v2 §9.5](specs/v2.md), steps [phase-2c](specs/plans/phase-2c-m1.6-session-recording/)). Recording is plugin-declared and off by default; connection create/edit shows auto-record options only when the selected plugin supports recording._
+
+- [ ] 2c.1 Recording manifest contract + connection policy
+- [ ] 2c.2 Recording storage, metadata, retention, and authorization
+- [ ] 2c.3 Core stream recording wrapper and lifecycle
+- [ ] 2c.4 Terminal asciicast recorder and playback
+- [ ] 2c.5 Desktop/graphical recording framework
+- [ ] 2c.6 Recording APIs and frontend management UI
+
 ## Phase 3 — M2 · SSH/SFTP reference plugin
 
 - [ ] 3.1 SSH session and Connect
@@ -52,9 +76,9 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 - [ ] 4.1 Docker session and resource routes
 - [ ] 4.2 Docker manifest (tree, resources, actions)
 - [ ] 4.3 Real logs, exec, and watch streams
-- [ ] 4.4 shellcn-agent binary (L4 tcp/unix)
-- [ ] 4.5 Agent enrollment flow and tunnel registry
-- [ ] 4.6 Wire agent transport into Docker connection
+- [ ] 4.4 Harden shellcn-agent L4 tcp/unix against Docker
+- [ ] 4.5 Harden enrollment/tunnel registry with Docker agent mode
+- [ ] 4.6 Wire and prove agent transport in Docker connection
 
 ## Phase 5 — M4 · Proxmox
 

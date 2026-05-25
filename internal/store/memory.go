@@ -157,6 +157,17 @@ func (s *memConnectionStore) ListByOwner(_ context.Context, ownerID string) ([]m
 	return out, nil
 }
 
+func (s *memConnectionStore) List(_ context.Context) ([]models.Connection, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]models.Connection, 0, len(s.m))
+	for _, c := range s.m {
+		out = append(out, c)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
 func (s *memConnectionStore) Update(_ context.Context, c *models.Connection) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -321,6 +332,18 @@ func (s *memCredentialGrantStore) Has(_ context.Context, credentialID, subjectID
 		}
 	}
 	return false, nil
+}
+
+func (s *memCredentialGrantStore) ListByCredential(_ context.Context, credentialID string) ([]models.CredentialGrant, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []models.CredentialGrant
+	for _, g := range s.m {
+		if g.CredentialID == credentialID {
+			out = append(out, g)
+		}
+	}
+	return out, nil
 }
 
 func (s *memCredentialGrantStore) ListBySubject(_ context.Context, subjectID string) ([]models.CredentialGrant, error) {

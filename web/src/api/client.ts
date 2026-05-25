@@ -12,17 +12,43 @@ export class ApiError extends Error {
   }
 }
 
+// Attached to every state-changing request; set/cleared by the auth store.
+let csrfToken = "";
+export function setCsrfToken(token: string): void {
+  csrfToken = token;
+}
+
+// One app-installed hook that runs on every API error (401→re-login, etc.).
+export type ApiErrorHandler = (err: ApiError) => void;
+let errorHandler: ApiErrorHandler | null = null;
+export function setApiErrorHandler(fn: ApiErrorHandler | null): void {
+  errorHandler = fn;
+}
+
+const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const res = await fetch(API_BASE + path, {
-    method,
-    headers:
-      body !== undefined ? { "Content-Type": "application/json" } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (MUTATING.has(method) && csrfToken) headers["X-CSRF-Token"] = csrfToken;
+
+  let res: Response;
+  try {
+    res = await fetch(API_BASE + path, {
+      method,
+      headers: Object.keys(headers).length ? headers : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    const err = new ApiError(0, "Network error — is the gateway reachable?");
+    errorHandler?.(err);
+    throw err;
+  }
+
   if (!res.ok) {
     let message = res.statusText;
     try {
@@ -31,7 +57,9 @@ async function request<T>(
     } catch {
       // body was not JSON; keep statusText
     }
-    throw new ApiError(res.status, message);
+    const err = new ApiError(res.status, message);
+    errorHandler?.(err);
+    throw err;
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

@@ -34,6 +34,7 @@ type connectionDTO struct {
 	Transport string       `json:"transport"`
 	Online    bool         `json:"online"`
 	Status    string       `json:"status,omitempty"`
+	CanManage bool         `json:"canManage"`
 }
 
 func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
@@ -48,17 +49,8 @@ func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]connectionDTO, 0, len(conns))
 	for _, c := range conns {
-		dto := connectionDTO{
-			ID: c.ID, Name: c.Name, Protocol: c.Protocol,
-			Transport: c.Transport, Online: c.Transport != string(plugin.TransportAgent),
-		}
-		if dto.Transport == string(plugin.TransportAgent) {
-			dto.Status = "pending"
-		}
-		if m, ok := s.deps.Plugins.Manifest(c.Protocol); ok {
-			icon := m.Icon
-			dto.Icon = &icon
-		}
+		dto := s.toConnectionDTO(c)
+		dto.CanManage = s.canManageConnection(ctx, user, c)
 		out = append(out, dto)
 	}
 	writeJSON(w, http.StatusOK, out)

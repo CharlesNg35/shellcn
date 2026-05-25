@@ -14,15 +14,19 @@ const (
 	EnvMasterKeyFile = "SHELLCN_MASTER_KEY_FILE" // path to a file holding the key
 )
 
-// LoadMasterKey reads the AES-256 master key from the environment: EnvMasterKey
-// (base64) takes precedence, else EnvMasterKeyFile (base64 or raw 32 bytes).
-// KMS/OpenBao is a later drop-in behind the same Vault construction.
+// LoadMasterKey reads the AES-256 master key from the environment.
 func LoadMasterKey() ([]byte, error) {
-	if raw := strings.TrimSpace(os.Getenv(EnvMasterKey)); raw != "" {
+	return ResolveMasterKey(os.Getenv(EnvMasterKey), os.Getenv(EnvMasterKeyFile))
+}
+
+// ResolveMasterKey takes an inline base64 key (precedence) or a key file path
+// holding base64 or raw 32 bytes.
+func ResolveMasterKey(key, file string) ([]byte, error) {
+	if raw := strings.TrimSpace(key); raw != "" {
 		return decodeKey([]byte(raw))
 	}
-	if path := os.Getenv(EnvMasterKeyFile); path != "" {
-		data, err := os.ReadFile(path)
+	if file != "" {
+		data, err := os.ReadFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("%w: read key file: %v", ErrMasterKey, err)
 		}

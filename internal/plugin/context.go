@@ -188,14 +188,27 @@ func (rc *RequestContext) ValidateSchema(schema *Schema) error {
 	if err != nil {
 		return err
 	}
-	for _, group := range schema.Groups {
+	uploaded := make(map[string]bool, len(rc.files))
+	for field := range rc.files {
+		uploaded[field] = true
+	}
+	return schema.ValidateValues(values, uploaded)
+}
+
+// ValidateValues checks a decoded value map against the schema: per-field
+// visibility, required-ness, type, options, and validators. File fields are
+// satisfied by the caller-supplied uploaded set (the actual bytes live outside
+// the value map). It is the shared validator behind the route wrapper
+// (ValidateSchema) and the control-plane connection-config check.
+func (s Schema) ValidateValues(values map[string]any, uploaded map[string]bool) error {
+	for _, group := range s.Groups {
 		for _, field := range group.Fields {
 			if !visible(field.VisibleWhen, values) {
 				continue
 			}
 			value, exists := values[field.Key]
 			if field.Type == FieldFile {
-				if field.Required && len(rc.Uploads(field.Key)) == 0 {
+				if field.Required && !uploaded[field.Key] && emptyValue(value, !exists) {
 					return fmt.Errorf("%w: %s is required", ErrInvalidInput, field.Key)
 				}
 				continue

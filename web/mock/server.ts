@@ -102,6 +102,56 @@ function paginate(items: Record<string, unknown>[], url: URL) {
 // In-memory simulation of agent enrollment progress, keyed by connection id.
 const agentOnlineAt = new Map<string, number>();
 
+type Json = Record<string, unknown>;
+
+// Mutable in-memory control-plane state so the dev UI can create/edit/share.
+let connectionsState: Json[] | null = null;
+function connections(): Json[] {
+  if (!connectionsState) {
+    connectionsState = readJSON<Json[]>("connections.json").map((c) => ({
+      ...c,
+      canManage: true,
+    }));
+  }
+  return connectionsState;
+}
+
+let credentialsState: Json[] | null = null;
+function credentials(): Json[] {
+  if (!credentialsState)
+    credentialsState = readJSON<Json[]>("credentials.json").map((c) => ({
+      ...c,
+      ownerId: "u-demo",
+    }));
+  return credentialsState;
+}
+
+const grantsState: Record<string, Json[]> = {};
+const mockUsers: Json[] = [
+  { id: "u-demo", username: "demo", displayName: "Demo User" },
+  { id: "u-alice", username: "alice", displayName: "Alice Ng" },
+  { id: "u-bob", username: "bob", displayName: "Bob Reyes" },
+];
+
+function uid(prefix: string): string {
+  return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function resetControlPlaneState(): void {
+  connectionsState = null;
+  credentialsState = null;
+  for (const key of Object.keys(grantsState)) delete grantsState[key];
+  agentOnlineAt.clear();
+}
+
+function pluginIcon(protocol: string): unknown {
+  try {
+    return readJSON<{ icon: unknown }>(`${protocol}.json`).icon;
+  } catch {
+    return { type: "name", value: "box" };
+  }
+}
+
 function agentStatus(connectionId: string): {
   status: string;
   message?: string;
@@ -126,6 +176,33 @@ function handleHTTP(
   if (!path.startsWith("/api/")) return next();
 
   const method = req.method ?? "GET";
+
+  if (path === "/api/__test/reset" && method === "POST") {
+    resetControlPlaneState();
+    return send(res, 200, { ok: true });
+  }
+
+  // Auth: the mock is always "signed in" as an admin so the dev/e2e UX stays
+  // open. The real backend gates this behind a session cookie + CSRF token.
+  const mockSession = () => ({
+    user: {
+      id: "u-demo",
+      username: "demo",
+      displayName: "Demo User",
+      email: "demo@example.com",
+      roles: ["admin"],
+    },
+    csrfToken: "mock-csrf-token",
+  });
+  if (path === "/api/auth/me" && method === "GET") {
+    return send(res, 200, mockSession());
+  }
+  if (path === "/api/auth/login" && method === "POST") {
+    return send(res, 200, mockSession());
+  }
+  if (path === "/api/auth/logout" && method === "POST") {
+    return send(res, 200, { ok: true });
+  }
 
   if (path === "/api/plugins" && method === "GET") {
     const summaries = pluginNames().map((name) => {
@@ -152,22 +229,166 @@ function handleHTTP(
     return send(res, 200, readJSON(`${pluginMatch[1]}.json`));
   }
 
+  if (path === "/api/users" && method === "GET") {
+    const q = (url.searchParams.get("query") ?? "").toLowerCase();
+    return send(
+      res,
+      200,
+      mockUsers.filter(
+        (u) =>
+          !q ||
+          String(u.username).toLowerCase().includes(q) ||
+          String(u.displayName ?? "")
+            .toLowerCase()
+            .includes(q),
+      ),
+    );
+  }
+
   if (path === "/api/connections" && method === "GET") {
-    return send(res, 200, readJSON("connections.json"));
+    return send(res, 200, connections());
+  }
+  if (path === "/api/connections" && method === "POST") {
+    return void readBody(req).then((raw) => {
+      const body = raw as Json;
+      const protocol = String(body.protocol ?? "");
+      const transport = String(body.transport ?? "direct");
+      const conn: Json = {
+        id: uid("conn"),
+        name: body.name,
+        protocol,
+        transport,
+        icon: pluginIcon(protocol),
+        online: transport !== "agent",
+        status: transport === "agent" ? "pending" : undefined,
+        canManage: true,
+      };
+      connections().push(conn);
+      send(res, 201, conn);
+    });
+  }
+
+  const connDetailMatch = path.match(/^\/api\/connections\/([^/]+)$/);
+  if (connDetailMatch) {
+    const id = connDetailMatch[1];
+    const conn = connections().find((c) => c.id === id);
+    if (!conn) return send(res, 404, { error: "unknown connection" });
+    if (method === "GET") {
+      return send(res, 200, {
+        id,
+        name: conn.name,
+        protocol: conn.protocol,
+        transport: conn.transport,
+        ownerId: "u-demo",
+        config: (conn.config as Json) ?? {},
+        secrets: {},
+      });
+    }
+    if (method === "PUT") {
+      return void readBody(req).then((raw) => {
+        const body = raw as Json;
+        conn.name = body.name ?? conn.name;
+        conn.transport = body.transport ?? conn.transport;
+        conn.config = body.config ?? {};
+        send(res, 200, {
+          id,
+          name: conn.name,
+          protocol: conn.protocol,
+          transport: conn.transport,
+          ownerId: "u-demo",
+          config: conn.config,
+          secrets: {},
+        });
+      });
+    }
+    if (method === "DELETE") {
+      connectionsState = connections().filter((c) => c.id !== id);
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  const grantsMatch = path.match(
+    /^\/api\/(connections|credentials)\/([^/]+)\/grants$/,
+  );
+  if (grantsMatch) {
+    const key = `${grantsMatch[1]}:${grantsMatch[2]}`;
+    grantsState[key] ??= [];
+    if (method === "GET") return send(res, 200, grantsState[key]);
+    if (method === "POST") {
+      return void readBody(req).then((raw) => {
+        const body = raw as Json;
+        const user = mockUsers.find((u) => u.id === body.subjectId);
+        const grant: Json = {
+          id: uid("grant"),
+          subjectId: body.subjectId,
+          username: user?.username,
+          displayName: user?.displayName,
+          access: body.access ?? "use",
+        };
+        grantsState[key].push(grant);
+        send(res, 201, grant);
+      });
+    }
+  }
+  const grantDeleteMatch = path.match(
+    /^\/api\/(connections|credentials)\/([^/]+)\/grants\/([^/]+)$/,
+  );
+  if (grantDeleteMatch && method === "DELETE") {
+    const key = `${grantDeleteMatch[1]}:${grantDeleteMatch[2]}`;
+    grantsState[key] = (grantsState[key] ?? []).filter(
+      (g) => g.id !== grantDeleteMatch[3],
+    );
+    return send(res, 200, { ok: true });
   }
 
   if (path === "/api/credentials" && method === "GET") {
-    const all =
-      readJSON<{ kind: string; protocols?: string[] }[]>("credentials.json");
     const kinds = url.searchParams.get("kind")?.split(",").filter(Boolean);
     const protocol = url.searchParams.get("protocol");
-    const filtered = all.filter((c) => {
-      if (kinds && kinds.length > 0 && !kinds.includes(c.kind)) return false;
-      if (protocol && c.protocols && !c.protocols.includes(protocol))
+    const filtered = credentials().filter((c) => {
+      const protocols = c.protocols as string[] | undefined;
+      if (kinds && kinds.length > 0 && !kinds.includes(String(c.kind)))
         return false;
+      if (protocol && protocols && !protocols.includes(protocol)) return false;
       return true;
     });
     return send(res, 200, filtered);
+  }
+  if (path === "/api/credentials" && method === "POST") {
+    return void readBody(req).then((raw) => {
+      const body = raw as Json;
+      const cred: Json = {
+        id: uid("cred"),
+        name: body.name,
+        kind: body.kind,
+        ownerId: "u-demo",
+        username: body.username,
+        protocols: body.protocols,
+        updatedAt: new Date().toISOString(),
+      };
+      credentials().push(cred);
+      send(res, 201, cred);
+    });
+  }
+  const credDetailMatch = path.match(/^\/api\/credentials\/([^/]+)$/);
+  if (credDetailMatch) {
+    const id = credDetailMatch[1];
+    const cred = credentials().find((c) => c.id === id);
+    if (!cred) return send(res, 404, { error: "unknown credential" });
+    if (method === "PUT") {
+      return void readBody(req).then((raw) => {
+        const body = raw as Json;
+        cred.name = body.name ?? cred.name;
+        cred.kind = body.kind ?? cred.kind;
+        cred.username = body.username;
+        cred.protocols = body.protocols;
+        cred.updatedAt = new Date().toISOString();
+        send(res, 200, cred);
+      });
+    }
+    if (method === "DELETE") {
+      credentialsState = credentials().filter((c) => c.id !== id);
+      return send(res, 200, { ok: true });
+    }
   }
 
   const agentStateMatch = path.match(

@@ -40,12 +40,26 @@ function visibleFields(fields: Field[]): Field[] {
   return fields.filter((f) => isVisible(f.visibleWhen, values));
 }
 
+function isBlank(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === "" ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
 function onSubmit(): void {
   const next: Record<string, string> = {};
   const payload: Record<string, unknown> = {};
   for (const group of props.schema.groups) {
     for (const field of visibleFields(group.fields)) {
       const value = values[field.key];
+      // A write-only secret that is already set and left untouched is kept by
+      // the backend — never require or resubmit it.
+      if (field.secret && props.secretsSet?.[field.key] && isBlank(value)) {
+        continue;
+      }
       const msg = validateField(field, value);
       if (msg) next[field.key] = msg;
       else if (value !== undefined) payload[field.key] = value;
@@ -54,6 +68,8 @@ function onSubmit(): void {
   errors.value = next;
   if (Object.keys(next).length === 0) emit("submit", payload);
 }
+
+defineExpose({ submit: onSubmit });
 </script>
 
 <template>

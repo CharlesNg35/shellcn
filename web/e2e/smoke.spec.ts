@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
 
+test.beforeEach(async ({ request }) => {
+  await request.post("/api/__test/reset");
+});
+
 test("renders the app shell", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#app")).toContainText("ShellCN");

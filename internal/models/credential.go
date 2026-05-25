@@ -25,6 +25,7 @@ type CredentialSummary struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Kind      string    `json:"kind"`
+	OwnerID   string    `json:"ownerId,omitempty"`
 	Username  string    `json:"username,omitempty"`
 	Protocols []string  `json:"protocols,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt,omitzero"`
@@ -36,6 +37,7 @@ func (c Credential) Summary() CredentialSummary {
 		ID:        c.ID,
 		Name:      c.Name,
 		Kind:      c.Kind,
+		OwnerID:   c.OwnerID,
 		Username:  c.Username,
 		Protocols: c.Protocols,
 		UpdatedAt: c.UpdatedAt,

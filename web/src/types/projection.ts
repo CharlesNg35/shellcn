@@ -271,6 +271,7 @@ export interface CredentialSummary {
   id: string;
   name: string;
   kind: CredentialKind;
+  ownerId?: string;
   username?: string;
   protocols?: string[];
   updatedAt?: string;
@@ -312,6 +313,38 @@ export interface ConnectionSummary {
   transport: Transport;
   online?: boolean;
   status?: string;
+  canManage?: boolean;
+}
+
+export type GrantAccess = "use" | "manage";
+
+// A sharing grant on a connection or credential, with the subject resolved for
+// display. Never carries secret material.
+export interface ShareGrant {
+  id: string;
+  subjectId: string;
+  username?: string;
+  displayName?: string;
+  access: GrantAccess;
+}
+
+// Minimal subject record returned by the user-lookup endpoint for grant assignment.
+export interface UserSummary {
+  id: string;
+  username: string;
+  displayName?: string;
+}
+
+// The edit/detail read: non-secret config plus a per-secret-field presence map
+// ("set" / "not set"). Secret values are never carried back.
+export interface ConnectionDetail {
+  id: string;
+  name: string;
+  protocol: string;
+  transport: Transport;
+  ownerId: string;
+  config: Record<string, unknown>;
+  secrets: Record<string, string>;
 }
 
 // Lists, pagination, watch

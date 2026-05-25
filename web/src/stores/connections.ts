@@ -36,5 +36,19 @@ export const useConnectionsStore = defineStore("connections", () => {
     return connections.value.find((c) => c.id === id);
   }
 
-  return { connections, plugins, projections, loaded, load, projection, byId };
+  // refresh re-fetches just the connection list after a control-plane mutation.
+  async function refresh(): Promise<void> {
+    connections.value = await api.get<ConnectionSummary[]>("/connections");
+  }
+
+  return {
+    connections,
+    plugins,
+    projections,
+    loaded,
+    load,
+    refresh,
+    projection,
+    byId,
+  };
 });

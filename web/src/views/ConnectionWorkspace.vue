@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
+import { api, ApiError } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import PanelHost from "../panels/PanelHost.vue";
 import EnrollPanel from "../panels/EnrollPanel.vue";
 import ResourceTree from "../panels/tree/ResourceTree.vue";
 import TablePanel from "../panels/TablePanel.vue";
 import DetailView from "../panels/DetailView.vue";
+import ConnectionFormDialog from "../components/ConnectionFormDialog.vue";
+import ShareDialog from "../components/ShareDialog.vue";
+import ConfirmDialog from "../components/ConfirmDialog.vue";
 import type {
   PluginProjection,
   ResourceRef,
@@ -21,6 +27,32 @@ import type {
 const props = defineProps<{ id: string }>();
 const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
+const router = useRouter();
+const notify = useNotify();
+
+const showEdit = ref(false);
+const showShare = ref(false);
+const showDelete = ref(false);
+const deleting = ref(false);
+
+const canManage = computed(() => connection.value?.canManage ?? false);
+
+async function onDelete(): Promise<void> {
+  deleting.value = true;
+  try {
+    await api.del(`/connections/${props.id}`);
+    await conns.refresh();
+    notify.success("Connection deleted");
+    showDelete.value = false;
+    await router.push({ name: "home" });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409) {
+      notify.error("Could not delete", e.message);
+    }
+  } finally {
+    deleting.value = false;
+  }
+}
 
 const projection = ref<PluginProjection | null>(null);
 const loading = ref(true);
@@ -119,6 +151,36 @@ function onEnrolled(): void {
           {{ connection?.transport }}
         </p>
       </div>
+
+      <div v-if="canManage" class="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
+          title="Share"
+          aria-label="Share connection"
+          @click="showShare = true"
+        >
+          <AppIcon :icon="{ type: 'name', value: 'users' }" :size="17" />
+        </button>
+        <button
+          type="button"
+          class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
+          title="Edit"
+          aria-label="Edit connection"
+          @click="showEdit = true"
+        >
+          <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="17" />
+        </button>
+        <button
+          type="button"
+          class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-red-500 dark:hover:bg-surface-800"
+          title="Delete"
+          aria-label="Delete connection"
+          @click="showDelete = true"
+        >
+          <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="17" />
+        </button>
+      </div>
     </header>
 
     <div class="min-h-0 flex-1">
@@ -204,5 +266,23 @@ function onEnrolled(): void {
         </div>
       </template>
     </div>
+
+    <ConnectionFormDialog v-model:visible="showEdit" :connection-id="id" />
+    <ShareDialog
+      v-model:visible="showShare"
+      resource="connections"
+      :resource-id="id"
+      :resource-name="connection?.name ?? id"
+      allow-manage
+    />
+    <ConfirmDialog
+      v-model:visible="showDelete"
+      title="Delete connection"
+      :message="`Delete “${connection?.name ?? id}”? This cannot be undone.`"
+      confirm-label="Delete"
+      danger
+      :busy="deleting"
+      @confirm="onDelete"
+    />
   </div>
 </template>

@@ -31,6 +31,7 @@ type ConnectionStore interface {
 	Create(ctx context.Context, c *models.Connection) error
 	Get(ctx context.Context, id string) (models.Connection, error)
 	ListByOwner(ctx context.Context, ownerID string) ([]models.Connection, error)
+	List(ctx context.Context) ([]models.Connection, error)
 	Update(ctx context.Context, c *models.Connection) error
 	Delete(ctx context.Context, id string) error
 }
@@ -58,6 +59,7 @@ type CredentialGrantStore interface {
 	Create(ctx context.Context, g *models.CredentialGrant) error
 	Delete(ctx context.Context, id string) error
 	Has(ctx context.Context, credentialID, subjectID string) (bool, error)
+	ListByCredential(ctx context.Context, credentialID string) ([]models.CredentialGrant, error)
 	ListBySubject(ctx context.Context, subjectID string) ([]models.CredentialGrant, error)
 }
 

@@ -11,8 +11,8 @@ import (
 	"github.com/charlesng/shellcn/internal/transport"
 )
 
-// CredentialField is the well-known config key holding a referenced credential's
-// id; the connector resolves it to plaintext material under CredentialSecret.
+// CredentialField is the legacy/default config key holding a referenced
+// credential id; CredentialSecret is the matching resolved plaintext key.
 const (
 	CredentialField  = "credential_id"
 	CredentialSecret = "_credential_secret"
@@ -67,13 +67,17 @@ func (c *Connector) Build(ctx context.Context, user models.User, conn models.Con
 		c.onSecretAccess()
 	}
 
-	// Resolve a referenced reusable credential (authorized for this user).
-	if credID, _ := cfg[CredentialField].(string); credID != "" {
-		material, err := c.creds.Resolve(ctx, user.ID, credID)
-		if err != nil {
-			return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
+	// Resolve referenced reusable credentials (authorized for this user).
+	if m, ok := c.plugins.Manifest(conn.Protocol); ok {
+		for _, key := range credentialRefKeys(m.Config) {
+			if credID, _ := cfg[key].(string); credID != "" {
+				material, err := c.creds.Resolve(ctx, user.ID, credID)
+				if err != nil {
+					return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
+				}
+				cfg[credentialSecretKey(key)] = string(material)
+			}
 		}
-		cfg[CredentialSecret] = string(material)
 	}
 
 	net, err := transport.Build(conn, c.tunnels)
@@ -87,4 +91,11 @@ func (c *Connector) Build(ctx context.Context, user models.User, conn models.Con
 		Config:       cfg,
 		Net:          net,
 	}, plg, nil
+}
+
+func credentialSecretKey(key string) string {
+	if key == CredentialField {
+		return CredentialSecret
+	}
+	return "_" + key + "_secret"
 }

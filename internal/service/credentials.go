@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/secrets"
 	"github.com/charlesng/shellcn/internal/store"
 )
@@ -70,12 +72,93 @@ func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (
 	return cred, nil
 }
 
+// UpdateCredentialInput updates a credential's metadata and optionally rotates
+// its secret. A blank Secret keeps the stored material (write-only).
+type UpdateCredentialInput struct {
+	Name      string
+	Kind      string
+	Username  string
+	Protocols []string
+	Secret    string
+}
+
+// Update applies metadata changes and, when Secret is non-blank, rotates the
+// encrypted material. Rotation updates the single record; every connection that
+// references it resolves the new value on its next connect.
+func (s *CredentialService) Update(ctx context.Context, id string, in UpdateCredentialInput) (models.Credential, error) {
+	cred, err := s.creds.Get(ctx, id)
+	if err != nil {
+		return models.Credential{}, err
+	}
+	cred.Name = in.Name
+	cred.Kind = in.Kind
+	cred.Username = in.Username
+	cred.Protocols = in.Protocols
+	if strings.TrimSpace(in.Secret) != "" {
+		enc, err := s.vault.Encrypt(ctx, []byte(in.Secret))
+		if err != nil {
+			return models.Credential{}, fmt.Errorf("encrypt credential: %w", err)
+		}
+		cred.EncryptedSecret = enc
+	}
+	cred.UpdatedAt = time.Now()
+	if err := s.creds.Update(ctx, &cred); err != nil {
+		return models.Credential{}, err
+	}
+	return cred, nil
+}
+
+// Delete removes a credential. Callers must enforce the not-referenced
+// invariant — a credential still referenced by a connection cannot be deleted.
+func (s *CredentialService) Delete(ctx context.Context, id string) error {
+	return s.creds.Delete(ctx, id)
+}
+
 // canUse reports whether userID owns the credential or holds a use-grant.
 func (s *CredentialService) canUse(ctx context.Context, userID string, cred models.Credential) (bool, error) {
 	if cred.OwnerID == userID {
 		return true, nil
 	}
 	return s.grants.Has(ctx, cred.ID, userID)
+}
+
+// EnsureUsable verifies that userID may use credentialID — used by the
+// connection control plane when a config references a reusable credential. It
+// returns ErrForbidden when the user lacks owner/use access and the store's
+// not-found error for an unknown credential.
+func (s *CredentialService) EnsureUsable(ctx context.Context, userID, credentialID string) error {
+	cred, err := s.creds.Get(ctx, credentialID)
+	if err != nil {
+		return err
+	}
+	return s.ensureUsableCredential(ctx, userID, cred)
+}
+
+// EnsureUsableFor verifies that userID may use credentialID and that the
+// credential matches the selector constraints for the connection protocol.
+func (s *CredentialService) EnsureUsableFor(ctx context.Context, userID, credentialID string, kinds []string, protocol string) error {
+	cred, err := s.creds.Get(ctx, credentialID)
+	if err != nil {
+		return err
+	}
+	if len(kinds) > 0 && !slices.Contains(kinds, cred.Kind) {
+		return fmt.Errorf("%w: credential %q is kind %q", plugin.ErrInvalidInput, credentialID, cred.Kind)
+	}
+	if protocol != "" && len(cred.Protocols) > 0 && !slices.Contains(cred.Protocols, protocol) {
+		return fmt.Errorf("%w: credential %q is not valid for protocol %q", plugin.ErrInvalidInput, credentialID, protocol)
+	}
+	return s.ensureUsableCredential(ctx, userID, cred)
+}
+
+func (s *CredentialService) ensureUsableCredential(ctx context.Context, userID string, cred models.Credential) error {
+	ok, err := s.canUse(ctx, userID, cred)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("credential %q: %w", cred.ID, models.ErrForbidden)
+	}
+	return nil
 }
 
 // Resolve returns the decrypted secret material for connect-time injection IF

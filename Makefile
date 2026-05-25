@@ -1,4 +1,4 @@
-.PHONY: help install build build-go build-web ensure-web-dist test test-web test-cover lint lint-go lint-web fmt fmt-go fmt-web tidy run dev dev-web dev-api dev-server clean tools
+.PHONY: help install build build-go build-web ensure-web-dist test test-web test-e2e test-cover lint lint-go lint-web fmt fmt-go fmt-web tidy run dev dev-web dev-api dev-server clean tools
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
@@ -44,13 +44,17 @@ build-go:
 	@CGO_ENABLED=0 go build -ldflags "$(GO_LDFLAGS)" -o $(BIN_DIR)/$(APP_NAME) ./cmd/server
 	@echo "✓ Binary at $(BIN_DIR)/$(APP_NAME)"
 
-test: test-web ensure-web-dist
+test: test-web test-e2e ensure-web-dist
 	@echo "Running Go tests..."
 	@go test -race $(PKG)
 
 test-web:
 	@echo "Running frontend unit tests..."
 	@cd $(WEB_DIR) && pnpm test:unit
+
+test-e2e:
+	@echo "Running frontend e2e tests..."
+	@cd $(WEB_DIR) && pnpm test:e2e
 
 test-cover:
 	@go test -coverprofile=coverage.out $(PKG)

@@ -3,16 +3,27 @@ import { computed, onMounted, ref } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
 import AppIcon from "./AppIcon.vue";
-import AppToast from "./AppToast.vue";
+import ConnectionFormDialog from "./ConnectionFormDialog.vue";
 import type { ConnectionSummary } from "../types/projection";
 
 const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
+const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const { isDark, toggle: toggleTheme } = useTheme();
+
+const userLabel = computed(
+  () => auth.user?.displayName || auth.user?.username || "",
+);
+
+async function onLogout(): Promise<void> {
+  await auth.logout();
+  await router.push({ name: "login" });
+}
 
 const query = ref("");
 const error = ref<string | null>(null);
@@ -52,6 +63,15 @@ function dotClass(c: ConnectionSummary): string {
 function go(c: ConnectionSummary): void {
   ws.open(c.id);
   router.push({ name: "connection", params: { id: c.id } });
+}
+
+const showCreate = ref(false);
+
+function onConnectionSaved(payload: { id: string; created: boolean }): void {
+  if (payload.created) {
+    ws.open(payload.id);
+    void router.push({ name: "connection", params: { id: payload.id } });
+  }
 }
 </script>
 
@@ -130,11 +150,22 @@ function go(c: ConnectionSummary): void {
           </button>
         </template>
 
-        <p
-          class="px-2 pb-1 pt-3 text-xs font-medium uppercase tracking-wide text-surface-400"
-        >
-          Connections
-        </p>
+        <div class="flex items-center justify-between px-2 pb-1 pt-3">
+          <p
+            class="text-xs font-medium uppercase tracking-wide text-surface-400"
+          >
+            Connections
+          </p>
+          <button
+            type="button"
+            class="rounded p-1 text-surface-400 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
+            title="Add connection"
+            aria-label="Add connection"
+            @click="showCreate = true"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
+          </button>
+        </div>
         <button
           v-for="c in filtered"
           :key="c.id"
@@ -163,20 +194,78 @@ function go(c: ConnectionSummary): void {
           />
         </button>
         <p
-          v-if="conns.loaded && !filtered.length"
+          v-if="conns.loaded && !filtered.length && query"
           class="px-2 py-4 text-sm text-surface-400"
         >
           No connections match.
         </p>
+        <div
+          v-else-if="conns.loaded && !conns.connections.length"
+          class="px-2 py-4 text-sm text-surface-400"
+        >
+          <p class="mb-2">No connections yet.</p>
+          <button
+            type="button"
+            class="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700"
+            @click="showCreate = true"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="13" />
+            Add connection
+          </button>
+        </div>
       </nav>
 
-      <RouterLink
-        :to="{ name: 'settings' }"
-        class="flex items-center gap-2.5 border-t border-surface-200 px-4 py-3 text-sm text-surface-500 hover:bg-surface-200 dark:border-surface-800 dark:hover:bg-surface-800"
-      >
-        <AppIcon :icon="{ type: 'name', value: 'settings' }" :size="16" />
-        Settings
-      </RouterLink>
+      <div class="border-t border-surface-200 dark:border-surface-800">
+        <RouterLink
+          :to="{ name: 'credentials' }"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          :class="
+            route.name === 'credentials'
+              ? 'font-medium text-primary-700 dark:text-primary-200'
+              : ''
+          "
+        >
+          <AppIcon :icon="{ type: 'name', value: 'key' }" :size="16" />
+          Credentials
+        </RouterLink>
+        <RouterLink
+          :to="{ name: 'settings' }"
+          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          :class="
+            route.name === 'settings'
+              ? 'font-medium text-primary-700 dark:text-primary-200'
+              : ''
+          "
+        >
+          <AppIcon :icon="{ type: 'name', value: 'settings' }" :size="16" />
+          Settings
+        </RouterLink>
+
+        <div
+          class="flex items-center gap-2.5 border-t border-surface-200 px-4 py-2.5 dark:border-surface-800"
+        >
+          <span
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-200 text-surface-600 dark:bg-surface-800 dark:text-surface-300"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'user' }" :size="15" />
+          </span>
+          <span
+            class="min-w-0 flex-1 truncate text-sm text-surface-700 dark:text-surface-200"
+            :title="userLabel"
+          >
+            {{ userLabel }}
+          </span>
+          <button
+            type="button"
+            class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
+            title="Sign out"
+            aria-label="Sign out"
+            @click="onLogout"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'log-out' }" :size="16" />
+          </button>
+        </div>
+      </div>
     </aside>
 
     <main class="min-w-0 flex-1 overflow-hidden">
@@ -189,6 +278,9 @@ function go(c: ConnectionSummary): void {
       </RouterView>
     </main>
 
-    <AppToast />
+    <ConnectionFormDialog
+      v-model:visible="showCreate"
+      @saved="onConnectionSaved"
+    />
   </div>
 </template>

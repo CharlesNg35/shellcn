@@ -5,7 +5,8 @@ const baseURL = `http://localhost:${port}`;
 
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: true,
+  fullyParallel: false,
+  workers: 1,
   use: { baseURL },
   webServer: {
     command: `pnpm run dev --port ${port} --strictPort`,

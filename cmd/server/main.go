@@ -20,6 +20,7 @@ import (
 
 	"github.com/charlesng/shellcn/internal/audit"
 	"github.com/charlesng/shellcn/internal/auth"
+	"github.com/charlesng/shellcn/internal/config"
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/policy"
@@ -43,11 +44,13 @@ func main() {
 		dev         bool
 		addr        string
 		dbPath      string
+		configPath  string
 	)
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.BoolVar(&dev, "dev", false, "dev mode: serve the API only; Vite serves the UI")
-	flag.StringVar(&addr, "addr", ":8080", "address to listen on")
-	flag.StringVar(&dbPath, "db", "shellcn.db", "SQLite database path")
+	flag.StringVar(&configPath, "config", "", "extra directory to search for config.yaml (besides . and ./config)")
+	flag.StringVar(&addr, "addr", "", "address to listen on (overrides config)")
+	flag.StringVar(&dbPath, "db", "", "database DSN / SQLite path (overrides config)")
 	flag.Parse()
 
 	if showVersion {
@@ -55,18 +58,31 @@ func main() {
 		return
 	}
 
-	logger := telemetry.NewLogger(slog.LevelInfo, !dev)
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		slog.Default().Error("load config", "err", err)
+		os.Exit(1)
+	}
+	// CLI flags take precedence over file/env config.
+	if addr != "" {
+		cfg.Server.Addr = addr
+	}
+	if dbPath != "" {
+		cfg.Database.DSN = dbPath
+	}
+
+	logger := telemetry.NewLogger(cfg.SlogLevel(), !dev)
 	slog.SetDefault(logger)
 
-	if err := run(logger, addr, dbPath, dev); err != nil {
+	if err := run(logger, cfg, dev); err != nil {
 		logger.Error("server exited", "err", err)
 		os.Exit(1)
 	}
 }
 
-func run(logger *slog.Logger, addr, dbPath string, dev bool) error {
+func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	// Master key: required in prod; generated (ephemeral) with a loud warning in dev.
-	masterKey, err := secrets.LoadMasterKey()
+	masterKey, err := secrets.ResolveMasterKey(cfg.Secrets.MasterKey, cfg.Secrets.MasterKeyFile)
 	if err != nil {
 		if !dev {
 			return fmt.Errorf("load master key: %w", err)
@@ -80,7 +96,7 @@ func run(logger *slog.Logger, addr, dbPath string, dev bool) error {
 		return err
 	}
 
-	st, err := store.Open(store.Config{Driver: store.DriverSQLite, DSN: dbPath})
+	st, err := store.Open(store.Config{Driver: store.Driver(cfg.Database.Driver), DSN: cfg.Database.DSN})
 	if err != nil {
 		return fmt.Errorf("open store: %w", err)
 	}
@@ -110,6 +126,7 @@ func run(logger *slog.Logger, addr, dbPath string, dev bool) error {
 	creds.SetSecretAccessHook(metrics.IncSecretAccess)
 	connector := service.NewConnector(reg, creds, vault, tunnels)
 	connector.SetSecretAccessHook(metrics.IncSecretAccess)
+	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 
 	health := telemetry.NewHealth()
@@ -165,6 +182,7 @@ func run(logger *slog.Logger, addr, dbPath string, dev bool) error {
 		Tickets:     auth.NewTicketStore(0),
 		Policy:      pol,
 		Connector:   connector,
+		Connections: connections,
 		Credentials: creds,
 		Enrollments: enrollments,
 		Tunnels:     tunnels,
@@ -177,7 +195,7 @@ func run(logger *slog.Logger, addr, dbPath string, dev bool) error {
 	})
 
 	httpServer := &http.Server{
-		Addr:              addr,
+		Addr:              cfg.Server.Addr,
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -187,7 +205,7 @@ func run(logger *slog.Logger, addr, dbPath string, dev bool) error {
 		if dev {
 			mode = "dev (API only; Vite serves the UI)"
 		}
-		logger.Info("starting", "addr", addr, "version", version, "mode", mode)
+		logger.Info("starting", "addr", cfg.Server.Addr, "version", version, "mode", mode)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("listen", "err", err)
 		}

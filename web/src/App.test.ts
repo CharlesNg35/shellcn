@@ -24,20 +24,36 @@ function testRouter(): Router {
     history: createMemoryHistory(),
     routes: [
       {
+        path: "/login",
+        name: "login",
+        component: () => import("./views/LoginView.vue"),
+      },
+      {
         path: "/",
-        name: "home",
-        component: () => import("./views/HomeView.vue"),
-      },
-      {
-        path: "/c/:id",
-        name: "connection",
-        component: () => import("./views/ConnectionWorkspace.vue"),
-        props: true,
-      },
-      {
-        path: "/settings",
-        name: "settings",
-        component: () => import("./views/SettingsView.vue"),
+        component: () => import("./components/AppShell.vue"),
+        children: [
+          {
+            path: "",
+            name: "home",
+            component: () => import("./views/HomeView.vue"),
+          },
+          {
+            path: "c/:id",
+            name: "connection",
+            component: () => import("./views/ConnectionWorkspace.vue"),
+            props: true,
+          },
+          {
+            path: "credentials",
+            name: "credentials",
+            component: () => import("./views/CredentialsView.vue"),
+          },
+          {
+            path: "settings",
+            name: "settings",
+            component: () => import("./views/SettingsView.vue"),
+          },
+        ],
       },
     ],
   });

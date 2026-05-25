@@ -32,6 +32,7 @@ type Deps struct {
 	Tickets     *auth.TicketStore
 	Policy      *policy.Enforcer
 	Connector   *service.Connector
+	Connections *service.ConnectionService
 	Credentials *service.CredentialService
 	Enrollments *service.EnrollmentService
 	Tunnels     *transport.Registry
@@ -102,8 +103,33 @@ func (s *Server) routes() chi.Router {
 
 			pr.Get("/plugins", s.handleListPlugins)
 			pr.Get("/plugins/{name}", s.handleGetPlugin)
+
 			pr.Get("/connections", s.handleListConnections)
 			pr.Get("/credentials", s.handleListCredentials)
+
+			if s.deps.Connections != nil {
+				pr.Post("/connections", s.handleCreateConnection)
+				pr.Get("/connections/{id}", s.handleConnectionDetail)
+				pr.Put("/connections/{id}", s.handleUpdateConnection)
+				pr.Delete("/connections/{id}", s.handleDeleteConnection)
+			}
+			if s.deps.Credentials != nil {
+				pr.Post("/credentials", s.handleCreateCredential)
+				pr.Put("/credentials/{id}", s.handleUpdateCredential)
+				pr.Delete("/credentials/{id}", s.handleDeleteCredential)
+			}
+
+			pr.Get("/users", s.handleListUsers)
+			if s.deps.Connections != nil {
+				pr.Get("/connections/{id}/grants", s.handleListConnectionGrants)
+				pr.Post("/connections/{id}/grants", s.handleCreateConnectionGrant)
+				pr.Delete("/connections/{id}/grants/{grantId}", s.handleDeleteConnectionGrant)
+			}
+			if s.deps.Credentials != nil {
+				pr.Get("/credentials/{id}/grants", s.handleListCredentialGrants)
+				pr.Post("/credentials/{id}/grants", s.handleCreateCredentialGrant)
+				pr.Delete("/credentials/{id}/grants/{grantId}", s.handleDeleteCredentialGrant)
+			}
 
 			pr.Post("/connections/{id}/tickets", s.handleMintTicket)
 			if s.deps.Enrollments != nil {

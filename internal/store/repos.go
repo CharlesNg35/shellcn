@@ -114,6 +114,14 @@ func (s *gormConnectionStore) ListByOwner(ctx context.Context, ownerID string) (
 	return list, nil
 }
 
+func (s *gormConnectionStore) List(ctx context.Context) ([]models.Connection, error) {
+	var list []models.Connection
+	if err := s.db.WithContext(ctx).Order("name").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (s *gormConnectionStore) Update(ctx context.Context, c *models.Connection) error {
 	res := s.db.WithContext(ctx).Model(&models.Connection{}).Where("id = ?", c.ID).
 		Select("name", "protocol", "transport", "shared", "config", "secrets").Updates(c)
@@ -205,6 +213,14 @@ func (s *gormCredentialGrantStore) Has(ctx context.Context, credentialID, subjec
 	err := s.db.WithContext(ctx).Model(&models.CredentialGrant{}).
 		Where("credential_id = ? AND subject_id = ?", credentialID, subjectID).Count(&n).Error
 	return n > 0, err
+}
+
+func (s *gormCredentialGrantStore) ListByCredential(ctx context.Context, credentialID string) ([]models.CredentialGrant, error) {
+	var list []models.CredentialGrant
+	if err := s.db.WithContext(ctx).Where("credential_id = ?", credentialID).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (s *gormCredentialGrantStore) ListBySubject(ctx context.Context, subjectID string) ([]models.CredentialGrant, error) {

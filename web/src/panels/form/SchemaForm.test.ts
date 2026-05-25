@@ -148,4 +148,32 @@ describe("SchemaForm", () => {
     // No password input is shown until the user chooses to replace.
     expect(w.find('input[type="password"]').exists()).toBe(false);
   });
+
+  it("does not require an already-set secret left untouched on edit", async () => {
+    const requiredSecret: Schema = {
+      groups: [
+        {
+          name: "Auth",
+          fields: [
+            {
+              key: "token",
+              label: "Token",
+              type: "password",
+              secret: true,
+              required: true,
+            },
+          ],
+        },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: { schema: requiredSecret, secretsSet: { token: true } },
+    });
+    (w.vm as unknown as { submit: () => void }).submit();
+    await flushPromises();
+    const submitted = w.emitted("submit");
+    expect(submitted).toBeTruthy();
+    // The kept secret is neither blocked nor resubmitted.
+    expect(submitted?.[0][0]).not.toHaveProperty("token");
+  });
 });

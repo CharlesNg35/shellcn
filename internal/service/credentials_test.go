@@ -83,6 +83,40 @@ func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 	}
 }
 
+func TestCredentialRotateAndResolve(t *testing.T) {
+	ctx := context.Background()
+	svc, st := newCredentialService(t)
+	cred, _ := svc.Create(ctx, service.NewCredentialInput{OwnerID: "owner", Name: "k", Kind: "ssh_password", Secret: "old-secret"})
+
+	if pt, err := svc.Resolve(ctx, "owner", cred.ID); err != nil || string(pt) != "old-secret" {
+		t.Fatalf("initial resolve: pt=%q err=%v", pt, err)
+	}
+
+	// Rotate: every referencing connection picks up the new value on next resolve.
+	if _, err := svc.Update(ctx, cred.ID, service.UpdateCredentialInput{Name: "k", Kind: "ssh_password", Secret: "new-secret"}); err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+	if pt, err := svc.Resolve(ctx, "owner", cred.ID); err != nil || string(pt) != "new-secret" {
+		t.Fatalf("post-rotate resolve: pt=%q err=%v", pt, err)
+	}
+
+	// A blank secret on update keeps the current material (write-only).
+	if _, err := svc.Update(ctx, cred.ID, service.UpdateCredentialInput{Name: "renamed", Kind: "ssh_password", Secret: ""}); err != nil {
+		t.Fatalf("metadata-only update: %v", err)
+	}
+	if pt, err := svc.Resolve(ctx, "owner", cred.ID); err != nil || string(pt) != "new-secret" {
+		t.Fatalf("resolve after metadata update: pt=%q err=%v", pt, err)
+	}
+
+	stored, _ := st.Credentials.Get(ctx, cred.ID)
+	if stored.Name != "renamed" {
+		t.Errorf("metadata not persisted: %+v", stored)
+	}
+	if containsBytes(stored.EncryptedSecret, "new-secret") {
+		t.Error("plaintext leaked into stored credential after rotation")
+	}
+}
+
 func TestCredentialResolveNotFound(t *testing.T) {
 	ctx := context.Background()
 	svc, _ := newCredentialService(t)

@@ -47,6 +47,18 @@ func (testPlugin) Manifest() plugin.Manifest {
 		APIVersion: plugin.CurrentAPIVersion, Name: "tester", Version: "0", Title: "Tester",
 		Layout:              plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
+		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{
+			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true},
+			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true},
+			{
+				Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}},
+			},
+			{
+				Key: "api_credential", Label: "API Credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}},
+			},
+		}}}},
 		Agent: &plugin.AgentProfile{
 			Proxy: plugin.ProxyTarget{Mode: plugin.AgentTCP, Address: "127.0.0.1:1", Risk: plugin.RiskPrivileged},
 			Install: []plugin.InstallArtifact{
@@ -180,6 +192,7 @@ func newHarness(t *testing.T) *harness {
 	t.Cleanup(sessMgr.Shutdown)
 	tunnels := transport.NewRegistry()
 	connector := service.NewConnector(reg, creds, vault, tunnels)
+	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	authMgr := auth.NewSessionManager(time.Hour)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 
@@ -187,7 +200,7 @@ func newHarness(t *testing.T) *harness {
 		Plugins: reg, Store: st, Sessions: sessMgr,
 		Auth: auth.NewLocalAuthenticator(st.Users), SessionMgr: authMgr,
 		Tickets: auth.NewTicketStore(time.Minute), Policy: pol,
-		Connector: connector, Credentials: creds, Audit: audit.NewWriter(st.Audit),
+		Connector: connector, Connections: connections, Credentials: creds, Audit: audit.NewWriter(st.Audit),
 		Enrollments: enrollments, Tunnels: tunnels,
 	})
 

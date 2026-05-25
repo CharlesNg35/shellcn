@@ -13,9 +13,9 @@ import (
 	"github.com/charlesng/shellcn/internal/store"
 )
 
-// TestNoopEndToEnd mirrors the M0 UI's real API flow against the noop plugin:
+// TestNoopEndToEnd exercises the full core path against the noop plugin:
 // projection → table load via the route resolver → WS echo through the wrapper →
-// audit row written → authz enforced. This is the Phase 2 (M1) exit gate.
+// audit row written → authz enforced.
 func TestNoopEndToEnd(t *testing.T) {
 	h := newHarness(t)
 
