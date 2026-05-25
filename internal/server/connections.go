@@ -138,6 +138,33 @@ func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	s.cleanupConnectionDependents(ctx, conn.ID)
 	s.auditConnEvent(ctx, user, conn.ID, connDeleteEvent, plugin.RiskDestructive, models.AuditAllowed, nil)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// cleanupConnectionDependents removes the access-control state tied to a deleted
+// connection so it can never be inherited by a future record: it drops any live
+// agent tunnel, deletes sharing grants, and revokes outstanding enrollments.
+// Best-effort — the connection is already gone, so failures are logged not fatal.
+func (s *Server) cleanupConnectionDependents(ctx context.Context, connID string) {
+	if s.deps.Tunnels != nil {
+		s.deps.Tunnels.Remove(connID)
+	}
+	if grants, err := s.deps.Store.Grants.ListByConnection(ctx, connID); err == nil {
+		for _, g := range grants {
+			if err := s.deps.Store.Grants.Delete(ctx, g.ID); err != nil {
+				s.deps.Logger.Warn("cleanup grant failed", "connection", connID, "grant", g.ID, "err", err)
+			}
+		}
+	}
+	if enrs, err := s.deps.Store.Enrollments.ListByConnection(ctx, connID); err == nil {
+		for _, e := range enrs {
+			if e.Status == models.EnrollmentPending || e.Status == models.EnrollmentOnline {
+				if err := s.deps.Store.Enrollments.UpdateStatus(ctx, e.ID, models.EnrollmentRevoked); err != nil {
+					s.deps.Logger.Warn("cleanup enrollment failed", "connection", connID, "enrollment", e.ID, "err", err)
+				}
+			}
+		}
+	}
 }

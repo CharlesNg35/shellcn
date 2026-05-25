@@ -132,6 +132,21 @@ func (s *Server) handleDeleteCredential(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	s.cleanupCredentialDependents(ctx, cred.ID)
 	s.auditCredEvent(ctx, user, cred.ID, credDeleteEvent, plugin.RiskDestructive, models.AuditAllowed, nil)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// cleanupCredentialDependents deletes the use-grants tied to a deleted credential
+// so they cannot be inherited by a future record. Best-effort.
+func (s *Server) cleanupCredentialDependents(ctx context.Context, credID string) {
+	grants, err := s.deps.Store.CredentialGrants.ListByCredential(ctx, credID)
+	if err != nil {
+		return
+	}
+	for _, g := range grants {
+		if err := s.deps.Store.CredentialGrants.Delete(ctx, g.ID); err != nil {
+			s.deps.Logger.Warn("cleanup credential grant failed", "credential", credID, "grant", g.ID, "err", err)
+		}
+	}
 }

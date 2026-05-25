@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watchEffect } from "vue";
+import { onMounted, reactive, ref, watch, watchEffect } from "vue";
 import Tree from "primevue/tree";
 import type { TreeNode as PVNode } from "primevue/treenode";
 import { fetchDoc, fetchPage } from "../../api/dataSource";
@@ -7,6 +7,7 @@ import type {
   DataSource,
   Icon,
   ResourceRef,
+  Row,
   TreeGroup,
   TreeNode,
 } from "../../types/projection";
@@ -16,6 +17,7 @@ interface NodeData {
   isGroup?: boolean;
   icon?: Icon;
   ref?: ResourceRef;
+  row?: Row;
   source?: DataSource;
 }
 
@@ -27,7 +29,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   "select-group": [key: string];
-  "select-node": [ref: ResourceRef];
+  "select-node": [row: Row];
 }>();
 
 const nodes = ref<PVNode[]>([]);
@@ -40,7 +42,12 @@ function toNode(n: TreeNode): PVNode {
     key: n.key,
     label: n.label,
     leaf: !n.childrenSource,
-    data: { icon: n.icon, ref: n.ref, source: n.childrenSource },
+    data: {
+      icon: n.icon,
+      ref: n.ref,
+      row: { ...n, ref: n.ref },
+      source: n.childrenSource,
+    },
   };
 }
 
@@ -71,11 +78,20 @@ async function onNodeSelect(node: PVNode): Promise<void> {
   const data = node.data as NodeData;
   selectionKeys.value = { [String(node.key)]: true };
   if (data.isGroup) emit("select-group", String(node.key));
-  else if (data.ref) emit("select-node", data.ref);
+  else if (data.row) emit("select-node", data.row);
   if (!node.leaf) {
     expandedKeys.value = { ...expandedKeys.value, [String(node.key)]: true };
     await loadChildren(node);
   }
+
+  watch(
+    () => [props.selectedGroup, props.selectedUid] as const,
+    ([group, uid]) => {
+      const selected = uid ?? group;
+      selectionKeys.value = selected ? { [selected]: true } : {};
+    },
+    { immediate: true },
+  );
 }
 
 onMounted(async () => {

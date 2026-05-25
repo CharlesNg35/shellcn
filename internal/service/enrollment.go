@@ -138,9 +138,6 @@ func (s *EnrollmentService) Redeem(ctx context.Context, token string) (connectio
 	if err != nil {
 		return "", plugin.ProxyTarget{}, ErrEnrollmentInvalid
 	}
-	if enr.Status != models.EnrollmentPending || s.now().After(enr.ExpiresAt) {
-		return "", plugin.ProxyTarget{}, ErrEnrollmentInvalid
-	}
 	conn, err := s.conns.Get(ctx, enr.ConnectionID)
 	if err != nil {
 		return "", plugin.ProxyTarget{}, ErrEnrollmentInvalid
@@ -149,8 +146,14 @@ func (s *EnrollmentService) Redeem(ctx context.Context, token string) (connectio
 	if !ok || m.Agent == nil {
 		return "", plugin.ProxyTarget{}, ErrNoAgentSupport
 	}
-	if err := s.store.UpdateStatus(ctx, enr.ID, models.EnrollmentOnline); err != nil {
+	// Atomic single-use gate: only the caller that flips pending→online wins, so
+	// two agents racing the same token cannot both enroll.
+	consumed, err := s.store.Consume(ctx, enr.ID, s.now())
+	if err != nil {
 		return "", plugin.ProxyTarget{}, err
+	}
+	if !consumed {
+		return "", plugin.ProxyTarget{}, ErrEnrollmentInvalid
 	}
 	return conn.ID, m.Agent.Proxy, nil
 }

@@ -125,6 +125,10 @@ type EnrollmentStore interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (models.AgentEnrollment, error)
 	ListByConnection(ctx context.Context, connectionID string) ([]models.AgentEnrollment, error)
 	UpdateStatus(ctx context.Context, id string, status models.AgentEnrollmentStatus) error
+	// Consume atomically transitions a still-pending, unexpired enrollment to
+	// online. It returns true only for the single caller that performed the
+	// transition, so a token cannot be redeemed by two racing agents.
+	Consume(ctx context.Context, id string, now time.Time) (bool, error)
 }
 
 // PolicyStore persists additive authorization policies loaded into Casbin.
@@ -141,6 +145,7 @@ type InvitationStore interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (models.Invitation, error)
 	List(ctx context.Context) ([]models.Invitation, error)
 	Update(ctx context.Context, i *models.Invitation) error
+	Consume(ctx context.Context, id string, acceptedAt time.Time) (bool, error)
 	Delete(ctx context.Context, id string) error
 }
 

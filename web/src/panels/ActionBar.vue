@@ -29,7 +29,13 @@ const riskClass: Record<RiskLevel, string> = {
 
 function trigger(action: Action): void {
   error.value = null;
-  if (action.requiresConfirm || action.input) pending.value = action;
+  if (
+    action.requiresConfirm ||
+    action.input ||
+    action.risk === "destructive" ||
+    action.risk === "privileged"
+  )
+    pending.value = action;
   else void execute(action);
 }
 

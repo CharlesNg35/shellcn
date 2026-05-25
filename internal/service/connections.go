@@ -327,12 +327,21 @@ func secretKeys(schema plugin.Schema) []string {
 // store as plaintext and the non-blank secret values to encrypt.
 func splitSecrets(schema plugin.Schema, in map[string]any) (config map[string]any, plain map[string]string) {
 	secret := map[string]bool{}
+	known := map[string]bool{}
 	for _, key := range secretKeys(schema) {
 		secret[key] = true
+	}
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			known[field.Key] = true
+		}
 	}
 	config = map[string]any{}
 	plain = map[string]string{}
 	for k, v := range in {
+		if !known[k] {
+			continue
+		}
 		if secret[k] {
 			if str, ok := v.(string); ok && strings.TrimSpace(str) != "" {
 				plain[k] = str

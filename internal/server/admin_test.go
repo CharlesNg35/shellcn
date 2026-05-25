@@ -67,6 +67,14 @@ func TestAdminDeleteUserRootRules(t *testing.T) {
 	if resp := h.do(t, http.MethodDelete, "/api/admin/users/admin2", "admin", nil); resp.Status != http.StatusForbidden {
 		t.Errorf("non-root delete admin: want 403, got %d", resp.Status)
 	}
+	if resp := h.do(t, http.MethodPut, "/api/admin/users/admin2", "admin",
+		strings.NewReader(`{"role":"viewer","disabled":false}`)); resp.Status != http.StatusForbidden {
+		t.Errorf("non-root demote admin: want 403, got %d", resp.Status)
+	}
+	if resp := h.do(t, http.MethodPut, "/api/admin/users/admin2", "admin",
+		strings.NewReader(`{"role":"admin","disabled":true}`)); resp.Status != http.StatusForbidden {
+		t.Errorf("non-root disable admin: want 403, got %d", resp.Status)
+	}
 	// The protected root admin can never be deleted.
 	if resp := h.do(t, http.MethodDelete, "/api/admin/users/root", "root", nil); resp.Status != http.StatusForbidden {
 		t.Errorf("delete protected root: want 403, got %d", resp.Status)

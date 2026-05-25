@@ -93,7 +93,11 @@ func (s *Server) handleAgentState(w http.ResponseWriter, r *http.Request) {
 // its enrollment token in the first message (not the URL); on success the gateway
 // registers the connection's dialer and serves the multiplexed tunnel.
 func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	// No InsecureSkipVerify: the CLI agent sends no Origin header (accepted by
+	// default), while a browser's cross-origin upgrade carries a mismatched
+	// Origin and is rejected. The enrollment token in the first message is the
+	// authenticator.
+	c, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return
 	}

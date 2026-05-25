@@ -96,8 +96,12 @@ func (s *recSession) finishLocked(status models.RecordingStatus) {
 	close(s.lr.stop)
 	<-s.drainDone
 
-	_ = s.recorder.Close()
-	_ = s.blob.Close()
+	if err := s.recorder.Close(); err != nil {
+		s.lr.failed.Store(true)
+	}
+	if err := s.blob.Close(); err != nil {
+		s.lr.failed.Store(true)
+	}
 
 	end := s.engine.now()
 	s.rec.EndedAt = &end
@@ -112,9 +116,12 @@ func (s *recSession) finishLocked(status models.RecordingStatus) {
 	} else {
 		s.rec.Status = status
 	}
-	_ = s.engine.store.Update(s.ctx, s.rec)
+	updateErr := s.engine.store.Update(s.ctx, s.rec)
 	s.engine.metrics.RecordingFinished()
-	if s.rec.Status == models.RecordingFailed {
+	if updateErr != nil {
+		s.engine.metrics.RecordingFailed()
+		s.engine.auditRecording(s.ctx, s, EventFailed, models.AuditError, updateErr)
+	} else if s.rec.Status == models.RecordingFailed {
 		s.engine.metrics.RecordingFailed()
 		s.engine.auditRecording(s.ctx, s, event, models.AuditError, nil)
 	} else {

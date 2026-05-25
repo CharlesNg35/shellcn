@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +31,7 @@ type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 // DialContext, so HTTP() reports unavailable.
 type Direct struct {
 	dialer *net.Dialer
+	target targetAllowlist
 }
 
 // NewDirect returns a direct transport with a sane dial timeout.
@@ -35,8 +39,17 @@ func NewDirect() *Direct {
 	return &Direct{dialer: &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}}
 }
 
+func NewDirectForConnection(conn models.Connection) *Direct {
+	d := NewDirect()
+	d.target = newTargetAllowlist(conn.Config)
+	return d
+}
+
 // DialContext dials the requested address directly.
 func (d *Direct) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	if err := d.target.allow(network, addr); err != nil {
+		return nil, err
+	}
 	return d.dialer.DialContext(ctx, network, addr)
 }
 
@@ -44,6 +57,102 @@ func (d *Direct) DialContext(ctx context.Context, network, addr string) (net.Con
 // DialContext. An L7 base URL + RoundTripper is only injected by an L7 agent.
 func (d *Direct) HTTP() (string, http.RoundTripper, bool) {
 	return "", nil, false
+}
+
+type targetAllowlist struct {
+	enabled bool
+	hosts   map[string]bool
+	addrs   map[string]bool
+	unix    map[string]bool
+	ports   map[string]bool
+}
+
+func newTargetAllowlist(config map[string]any) targetAllowlist {
+	t := targetAllowlist{
+		enabled: true,
+		hosts:   map[string]bool{},
+		addrs:   map[string]bool{},
+		unix:    map[string]bool{},
+		ports:   map[string]bool{},
+	}
+	for key, value := range config {
+		if port, ok := portValue(value); ok && strings.Contains(strings.ToLower(key), "port") {
+			t.ports[port] = true
+			continue
+		}
+		s, ok := value.(string)
+		if !ok || strings.TrimSpace(s) == "" {
+			continue
+		}
+		t.addString(s)
+	}
+	return t
+}
+
+func (t targetAllowlist) addString(raw string) {
+	s := strings.TrimSpace(raw)
+	if strings.HasPrefix(s, "/") {
+		t.unix[s] = true
+	}
+	if u, err := url.Parse(s); err == nil && u.Hostname() != "" {
+		t.hosts[u.Hostname()] = true
+		if u.Port() != "" {
+			t.addrs[net.JoinHostPort(u.Hostname(), u.Port())] = true
+			t.ports[u.Port()] = true
+		}
+		return
+	}
+	if host, port, err := net.SplitHostPort(s); err == nil {
+		t.hosts[host] = true
+		t.addrs[net.JoinHostPort(host, port)] = true
+		t.ports[port] = true
+		return
+	}
+	if !strings.ContainsAny(s, "/\\") {
+		t.hosts[s] = true
+	}
+}
+
+func (t targetAllowlist) allow(network, addr string) error {
+	if !t.enabled {
+		return nil
+	}
+	if len(t.hosts) == 0 && len(t.addrs) == 0 && len(t.unix) == 0 {
+		return fmt.Errorf("transport: direct target is not declared in connection config")
+	}
+	switch network {
+	case "unix", "unixpacket":
+		if t.unix[addr] || t.addrs[addr] {
+			return nil
+		}
+		return fmt.Errorf("transport: direct dial to %q is outside connection target", addr)
+	default:
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return fmt.Errorf("transport: direct dial address %q must include host and port", addr)
+		}
+		if t.addrs[net.JoinHostPort(host, port)] {
+			return nil
+		}
+		if t.hosts[host] && (len(t.ports) == 0 || t.ports[port]) {
+			return nil
+		}
+		return fmt.Errorf("transport: direct dial to %q is outside connection target", addr)
+	}
+}
+
+func portValue(value any) (string, bool) {
+	switch v := value.(type) {
+	case int:
+		return strconv.Itoa(v), true
+	case int64:
+		return strconv.FormatInt(v, 10), true
+	case float64:
+		if v == float64(int(v)) {
+			return strconv.Itoa(int(v)), true
+		}
+	}
+	return "", false
 }
 
 // TunnelRegistry resolves a live agent dialer for a connection.
@@ -56,22 +165,42 @@ type TunnelRegistry interface {
 // agent-mode connections. It is safe for concurrent use.
 type Registry struct {
 	mu      sync.RWMutex
-	dialers map[string]DialFunc
+	seq     uint64
+	dialers map[string]registration
+}
+
+// registration tags a dialer with a unique id so a teardown only removes its
+// own entry — never a later tunnel that replaced it.
+type registration struct {
+	id   uint64
+	dial DialFunc
 }
 
 // NewRegistry returns an empty tunnel registry.
 func NewRegistry() *Registry {
-	return &Registry{dialers: make(map[string]DialFunc)}
+	return &Registry{dialers: make(map[string]registration)}
 }
 
-// Register binds a connection's agent dialer; replacing any previous one.
-func (r *Registry) Register(connectionID string, dial DialFunc) {
+// Register binds a connection's agent dialer, replacing any previous one, and
+// returns a release func that removes only this registration. A teardown that
+// fires after another tunnel has replaced this one is a no-op, so it cannot
+// drop the live tunnel.
+func (r *Registry) Register(connectionID string, dial DialFunc) (release func()) {
 	r.mu.Lock()
-	r.dialers[connectionID] = dial
+	r.seq++
+	id := r.seq
+	r.dialers[connectionID] = registration{id: id, dial: dial}
 	r.mu.Unlock()
+	return func() {
+		r.mu.Lock()
+		if cur, ok := r.dialers[connectionID]; ok && cur.id == id {
+			delete(r.dialers, connectionID)
+		}
+		r.mu.Unlock()
+	}
 }
 
-// Remove drops a connection's tunnel (agent disconnected).
+// Remove drops a connection's tunnel unconditionally (e.g. on revocation).
 func (r *Registry) Remove(connectionID string) {
 	r.mu.Lock()
 	delete(r.dialers, connectionID)
@@ -82,8 +211,8 @@ func (r *Registry) Remove(connectionID string) {
 func (r *Registry) Dialer(connectionID string) (DialFunc, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	dial, ok := r.dialers[connectionID]
-	return dial, ok
+	reg, ok := r.dialers[connectionID]
+	return reg.dial, ok
 }
 
 // agentNet routes L4 through an agent tunnel dialer.
@@ -105,7 +234,7 @@ func (a *agentNet) HTTP() (string, http.RoundTripper, bool) {
 func Build(conn models.Connection, reg TunnelRegistry) (plugin.NetTransport, error) {
 	switch conn.Transport {
 	case "", string(plugin.TransportDirect):
-		return NewDirect(), nil
+		return NewDirectForConnection(conn), nil
 	case string(plugin.TransportAgent):
 		if reg == nil {
 			return nil, ErrAgentUnavailable

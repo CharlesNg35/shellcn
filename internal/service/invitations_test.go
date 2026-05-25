@@ -32,9 +32,12 @@ func TestInvitationCreateAndAccept(t *testing.T) {
 	ctx := context.Background()
 	inv, st, mailer := newInvitationService(true)
 
-	_, token, err := inv.Create(ctx, "new@example.com", models.RoleOperator, "admin", "https://host/invite/")
+	_, token, sent, err := inv.Create(ctx, "new@example.com", models.RoleOperator, "admin", "https://host/invite/")
 	if err != nil {
 		t.Fatalf("create: %v", err)
+	}
+	if !sent {
+		t.Fatal("email should be reported sent when mailer succeeds")
 	}
 	if mailer.sent != 1 {
 		t.Errorf("expected one invite email, sent=%d", mailer.sent)
@@ -65,7 +68,7 @@ func TestInvitationRevoke(t *testing.T) {
 	ctx := context.Background()
 	inv, _, _ := newInvitationService(false)
 
-	rec, token, err := inv.Create(ctx, "x@example.com", models.RoleViewer, "admin", "https://host/invite/")
+	rec, token, _, err := inv.Create(ctx, "x@example.com", models.RoleViewer, "admin", "https://host/invite/")
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -81,9 +84,12 @@ func TestInvitationMailerOptional(t *testing.T) {
 	ctx := context.Background()
 	inv, _, mailer := newInvitationService(false)
 
-	_, token, err := inv.Create(ctx, "y@example.com", models.RoleViewer, "admin", "https://host/invite/")
+	_, token, sent, err := inv.Create(ctx, "y@example.com", models.RoleViewer, "admin", "https://host/invite/")
 	if err != nil {
 		t.Fatalf("create: %v", err)
+	}
+	if sent {
+		t.Fatal("disabled mailer should not be reported sent")
 	}
 	if mailer.sent != 0 {
 		t.Errorf("disabled mailer should not send, sent=%d", mailer.sent)

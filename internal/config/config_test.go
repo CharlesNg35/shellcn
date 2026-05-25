@@ -13,7 +13,7 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	if cfg.Server.Addr != ":8080" {
+	if cfg.Server.Addr != ":8081" {
 		t.Errorf("addr default: got %q", cfg.Server.Addr)
 	}
 	if cfg.Server.LogLevel != "info" {

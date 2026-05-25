@@ -32,6 +32,10 @@ make test       # Go + frontend tests
 make lint       # golangci-lint + gofumpt + frontend lint
 ```
 
+By default, `make dev-web` proxies `/api` to the real Go server at
+`http://localhost:8081`. Use `VITE_API=mock pnpm dev` from `web/` only when you
+want the fixture-backed mock API.
+
 ## License
 
 [MIT](LICENSE)

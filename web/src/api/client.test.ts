@@ -2,6 +2,10 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { installFetch } from "../test/fetchMock";
 import { api, ApiError, setCsrfToken, setApiErrorHandler } from "./client";
 
+function headers(init?: RequestInit): Headers {
+  return new Headers(init?.headers);
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   setCsrfToken("");
@@ -18,10 +22,8 @@ describe("api client", () => {
 
     const [, getInit] = fetchFn.mock.calls[0];
     const [, postInit] = fetchFn.mock.calls[1];
-    const getHeaders = (getInit?.headers ?? {}) as Record<string, string>;
-    const postHeaders = (postInit?.headers ?? {}) as Record<string, string>;
-    expect(getHeaders["X-CSRF-Token"]).toBeUndefined();
-    expect(postHeaders["X-CSRF-Token"]).toBe("tok-123");
+    expect(headers(getInit).get("X-CSRF-Token")).toBeNull();
+    expect(headers(postInit).get("X-CSRF-Token")).toBe("tok-123");
   });
 
   it("invokes the error interceptor and rejects with an ApiError", async () => {

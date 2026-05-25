@@ -20,7 +20,6 @@ import ConfirmDialog from "../components/ConfirmDialog.vue";
 import { recordingForStream } from "../composables/useRecordingControl";
 import type {
   PluginProjection,
-  ResourceRef,
   ResourceType,
   Row,
   Tab as TabDef,
@@ -136,8 +135,8 @@ function tabConfig(tab: TabDef): Record<string, unknown> {
 function onSelectGroup(key: string): void {
   ws.selectGroup(props.id, key);
 }
-function onSelectNode(ref: ResourceRef): void {
-  ws.selectRef(props.id, ref);
+function onSelectNode(row: Row): void {
+  ws.selectRow(props.id, row);
 }
 function onSelectRow(row: Row): void {
   ws.selectRow(props.id, row);

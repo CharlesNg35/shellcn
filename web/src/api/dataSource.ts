@@ -1,4 +1,4 @@
-import { API_BASE, ApiError } from "./client";
+import { API_BASE, apiFetch } from "./client";
 import type { SocketLike } from "../stores/sessions";
 import type {
   DataSource,
@@ -91,8 +91,7 @@ export function routeURL(
 }
 
 async function getJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  const res = await apiFetch(url);
   return (await res.json()) as T;
 }
 
@@ -140,12 +139,11 @@ export async function runAction(
     routePath(connectionId, routeId),
     queryParams(resolveParams(params, ctx)),
   );
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body ?? {}),
   });
-  if (!res.ok) throw new ApiError(res.status, res.statusText);
   return (await res.json()) as ActionResult;
 }
 
@@ -192,11 +190,10 @@ export async function runFormAction(
   for (const [key, value] of Object.entries(body)) {
     appendFormValue(form, key, value);
   }
-  const res = await fetch(routeURL(connectionId, routeId, ctx, params), {
+  const res = await apiFetch(routeURL(connectionId, routeId, ctx, params), {
     method,
     body: form,
   });
-  if (!res.ok) throw new ApiError(res.status, res.statusText);
   return (await res.json()) as ActionResult;
 }
 
@@ -210,11 +207,10 @@ export async function uploadFiles(
 ): Promise<ActionResult> {
   const body = new FormData();
   for (const file of files) body.append(fieldName, file, file.name);
-  const res = await fetch(routeURL(connectionId, routeId, ctx, params), {
+  const res = await apiFetch(routeURL(connectionId, routeId, ctx, params), {
     method: "POST",
     body,
   });
-  if (!res.ok) throw new ApiError(res.status, res.statusText);
   return (await res.json()) as ActionResult;
 }
 
@@ -223,12 +219,14 @@ async function requestTicket(
   routeId: string,
   params: Record<string, string>,
 ): Promise<string> {
-  const res = await fetch(`${API_BASE}/connections/${connectionId}/tickets`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ routeId, params }),
-  });
-  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  const res = await apiFetch(
+    `${API_BASE}/connections/${connectionId}/tickets`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ routeId, params }),
+    },
+  );
   const { ticket } = (await res.json()) as { ticket: string };
   return ticket;
 }
@@ -298,6 +296,7 @@ export function watch(
 
   async function connect(): Promise<void> {
     if (stopped) return;
+    timer = undefined;
     try {
       const { url } = await prepareStream(connectionId, ds, ctx);
       if (stopped) return;
@@ -317,7 +316,7 @@ export function watch(
   }
 
   function scheduleReconnect(): void {
-    if (stopped) return;
+    if (stopped || timer) return;
     timer = setTimeout(connect, reconnectMs);
   }
 

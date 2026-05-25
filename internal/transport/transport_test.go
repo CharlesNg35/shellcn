@@ -49,6 +49,39 @@ func TestBuildDirect(t *testing.T) {
 	}
 }
 
+func TestDirectForConnectionOnlyDialsDeclaredTarget(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+	go func() {
+		c, err := ln.Accept()
+		if err == nil {
+			_ = c.Close()
+		}
+	}()
+	host, port, err := net.SplitHostPort(ln.Addr().String())
+	if err != nil {
+		t.Fatalf("split addr: %v", err)
+	}
+	d := transport.NewDirectForConnection(models.Connection{Config: map[string]any{"host": host, "port": port}})
+	c, err := d.DialContext(context.Background(), "tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("declared dial: %v", err)
+	}
+	_ = c.Close()
+
+	if _, err := d.DialContext(context.Background(), "tcp", net.JoinHostPort(host, "1")); err == nil {
+		t.Fatal("dial to undeclared port should be rejected")
+	}
+
+	empty := transport.NewDirectForConnection(models.Connection{})
+	if _, err := empty.DialContext(context.Background(), "tcp", ln.Addr().String()); err == nil {
+		t.Fatal("connection with no declared target should not direct-dial arbitrary addresses")
+	}
+}
+
 func TestBuildAgentUnavailableWithoutTunnel(t *testing.T) {
 	_, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, transport.NewRegistry())
 	if !errors.Is(err, transport.ErrAgentUnavailable) {

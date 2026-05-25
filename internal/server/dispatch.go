@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -68,11 +69,56 @@ func (s *Server) resolve(r *http.Request) (resolved, error) {
 		return resolved{}, plugin.ErrNotFound
 	}
 
-	res := resolved{user: user, conn: conn, plg: plg, route: route, params: pParams(r)}
+	params, err := resolveRouteParams(route.Path, pParams(r))
+	if err != nil {
+		return resolved{user: user, conn: conn, plg: plg, route: route, params: pParams(r)}, err
+	}
+	res := resolved{user: user, conn: conn, plg: plg, route: route, params: params}
 	if err := s.authorize(ctx, user, conn, route); err != nil {
 		return res, err
 	}
 	return res, nil
+}
+
+func resolveRouteParams(path string, got map[string]string) (map[string]string, error) {
+	names := templateParamNames(path)
+	if len(names) == 0 {
+		return got, nil
+	}
+	out := make(map[string]string, len(names))
+	for name := range names {
+		v := got[name]
+		if v == "" {
+			return nil, fmt.Errorf("%w: missing route param %q", plugin.ErrInvalidInput, name)
+		}
+		out[name] = v
+	}
+	for name := range got {
+		if !names[name] {
+			return nil, fmt.Errorf("%w: unknown route param %q", plugin.ErrInvalidInput, name)
+		}
+	}
+	return out, nil
+}
+
+func templateParamNames(path string) map[string]bool {
+	out := map[string]bool{}
+	for {
+		start := strings.IndexByte(path, '{')
+		if start < 0 {
+			return out
+		}
+		path = path[start+1:]
+		end := strings.IndexByte(path, '}')
+		if end < 0 {
+			return out
+		}
+		name := strings.TrimSpace(path[:end])
+		if name != "" {
+			out[name] = true
+		}
+		path = path[end+1:]
+	}
 }
 
 // authorize resolves the user's grant on the connection and applies policy.
@@ -136,7 +182,8 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, res resolved) {
-	ctx := r.Context()
+	ctx, cancel := routeContext(r.Context(), res.route)
+	defer cancel()
 	handle, err := s.acquireSession(ctx, res)
 	if err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
@@ -144,7 +191,7 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, res resolved)
 		return
 	}
 
-	rc, cleanup, err := s.bindRequest(w, r, res, handle.Session())
+	rc, cleanup, err := s.bindRequest(w, r.WithContext(ctx), res, handle)
 	if err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
 		writeError(w, s.deps.Logger, err)
@@ -220,7 +267,8 @@ type wsClientStream struct {
 func (s *wsClientStream) Context() context.Context { return s.ctx }
 
 func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolved) {
-	ctx := r.Context()
+	ctx, cancel := routeContext(r.Context(), res.route)
+	defer cancel()
 
 	// Browsers can't set Authorization on a WS upgrade, so a param-scoped,
 	// single-use ticket is mandatory; the origin is checked too.
@@ -263,17 +311,24 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	}
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
 
-	streamCtx, cancel := context.WithCancel(context.Background())
+	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	conn := websocket.NetConn(streamCtx, c, websocket.MessageText)
 	client := pending.Attach(&wsClientStream{Conn: conn, ctx: streamCtx})
 
-	rc := plugin.NewRequestContext(streamCtx, res.user, handle.Session(), res.params, r.URL.Query(), nil)
+	rc := plugin.NewRequestContext(streamCtx, res.user, handle, res.params, r.URL.Query(), nil)
 	if err := res.route.Stream(rc, client); err != nil {
 		_ = c.Close(websocket.StatusInternalError, "stream error")
 		return
 	}
 	_ = c.Close(websocket.StatusNormalClosure, "")
+}
+
+func routeContext(parent context.Context, route plugin.Route) (context.Context, context.CancelFunc) {
+	if route.Timeout <= 0 {
+		return parent, func() {}
+	}
+	return context.WithTimeout(parent, route.Timeout)
 }
 
 // prepareRecording resolves the stream's recording decision from plugin

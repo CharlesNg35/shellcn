@@ -86,6 +86,9 @@ func (s *RecordingService) Delete(ctx context.Context, actor models.User, id str
 	if !s.canView(ctx, actor, r) {
 		return models.Recording{}, plugin.ErrForbidden
 	}
+	if r.Status == models.RecordingActive {
+		return models.Recording{}, plugin.ErrConflict
+	}
 	if r.StorageKey != "" {
 		if err := s.blobs.Delete(ctx, r.StorageKey); err != nil {
 			return models.Recording{}, err
@@ -106,7 +109,7 @@ func (s *RecordingService) Cleanup(ctx context.Context, now time.Time) (int, err
 	}
 	n := 0
 	for _, r := range expired {
-		if r.Status == models.RecordingDiscarded {
+		if r.Status == models.RecordingDiscarded || r.Status == models.RecordingActive {
 			continue
 		}
 		if r.StorageKey != "" {

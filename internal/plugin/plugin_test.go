@@ -167,6 +167,9 @@ func TestValidateRecordingRejects(t *testing.T) {
 		{"no formats", "declares no formats", []plugin.RecordingCapability{
 			{Class: plugin.RecordingTerminal, StreamIDs: []string{"rec.shell"}},
 		}},
+		{"no streams", "declares no streams", []plugin.RecordingCapability{
+			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2}},
+		}},
 		{"format/class mismatch", "does not support format", []plugin.RecordingCapability{
 			{Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatWebMCanvas}, StreamIDs: []string{"rec.shell"}},
 		}},
@@ -240,6 +243,22 @@ func TestRequestContextBindTypedNoPanic(t *testing.T) {
 	rc = newRC(nil, nil, ``)
 	if err := rc.Bind(&scaleReq{}); err != nil {
 		t.Errorf("bind empty body: %v", err)
+	}
+}
+
+func TestSchemaRejectsUnknownFields(t *testing.T) {
+	schema := plugin.Schema{Groups: []plugin.Group{{Name: "Input", Fields: []plugin.Field{
+		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+		{Key: "upload", Label: "Upload", Type: plugin.FieldFile},
+	}}}}
+	if err := schema.ValidateValues(map[string]any{"name": "ok"}, nil); err != nil {
+		t.Fatalf("valid schema values rejected: %v", err)
+	}
+	if err := schema.ValidateValues(map[string]any{"name": "ok", "extra": "no"}, nil); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unknown value field: want ErrInvalidInput, got %v", err)
+	}
+	if err := schema.ValidateValues(map[string]any{"name": "ok"}, map[string]bool{"ghost": true}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unknown upload field: want ErrInvalidInput, got %v", err)
 	}
 }
 

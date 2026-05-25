@@ -47,10 +47,10 @@ func (s *InvitationService) EmailEnabled() bool {
 
 // Create issues an invitation. It returns the stored record and the raw token,
 // which appears only here (in the acceptURL link) and as a stored hash.
-func (s *InvitationService) Create(ctx context.Context, email string, role models.Role, inviterID, acceptURL string) (models.Invitation, string, error) {
+func (s *InvitationService) Create(ctx context.Context, email string, role models.Role, inviterID, acceptURL string) (models.Invitation, string, bool, error) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		return models.Invitation{}, "", err
+		return models.Invitation{}, "", false, err
 	}
 	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
 
@@ -66,15 +66,16 @@ func (s *InvitationService) Create(ctx context.Context, email string, role model
 		ExpiresAt: now.Add(s.ttl),
 	}
 	if err := s.invites.Create(ctx, &inv); err != nil {
-		return models.Invitation{}, "", err
+		return models.Invitation{}, "", false, err
 	}
 
+	emailSent := false
 	if s.mailer != nil && s.mailer.Enabled() {
 		body := fmt.Sprintf("You've been invited to ShellCN.\n\nAccept and set your password:\n%s%s\n\nThis link expires %s.",
 			acceptURL, token, inv.ExpiresAt.Format(time.RFC1123))
-		_ = s.mailer.Send(email, "You're invited to ShellCN", body) // best-effort; the link is also returned
+		emailSent = s.mailer.Send(email, "You're invited to ShellCN", body) == nil
 	}
-	return inv, token, nil
+	return inv, token, emailSent, nil
 }
 
 func (s *InvitationService) List(ctx context.Context) ([]models.InvitationSummary, error) {
@@ -117,6 +118,14 @@ func (s *InvitationService) Accept(ctx context.Context, token, username, passwor
 	if err != nil {
 		return models.User{}, err
 	}
+	now := s.now()
+	consumed, err := s.invites.Consume(ctx, inv.ID, now)
+	if err != nil {
+		return models.User{}, err
+	}
+	if !consumed {
+		return models.User{}, ErrInvitationInvalid
+	}
 	user, err := s.users.Create(ctx, NewUserInput{
 		Username: username,
 		Email:    inv.Email,
@@ -124,11 +133,6 @@ func (s *InvitationService) Accept(ctx context.Context, token, username, passwor
 		Password: password,
 	})
 	if err != nil {
-		return models.User{}, err
-	}
-	inv.Status = models.InviteAccepted
-	inv.AcceptedAt = s.now()
-	if err := s.invites.Update(ctx, &inv); err != nil {
 		return models.User{}, err
 	}
 	return user, nil

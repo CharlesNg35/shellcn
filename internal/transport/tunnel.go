@@ -48,10 +48,10 @@ func ServeGatewayTunnel(c *websocket.Conn, connectionID string, reg *Registry) e
 	}
 	defer func() { _ = sess.Close() }()
 
-	reg.Register(connectionID, func(_ context.Context, _, _ string) (net.Conn, error) {
+	release := reg.Register(connectionID, func(_ context.Context, _, _ string) (net.Conn, error) {
 		return sess.Open()
 	})
-	defer reg.Remove(connectionID)
+	defer release()
 
 	<-sess.CloseChan()
 	return nil

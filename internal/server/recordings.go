@@ -218,6 +218,15 @@ func (s *Server) handleManualRecordingControl(w http.ResponseWriter, r *http.Req
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
+	_, route, ok := s.streamInfoFor(r, user, conn, req.RouteID, req.Params)
+	if !ok || !route.IsStream() {
+		writeError(w, s.deps.Logger, plugin.ErrNotFound)
+		return
+	}
+	if err := s.authorize(ctx, user, conn, route); err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
 	key := recording.StreamKey(user.ID, conn.ID, req.RouteID, req.Params)
 	switch req.Action {
 	case "start":
@@ -255,9 +264,17 @@ func (s *Server) handleStartDesktopRecording(w http.ResponseWriter, r *http.Requ
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
-	info, _, ok := s.streamInfoFor(r, user, conn, req.RouteID, req.Params)
+	info, route, ok := s.streamInfoFor(r, user, conn, req.RouteID, req.Params)
 	if !ok {
 		writeError(w, s.deps.Logger, plugin.ErrNotFound)
+		return
+	}
+	if !route.IsStream() {
+		writeError(w, s.deps.Logger, plugin.ErrNotFound)
+		return
+	}
+	if err := s.authorize(ctx, user, conn, route); err != nil {
+		writeError(w, s.deps.Logger, err)
 		return
 	}
 	format := plugin.RecordingFormat(req.Format)

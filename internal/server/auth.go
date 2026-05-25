@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/charlesng/shellcn/internal/auth"
@@ -44,6 +45,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := s.deps.Auth.Authenticate(r.Context(), req.Username, req.Password)
 	if err != nil {
+		// Collapse "account disabled" into the generic invalid-credentials
+		// response: a distinct 403 would let an attacker enumerate accounts and
+		// confirm a correct password against a disabled account.
+		if errors.Is(err, auth.ErrAccountDisabled) {
+			err = auth.ErrInvalidCredentials
+		}
 		writeError(w, s.deps.Logger, err)
 		return
 	}

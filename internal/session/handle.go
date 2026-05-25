@@ -21,6 +21,10 @@ func (h *Handle) Session() plugin.Session {
 	return h.e.sess
 }
 
+func (h *Handle) HealthCheck(ctx context.Context) error {
+	return h.Session().HealthCheck(ctx)
+}
+
 // OpenChannel opens a tracked upstream stream, enforcing the per-session channel
 // cap. The returned channel decrements the counter exactly once on Close.
 func (h *Handle) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (plugin.Channel, error) {
@@ -54,6 +58,10 @@ func (h *Handle) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (pl
 		e.lastUsed = h.m.now()
 		e.mu.Unlock()
 	}}, nil
+}
+
+func (h *Handle) Close() error {
+	return h.Session().Close()
 }
 
 // trackedChannel decrements the session's channel counter once, on Close.

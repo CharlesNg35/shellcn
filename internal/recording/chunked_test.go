@@ -107,6 +107,18 @@ func TestChunkedAbortDiscardsBlob(t *testing.T) {
 	}
 }
 
+func TestChunkedFinalizeRejectsEmptyRecording(t *testing.T) {
+	e, _, _ := newChunkEngine(t)
+	ctx := context.Background()
+	row, err := e.BeginChunked(ctx, desktopInfo(), plugin.FormatWebMCanvas)
+	if err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	if _, err := e.FinalizeChunked(ctx, row.ID, "u1"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("empty finalize: want invalid input, got %v", err)
+	}
+}
+
 func TestChunkedRejectsNonDesktopStream(t *testing.T) {
 	e, _, _ := newChunkEngine(t)
 	if _, err := e.BeginChunked(context.Background(), streamInfo("manual"), plugin.FormatWebMCanvas); !errors.Is(err, plugin.ErrNotSupported) {

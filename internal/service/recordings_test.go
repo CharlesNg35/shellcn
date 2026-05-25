@@ -127,6 +127,9 @@ func TestRecordingContentAndDelete(t *testing.T) {
 	if _, _, err := svc.Content(ctx, op, "r-active"); !errors.Is(err, plugin.ErrUnavailable) {
 		t.Errorf("active content: want unavailable, got %v", err)
 	}
+	if _, err := svc.Delete(ctx, op, "r-active"); !errors.Is(err, plugin.ErrConflict) {
+		t.Errorf("active delete: want conflict, got %v", err)
+	}
 
 	// A stranger cannot delete.
 	if _, err := svc.Delete(ctx, stranger, "r-fin"); !errors.Is(err, plugin.ErrForbidden) {
@@ -152,20 +155,21 @@ func TestRecordingRetentionCleanup(t *testing.T) {
 	past := now.Add(-time.Hour)
 	future := now.Add(time.Hour)
 
-	mk := func(id string, expires *time.Time) {
+	mk := func(id string, expires *time.Time, status models.RecordingStatus) {
 		key := recording.StorageKey("c-op", id, plugin.FormatAsciicastV2)
 		w, _ := bs.Create(ctx, key)
 		_, _ = w.Write([]byte("data"))
 		_ = w.Close()
 		_ = st.Recordings.Create(ctx, &models.Recording{
 			ID: id, UserID: "op", ConnectionID: "c-op", Protocol: "ssh", Class: "terminal",
-			Format: "asciicast_v2", Status: models.RecordingFinalized, StartedAt: now,
+			Format: "asciicast_v2", Status: status, StartedAt: now,
 			StorageKey: key, ExpiresAt: expires,
 		})
 	}
-	mk("r-expired", &past)
-	mk("r-future", &future)
-	mk("r-kept", nil) // no expiry → retained
+	mk("r-expired", &past, models.RecordingFinalized)
+	mk("r-future", &future, models.RecordingFinalized)
+	mk("r-active", &past, models.RecordingActive)
+	mk("r-kept", nil, models.RecordingFinalized) // no expiry → retained
 
 	n, err := svc.Cleanup(ctx, now)
 	if err != nil {
@@ -185,6 +189,9 @@ func TestRecordingRetentionCleanup(t *testing.T) {
 	// Untouched.
 	if kept, _ := st.Recordings.Get(ctx, "r-kept"); kept.Status != models.RecordingFinalized {
 		t.Errorf("kept recording changed: %s", kept.Status)
+	}
+	if active, _ := st.Recordings.Get(ctx, "r-active"); active.Status != models.RecordingActive {
+		t.Errorf("active recording should not be cleaned: %s", active.Status)
 	}
 	if _, err := bs.Open(ctx, recording.StorageKey("c-op", "r-future", plugin.FormatAsciicastV2)); err != nil {
 		t.Errorf("future blob wrongly deleted: %v", err)

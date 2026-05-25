@@ -11,6 +11,7 @@ import {
   routePath,
   watch,
 } from "./dataSource";
+import { setCsrfToken } from "./client";
 
 class FakeSocket implements SocketLike {
   closed = false;
@@ -45,7 +46,9 @@ function waitFor(cond: () => boolean, timeout = 500): Promise<void> {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
+  setCsrfToken("");
 });
 
 describe("dataSource resolver", () => {
@@ -96,6 +99,7 @@ describe("dataSource resolver", () => {
 
   it("posts file uploads as multipart without forcing a JSON content type", async () => {
     const fetchMock = installFetch(() => ({ body: { ok: true } }));
+    setCsrfToken("tok-uploads");
     const file = new File(["hello"], "hello.txt", { type: "text/plain" });
 
     await uploadFiles(
@@ -110,13 +114,16 @@ describe("dataSource resolver", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toContain("/api/connections/conn/x/ssh.sftp.upload?p.path=%2F");
     expect(init?.method).toBe("POST");
-    expect(init?.headers).toBeUndefined();
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Content-Type")).toBeNull();
+    expect(headers.get("X-CSRF-Token")).toBe("tok-uploads");
     expect(init?.body).toBeInstanceOf(FormData);
     expect((init?.body as FormData).getAll("files")).toEqual([file]);
   });
 
   it("promotes action bodies with files to multipart form data", async () => {
     const fetchMock = installFetch(() => ({ body: { ok: true } }));
+    setCsrfToken("tok-form");
     const file = new File(["cert"], "client.pem");
 
     await runFormAction(
@@ -131,7 +138,9 @@ describe("dataSource resolver", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toContain("/api/connections/conn/x/cert.upload?p.id=c1");
     expect(init?.method).toBe("PATCH");
-    expect(init?.headers).toBeUndefined();
+    const headers = new Headers(init?.headers);
+    expect(headers.get("Content-Type")).toBeNull();
+    expect(headers.get("X-CSRF-Token")).toBe("tok-form");
     const body = init?.body as FormData;
     expect(body.get("name")).toBe("client");
     expect(body.getAll("cert")).toEqual([file]);
@@ -200,5 +209,34 @@ describe("dataSource resolver", () => {
 
     stop();
     expect(sockets[1].closed).toBe(true);
+  });
+
+  it("deduplicates reconnect timers for repeated close/error events", async () => {
+    vi.useFakeTimers();
+    installFetch(() => ({ body: { ticket: "t1" } }));
+    const sockets: FakeSocket[] = [];
+    const stop = watch(
+      "conn",
+      { routeId: "docker.container.watch" },
+      {},
+      () => {},
+      {
+        socketFactory: (url) => {
+          const s = new FakeSocket(url);
+          sockets.push(s);
+          return s;
+        },
+        reconnectMs: 10,
+      },
+    );
+
+    await vi.waitFor(() => expect(sockets).toHaveLength(1));
+    sockets[0].emit("close");
+    sockets[0].emit("error");
+    await vi.advanceTimersByTimeAsync(10);
+    await vi.waitFor(() => expect(sockets).toHaveLength(2));
+
+    stop();
+    vi.useRealTimers();
   });
 });

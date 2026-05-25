@@ -9,7 +9,7 @@ export default defineConfig({
   workers: 1,
   use: { baseURL },
   webServer: {
-    command: `pnpm run dev --port ${port} --strictPort`,
+    command: `VITE_API=mock pnpm run dev --port ${port} --strictPort`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
   },

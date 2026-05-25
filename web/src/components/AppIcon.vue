@@ -91,8 +91,7 @@ const MAX_SVG_BYTES = 64 * 1024;
 const kind = computed(() => {
   const t = props.icon?.type;
   const v = props.icon?.value;
-  // No icon declared → render nothing (a fallback glyph would just be noise).
-  if (!t || !v) return "none";
+  if (!t || !v) return "glyph";
   if ((t === "url" || t === "base64") && !imgFailed.value) {
     const safe =
       t === "base64" ? v.startsWith("data:image/") : v.startsWith("https://");
@@ -125,7 +124,6 @@ const safeSvg = computed(() => {
 
 <template>
   <span
-    v-if="kind !== 'none'"
     v-bind="attrs"
     class="inline-flex shrink-0 items-center justify-center"
     :style="{ width: `${size}px`, height: `${size}px` }"

@@ -46,7 +46,11 @@ func NewSessionManager(ttl time.Duration) *SessionManager {
 
 func randomToken() string {
 	b := make([]byte, 32)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// A failing system CSPRNG must never yield a predictable session/CSRF
+		// token; fail loudly rather than emit weak entropy.
+		panic("auth: crypto/rand failed: " + err.Error())
+	}
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 

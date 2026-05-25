@@ -137,7 +137,13 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	// The root admin must stay an enabled admin (no self-lockout).
 	if target.Protected && (req.Disabled || role != models.RoleAdmin) {
+		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, errForbidden("the root admin must remain an enabled admin"))
+		return
+	}
+	if target.HasRole(models.RoleAdmin) && !actor.Protected && (req.Disabled != target.Disabled || role != models.RoleAdmin) {
+		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, errForbidden("only the root admin may disable or change another admin's role"))
 		return
 	}
 	updated, err := s.deps.Users.Update(ctx, target.ID, service.UpdateUserInput{
@@ -216,7 +222,7 @@ func (s *Server) handleAdminCreateInvitation(w http.ResponseWriter, r *http.Requ
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
-	inv, token, err := s.deps.Invitations.Create(ctx, req.Email, role, actor.ID, s.inviteAcceptURL(r))
+	inv, token, emailSent, err := s.deps.Invitations.Create(ctx, req.Email, role, actor.ID, s.inviteAcceptURL(r))
 	if err != nil {
 		s.auditAdminEvent(ctx, actor, inviteCreateEvent, models.AuditError, nil, err)
 		writeError(w, s.deps.Logger, err)
@@ -226,7 +232,7 @@ func (s *Server) handleAdminCreateInvitation(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusCreated, inviteResponse{
 		Invitation: inv.Summary(),
 		Link:       s.inviteAcceptURL(r) + token,
-		EmailSent:  s.deps.Invitations.EmailEnabled(),
+		EmailSent:  emailSent,
 	})
 }
 
@@ -235,6 +241,7 @@ func (s *Server) handleAdminRevokeInvitation(w http.ResponseWriter, r *http.Requ
 	actor, _ := userFrom(ctx)
 	id := chi.URLParam(r, "id")
 	if err := s.deps.Invitations.Revoke(ctx, id); err != nil {
+		s.auditAdminEvent(ctx, actor, inviteRevokeEvent, models.AuditError, map[string]string{"id": id}, err)
 		writeError(w, s.deps.Logger, err)
 		return
 	}

@@ -113,10 +113,14 @@ async function loadList(path: string): Promise<void> {
   selected.value = null;
   content.value = null;
   try {
-    const page = await fetchPage<FileEntry>(props.connectionId, {
-      routeId: props.source.routeId,
-      params: operationParams(path),
-    });
+    const page = await fetchPage<FileEntry>(
+      props.connectionId,
+      {
+        routeId: props.source.routeId,
+        params: operationParams(path),
+      },
+      operationCtx.value,
+    );
     entries.value = page.items;
     cwd.value = path;
   } catch (e) {

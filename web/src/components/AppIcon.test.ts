@@ -80,15 +80,14 @@ describe("AppIcon", () => {
     expect(html).not.toContain("alert");
   });
 
-  it("renders nothing for empty svg markup", () => {
+  it("falls back for empty svg markup", () => {
     const w = mount(AppIcon, { props: { icon: { type: "svg", value: "" } } });
-    // empty value → no icon at all (treated as not provided)
-    expect(w.find("svg").exists()).toBe(false);
+    expect(w.find("svg").exists()).toBe(true);
   });
 
-  it("renders nothing when no icon is provided", () => {
+  it("falls back when no icon is provided", () => {
     const w = mount(AppIcon, { props: { icon: null } });
-    expect(w.find("svg").exists()).toBe(false);
+    expect(w.find("svg").exists()).toBe(true);
     expect(w.find("img").exists()).toBe(false);
   });
 });

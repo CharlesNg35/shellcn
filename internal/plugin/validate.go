@@ -159,6 +159,9 @@ func validateRecording(m Manifest, streams map[string]Stream, add func(string, .
 		if len(c.Formats) == 0 {
 			add("recording class %q declares no formats", c.Class)
 		}
+		if len(c.StreamIDs) == 0 {
+			add("recording class %q declares no streams", c.Class)
+		}
 		for _, f := range c.Formats {
 			if !recordingFormatValidForClass(c.Class, f) {
 				add("recording class %q does not support format %q", c.Class, f)

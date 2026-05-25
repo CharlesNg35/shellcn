@@ -7,9 +7,11 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"golang.org/x/time/rate"
 
 	"github.com/charlesng/shellcn/internal/audit"
 	"github.com/charlesng/shellcn/internal/auth"
@@ -56,8 +58,9 @@ type Deps struct {
 
 // Server wires the dependencies into a chi router.
 type Server struct {
-	deps   Deps
-	router chi.Router
+	deps         Deps
+	router       chi.Router
+	loginLimiter *rateLimiter
 }
 
 // New builds the server and its routes.
@@ -68,7 +71,9 @@ func New(d Deps) *Server {
 	if d.Audit == nil {
 		d.Audit = audit.Noop{}
 	}
-	s := &Server{deps: d}
+	// ~5 login attempts/min per IP with a small burst — generous for humans,
+	// punishing for online password guessing.
+	s := &Server{deps: d, loginLimiter: newRateLimiter(rate.Every(12*time.Second), 5)}
 	s.router = s.routes()
 	return s
 }
@@ -80,6 +85,7 @@ func (s *Server) routes() chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(telemetry.RequestIDMiddleware)
+	r.Use(s.withRemoteAddr)
 
 	// Observability endpoints (unauthenticated, like any /metrics + /healthz).
 	if s.deps.Health != nil {
@@ -92,8 +98,9 @@ func (s *Server) routes() chi.Router {
 	}
 
 	r.Route("/api", func(api chi.Router) {
-		// Auth (login is public; the rest require a session).
-		api.Post("/auth/login", s.handleLogin)
+		// Auth (login is public; the rest require a session). Rate-limited per IP
+		// to blunt online brute force.
+		api.With(s.loginRateLimit).Post("/auth/login", s.handleLogin)
 
 		// The agent connect endpoint authenticates with its enrollment token in
 		// the handshake (it is not a browser session), so it sits outside the

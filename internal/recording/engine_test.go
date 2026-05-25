@@ -250,15 +250,11 @@ func TestEngineWebMCanvasDesktopAutoUsesChunkedPath(t *testing.T) {
 	}
 
 	wrapped, finalize, err := e.Wrap(context.Background(), newFakeClient(), info)
-	if err != nil {
-		t.Fatalf("webm_canvas desktop should not require server recorder: %v", err)
-	}
-	finalize()
-	if _, ok := wrapped.(*fakeClient); !ok {
-		t.Fatalf("webm_canvas desktop should not install stream tap, got %T", wrapped)
+	if !errors.Is(err, plugin.ErrUnavailable) {
+		t.Fatalf("forced webm_canvas desktop: want ErrUnavailable, got wrapped=%T finalizeNil=%v err=%v", wrapped, finalize == nil, err)
 	}
 	if recs, _ := st.Recordings.List(context.Background(), store.RecordingFilter{}); len(recs) != 0 {
-		t.Fatalf("webm_canvas stream wrapper should not create metadata, got %+v", recs)
+		t.Fatalf("denied webm_canvas stream should not create metadata, got %+v", recs)
 	}
 }
 

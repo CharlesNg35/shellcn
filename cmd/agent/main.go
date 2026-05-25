@@ -6,11 +6,15 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -32,11 +36,13 @@ func main() {
 		connectURL  string
 		token       string
 		target      string
+		insecure    bool
 	)
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.StringVar(&connectURL, "connect", os.Getenv("SHELLCN_CONNECT_URL"), "gateway agent-connect URL (wss://host/api/agent/connect)")
 	flag.StringVar(&token, "token", os.Getenv("SHELLCN_ENROLL_TOKEN"), "enrollment token")
 	flag.StringVar(&target, "target", os.Getenv("SHELLCN_TARGET"), "override the local target address the gateway told us to proxy")
+	flag.BoolVar(&insecure, "insecure", os.Getenv("SHELLCN_INSECURE") == "1", "DEVELOPMENT ONLY: allow ws:// and skip TLS verification")
 	flag.Parse()
 
 	if showVersion {
@@ -49,19 +55,55 @@ func main() {
 		logger.Error("missing required config", "connect", connectURL != "", "token", token != "")
 		os.Exit(2)
 	}
+	if err := checkConnectURL(connectURL, insecure); err != nil {
+		logger.Error("invalid connect URL", "err", err)
+		os.Exit(2)
+	}
+	if insecure {
+		logger.Warn("insecure mode: TLS verification disabled and plaintext ws:// permitted — do not use in production")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	run(ctx, logger, connectURL, token, target)
+	run(ctx, logger, connectURL, token, target, insecure)
 }
 
+// checkConnectURL enforces wss:// (encrypted, CA-validated) unless the operator
+// has explicitly opted into insecure mode for development.
+func checkConnectURL(connectURL string, insecure bool) error {
+	u, err := url.Parse(connectURL)
+	if err != nil {
+		return err
+	}
+	switch u.Scheme {
+	case "wss":
+		return nil
+	case "ws":
+		if insecure {
+			return nil
+		}
+		return fmt.Errorf("refusing plaintext ws:// without -insecure; use wss://")
+	default:
+		return fmt.Errorf("connect URL must use wss:// (got %q)", u.Scheme)
+	}
+}
+
+// errEnrollmentRejected marks a fatal handshake rejection (bad/used/expired
+// token): retrying with the same token will never succeed, so the agent stops.
+var errEnrollmentRejected = errors.New("enrollment rejected by gateway")
+
 // run keeps a tunnel up, reconnecting with backoff until the context is cancelled.
-func run(ctx context.Context, logger *slog.Logger, connectURL, token, targetOverride string) {
+func run(ctx context.Context, logger *slog.Logger, connectURL, token, targetOverride string, insecure bool) {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 	for {
-		if err := serve(ctx, logger, connectURL, token, targetOverride); err != nil && ctx.Err() == nil {
+		err := serve(ctx, logger, connectURL, token, targetOverride, insecure)
+		if errors.Is(err, errEnrollmentRejected) {
+			logger.Error("enrollment rejected — token is invalid, used, or expired; not retrying", "err", err)
+			return
+		}
+		if err != nil && ctx.Err() == nil {
 			logger.Warn("tunnel ended, reconnecting", "err", err, "in", backoff)
 		}
 		if ctx.Err() != nil {
@@ -80,10 +122,19 @@ func run(ctx context.Context, logger *slog.Logger, connectURL, token, targetOver
 
 // serve runs a single tunnel lifetime: dial, handshake, then accept + proxy
 // multiplexed streams until the tunnel closes.
-func serve(ctx context.Context, logger *slog.Logger, connectURL, token, targetOverride string) error {
+func serve(ctx context.Context, logger *slog.Logger, connectURL, token, targetOverride string, insecure bool) error {
 	dialCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	c, _, err := websocket.Dial(dialCtx, connectURL, nil)
+	var opts *websocket.DialOptions
+	if insecure {
+		opts = &websocket.DialOptions{HTTPClient: &http.Client{
+			Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, //nolint:gosec // explicit dev opt-in
+		}}
+	}
+	c, httpResp, err := websocket.Dial(dialCtx, connectURL, opts)
 	cancel()
+	if httpResp != nil && httpResp.Body != nil {
+		defer func() { _ = httpResp.Body.Close() }()
+	}
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
@@ -99,7 +150,7 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token, targetOv
 		return fmt.Errorf("handshake read: %w", err)
 	}
 	if !resp.OK {
-		return fmt.Errorf("gateway rejected enrollment: %s", resp.Error)
+		return fmt.Errorf("%w: %s", errEnrollmentRejected, resp.Error)
 	}
 
 	target := resp.Proxy

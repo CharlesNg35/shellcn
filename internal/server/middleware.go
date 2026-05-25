@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"net"
 	"net/http"
 
+	"github.com/charlesng/shellcn/internal/audit"
 	"github.com/charlesng/shellcn/internal/auth"
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
@@ -49,6 +51,12 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			writeError(w, s.deps.Logger, plugin.ErrUnauthorized)
 			return
 		}
+		if user.Disabled {
+			s.deps.SessionMgr.Destroy(sess.ID)
+			auth.ClearSessionCookie(w)
+			writeError(w, s.deps.Logger, plugin.ErrUnauthorized)
+			return
+		}
 		ctx := context.WithValue(r.Context(), ctxUser, user)
 		ctx = context.WithValue(ctx, ctxSession, sess)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -79,4 +87,21 @@ func isStateChanging(method string) bool {
 
 func isTLS(r *http.Request) bool {
 	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+// withRemoteAddr stashes the direct peer address on the request context so every
+// audit event recorded during the request carries the caller's source IP. The
+// non-spoofable RemoteAddr is used (not X-Forwarded-For) so the audit trail
+// cannot be forged by a client header.
+func (s *Server) withRemoteAddr(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		next.ServeHTTP(w, r.WithContext(audit.WithRemoteAddr(r.Context(), clientIP(r))))
+	})
+}
+
+func clientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }

@@ -69,13 +69,22 @@ func (c *Connector) Build(ctx context.Context, user models.User, conn models.Con
 
 	// Resolve referenced reusable credentials (authorized for this user).
 	if m, ok := c.plugins.Manifest(conn.Protocol); ok {
-		for _, key := range credentialRefKeys(m.Config) {
-			if credID, _ := cfg[key].(string); credID != "" {
-				material, err := c.creds.Resolve(ctx, user.ID, credID)
-				if err != nil {
-					return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
+		for _, group := range m.Config.Groups {
+			for _, field := range group.Fields {
+				if field.Type != plugin.FieldCredentialRef {
+					continue
 				}
-				cfg[credentialSecretKey(key)] = string(material)
+				key := field.Key
+				if credID, _ := cfg[key].(string); credID != "" {
+					if err := c.creds.EnsureUsableFor(ctx, user.ID, credID, credentialSelectorKinds(field.Credential), conn.Protocol); err != nil {
+						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
+					}
+					material, err := c.creds.Resolve(ctx, user.ID, credID)
+					if err != nil {
+						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
+					}
+					cfg[credentialSecretKey(key)] = string(material)
+				}
 			}
 		}
 	}

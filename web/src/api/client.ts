@@ -30,6 +30,44 @@ export function setApiErrorHandler(fn: ApiErrorHandler | null): void {
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
+async function responseError(res: Response): Promise<ApiError> {
+  let message = res.statusText;
+  try {
+    const parsed = (await res.json()) as { error?: string };
+    if (parsed.error) message = parsed.error;
+  } catch {
+    // body was not JSON; keep statusText
+  }
+  return new ApiError(res.status, message);
+}
+
+export async function apiFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const headers = new Headers(init.headers);
+  if (MUTATING.has(method) && csrfToken && !headers.has("X-CSRF-Token")) {
+    headers.set("X-CSRF-Token", csrfToken);
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(input, { ...init, method, headers });
+  } catch {
+    const err = new ApiError(0, "Network error — is the gateway reachable?");
+    errorHandler?.(err);
+    throw err;
+  }
+
+  if (!res.ok) {
+    const err = await responseError(res);
+    errorHandler?.(err);
+    throw err;
+  }
+  return res;
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -39,31 +77,11 @@ async function request<T>(
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (MUTATING.has(method) && csrfToken) headers["X-CSRF-Token"] = csrfToken;
 
-  let res: Response;
-  try {
-    res = await fetch(API_BASE + path, {
-      method,
-      headers: Object.keys(headers).length ? headers : undefined,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    const err = new ApiError(0, "Network error — is the gateway reachable?");
-    errorHandler?.(err);
-    throw err;
-  }
-
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const parsed = (await res.json()) as { error?: string };
-      if (parsed.error) message = parsed.error;
-    } catch {
-      // body was not JSON; keep statusText
-    }
-    const err = new ApiError(res.status, message);
-    errorHandler?.(err);
-    throw err;
-  }
+  const res = await apiFetch(API_BASE + path, {
+    method,
+    headers: Object.keys(headers).length ? headers : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }

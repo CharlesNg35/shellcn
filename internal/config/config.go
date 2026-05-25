@@ -112,7 +112,7 @@ func Load(paths ...string) (*Config, error) {
 }
 
 func setDefaults(v *viper.Viper) {
-	v.SetDefault("server.addr", ":8080")
+	v.SetDefault("server.addr", ":8081")
 	v.SetDefault("server.log_level", "info")
 	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.dsn", "shellcn.db")

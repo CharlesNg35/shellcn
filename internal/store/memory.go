@@ -405,6 +405,11 @@ type memPolicyStore struct {
 func (s *memPolicyStore) Create(_ context.Context, p *models.PolicyRule) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for _, existing := range s.m {
+		if existing.Role == p.Role && existing.Permission == p.Permission && existing.Risk == p.Risk {
+			return models.ErrConflict
+		}
+	}
 	s.m[p.ID] = *p
 	return nil
 }
@@ -515,6 +520,11 @@ type memInvitationStore struct {
 func (s *memInvitationStore) Create(_ context.Context, i *models.Invitation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for _, existing := range s.m {
+		if existing.TokenHash == i.TokenHash {
+			return models.ErrConflict
+		}
+	}
 	s.m[i.ID] = *i
 	return nil
 }
@@ -561,6 +571,19 @@ func (s *memInvitationStore) Update(_ context.Context, i *models.Invitation) err
 	return nil
 }
 
+func (s *memInvitationStore) Consume(_ context.Context, id string, acceptedAt time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i, ok := s.m[id]
+	if !ok || i.Status != models.InvitePending || !acceptedAt.Before(i.ExpiresAt) {
+		return false, nil
+	}
+	i.Status = models.InviteAccepted
+	i.AcceptedAt = acceptedAt
+	s.m[id] = i
+	return true, nil
+}
+
 func (s *memInvitationStore) Delete(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -576,6 +599,11 @@ type memEnrollmentStore struct {
 func (s *memEnrollmentStore) Create(_ context.Context, e *models.AgentEnrollment) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for _, existing := range s.m {
+		if existing.TokenHash == e.TokenHash {
+			return models.ErrConflict
+		}
+	}
 	s.m[e.ID] = *e
 	return nil
 }
@@ -624,6 +652,19 @@ func (s *memEnrollmentStore) UpdateStatus(_ context.Context, id string, status m
 	e.UpdatedAt = time.Now()
 	s.m[id] = e
 	return nil
+}
+
+func (s *memEnrollmentStore) Consume(_ context.Context, id string, now time.Time) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.m[id]
+	if !ok || e.Status != models.EnrollmentPending || !now.Before(e.ExpiresAt) {
+		return false, nil
+	}
+	e.Status = models.EnrollmentOnline
+	e.UpdatedAt = now
+	s.m[id] = e
+	return true, nil
 }
 
 type memRecordingStore struct {

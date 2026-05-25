@@ -6,7 +6,7 @@ import { mockApiPlugin } from "./mock/server.ts";
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  const useMock = (env.VITE_API ?? "mock") === "mock";
+  const useMock = env.VITE_API === "mock";
 
   return {
     base: "/",
@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
       : {
           proxy: {
             "/api": {
-              target: "http://localhost:8080",
+              target: env.VITE_API_TARGET || "http://localhost:8081",
               changeOrigin: true,
               ws: true,
             },

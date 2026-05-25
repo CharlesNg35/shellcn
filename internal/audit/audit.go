@@ -33,6 +33,22 @@ type Sink interface {
 	Record(ctx context.Context, ev Event)
 }
 
+type ctxKey int
+
+const remoteAddrKey ctxKey = iota
+
+// WithRemoteAddr stashes the request's client address on the context so every
+// audit event recorded during the request inherits it without each call site
+// having to thread it through.
+func WithRemoteAddr(ctx context.Context, addr string) context.Context {
+	return context.WithValue(ctx, remoteAddrKey, addr)
+}
+
+func remoteAddrFrom(ctx context.Context) string {
+	addr, _ := ctx.Value(remoteAddrKey).(string)
+	return addr
+}
+
 // Writer persists events to the append-only AuditStore.
 type Writer struct {
 	store store.AuditStore
@@ -47,6 +63,10 @@ func NewWriter(s store.AuditStore) *Writer {
 // Record appends one audit entry. Append failures are intentionally swallowed
 // here (audit must never break the request path); the store logs its own errors.
 func (w *Writer) Record(ctx context.Context, ev Event) {
+	addr := ev.RemoteAddr
+	if addr == "" {
+		addr = remoteAddrFrom(ctx)
+	}
 	entry := &models.AuditEntry{
 		ID:           uuid.NewString(),
 		Time:         w.now(),
@@ -58,6 +78,7 @@ func (w *Writer) Record(ctx context.Context, ev Event) {
 		Risk:         ev.Risk,
 		Result:       ev.Result,
 		Params:       ev.Params,
+		RemoteAddr:   addr,
 	}
 	if ev.Err != nil {
 		entry.Error = ev.Err.Error()

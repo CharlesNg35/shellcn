@@ -364,6 +364,16 @@ func (s *gormInvitationStore) Update(ctx context.Context, i *models.Invitation) 
 	return rowsOrNotFound(res)
 }
 
+func (s *gormInvitationStore) Consume(ctx context.Context, id string, acceptedAt time.Time) (bool, error) {
+	res := s.db.WithContext(ctx).Model(&models.Invitation{}).
+		Where("id = ? AND status = ? AND expires_at > ?", id, string(models.InvitePending), acceptedAt).
+		Updates(map[string]any{"status": string(models.InviteAccepted), "accepted_at": acceptedAt})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected == 1, nil
+}
+
 func (s *gormInvitationStore) Delete(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&models.Invitation{}, "id = ?", id).Error
 }
@@ -383,9 +393,20 @@ func (s *gormRecordingStore) Get(ctx context.Context, id string) (models.Recordi
 }
 
 func (s *gormRecordingStore) Update(ctx context.Context, r *models.Recording) error {
+	// A map (not a struct) guarantees every column is written — including the
+	// nullable *time.Time fields back to NULL — matching the memory store.
 	res := s.db.WithContext(ctx).Model(&models.Recording{}).Where("id = ?", r.ID).
-		Select("status", "title", "ended_at", "duration_ms", "size", "checksum", "storage_key", "error", "expires_at").
-		Updates(r)
+		Updates(map[string]any{
+			"status":      r.Status,
+			"title":       r.Title,
+			"ended_at":    r.EndedAt,
+			"duration_ms": r.DurationMS,
+			"size":        r.Size,
+			"checksum":    r.Checksum,
+			"storage_key": r.StorageKey,
+			"error":       r.Error,
+			"expires_at":  r.ExpiresAt,
+		})
 	return rowsOrNotFound(res)
 }
 
@@ -466,4 +487,14 @@ func (s *gormEnrollmentStore) UpdateStatus(ctx context.Context, id string, statu
 	res := s.db.WithContext(ctx).Model(&models.AgentEnrollment{}).Where("id = ?", id).
 		Update("status", string(status))
 	return rowsOrNotFound(res)
+}
+
+func (s *gormEnrollmentStore) Consume(ctx context.Context, id string, now time.Time) (bool, error) {
+	res := s.db.WithContext(ctx).Model(&models.AgentEnrollment{}).
+		Where("id = ? AND status = ? AND expires_at > ?", id, string(models.EnrollmentPending), now).
+		Updates(map[string]any{"status": string(models.EnrollmentOnline), "updated_at": now})
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected == 1, nil
 }

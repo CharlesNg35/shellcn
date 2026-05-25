@@ -87,6 +87,7 @@ func (testPlugin) Routes() []plugin.Route {
 		},
 		{
 			ID: "t.echoparam", Method: plugin.MethodGet, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.echoparam",
+			Path:   "/echo/{name}",
 			Handle: func(rc *plugin.RequestContext) (any, error) { return map[string]string{"name": rc.Param("name")}, nil },
 		},
 		{
@@ -352,6 +353,12 @@ func TestParamResolution(t *testing.T) {
 	if !strings.Contains(string(b), "resolved") {
 		t.Errorf("p.name param did not resolve into rc.Param: %s", b)
 	}
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam", "op", nil); resp.Status != http.StatusBadRequest {
+		t.Fatalf("missing declared param: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam?p.name=x&p.extra=y", "op", nil); resp.Status != http.StatusBadRequest {
+		t.Fatalf("unknown declared param: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
 }
 
 func TestMultipartRouteBinding(t *testing.T) {
@@ -424,6 +431,14 @@ func TestWrapperValidatesDeclaredInputSchemaBeforeHandler(t *testing.T) {
 	}
 	if got := schemaOnlyCalls.Load(); got != 1 {
 		t.Fatalf("handler call count = %d, want 1", got)
+	}
+
+	resp = h.do(t, http.MethodPost, "/api/connections/c-op/x/t.schema", "op", strings.NewReader(`{"name":"release","extra":"nope"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("schema unknown field: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+	if got := schemaOnlyCalls.Load(); got != 1 {
+		t.Fatalf("handler ran despite unknown declared input: calls=%d", got)
 	}
 }
 
@@ -614,6 +629,22 @@ func TestAuthLoginFlow(t *testing.T) {
 	_ = logoutResp.Body.Close()
 	if logoutResp.StatusCode != http.StatusForbidden {
 		t.Errorf("logout without CSRF: want 403, got %d", logoutResp.StatusCode)
+	}
+}
+
+func TestDisabledUserExistingSessionRejected(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	user, err := h.store.Users.GetByID(ctx, "viewer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	user.Disabled = true
+	if err := h.store.Users.Update(ctx, &user); err != nil {
+		t.Fatal(err)
+	}
+	if resp := h.do(t, http.MethodGet, "/api/connections", "viewer", nil); resp.Status != http.StatusUnauthorized {
+		t.Fatalf("disabled user with existing session: want 401, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 

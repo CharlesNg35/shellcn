@@ -5,7 +5,12 @@ import ToastService from "primevue/toastservice";
 import App from "./App.vue";
 import router from "./router";
 import { primeVuePassthrough } from "./primevue/preset";
+import { useTheme } from "./composables/useTheme";
 import "./style.css";
+
+// Apply the stored/system theme app-wide before first paint so every route
+// (including login) renders in the right scheme with no flash.
+useTheme();
 
 createApp(App)
   .use(createPinia())

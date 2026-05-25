@@ -201,8 +201,10 @@ func (rc *RequestContext) ValidateSchema(schema *Schema) error {
 // the value map). It is the shared validator behind the route wrapper
 // (ValidateSchema) and the control-plane connection-config check.
 func (s Schema) ValidateValues(values map[string]any, uploaded map[string]bool) error {
+	known := map[string]bool{}
 	for _, group := range s.Groups {
 		for _, field := range group.Fields {
+			known[field.Key] = true
 			if !visible(field.VisibleWhen, values) {
 				continue
 			}
@@ -222,6 +224,16 @@ func (s Schema) ValidateValues(values map[string]any, uploaded map[string]bool) 
 			if err := validateFieldValue(field, value); err != nil {
 				return err
 			}
+		}
+	}
+	for key := range values {
+		if !known[key] {
+			return fmt.Errorf("%w: unknown field %q", ErrInvalidInput, key)
+		}
+	}
+	for key := range uploaded {
+		if !known[key] {
+			return fmt.Errorf("%w: unknown upload field %q", ErrInvalidInput, key)
 		}
 	}
 	return nil

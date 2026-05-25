@@ -103,6 +103,9 @@ func (e *Engine) FinalizeChunked(ctx context.Context, recordingID, userID string
 	}
 	cr.mu.Lock()
 	defer cr.mu.Unlock()
+	if cr.nextIndex == 0 {
+		return models.Recording{}, fmt.Errorf("%w: recording has no chunks", plugin.ErrInvalidInput)
+	}
 	if !cr.done {
 		cr.done = true
 		end := e.now()
@@ -111,7 +114,10 @@ func (e *Engine) FinalizeChunked(ctx context.Context, recordingID, userID string
 		cr.rec.Size = cr.size
 		cr.rec.Checksum = hex.EncodeToString(cr.hash.Sum(nil))
 		cr.rec.Status = models.RecordingFinalized
-		_ = e.store.Update(ctx, &cr.rec)
+		if err := e.store.Update(ctx, &cr.rec); err != nil {
+			cr.done = false
+			return models.Recording{}, err
+		}
 		e.metrics.RecordingFinished()
 		e.auditChunked(ctx, cr.info, EventFinalize, models.AuditAllowed)
 	}
@@ -134,7 +140,9 @@ func (e *Engine) AbortChunked(ctx context.Context, recordingID, userID string) e
 		_ = e.blobs.Delete(ctx, cr.rec.StorageKey)
 		cr.rec.Status = models.RecordingDiscarded
 		cr.rec.Error = "aborted"
-		_ = e.store.Update(ctx, &cr.rec)
+		if err := e.store.Update(ctx, &cr.rec); err != nil {
+			return err
+		}
 		e.metrics.RecordingFinished()
 		e.auditChunked(ctx, cr.info, EventFailed, models.AuditError)
 	}
