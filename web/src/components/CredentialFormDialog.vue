@@ -224,8 +224,8 @@ async function save(): Promise<void> {
     }"
     @update:visible="emit('update:visible', $event)"
   >
-    <div class="flex flex-col gap-4">
-      <div v-if="catalogLoading" class="flex flex-col gap-3">
+    <div class="flex min-w-0 flex-col gap-4">
+      <div v-if="catalogLoading" class="flex min-w-0 flex-col gap-3">
         <div
           v-for="i in 5"
           :key="i"
@@ -235,7 +235,7 @@ async function save(): Promise<void> {
       <p v-else-if="catalogError" class="text-sm text-red-500">
         {{ catalogError }}
       </p>
-      <div v-else class="flex flex-col gap-1.5">
+      <div v-else class="flex min-w-0 flex-col gap-1.5">
         <label
           for="cred-name"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -253,7 +253,7 @@ async function save(): Promise<void> {
 
       <div
         v-if="!catalogLoading && !catalogError"
-        class="flex flex-col gap-1.5"
+        class="flex min-w-0 flex-col gap-1.5"
       >
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -278,7 +278,7 @@ async function save(): Promise<void> {
 
       <div
         v-if="!catalogLoading && !catalogError && showIdentity"
-        class="flex flex-col gap-1.5"
+        class="flex min-w-0 flex-col gap-1.5"
       >
         <label
           for="cred-identity"
@@ -296,7 +296,7 @@ async function save(): Promise<void> {
 
       <div
         v-if="!catalogLoading && !catalogError && !scopedToSelector"
-        class="flex flex-col gap-1.5"
+        class="flex min-w-0 flex-col gap-1.5"
       >
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -316,7 +316,7 @@ async function save(): Promise<void> {
 
       <div
         v-if="!catalogLoading && !catalogError"
-        class="flex flex-col gap-1.5"
+        class="flex min-w-0 flex-col gap-1.5"
       >
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"

@@ -143,7 +143,7 @@ async function revoke(): Promise<void> {
       Loading…
     </p>
 
-    <div v-else class="flex flex-col gap-4">
+    <div v-else class="flex min-w-0 flex-col gap-4">
       <!-- Add a subject -->
       <div class="flex items-end gap-2">
         <div class="min-w-0 flex-1">

@@ -76,13 +76,13 @@ async function savePassword(): Promise<void> {
     </h1>
 
     <section
-      class="flex flex-col gap-4 rounded-xl border border-surface-200 bg-surface-0 p-5 dark:border-surface-800 dark:bg-surface-900"
+      class="flex min-w-0 flex-col gap-4 rounded-xl border border-surface-200 bg-surface-0 p-5 dark:border-surface-800 dark:bg-surface-900"
     >
       <h2 class="text-sm font-semibold text-surface-900 dark:text-surface-100">
         Account
       </h2>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
           >Username</label
@@ -95,7 +95,7 @@ async function savePassword(): Promise<void> {
         <p class="text-xs text-surface-400">Your username can’t be changed.</p>
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           for="profile-name"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -108,7 +108,7 @@ async function savePassword(): Promise<void> {
         />
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           for="profile-email"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -135,13 +135,13 @@ async function savePassword(): Promise<void> {
     </section>
 
     <section
-      class="flex flex-col gap-4 rounded-xl border border-surface-200 bg-surface-0 p-5 dark:border-surface-800 dark:bg-surface-900"
+      class="flex min-w-0 flex-col gap-4 rounded-xl border border-surface-200 bg-surface-0 p-5 dark:border-surface-800 dark:bg-surface-900"
     >
       <h2 class="text-sm font-semibold text-surface-900 dark:text-surface-100">
         Change password
       </h2>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           for="cur-pw"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -156,7 +156,7 @@ async function savePassword(): Promise<void> {
         />
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           for="new-pw"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -171,7 +171,7 @@ async function savePassword(): Promise<void> {
         />
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           for="confirm-pw"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"

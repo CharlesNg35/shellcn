@@ -114,8 +114,8 @@ async function save(): Promise<void> {
     }"
     @update:visible="emit('update:visible', $event)"
   >
-    <div class="flex flex-col gap-4">
-      <div v-if="!isEdit" class="flex flex-col gap-1.5">
+    <div class="flex min-w-0 flex-col gap-4">
+      <div v-if="!isEdit" class="flex min-w-0 flex-col gap-1.5">
         <label
           for="user-username"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -132,7 +132,7 @@ async function save(): Promise<void> {
         </p>
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           for="user-email"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -146,7 +146,7 @@ async function save(): Promise<void> {
         />
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           for="user-display"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -160,7 +160,7 @@ async function save(): Promise<void> {
         />
       </div>
 
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
@@ -176,7 +176,7 @@ async function save(): Promise<void> {
         />
       </div>
 
-      <div v-if="!isEdit" class="flex flex-col gap-1.5">
+      <div v-if="!isEdit" class="flex min-w-0 flex-col gap-1.5">
         <label
           for="user-password"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"

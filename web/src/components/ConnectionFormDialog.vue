@@ -194,9 +194,9 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
       Loading…
     </p>
 
-    <div v-else class="flex flex-col gap-5">
+    <div v-else class="flex min-w-0 flex-col gap-5">
       <!-- Step 1: pick a protocol (create only, until one is chosen). -->
-      <div v-if="!isEdit && !protocol" class="flex flex-col gap-1.5">
+      <div v-if="!isEdit && !protocol" class="flex min-w-0 flex-col gap-1.5">
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
@@ -247,7 +247,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           </span>
         </nav>
 
-        <div class="flex flex-col gap-1.5">
+        <div class="flex min-w-0 flex-col gap-1.5">
           <label
             for="conn-name"
             class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -263,7 +263,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           <p v-if="nameError" class="text-xs text-red-500">{{ nameError }}</p>
         </div>
 
-        <div v-if="transportChoices.length > 1" class="flex flex-col gap-1.5">
+        <div v-if="transportChoices.length > 1" class="flex min-w-0 flex-col gap-1.5">
           <label
             class="text-sm font-medium text-surface-700 dark:text-surface-200"
           >
@@ -290,7 +290,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
 
         <fieldset
           v-if="recordingClasses.length"
-          class="flex flex-col gap-3 rounded-md border border-surface-200 p-3 dark:border-surface-700"
+          class="flex min-w-0 flex-col gap-3 rounded-md border border-surface-200 p-3 dark:border-surface-700"
         >
           <legend
             class="flex items-center gap-1.5 px-1 text-sm font-medium text-surface-700 dark:text-surface-200"

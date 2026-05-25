@@ -89,8 +89,8 @@ async function copyLink(): Promise<void> {
     @update:visible="emit('update:visible', $event)"
   >
     <!-- Step 1: choose who + what role -->
-    <div v-if="!result" class="flex flex-col gap-4">
-      <div class="flex flex-col gap-1.5">
+    <div v-if="!result" class="flex min-w-0 flex-col gap-4">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           for="invite-email"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -104,7 +104,7 @@ async function copyLink(): Promise<void> {
           @update:model-value="email = $event ?? ''"
         />
       </div>
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
@@ -122,7 +122,7 @@ async function copyLink(): Promise<void> {
     </div>
 
     <!-- Step 2: share the link -->
-    <div v-else class="flex flex-col gap-3">
+    <div v-else class="flex min-w-0 flex-col gap-3">
       <p class="text-sm text-surface-600 dark:text-surface-300">
         Invitation created for
         <span class="font-medium">{{ result.invitation.email }}</span
