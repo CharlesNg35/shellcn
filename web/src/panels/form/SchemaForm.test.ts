@@ -139,6 +139,40 @@ describe("SchemaForm", () => {
     expect(payload).not.toHaveProperty("password");
   });
 
+  it("uses ambient context for visibility", async () => {
+    const contextual: Schema = {
+      groups: [
+        {
+          name: "Target",
+          fields: [
+            {
+              key: "endpoint",
+              label: "Endpoint",
+              type: "text",
+              required: true,
+              visibleWhen: {
+                allOf: [{ field: "$transport", op: "eq", value: "direct" }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: {
+        schema: contextual,
+        submitLabel: "Save",
+        modelValue: { endpoint: "127.0.0.1:2375" },
+        context: { $transport: "agent" },
+      },
+    });
+    await flushPromises();
+    expect(w.text()).not.toContain("Endpoint");
+    await w.find("form").trigger("submit");
+    const payload = w.emitted("submit")?.[0][0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("endpoint");
+  });
+
   it("keeps secret fields write-only (set/replace, value never in a readable field)", async () => {
     const w = mount(SchemaForm, {
       props: { schema, secretsSet: { password: true } },

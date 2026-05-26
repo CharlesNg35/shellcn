@@ -129,14 +129,16 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 	if strings.TrimSpace(in.Name) == "" {
 		return models.Connection{}, fmt.Errorf("%w: name is required", plugin.ErrInvalidInput)
 	}
-	if err := m.Config.ValidateValues(in.Config, nil); err != nil {
+	context := connectionSchemaContext(in.Protocol, transport)
+	if err := m.Config.ValidateValuesWithContext(in.Config, nil, context); err != nil {
 		return models.Connection{}, err
 	}
+	visibleConfig := m.Config.VisibleValues(in.Config, context)
 	actorID := in.ActorID
 	if actorID == "" {
 		actorID = ownerID
 	}
-	if err := s.checkCredentialRefs(ctx, actorID, in.Protocol, m.Config, in.Config); err != nil {
+	if err := s.checkCredentialRefs(ctx, actorID, in.Protocol, m.Config, visibleConfig); err != nil {
 		return models.Connection{}, err
 	}
 	recording, err := resolveRecordingPolicy(m, in.Recording, nil)
@@ -144,7 +146,7 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 		return models.Connection{}, err
 	}
 
-	config, plain := splitSecrets(m.Config, in.Config)
+	config, plain := splitSecrets(m.Config, visibleConfig)
 	enc, err := secrets.EncryptMap(ctx, s.vault, plain)
 	if err != nil {
 		return models.Connection{}, fmt.Errorf("encrypt secrets: %w", err)
@@ -185,6 +187,7 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 		return models.Connection{}, fmt.Errorf("%w: name is required", plugin.ErrInvalidInput)
 	}
 
+	context := connectionSchemaContext(existing.Protocol, transport)
 	mergedConfig, err := s.mergePreservedCredentialRefs(existing, m.Config, in)
 	if err != nil {
 		return models.Connection{}, err
@@ -197,14 +200,15 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 			validateView[key] = secretPlaceholder
 		}
 	}
-	if err := m.Config.ValidateValues(validateView, nil); err != nil {
+	if err := m.Config.ValidateValuesWithContext(validateView, nil, context); err != nil {
 		return models.Connection{}, err
 	}
+	visibleConfig := m.Config.VisibleValues(mergedConfig, context)
 	actorID := in.ActorID
 	if actorID == "" {
 		actorID = existing.OwnerID
 	}
-	if err := s.checkCredentialRefsForUpdate(ctx, actorID, existing, m.Config, mergedConfig, in.PreserveCredentials); err != nil {
+	if err := s.checkCredentialRefsForUpdate(ctx, actorID, existing, m.Config, visibleConfig, in.PreserveCredentials); err != nil {
 		return models.Connection{}, err
 	}
 	recording, err := resolveRecordingPolicy(m, in.Recording, existing.Recording)
@@ -212,9 +216,9 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 		return models.Connection{}, err
 	}
 
-	config, plain := splitSecrets(m.Config, mergedConfig)
+	config, plain := splitSecrets(m.Config, visibleConfig)
 	enc := map[string][]byte{}
-	for _, key := range secretKeys(m.Config) {
+	for _, key := range m.Config.VisibleSecretKeys(validateView, context) {
 		if v, ok := plain[key]; ok {
 			ct, err := s.vault.Encrypt(ctx, []byte(v))
 			if err != nil {
@@ -380,8 +384,9 @@ func (s *ConnectionService) ReferencesCredential(ctx context.Context, credential
 	}
 	for _, c := range conns {
 		if m, ok := s.plugins.Manifest(c.Protocol); ok {
+			config := m.Config.VisibleValues(c.Config, connectionSchemaContext(c.Protocol, c.Transport))
 			for _, key := range credentialRefKeys(m.Config) {
-				if id, _ := c.Config[key].(string); id == credentialID {
+				if id, _ := config[key].(string); id == credentialID {
 					return true, nil
 				}
 			}
@@ -399,11 +404,12 @@ func (s *ConnectionService) ReferencesCredential(ctx context.Context, credential
 func (s *ConnectionService) Detail(ctx context.Context, userID string, conn models.Connection) ConnectionDetail {
 	m, _ := s.plugins.Manifest(conn.Protocol)
 	state := map[string]string{}
-	for _, key := range secretKeys(m.Config) {
+	context := connectionSchemaContext(conn.Protocol, conn.Transport)
+	for _, key := range m.Config.VisibleSecretKeys(conn.Config, context) {
 		state[key] = secrets.State(len(conn.Secrets[key]) > 0)
 	}
 	config := map[string]any{}
-	maps.Copy(config, conn.Config)
+	maps.Copy(config, m.Config.VisibleValues(conn.Config, context))
 	credentialStates := s.credentialRefStates(ctx, userID, m.Config, config)
 	recording := conn.Recording
 	if recording == nil {
@@ -643,6 +649,16 @@ func resolveTransport(m plugin.Manifest, requested string) (string, error) {
 		return "", fmt.Errorf("%w: transport %q is not supported by %q", plugin.ErrInvalidInput, requested, m.Name)
 	}
 	return requested, nil
+}
+
+func connectionSchemaContext(protocol, transport string) map[string]any {
+	if transport == "" {
+		transport = string(plugin.TransportDirect)
+	}
+	return map[string]any{
+		plugin.SchemaContextProtocol:  protocol,
+		plugin.SchemaContextTransport: transport,
+	}
 }
 
 // secretKeys returns the keys of all Secret==true fields in a schema.

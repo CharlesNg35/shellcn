@@ -60,6 +60,21 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	}
 }
 
+func TestConfigSchemaHidesEndpointForAgentTransport(t *testing.T) {
+	schema := configSchema()
+	direct := map[string]any{plugin.SchemaContextTransport: string(plugin.TransportDirect)}
+	if err := schema.ValidateValuesWithContext(map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"}, nil, direct); err != nil {
+		t.Fatalf("direct unix config rejected: %v", err)
+	}
+	agent := map[string]any{plugin.SchemaContextTransport: string(plugin.TransportAgent)}
+	if err := schema.ValidateValuesWithContext(map[string]any{}, nil, agent); err != nil {
+		t.Fatalf("agent config should not require endpoint fields: %v", err)
+	}
+	if visible := schema.VisibleValues(map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"}, agent); len(visible) != 0 {
+		t.Fatalf("agent config should not persist direct endpoint fields: %#v", visible)
+	}
+}
+
 func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	srv, calls := fakeDockerDaemon(t)
 	defer srv.Close()

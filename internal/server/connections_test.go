@@ -95,6 +95,35 @@ func TestConnectionCRUDRoundTrip(t *testing.T) {
 	}
 }
 
+func TestConnectionConfigVisibilityFollowsTransport(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	body := `{"name":"ctx","protocol":"tester","transport":"direct","config":{"host":"db.local","direct_secret":"direct-only","password":"shared"}}`
+	resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(body))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create direct: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	id := createConnID(t, resp)
+	conn, _ := h.store.Connections.Get(ctx, id)
+	if conn.Config["host"] != "db.local" || len(conn.Secrets["direct_secret"]) == 0 {
+		t.Fatalf("direct-only fields were not stored while visible: config=%v secrets=%v", conn.Config, conn.Secrets)
+	}
+
+	update := `{"name":"ctx","transport":"agent","config":{"password":"shared"}}`
+	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "op", strings.NewReader(update))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("switch to agent: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	conn, _ = h.store.Connections.Get(ctx, id)
+	if _, ok := conn.Config["host"]; ok {
+		t.Fatalf("hidden direct host should be removed after switching to agent: %v", conn.Config)
+	}
+	if _, ok := conn.Secrets["direct_secret"]; ok {
+		t.Fatalf("hidden direct secret should not be preserved after switching to agent: %v", conn.Secrets)
+	}
+}
+
 func TestConnectionRecordingPolicy(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()

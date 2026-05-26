@@ -51,6 +51,10 @@ const transportChoices = computed(() =>
     value: t,
   })),
 );
+const schemaContext = computed(() => ({
+  $protocol: protocol.value,
+  $transport: transport.value,
+}));
 
 // Shown only when the plugin declares support; never inferred from a panel type.
 const recordingClasses = computed(() => projection.value?.recording ?? []);
@@ -292,6 +296,7 @@ async function onConfig(
           :model-value="configModel"
           :secrets-set="secretsSet"
           :credential-states="credentialStates"
+          :context="schemaContext"
           :protocol="protocol"
           @submit="onConfig"
         />

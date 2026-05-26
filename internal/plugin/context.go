@@ -218,11 +218,16 @@ func (rc *RequestContext) ValidateSchema(schema *Schema) error {
 // the value map). It is the shared validator behind the route wrapper
 // (ValidateSchema) and the control-plane connection-config check.
 func (s Schema) ValidateValues(values map[string]any, uploaded map[string]bool) error {
+	return s.ValidateValuesWithContext(values, uploaded, nil)
+}
+
+func (s Schema) ValidateValuesWithContext(values map[string]any, uploaded map[string]bool, context map[string]any) error {
+	conditionValues := mergedConditionValues(values, context)
 	known := map[string]bool{}
 	for _, group := range s.Groups {
 		for _, field := range group.Fields {
 			known[field.Key] = true
-			if !visible(field.VisibleWhen, values) {
+			if !visible(field.VisibleWhen, conditionValues) {
 				continue
 			}
 			value, exists := values[field.Key]
@@ -254,6 +259,49 @@ func (s Schema) ValidateValues(values map[string]any, uploaded map[string]bool) 
 		}
 	}
 	return nil
+}
+
+func (s Schema) VisibleValues(values map[string]any, context map[string]any) map[string]any {
+	conditionValues := mergedConditionValues(values, context)
+	out := map[string]any{}
+	for _, group := range s.Groups {
+		for _, field := range group.Fields {
+			if !visible(field.VisibleWhen, conditionValues) {
+				continue
+			}
+			if value, ok := values[field.Key]; ok {
+				out[field.Key] = value
+			}
+		}
+	}
+	return out
+}
+
+func (s Schema) VisibleSecretKeys(values map[string]any, context map[string]any) []string {
+	conditionValues := mergedConditionValues(values, context)
+	var keys []string
+	for _, group := range s.Groups {
+		for _, field := range group.Fields {
+			if field.Secret && visible(field.VisibleWhen, conditionValues) {
+				keys = append(keys, field.Key)
+			}
+		}
+	}
+	return keys
+}
+
+func mergedConditionValues(values map[string]any, context map[string]any) map[string]any {
+	if len(context) == 0 {
+		return values
+	}
+	out := make(map[string]any, len(values)+len(context))
+	for key, value := range values {
+		out[key] = value
+	}
+	for key, value := range context {
+		out[key] = value
+	}
+	return out
 }
 
 func (rc *RequestContext) inputValues() (map[string]any, error) {
@@ -400,13 +448,10 @@ func visible(cond *Condition, values map[string]any) bool {
 	if cond == nil {
 		return true
 	}
-	if len(cond.AllOf) > 0 {
-		for _, rule := range cond.AllOf {
-			if !matchRule(rule, values[rule.Field]) {
-				return false
-			}
+	for _, rule := range cond.AllOf {
+		if !matchRule(rule, values[rule.Field]) {
+			return false
 		}
-		return true
 	}
 	if len(cond.AnyOf) > 0 {
 		for _, rule := range cond.AnyOf {

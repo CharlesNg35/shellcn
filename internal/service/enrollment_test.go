@@ -38,6 +38,9 @@ func TestDockerEnrollmentArtifactsAndRedeem(t *testing.T) {
 	if !strings.Contains(cmd, "-e SHELLCN_ENROLL_TOKEN=") || strings.Contains(cmd, "/api/agent/connect/") {
 		t.Fatalf("artifact should use token env and not token-in-path: %s", cmd)
 	}
+	if !strings.Contains(cmd, "ghcr.io/charlesng35/shellcn-agent:latest") || strings.Contains(cmd, "shellcn-proxy") {
+		t.Fatalf("artifact should use the published shellcn-agent image: %s", cmd)
+	}
 	token := extractToken(t, cmd)
 	connectionID, proxy, err := svc.Redeem(ctx, token)
 	if err != nil {

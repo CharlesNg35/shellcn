@@ -31,7 +31,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			Install: []plugin.InstallArtifact{{
 				Label: "Docker",
 				Kind:  "docker-run",
-				Template: "docker run --rm --name shellcn-proxy " +
+				Template: "docker run --rm --name shellcn-agent " +
 					"-e SHELLCN_CONNECT_URL={{.ConnectURL}} " +
 					"-e SHELLCN_ENROLL_TOKEN={{.Token}} " +
 					"-v /var/run/docker.sock:/var/run/docker.sock " +
@@ -63,16 +63,25 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 }
 
 func configSchema() plugin.Schema {
+	directOnly := plugin.Condition{AllOf: []plugin.Rule{{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)}}}
+	directUnix := plugin.Condition{AllOf: []plugin.Rule{
+		{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)},
+		{Field: "endpoint_type", Op: plugin.OpEq, Value: "unix"},
+	}}
+	directTCP := plugin.Condition{AllOf: []plugin.Rule{
+		{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)},
+		{Field: "endpoint_type", Op: plugin.OpEq, Value: "tcp"},
+	}}
 	return plugin.Schema{Groups: []plugin.Group{{
 		Name: "Endpoint",
 		Fields: []plugin.Field{
-			{Key: "endpoint_type", Label: "Endpoint", Type: plugin.FieldSelect, Required: true, Default: "unix", Options: []plugin.Option{
+			{Key: "endpoint_type", Label: "Endpoint", Type: plugin.FieldSelect, Required: true, Default: "unix", VisibleWhen: &directOnly, Options: []plugin.Option{
 				{Label: "Unix socket", Value: "unix"},
 				{Label: "TCP host", Value: "tcp"},
 			}},
-			{Key: "socket_path", Label: "Socket path", Type: plugin.FieldText, Required: true, Default: "/var/run/docker.sock", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "endpoint_type", Op: plugin.OpEq, Value: "unix"}}}},
-			{Key: "host", Label: "Host", Type: plugin.FieldText, Placeholder: "docker.example.internal", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "endpoint_type", Op: plugin.OpEq, Value: "tcp"}}}},
-			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Default: 2375, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "endpoint_type", Op: plugin.OpEq, Value: "tcp"}}}},
+			{Key: "socket_path", Label: "Socket path", Type: plugin.FieldText, Required: true, Default: "/var/run/docker.sock", VisibleWhen: &directUnix},
+			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "docker.example.internal", VisibleWhen: &directTCP},
+			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Required: true, Default: 2375, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}, VisibleWhen: &directTCP},
 		},
 	}}}
 }

@@ -45,12 +45,14 @@ type testPlugin struct{}
 var schemaOnlyCalls atomic.Int32
 
 func (testPlugin) Manifest() plugin.Manifest {
+	directOnly := plugin.Condition{AllOf: []plugin.Rule{{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)}}}
 	return plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion, Name: "tester", Version: "0", Title: "Tester",
 		Layout:              plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{
-			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true},
+			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, VisibleWhen: &directOnly},
+			{Key: "direct_secret", Label: "Direct secret", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &directOnly},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true},
 			{
 				Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
