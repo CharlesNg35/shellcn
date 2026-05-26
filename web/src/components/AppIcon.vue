@@ -36,14 +36,12 @@ const kind = computed(() => {
   return "glyph";
 });
 
-const glyphComponent = computed(() => {
-  const iconType = props.icon?.type as string | undefined;
-  const name =
-    iconType === "lucide" || iconType === "name"
-      ? props.icon?.value
-      : props.fallback;
-  return resolveLucideIcon(name);
-});
+// A glyph's value is a Lucide name (legacy projections used type "name"; both
+// resolve the same way). resolveLucideIcon falls back to a placeholder for an
+// empty or unknown name.
+const glyphComponent = computed(() =>
+  resolveLucideIcon(props.icon?.value || props.fallback),
+);
 
 // Sanitize raw inline SVG (svg profile only — no HTML/MathML, scripts and event
 // handlers stripped) before it is ever injected into the DOM.

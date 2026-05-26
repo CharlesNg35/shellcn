@@ -4,7 +4,7 @@ import AppIcon from "./AppIcon.vue";
 import { iconExists, toPascalCase } from "./lucideIconRegistry";
 import type { Icon } from "../types/projection";
 
-describe("appIconRegistry", () => {
+describe("lucideIconRegistry", () => {
   it("normalizes any separator/casing to Lucide PascalCase", () => {
     for (const input of [
       "ellipsis-vertical",
