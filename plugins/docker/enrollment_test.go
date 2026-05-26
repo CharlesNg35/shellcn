@@ -32,6 +32,7 @@ func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
 	cmd := enr.Artifacts[0].Command
 	for _, want := range []string{
 		"docker run --rm --name shellcn-agent",
+		`--group-add "$(stat -c '%g' /var/run/docker.sock)"`,
 		"-e SHELLCN_CONNECT_URL='wss://shellcn.test/api/agent/connect'",
 		"-e SHELLCN_ENROLL_TOKEN='",
 		"'/var/run/docker.sock:/var/run/docker.sock'",

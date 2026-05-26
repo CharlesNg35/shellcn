@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch, ref } from "vue";
+import { computed, onMounted, watch, ref } from "vue";
 import Button from "primevue/button";
 import { api } from "../../api/client";
 import type { Enrollment, InstallArtifact } from "../../types/projection";
@@ -14,13 +14,48 @@ const enrollment = ref<Enrollment | null>(null);
 const error = ref<string | null>(null);
 const copied = ref<string | null>(null);
 
-const { status, message, online, refresh, start, stop } = useAgentState(
+const { status, message, online, refresh, start } = useAgentState(
   props.connectionId,
 );
 
+const statusTone = computed(() => {
+  switch (status.value) {
+    case "online":
+      return "bg-emerald-400";
+    case "offline":
+    case "error":
+      return "bg-red-500";
+    default:
+      return "animate-pulse bg-amber-400";
+  }
+});
+
+const heading = computed(() => {
+  switch (status.value) {
+    case "online":
+      return "Agent online";
+    case "offline":
+    case "error":
+      return "Agent disconnected";
+    default:
+      return "Connect the agent";
+  }
+});
+
+const guidance = computed(() => {
+  switch (status.value) {
+    case "offline":
+    case "error":
+      return "Restart the installed agent on the target host. Generate a new command only if the previous install command was lost or intentionally rotated.";
+    case "online":
+      return "";
+    default:
+      return "This connection reaches a private target through an agent. Run the command on the target host; this page updates when the agent dials back.";
+  }
+});
+
 watch(online, (isOnline) => {
   if (isOnline) {
-    stop();
     emit("online");
   }
 });
@@ -54,21 +89,13 @@ onMounted(() => start());
 <template>
   <div class="mx-auto flex h-full max-w-2xl flex-col gap-5 overflow-auto p-6">
     <div class="flex items-center gap-3">
-      <span
-        class="h-2.5 w-2.5 rounded-full"
-        :class="
-          status === 'online' ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'
-        "
-      />
+      <span class="h-2.5 w-2.5 rounded-full" :class="statusTone" />
       <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-0">
-        {{ status === "online" ? "Agent online" : "Connect the agent" }}
+        {{ heading }}
       </h2>
     </div>
 
-    <p v-if="status !== 'online'" class="text-sm text-surface-500">
-      This connection reaches a private target through an agent. Run the command
-      on the target host; this page updates when the agent dials back.
-    </p>
+    <p v-if="guidance" class="text-sm text-surface-500">{{ guidance }}</p>
     <p v-if="message" class="text-sm text-surface-400">{{ message }}</p>
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
 
@@ -78,7 +105,11 @@ onMounted(() => start());
       class="self-start"
       @click="enroll"
     >
-      Generate install command
+      {{
+        status === "pending"
+          ? "Generate install command"
+          : "Generate new install command"
+      }}
     </Button>
 
     <div

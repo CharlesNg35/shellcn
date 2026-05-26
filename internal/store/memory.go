@@ -783,7 +783,16 @@ func (s *memEnrollmentStore) Consume(_ context.Context, id string, now time.Time
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	e, ok := s.m[id]
-	if !ok || e.Status != models.EnrollmentPending || !now.Before(e.ExpiresAt) {
+	if !ok {
+		return false, nil
+	}
+	switch e.Status {
+	case models.EnrollmentPending:
+		if !now.Before(e.ExpiresAt) {
+			return false, nil
+		}
+	case models.EnrollmentOffline, models.EnrollmentOnline:
+	default:
 		return false, nil
 	}
 	e.Status = models.EnrollmentOnline

@@ -30,7 +30,7 @@ const DefaultEnrollmentTTL = 15 * time.Minute
 var (
 	// ErrNoAgentSupport is returned when a connection's plugin declares no agent.
 	ErrNoAgentSupport = errors.New("service: plugin does not support agent transport")
-	// ErrEnrollmentInvalid is returned for an unknown/expired/used token.
+	// ErrEnrollmentInvalid is returned for an unknown, expired, or revoked token.
 	ErrEnrollmentInvalid = errors.New("service: invalid enrollment token")
 )
 
@@ -190,8 +190,9 @@ func shellQuote(value string) string {
 }
 
 // Redeem validates an agent-presented token and returns the connection it binds
-// to plus the target the agent should proxy. Single-use: a pending enrollment
-// flips to online.
+// to plus the target the agent should proxy. An unused pending token must still
+// be within its install window; an already-enrolled agent may reconnect with the
+// same token until that enrollment is revoked.
 func (s *EnrollmentService) Redeem(ctx context.Context, token string) (connectionID string, proxy plugin.ProxyTarget, err error) {
 	enr, err := s.store.GetByTokenHash(ctx, hashToken(token))
 	if err != nil {
@@ -205,8 +206,6 @@ func (s *EnrollmentService) Redeem(ctx context.Context, token string) (connectio
 	if !ok || m.Agent == nil {
 		return "", plugin.ProxyTarget{}, ErrNoAgentSupport
 	}
-	// Atomic single-use gate: only the caller that flips pending→online wins, so
-	// two agents racing the same token cannot both enroll.
 	consumed, err := s.store.Consume(ctx, enr.ID, s.now())
 	if err != nil {
 		return "", plugin.ProxyTarget{}, err
@@ -248,6 +247,8 @@ func (s *EnrollmentService) State(ctx context.Context, connectionID string) Agen
 		st.Message = "Waiting for the agent to dial back."
 	case models.EnrollmentOnline:
 		st.Message = "Agent connected."
+	case models.EnrollmentOffline:
+		st.Message = "Agent disconnected."
 	}
 	return st
 }

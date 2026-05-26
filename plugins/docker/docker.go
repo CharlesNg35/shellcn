@@ -34,6 +34,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
 				Template: "docker run --rm --name shellcn-agent " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
+					`--group-add "$(stat -c '%g' /var/run/docker.sock)" ` +
 					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +
 					"{{if .Insecure}}-e SHELLCN_INSECURE=1 {{end}}" +
 					"-e SHELLCN_ENROLL_TOKEN={{shellquote .Token}} " +

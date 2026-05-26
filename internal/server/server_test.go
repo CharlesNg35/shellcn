@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -533,6 +534,78 @@ func TestAgentEnrollmentIsAudited(t *testing.T) {
 		}
 	}
 	t.Fatalf("missing agent enrollment audit row: %+v", rows)
+}
+
+func TestAgentEnrollmentUsesForwardedPublicURL(t *testing.T) {
+	h := newHarness(t)
+	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/connections/c-op/agent/enrollments", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Host = "internal:8080"
+	req.Header.Set("X-Forwarded-Host", "shellcn.example.com")
+	req.Header.Set("X-Forwarded-Proto", "https")
+
+	resp := h.doReq(t, req, "op")
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create enrollment: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	if !strings.Contains(string(resp.Body), "wss://shellcn.example.com/api/agent/connect") {
+		t.Fatalf("enrollment response did not use forwarded public URL: %s", resp.Body)
+	}
+}
+
+func TestAgentEnrollmentUsesAPIServerPortBehindLocalDevProxy(t *testing.T) {
+	h := newHarness(t)
+	serverURL, err := url.Parse(h.ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/connections/c-op/agent/enrollments", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Host = "localhost:5173"
+
+	resp := h.doReq(t, req, "op")
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create enrollment: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	want := "ws://localhost:" + serverURL.Port() + "/api/agent/connect"
+	if !strings.Contains(string(resp.Body), want) {
+		t.Fatalf("enrollment response did not use API server port %q: %s", want, resp.Body)
+	}
+}
+
+func TestAgentStateTreatsTunnelRegistryAsAuthoritative(t *testing.T) {
+	h := newHarness(t)
+	now := time.Now()
+	if err := h.store.Enrollments.Create(context.Background(), &models.AgentEnrollment{
+		ID:           "stale-online",
+		ConnectionID: "c-op",
+		TokenHash:    "stale-online-token",
+		Status:       models.EnrollmentOnline,
+		ExpiresAt:    now.Add(time.Hour),
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}); err != nil {
+		t.Fatalf("seed enrollment: %v", err)
+	}
+
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/agent/state", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("state: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if !strings.Contains(string(resp.Body), `"status":"offline"`) {
+		t.Fatalf("state should be offline without a live tunnel: %s", resp.Body)
+	}
+	enr, err := h.store.Enrollments.Get(context.Background(), "stale-online")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if enr.Status != models.EnrollmentOffline {
+		t.Fatalf("stale enrollment should be persisted offline, got %s", enr.Status)
+	}
 }
 
 func TestAdminCanAccessAnyConnection(t *testing.T) {

@@ -28,7 +28,10 @@ function connectDisabled(w: ReturnType<typeof mount>): boolean {
   return el?.disabled ?? false;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe("ConnectPanel", () => {
   beforeEach(() => {
@@ -93,6 +96,33 @@ describe("ConnectPanel", () => {
     await flushPromises();
     expect(w.text()).toContain("Agent connected");
     expect(connectDisabled(w)).toBe(false);
-    vi.useRealTimers();
+    w.unmount();
+  });
+
+  it("agent offline after being online disables Connect again", async () => {
+    let calls = 0;
+    installFetch((url) => {
+      if (url.includes("/agent/state")) {
+        calls++;
+        return {
+          body: { status: calls <= 1 ? "online" : "offline" },
+        };
+      }
+      return { body: {} };
+    });
+    vi.useFakeTimers();
+
+    const w = mount(ConnectPanel, {
+      props: { connectionId: "edge", connection: agent },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("Agent connected");
+    expect(connectDisabled(w)).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await flushPromises();
+    expect(w.text()).toContain("Agent offline");
+    expect(connectDisabled(w)).toBe(true);
+    w.unmount();
   });
 });

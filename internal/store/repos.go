@@ -559,7 +559,12 @@ func (s *gormEnrollmentStore) UpdateStatus(ctx context.Context, id string, statu
 
 func (s *gormEnrollmentStore) Consume(ctx context.Context, id string, now time.Time) (bool, error) {
 	res := s.db.WithContext(ctx).Model(&models.AgentEnrollment{}).
-		Where("id = ? AND status = ? AND expires_at > ?", id, string(models.EnrollmentPending), now).
+		Where("id = ? AND (status IN ? OR (status = ? AND expires_at > ?))",
+			id,
+			[]string{string(models.EnrollmentOffline), string(models.EnrollmentOnline)},
+			string(models.EnrollmentPending),
+			now,
+		).
 		Updates(map[string]any{"status": string(models.EnrollmentOnline), "updated_at": now})
 	if res.Error != nil {
 		return false, res.Error
