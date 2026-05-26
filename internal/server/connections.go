@@ -19,6 +19,12 @@ const (
 	connDeleteEvent = "connection.delete"
 )
 
+// Presence states surfaced on a connection, driving the generic status dot.
+const (
+	connStatusActive  = "active"  // a live stream is attached for this user
+	connStatusOffline = "offline" // agent transport with no tunnel registered
+)
+
 type connectionWriteRequest struct {
 	Name      string            `json:"name"`
 	Protocol  string            `json:"protocol"`
@@ -27,20 +33,50 @@ type connectionWriteRequest struct {
 	Recording map[string]string `json:"recording"`
 }
 
-func (s *Server) toConnectionDTO(c models.Connection) connectionDTO {
+// toConnectionDTO projects a stored connection for the client. `active` is the
+// caller's session-presence map (which connections the user has open now); pass
+// nil when presence is irrelevant (e.g. a just-created connection).
+func (s *Server) toConnectionDTO(c models.Connection, active map[string]bool) connectionDTO {
 	dto := connectionDTO{
 		ID: c.ID, Name: c.Name, Protocol: c.Protocol,
-		Transport: c.Transport, Online: c.Transport != string(plugin.TransportAgent),
-		Recording: c.Recording,
+		Transport: c.Transport, Recording: c.Recording,
 	}
+	// A direct transport is always dialable on demand; an agent transport is
+	// reachable only while its tunnel is registered. `online` gates the enroll
+	// panel; `status` drives the generic presence dot with no per-plugin logic.
+	dto.Online = true
 	if dto.Transport == string(plugin.TransportAgent) {
-		dto.Status = "pending"
+		dto.Online = s.tunnelRegistered(c.ID)
+	}
+	switch {
+	case !dto.Online:
+		dto.Status = connStatusOffline
+	case active[c.ID]:
+		dto.Status = connStatusActive
 	}
 	if m, ok := s.deps.Plugins.Manifest(c.Protocol); ok {
 		icon := m.Icon
 		dto.Icon = &icon
 	}
 	return dto
+}
+
+// tunnelRegistered reports whether an agent tunnel is currently live for a
+// connection — the authoritative source of agent reachability.
+func (s *Server) tunnelRegistered(connID string) bool {
+	if s.deps.Tunnels == nil {
+		return false
+	}
+	_, ok := s.deps.Tunnels.Dialer(connID)
+	return ok
+}
+
+// connectionPresence returns the connections a user currently has open.
+func (s *Server) connectionPresence(userID string) map[string]bool {
+	if s.deps.Sessions == nil {
+		return nil
+	}
+	return s.deps.Sessions.Active(userID)
 }
 
 func (s *Server) auditConnEvent(ctx context.Context, user models.User, connID, event string, risk plugin.RiskLevel, result models.AuditResult, err error) {
@@ -69,7 +105,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.auditConnEvent(ctx, user, conn.ID, connCreateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
-	dto := s.toConnectionDTO(conn)
+	dto := s.toConnectionDTO(conn, nil)
 	dto.CanManage = true
 	writeJSON(w, http.StatusCreated, dto)
 }

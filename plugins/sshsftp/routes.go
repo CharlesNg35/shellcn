@@ -49,6 +49,33 @@ type FileContent struct {
 	Truncated bool   `json:"truncated,omitempty"`
 }
 
+type FilePage struct {
+	Items      []FileEntry `json:"items"`
+	NextCursor string      `json:"nextCursor"`
+	Total      *int        `json:"total,omitempty"`
+	Path       string      `json:"path"`
+}
+
+type snippet struct {
+	ID        string              `json:"id"`
+	Ref       *plugin.ResourceRef `json:"ref"`
+	Name      string              `json:"name"`
+	Body      string              `json:"body"`
+	CreatedAt time.Time           `json:"createdAt"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+}
+
+type snippetRequest struct {
+	Name string `json:"name" validate:"required"`
+	Body string `json:"body" validate:"required"`
+}
+
+type snippetRunResult struct {
+	OK        bool   `json:"ok"`
+	Output    string `json:"output"`
+	Truncated bool   `json:"truncated,omitempty"`
+}
+
 // Routes returns the shared SFTP route handlers using the provided route prefix.
 func Routes(prefix, protocol string, includeShell bool) []plugin.Route {
 	routes := []plugin.Route{
@@ -61,8 +88,6 @@ func Routes(prefix, protocol string, includeShell bool) []plugin.Route {
 		{ID: prefix + ".sftp.mkdir", Method: plugin.MethodPost, Path: "/sftp/mkdir/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.mkdir", Input: nameSchema("Folder"), Handle: mkdir},
 		{ID: prefix + ".sftp.rename", Method: plugin.MethodPatch, Path: "/sftp/rename/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".sftp.rename", Input: nameSchema("Name"), Handle: renameEntry},
 		{ID: prefix + ".sftp.delete", Method: plugin.MethodDelete, Path: "/sftp/delete/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".sftp.delete", Handle: deleteEntry},
-		{ID: prefix + ".snippet.list", Method: plugin.MethodGet, Path: "/snippets", Permission: protocol + ".snippets.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".snippet.list", Handle: snippetList(protocol)},
-		{ID: prefix + ".snippet.create", Method: plugin.MethodPost, Path: "/snippets", Permission: protocol + ".snippets.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".snippet.create", Input: snippetSchema(), Handle: snippetCreate(protocol)},
 	}
 	if includeShell {
 		routes = append([]plugin.Route{{
@@ -71,9 +96,10 @@ func Routes(prefix, protocol string, includeShell bool) []plugin.Route {
 			AuditEvent: protocol + ".shell", Input: terminalSchema(), Stream: shell,
 		}}, routes...)
 		routes = append(routes,
-			plugin.Route{ID: prefix + ".tunnel.list", Method: plugin.MethodGet, Path: "/tunnels", Permission: protocol + ".tunnels.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".tunnel.list", Handle: tunnelList},
-			plugin.Route{ID: prefix + ".tunnel.open", Method: plugin.MethodPost, Path: "/tunnels", Permission: protocol + ".tunnels.open", Risk: plugin.RiskPrivileged, AuditEvent: protocol + ".tunnel.open", Input: tunnelSchema(), Handle: tunnelOpen},
-			plugin.Route{ID: prefix + ".tunnel.close", Method: plugin.MethodDelete, Path: "/tunnels/{id}", Permission: protocol + ".tunnels.close", Risk: plugin.RiskPrivileged, AuditEvent: protocol + ".tunnel.close", Handle: tunnelClose},
+			plugin.Route{ID: prefix + ".snippet.list", Method: plugin.MethodGet, Path: "/snippets", Permission: protocol + ".snippets.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".snippet.list", Handle: snippetList(protocol)},
+			plugin.Route{ID: prefix + ".snippet.create", Method: plugin.MethodPost, Path: "/snippets", Permission: protocol + ".snippets.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".snippet.create", Input: snippetSchema(), Handle: snippetCreate(protocol)},
+			plugin.Route{ID: prefix + ".snippet.run", Method: plugin.MethodPost, Path: "/snippets/{id}/run", Permission: protocol + ".snippets.run", Risk: plugin.RiskPrivileged, AuditEvent: protocol + ".snippet.run", Timeout: 30 * time.Second, Handle: snippetRun(protocol)},
+			plugin.Route{ID: prefix + ".snippet.delete", Method: plugin.MethodDelete, Path: "/snippets/{id}", Permission: protocol + ".snippets.delete", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".snippet.delete", Handle: snippetDelete(protocol)},
 		)
 	}
 	return routes
@@ -103,20 +129,6 @@ func snippetSchema() *plugin.Schema {
 		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
 		{Key: "body", Label: "Command", Type: plugin.FieldTextarea, Required: true},
 	}}}}
-}
-
-func tunnelSchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Tunnel", Fields: []plugin.Field{
-		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
-		{Key: "listen", Label: "Listen address", Type: plugin.FieldText, Required: true},
-		{Key: "target", Label: "Target address", Type: plugin.FieldText, Required: true},
-	}}}}
-}
-
-type tunnelRequest struct {
-	Name   string `json:"name" validate:"required"`
-	Listen string `json:"listen" validate:"required"`
-	Target string `json:"target" validate:"required"`
 }
 
 func shell(rc *plugin.RequestContext, client plugin.ClientStream) error {
@@ -205,7 +217,7 @@ func list(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := cleanRemotePath(rc.Param("path"))
+	p, err := resolveRemotePath(fs, rc.Param("path"))
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +246,7 @@ func list(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pageEntries(entries, req), nil
+	return pageEntries(p, entries, req), nil
 }
 
 func stat(rc *plugin.RequestContext) (any, error) {
@@ -242,7 +254,7 @@ func stat(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := cleanRemotePath(rc.Param("path"))
+	p, err := resolveRemotePath(fs, rc.Param("path"))
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +270,7 @@ func read(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := cleanRemotePath(rc.Param("path"))
+	p, err := resolveRemotePath(fs, rc.Param("path"))
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +316,7 @@ func download(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := cleanRemotePath(rc.Param("path"))
+	p, err := resolveRemotePath(fs, rc.Param("path"))
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +345,7 @@ func upload(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir, err := cleanRemotePath(rc.Param("path"))
+	dir, err := resolveRemotePath(fs, rc.Param("path"))
 	if err != nil {
 		return nil, err
 	}
@@ -377,7 +389,7 @@ func writeFile(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := cleanRemotePath(rc.Param("path"))
+	p, err := resolveRemotePath(fs, rc.Param("path"))
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +420,7 @@ func mkdir(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	dir, err := cleanRemotePath(rc.Param("path"))
+	dir, err := resolveRemotePath(fs, rc.Param("path"))
 	if err != nil {
 		return nil, err
 	}
@@ -431,7 +443,7 @@ func renameEntry(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := cleanRemotePath(rc.Param("path"))
+	p, err := resolveRemotePath(fs, rc.Param("path"))
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +466,7 @@ func deleteEntry(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := cleanRemotePath(rc.Param("path"))
+	p, err := resolveRemotePath(fs, rc.Param("path"))
 	if err != nil {
 		return nil, err
 	}
@@ -490,19 +502,6 @@ func snippetList(protocol string) plugin.Handler {
 	}
 }
 
-type snippet struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
-}
-
-type snippetRequest struct {
-	Name string `json:"name" validate:"required"`
-	Body string `json:"body" validate:"required"`
-}
-
 func snippetCreate(protocol string) plugin.Handler {
 	return func(rc *plugin.RequestContext) (any, error) {
 		if rc.Snippets == nil {
@@ -515,10 +514,10 @@ func snippetCreate(protocol string) plugin.Handler {
 		now := time.Now()
 		sn := models.Snippet{
 			ID: uuid.NewString(), OwnerID: rc.User.ID, Protocol: protocol,
-			Name: strings.TrimSpace(req.Name), Body: req.Body,
+			Name: strings.TrimSpace(req.Name), Body: strings.TrimSpace(req.Body),
 			CreatedAt: now, UpdatedAt: now,
 		}
-		if sn.Name == "" || strings.TrimSpace(sn.Body) == "" {
+		if sn.Name == "" || sn.Body == "" {
 			return nil, plugin.ErrInvalidInput
 		}
 		if err := rc.Snippets.Create(rc.Ctx, &sn); err != nil {
@@ -528,67 +527,49 @@ func snippetCreate(protocol string) plugin.Handler {
 	}
 }
 
-func tunnelList(rc *plugin.RequestContext) (any, error) {
-	s, err := Unwrap(rc.Session)
-	if err != nil {
-		return nil, err
+func snippetRun(protocol string) plugin.Handler {
+	return func(rc *plugin.RequestContext) (any, error) {
+		sn, err := ownedSnippet(rc, protocol)
+		if err != nil {
+			return nil, err
+		}
+		s, err := Unwrap(rc.Session)
+		if err != nil {
+			return nil, err
+		}
+		output, truncated, err := s.RunCommand(rc.Ctx, sn.Body)
+		if err != nil {
+			return nil, err
+		}
+		return snippetRunResult{OK: true, Output: output, Truncated: truncated}, nil
 	}
-	rows := s.ListTunnels()
-	req, err := rc.Page()
-	if err != nil {
-		return nil, err
-	}
-	offset := cursorOffset(req.Cursor)
-	if offset < 0 || offset > len(rows) {
-		offset = 0
-	}
-	limit := req.Limit
-	if limit <= 0 {
-		limit = plugin.DefaultPageLimit
-	}
-	end := offset + limit
-	if end > len(rows) {
-		end = len(rows)
-	}
-	next := ""
-	if end < len(rows) {
-		next = base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(end)))
-	}
-	total := len(rows)
-	return plugin.Page[Tunnel]{Items: rows[offset:end], NextCursor: next, Total: &total}, nil
 }
 
-func tunnelOpen(rc *plugin.RequestContext) (any, error) {
-	s, err := Unwrap(rc.Session)
-	if err != nil {
-		return nil, err
+func snippetDelete(protocol string) plugin.Handler {
+	return func(rc *plugin.RequestContext) (any, error) {
+		sn, err := ownedSnippet(rc, protocol)
+		if err != nil {
+			return nil, err
+		}
+		if err := rc.Snippets.Delete(rc.Ctx, sn.ID); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"ok": true}, nil
 	}
-	var req tunnelRequest
-	if err := rc.Bind(&req); err != nil {
-		return nil, err
-	}
-	req.Name = strings.TrimSpace(req.Name)
-	req.Listen = strings.TrimSpace(req.Listen)
-	req.Target = strings.TrimSpace(req.Target)
-	if req.Name == "" || req.Listen == "" || req.Target == "" {
-		return nil, plugin.ErrInvalidInput
-	}
-	t, err := s.OpenTunnel(uuid.NewString(), req.Name, req.Listen, req.Target)
-	if err != nil {
-		return nil, err
-	}
-	return t, nil
 }
 
-func tunnelClose(rc *plugin.RequestContext) (any, error) {
-	s, err := Unwrap(rc.Session)
+func ownedSnippet(rc *plugin.RequestContext, protocol string) (models.Snippet, error) {
+	if rc.Snippets == nil {
+		return models.Snippet{}, plugin.ErrNotSupported
+	}
+	sn, err := rc.Snippets.Get(rc.Ctx, rc.Param("id"))
 	if err != nil {
-		return nil, err
+		return models.Snippet{}, err
 	}
-	if err := s.CloseTunnel(rc.Param("id")); err != nil {
-		return nil, err
+	if sn.OwnerID != rc.User.ID || sn.Protocol != protocol {
+		return models.Snippet{}, plugin.ErrNotFound
 	}
-	return map[string]bool{"ok": true}, nil
+	return sn, nil
 }
 
 func fileEntry(p string, info os.FileInfo) FileEntry {
@@ -603,7 +584,7 @@ func fileEntry(p string, info os.FileInfo) FileEntry {
 	}
 }
 
-func pageEntries(entries []FileEntry, req plugin.PageRequest) plugin.Page[FileEntry] {
+func pageEntries(currentPath string, entries []FileEntry, req plugin.PageRequest) FilePage {
 	offset := 0
 	if req.Cursor != "" {
 		if raw, err := base64.RawURLEncoding.DecodeString(req.Cursor); err == nil {
@@ -626,7 +607,7 @@ func pageEntries(entries []FileEntry, req plugin.PageRequest) plugin.Page[FileEn
 		next = base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(end)))
 	}
 	total := len(entries)
-	return plugin.Page[FileEntry]{Items: entries[offset:end], NextCursor: next, Total: &total}
+	return FilePage{Items: entries[offset:end], NextCursor: next, Total: &total, Path: currentPath}
 }
 
 func pageSnippets(rows []models.Snippet, req plugin.PageRequest) plugin.Page[snippet] {
@@ -655,7 +636,15 @@ func pageSnippets(rows []models.Snippet, req plugin.PageRequest) plugin.Page[sni
 }
 
 func snippetFromModel(sn models.Snippet) snippet {
-	return snippet{ID: sn.ID, Name: sn.Name, Body: sn.Body, CreatedAt: sn.CreatedAt, UpdatedAt: sn.UpdatedAt}
+	return snippet{
+		ID: sn.ID,
+		Ref: &plugin.ResourceRef{
+			Kind: "snippet",
+			Name: sn.Name,
+			UID:  sn.ID,
+		},
+		Name: sn.Name, Body: sn.Body, CreatedAt: sn.CreatedAt, UpdatedAt: sn.UpdatedAt,
+	}
 }
 
 func cursorOffset(cursor string) int {
@@ -671,6 +660,38 @@ func cursorOffset(cursor string) int {
 		return 0
 	}
 	return n
+}
+
+func resolveRemotePath(fs *sftp.Client, raw string) (string, error) {
+	if strings.ContainsRune(raw, 0) {
+		return "", fmt.Errorf("%w: invalid path", plugin.ErrInvalidInput)
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "." || raw == "~" {
+		return homePath(fs)
+	}
+	if strings.HasPrefix(raw, "~/") {
+		home, err := homePath(fs)
+		if err != nil {
+			return "", err
+		}
+		raw = joinRemote(home, strings.TrimPrefix(raw, "~/"))
+	}
+	clean, err := cleanRemotePath(raw)
+	if err != nil {
+		return "", err
+	}
+	return clean, nil
+}
+
+func homePath(fs *sftp.Client) (string, error) {
+	if home, err := fs.RealPath("."); err == nil && home != "" {
+		return cleanRemotePath(home)
+	}
+	if home, err := fs.Getwd(); err == nil && home != "" {
+		return cleanRemotePath(home)
+	}
+	return "", fmt.Errorf("%w: resolve home directory", plugin.ErrUnavailable)
 }
 
 func cleanRemotePath(raw string) (string, error) {

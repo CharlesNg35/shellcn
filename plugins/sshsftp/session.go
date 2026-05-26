@@ -5,9 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"sync"
-	"time"
+	"sync/atomic"
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -17,15 +16,14 @@ import (
 
 // Session holds all mutable per-connection SSH state.
 type Session struct {
-	client  *ssh.Client
-	mu      sync.Mutex
-	sftp    *sftp.Client
-	tunnels map[string]*Tunnel
+	client *ssh.Client
+	mu     sync.Mutex
+	sftp   *sftp.Client
 }
 
 // NewSession wraps an authenticated SSH client.
 func NewSession(client *ssh.Client) *Session {
-	return &Session{client: client, tunnels: map[string]*Tunnel{}}
+	return &Session{client: client}
 }
 
 // Unwrap returns the shared SSH/SFTP session from the core session handle.
@@ -73,6 +71,32 @@ func (s *Session) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (p
 	}
 }
 
+func (s *Session) RunCommand(ctx context.Context, command string) (string, bool, error) {
+	sshSess, err := s.client.NewSession()
+	if err != nil {
+		return "", false, fmt.Errorf("%w: open command session: %v", plugin.ErrUnavailable, err)
+	}
+	defer func() { _ = sshSess.Close() }()
+	var out limitedBuffer
+	sshSess.Stdout = &out
+	sshSess.Stderr = &out
+	if err := sshSess.Start(command); err != nil {
+		return "", false, fmt.Errorf("%w: start command: %v", plugin.ErrUnavailable, err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- sshSess.Wait() }()
+	select {
+	case <-ctx.Done():
+		_ = sshSess.Close()
+		return out.String(), out.Truncated(), ctx.Err()
+	case err := <-done:
+		if err != nil {
+			return out.String(), out.Truncated(), fmt.Errorf("%w: command failed: %v", plugin.ErrUnavailable, err)
+		}
+		return out.String(), out.Truncated(), nil
+	}
+}
+
 func (s *Session) Close() error {
 	s.mu.Lock()
 	fs := s.sftp
@@ -82,120 +106,9 @@ func (s *Session) Close() error {
 	if fs != nil {
 		err = fs.Close()
 	}
-	for _, t := range s.tunnelsSnapshot() {
-		if cerr := t.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}
 	if cerr := s.client.Close(); cerr != nil && err == nil {
 		err = cerr
 	}
-	return err
-}
-
-// Tunnel is a local TCP forward through the SSH connection.
-type Tunnel struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Listen    string `json:"listen"`
-	Target    string `json:"target"`
-	Status    string `json:"status"`
-	CreatedAt string `json:"createdAt"`
-
-	ln   net.Listener
-	done chan struct{}
-	once sync.Once
-}
-
-// OpenTunnel starts a local TCP listener that forwards accepted connections over SSH.
-func (s *Session) OpenTunnel(id, name, listen, target string) (*Tunnel, error) {
-	ln, err := net.Listen("tcp", listen)
-	if err != nil {
-		return nil, fmt.Errorf("%w: listen tunnel: %v", plugin.ErrUnavailable, err)
-	}
-	t := &Tunnel{
-		ID: id, Name: name, Listen: ln.Addr().String(), Target: target,
-		Status: "active", CreatedAt: nowUTC(), ln: ln, done: make(chan struct{}),
-	}
-	s.mu.Lock()
-	s.tunnels[id] = t
-	s.mu.Unlock()
-	go s.serveTunnel(t)
-	return t, nil
-}
-
-// ListTunnels returns active tunnel summaries.
-func (s *Session) ListTunnels() []Tunnel {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]Tunnel, 0, len(s.tunnels))
-	for _, t := range s.tunnels {
-		out = append(out, Tunnel{ID: t.ID, Name: t.Name, Listen: t.Listen, Target: t.Target, Status: t.Status, CreatedAt: t.CreatedAt})
-	}
-	return out
-}
-
-// CloseTunnel stops a tunnel by id.
-func (s *Session) CloseTunnel(id string) error {
-	s.mu.Lock()
-	t, ok := s.tunnels[id]
-	if ok {
-		delete(s.tunnels, id)
-	}
-	s.mu.Unlock()
-	if !ok {
-		return plugin.ErrNotFound
-	}
-	return t.Close()
-}
-
-func (s *Session) tunnelsSnapshot() []*Tunnel {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]*Tunnel, 0, len(s.tunnels))
-	for id, t := range s.tunnels {
-		out = append(out, t)
-		delete(s.tunnels, id)
-	}
-	return out
-}
-
-func (s *Session) serveTunnel(t *Tunnel) {
-	for {
-		conn, err := t.ln.Accept()
-		if err != nil {
-			return
-		}
-		go s.handleTunnelConn(conn, t.Target)
-	}
-}
-
-func (s *Session) handleTunnelConn(local net.Conn, target string) {
-	defer func() { _ = local.Close() }()
-	remote, err := s.client.Dial("tcp", target)
-	if err != nil {
-		return
-	}
-	defer func() { _ = remote.Close() }()
-	errc := make(chan error, 2)
-	go func() {
-		_, err := io.Copy(remote, local)
-		errc <- err
-	}()
-	go func() {
-		_, err := io.Copy(local, remote)
-		errc <- err
-	}()
-	<-errc
-}
-
-func (t *Tunnel) Close() error {
-	var err error
-	t.once.Do(func() {
-		t.Status = "closed"
-		err = t.ln.Close()
-		close(t.done)
-	})
 	return err
 }
 
@@ -260,10 +173,6 @@ func intParam(params map[string]string, key string, fallback int) int {
 	return n
 }
 
-func nowUTC() string {
-	return time.Now().UTC().Format(time.RFC3339)
-}
-
 type terminalChannel struct {
 	ctx     context.Context
 	session *ssh.Session
@@ -273,6 +182,32 @@ type terminalChannel struct {
 	done    chan struct{}
 	once    sync.Once
 }
+
+const maxCommandOutput = 1 << 20
+
+type limitedBuffer struct {
+	buf       []byte
+	truncated atomic.Bool
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	remaining := maxCommandOutput - len(b.buf)
+	if remaining <= 0 {
+		b.truncated.Store(true)
+		return len(p), nil
+	}
+	if len(p) > remaining {
+		b.buf = append(b.buf, p[:remaining]...)
+		b.truncated.Store(true)
+		return len(p), nil
+	}
+	b.buf = append(b.buf, p...)
+	return len(p), nil
+}
+
+func (b *limitedBuffer) String() string { return string(b.buf) }
+
+func (b *limitedBuffer) Truncated() bool { return b.truncated.Load() }
 
 func (c *terminalChannel) Kind() plugin.StreamKind { return plugin.StreamTerminal }
 

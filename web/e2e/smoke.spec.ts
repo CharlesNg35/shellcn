@@ -9,7 +9,7 @@ test("renders the app shell", async ({ page }) => {
   await expect(page.locator("#app")).toContainText("ShellCN");
 });
 
-test("SSH (tabs): terminal stream, files preview, tables", async ({ page }) => {
+test("SSH (tabs): terminal stream, home files, snippets", async ({ page }) => {
   await page.goto("/");
   await page
     .getByRole("button", { name: /prod-web-01/ })
@@ -23,13 +23,16 @@ test("SSH (tabs): terminal stream, files preview, tables", async ({ page }) => {
 
   // Files tab: list + type-based preview.
   await page.getByRole("tab", { name: "Files" }).click();
-  await expect(page.locator("main")).toContainText("README.md");
-  await page.getByRole("button", { name: /README\.md/ }).click();
-  await expect(page.locator("textarea")).toHaveValue(/# Project/);
+  await expect(page.locator("main")).toContainText("app.json");
+  await expect(page.locator("main")).toContainText("home");
+  await page.getByRole("button", { name: /app\.json/ }).click();
+  await expect(page.locator("textarea")).toHaveValue(/"name": "app"/);
 
-  // Tunnels tab: a table panel.
-  await page.getByRole("tab", { name: "Tunnels" }).click();
-  await expect(page.locator("main")).toContainText("db.internal:5432");
+  await page.getByRole("tab", { name: "Snippets" }).click();
+  await expect(page.locator("main")).toContainText("disk usage");
+  await expect(page.getByRole("button", { name: "New snippet" })).toBeVisible();
+  await page.getByText("disk usage").click();
+  await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
 });
 
 test("Docker (sidebar tree): list table + resource detail", async ({

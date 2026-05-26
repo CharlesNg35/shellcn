@@ -232,6 +232,7 @@ function onEnrolled(): void {
                 :connection-id="id"
                 :source="activeTab.source"
                 :config="tabConfig(activeTab)"
+                :actions="projection.actions ?? []"
               />
             </KeepAlive>
           </div>
@@ -268,6 +269,7 @@ function onEnrolled(): void {
                 columns: groupResource.columns,
                 watch: groupResource.watch,
               }"
+              :actions="projection.actions ?? []"
               @select="onSelectRow"
             />
             <div

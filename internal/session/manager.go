@@ -188,6 +188,30 @@ func (m *Manager) Stats() Stats {
 	return s
 }
 
+// Active reports which connections have a live attached stream (at least one
+// open channel) within the given owner scope. It answers "is this connection
+// open right now" for presence indicators: a session kept warm for resume but
+// with no attached stream is not active, so detaching the last stream (e.g. a
+// browser refresh closing the websocket) reads as inactive immediately.
+func (m *Manager) Active(scope string) map[string]bool {
+	m.mu.Lock()
+	snapshot := make([]*entry, 0, len(m.sessions))
+	for _, e := range m.sessions {
+		snapshot = append(snapshot, e)
+	}
+	m.mu.Unlock()
+
+	active := make(map[string]bool)
+	for _, e := range snapshot {
+		e.mu.Lock()
+		if !e.closed && e.sess != nil && e.channels > 0 && e.key.OwnerScope == scope {
+			active[e.key.ConnectionID] = true
+		}
+		e.mu.Unlock()
+	}
+	return active
+}
+
 func (e *entry) shutdown() {
 	e.mu.Lock()
 	defer e.mu.Unlock()

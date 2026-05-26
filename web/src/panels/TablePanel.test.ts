@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { installFetch } from "../test/fetchMock";
 import TablePanel from "./TablePanel.vue";
-import type { Column } from "../types/projection";
+import type { Action, Column } from "../types/projection";
 
 const columns: Column[] = [
   { key: "name", label: "Name", sortable: true },
@@ -32,6 +32,12 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
+
+function bodyButton(text: string): HTMLButtonElement | undefined {
+  return [...document.body.querySelectorAll("button")].find(
+    (b) => b.textContent?.trim() === text,
+  ) as HTMLButtonElement | undefined;
+}
 
 describe("TablePanel", () => {
   it("renders manifest columns and rows, paginates via cursor", async () => {
@@ -88,5 +94,71 @@ describe("TablePanel", () => {
     const ev = w.emitted("select");
     expect(ev).toBeTruthy();
     expect((ev?.[0][0] as { ref: { uid: string } }).ref.uid).toBe("a");
+  });
+
+  it("renders declarative table and row actions", async () => {
+    const calls: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      calls.push(url);
+      if (init?.method === "POST")
+        return { body: { ok: true, output: "ran command" } };
+      return {
+        body: {
+          items: [row("s1", "disk usage")],
+          nextCursor: "",
+          total: 1,
+        },
+      };
+    });
+    const create: Action = {
+      id: "snippet.create",
+      label: "New snippet",
+      routeId: "ssh.snippet.create",
+      method: "POST",
+      risk: "write",
+      requiresConfirm: false,
+    };
+    const run: Action = {
+      id: "snippet.run",
+      label: "Run",
+      routeId: "ssh.snippet.run",
+      method: "POST",
+      params: { id: "${resource.uid}" },
+      risk: "privileged",
+      requiresConfirm: true,
+      confirmText: "Run it?",
+    };
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.snippet.list" },
+        config: {
+          columns,
+          actionIds: ["snippet.create"],
+          rowActionIds: ["snippet.run"],
+        },
+        actions: [create, run],
+      },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("New snippet");
+    expect(w.text()).not.toContain("Run");
+
+    await w.find("tbody tr").trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("Run");
+    await w
+      .findAll("button")
+      .find((b) => b.text() === "Run")!
+      .trigger("click");
+    await flushPromises();
+    bodyButton("Confirm")!.click();
+    await flushPromises();
+
+    expect(calls.some((url) => url.includes("p.id=s1"))).toBe(true);
+    expect(document.body.textContent).toContain("ran command");
+    w.unmount();
   });
 });

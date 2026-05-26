@@ -52,9 +52,10 @@ func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	active := s.connectionPresence(user.ID)
 	out := make([]connectionDTO, 0, len(conns))
 	for _, c := range conns {
-		dto := s.toConnectionDTO(c)
+		dto := s.toConnectionDTO(c, active)
 		dto.CanManage = s.canManageConnection(ctx, user, c)
 		out = append(out, dto)
 	}

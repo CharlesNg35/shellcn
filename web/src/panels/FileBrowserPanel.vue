@@ -2,7 +2,6 @@
 import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
-import FileUpload from "primevue/fileupload";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
 import InputText from "primevue/inputtext";
 import Textarea from "primevue/textarea";
@@ -18,11 +17,14 @@ import type {
   FileBrowserConfig,
   FileContent,
   FileEntry,
+  Page,
 } from "../types/projection";
 import type { PanelProps } from "./types";
-import AppIcon from "../components/AppIcon.vue";
+import FileCrumbs from "./file/FileCrumbs.vue";
+import FileEntryGrid from "./file/FileEntryGrid.vue";
+import FileEntryList from "./file/FileEntryList.vue";
 import FilePreview from "./file/FilePreview.vue";
-import { formatBytes } from "./file/fileTypes";
+import FileToolbar from "./file/FileToolbar.vue";
 
 const props = defineProps<PanelProps>();
 const toast = useToast();
@@ -45,7 +47,7 @@ const uploadFieldName = computed(
 );
 
 const startPath = computed(
-  () => props.source?.params?.[pathParam.value] ?? "/",
+  () => props.source?.params?.[pathParam.value] ?? ".",
 );
 const cwd = ref(startPath.value);
 const entries = ref<FileEntry[]>([]);
@@ -60,8 +62,12 @@ const mutating = ref(false);
 const mkdirOpen = ref(false);
 const renameOpen = ref(false);
 const deleteOpen = ref(false);
+const previewOpen = ref(false);
+const viewMode = ref<"split" | "grid">("split");
 const newFolderName = ref("");
 const renameName = ref("");
+
+type FileListPage = Page<FileEntry> & { path?: string };
 
 const sorted = computed(() =>
   [...entries.value].sort((a, b) => {
@@ -69,17 +75,6 @@ const sorted = computed(() =>
     return a.name.localeCompare(b.name);
   }),
 );
-
-const crumbs = computed(() => {
-  const parts = cwd.value.split("/").filter(Boolean);
-  const acc: { label: string; path: string }[] = [{ label: "/", path: "/" }];
-  let p = "";
-  for (const part of parts) {
-    p += `/${part}`;
-    acc.push({ label: part, path: p });
-  }
-  return acc;
-});
 
 const operationCtx = computed(() => ({ resource: props.resource }));
 const canUpload = computed(
@@ -120,6 +115,19 @@ function operationParams(path: string): Record<string, string> {
   return { ...(props.source?.params ?? {}), [pathParam.value]: path };
 }
 
+function parentPath(path: string): string {
+  const normalized = path.replace(/\/+$/, "");
+  if (!normalized || normalized === "/") return "/";
+  const idx = normalized.lastIndexOf("/");
+  return idx <= 0 ? "/" : normalized.slice(0, idx);
+}
+
+function resolvedListPath(requested: string, page: FileListPage): string {
+  if (page.path) return page.path;
+  const first = page.items[0]?.path;
+  return first?.startsWith("/") ? parentPath(first) : requested;
+}
+
 async function loadList(path: string): Promise<void> {
   if (!props.source) return;
   loadingList.value = true;
@@ -127,16 +135,16 @@ async function loadList(path: string): Promise<void> {
   selected.value = null;
   content.value = null;
   try {
-    const page = await fetchPage<FileEntry>(
+    const page = (await fetchPage<FileEntry>(
       props.connectionId,
       {
         routeId: props.source.routeId,
         params: operationParams(path),
       },
       operationCtx.value,
-    );
+    )) as FileListPage;
     entries.value = page.items;
-    cwd.value = path;
+    cwd.value = resolvedListPath(path, page);
   } catch (e) {
     listError.value = (e as Error).message;
   } finally {
@@ -201,7 +209,10 @@ async function saveFile(): Promise<void> {
 
 async function openEntry(entry: FileEntry): Promise<void> {
   if (entry.isDir) await loadList(entry.path);
-  else await selectEntry(entry);
+  else {
+    await selectEntry(entry);
+    if (viewMode.value === "grid") previewOpen.value = true;
+  }
 }
 
 function notifySuccess(detail: string): void {
@@ -333,123 +344,42 @@ watch(
 
 <template>
   <div class="flex h-full flex-col">
-    <div
-      class="flex items-center gap-1 overflow-x-auto border-b border-surface-200 px-3 py-2 text-sm dark:border-surface-800"
-    >
-      <template v-for="(c, i) in crumbs" :key="c.path">
-        <span v-if="i > 0" class="text-surface-300">/</span>
-        <button
-          type="button"
-          class="rounded px-1.5 py-0.5 text-surface-500 hover:bg-surface-100 hover:text-surface-800 dark:hover:bg-surface-800"
-          @click="loadList(c.path)"
-        >
-          {{ c.label }}
-        </button>
-      </template>
-    </div>
+    <FileCrumbs :path="cwd" @navigate="loadList" />
 
-    <div
-      class="flex min-h-12 flex-wrap items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
-    >
-      <FileUpload
-        v-if="canUpload"
-        mode="basic"
-        :name="uploadFieldName"
-        :multiple="multipleUpload"
-        :max-file-size="fileConfig?.maxUploadBytes"
-        custom-upload
-        auto
-        choose-label="Upload"
-        :disabled="mutating"
-        @uploader="upload"
-      />
-      <Button
-        v-if="canMkdir"
-        type="button"
-        :disabled="mutating"
-        label="New folder"
-        @click="mkdirOpen = true"
-      />
-      <Button
-        v-if="writable && renameRouteId"
-        type="button"
-        :disabled="!canRename || mutating"
-        label="Rename"
-        @click="beginRename"
-      />
-      <Button
-        v-if="writable && deleteRouteId"
-        type="button"
-        :disabled="!canDelete || mutating"
-        label="Delete"
-        @click="deleteOpen = true"
-      />
-      <Button
-        v-if="downloadHref"
-        as="a"
-        :href="downloadHref"
-        :download="selected?.name"
-        label="Download"
-      />
-      <Button
-        type="button"
-        :disabled="loadingList"
-        label="Refresh"
-        @click="loadList(cwd)"
-      />
-    </div>
+    <FileToolbar
+      v-model:view-mode="viewMode"
+      :can-upload="canUpload"
+      :can-mkdir="canMkdir"
+      :can-rename="canRename"
+      :can-delete="canDelete"
+      :can-show-rename="writable && Boolean(renameRouteId)"
+      :can-show-delete="writable && Boolean(deleteRouteId)"
+      :download-href="downloadHref"
+      :download-name="selected?.name"
+      :multiple-upload="multipleUpload"
+      :max-upload-bytes="fileConfig?.maxUploadBytes"
+      :upload-field-name="uploadFieldName"
+      :mutating="mutating"
+      :loading="loadingList"
+      @upload="upload"
+      @mkdir="mkdirOpen = true"
+      @rename="beginRename"
+      @delete="deleteOpen = true"
+      @refresh="loadList(cwd)"
+    />
 
-    <div class="flex min-h-0 flex-1">
+    <div v-if="viewMode === 'split'" class="flex min-h-0 flex-1">
       <div
-        class="w-72 shrink-0 overflow-y-auto border-r border-surface-200 dark:border-surface-800"
+        class="w-72 shrink-0 border-r border-surface-200 dark:border-surface-800"
       >
-        <p v-if="loadingList" class="p-3 text-sm text-surface-400">Loading…</p>
-        <p v-else-if="listError" class="p-3 text-sm text-red-500">
-          {{ listError }}
-        </p>
-        <ul v-else>
-          <li
-            v-for="entry in sorted"
-            :key="entry.path"
-            class="flex items-stretch"
-          >
-            <button
-              type="button"
-              class="flex min-w-0 flex-1 items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-100 dark:hover:bg-surface-800"
-              :class="
-                selected?.path === entry.path
-                  ? 'bg-surface-100 dark:bg-surface-800'
-                  : ''
-              "
-              @click="selectEntry(entry)"
-              @dblclick="openEntry(entry)"
-            >
-              <AppIcon
-                :icon="{ type: 'name', value: entry.isDir ? 'folder' : 'code' }"
-                :size="15"
-                class="shrink-0 text-surface-400"
-              />
-              <span
-                class="flex-1 truncate text-surface-700 dark:text-surface-200"
-                >{{ entry.name }}</span
-              >
-              <span v-if="!entry.isDir" class="text-xs text-surface-400">{{
-                formatBytes(entry.size)
-              }}</span>
-            </button>
-            <Button
-              v-if="entry.isDir"
-              type="button"
-              :aria-label="`Open ${entry.name}`"
-              :pt="{
-                root: 'w-8 shrink-0 rounded-none px-0 text-surface-400 hover:bg-surface-100 dark:hover:bg-surface-800',
-              }"
-              @click="openEntry(entry)"
-            >
-              <AppIcon :icon="{ type: 'name', value: 'chevron-right' }" />
-            </Button>
-          </li>
-        </ul>
+        <FileEntryList
+          :entries="sorted"
+          :selected-path="selected?.path"
+          :loading="loadingList"
+          :error="listError"
+          @select="selectEntry"
+          @open="openEntry"
+        />
       </div>
 
       <div class="min-w-0 flex-1">
@@ -479,6 +409,53 @@ watch(
         />
       </div>
     </div>
+
+    <FileEntryGrid
+      v-else
+      class="min-h-0 flex-1"
+      :entries="sorted"
+      :selected-path="selected?.path"
+      :loading="loadingList"
+      :error="listError"
+      @select="selectEntry"
+      @open="openEntry"
+    />
+
+    <Dialog
+      v-model:visible="previewOpen"
+      modal
+      :header="selected?.name ?? 'Preview'"
+      :pt="{
+        root: 'w-full max-w-5xl overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl dark:border-surface-800 dark:bg-surface-900',
+      }"
+    >
+      <div class="h-[70vh] min-h-0">
+        <div v-if="canEdit" class="flex h-full flex-col">
+          <div
+            class="flex items-center justify-end border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+          >
+            <Button
+              type="button"
+              label="Save"
+              :disabled="!dirty || mutating"
+              @click="saveFile"
+            />
+          </div>
+          <Textarea
+            v-model="editContent"
+            class="h-full min-h-0 w-full flex-1 resize-none rounded-none border-0 p-4 font-mono text-xs leading-relaxed"
+            spellcheck="false"
+            :disabled="mutating"
+          />
+        </div>
+        <FilePreview
+          v-else
+          :name="selected?.name ?? ''"
+          :content="content"
+          :loading="loadingContent"
+        />
+      </div>
+    </Dialog>
 
     <Dialog v-model:visible="mkdirOpen" modal header="New Folder">
       <form class="flex flex-col gap-4" @submit.prevent="createFolder">

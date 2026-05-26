@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useAuthStore } from "../stores/auth";
@@ -39,6 +40,21 @@ onMounted(async () => {
   }
 });
 
+// Keep the presence dots honest: re-fetch the catalog on a slow cadence so a
+// session opening or closing flips its dot without a manual reload. Paused
+// while the tab is hidden to avoid background churn.
+const visibility = useDocumentVisibility();
+const { pause, resume } = useIntervalFn(
+  () => {
+    if (conns.loaded) void conns.refresh().catch(() => undefined);
+  },
+  15000,
+  { immediate: false },
+);
+watch(visibility, (state) => (state === "visible" ? resume() : pause()), {
+  immediate: true,
+});
+
 const activeId = computed(() =>
   route.name === "connection" ? String(route.params.id) : null,
 );
@@ -52,8 +68,25 @@ const filtered = computed(() => {
 });
 
 function dotClass(c: ConnectionSummary): string {
-  if (c.transport === "agent" && !c.online) return "bg-amber-400";
-  return c.online === false ? "bg-surface-400" : "bg-emerald-400";
+  switch (c.status) {
+    case "active":
+      return "bg-emerald-400";
+    case "offline":
+      return "bg-red-500";
+    default:
+      return "bg-surface-300 dark:bg-surface-600";
+  }
+}
+
+function dotTitle(c: ConnectionSummary): string {
+  switch (c.status) {
+    case "active":
+      return "Open — live session";
+    case "offline":
+      return "Agent offline";
+    default:
+      return "Idle";
+  }
 }
 
 function go(c: ConnectionSummary): void {
@@ -154,9 +187,9 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
             }}</span>
           </span>
           <span
-            class="h-2 w-2 rounded-full"
+            class="h-2 w-2 shrink-0 rounded-full"
             :class="dotClass(c)"
-            :title="c.status ?? (c.online ? 'online' : 'offline')"
+            :title="dotTitle(c)"
           />
         </button>
         <!-- Loading: skeleton rows while the catalog is fetched. -->

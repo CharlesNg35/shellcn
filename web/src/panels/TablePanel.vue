@@ -5,8 +5,11 @@ import DataTable, {
   type DataTableRowClickEvent,
 } from "primevue/datatable";
 import Column from "primevue/column";
+import Dialog from "primevue/dialog";
+import Button from "primevue/button";
 import { fetchPage, watch as watchResource } from "../api/dataSource";
 import type {
+  Action,
   Column as ColumnSpec,
   DataSource,
   ResourceEvent,
@@ -16,6 +19,7 @@ import type { PanelProps } from "./types";
 import { formatBytes } from "./file/fileTypes";
 import { inputClass } from "../primevue/preset";
 import SkeletonList from "../components/SkeletonList.vue";
+import ActionBar from "./ActionBar.vue";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{ select: [row: Row] }>();
@@ -37,10 +41,20 @@ const error = ref<string | null>(null);
 const filterText = ref("");
 const sortField = ref<string | undefined>();
 const sortOrder = ref<number | undefined>();
+const selectedRow = ref<Row | null>(null);
+const actionOutput = ref<{
+  title: string;
+  output: string;
+  truncated: boolean;
+} | null>(null);
 
 const declaredColumns = computed(
   () => props.config?.columns as ColumnSpec[] | undefined,
 );
+const actionIds = computed(() => stringList(props.config?.actionIds));
+const rowActionIds = computed(() => stringList(props.config?.rowActionIds));
+const globalActions = computed(() => resolveActions(actionIds.value));
+const rowActions = computed(() => resolveActions(rowActionIds.value));
 
 const columns = computed<ColumnSpec[]>(() => {
   if (declaredColumns.value?.length) return declaredColumns.value;
@@ -64,6 +78,7 @@ async function load(reset: boolean): Promise<void> {
   if (!props.source) return;
   loading.value = true;
   error.value = null;
+  if (reset) selectedRow.value = null;
   try {
     const page = await fetchPage<Row>(
       props.connectionId,
@@ -96,7 +111,34 @@ function onSort(e: DataTableSortEvent): void {
 
 function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
+  selectedRow.value = row;
   if (row.ref) emit("select", row);
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((v): v is string => typeof v === "string")
+    : [];
+}
+
+function resolveActions(ids: string[]): Action[] {
+  return ids
+    .map((id) => props.actions?.find((a) => a.id === id))
+    .filter((a): a is Action => Boolean(a));
+}
+
+async function onActionDone(
+  action: Action,
+  result?: Record<string, unknown>,
+): Promise<void> {
+  if (typeof result?.output === "string") {
+    actionOutput.value = {
+      title: action.label,
+      output: result.output,
+      truncated: result.truncated === true,
+    };
+  }
+  await load(true);
 }
 
 function applyEvent(ev: ResourceEvent): void {
@@ -165,6 +207,19 @@ onUnmounted(() => {
       <span v-if="total != null" class="text-xs text-surface-400"
         >{{ total }} total</span
       >
+      <ActionBar
+        v-if="globalActions.length"
+        :connection-id="connectionId"
+        :actions="globalActions"
+        @done="onActionDone"
+      />
+      <ActionBar
+        v-if="rowActions.length && selectedRow?.ref"
+        :connection-id="connectionId"
+        :actions="rowActions"
+        :resource="selectedRow.ref"
+        @done="onActionDone"
+      />
       <button
         type="button"
         :disabled="loading"
@@ -224,5 +279,27 @@ onUnmounted(() => {
         {{ loading ? "Loading…" : "Load more" }}
       </button>
     </div>
+
+    <Dialog
+      :visible="!!actionOutput"
+      modal
+      :header="actionOutput?.title"
+      :dismissable-mask="true"
+      :pt="{
+        root: 'w-full max-w-3xl overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl dark:border-surface-800 dark:bg-surface-900',
+      }"
+      @update:visible="(v) => !v && (actionOutput = null)"
+    >
+      <pre
+        class="max-h-[60vh] overflow-auto rounded-lg bg-surface-950 p-4 text-xs leading-relaxed text-surface-100"
+        >{{ actionOutput?.output || "(no output)" }}</pre
+      >
+      <p v-if="actionOutput?.truncated" class="mt-2 text-xs text-amber-500">
+        Output truncated.
+      </p>
+      <template #footer>
+        <Button type="button" label="Close" @click="actionOutput = null" />
+      </template>
+    </Dialog>
   </div>
 </template>

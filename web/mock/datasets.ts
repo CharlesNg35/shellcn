@@ -179,48 +179,6 @@ function pgTables(schema: string): Item[] {
   );
 }
 
-const sshTunnels: Item[] = [
-  {
-    key: "t1",
-    ref: { kind: "tunnel", name: "pg", uid: "t1" },
-    name: "pg",
-    type: "local",
-    listen: "127.0.0.1:5432",
-    target: "db.internal:5432",
-    status: "active",
-  },
-  {
-    key: "t2",
-    ref: { kind: "tunnel", name: "redis", uid: "t2" },
-    name: "redis",
-    type: "local",
-    listen: "127.0.0.1:6379",
-    target: "cache.internal:6379",
-    status: "active",
-  },
-];
-
-const sshSnippets: Item[] = [
-  {
-    key: "s1",
-    ref: { kind: "snippet", name: "disk usage", uid: "s1" },
-    name: "disk usage",
-    command: "df -h",
-  },
-  {
-    key: "s2",
-    ref: { kind: "snippet", name: "tail syslog", uid: "s2" },
-    name: "tail syslog",
-    command: "tail -f /var/log/syslog",
-  },
-  {
-    key: "s3",
-    ref: { kind: "snippet", name: "top procs", uid: "s3" },
-    name: "top procs",
-    command: "ps aux --sort=-%cpu | head",
-  },
-];
-
 function envRows(id: string): Item[] {
   return [
     {
@@ -312,7 +270,13 @@ const fs: Record<string, FsNode> = {
   },
 };
 
+function mockFsPath(path: string): string {
+  if (!path || path === "." || path === "~") return "/home/deploy";
+  return path;
+}
+
 function fsList(path: string): Item[] {
+  path = mockFsPath(path);
   const node = fs[path] ?? { entries: [] };
   return node.entries.map((e) => ({
     name: e.name,
@@ -324,6 +288,27 @@ function fsList(path: string): Item[] {
     mode: e.isDir ? "drwxr-xr-x" : "rw-r--r--",
   }));
 }
+
+const sshSnippets: Item[] = [
+  {
+    id: "s1",
+    key: "s1",
+    ref: { kind: "snippet", name: "disk usage", uid: "s1" },
+    name: "disk usage",
+    body: "df -h",
+    createdAt: "2026-05-20T08:00:00Z",
+    updatedAt: "2026-05-20T08:00:00Z",
+  },
+  {
+    id: "s2",
+    key: "s2",
+    ref: { kind: "snippet", name: "tail syslog", uid: "s2" },
+    name: "tail syslog",
+    body: "tail -f /var/log/syslog",
+    createdAt: "2026-05-20T08:00:00Z",
+    updatedAt: "2026-05-20T08:00:00Z",
+  },
+];
 
 const fileContents: Record<string, string> = {
   "/README.md":
@@ -439,7 +424,7 @@ function renameFsEntry(path: string, name: string): void {
 }
 
 const lists: Record<string, (params: Record<string, string>) => Item[]> = {
-  "ssh.sftp.list": (p) => fsList(p.path ?? "/"),
+  "ssh.sftp.list": (p) => fsList(p.path ?? "."),
   "docker.container.list": () => containers,
   "docker.image.list": () => images,
   "docker.volume.list": () => volumes,
@@ -525,7 +510,6 @@ const lists: Record<string, (params: Record<string, string>) => Item[]> = {
   ],
   "postgres.table.columns": (p) => tableColumns(p.table ?? "users"),
   "postgres.table.indexes": (p) => tableIndexes(p.table ?? "users"),
-  "ssh.tunnel.list": () => sshTunnels,
   "ssh.snippet.list": () => sshSnippets,
 };
 
@@ -624,6 +608,32 @@ export function actionData(
       const name = safeName(item);
       if (name) addFsEntry(params.path ?? "/", name, { isDir: false, size: 0 });
     }
+    return { ok: true, routeId };
+  }
+  if (routeId === "ssh.snippet.create") {
+    const id = `s${sshSnippets.length + 1}`;
+    const now = new Date().toISOString();
+    sshSnippets.unshift({
+      id,
+      key: id,
+      ref: { kind: "snippet", name: String(payload.name ?? ""), uid: id },
+      name: String(payload.name ?? ""),
+      body: String(payload.body ?? ""),
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { ok: true, routeId };
+  }
+  if (routeId === "ssh.snippet.run") {
+    const sn = sshSnippets.find((item) => item.id === params.id);
+    return {
+      ok: true,
+      output: sn ? `$ ${sn.body}\nmock command completed\n` : "",
+    };
+  }
+  if (routeId === "ssh.snippet.delete") {
+    const idx = sshSnippets.findIndex((item) => item.id === params.id);
+    if (idx >= 0) sshSnippets.splice(idx, 1);
     return { ok: true, routeId };
   }
   return undefined;

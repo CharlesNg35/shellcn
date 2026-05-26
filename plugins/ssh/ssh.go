@@ -8,7 +8,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/sshsftp"
 )
 
-// Plugin exposes full SSH: terminal, files, tunnels, and snippets.
+// Plugin exposes full SSH: terminal, files, and command snippets.
 type Plugin struct{}
 
 func New() *Plugin { return &Plugin{} }
@@ -19,10 +19,10 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Name:                "ssh",
 		Version:             "0.1.0",
 		Title:               "SSH",
-		Description:         "Secure shell with terminal, SFTP files, tunnels, and snippets.",
+		Description:         "Secure shell with terminal, SFTP files, and command snippets.",
 		Icon:                plugin.Icon{Type: plugin.IconName, Value: "terminal"},
 		Config:              configSchema("ssh"),
-		Capabilities:        []plugin.Capability{"terminal", "filesystem", "tunnel"},
+		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
 		CredentialKinds:     sshsftp.CredentialKinds(),
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
@@ -32,24 +32,22 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "ssh.shell", Method: plugin.MethodWS, Params: map[string]string{"cols": "80", "rows": "24"}},
 			},
 			filesTab("ssh"),
+			snippetsTab(),
+		},
+		Actions: []plugin.Action{
 			{
-				Key: "tunnels", Label: "Tunnels", Icon: plugin.Icon{Type: plugin.IconName, Value: "share"},
-				Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ssh.tunnel.list"},
-				Config: map[string]any{"columns": []plugin.Column{
-					{Key: "name", Label: "Name", Sortable: true},
-					{Key: "listen", Label: "Listen", Sortable: true},
-					{Key: "target", Label: "Target", Sortable: true},
-					{Key: "status", Label: "Status", Type: plugin.ColumnBadge},
-				}},
+				ID: "ssh.snippet.create", Label: "New snippet", Icon: plugin.Icon{Type: plugin.IconName, Value: "plus"},
+				RouteID: "ssh.snippet.create",
 			},
 			{
-				Key: "snippets", Label: "Snippets", Icon: plugin.Icon{Type: plugin.IconName, Value: "code"},
-				Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ssh.snippet.list"},
-				Config: map[string]any{"columns": []plugin.Column{
-					{Key: "name", Label: "Name", Sortable: true},
-					{Key: "body", Label: "Command"},
-					{Key: "updatedAt", Label: "Updated", Type: plugin.ColumnDateTime, Sortable: true},
-				}},
+				ID: "ssh.snippet.run", Label: "Run", Icon: plugin.Icon{Type: plugin.IconName, Value: "play"},
+				RouteID: "ssh.snippet.run", Params: map[string]string{"id": "${resource.uid}"},
+				Confirm: true, ConfirmText: "Run this snippet on the SSH host?",
+			},
+			{
+				ID: "ssh.snippet.delete", Label: "Delete", Icon: plugin.Icon{Type: plugin.IconName, Value: "trash"},
+				RouteID: "ssh.snippet.delete", Params: map[string]string{"id": "${resource.uid}"},
+				Confirm: true, ConfirmText: "Delete this snippet?",
 			},
 		},
 		Streams: []plugin.Stream{{ID: "ssh.shell", Kind: plugin.StreamTerminal, RouteID: "ssh.shell"}},
@@ -57,6 +55,22 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			Class: plugin.RecordingTerminal, Formats: []plugin.RecordingFormat{plugin.FormatAsciicastV2},
 			StreamIDs: []string{"ssh.shell"}, Authoritative: true,
 		}},
+	}
+}
+
+func snippetsTab() plugin.Tab {
+	return plugin.Tab{
+		Key: "snippets", Label: "Snippets", Icon: plugin.Icon{Type: plugin.IconName, Value: "code"},
+		Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ssh.snippet.list"},
+		Config: map[string]any{
+			"columns": []plugin.Column{
+				{Key: "name", Label: "Name", Sortable: true},
+				{Key: "body", Label: "Command"},
+				{Key: "updatedAt", Label: "Updated", Type: plugin.ColumnDateTime, Sortable: true},
+			},
+			"actionIds":    []string{"ssh.snippet.create"},
+			"rowActionIds": []string{"ssh.snippet.run", "ssh.snippet.delete"},
+		},
 	}
 }
 
@@ -95,7 +109,7 @@ func filesTab(prefix string) plugin.Tab {
 	return plugin.Tab{
 		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconName, Value: "folder"},
 		Panel:  plugin.PanelFileBrowser,
-		Source: &plugin.DataSource{RouteID: prefix + ".sftp.list", Params: map[string]string{"path": "/"}},
+		Source: &plugin.DataSource{RouteID: prefix + ".sftp.list", Params: map[string]string{"path": "."}},
 		Config: map[string]any{
 			"pathParam":       "path",
 			"readRouteId":     prefix + ".sftp.read",

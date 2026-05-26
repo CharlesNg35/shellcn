@@ -121,6 +121,64 @@ describe("FileBrowserPanel", () => {
     expect(w.text()).toContain("hosts");
   });
 
+  it("uses the resolved server path for the initial home directory", async () => {
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("sftp.list")) {
+        return {
+          body: {
+            path: "/home/deploy",
+            items: [
+              {
+                name: "app.json",
+                path: "/home/deploy/app.json",
+                isDir: false,
+                mime: "application/json",
+              },
+            ],
+            nextCursor: "",
+          },
+        };
+      }
+      return { body: {} };
+    });
+
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "." } },
+        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+      },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("home");
+    expect(w.text()).toContain("deploy");
+    expect(w.text()).toContain("app.json");
+  });
+
+  it("offers a grid view that opens file previews in a dialog", async () => {
+    const w = mount(FileBrowserPanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+      },
+    });
+    await flushPromises();
+    await w.find('button[title="Grid view"]').trigger("click");
+    await w
+      .findAll("button")
+      .find((b) => b.text().includes("README.md"))!
+      .trigger("dblclick");
+    await flushPromises();
+
+    expect(document.body.textContent).toContain("README.md");
+    expect(document.body.textContent).toContain("# Hello");
+    w.unmount();
+  });
+
   it("wires declared file operations to route IDs and path params", async () => {
     const calls: { url: string; init?: RequestInit }[] = [];
     vi.unstubAllGlobals();

@@ -13,7 +13,9 @@ const props = defineProps<{
   actions: Action[];
   resource?: ResourceRef | null;
 }>();
-const emit = defineEmits<{ done: [action: Action] }>();
+const emit = defineEmits<{
+  done: [action: Action, result?: Record<string, unknown>];
+}>();
 
 const toast = useToast();
 const pending = ref<Action | null>(null);
@@ -59,7 +61,7 @@ async function execute(
   busy.value = true;
   error.value = null;
   try {
-    await runFormAction(
+    const result = await runFormAction(
       props.connectionId,
       action.routeId,
       { resource: props.resource },
@@ -73,7 +75,7 @@ async function execute(
       summary: `${action.label} succeeded.`,
       life: 4000,
     });
-    emit("done", action);
+    emit("done", action, result);
   } catch (e) {
     error.value = (e as Error).message;
     toast.add({

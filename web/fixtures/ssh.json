@@ -3,9 +3,9 @@
   "name": "ssh",
   "version": "0.1.0",
   "title": "SSH",
-  "description": "Secure Shell — terminal, files, tunnels, snippets.",
+  "description": "Secure Shell — terminal, files, and command snippets.",
   "icon": { "type": "name", "value": "terminal" },
-  "capabilities": ["terminal", "filesystem", "tunnel"],
+  "capabilities": ["terminal", "filesystem"],
   "credentialKinds": [
     {
       "kind": "ssh_private_key",
@@ -127,7 +127,7 @@
       "label": "Files",
       "icon": { "type": "name", "value": "folder" },
       "panel": "file_browser",
-      "source": { "routeId": "ssh.sftp.list", "params": { "path": "/" } },
+      "source": { "routeId": "ssh.sftp.list", "params": { "path": "." } },
       "config": {
         "pathParam": "path",
         "readRouteId": "ssh.sftp.read",
@@ -143,18 +143,79 @@
       }
     },
     {
-      "key": "tunnels",
-      "label": "Tunnels",
-      "icon": { "type": "name", "value": "share" },
-      "panel": "table",
-      "source": { "routeId": "ssh.tunnel.list" }
-    },
-    {
       "key": "snippets",
       "label": "Snippets",
       "icon": { "type": "name", "value": "code" },
       "panel": "table",
-      "source": { "routeId": "ssh.snippet.list" }
+      "source": { "routeId": "ssh.snippet.list" },
+      "config": {
+        "columns": [
+          { "key": "name", "label": "Name", "sortable": true },
+          { "key": "body", "label": "Command" },
+          {
+            "key": "updatedAt",
+            "label": "Updated",
+            "type": "datetime",
+            "sortable": true
+          }
+        ],
+        "actionIds": ["ssh.snippet.create"],
+        "rowActionIds": ["ssh.snippet.run", "ssh.snippet.delete"]
+      }
+    }
+  ],
+  "actions": [
+    {
+      "id": "ssh.snippet.create",
+      "label": "New snippet",
+      "icon": { "type": "name", "value": "plus" },
+      "routeId": "ssh.snippet.create",
+      "method": "POST",
+      "risk": "write",
+      "requiresConfirm": false,
+      "input": {
+        "groups": [
+          {
+            "name": "Snippet",
+            "fields": [
+              {
+                "key": "name",
+                "label": "Name",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "body",
+                "label": "Command",
+                "type": "textarea",
+                "required": true
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ssh.snippet.run",
+      "label": "Run",
+      "icon": { "type": "name", "value": "play" },
+      "routeId": "ssh.snippet.run",
+      "method": "POST",
+      "params": { "id": "${resource.uid}" },
+      "risk": "privileged",
+      "requiresConfirm": true,
+      "confirmText": "Run this snippet on the SSH host?"
+    },
+    {
+      "id": "ssh.snippet.delete",
+      "label": "Delete",
+      "icon": { "type": "name", "value": "trash" },
+      "routeId": "ssh.snippet.delete",
+      "method": "DELETE",
+      "params": { "id": "${resource.uid}" },
+      "risk": "destructive",
+      "requiresConfirm": true,
+      "confirmText": "Delete this snippet?"
     }
   ],
   "streams": [{ "id": "ssh.shell", "kind": "terminal", "routeId": "ssh.shell" }]

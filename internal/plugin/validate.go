@@ -311,6 +311,8 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 			if t.Source != nil {
 				checkDS(fmt.Sprintf("%s tab %q source", ctx, t.Key), *t.Source)
 			}
+			checkActionIDs(fmt.Sprintf("%s tab %q actionIds", ctx, t.Key), stringConfigList(t.Config, "actionIds"))
+			checkActionIDs(fmt.Sprintf("%s tab %q rowActionIds", ctx, t.Key), stringConfigList(t.Config, "rowActionIds"))
 			checkPanelConfigRoutes(fmt.Sprintf("%s tab %q", ctx, t.Key), t, checkRouteID, checkWriteRouteID, checkMultipartRouteID)
 		}
 	}
@@ -327,6 +329,26 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		checkActionIDs(fmt.Sprintf("resource %q", rt.Kind), rt.ActionIDs)
 		checkActionIDs(fmt.Sprintf("resource %q header", rt.Kind), rt.Detail.Header.ActionIDs)
 		checkTabs(fmt.Sprintf("resource %q detail", rt.Kind), rt.Detail.Tabs)
+	}
+}
+
+func stringConfigList(config map[string]any, key string) []string {
+	if config == nil {
+		return nil
+	}
+	switch v := config[key].(type) {
+	case []string:
+		return v
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		return nil
 	}
 }
 

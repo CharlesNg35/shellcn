@@ -64,7 +64,7 @@ func filesTab() plugin.Tab {
 	return plugin.Tab{
 		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconName, Value: "folder"},
 		Panel:  plugin.PanelFileBrowser,
-		Source: &plugin.DataSource{RouteID: "sftp.sftp.list", Params: map[string]string{"path": "/"}},
+		Source: &plugin.DataSource{RouteID: "sftp.sftp.list", Params: map[string]string{"path": "."}},
 		Config: map[string]any{
 			"pathParam":       "path",
 			"readRouteId":     "sftp.sftp.read",

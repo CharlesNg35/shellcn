@@ -109,6 +109,16 @@ func (s *sshTestServer) handleSession(ch ssh.Channel, reqs <-chan *ssh.Request) 
 			_, _ = io.WriteString(ch, "ready\n")
 			_, _ = io.Copy(ch, ch)
 			return
+		case "exec":
+			var payload struct{ Command string }
+			if err := ssh.Unmarshal(req.Payload, &payload); err != nil {
+				_ = req.Reply(false, nil)
+				continue
+			}
+			_ = req.Reply(true, nil)
+			_, _ = io.WriteString(ch, "ran: "+payload.Command+"\n")
+			_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
+			return
 		case "subsystem":
 			var payload struct{ Name string }
 			if err := ssh.Unmarshal(req.Payload, &payload); err != nil || payload.Name != "sftp" {

@@ -26,14 +26,14 @@ These plugins should prove the core architecture first.
 
 | Plugin       | Purpose                | Main Capabilities                                         |
 | ------------ | ---------------------- | --------------------------------------------------------- |
-| `ssh`        | Remote shell access    | terminal, **SFTP (Files tab)**, tunnels, snippets         |
+| `ssh`        | Remote shell access    | terminal, **SFTP (Files tab)**, command snippets          |
 | `sftp`       | File-only access       | filesystem, upload/download, editor, permissions          |
 | `docker`     | Docker host management | containers, images, volumes, networks, logs, exec, stats  |
 | `postgresql` | PostgreSQL access      | schema browser, query editor, table data, snippets, audit |
 
 > **`ssh` vs `sftp`:** an `ssh` connection exposes SFTP as its **Files** tab over
 > the *same* `ssh.Client` (no second connection / re-auth). The standalone `sftp`
-> plugin is for users who want **file access only** (no shell/tunnels). Both
+> plugin is for users who want **file access only** (no shell). Both
 > render the same `file_browser` panel and share the SFTP route handlers — the
 > only difference is the manifest each declares. The frontend special-cases
 > neither (v2 §12, §13).

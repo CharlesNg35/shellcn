@@ -368,8 +368,9 @@ export interface ConnectionSummary {
   protocol: string;
   icon?: Icon;
   transport: Transport;
+  // online gates the agent enroll panel; status drives the presence dot.
   online?: boolean;
-  status?: string;
+  status?: "active" | "offline";
   canManage?: boolean;
   recording?: Record<string, string>;
 }
