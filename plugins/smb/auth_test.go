@@ -1,0 +1,47 @@
+package smb
+
+import (
+	"testing"
+
+	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/internal/service"
+)
+
+func TestParseOptionsValidatesAuthFields(t *testing.T) {
+	for name, cfg := range map[string]map[string]any{
+		"password missing password": {"host": "smb.example.com", "share": "files", "auth": "password", "username": "alice"},
+		"credential missing secret": {
+			"host": "smb.example.com", "share": "files", "auth": "credential", service.CredentialIdentity: "alice",
+		},
+		"unsupported auth": {"host": "smb.example.com", "share": "files", "auth": "token", "username": "alice", "password": "pw"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parseOptions(plugin.ConnectConfig{Config: cfg}); err == nil {
+				t.Fatal("expected validation error")
+			}
+		})
+	}
+
+	t.Run("guest", func(t *testing.T) {
+		opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{"host": "smb.example.com", "share": "files", "auth": "guest"}})
+		if err != nil {
+			t.Fatalf("guest auth should validate: %v", err)
+		}
+		if opts.Username != "" || opts.Password != "" {
+			t.Fatalf("guest should not carry user material: %+v", opts)
+		}
+	})
+
+	t.Run("credential", func(t *testing.T) {
+		opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
+			"host": "smb.example.com", "share": "files", "auth": "credential",
+			service.CredentialIdentity: "alice", service.CredentialSecret: "pw",
+		}})
+		if err != nil {
+			t.Fatalf("credential auth should validate: %v", err)
+		}
+		if opts.Username != "alice" || opts.Password != "pw" {
+			t.Fatalf("credential material not applied: %+v", opts)
+		}
+	})
+}

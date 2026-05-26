@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-26 — Phase 6 (M5 PostgreSQL) is complete. PostgreSQL is a direct-only first-party database plugin: pgxpool over `cfg.Net.DialContext`, reusable `db_password` and `tls_client_cert` credentials, schema/table/view/function/sequence routes, direct table browsing through the generic paginated table renderer, schema-aware completion, and a protocol-neutral executable `query_editor` panel whose language and labels come from manifest config. SQL plugins share driver-neutral helpers in `plugins/shared/sqldb` for query envelopes, identifier/DDL validation, statement safety checks, TLS config, common config parsing, audit metadata, and result redaction. The renderer contract includes `treeGroup.resourceKind` so lazy tree sources and group-click resource lists stay explicit instead of inferred from route IDs. PostgreSQL agent transport is intentionally not part of M5; agent remains for Docker and later Kubernetes-style private control planes. Earlier phases through M5 are complete; live validation against a real Proxmox cluster is still pending._
+_Last updated: 2026-05-26 — Phase 6 (M5 PostgreSQL) is complete. PostgreSQL is a direct-only first-party database plugin: pgxpool over `cfg.Net.DialContext`, reusable `db_password` and `tls_client_cert` credentials, schema/table/view/function/sequence routes, direct table browsing through the generic paginated table renderer, schema-aware completion, and a protocol-neutral executable `query_editor` panel whose language and labels come from manifest config. SQL plugins share driver-neutral helpers in `plugins/shared/sqldb` for query envelopes, identifier/DDL validation, statement safety checks, TLS config, common config parsing, audit metadata, and result redaction. The renderer contract includes `treeGroup.resourceKind` so lazy tree sources and group-click resource lists stay explicit instead of inferred from route IDs. PostgreSQL agent transport is intentionally not part of M5; agent remains for Docker and later Kubernetes-style private control planes. Telnet is now a direct-only first-party terminal plugin with manifest-declared asciicast recording. Earlier phases through M5 are complete; live validation against a real Proxmox cluster is still pending._
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -107,6 +107,10 @@ _Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP ses
 - [x] 6.1 PostgreSQL session and schema browser
 - [x] 6.2 Real query editor and results panel
 - [x] 6.3 Database safety controls
+
+## Additional first-party plugins
+
+- [x] Telnet — direct terminal plugin using the generic terminal panel and core terminal recording path
 
 ## Phase 7 — M6 · Kubernetes
 
