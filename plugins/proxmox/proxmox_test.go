@@ -20,6 +20,29 @@ func TestManifestValidates(t *testing.T) {
 	}
 }
 
+func TestNodeStorageTabIsNodeScoped(t *testing.T) {
+	var storageTab *plugin.Tab
+	for _, r := range New().Manifest().Resources {
+		if r.Kind != "node" {
+			continue
+		}
+		for i := range r.Detail.Tabs {
+			if r.Detail.Tabs[i].Key == "storage" {
+				storageTab = &r.Detail.Tabs[i]
+			}
+		}
+	}
+	if storageTab == nil || storageTab.Source == nil {
+		t.Fatalf("node storage tab missing source")
+	}
+	if storageTab.Source.RouteID != "proxmox.node.storage" {
+		t.Fatalf("node storage route = %q", storageTab.Source.RouteID)
+	}
+	if storageTab.Source.Params["node"] != "${resource.uid}" {
+		t.Fatalf("node storage params = %+v", storageTab.Source.Params)
+	}
+}
+
 func TestParseConnectOptions(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -135,6 +158,17 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 			t.Fatalf("expected guests + storage, got %+v", page.Items)
 		}
 	})
+
+	t.Run("list node storage", func(t *testing.T) {
+		page := callList(t, sess, listNodeStorage, map[string]string{"node": "pve"})
+		if len(page.Items) != 1 || page.Items[0]["name"] != "local" {
+			t.Fatalf("storage rows = %+v", page.Items)
+		}
+		ref := page.Items[0]["ref"].(plugin.ResourceRef)
+		if ref.Kind != "storage" || ref.Namespace != "pve" || ref.UID != "local" {
+			t.Fatalf("storage ref = %+v", ref)
+		}
+	})
 }
 
 // --- helpers --------------------------------------------------------------
@@ -153,7 +187,7 @@ func fakeProxmox(t *testing.T) *httptest.Server {
 			{"type":"lxc","vmid":200,"name":"ct1","node":"pve","status":"stopped","cpu":0,"mem":0,"maxmem":536870912}
 		]}`))
 	})
-	mux.HandleFunc("/api2/json/nodes/pve/storage", jsonHandler(`{"data":[{"storage":"local","content":"backup,iso"}]}`))
+	mux.HandleFunc("/api2/json/nodes/pve/storage", jsonHandler(`{"data":[{"storage":"local","type":"dir","content":"backup,iso","used":10,"total":100,"active":1}]}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/snapshot", jsonHandler(`{"data":[{"name":"pre-upgrade","description":"before update","snaptime":1700000000,"parent":""}]}`))
 	srv := httptest.NewTLSServer(mux)
 	return srv

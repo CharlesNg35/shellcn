@@ -161,10 +161,15 @@ function tabConfig(tab: TabDef): Record<string, unknown> {
 function onSelectGroup(key: string): void {
   ws.selectGroup(props.id, key);
 }
+function isNavigableRow(row: Row): boolean {
+  return !row.ref || resourceByKind.value.has(row.ref.kind);
+}
 function onSelectNode(row: Row): void {
+  if (!isNavigableRow(row)) return;
   ws.selectRow(props.id, row);
 }
 function onSelectRow(row: Row): void {
+  if (!isNavigableRow(row)) return;
   ws.selectRow(props.id, row);
 }
 function onActionDone(action: Action): void {
@@ -217,7 +222,7 @@ function onActionDone(action: Action): void {
             aria-label="Share connection"
             @click="showShare = true"
           >
-            <AppIcon :icon="{ type: 'name', value: 'users' }" :size="17" />
+            <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="17" />
           </Button>
           <Button
             text
@@ -227,7 +232,7 @@ function onActionDone(action: Action): void {
             aria-label="Edit connection"
             @click="showEdit = true"
           >
-            <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="17" />
+            <AppIcon :icon="{ type: 'lucide', value: 'pencil' }" :size="17" />
           </Button>
           <Button
             text
@@ -237,7 +242,7 @@ function onActionDone(action: Action): void {
             aria-label="Delete connection"
             @click="askDelete()"
           >
-            <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="17" />
+            <AppIcon :icon="{ type: 'lucide', value: 'trash' }" :size="17" />
           </Button>
         </template>
       </div>

@@ -2,7 +2,7 @@
 // Mirrors the Go manifest projection. Carries no server-only fields
 // (handlers, raw mount paths, permission keys, audit-event names).
 
-export type IconType = "name" | "url" | "base64" | "emoji" | "svg";
+export type IconType = "lucide" | "url" | "base64" | "emoji" | "svg";
 
 export interface Icon {
   type: IconType;

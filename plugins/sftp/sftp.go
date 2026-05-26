@@ -20,7 +20,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Version:             "0.1.0",
 		Title:               "SFTP",
 		Description:         "File browser over SSH SFTP.",
-		Icon:                plugin.Icon{Type: plugin.IconName, Value: "server"},
+		Icon:                plugin.Icon{Type: plugin.IconLucide, Value: "server"},
 		Config:              configSchema(),
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
@@ -62,7 +62,7 @@ func configSchema() plugin.Schema {
 
 func filesTab() plugin.Tab {
 	return plugin.Tab{
-		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconName, Value: "folder"},
+		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
 		Panel:  plugin.PanelFileBrowser,
 		Source: &plugin.DataSource{RouteID: "sftp.sftp.list", Params: map[string]string{"path": "."}},
 		Config: map[string]any{

@@ -30,7 +30,7 @@ const filtered = computed(() => {
         class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-surface-400"
         aria-hidden="true"
       >
-        <AppIcon :icon="{ type: 'name', value: 'search' }" :size="16" />
+        <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="16" />
       </span>
       <input
         v-model="query"

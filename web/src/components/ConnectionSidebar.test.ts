@@ -29,7 +29,7 @@ function router() {
   return createRouter({ history: createMemoryHistory(), routes });
 }
 
-const icon = { type: "name" as const, value: "server" };
+const icon = { type: "lucide" as const, value: "server" };
 const connections: ConnectionSummary[] = [
   {
     id: "c-root",

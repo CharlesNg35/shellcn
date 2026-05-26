@@ -219,7 +219,7 @@ onUnmounted(() => {
         class="inline-flex items-center gap-1.5 rounded-md border border-surface-600 px-2 py-1 text-surface-300 hover:bg-white/5"
         @click="stopDesiredRecording"
       >
-        <AppIcon :icon="{ type: 'name', value: 'stop' }" :size="12" />
+        <AppIcon :icon="{ type: 'lucide', value: 'stop' }" :size="12" />
         Stop
       </button>
       <span v-if="unsupported" class="text-amber-400">

@@ -6,7 +6,7 @@ import "slices"
 type IconType string
 
 const (
-	IconName   IconType = "name"   // built-in glyph id, e.g. "terminal"
+	IconLucide IconType = "lucide" // Lucide icon name, kebab-case e.g. "ellipsis-vertical"
 	IconURL    IconType = "url"    // remote image
 	IconBase64 IconType = "base64" // inline data URI
 	IconEmoji  IconType = "emoji"  // single emoji

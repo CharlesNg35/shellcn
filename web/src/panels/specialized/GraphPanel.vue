@@ -129,7 +129,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       class="flex items-center justify-between border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <div class="flex items-center gap-2 text-sm text-surface-500">
-        <AppIcon :icon="{ type: 'name', value: 'workflow' }" :size="16" />
+        <AppIcon :icon="{ type: 'lucide', value: 'workflow' }" :size="16" />
         <span>{{ nodes.length }} nodes</span>
         <span>{{ edges.length }} edges</span>
       </div>

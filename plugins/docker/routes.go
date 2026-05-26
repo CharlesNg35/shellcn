@@ -155,7 +155,7 @@ func treeCompose(rc *plugin.RequestContext) (any, error) {
 		nodes = append(nodes, plugin.TreeNode{
 			Key:   "compose:" + name,
 			Label: name,
-			Icon:  plugin.Icon{Type: plugin.IconName, Value: "workflow"},
+			Icon:  plugin.Icon{Type: plugin.IconLucide, Value: "workflow"},
 			Ref:   &plugin.ResourceRef{Kind: "compose", Name: name, UID: name},
 			Leaf:  true,
 			Badge: &plugin.Badge{Value: r["containers"], Severity: plugin.SeverityInfo},
@@ -1094,15 +1094,15 @@ func mapKeys[V any](m map[string]V) []string {
 func iconForKind(kind string) plugin.Icon {
 	switch kind {
 	case "container":
-		return plugin.Icon{Type: plugin.IconName, Value: "box"}
+		return plugin.Icon{Type: plugin.IconLucide, Value: "box"}
 	case "image":
-		return plugin.Icon{Type: plugin.IconName, Value: "layers"}
+		return plugin.Icon{Type: plugin.IconLucide, Value: "layers"}
 	case "volume":
-		return plugin.Icon{Type: plugin.IconName, Value: "database"}
+		return plugin.Icon{Type: plugin.IconLucide, Value: "database"}
 	case "network":
-		return plugin.Icon{Type: plugin.IconName, Value: "globe"}
+		return plugin.Icon{Type: plugin.IconLucide, Value: "globe"}
 	default:
-		return plugin.Icon{Type: plugin.IconName, Value: "box"}
+		return plugin.Icon{Type: plugin.IconLucide, Value: "box"}
 	}
 }
 

@@ -45,10 +45,10 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 			},
 		}}},
 		Tabs: []plugin.Tab{{
-			Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconName, Value: "terminal"},
+			Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
 			Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "sample.shell", Method: plugin.MethodWS},
 		}, {
-			Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconName, Value: "folder"},
+			Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
 			Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "sample.files.list", Params: map[string]string{"path": "/"}},
 			Config: map[string]any{
 				"pathParam":       "path",
@@ -93,7 +93,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 			},
 		}},
 		Actions: []plugin.Action{{
-			ID: "sample.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconName, Value: "play"},
+			ID: "sample.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"},
 			RouteID: "sample.start", Confirm: true, ConfirmText: "Start it?",
 		}},
 		Streams: []plugin.Stream{{ID: "sample.shell", Kind: plugin.StreamTerminal, RouteID: "sample.shell"}},

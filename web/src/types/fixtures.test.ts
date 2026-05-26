@@ -14,7 +14,7 @@ import type {
 const projections: Record<string, unknown> = { ssh, docker, proxmox, postgres };
 
 const risks: RiskLevel[] = ["safe", "write", "destructive", "privileged"];
-const iconTypes = ["name", "url", "base64", "emoji"];
+const iconTypes = ["lucide", "url", "base64", "emoji"];
 
 function assertDataSource(ds: DataSource, where: string) {
   expect(typeof ds.routeId, `${where}: routeId`).toBe("string");

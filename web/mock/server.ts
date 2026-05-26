@@ -380,7 +380,7 @@ function pluginIcon(protocol: string): unknown {
   try {
     return readJSON<{ icon: unknown }>(`${protocol}.json`).icon;
   } catch {
-    return { type: "name", value: "box" };
+    return { type: "lucide", value: "box" };
   }
 }
 

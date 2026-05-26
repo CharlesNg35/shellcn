@@ -111,7 +111,7 @@ function shareTitle(c: ConnectionSummary): string {
     <AppIcon
       v-if="connection.sharedWithMe || connection.sharedByMe"
       :icon="{
-        type: 'name',
+        type: 'lucide',
         value: connection.sharedWithMe ? 'users' : 'share-2',
       }"
       :size="14"

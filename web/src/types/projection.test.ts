@@ -16,7 +16,7 @@ describe("projection contract", () => {
       version: "0.1.0",
       title: "SSH",
       description: "Secure Shell",
-      icon: { type: "name", value: "terminal" },
+      icon: { type: "lucide", value: "terminal" },
       config: {
         groups: [
           {
@@ -63,7 +63,7 @@ describe("projection contract", () => {
   it("narrows Icon by its discriminant", () => {
     const render = (icon: Icon): string => {
       switch (icon.type) {
-        case "name":
+        case "lucide":
           return `glyph:${icon.value}`;
         case "url":
         case "base64":
@@ -79,13 +79,13 @@ describe("projection contract", () => {
       }
     };
     const cases: Array<[IconType, string]> = [
-      ["name", "glyph:db"],
+      ["lucide", "glyph:db"],
       ["url", "img:https://x/i.svg"],
       ["base64", "img:data:image/svg+xml;base64,AAA"],
       ["emoji", "🐳"],
       ["svg", "svg:<svg/>"],
     ];
-    expect(render({ type: "name", value: "db" })).toBe("glyph:db");
+    expect(render({ type: "lucide", value: "db" })).toBe("glyph:db");
     expect(render({ type: "url", value: "https://x/i.svg" })).toBe(
       "img:https://x/i.svg",
     );

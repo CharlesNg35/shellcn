@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "title": "SSH",
   "description": "Secure Shell — terminal, files, and command snippets.",
-  "icon": { "type": "name", "value": "terminal" },
+  "icon": { "type": "lucide", "value": "terminal" },
   "capabilities": ["terminal", "filesystem"],
   "credentialKinds": [
     {
@@ -118,14 +118,14 @@
     {
       "key": "terminal",
       "label": "Terminal",
-      "icon": { "type": "name", "value": "terminal" },
+      "icon": { "type": "lucide", "value": "terminal" },
       "panel": "terminal",
       "source": { "routeId": "ssh.shell", "method": "WS" }
     },
     {
       "key": "files",
       "label": "Files",
-      "icon": { "type": "name", "value": "folder" },
+      "icon": { "type": "lucide", "value": "folder" },
       "panel": "file_browser",
       "source": { "routeId": "ssh.sftp.list", "params": { "path": "." } },
       "config": {
@@ -145,7 +145,7 @@
     {
       "key": "snippets",
       "label": "Snippets",
-      "icon": { "type": "name", "value": "code" },
+      "icon": { "type": "lucide", "value": "code" },
       "panel": "table",
       "source": { "routeId": "ssh.snippet.list" },
       "config": {
@@ -168,7 +168,7 @@
     {
       "id": "ssh.snippet.create",
       "label": "New snippet",
-      "icon": { "type": "name", "value": "plus" },
+      "icon": { "type": "lucide", "value": "plus" },
       "routeId": "ssh.snippet.create",
       "method": "POST",
       "risk": "write",
@@ -198,7 +198,7 @@
     {
       "id": "ssh.snippet.run",
       "label": "Run",
-      "icon": { "type": "name", "value": "play" },
+      "icon": { "type": "lucide", "value": "play" },
       "routeId": "ssh.snippet.run",
       "method": "POST",
       "params": { "id": "${resource.uid}" },
@@ -210,7 +210,7 @@
     {
       "id": "ssh.snippet.delete",
       "label": "Delete",
-      "icon": { "type": "name", "value": "trash" },
+      "icon": { "type": "lucide", "value": "trash" },
       "routeId": "ssh.snippet.delete",
       "method": "DELETE",
       "params": { "id": "${resource.uid}" },

@@ -143,7 +143,7 @@ async function copyLink(): Promise<void> {
           class="shrink-0"
           @click="copyLink"
         >
-          <AppIcon :icon="{ type: 'name', value: 'copy' }" :size="13" />
+          <AppIcon :icon="{ type: 'lucide', value: 'copy' }" :size="13" />
           {{ copied ? "Copied" : "Copy" }}
         </Button>
       </div>

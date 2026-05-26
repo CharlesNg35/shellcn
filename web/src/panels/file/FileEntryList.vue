@@ -51,7 +51,7 @@ const emit = defineEmits<{
           @dblclick="emit('open', entry)"
         >
           <AppIcon
-            :icon="{ type: 'name', value: entry.isDir ? 'folder' : 'code' }"
+            :icon="{ type: 'lucide', value: entry.isDir ? 'folder' : 'code' }"
             :size="16"
             class="shrink-0 text-surface-400 group-hover:text-surface-600 dark:group-hover:text-surface-300"
           />
@@ -66,7 +66,7 @@ const emit = defineEmits<{
           </span>
           <AppIcon
             v-else
-            :icon="{ type: 'name', value: 'chevron-right' }"
+            :icon="{ type: 'lucide', value: 'chevron-right' }"
             :size="15"
             class="shrink-0 text-surface-300 transition-colors group-hover:text-surface-500 dark:text-surface-600 dark:group-hover:text-surface-300"
           />

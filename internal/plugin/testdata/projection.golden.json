@@ -91,7 +91,7 @@
       "key": "terminal",
       "label": "Terminal",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "terminal"
       },
       "panel": "terminal",
@@ -104,7 +104,7 @@
       "key": "files",
       "label": "Files",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "folder"
       },
       "panel": "file_browser",
@@ -225,7 +225,7 @@
       "id": "sample.start",
       "label": "Start",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "play"
       },
       "routeId": "sample.start",

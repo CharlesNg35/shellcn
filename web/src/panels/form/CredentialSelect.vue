@@ -78,7 +78,7 @@ watch(() => [props.selector, requestProtocol.value], load, { immediate: true });
       <span
         class="flex min-w-0 items-center gap-2 text-surface-600 dark:text-surface-300"
       >
-        <AppIcon :icon="{ type: 'name', value: 'lock' }" :size="14" />
+        <AppIcon :icon="{ type: 'lucide', value: 'lock' }" :size="14" />
         <span class="truncate">Credential configured</span>
       </span>
       <Button link class="shrink-0 text-xs!" @click="replaceHidden">
@@ -106,7 +106,7 @@ watch(() => [props.selector, requestProtocol.value], load, { immediate: true });
       </p>
       <span v-else />
       <Button link class="shrink-0 text-xs!" @click="showCreate = true">
-        <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="12" />
+        <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="12" />
         New credential
       </Button>
     </div>

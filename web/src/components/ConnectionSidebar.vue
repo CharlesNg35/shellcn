@@ -301,7 +301,10 @@ function go(connection: ConnectionSummary): void {
           aria-label="New folder"
           @click="openNewFolder()"
         >
-          <AppIcon :icon="{ type: 'name', value: 'folder-plus' }" :size="15" />
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'folder-plus' }"
+            :size="15"
+          />
         </Button>
         <slot name="create" />
       </div>
@@ -342,7 +345,7 @@ function go(connection: ConnectionSummary): void {
         <span
           class="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-surface-100 text-surface-400 dark:bg-surface-800"
         >
-          <AppIcon :icon="{ type: 'name', value: 'server' }" :size="18" />
+          <AppIcon :icon="{ type: 'lucide', value: 'server' }" :size="18" />
         </span>
         <p class="text-sm font-medium text-surface-600 dark:text-surface-300">
           No connections yet

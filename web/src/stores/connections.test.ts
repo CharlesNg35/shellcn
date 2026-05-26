@@ -20,7 +20,7 @@ const connections = [
   },
 ];
 const plugins = [
-  { name: "ssh", title: "SSH", icon: { type: "name", value: "terminal" } },
+  { name: "ssh", title: "SSH", icon: { type: "lucide", value: "terminal" } },
 ];
 const sshProjection = {
   apiVersion: 1,
@@ -28,7 +28,7 @@ const sshProjection = {
   version: "0.1.0",
   title: "SSH",
   description: "",
-  icon: { type: "name", value: "terminal" },
+  icon: { type: "lucide", value: "terminal" },
   config: { groups: [] },
   capabilities: [],
   supportedTransports: ["direct"],

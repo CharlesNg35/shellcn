@@ -24,6 +24,7 @@ func Routes() []plugin.Route {
 		{ID: "proxmox.lxc.list", Method: plugin.MethodGet, Path: "/lxc", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.list", Handle: listGuests("lxc")},
 		{ID: "proxmox.node.list", Method: plugin.MethodGet, Path: "/nodes", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.list", Handle: listNodes},
 		{ID: "proxmox.storage.list", Method: plugin.MethodGet, Path: "/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.storage.list", Handle: listStorage},
+		{ID: "proxmox.node.storage", Method: plugin.MethodGet, Path: "/nodes/{node}/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.storage", Handle: listNodeStorage},
 		{ID: "proxmox.node.tasks", Method: plugin.MethodGet, Path: "/nodes/{node}/tasks", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.tasks", Handle: listTasks},
 		{ID: "proxmox.storage.content", Method: plugin.MethodGet, Path: "/nodes/{node}/storage/{storage}/content", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.storage.content", Handle: listStorageContent},
 		{ID: "proxmox.qemu.snapshots", Method: plugin.MethodGet, Path: "/nodes/{node}/qemu/{vmid}/snapshot", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.snapshots", Handle: listSnapshots("qemu")},
@@ -266,19 +267,73 @@ func listStorage(rc *plugin.RequestContext) (any, error) {
 	rows := make([]row, 0, len(items))
 	for _, st := range items {
 		node := str(st["node"])
-		storage := str(st["storage"])
-		rows = append(rows, row{
-			"name":    storage,
-			"node":    node,
-			"type":    str(st["plugintype"]),
-			"content": str(st["content"]),
-			"used":    numInt(st["disk"]),
-			"total":   numInt(st["maxdisk"]),
-			"status":  str(st["status"]),
-			"ref":     plugin.ResourceRef{Kind: "storage", Namespace: node, Name: storage, UID: storage},
-		})
+		if r, ok := storageRow(node, st); ok {
+			rows = append(rows, r)
+		}
 	}
 	return pageRows(rc, rows)
+}
+
+func listNodeStorage(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	node := rc.Param("node")
+	items, err := s.list(rc.Ctx, "/nodes/"+node+"/storage")
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]row, 0, len(items))
+	for _, st := range items {
+		if r, ok := storageRow(node, st); ok {
+			rows = append(rows, r)
+		}
+	}
+	return pageRows(rc, rows)
+}
+
+func storageRow(node string, st row) (row, bool) {
+	storage := str(st["storage"])
+	if storage == "" {
+		return nil, false
+	}
+	typ := str(st["plugintype"])
+	if typ == "" {
+		typ = str(st["type"])
+	}
+	used := numInt(st["disk"])
+	if used == 0 {
+		used = numInt(st["used"])
+	}
+	total := numInt(st["maxdisk"])
+	if total == 0 {
+		total = numInt(st["total"])
+	}
+	status := str(st["status"])
+	if status == "" {
+		status = nodeStorageStatus(st)
+	}
+	return row{
+		"name":    storage,
+		"node":    node,
+		"type":    typ,
+		"content": str(st["content"]),
+		"used":    used,
+		"total":   total,
+		"status":  status,
+		"ref":     plugin.ResourceRef{Kind: "storage", Namespace: node, Name: storage, UID: storage},
+	}, true
+}
+
+func nodeStorageStatus(st row) string {
+	if st["enabled"] != nil && numInt(st["enabled"]) == 0 {
+		return "disabled"
+	}
+	if numInt(st["active"]) == 1 {
+		return "online"
+	}
+	return "available"
 }
 
 func listStorageContent(rc *plugin.RequestContext) (any, error) {
@@ -611,7 +666,7 @@ func refForVolume(kind, node, storage, volid string) plugin.ResourceRef {
 	return plugin.ResourceRef{Kind: kind, Namespace: node, Name: storage, UID: volid}
 }
 
-func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconName, Value: name} }
+func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
 
 func guestIcon(kind string) plugin.Icon {
 	if kind == "lxc" {

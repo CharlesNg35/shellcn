@@ -155,7 +155,7 @@ function dragAdd(event: unknown): void {
             >
               <AppIcon
                 :icon="{
-                  type: 'name',
+                  type: 'lucide',
                   value: isExpanded(item) ? 'folder-open' : 'folder',
                 }"
                 :size="16"
@@ -194,7 +194,7 @@ function dragAdd(event: unknown): void {
               @click.stop="toggleMenu($event, item)"
             >
               <AppIcon
-                :icon="{ type: 'name', value: 'ellipsis-vertical' }"
+                :icon="{ type: 'lucide', value: 'ellipsis-vertical' }"
                 :size="15"
               />
             </Button>

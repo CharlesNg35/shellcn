@@ -127,7 +127,7 @@ onMounted(() => start());
           variant="text"
           @click="copy(artifact)"
         >
-          <AppIcon :icon="{ type: 'name', value: 'copy' }" :size="13" />
+          <AppIcon :icon="{ type: 'lucide', value: 'copy' }" :size="13" />
           {{ copied === artifact.kind ? "Copied" : "Copy" }}
         </Button>
       </div>

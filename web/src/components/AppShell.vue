@@ -102,7 +102,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
           <span
             class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-surface-400"
           >
-            <AppIcon :icon="{ type: 'name', value: 'search' }" :size="15" />
+            <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="15" />
           </span>
           <input
             v-model="query"
@@ -127,7 +127,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
               aria-label="Add connection"
               @click="showCreate = true"
             >
-              <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
+              <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="15" />
             </Button>
           </template>
         </ConnectionSidebar>
@@ -144,7 +144,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
               : ''
           "
         >
-          <AppIcon :icon="{ type: 'name', value: 'users' }" :size="16" />
+          <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="16" />
           Users
         </RouterLink>
         <RouterLink
@@ -156,7 +156,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
               : ''
           "
         >
-          <AppIcon :icon="{ type: 'name', value: 'key' }" :size="16" />
+          <AppIcon :icon="{ type: 'lucide', value: 'key' }" :size="16" />
           Credentials
         </RouterLink>
         <RouterLink
@@ -168,7 +168,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
               : ''
           "
         >
-          <AppIcon :icon="{ type: 'name', value: 'video' }" :size="16" />
+          <AppIcon :icon="{ type: 'lucide', value: 'video' }" :size="16" />
           Recordings
         </RouterLink>
         <RouterLink
@@ -180,7 +180,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
               : ''
           "
         >
-          <AppIcon :icon="{ type: 'name', value: 'settings' }" :size="16" />
+          <AppIcon :icon="{ type: 'lucide', value: 'settings' }" :size="16" />
           Settings
         </RouterLink>
 
@@ -200,7 +200,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
             <span
               class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-200 text-surface-600 dark:bg-surface-800 dark:text-surface-300"
             >
-              <AppIcon :icon="{ type: 'name', value: 'user' }" :size="15" />
+              <AppIcon :icon="{ type: 'lucide', value: 'user' }" :size="15" />
             </span>
             <span
               class="min-w-0 flex-1 truncate text-sm text-surface-700 dark:text-surface-200"
@@ -219,7 +219,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
             aria-label="Sign out"
             @click="onLogout"
           >
-            <AppIcon :icon="{ type: 'name', value: 'log-out' }" :size="16" />
+            <AppIcon :icon="{ type: 'lucide', value: 'log-out' }" :size="16" />
           </Button>
         </div>
       </div>

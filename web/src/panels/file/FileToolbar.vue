@@ -71,7 +71,7 @@ const statusText = computed(() => {
       >
         <template #option="{ option }">
           <AppIcon
-            :icon="{ type: 'name', value: option.icon }"
+            :icon="{ type: 'lucide', value: option.icon }"
             :size="15"
             :title="option.label"
           />
@@ -92,7 +92,7 @@ const statusText = computed(() => {
         @uploader="emit('upload', $event)"
       >
         <template #chooseicon>
-          <AppIcon :icon="{ type: 'name', value: 'upload' }" :size="15" />
+          <AppIcon :icon="{ type: 'lucide', value: 'upload' }" :size="15" />
         </template>
       </FileUpload>
       <Button

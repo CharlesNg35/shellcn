@@ -85,7 +85,7 @@ onMounted(() => {
         :outlined="gated"
         @click="emit('connect')"
       >
-        <AppIcon :icon="{ type: 'name', value: 'play' }" :size="16" />
+        <AppIcon :icon="{ type: 'lucide', value: 'play' }" :size="16" />
         Connect
       </Button>
     </div>
