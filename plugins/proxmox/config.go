@@ -39,13 +39,13 @@ func configSchema(protocol string) plugin.Schema {
 			{Key: "auth", Label: "Method", Type: plugin.FieldSelect, Required: true, Default: "token", Options: []plugin.Option{
 				{Label: "API token", Value: "token"},
 				{Label: "Username & password", Value: "password"},
-				{Label: "Stored credential", Value: "credential"},
+				{Label: "Stored API token", Value: "credential"},
 			}},
 			{Key: "token_id", Label: "Token ID", Type: plugin.FieldText, Required: true, Placeholder: "root@pam!shellcn", VisibleWhen: whenToken},
 			{Key: "token_secret", Label: "Token secret", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: whenToken},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "root@pam", VisibleWhen: whenPassword},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: whenPassword},
-			{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+			{Key: "credential_id", Label: "API token credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{CredentialProxmoxToken}, Protocols: []string{protocol}, Required: true,
 			}, VisibleWhen: whenCredential},
 		}},
