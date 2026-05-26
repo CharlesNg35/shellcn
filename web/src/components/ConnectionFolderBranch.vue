@@ -137,133 +137,137 @@ function branchLineClass(folder: ConnectionFolderNode): string {
 </script>
 
 <template>
-  <VueDraggable
-    v-model="folders"
-    group="folders"
-    handle=".folder-drag-handle"
-    :disabled="disabled"
-    :animation="150"
-    ghost-class="opacity-40"
-    class="min-h-3 space-y-1"
-    @start="emit('drag-start')"
-    @end="emit('drag-end')"
-  >
-    <section v-for="folder in folders" :key="folder.id" class="min-w-0">
-      <div
-        class="group flex min-h-9 items-center gap-1.5 rounded-md px-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
-        :class="folderRowClass(folder)"
-      >
-        <Button
-          text
-          rounded
-          severity="secondary"
-          size="small"
-          :aria-label="isExpanded(folder) ? 'Collapse folder' : 'Expand folder'"
-          class="h-7 w-7 p-0"
-          @click="emit('toggle-folder', folder.id)"
+  <div class="min-w-0">
+    <VueDraggable
+      v-model="folders"
+      group="folders"
+      handle=".folder-drag-handle"
+      :disabled="disabled"
+      :animation="150"
+      ghost-class="opacity-40"
+      class="min-h-3 space-y-1"
+      @start="emit('drag-start')"
+      @end="emit('drag-end')"
+    >
+      <section v-for="folder in folders" :key="folder.id" class="min-w-0">
+        <div
+          class="group flex min-h-9 items-center gap-1.5 rounded-md px-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+          :class="folderRowClass(folder)"
         >
-          <AppIcon
-            :icon="{
-              type: 'name',
-              value: isExpanded(folder) ? 'chevron-down' : 'chevron-right',
-            }"
-            :size="14"
-          />
-        </Button>
+          <Button
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            :aria-label="
+              isExpanded(folder) ? 'Collapse folder' : 'Expand folder'
+            "
+            class="h-7 w-7 p-0"
+            @click="emit('toggle-folder', folder.id)"
+          >
+            <AppIcon
+              :icon="{
+                type: 'name',
+                value: isExpanded(folder) ? 'chevron-down' : 'chevron-right',
+              }"
+              :size="14"
+            />
+          </Button>
 
-        <span
-          class="folder-drag-handle inline-flex h-7 w-7 cursor-grab touch-none items-center justify-center rounded active:cursor-grabbing"
-          :class="folderIconClass(folder)"
-          title="Drag folder"
-          aria-label="Drag folder"
+          <span
+            class="folder-drag-handle inline-flex h-7 w-7 cursor-grab touch-none items-center justify-center rounded active:cursor-grabbing"
+            :class="folderIconClass(folder)"
+            title="Drag folder"
+            aria-label="Drag folder"
+          >
+            <AppIcon
+              :icon="{
+                type: 'name',
+                value: isExpanded(folder) ? 'folder-open' : 'folder',
+              }"
+              :size="17"
+            />
+          </span>
+
+          <button
+            type="button"
+            class="min-w-0 flex-1 truncate text-left font-medium text-surface-800 dark:text-surface-100"
+            @click="emit('toggle-folder', folder.id)"
+          >
+            {{ folder.name }}
+          </button>
+
+          <span class="min-w-5 text-right text-xs text-surface-400">
+            {{ totalConnections(folder) }}
+          </span>
+
+          <Button
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            class="h-7 w-7 p-0 opacity-70 transition-opacity group-hover:opacity-100"
+            title="Folder actions"
+            aria-label="Folder actions"
+            aria-haspopup="true"
+            :aria-controls="`folder-menu-${folder.id}`"
+            @click.stop="toggleMenu($event, folder)"
+          >
+            <AppIcon
+              :icon="{ type: 'name', value: 'ellipsis-vertical' }"
+              :size="15"
+            />
+          </Button>
+        </div>
+
+        <div
+          v-show="isExpanded(folder)"
+          class="mt-1 ml-4 border-l pl-2"
+          :class="branchLineClass(folder)"
         >
-          <AppIcon
-            :icon="{
-              type: 'name',
-              value: isExpanded(folder) ? 'folder-open' : 'folder',
-            }"
-            :size="17"
-          />
-        </span>
+          <VueDraggable
+            v-model="folder.connections"
+            group="connections"
+            handle=".connection-drag-handle"
+            :disabled="disabled"
+            :animation="150"
+            ghost-class="opacity-40"
+            class="min-h-3 space-y-1"
+            @start="emit('drag-start')"
+            @end="emit('drag-end')"
+          >
+            <ConnectionSidebarItem
+              v-for="connection in folder.connections"
+              :key="connection.id"
+              :connection="connection"
+              :active="activeId === connection.id"
+              @open="emit('open', $event)"
+            />
+          </VueDraggable>
 
-        <button
-          type="button"
-          class="min-w-0 flex-1 truncate text-left font-medium text-surface-800 dark:text-surface-100"
-          @click="emit('toggle-folder', folder.id)"
-        >
-          {{ folder.name }}
-        </button>
-
-        <span class="min-w-5 text-right text-xs text-surface-400">
-          {{ totalConnections(folder) }}
-        </span>
-
-        <Button
-          text
-          rounded
-          severity="secondary"
-          size="small"
-          class="h-7 w-7 p-0 opacity-70 transition-opacity group-hover:opacity-100"
-          title="Folder actions"
-          aria-label="Folder actions"
-          aria-haspopup="true"
-          :aria-controls="`folder-menu-${folder.id}`"
-          @click.stop="toggleMenu($event, folder)"
-        >
-          <AppIcon
-            :icon="{ type: 'name', value: 'ellipsis-vertical' }"
-            :size="15"
-          />
-        </Button>
-      </div>
-
-      <div
-        v-show="isExpanded(folder)"
-        class="mt-1 ml-4 border-l pl-2"
-        :class="branchLineClass(folder)"
-      >
-        <VueDraggable
-          v-model="folder.connections"
-          group="connections"
-          handle=".connection-drag-handle"
-          :disabled="disabled"
-          :animation="150"
-          ghost-class="opacity-40"
-          class="min-h-3 space-y-1"
-          @start="emit('drag-start')"
-          @end="emit('drag-end')"
-        >
-          <ConnectionSidebarItem
-            v-for="connection in folder.connections"
-            :key="connection.id"
-            :connection="connection"
-            :active="activeId === connection.id"
+          <ConnectionFolderBranch
+            v-show="isExpanded(folder)"
+            v-model="folder.children"
+            :active-id="activeId"
+            :expanded="expanded"
+            :disabled="disabled"
+            :depth="(depth ?? 0) + 1"
+            class="mt-1"
+            @toggle-folder="emit('toggle-folder', $event)"
+            @menu-action="emit('menu-action', $event)"
+            @drag-start="emit('drag-start')"
+            @drag-end="emit('drag-end')"
             @open="emit('open', $event)"
           />
-        </VueDraggable>
+        </div>
+      </section>
+    </VueDraggable>
 
-        <ConnectionFolderBranch
-          v-show="isExpanded(folder)"
-          v-model="folder.children"
-          :active-id="activeId"
-          :expanded="expanded"
-          :disabled="disabled"
-          :depth="(depth ?? 0) + 1"
-          class="mt-1"
-          @toggle-folder="emit('toggle-folder', $event)"
-          @menu-action="emit('menu-action', $event)"
-          @drag-start="emit('drag-start')"
-          @drag-end="emit('drag-end')"
-          @open="emit('open', $event)"
-        />
-      </div>
-    </section>
-  </VueDraggable>
-
-  <Menu
-    :id="menuFolder ? `folder-menu-${menuFolder.id}` : 'folder-menu'"
-    ref="menu"
-    :model="menuItems"
-    popup
-  />
+    <Menu
+      :id="menuFolder ? `folder-menu-${menuFolder.id}` : 'folder-menu'"
+      ref="menu"
+      :model="menuItems"
+      popup
+    />
+  </div>
 </template>
