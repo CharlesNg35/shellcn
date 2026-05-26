@@ -7,6 +7,7 @@ import type {
   DataSource,
   PanelType,
   ResourceRef,
+  Row,
 } from "../../types/projection";
 
 const props = defineProps<{
@@ -19,12 +20,17 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   actionDone: [action: Action, result?: Record<string, unknown>];
+  select: [row: Row];
 }>();
 
 const component = computed(() => resolvePanel(props.panel));
 
 function onActionDone(action: Action, result?: Record<string, unknown>): void {
   emit("actionDone", action, result);
+}
+
+function onSelect(row: Row): void {
+  emit("select", row);
 }
 </script>
 
@@ -38,6 +44,7 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
     :resource="resource"
     :actions="actions"
     @action-done="onActionDone"
+    @select="onSelect"
   />
   <FallbackPanel v-else :panel="panel" />
 </template>

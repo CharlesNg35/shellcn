@@ -58,6 +58,28 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 			t.Fatalf("tab %d = %q, want %q", i, containerRes.Detail.Tabs[i].Key, want)
 		}
 	}
+	if containerRes.Detail.Tabs[0].Panel != plugin.PanelDocument || containerRes.Detail.Tabs[0].Source.RouteID != "docker.container.overview" {
+		t.Fatalf("container overview should render selected container details, got panel=%s source=%+v", containerRes.Detail.Tabs[0].Panel, containerRes.Detail.Tabs[0].Source)
+	}
+	var composeRes *plugin.ResourceType
+	for i := range m.Resources {
+		if m.Resources[i].Kind == "compose" {
+			composeRes = &m.Resources[i]
+			break
+		}
+	}
+	if composeRes == nil {
+		t.Fatal("missing compose resource")
+	}
+	wantComposeTabs := []string{"overview", "containers", "services", "api"}
+	if len(composeRes.Detail.Tabs) != len(wantComposeTabs) {
+		t.Fatalf("compose detail tabs = %d, want %d", len(composeRes.Detail.Tabs), len(wantComposeTabs))
+	}
+	for i, want := range wantComposeTabs {
+		if composeRes.Detail.Tabs[i].Key != want {
+			t.Fatalf("compose tab %d = %q, want %q", i, composeRes.Detail.Tabs[i].Key, want)
+		}
+	}
 }
 
 func TestConfigSchemaHidesEndpointForAgentTransport(t *testing.T) {
@@ -108,6 +130,24 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	asMap := doc.(map[string]any)
 	if asMap["Name"] != "/web" {
 		t.Fatalf("inspect name = %#v", asMap["Name"])
+	}
+
+	overview, err := containerOverview(inspectRC)
+	if err != nil {
+		t.Fatalf("container overview: %v", err)
+	}
+	if fmt.Sprint(overview.(row)["name"]) != "web" || fmt.Sprint(overview.(row)["state"]) != "running" {
+		t.Fatalf("container overview unexpected: %+v", overview)
+	}
+
+	composeRC := plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, map[string]string{"project": "demo"}, url.Values{}, nil)
+	services, err := composeServices(composeRC)
+	if err != nil {
+		t.Fatalf("compose services: %v", err)
+	}
+	servicePage := services.(plugin.Page[row])
+	if len(servicePage.Items) != 1 || servicePage.Items[0]["name"] != "web" || servicePage.Items[0]["running"] != 1 {
+		t.Fatalf("compose services unexpected: %+v", servicePage.Items)
 	}
 
 	if _, err := startContainer(inspectRC); err != nil {
@@ -170,7 +210,7 @@ func fakeDockerDaemon(t *testing.T) (*httptest.Server, map[string]bool) {
 				"Created": float64(1710000000),
 				"State":   "running",
 				"Status":  "Up 2 minutes",
-				"Labels":  map[string]string{"com.docker.compose.project": "demo"},
+				"Labels":  map[string]string{"com.docker.compose.project": "demo", "com.docker.compose.service": "web"},
 			}})
 		case p == "/containers/abc123/json":
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -178,8 +218,9 @@ func fakeDockerDaemon(t *testing.T) (*httptest.Server, map[string]bool) {
 				"Name":  "/web",
 				"Image": "sha256:img",
 				"Config": map[string]any{
-					"Tty": false,
-					"Env": []string{"APP_ENV=prod"},
+					"Tty":    false,
+					"Env":    []string{"APP_ENV=prod"},
+					"Labels": map[string]string{"com.docker.compose.project": "demo", "com.docker.compose.service": "web"},
 				},
 				"State": map[string]any{"Status": "running", "Running": true},
 			})

@@ -13,6 +13,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/yamux v0.1.2
 	github.com/joho/godotenv v1.5.1
+	github.com/luthermonson/go-proxmox v0.5.1
 	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1
 	github.com/pkg/sftp v1.13.10
@@ -62,7 +63,6 @@ require (
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lunixbochs/struc v0.0.0-20241101090106-8d528fa2c543 // indirect
-	github.com/luthermonson/go-proxmox v0.5.1 // indirect
 	github.com/magefile/mage v1.14.0 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect

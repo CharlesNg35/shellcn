@@ -110,8 +110,8 @@ func resources() []plugin.ResourceType {
 	}
 }
 
-func containerResource() plugin.ResourceType {
-	columns := []plugin.Column{
+func containerColumns() []plugin.Column {
+	return []plugin.Column{
 		{Key: "name", Label: "Name", Sortable: true},
 		{Key: "image", Label: "Image", Sortable: true},
 		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
@@ -120,6 +120,20 @@ func containerResource() plugin.ResourceType {
 		{Key: "compose", Label: "Compose", Sortable: true},
 		{Key: "createdAt", Label: "Created", Type: plugin.ColumnDateTime, Sortable: true},
 	}
+}
+
+func serviceColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "name", Label: "Service", Sortable: true},
+		{Key: "image", Label: "Image", Sortable: true},
+		{Key: "containers", Label: "Containers", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "running", Label: "Running", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "ports", Label: "Ports"},
+	}
+}
+
+func containerResource() plugin.ResourceType {
+	columns := containerColumns()
 	return plugin.ResourceType{
 		Kind: "container", Title: "Containers",
 		List:      plugin.DataSource{RouteID: "docker.containers.list"},
@@ -129,7 +143,7 @@ func containerResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.exec", "docker.container.remove"}},
 			Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "list"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.containers.list"}, Config: plugin.TableConfig{Columns: columns, Watch: &plugin.DataSource{RouteID: "docker.events.watch", Method: plugin.MethodWS}}.Map()},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconName, Value: "terminal"}, Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "docker.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24", "command": "/bin/sh"}}},
 				{Key: "logs", Label: "Logs", Icon: plugin.Icon{Type: plugin.IconName, Value: "logs"}, Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "docker.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconName, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
@@ -154,7 +168,7 @@ func imageResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"docker.image.remove"}},
 			Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "list"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.images.list"}, Config: plugin.TableConfig{Columns: columns}.Map()},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.image.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconName, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.image.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
@@ -176,7 +190,7 @@ func volumeResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"docker.volume.remove"}},
 			Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "list"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.volumes.list"}, Config: plugin.TableConfig{Columns: columns}.Map()},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.volume.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconName, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.volume.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
@@ -198,7 +212,7 @@ func networkResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"docker.network.remove"}},
 			Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "list"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.networks.list"}, Config: plugin.TableConfig{Columns: columns}.Map()},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.network.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconName, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.network.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
@@ -218,7 +232,9 @@ func composeResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "list"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.list"}, Config: plugin.TableConfig{Columns: columns}.Map()},
+				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconName, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.compose.overview", Params: map[string]string{"project": "${resource.uid}"}}},
+				{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconName, Value: "box"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.containers", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: containerColumns()}.Map()},
+				{Key: "services", Label: "Services", Icon: plugin.Icon{Type: plugin.IconName, Value: "workflow"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.services", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}.Map()},
 				{Key: "api", Label: "API", Icon: plugin.Icon{Type: plugin.IconName, Value: "upload"}, Panel: plugin.PanelHTTPClient, Config: plugin.HTTPClientConfig{ExecuteRouteID: "docker.api.execute", Methods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, DefaultMethod: "GET", DefaultURL: "/version"}.Map()},
 			},
 		},

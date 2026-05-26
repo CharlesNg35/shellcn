@@ -315,6 +315,7 @@ function onActionDone(action: Action): void {
               :row="view.selectedRow"
               :actions="projection.actions ?? []"
               @action-done="onActionDone"
+              @select="onSelectRow"
             />
             <TablePanel
               v-else-if="groupResource"

@@ -42,6 +42,13 @@ func Routes() []plugin.Route {
 		{ID: "docker.volumes.list", Method: plugin.MethodGet, Path: "/volumes", Permission: "docker.volumes.read", Risk: plugin.RiskSafe, AuditEvent: "docker.volumes.list", Handle: listVolumes},
 		{ID: "docker.networks.list", Method: plugin.MethodGet, Path: "/networks", Permission: "docker.networks.read", Risk: plugin.RiskSafe, AuditEvent: "docker.networks.list", Handle: listNetworks},
 		{ID: "docker.compose.list", Method: plugin.MethodGet, Path: "/compose", Permission: "docker.compose.read", Risk: plugin.RiskSafe, AuditEvent: "docker.compose.list", Handle: listCompose},
+		{ID: "docker.container.overview", Method: plugin.MethodGet, Path: "/containers/{id}/overview", Permission: "docker.containers.read", Risk: plugin.RiskSafe, AuditEvent: "docker.container.overview", Handle: containerOverview},
+		{ID: "docker.image.overview", Method: plugin.MethodGet, Path: "/images/{id}/overview", Permission: "docker.images.read", Risk: plugin.RiskSafe, AuditEvent: "docker.image.overview", Handle: imageOverview},
+		{ID: "docker.volume.overview", Method: plugin.MethodGet, Path: "/volumes/{id}/overview", Permission: "docker.volumes.read", Risk: plugin.RiskSafe, AuditEvent: "docker.volume.overview", Handle: volumeOverview},
+		{ID: "docker.network.overview", Method: plugin.MethodGet, Path: "/networks/{id}/overview", Permission: "docker.networks.read", Risk: plugin.RiskSafe, AuditEvent: "docker.network.overview", Handle: networkOverview},
+		{ID: "docker.compose.overview", Method: plugin.MethodGet, Path: "/compose/{project}/overview", Permission: "docker.compose.read", Risk: plugin.RiskSafe, AuditEvent: "docker.compose.overview", Handle: composeOverview},
+		{ID: "docker.compose.containers", Method: plugin.MethodGet, Path: "/compose/{project}/containers", Permission: "docker.compose.read", Risk: plugin.RiskSafe, AuditEvent: "docker.compose.containers", Handle: composeContainers},
+		{ID: "docker.compose.services", Method: plugin.MethodGet, Path: "/compose/{project}/services", Permission: "docker.compose.read", Risk: plugin.RiskSafe, AuditEvent: "docker.compose.services", Handle: composeServices},
 		{ID: "docker.container.inspect", Method: plugin.MethodGet, Path: "/containers/{id}/inspect", Permission: "docker.containers.read", Risk: plugin.RiskSafe, AuditEvent: "docker.container.inspect", Handle: inspectContainer},
 		{ID: "docker.image.inspect", Method: plugin.MethodGet, Path: "/images/{id}/inspect", Permission: "docker.images.read", Risk: plugin.RiskSafe, AuditEvent: "docker.image.inspect", Handle: inspectImage},
 		{ID: "docker.volume.inspect", Method: plugin.MethodGet, Path: "/volumes/{id}/inspect", Permission: "docker.volumes.read", Risk: plugin.RiskSafe, AuditEvent: "docker.volume.inspect", Handle: inspectVolume},
@@ -155,6 +162,162 @@ func treeCompose(rc *plugin.RequestContext) (any, error) {
 		})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
+}
+
+func containerOverview(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.ContainerInspect(rc.Ctx, rc.Param("id"), dockerclient.ContainerInspectOptions{})
+	if err != nil {
+		return nil, dockerErr(err)
+	}
+	out := row{
+		"id":           shortID(res.Container.ID),
+		"name":         strings.TrimPrefix(res.Container.Name, "/"),
+		"image":        res.Container.Image,
+		"created":      res.Container.Created,
+		"command":      strings.TrimSpace(res.Container.Path + " " + strings.Join(res.Container.Args, " ")),
+		"restartCount": res.Container.RestartCount,
+		"driver":       res.Container.Driver,
+		"platform":     res.Container.Platform,
+		"mounts":       len(res.Container.Mounts),
+	}
+	if res.Container.Config != nil {
+		out["image"] = stringDefault(res.Container.Config.Image, fmt.Sprint(out["image"]))
+		out["composeProject"] = res.Container.Config.Labels["com.docker.compose.project"]
+		out["composeService"] = res.Container.Config.Labels["com.docker.compose.service"]
+	}
+	if res.Container.State != nil {
+		out["state"] = res.Container.State.Status
+		out["running"] = res.Container.State.Running
+		out["startedAt"] = res.Container.State.StartedAt
+		out["finishedAt"] = res.Container.State.FinishedAt
+		out["exitCode"] = res.Container.State.ExitCode
+		if res.Container.State.Health != nil {
+			out["health"] = res.Container.State.Health.Status
+		}
+	}
+	if res.Container.NetworkSettings != nil {
+		out["networks"] = mapKeys(res.Container.NetworkSettings.Networks)
+	}
+	return out, nil
+}
+
+func imageOverview(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.ImageInspect(rc.Ctx, rc.Param("id"))
+	if err != nil {
+		return nil, dockerErr(err)
+	}
+	return pickStruct(res, "Id", "RepoTags", "RepoDigests", "Created", "Size", "VirtualSize", "Architecture", "Os", "DockerVersion", "Author", "Comment"), nil
+}
+
+func volumeOverview(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.VolumeInspect(rc.Ctx, rc.Param("id"), dockerclient.VolumeInspectOptions{})
+	if err != nil {
+		return nil, dockerErr(err)
+	}
+	out := row{
+		"name":       res.Volume.Name,
+		"driver":     res.Volume.Driver,
+		"scope":      res.Volume.Scope,
+		"mountpoint": res.Volume.Mountpoint,
+		"createdAt":  res.Volume.CreatedAt,
+		"labels":     res.Volume.Labels,
+		"options":    res.Volume.Options,
+	}
+	if res.Volume.UsageData != nil {
+		out["size"] = res.Volume.UsageData.Size
+		out["refs"] = res.Volume.UsageData.RefCount
+	}
+	return out, nil
+}
+
+func networkOverview(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.NetworkInspect(rc.Ctx, rc.Param("id"), dockerclient.NetworkInspectOptions{})
+	if err != nil {
+		return nil, dockerErr(err)
+	}
+	n := res.Network
+	return row{
+		"id":         shortID(n.ID),
+		"name":       n.Name,
+		"driver":     n.Driver,
+		"scope":      n.Scope,
+		"created":    n.Created.Format(time.RFC3339),
+		"internal":   n.Internal,
+		"attachable": n.Attachable,
+		"ingress":    n.Ingress,
+		"containers": len(n.Containers),
+		"services":   len(n.Services),
+		"labels":     n.Labels,
+	}, nil
+}
+
+func composeOverview(rc *plugin.RequestContext) (any, error) {
+	rows, err := composeRows(rc)
+	if err != nil {
+		return nil, err
+	}
+	project := rc.Param("project")
+	for _, r := range rows {
+		if r["name"] == project {
+			return r, nil
+		}
+	}
+	return nil, plugin.ErrNotFound
+}
+
+func composeContainers(rc *plugin.RequestContext) (any, error) {
+	rows, err := containersForCompose(rc, rc.Param("project"))
+	if err != nil {
+		return nil, err
+	}
+	return pageRows(rc, rows)
+}
+
+func composeServices(rc *plugin.RequestContext) (any, error) {
+	containers, err := containersForCompose(rc, rc.Param("project"))
+	if err != nil {
+		return nil, err
+	}
+	services := map[string]row{}
+	for _, c := range containers {
+		name, _ := c["composeService"].(string)
+		if name == "" {
+			name = "(default)"
+		}
+		r, ok := services[name]
+		if !ok {
+			r = row{"name": name, "image": c["image"], "containers": 0, "running": 0, "ports": c["ports"]}
+			services[name] = r
+		}
+		r["containers"] = r["containers"].(int) + 1
+		if c["state"] == "running" {
+			r["running"] = r["running"].(int) + 1
+		}
+		if r["ports"] == "" {
+			r["ports"] = c["ports"]
+		}
+	}
+	rows := make([]row, 0, len(services))
+	for _, r := range services {
+		rows = append(rows, r)
+	}
+	return pageRows(rc, rows)
 }
 
 func inspectContainer(rc *plugin.RequestContext) (any, error) {
@@ -511,15 +674,16 @@ func containerRows(items []container.Summary) []row {
 	for _, c := range items {
 		name := firstName(c.Names, shortID(c.ID))
 		rows = append(rows, row{
-			"id":        c.ID,
-			"name":      name,
-			"image":     c.Image,
-			"state":     string(c.State),
-			"status":    c.Status,
-			"createdAt": unixTime(c.Created),
-			"ports":     ports(c.Ports),
-			"compose":   c.Labels["com.docker.compose.project"],
-			"ref":       plugin.ResourceRef{Kind: "container", Name: name, UID: c.ID},
+			"id":             c.ID,
+			"name":           name,
+			"image":          c.Image,
+			"state":          string(c.State),
+			"status":         c.Status,
+			"createdAt":      unixTime(c.Created),
+			"ports":          ports(c.Ports),
+			"compose":        c.Labels["com.docker.compose.project"],
+			"composeService": c.Labels["com.docker.compose.service"],
+			"ref":            plugin.ResourceRef{Kind: "container", Name: name, UID: c.ID},
 		})
 	}
 	return rows
@@ -622,6 +786,27 @@ func composeRows(rc *plugin.RequestContext) ([]row, error) {
 		rows = append(rows, r)
 	}
 	return rows, nil
+}
+
+func containersForCompose(rc *plugin.RequestContext, project string) ([]row, error) {
+	if project == "" {
+		return nil, fmt.Errorf("%w: compose project is required", plugin.ErrInvalidInput)
+	}
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.ContainerList(rc.Ctx, dockerclient.ContainerListOptions{All: true})
+	if err != nil {
+		return nil, dockerErr(err)
+	}
+	filtered := make([]container.Summary, 0, len(res.Items))
+	for _, c := range res.Items {
+		if c.Labels["com.docker.compose.project"] == project {
+			filtered = append(filtered, c)
+		}
+	}
+	return containerRows(filtered), nil
 }
 
 func treeFromRows(rc *plugin.RequestContext, kind string, fn func(*plugin.RequestContext) (any, error)) (any, error) {
@@ -880,6 +1065,30 @@ func decodeBody(b []byte, contentType string) any {
 		return out
 	}
 	return string(b)
+}
+
+func pickStruct(value any, keys ...string) row {
+	var m map[string]any
+	b, err := json.Marshal(value)
+	if err != nil || json.Unmarshal(b, &m) != nil {
+		return row{}
+	}
+	out := row{}
+	for _, key := range keys {
+		if v, ok := m[key]; ok {
+			out[key] = v
+		}
+	}
+	return out
+}
+
+func mapKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func iconForKind(kind string) plugin.Icon {

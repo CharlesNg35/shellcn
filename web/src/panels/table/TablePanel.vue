@@ -123,6 +123,10 @@ function onRowClick(e: DataTableRowClickEvent): void {
   if (row.ref) emit("select", row);
 }
 
+function rowClass(row: Row): string {
+  return row.ref ? "cursor-pointer" : "";
+}
+
 function resolveActions(ids: string[]): Action[] {
   return ids
     .map((id) => props.actions?.find((a) => a.id === id))
@@ -247,6 +251,7 @@ onUnmounted(() => {
         :sort-order="sortOrder"
         scrollable
         scroll-height="flex"
+        :row-class="rowClass"
         @sort="onSort"
         @row-click="onRowClick"
       >

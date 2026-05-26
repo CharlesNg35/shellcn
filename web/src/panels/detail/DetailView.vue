@@ -21,6 +21,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   actionDone: [action: Action, result?: Record<string, unknown>];
+  select: [row: Row];
 }>();
 
 const resource = computed(() => props.row.ref ?? null);
@@ -118,6 +119,7 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
           :resource="resource"
           :actions="actions"
           @action-done="onActionDone"
+          @select="emit('select', $event)"
         />
       </KeepAlive>
     </div>
