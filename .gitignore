@@ -8,6 +8,7 @@ bin/
 shellcn
 /server
 /agent
+/recordings
 
 # Build artifacts
 dist/

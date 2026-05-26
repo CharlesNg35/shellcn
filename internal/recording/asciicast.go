@@ -12,6 +12,8 @@ import (
 // terminal-shaping variables, never anything that could leak secrets.
 var asciicastEnvAllowlist = []string{"TERM", "SHELL", "LANG"}
 
+const asciicastIdleTimeLimit = 2.0
+
 // asciicastRecorder encodes terminal events as asciicast v2: a JSON header line
 // followed by newline-delimited `[time, code, data]` event arrays. Writes are
 // incremental and flushed per line, so a recording stays valid if the session
@@ -32,7 +34,12 @@ func NewAsciicastRecorder(w io.Writer, info StartInfo) (Recorder, error) {
 	if rows <= 0 {
 		rows = 24
 	}
-	header := map[string]any{"version": 2, "width": cols, "height": rows}
+	header := map[string]any{
+		"version":         2,
+		"width":           cols,
+		"height":          rows,
+		"idle_time_limit": asciicastIdleTimeLimit,
+	}
 	if !info.Start.IsZero() {
 		header["timestamp"] = info.Start.Unix()
 	}

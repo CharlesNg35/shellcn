@@ -1,4 +1,4 @@
-{"env":{"TERM":"xterm-256color"},"height":24,"timestamp":1700000000,"title":"golden","version":2,"width":80}
+{"env":{"TERM":"xterm-256color"},"height":24,"idle_time_limit":2,"timestamp":1700000000,"title":"golden","version":2,"width":80}
 [0.1,"o","$ echo hi\r\n"]
 [0.25,"o","hi\r\n"]
 [0.3,"r","100x30"]
