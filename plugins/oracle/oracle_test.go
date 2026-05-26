@@ -28,8 +28,40 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if !reg.CredentialKindSupportsProtocol(plugin.CredentialDBPassword, protocolName) {
 		t.Fatal("database password credential should support Oracle")
 	}
-	if reg.CredentialKindSupportsProtocol(plugin.CredentialTLSClientCert, protocolName) {
-		t.Fatal("Oracle should not advertise TLS client certificates without a client-certificate auth path")
+	if !reg.CredentialKindSupportsProtocol(plugin.CredentialTLSClientCert, protocolName) {
+		t.Fatal("TLS client certificate credential should support Oracle")
+	}
+}
+
+func TestParseOptionsUsesTLSCredentialAsTCPSAuth(t *testing.T) {
+	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
+		"host":                        "oracle.local",
+		"service":                     "FREEPDB1",
+		"auth":                        authClientCert,
+		"_auth_client_cert_id_secret": "pem-material",
+	}})
+	if err != nil {
+		t.Fatalf("parse options: %v", err)
+	}
+	if !opts.TCPSAuth || opts.Username != "" || opts.Password != "" || opts.ClientCertificate != "pem-material" || opts.TLSMode != "require" {
+		t.Fatalf("unexpected credential material: %+v", opts)
+	}
+}
+
+func TestParseOptionsUsesTLSClientCertificateCredential(t *testing.T) {
+	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
+		"host":                   "oracle.local",
+		"service":                "FREEPDB1",
+		"username":               "SYSTEM",
+		"password":               "secret",
+		"tls_mode":               "require",
+		"_client_cert_id_secret": "pem-material",
+	}})
+	if err != nil {
+		t.Fatalf("parse options: %v", err)
+	}
+	if opts.TCPSAuth || opts.ClientCertificate != "pem-material" || opts.Username != "SYSTEM" || opts.Password != "secret" {
+		t.Fatalf("unexpected credential material: %+v", opts)
 	}
 }
 

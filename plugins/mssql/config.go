@@ -3,7 +3,6 @@ package mssql
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"net"
 	"strings"
@@ -13,7 +12,7 @@ import (
 	"github.com/microsoft/go-mssqldb/msdsn"
 
 	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng/shellcn/plugins/shared/sqldb"
 )
 
@@ -24,29 +23,32 @@ const (
 	defaultMaxConns   = 4
 	protocolName      = "mssql"
 	credentialIDField = "credential_id"
+	clientCertField   = "client_cert_id"
 	authPassword      = "password"
 	authCredential    = "credential"
 )
 
 type optionsData struct {
-	Host           string
-	Port           int
-	Database       string
-	Username       string
-	Password       string
-	EncryptMode    string
-	CACertificate  string
-	ReadOnly       bool
-	RequireConfirm bool
-	QueryTimeout   time.Duration
-	RowLimit       int
-	MaxConns       int
-	RedactPatterns []string
+	Host              string
+	Port              int
+	Database          string
+	Username          string
+	Password          string
+	EncryptMode       string
+	CACertificate     string
+	ClientCertificate string
+	ReadOnly          bool
+	RequireConfirm    bool
+	QueryTimeout      time.Duration
+	RowLimit          int
+	MaxConns          int
+	RedactPatterns    []string
 }
 
 func configSchema() plugin.Schema {
 	passwordAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}}}
 	credentialAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authCredential}, {Field: credentialIDField, Op: plugin.OpNotEmpty}}}
+	tlsEnabled := plugin.Condition{AllOf: []plugin.Rule{{Field: "encrypt", Op: plugin.OpNeq, Value: "disable"}}}
 	verifyTLS := plugin.Condition{AnyOf: []plugin.Rule{
 		{Field: "encrypt", Op: plugin.OpEq, Value: "verify-ca"},
 		{Field: "encrypt", Op: plugin.OpEq, Value: "verify-full"},
@@ -76,6 +78,9 @@ func configSchema() plugin.Schema {
 				{Label: "Verify full", Value: "verify-full"},
 			}},
 			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &verifyTLS, Help: "PEM CA bundle used for verify-ca and verify-full."},
+			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
+			}, VisibleWhen: &tlsEnabled, Help: "Optional PEM containing the client certificate and private key for TLS client authentication."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
 			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks INSERT, UPDATE, DELETE, DDL, EXEC, TRUNCATE, GRANT, and other write statements."},
@@ -104,16 +109,9 @@ func parseOptions(cfg plugin.ConnectConfig) (optionsData, error) {
 	if database == "" {
 		database = "master"
 	}
-	username := strings.TrimSpace(cfg.String("username"))
-	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
-		username = identity
-	}
-	if username == "" {
+	auth := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
+	if auth.Username == "" {
 		return optionsData{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
-	}
-	password := cfg.String("password")
-	if secret := cfg.String(service.CredentialSecret); secret != "" {
-		password = secret
 	}
 	rowLimit, ok := cfg.Int("row_limit")
 	if !ok || rowLimit <= 0 {
@@ -130,19 +128,20 @@ func parseOptions(cfg plugin.ConnectConfig) (optionsData, error) {
 		maxConns = 20
 	}
 	return optionsData{
-		Host:           host,
-		Port:           port,
-		Database:       database,
-		Username:       username,
-		Password:       password,
-		EncryptMode:    stringDefault(cfg.String("encrypt"), "require"),
-		CACertificate:  cfg.String("ca_certificate"),
-		ReadOnly:       sqldb.BoolValue(cfg.Config["read_only"], true),
-		RequireConfirm: sqldb.BoolValue(cfg.Config["require_destructive_confirmation"], true),
-		QueryTimeout:   sqldb.DurationValue(cfg.Config["query_timeout"], defaultTimeout),
-		RowLimit:       rowLimit,
-		MaxConns:       maxConns,
-		RedactPatterns: sqldb.ParsePatterns(cfg.String("redact_columns"), sqldb.DefaultRedactColumnPatterns()),
+		Host:              host,
+		Port:              port,
+		Database:          database,
+		Username:          auth.Username,
+		Password:          auth.Password,
+		EncryptMode:       stringDefault(cfg.String("encrypt"), "require"),
+		CACertificate:     cfg.String("ca_certificate"),
+		ClientCertificate: dbcred.ResolvedSecret(cfg, clientCertField),
+		ReadOnly:          sqldb.BoolValue(cfg.Config["read_only"], true),
+		RequireConfirm:    sqldb.BoolValue(cfg.Config["require_destructive_confirmation"], true),
+		QueryTimeout:      sqldb.DurationValue(cfg.Config["query_timeout"], defaultTimeout),
+		RowLimit:          rowLimit,
+		MaxConns:          maxConns,
+		RedactPatterns:    sqldb.ParsePatterns(cfg.String("redact_columns"), sqldb.DefaultRedactColumnPatterns()),
 	}, nil
 }
 
@@ -183,27 +182,24 @@ func (d netDialer) HostName() string { return "" }
 func mssqlTLSConfig(opts optionsData) (*tls.Config, msdsn.Encryption, bool, error) {
 	switch opts.EncryptMode {
 	case "", "disable":
+		if opts.ClientCertificate != "" {
+			return nil, 0, false, fmt.Errorf("%w: client certificate requires encryption", plugin.ErrInvalidInput)
+		}
 		return nil, msdsn.EncryptionDisabled, true, nil
 	case "require", "verify-ca", "verify-full":
 	default:
 		return nil, 0, false, fmt.Errorf("%w: unsupported encryption mode %q", plugin.ErrInvalidInput, opts.EncryptMode)
 	}
-	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
-	trust := false
-	if opts.EncryptMode == "require" {
-		cfg.InsecureSkipVerify = true //nolint:gosec // explicit user-selected SQL Server trust mode.
-		trust = true
+	cfg, err := sqldb.TLSConfig(sqldb.TLSOptions{
+		Mode:              opts.EncryptMode,
+		Host:              opts.Host,
+		CACertificate:     opts.CACertificate,
+		ClientCertificate: opts.ClientCertificate,
+	})
+	if err != nil {
+		return nil, 0, false, err
 	}
-	if opts.EncryptMode == "verify-full" {
-		cfg.ServerName = opts.Host
-	}
-	if opts.CACertificate != "" {
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM([]byte(opts.CACertificate)) {
-			return nil, 0, false, fmt.Errorf("%w: CA certificate is not valid PEM", plugin.ErrInvalidInput)
-		}
-		cfg.RootCAs = pool
-	}
+	trust := opts.EncryptMode == "require"
 	return cfg, msdsn.EncryptionRequired, trust, nil
 }
 

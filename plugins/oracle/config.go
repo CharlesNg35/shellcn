@@ -3,7 +3,6 @@ package oracle
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"database/sql"
 	"fmt"
 	"net"
@@ -14,7 +13,7 @@ import (
 	go_ora "github.com/sijms/go-ora/v2"
 
 	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng/shellcn/plugins/shared/sqldb"
 )
 
@@ -25,31 +24,37 @@ const (
 	defaultMaxConns   = 4
 	protocolName      = "oracle"
 	credentialIDField = "credential_id"
+	authCertField     = "auth_client_cert_id"
+	clientCertField   = "client_cert_id"
 	authPassword      = "password"
 	authCredential    = "credential"
+	authClientCert    = "client_certificate"
 )
 
 type optionsData struct {
-	Host           string
-	Port           int
-	Service        string
-	SID            string
-	Username       string
-	Password       string
-	TLSMode        string
-	CACertificate  string
-	DBAPrivilege   string
-	ReadOnly       bool
-	RequireConfirm bool
-	QueryTimeout   time.Duration
-	RowLimit       int
-	MaxConns       int
-	RedactPatterns []string
+	Host              string
+	Port              int
+	Service           string
+	SID               string
+	Username          string
+	Password          string
+	TLSMode           string
+	CACertificate     string
+	ClientCertificate string
+	TCPSAuth          bool
+	DBAPrivilege      string
+	ReadOnly          bool
+	RequireConfirm    bool
+	QueryTimeout      time.Duration
+	RowLimit          int
+	MaxConns          int
+	RedactPatterns    []string
 }
 
 func configSchema() plugin.Schema {
-	passwordAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}}}
+	passwordAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}, {Field: authCertField, Op: plugin.OpEmpty}}}
 	credentialAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authCredential}, {Field: credentialIDField, Op: plugin.OpNotEmpty}}}
+	optionalClientCertificate := plugin.Condition{AllOf: []plugin.Rule{{Field: "tls_mode", Op: plugin.OpNeq, Value: "disable"}, {Field: "auth", Op: plugin.OpNeq, Value: authClientCert}}}
 	verifyTLS := plugin.Condition{AnyOf: []plugin.Rule{
 		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-ca"},
 		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-full"},
@@ -65,11 +70,15 @@ func configSchema() plugin.Schema {
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
 				{Label: "Password", Value: authPassword},
 				{Label: "Stored password", Value: authCredential},
+				{Label: "Client certificate", Value: authClientCert},
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "SYSTEM", VisibleWhen: &passwordAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{protocolName},
 			}, VisibleWhen: &credentialAuth, Help: "Reusable Oracle password. The credential identity can also supply the username."},
+			{Key: authCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
+			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authClientCert}}}, Help: "Reusable client certificate and private key used for TCPS external authentication."},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
 			{Key: "dba_privilege", Label: "DBA privilege", Type: plugin.FieldSelect, Default: "", Options: []plugin.Option{
 				{Label: "None", Value: ""},
@@ -85,6 +94,9 @@ func configSchema() plugin.Schema {
 				{Label: "Verify full", Value: "verify-full"},
 			}},
 			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &verifyTLS, Help: "PEM CA bundle used for verify-ca and verify-full."},
+			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
+			}, VisibleWhen: &optionalClientCertificate, Help: "Optional PEM containing the client certificate and private key for TCPS client authentication."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
 			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks INSERT, UPDATE, DELETE, MERGE, PL/SQL blocks, DDL, TRUNCATE, GRANT, and other write statements."},
@@ -114,16 +126,22 @@ func parseOptions(cfg plugin.ConnectConfig) (optionsData, error) {
 	if serviceName == "" && sid == "" {
 		serviceName = "FREEPDB1"
 	}
-	username := strings.TrimSpace(cfg.String("username"))
-	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
-		username = identity
+	tlsMode := stringDefault(cfg.String("tls_mode"), "disable")
+	auth := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
+	clientCertificate := dbcred.ResolvedSecret(cfg, clientCertField)
+	tcpsAuth := cfg.String("auth") == authClientCert || dbcred.ResolvedSecret(cfg, authCertField) != ""
+	if tcpsAuth {
+		certAuth := dbcred.ApplyClientCertificateCredential(cfg, authCertField, "", tlsMode, "")
+		auth.Username = ""
+		auth.Password = ""
+		tlsMode = certAuth.TLSMode
+		clientCertificate = certAuth.ClientCertificate
 	}
-	if username == "" {
+	if tcpsAuth && clientCertificate == "" {
+		return optionsData{}, fmt.Errorf("%w: client certificate is required", plugin.ErrInvalidInput)
+	}
+	if !tcpsAuth && auth.Username == "" {
 		return optionsData{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
-	}
-	password := cfg.String("password")
-	if secret := cfg.String(service.CredentialSecret); secret != "" {
-		password = secret
 	}
 	rowLimit, ok := cfg.Int("row_limit")
 	if !ok || rowLimit <= 0 {
@@ -140,21 +158,23 @@ func parseOptions(cfg plugin.ConnectConfig) (optionsData, error) {
 		maxConns = 20
 	}
 	return optionsData{
-		Host:           host,
-		Port:           port,
-		Service:        serviceName,
-		SID:            sid,
-		Username:       username,
-		Password:       password,
-		TLSMode:        stringDefault(cfg.String("tls_mode"), "disable"),
-		CACertificate:  cfg.String("ca_certificate"),
-		DBAPrivilege:   strings.ToUpper(strings.TrimSpace(cfg.String("dba_privilege"))),
-		ReadOnly:       sqldb.BoolValue(cfg.Config["read_only"], true),
-		RequireConfirm: sqldb.BoolValue(cfg.Config["require_destructive_confirmation"], true),
-		QueryTimeout:   sqldb.DurationValue(cfg.Config["query_timeout"], defaultTimeout),
-		RowLimit:       rowLimit,
-		MaxConns:       maxConns,
-		RedactPatterns: sqldb.ParsePatterns(cfg.String("redact_columns"), sqldb.DefaultRedactColumnPatterns()),
+		Host:              host,
+		Port:              port,
+		Service:           serviceName,
+		SID:               sid,
+		Username:          auth.Username,
+		Password:          auth.Password,
+		TLSMode:           tlsMode,
+		CACertificate:     cfg.String("ca_certificate"),
+		ClientCertificate: clientCertificate,
+		TCPSAuth:          tcpsAuth,
+		DBAPrivilege:      strings.ToUpper(strings.TrimSpace(cfg.String("dba_privilege"))),
+		ReadOnly:          sqldb.BoolValue(cfg.Config["read_only"], true),
+		RequireConfirm:    sqldb.BoolValue(cfg.Config["require_destructive_confirmation"], true),
+		QueryTimeout:      sqldb.DurationValue(cfg.Config["query_timeout"], defaultTimeout),
+		RowLimit:          rowLimit,
+		MaxConns:          maxConns,
+		RedactPatterns:    sqldb.ParsePatterns(cfg.String("redact_columns"), sqldb.DefaultRedactColumnPatterns()),
 	}, nil
 }
 
@@ -174,6 +194,9 @@ func openDB(opts optionsData, netTransport plugin.NetTransport) (*sql.DB, error)
 		default:
 			return nil, fmt.Errorf("%w: unsupported DBA privilege %q", plugin.ErrInvalidInput, opts.DBAPrivilege)
 		}
+	}
+	if opts.TCPSAuth {
+		urlOptions["AUTH TYPE"] = "TCPS"
 	}
 	tlsConfig, ssl, verify, err := oracleTLSConfig(opts)
 	if err != nil {
@@ -207,26 +230,24 @@ func (d netDialer) DialContext(ctx context.Context, network, addr string) (net.C
 func oracleTLSConfig(opts optionsData) (*tls.Config, bool, bool, error) {
 	switch opts.TLSMode {
 	case "", "disable":
+		if opts.ClientCertificate != "" {
+			return nil, false, false, fmt.Errorf("%w: client certificate requires TLS", plugin.ErrInvalidInput)
+		}
 		return nil, false, false, nil
 	case "require", "verify-ca", "verify-full":
 	default:
 		return nil, false, false, fmt.Errorf("%w: unsupported TLS mode %q", plugin.ErrInvalidInput, opts.TLSMode)
 	}
-	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	cfg, err := sqldb.TLSConfig(sqldb.TLSOptions{
+		Mode:              opts.TLSMode,
+		Host:              opts.Host,
+		CACertificate:     opts.CACertificate,
+		ClientCertificate: opts.ClientCertificate,
+	})
+	if err != nil {
+		return nil, false, false, err
+	}
 	verify := opts.TLSMode == "verify-ca" || opts.TLSMode == "verify-full"
-	if opts.TLSMode == "require" {
-		cfg.InsecureSkipVerify = true //nolint:gosec // explicit user-selected Oracle TCPS trust mode.
-	}
-	if opts.TLSMode == "verify-full" {
-		cfg.ServerName = opts.Host
-	}
-	if opts.CACertificate != "" {
-		pool := x509.NewCertPool()
-		if !pool.AppendCertsFromPEM([]byte(opts.CACertificate)) {
-			return nil, false, false, fmt.Errorf("%w: CA certificate is not valid PEM", plugin.ErrInvalidInput)
-		}
-		cfg.RootCAs = pool
-	}
 	return cfg, true, verify, nil
 }
 

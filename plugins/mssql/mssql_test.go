@@ -28,8 +28,25 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if !reg.CredentialKindSupportsProtocol(plugin.CredentialDBPassword, protocolName) {
 		t.Fatal("database password credential should support MSSQL")
 	}
-	if reg.CredentialKindSupportsProtocol(plugin.CredentialTLSClientCert, protocolName) {
-		t.Fatal("MSSQL should not advertise TLS client certificates without a client-certificate auth path")
+	if !reg.CredentialKindSupportsProtocol(plugin.CredentialTLSClientCert, protocolName) {
+		t.Fatal("TLS client certificate credential should support MSSQL transport TLS")
+	}
+}
+
+func TestParseOptionsUsesTLSClientCertificateCredential(t *testing.T) {
+	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
+		"host":                   "sql.local",
+		"database":               "master",
+		"username":               "sa",
+		"password":               "secret",
+		"encrypt":                "require",
+		"_client_cert_id_secret": "pem-material",
+	}})
+	if err != nil {
+		t.Fatalf("parse options: %v", err)
+	}
+	if opts.ClientCertificate != "pem-material" || opts.Username != "sa" || opts.Password != "secret" {
+		t.Fatalf("unexpected credential material: %+v", opts)
 	}
 }
 
