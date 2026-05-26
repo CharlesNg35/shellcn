@@ -213,7 +213,11 @@ async function onConfig(
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
-          Protocol <span class="text-red-500">*</span>
+          Protocol
+          <span class="font-normal text-surface-400"
+            >({{ conns.plugins.length }})</span
+          >
+          <span class="text-red-500">*</span>
         </label>
         <ProtocolPicker
           :model-value="protocol"

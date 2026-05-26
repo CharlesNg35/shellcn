@@ -83,7 +83,7 @@ const groups = computed<PluginGroup[]>(() => {
         class="flex min-w-0 flex-col gap-2 pb-4 last:pb-0"
       >
         <header
-          class="py-1 text-xs font-semibold tracking-wide text-surface-500 uppercase dark:text-surface-400"
+          class="flex items-center gap-1.5 py-1 text-xs font-semibold tracking-wide text-surface-500 uppercase dark:text-surface-400"
         >
           <span>{{ group.category.label }}</span>
           <span class="font-normal text-surface-400">{{
