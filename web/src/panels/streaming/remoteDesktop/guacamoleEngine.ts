@@ -61,7 +61,7 @@ export async function connectGuacamoleDesktop({
 
   displayElement.tabIndex = 0;
   displayElement.classList.add("h-full", "w-full", "outline-none");
-  target.replaceChildren(displayElement);
+  target.appendChild(displayElement);
 
   const resizeObserver = new ResizeObserver(() => {
     fitDisplay(client, target, config, () => isConnected);
@@ -137,7 +137,7 @@ export async function connectGuacamoleDesktop({
       keyboard.onkeyup = null;
       display.onresize = null;
       client.disconnect();
-      target.replaceChildren();
+      displayElement.remove();
     },
   };
 }

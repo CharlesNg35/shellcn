@@ -167,6 +167,7 @@ beforeEach(() => {
   setActivePinia(createPinia());
   FakeWS.instances = [];
   guacamoleTunnelUrls.length = 0;
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.stubGlobal("WebSocket", FakeWS);
   installFetch((url) => {
     if (url.includes("/tickets"))
@@ -260,7 +261,7 @@ describe("streaming stub panels", () => {
     await flushPromises();
 
     expect(w.text()).not.toContain("not available");
-    expect(guacamoleTunnelUrls).toHaveLength(1);
+    await vi.waitFor(() => expect(guacamoleTunnelUrls).toHaveLength(1));
     expect(guacamoleTunnelUrls[0]).toContain("ticket=t1");
     expect(FakeWS.instances).toHaveLength(0);
     w.unmount();
