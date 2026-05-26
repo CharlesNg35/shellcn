@@ -10,7 +10,7 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
 
-	for _, name := range []string{"ftp", "ftps", "webdav", "smb", "nfs"} {
+	for _, name := range []string{"ftp", "ftps", "webdav", "smb", "nfs", "s3", "minio"} {
 		proj, ok := reg.Projection(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -40,6 +40,11 @@ func TestSharedBasicAuthCredentialCompatibility(t *testing.T) {
 	}
 	if reg.CredentialKindSupportsProtocol(plugin.CredentialBasicAuth, "nfs") {
 		t.Fatal("nfs should not claim basic auth credential support")
+	}
+	for _, name := range []string{"s3", "minio"} {
+		if !reg.CredentialKindSupportsProtocol(plugin.CredentialCloudAccessKey, name) {
+			t.Fatalf("cloud access key credential should support %s", name)
+		}
 	}
 }
 
@@ -76,6 +81,24 @@ func TestFilesystemAuthSchemasAreProtocolSpecific(t *testing.T) {
 	for _, key := range []string{"machine_name", "uid", "gid", "export_path"} {
 		if !nfsFields[key] {
 			t.Fatalf("nfs should include AUTH_SYS/export field %q", key)
+		}
+	}
+
+	for _, name := range []string{"s3", "minio"} {
+		m, ok := reg.Manifest(name)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", name)
+		}
+		fields := fieldMap(m.Config)
+		for _, key := range []string{"username", "password", "machine_name", "uid", "gid"} {
+			if fields[key] {
+				t.Fatalf("%s should not include non-S3 auth field %q", name, key)
+			}
+		}
+		for _, key := range []string{"access_key_id", "secret_access_key", "credential_id", "bucket", "region"} {
+			if !fields[key] {
+				t.Fatalf("%s should include S3-compatible field %q", name, key)
+			}
 		}
 	}
 }

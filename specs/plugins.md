@@ -209,7 +209,7 @@ These plugins should prove the core architecture first.
 | `graphql`  | GraphQL endpoint        | schema introspection, query editor            |
 | `grpc`     | gRPC endpoint           | reflection, method calls, streaming           |
 | `tcp`      | Generic TCP client      | raw connection, send/receive, diagnostics     |
-| `telnet`   | Legacy terminal access  | terminal                                      |
+| `telnet`   | Legacy terminal access  | terminal, terminal recording                  |
 | `serial`   | Serial console          | terminal, logs                                |
 | `rsync`    | rsync targets           | sync jobs, dry-run, transfer logs             |
 | `rclone`   | rclone remotes          | cloud storage browser and transfer operations |
