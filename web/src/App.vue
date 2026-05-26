@@ -2,10 +2,12 @@
 import { onMounted, onUnmounted } from "vue";
 import { RouterView, useRouter } from "vue-router";
 import { useToast } from "primevue/usetoast";
+import ConfirmDialog from "primevue/confirmdialog";
 import { setApiErrorHandler, type ApiError } from "./api/client";
 import { useAuthStore } from "./stores/auth";
 import AppLogo from "./components/AppLogo.vue";
 import AppToast from "./components/AppToast.vue";
+import AppIcon from "./components/AppIcon.vue";
 
 const toast = useToast();
 const router = useRouter();
@@ -57,4 +59,18 @@ onUnmounted(() => setApiErrorHandler(null));
     <RouterView />
   </template>
   <AppToast />
+  <ConfirmDialog>
+    <template #message="{ message }">
+      <div class="flex items-start gap-3">
+        <AppIcon
+          :icon="{ type: 'name', value: 'alert' }"
+          :size="20"
+          class="mt-0.5 shrink-0 text-red-500"
+        />
+        <p class="text-sm text-surface-600 dark:text-surface-300">
+          {{ message.message }}
+        </p>
+      </div>
+    </template>
+  </ConfirmDialog>
 </template>

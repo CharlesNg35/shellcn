@@ -8,12 +8,14 @@ import {
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import AppIcon from "../../components/AppIcon.vue";
 import type { PanelProps } from "../types";
-import StubBanner from "./StubBanner.vue";
+import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
 
 const loaded = ref(false);
 const status = ref("connecting");
+const error = ref<string | null>(null);
+const reconnecting = ref(false);
 const container = ref<HTMLElement | null>(null);
 
 interface RfbLike {
@@ -59,12 +61,23 @@ async function beginCapture(): Promise<boolean> {
   return recorder.start(canvas);
 }
 
-onMounted(async () => {
+function disconnectRemote(): void {
+  recorder.stop();
+  const current = rfb;
+  rfb = null;
+  current?.disconnect();
+}
+
+async function connectRemote(): Promise<void> {
   // A forced recording on a browser that cannot capture is denied before connect.
+  error.value = null;
   if (forced.value && unsupported.value) {
     status.value = "recording-unsupported";
     return;
   }
+  disconnectRemote();
+  status.value = "connecting";
+  loaded.value = false;
   try {
     if (!props.source || !container.value) {
       status.value = "missing-route";
@@ -83,6 +96,7 @@ onMounted(async () => {
       shared: true,
       repeaterID: props.config?.repeaterID,
     });
+    const current = rfb;
     // Scale the framebuffer to fit the panel rather than clipping/scrolling.
     rfb.scaleViewport = true;
     rfb.clipViewport = false;
@@ -90,6 +104,7 @@ onMounted(async () => {
 
     // Ready is driven by the protocol handshake, not by object construction.
     rfb.addEventListener("connect", async () => {
+      if (rfb !== current) return;
       status.value = "ready";
       loaded.value = true;
       if (forced.value) {
@@ -103,6 +118,7 @@ onMounted(async () => {
       }
     });
     rfb.addEventListener("disconnect", (e) => {
+      if (rfb !== current) return;
       recorder.stop();
       loaded.value = false;
       // Preserve a more specific terminal state (auth/recording) if already set.
@@ -111,22 +127,36 @@ onMounted(async () => {
       }
     });
     rfb.addEventListener("securityfailure", () => {
+      if (rfb !== current) return;
       status.value = "auth-failed";
       loaded.value = false;
     });
     rfb.addEventListener("credentialsrequired", () => {
+      if (rfb !== current) return;
       status.value = "credentials-required";
     });
   } catch (e) {
-    status.value = (e as Error).message || "unavailable";
+    status.value = "error";
+    error.value = (e as Error).message || "Remote desktop unavailable";
     loaded.value = false;
   }
+}
+
+async function onReconnect(): Promise<void> {
+  reconnecting.value = true;
+  try {
+    await connectRemote();
+  } finally {
+    reconnecting.value = false;
+  }
+}
+
+onMounted(() => {
+  void connectRemote();
 });
 
 onUnmounted(() => {
-  recorder.stop();
-  rfb?.disconnect();
-  rfb = null;
+  disconnectRemote();
   loaded.value = false;
 });
 </script>
@@ -173,7 +203,13 @@ onUnmounted(() => {
       </span>
     </div>
 
-    <StubBanner :status="loaded ? 'ready' : status" />
+    <StreamStatusBar
+      :status="loaded ? 'ready' : status"
+      :error="error"
+      :reconnecting="reconnecting"
+      can-reconnect
+      @reconnect="onReconnect"
+    />
     <div ref="container" class="min-h-0 flex-1">
       <p
         v-if="status === 'recording-unsupported'"

@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  TriangleAlert,
   Code2,
   Copy,
   Database,
@@ -44,6 +45,7 @@ const FALLBACK_ICON = "circle";
 const attrs = useAttrs();
 
 const iconComponents: Record<string, Component> = {
+  alert: TriangleAlert,
   box: Box,
   camera: Camera,
   "chevron-down": ChevronDown,

@@ -24,15 +24,23 @@ export function useStream(
   let unsub: (() => void) | undefined;
 
   function attach(k: string): void {
+    unsub?.();
     key.value = k;
     if (onFrame) for (const frame of store.buffer(k)) onFrame(frame);
     unsub = store.subscribe(k, (d) => onFrame?.(d));
   }
 
-  onMounted(async () => {
+  async function connect(force = false): Promise<void> {
     if (!source) return;
     try {
+      error.value = null;
       const existing = channelKey(connectionId, source, ctx);
+      if (force) {
+        unsub?.();
+        unsub = undefined;
+        store.close(existing);
+        key.value = null;
+      }
       if (store.has(existing)) {
         const current = store.status(existing);
         if (current === "open" || current === "connecting") {
@@ -47,7 +55,9 @@ export function useStream(
     } catch (e) {
       error.value = (e as Error).message;
     }
-  });
+  }
+
+  onMounted(() => void connect());
 
   onUnmounted(() => unsub?.());
 
@@ -63,5 +73,9 @@ export function useStream(
     if (key.value) store.send(key.value, data);
   }
 
-  return { status, error, send };
+  function reconnect(): Promise<void> {
+    return connect(true);
+  }
+
+  return { status, error, send, reconnect };
 }

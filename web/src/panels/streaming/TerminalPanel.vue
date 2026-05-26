@@ -7,6 +7,7 @@ import { useTheme } from "../../composables/useTheme";
 import RecordingControls from "../../components/recordings/RecordingControls.vue";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import type { PanelProps } from "../types";
+import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
 const { isDark } = useTheme();
@@ -77,6 +78,7 @@ const showRecording = computed(
 
 const container = ref<HTMLElement | null>(null);
 const failed = ref(false);
+const reconnecting = ref(false);
 const pending: string[] = [];
 let term: Terminal | null = null;
 let fit: FitAddon | null = null;
@@ -89,7 +91,7 @@ function write(data: string): void {
   else pending.push(data);
 }
 
-const { status, send } = useStream(
+const { status, error, send, reconnect } = useStream(
   props.connectionId,
   props.source,
   { resource: props.resource },
@@ -123,6 +125,15 @@ function scheduleFit(): void {
 function applyTerminalTheme(): void {
   if (!term) return;
   term.options.theme = { ...terminalTheme.value };
+}
+
+async function onReconnect(): Promise<void> {
+  reconnecting.value = true;
+  try {
+    await reconnect();
+  } finally {
+    reconnecting.value = false;
+  }
 }
 
 async function mountTerminal(): Promise<void> {
@@ -202,13 +213,13 @@ onUnmounted(() => {
         :descriptor="recording!"
       />
     </div>
-    <p
-      v-if="status === 'error' || status === 'closed'"
-      class="border-b border-red-300/40 bg-red-50 px-3 py-1.5 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300"
-      role="alert"
-    >
-      Terminal stream {{ status }}.
-    </p>
+    <StreamStatusBar
+      :status="status"
+      :error="error"
+      :reconnecting="reconnecting"
+      can-reconnect
+      @reconnect="onReconnect"
+    />
     <p v-if="failed" class="p-4 text-sm text-surface-400" role="alert">
       Terminal preview unavailable in this environment.
     </p>

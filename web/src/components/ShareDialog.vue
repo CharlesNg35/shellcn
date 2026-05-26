@@ -7,7 +7,7 @@ import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
-import ConfirmDialog from "./ConfirmDialog.vue";
+import { useConfirmAction } from "../composables/useConfirmAction";
 import { dialogRoot, btnPrimary } from "../primevue/preset";
 import type { GrantAccess, ShareGrant, UserSummary } from "../types/projection";
 
@@ -31,8 +31,7 @@ const subject = ref<UserOption | null>(null);
 const access = ref<GrantAccess>("use");
 const loading = ref(false);
 const busy = ref(false);
-const revokeTarget = ref<ShareGrant | null>(null);
-const revoking = ref(false);
+const { confirmDanger } = useConfirmAction();
 
 const base = computed(() => `/${props.resource}/${props.resourceId}/grants`);
 const accessChoices = [
@@ -106,24 +105,23 @@ async function add(): Promise<void> {
 }
 
 function requestRevoke(grant: ShareGrant): void {
-  revokeTarget.value = grant;
+  confirmDanger({
+    header: "Revoke access",
+    message: `Revoke access for ${grant.username || grant.subjectId}?`,
+    acceptLabel: "Revoke",
+    accept: () => revoke(grant),
+  });
 }
 
-async function revoke(): Promise<void> {
-  if (!revokeTarget.value) return;
-  const grant = revokeTarget.value;
-  revoking.value = true;
+async function revoke(grant: ShareGrant): Promise<void> {
   try {
     await api.del(`${base.value}/${grant.id}`);
     grants.value = grants.value.filter((g) => g.id !== grant.id);
-    revokeTarget.value = null;
     notify.success("Access revoked", grant.username);
     await searchUsers("");
   } catch (e) {
     if (e instanceof ApiError)
       notify.error("Could not revoke access", e.message);
-  } finally {
-    revoking.value = false;
   }
 }
 </script>
@@ -228,18 +226,4 @@ async function revoke(): Promise<void> {
       <p v-else class="text-sm text-surface-400">Not shared with anyone yet.</p>
     </div>
   </Dialog>
-  <ConfirmDialog
-    :visible="Boolean(revokeTarget)"
-    title="Revoke access"
-    :message="`Revoke access for ${revokeTarget?.username || revokeTarget?.subjectId}?`"
-    confirm-label="Revoke"
-    danger
-    :busy="revoking"
-    @update:visible="
-      (open) => {
-        if (!open) revokeTarget = null;
-      }
-    "
-    @confirm="revoke"
-  />
 </template>

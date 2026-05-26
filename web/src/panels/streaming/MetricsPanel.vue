@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import { useStream } from "../../composables/useStream";
 import type { PanelProps } from "../types";
-import StubBanner from "./StubBanner.vue";
+import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
 
@@ -10,6 +10,7 @@ const cpu = ref<number | null>(null);
 const mem = ref<number | null>(null);
 const cpuHistory = ref<number[]>([]);
 const memHistory = ref<number[]>([]);
+const reconnecting = ref(false);
 
 function push(history: typeof cpuHistory, value: number): void {
   history.value.push(Math.max(0, Math.min(100, value)));
@@ -32,12 +33,21 @@ function onFrame(frame: string): void {
   }
 }
 
-const { status } = useStream(
+const { status, error, reconnect } = useStream(
   props.connectionId,
   props.source,
   { resource: props.resource },
   onFrame,
 );
+
+async function onReconnect(): Promise<void> {
+  reconnecting.value = true;
+  try {
+    await reconnect();
+  } finally {
+    reconnecting.value = false;
+  }
+}
 
 const metrics = [
   { label: "CPU", value: cpu, history: cpuHistory, color: "bg-primary-500" },
@@ -47,7 +57,13 @@ const metrics = [
 
 <template>
   <div class="flex h-full flex-col">
-    <StubBanner :status="status" />
+    <StreamStatusBar
+      :status="status"
+      :error="error"
+      :reconnecting="reconnecting"
+      can-reconnect
+      @reconnect="onReconnect"
+    />
     <div class="grid gap-4 p-6 sm:grid-cols-2">
       <div
         v-for="m in metrics"

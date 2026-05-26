@@ -95,12 +95,12 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 const panels = [
-  { name: "terminal", comp: TerminalPanel, banner: false },
-  { name: "logs", comp: LogStreamPanel, banner: true },
-  { name: "metrics", comp: MetricsPanel, banner: true },
-  { name: "remote desktop", comp: RemoteDesktopPanel, banner: true },
-  { name: "query editor", comp: QueryEditorPanel, banner: true },
-  { name: "code editor", comp: CodeEditorPanel, banner: false },
+  { name: "terminal", comp: TerminalPanel, status: true },
+  { name: "logs", comp: LogStreamPanel, status: true },
+  { name: "metrics", comp: MetricsPanel, status: true },
+  { name: "remote desktop", comp: RemoteDesktopPanel, status: true },
+  { name: "query editor", comp: QueryEditorPanel, status: true },
+  { name: "code editor", comp: CodeEditorPanel, status: false },
 ];
 
 describe("streaming stub panels", () => {
@@ -108,7 +108,8 @@ describe("streaming stub panels", () => {
     it(`${p.name} mounts and unmounts without throwing`, async () => {
       const w = mount(p.comp, { props });
       await flushPromises();
-      if (p.banner) expect(w.text()).toContain("Stub panel");
+      expect(w.text()).not.toContain("Stub panel");
+      if (p.status) expect(w.text()).toContain("Connecting");
       expect(() => w.unmount()).not.toThrow();
     });
   }
@@ -138,5 +139,23 @@ describe("streaming stub panels", () => {
     expect(FakeWS.instances).toHaveLength(2);
     expect(FakeWS.instances[0].closed).toBe(true);
     second.unmount();
+  });
+
+  it("reconnects a failed stream from the status bar", async () => {
+    const w = mount(TerminalPanel, { props });
+    await flushPromises();
+    expect(FakeWS.instances).toHaveLength(1);
+    FakeWS.instances[0].emit("error");
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Reconnect"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(FakeWS.instances).toHaveLength(2);
+    expect(FakeWS.instances[0].closed).toBe(true);
+    w.unmount();
   });
 });

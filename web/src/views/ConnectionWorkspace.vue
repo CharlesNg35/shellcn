@@ -18,7 +18,7 @@ import TablePanel from "../panels/TablePanel.vue";
 import DetailView from "../panels/DetailView.vue";
 import ConnectionFormDialog from "../components/ConnectionFormDialog.vue";
 import ShareDialog from "../components/ShareDialog.vue";
-import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { useConfirmAction } from "../composables/useConfirmAction";
 import { recordingForStream } from "../composables/useRecordingControl";
 import type {
   Action,
@@ -37,25 +37,28 @@ const notify = useNotify();
 
 const showEdit = ref(false);
 const showShare = ref(false);
-const showDelete = ref(false);
-const deleting = ref(false);
+const { confirmDanger } = useConfirmAction();
 
 const canManage = computed(() => connection.value?.canManage ?? false);
 
+function askDelete(): void {
+  confirmDanger({
+    header: "Delete connection",
+    message: `Delete “${connection.value?.name ?? props.id}”? This cannot be undone.`,
+    accept: onDelete,
+  });
+}
+
 async function onDelete(): Promise<void> {
-  deleting.value = true;
   try {
     await api.del(`/connections/${props.id}`);
     await conns.refresh();
     notify.success("Connection deleted");
-    showDelete.value = false;
     await router.push({ name: "home" });
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
       notify.error("Could not delete", e.message);
     }
-  } finally {
-    deleting.value = false;
   }
 }
 
@@ -243,7 +246,7 @@ function onEnrolled(): void {
             severity="danger"
             title="Delete"
             aria-label="Delete connection"
-            @click="showDelete = true"
+            @click="askDelete()"
           >
             <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="17" />
           </Button>
@@ -373,15 +376,6 @@ function onEnrolled(): void {
       :resource-id="id"
       :resource-name="connection?.name ?? id"
       allow-manage
-    />
-    <ConfirmDialog
-      v-model:visible="showDelete"
-      title="Delete connection"
-      :message="`Delete “${connection?.name ?? id}”? This cannot be undone.`"
-      confirm-label="Delete"
-      danger
-      :busy="deleting"
-      @confirm="onDelete"
     />
   </div>
 </template>

@@ -14,7 +14,7 @@ import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import UserFormDialog from "../components/UserFormDialog.vue";
 import InviteDialog from "../components/InviteDialog.vue";
-import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { useConfirmAction } from "../composables/useConfirmAction";
 import type { AdminUser, InvitationSummary } from "../types/projection";
 
 const auth = useAuthStore();
@@ -27,11 +27,7 @@ const invitations = ref<InvitationSummary[]>([]);
 const showUserForm = ref(false);
 const editingUser = ref<AdminUser | null>(null);
 const showInvite = ref(false);
-const showDeleteUser = ref(false);
-const deleteTarget = ref<AdminUser | null>(null);
-const showRevoke = ref(false);
-const revokeTarget = ref<InvitationSummary | null>(null);
-const busy = ref(false);
+const { confirmDanger } = useConfirmAction();
 
 async function loadUsers(): Promise<void> {
   users.value = await api.get<AdminUser[]>("/admin/users");
@@ -67,34 +63,39 @@ function openEdit(u: AdminUser): void {
   showUserForm.value = true;
 }
 
-async function deleteUser(): Promise<void> {
-  if (!deleteTarget.value) return;
-  busy.value = true;
+function askDeleteUser(u: AdminUser): void {
+  confirmDanger({
+    header: "Delete user",
+    message: `Delete “${u.username}”? This cannot be undone.`,
+    accept: () => deleteUser(u),
+  });
+}
+
+async function deleteUser(u: AdminUser): Promise<void> {
   try {
-    await api.del(`/admin/users/${deleteTarget.value.id}`);
-    notify.success("User deleted", deleteTarget.value.username);
-    showDeleteUser.value = false;
+    await api.del(`/admin/users/${u.id}`);
+    notify.success("User deleted", u.username);
     await loadUsers();
   } catch (e) {
     if (e instanceof ApiError && e.status === 403) {
       notify.error("Not allowed", e.message);
     }
-  } finally {
-    busy.value = false;
   }
 }
 
-async function revokeInvite(): Promise<void> {
-  if (!revokeTarget.value) return;
-  busy.value = true;
-  try {
-    await api.del(`/admin/invitations/${revokeTarget.value.id}`);
-    notify.success("Invitation revoked");
-    showRevoke.value = false;
-    await loadInvitations();
-  } finally {
-    busy.value = false;
-  }
+function askRevoke(inv: InvitationSummary): void {
+  confirmDanger({
+    header: "Revoke invitation",
+    message: `Revoke the invitation for “${inv.email}”?`,
+    acceptLabel: "Revoke",
+    accept: () => revokeInvite(inv),
+  });
+}
+
+async function revokeInvite(inv: InvitationSummary): Promise<void> {
+  await api.del(`/admin/invitations/${inv.id}`);
+  notify.success("Invitation revoked");
+  await loadInvitations();
 }
 </script>
 
@@ -205,10 +206,7 @@ async function revokeInvite(): Promise<void> {
                       size="small"
                       title="Delete"
                       :aria-label="`Delete ${(data as AdminUser).username}`"
-                      @click="
-                        deleteTarget = data as AdminUser;
-                        showDeleteUser = true;
-                      "
+                      @click="askDeleteUser(data as AdminUser)"
                     >
                       <AppIcon
                         :icon="{ type: 'name', value: 'trash' }"
@@ -259,19 +257,18 @@ async function revokeInvite(): Promise<void> {
               </Column>
               <Column header="" :pt="{ bodyCell: 'text-right' }">
                 <template #body="{ data }">
-                  <button
+                  <Button
                     v-if="(data as InvitationSummary).status === 'pending'"
-                    type="button"
-                    class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+                    text
+                    rounded
+                    severity="danger"
+                    size="small"
                     title="Revoke"
                     :aria-label="`Revoke ${(data as InvitationSummary).email}`"
-                    @click="
-                      revokeTarget = data as InvitationSummary;
-                      showRevoke = true;
-                    "
+                    @click="askRevoke(data as InvitationSummary)"
                   >
                     <AppIcon :icon="{ type: 'name', value: 'x' }" :size="16" />
-                  </button>
+                  </Button>
                 </template>
               </Column>
               <template #empty>No invitations.</template>
@@ -287,23 +284,5 @@ async function revokeInvite(): Promise<void> {
       @saved="loadUsers"
     />
     <InviteDialog v-model:visible="showInvite" @created="loadInvitations" />
-    <ConfirmDialog
-      v-model:visible="showDeleteUser"
-      title="Delete user"
-      :message="`Delete “${deleteTarget?.username}”? This cannot be undone.`"
-      confirm-label="Delete"
-      danger
-      :busy="busy"
-      @confirm="deleteUser"
-    />
-    <ConfirmDialog
-      v-model:visible="showRevoke"
-      title="Revoke invitation"
-      :message="`Revoke the invitation for “${revokeTarget?.email}”?`"
-      confirm-label="Revoke"
-      danger
-      :busy="busy"
-      @confirm="revokeInvite"
-    />
   </div>
 </template>

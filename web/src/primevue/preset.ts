@@ -142,6 +142,28 @@ const overlayTransition = {
   leaveToClass: "opacity-0",
 };
 
+// Shared dialog chrome, reused by both Dialog and ConfirmDialog (which render the
+// same header/footer/transition). Mask carries no z-index so each consumer can set
+// its own stacking order.
+const dialogMask =
+  "fixed inset-0 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm";
+const dialogHeader =
+  "flex items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
+const dialogTitle =
+  "text-base font-semibold tracking-tight text-surface-900 dark:text-surface-0";
+const dialogFooter =
+  "flex items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800";
+// Natural rise + fade + subtle scale on open/close; the global prefers-reduced-motion
+// rule neutralizes it.
+const dialogTransition = {
+  enterFromClass: "opacity-0 translate-y-2 scale-[0.97]",
+  enterActiveClass: "transition duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+  enterToClass: "opacity-100 translate-y-0 scale-100",
+  leaveFromClass: "opacity-100 translate-y-0 scale-100",
+  leaveActiveClass: "transition duration-150 ease-in",
+  leaveToClass: "opacity-0 translate-y-1 scale-[0.98]",
+};
+
 // Shared checkbox visuals (standalone Checkbox + MultiSelect option/header checks).
 const checkbox = {
   root: "relative inline-flex h-4 w-4 shrink-0",
@@ -251,30 +273,28 @@ export const primeVuePassthrough = {
   },
 
   dialog: {
-    mask: "fixed inset-0 z-50 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm",
+    mask: `${dialogMask} z-50`,
     root: dialogRoot(),
-    header:
-      "flex items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800",
-    title:
-      "text-base font-semibold tracking-tight text-surface-900 dark:text-surface-0",
+    header: dialogHeader,
+    title: dialogTitle,
     content: "p-5",
-    footer:
-      "flex items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800",
+    footer: dialogFooter,
     pcCloseButton: {
       root: "rounded-md p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200",
     },
-    // Natural rise + fade + subtle scale on open/close. The enter easing is a
-    // gentle ease-out (cubic-bezier) so the dialog settles rather than snapping;
-    // the global prefers-reduced-motion rule neutralizes it.
-    transition: {
-      enterFromClass: "opacity-0 translate-y-2 scale-[0.97]",
-      enterActiveClass:
-        "transition duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
-      enterToClass: "opacity-100 translate-y-0 scale-100",
-      leaveFromClass: "opacity-100 translate-y-0 scale-100",
-      leaveActiveClass: "transition duration-150 ease-in",
-      leaveToClass: "opacity-0 translate-y-1 scale-[0.98]",
-    },
+    transition: dialogTransition,
+  },
+
+  // Shares the dialog's chrome; mask sits above open dialogs (z-60) so a confirm
+  // raised from within a dialog (e.g. revoke inside Share) is never occluded.
+  confirmdialog: {
+    mask: `${dialogMask} z-[60]`,
+    root: dialogRoot("max-w-md"),
+    header: dialogHeader,
+    title: dialogTitle,
+    content: "px-5 py-5",
+    footer: dialogFooter,
+    transition: dialogTransition,
   },
 
   tabs: { root: "flex min-h-0 flex-col" },

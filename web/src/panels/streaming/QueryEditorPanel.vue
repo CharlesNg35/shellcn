@@ -5,7 +5,7 @@ import { interpolate, runAction } from "../../api/dataSource";
 import type { QueryEditorConfig } from "../../types/projection";
 import { useStream } from "../../composables/useStream";
 import type { PanelProps } from "../types";
-import StubBanner from "./StubBanner.vue";
+import StreamStatusBar from "./StreamStatusBar.vue";
 import { useTheme } from "../../composables/useTheme";
 import { loadMonaco, syncMonacoTheme, type MonacoModule } from "../../monaco";
 
@@ -35,6 +35,7 @@ const running = ref(false);
 const error = ref<string | null>(null);
 const container = ref<HTMLElement | null>(null);
 const useFallback = ref(false);
+const reconnecting = ref(false);
 let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
 let monacoModule: MonacoModule | null = null;
 const { isDark } = useTheme();
@@ -48,12 +49,26 @@ function onFrame(frame: string): void {
   }
 }
 
-const { status, send } = useStream(
+const {
+  status,
+  error: streamError,
+  send,
+  reconnect,
+} = useStream(
   props.connectionId,
   props.source,
   { resource: props.resource },
   onFrame,
 );
+
+async function onReconnect(): Promise<void> {
+  reconnecting.value = true;
+  try {
+    await reconnect();
+  } finally {
+    reconnecting.value = false;
+  }
+}
 
 function run(): void {
   if (editor) query.value = editor.getValue();
@@ -130,7 +145,13 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full flex-col">
-    <StubBanner :status="status" />
+    <StreamStatusBar
+      :status="status"
+      :error="streamError"
+      :reconnecting="reconnecting"
+      can-reconnect
+      @reconnect="onReconnect"
+    />
     <div
       class="flex items-center justify-between border-b border-surface-200 px-3 py-1.5 dark:border-surface-800"
     >

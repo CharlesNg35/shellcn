@@ -10,7 +10,7 @@ import AppIcon from "../components/AppIcon.vue";
 import SkeletonList from "../components/SkeletonList.vue";
 import CredentialFormDialog from "../components/CredentialFormDialog.vue";
 import ShareDialog from "../components/ShareDialog.vue";
-import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { useConfirmAction } from "../composables/useConfirmAction";
 import type {
   CredentialKindInfo,
   CredentialSummary,
@@ -28,9 +28,7 @@ const showForm = ref(false);
 const editing = ref<CredentialSummary | null>(null);
 const showShare = ref(false);
 const shareTarget = ref<CredentialSummary | null>(null);
-const showDelete = ref(false);
-const deleteTarget = ref<CredentialSummary | null>(null);
-const deleting = ref(false);
+const { confirmDanger } = useConfirmAction();
 
 function canManage(c: CredentialSummary): boolean {
   return auth.isAdmin || c.ownerId === auth.user?.id;
@@ -81,17 +79,17 @@ function openShare(c: CredentialSummary): void {
   showShare.value = true;
 }
 function openDelete(c: CredentialSummary): void {
-  deleteTarget.value = c;
-  showDelete.value = true;
+  confirmDanger({
+    header: "Delete credential",
+    message: `Delete “${c.name}”? Connections that reference it must be updated first.`,
+    accept: () => onDelete(c),
+  });
 }
 
-async function onDelete(): Promise<void> {
-  if (!deleteTarget.value) return;
-  deleting.value = true;
+async function onDelete(c: CredentialSummary): Promise<void> {
   try {
-    await api.del(`/credentials/${deleteTarget.value.id}`);
-    notify.success("Credential deleted", deleteTarget.value.name);
-    showDelete.value = false;
+    await api.del(`/credentials/${c.id}`);
+    notify.success("Credential deleted", c.name);
     await load();
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
@@ -100,8 +98,6 @@ async function onDelete(): Promise<void> {
         "This credential is still referenced by a connection.",
       );
     }
-  } finally {
-    deleting.value = false;
   }
 }
 
@@ -216,15 +212,6 @@ const hasItems = computed(() => items.value.length > 0);
       resource="credentials"
       :resource-id="shareTarget.id"
       :resource-name="shareTarget.name"
-    />
-    <ConfirmDialog
-      v-model:visible="showDelete"
-      title="Delete credential"
-      :message="`Delete “${deleteTarget?.name}”? Connections that reference it must be updated first.`"
-      confirm-label="Delete"
-      danger
-      :busy="deleting"
-      @confirm="onDelete"
     />
   </div>
 </template>
