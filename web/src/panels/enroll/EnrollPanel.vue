@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch, ref } from "vue";
+import { computed, onUnmounted, ref, toRef, watch } from "vue";
 import Button from "primevue/button";
 import { api } from "../../api/client";
 import type { Enrollment, InstallArtifact } from "../../types/projection";
@@ -13,10 +13,16 @@ const emit = defineEmits<{ online: [] }>();
 const enrollment = ref<Enrollment | null>(null);
 const error = ref<string | null>(null);
 const copied = ref<string | null>(null);
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
 const { status, message, online, refresh, start } = useAgentState(
-  props.connectionId,
+  toRef(props, "connectionId"),
 );
+
+function clearCopiedTimer(): void {
+  if (copiedTimer) clearTimeout(copiedTimer);
+  copiedTimer = undefined;
+}
 
 const statusTone = computed(() => {
   switch (status.value) {
@@ -77,13 +83,26 @@ async function copy(artifact: InstallArtifact): Promise<void> {
   try {
     await navigator.clipboard?.writeText(artifact.command);
     copied.value = artifact.kind;
-    setTimeout(() => (copied.value = null), 1500);
+    clearCopiedTimer();
+    copiedTimer = setTimeout(() => (copied.value = null), 1500);
   } catch {
     // clipboard unavailable
   }
 }
 
-onMounted(() => start());
+watch(
+  () => props.connectionId,
+  () => {
+    clearCopiedTimer();
+    copied.value = null;
+    enrollment.value = null;
+    error.value = null;
+    start();
+  },
+  { immediate: true },
+);
+
+onUnmounted(clearCopiedTimer);
 </script>
 
 <template>

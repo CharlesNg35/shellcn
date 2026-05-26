@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useStorage } from "@vueuse/core";
 import Button from "primevue/button";
@@ -44,6 +44,7 @@ const showFolderDialog = ref(false);
 const editingFolder = ref<ConnectionFolder | null>(null);
 const newFolderParentId = ref<string | null>(null);
 const savingLayout = ref(false);
+let dragEndTimer: ReturnType<typeof window.setTimeout> | undefined;
 
 const emptyFiltered = computed(
   () => conns.loaded && Boolean(props.query.trim()) && !rootItems.value.length,
@@ -273,10 +274,16 @@ function onDragStart(): void {
 
 function afterDragEnd(preference?: ConnectionTreeDropPreference): void {
   onDragEnd(preference);
-  window.setTimeout(() => {
+  if (dragEndTimer) window.clearTimeout(dragEndTimer);
+  dragEndTimer = window.setTimeout(() => {
     dragging.value = false;
+    dragEndTimer = undefined;
   }, 0);
 }
+
+onUnmounted(() => {
+  if (dragEndTimer) window.clearTimeout(dragEndTimer);
+});
 
 function go(connection: ConnectionSummary): void {
   if (dragging.value) return;

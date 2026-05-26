@@ -96,7 +96,14 @@ async function load(): Promise<void> {
   }
 }
 
-watch(() => props.id, load, { immediate: true });
+watch(
+  () => props.id,
+  () => {
+    showEnroll.value = false;
+    load();
+  },
+  { immediate: true },
+);
 
 // A connection does not open on its own: the user connects explicitly, so a
 // page refresh lands on the prompt rather than dialing the target again. The

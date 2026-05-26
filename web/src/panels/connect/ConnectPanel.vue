@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, toRef, watch } from "vue";
 import Button from "primevue/button";
 import { useAgentState } from "../../composables/useAgentState";
 import AppIcon from "../../components/AppIcon.vue";
@@ -13,7 +13,7 @@ const emit = defineEmits<{ connect: []; enroll: [] }>();
 
 const isAgent = computed(() => props.connection?.transport === "agent");
 
-const agent = useAgentState(props.connectionId);
+const agent = useAgentState(toRef(props, "connectionId"));
 const canConnect = computed(() => !isAgent.value || agent.online.value);
 // Agent is the gate: until its tunnel is up, "Connect" is not actionable and
 // the real next step is enrolling the agent.
@@ -42,9 +42,17 @@ const agentLabel = computed(() => {
   }
 });
 
-onMounted(() => {
-  if (isAgent.value) agent.start();
-});
+watch(
+  [() => props.connectionId, isAgent],
+  () => {
+    if (isAgent.value) {
+      agent.start();
+    } else {
+      agent.stop();
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { onUnmounted, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
@@ -30,11 +30,21 @@ const result = ref<InviteResult | null>(null);
 const error = ref<string | null>(null);
 const busy = ref(false);
 const copied = ref(false);
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+function clearCopiedTimer(): void {
+  if (copiedTimer) clearTimeout(copiedTimer);
+  copiedTimer = undefined;
+}
 
 watch(
   () => props.visible,
   (open) => {
-    if (!open) return;
+    clearCopiedTimer();
+    if (!open) {
+      copied.value = false;
+      return;
+    }
     email.value = "";
     role.value = "viewer";
     result.value = null;
@@ -70,11 +80,14 @@ async function copyLink(): Promise<void> {
     await navigator.clipboard?.writeText(result.value.link);
     copied.value = true;
     notify.success("Link copied");
-    setTimeout(() => (copied.value = false), 1500);
+    clearCopiedTimer();
+    copiedTimer = setTimeout(() => (copied.value = false), 1500);
   } catch {
     // clipboard unavailable
   }
 }
+
+onUnmounted(clearCopiedTimer);
 </script>
 
 <template>

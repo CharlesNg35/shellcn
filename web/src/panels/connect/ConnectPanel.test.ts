@@ -125,4 +125,30 @@ describe("ConnectPanel", () => {
     expect(connectDisabled(w)).toBe(true);
     w.unmount();
   });
+
+  it("stops polling an old agent connection when the panel is reused", async () => {
+    const calls: string[] = [];
+    installFetch((url) => {
+      if (url.includes("/agent/state")) {
+        calls.push(url);
+        return { body: { status: "pending" } };
+      }
+      return { body: {} };
+    });
+    vi.useFakeTimers();
+
+    const w = mount(ConnectPanel, {
+      props: { connectionId: "edge", connection: agent },
+    });
+    await flushPromises();
+    expect(calls).toHaveLength(1);
+
+    await w.setProps({ connectionId: "c1", connection: direct });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(4000);
+    await flushPromises();
+
+    expect(calls).toHaveLength(1);
+    w.unmount();
+  });
 });
