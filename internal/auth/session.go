@@ -4,18 +4,21 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"fmt"
 	"net/http"
-	"sync"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const (
-	// SessionCookieName carries the opaque platform session id.
+	// SessionCookieName carries the signed stateless browser session JWT.
 	SessionCookieName = "shellcn_session"
 	// CSRFHeader is where state-changing HTTP requests echo the CSRF token.
 	CSRFHeader = "X-CSRF-Token"
 	// DefaultSessionTTL is how long a platform session lives.
 	DefaultSessionTTL = 24 * time.Hour
+	sessionIssuer     = "shellcn"
 )
 
 // Session is one authenticated browser session.
@@ -26,69 +29,99 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
-func (s Session) expired() bool { return time.Now().After(s.ExpiresAt) }
-
-// SessionManager is an in-memory platform session registry. Sessions are
-// revocable on logout; the registry is not shared across instances.
-type SessionManager struct {
-	mu       sync.RWMutex
-	sessions map[string]Session
-	ttl      time.Duration
+type sessionClaims struct {
+	CSRFToken string `json:"csrf"`
+	jwt.RegisteredClaims
 }
 
-// NewSessionManager returns a manager with the given TTL (0 = default).
+// SessionManager signs and verifies stateless browser session JWTs.
+type SessionManager struct {
+	key []byte
+	ttl time.Duration
+}
+
+// NewSessionManager returns a manager with an ephemeral signing key. Production
+// code should use NewSessionManagerWithKey so sessions survive process restarts.
 func NewSessionManager(ttl time.Duration) *SessionManager {
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		panic("auth: crypto/rand failed: " + err.Error())
+	}
+	return NewSessionManagerWithKey(ttl, key)
+}
+
+// NewSessionManagerWithKey returns a JWT session manager with a stable HMAC key.
+func NewSessionManagerWithKey(ttl time.Duration, key []byte) *SessionManager {
 	if ttl <= 0 {
 		ttl = DefaultSessionTTL
 	}
-	return &SessionManager{sessions: make(map[string]Session), ttl: ttl}
+	if len(key) < 32 {
+		panic("auth: JWT signing key must be at least 32 bytes")
+	}
+	return &SessionManager{key: append([]byte(nil), key...), ttl: ttl}
 }
 
 func randomToken() string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// A failing system CSPRNG must never yield a predictable session/CSRF
-		// token; fail loudly rather than emit weak entropy.
 		panic("auth: crypto/rand failed: " + err.Error())
 	}
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-// Create starts a new session for userID, returning it with a fresh CSRF token.
+// Create starts a new stateless session for userID, returning its signed JWT.
 func (m *SessionManager) Create(userID string) Session {
+	now := time.Now()
 	s := Session{
-		ID:        randomToken(),
 		UserID:    userID,
 		CSRFToken: randomToken(),
-		ExpiresAt: time.Now().Add(m.ttl),
+		ExpiresAt: now.Add(m.ttl),
 	}
-	m.mu.Lock()
-	m.sessions[s.ID] = s
-	m.mu.Unlock()
+	claims := sessionClaims{
+		CSRFToken: s.CSRFToken,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    sessionIssuer,
+			Subject:   userID,
+			ID:        randomToken(),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(s.ExpiresAt),
+		},
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.key)
+	if err != nil {
+		panic("auth: sign session JWT: " + err.Error())
+	}
+	s.ID = token
 	return s
 }
 
-// Get returns a live (non-expired) session by id.
-func (m *SessionManager) Get(id string) (Session, bool) {
-	m.mu.RLock()
-	s, ok := m.sessions[id]
-	m.mu.RUnlock()
-	if !ok {
+// Get validates a signed session JWT.
+func (m *SessionManager) Get(tokenString string) (Session, bool) {
+	claims := &sessionClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return m.key, nil
+	}, jwt.WithIssuer(sessionIssuer))
+	if err != nil || !token.Valid {
 		return Session{}, false
 	}
-	if s.expired() {
-		m.Destroy(id)
+	if claims.Subject == "" || claims.CSRFToken == "" || claims.ExpiresAt == nil {
 		return Session{}, false
 	}
-	return s, true
+	return Session{
+		ID:        tokenString,
+		UserID:    claims.Subject,
+		CSRFToken: claims.CSRFToken,
+		ExpiresAt: claims.ExpiresAt.Time,
+	}, true
 }
 
-// Destroy revokes a session.
-func (m *SessionManager) Destroy(id string) {
-	m.mu.Lock()
-	delete(m.sessions, id)
-	m.mu.Unlock()
-}
+// Destroy is intentionally a no-op for stateless JWT sessions. Logout clears the
+// browser cookie; server-side token revocation is not available without state.
+func (m *SessionManager) Destroy(string) {}
 
 // ValidateCSRF reports whether the request carries the session's CSRF token.
 func (s Session) ValidateCSRF(r *http.Request) bool {

@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, defineAsyncComponent, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
 import InputText from "primevue/inputtext";
-import Textarea from "primevue/textarea";
 import { useToast } from "primevue/usetoast";
 import {
   fetchDoc,
@@ -20,11 +19,18 @@ import type {
   Page,
 } from "../../types/projection";
 import type { PanelProps } from "../core/types";
+import SkeletonList from "../../components/SkeletonList.vue";
 import FileCrumbs from "./FileCrumbs.vue";
 import FileEntryGrid from "./FileEntryGrid.vue";
 import FileEntryList from "./FileEntryList.vue";
 import FilePreview from "./FilePreview.vue";
 import FileToolbar from "./FileToolbar.vue";
+
+const FileCodeEditor = defineAsyncComponent({
+  loader: () => import("./FileCodeEditor.vue"),
+  loadingComponent: SkeletonList,
+  delay: 0,
+});
 
 const props = defineProps<PanelProps>();
 const toast = useToast();
@@ -395,10 +401,9 @@ watch(
               @click="saveFile"
             />
           </div>
-          <Textarea
-            v-model="editContent"
-            class="h-full min-h-0 w-full flex-1 resize-none rounded-none border-0 p-4 font-mono text-xs leading-relaxed"
-            spellcheck="false"
+          <FileCodeEditor
+            v-model:value="editContent"
+            :name="selected?.name ?? ''"
             :disabled="mutating"
           />
         </div>
@@ -443,10 +448,9 @@ watch(
               @click="saveFile"
             />
           </div>
-          <Textarea
-            v-model="editContent"
-            class="h-full min-h-0 w-full flex-1 resize-none rounded-none border-0 p-4 font-mono text-xs leading-relaxed"
-            spellcheck="false"
+          <FileCodeEditor
+            v-model:value="editContent"
+            :name="selected?.name ?? ''"
             :disabled="mutating"
           />
         </div>

@@ -1,8 +1,62 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
+import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
+
+const monacoEditors = vi.hoisted(
+  () =>
+    [] as Array<{
+      setValue(value: string): void;
+      emitChange(): void;
+    }>,
+);
+
+vi.mock("monaco-editor/min/vs/editor/editor.main.css", () => ({}));
+vi.mock("monaco-editor/esm/vs/editor/editor.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor/esm/vs/language/json/json.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor/esm/vs/language/css/css.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor/esm/vs/language/html/html.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor/esm/vs/language/typescript/ts.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor", () => ({
+  editor: {
+    create: (_container: HTMLElement, options: { value: string }) => {
+      let value = options.value;
+      let onChange: (() => void) | undefined;
+      const editor = {
+        getValue: () => value,
+        setValue(next: string) {
+          value = next;
+        },
+        emitChange() {
+          onChange?.();
+        },
+        getModel: () => ({}),
+        onDidChangeModelContent(callback: () => void) {
+          onChange = callback;
+        },
+        updateOptions() {},
+        dispose() {},
+      };
+      monacoEditors.push(editor);
+      return editor;
+    },
+    defineTheme() {},
+    setTheme() {},
+    setModelLanguage() {},
+  },
+}));
 
 const rootEntries = [
   { name: "etc", path: "/etc", isDir: true },
@@ -16,6 +70,8 @@ const rootEntries = [
 ];
 
 beforeEach(() => {
+  setActivePinia(createPinia());
+  monacoEditors.length = 0;
   installFetch((url) => {
     const u = new URL(url, "http://h");
     if (url.includes("sftp.list")) {
@@ -104,7 +160,9 @@ describe("FileBrowserPanel", () => {
     const file = items.find((b) => b.text().includes("README.md"));
     await file!.trigger("click");
     await flushPromises();
-    expect(w.text()).toContain("# Hello");
+    await vi.waitFor(() =>
+      expect(w.find(".shellcn-monaco-host").exists()).toBe(true),
+    );
   });
 
   it("navigates into a directory", async () => {
@@ -179,7 +237,9 @@ describe("FileBrowserPanel", () => {
     await flushPromises();
 
     expect(document.body.textContent).toContain("README.md");
-    expect(document.body.textContent).toContain("# Hello");
+    await vi.waitFor(() =>
+      expect(document.body.querySelector(".shellcn-monaco-host")).toBeTruthy(),
+    );
     w.unmount();
   });
 
@@ -247,8 +307,11 @@ describe("FileBrowserPanel", () => {
       .find((b) => b.text().includes("README.md"));
     await fileAgain!.trigger("click");
     await flushPromises();
-    const editor = w.get("textarea");
-    await editor.setValue("# Updated");
+    await vi.waitFor(() => expect(monacoEditors.length).toBeGreaterThan(0));
+    const editor = monacoEditors.at(-1)!;
+    editor.setValue("# Updated");
+    editor.emitChange();
+    await nextTick();
     await panelButton(w, "Save").trigger("click");
     await flushPromises();
 

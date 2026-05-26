@@ -30,7 +30,8 @@ test("SSH (tabs): terminal stream, home files, snippets", async ({ page }) => {
   await expect(page.locator("main")).toContainText("app.json");
   await expect(page.locator("main")).toContainText("home");
   await page.getByRole("button", { name: /app\.json/ }).click();
-  await expect(page.locator("textarea")).toHaveValue(/"name": "app"/);
+  await expect(page.locator(".shellcn-monaco-host")).toBeVisible();
+  await expect(page.locator(".monaco-editor")).toContainText('"name": "app"');
 
   await page.getByRole("tab", { name: "Snippets" }).click();
   await expect(page.locator("main")).toContainText("disk usage");

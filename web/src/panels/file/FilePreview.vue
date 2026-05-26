@@ -1,9 +1,15 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, defineAsyncComponent } from "vue";
 import Button from "primevue/button";
 import SkeletonList from "../../components/SkeletonList.vue";
 import type { FileContent } from "../../types/projection";
 import { formatBytes, viewerFor } from "./fileTypes";
+
+const FileCodeEditor = defineAsyncComponent({
+  loader: () => import("./FileCodeEditor.vue"),
+  loadingComponent: SkeletonList,
+  delay: 0,
+});
 
 const props = defineProps<{
   name: string;
@@ -19,6 +25,9 @@ const src = computed(() => {
   if (c.encoding === "url" && c.url) return c.url;
   if (c.encoding === "base64" && c.content)
     return `data:${c.mime ?? "application/octet-stream"};base64,${c.content}`;
+  if (c.encoding === "utf8" && c.content && c.mime?.startsWith("image/")) {
+    return `data:${c.mime};charset=utf-8,${encodeURIComponent(c.content)}`;
+  }
   return c.url ?? "";
 });
 </script>
@@ -28,11 +37,12 @@ const src = computed(() => {
     <SkeletonList v-if="loading" />
 
     <template v-else-if="content">
-      <pre
+      <FileCodeEditor
         v-if="viewer === 'code'"
-        class="m-0 h-full overflow-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-surface-700 dark:text-surface-200"
-        >{{ content.content }}</pre
-      >
+        :name="name"
+        :value="content.content ?? ''"
+        readonly
+      />
 
       <div
         v-else-if="viewer === 'image'"
