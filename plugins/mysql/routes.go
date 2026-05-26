@@ -730,15 +730,16 @@ func executeStatement(ctx context.Context, s *Session, statement string) (sqldb.
 	if err != nil {
 		return sqldb.StatementResult{}, mysqlErr(err)
 	}
-	defer rows.Close()
 	columns, err := rows.Columns()
 	if err != nil {
+		_ = rows.Close()
 		return sqldb.StatementResult{}, mysqlErr(err)
 	}
 	out := sqldb.StatementResult{Statement: statement, Columns: columns}
 	for rows.Next() {
 		values, err := scanValues(rows, len(columns))
 		if err != nil {
+			_ = rows.Close()
 			return sqldb.StatementResult{}, mysqlErr(err)
 		}
 		out.Rows = append(out.Rows, values)
@@ -746,7 +747,9 @@ func executeStatement(ctx context.Context, s *Session, statement string) (sqldb.
 			break
 		}
 	}
-	rows.Close()
+	if err := rows.Close(); err != nil {
+		return sqldb.StatementResult{}, mysqlErr(err)
+	}
 	if err := rows.Err(); err != nil {
 		return sqldb.StatementResult{}, mysqlErr(err)
 	}
@@ -793,7 +796,7 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	if err != nil {
 		return nil, mysqlErr(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, mysqlErr(err)
