@@ -262,6 +262,45 @@ func TestConnectionUpdateAuthz(t *testing.T) {
 	}
 }
 
+func TestDisconnectConnectionSessionClosesOnlyCurrentUserSession(t *testing.T) {
+	h := newHarness(t)
+
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil); resp.Status != http.StatusOK {
+		t.Fatalf("open op session: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "admin", nil); resp.Status != http.StatusOK {
+		t.Fatalf("open admin session: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if got := h.pluginSessions.Stats().Sessions; got != 2 {
+		t.Fatalf("sessions before disconnect = %d, want 2", got)
+	}
+
+	resp := h.do(t, http.MethodDelete, "/api/connections/c-op/session", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("disconnect session: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if got := h.pluginSessions.Stats().Sessions; got != 1 {
+		t.Fatalf("sessions after disconnect = %d, want 1", got)
+	}
+}
+
+func TestDisconnectConnectionSessionHonorsConnectionAccess(t *testing.T) {
+	h := newHarness(t)
+
+	if resp := h.do(t, http.MethodDelete, "/api/connections/c-op/session", "viewer", nil); resp.Status != http.StatusForbidden {
+		t.Fatalf("viewer without grant: want 403, got %d (%s)", resp.Status, resp.Body)
+	}
+
+	if err := h.store.Grants.Create(context.Background(), &models.Grant{
+		ID: "g-use-c-op", ConnectionID: "c-op", SubjectID: "viewer", Access: models.AccessUse,
+	}); err != nil {
+		t.Fatalf("create grant: %v", err)
+	}
+	if resp := h.do(t, http.MethodDelete, "/api/connections/c-op/session", "viewer", nil); resp.Status != http.StatusOK {
+		t.Fatalf("viewer with grant: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+}
+
 func TestConnectionCredentialRefUsability(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()

@@ -44,15 +44,15 @@ These plugins should prove the core architecture first.
 > only difference is the manifest each declares. The frontend special-cases
 > neither (v2 §12, §13).
 
-> **SQL plugins:** PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB, SQLite,
-> and later SQL engines share only driver-neutral helpers from `plugins/shared/sqldb`
+> **SQL plugins:** PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB,
+> ClickHouse, SQLite, and later SQL engines share only driver-neutral helpers from `plugins/shared/sqldb`
 > (query editor envelopes, identifier/DDL helpers, statement safety checks,
 > audit metadata/result redaction, and TLS/config parsing). Dialect catalog
 > queries, driver connection code, actions, and manifests remain inside each
-> plugin. PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB, Redis, and
-> MongoDB are implemented as direct-only database/data-store plugins; agent
-> transport is reserved for private control-plane targets such as Docker and
-> Kubernetes.
+> plugin. PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB, ClickHouse,
+> Redis, and MongoDB are implemented as direct-only database/data-store plugins;
+> agent transport is reserved for private control-plane targets such as Docker
+> and Kubernetes.
 
 ## P1: Core Infrastructure
 
@@ -66,6 +66,7 @@ These plugins should prove the core architecture first.
 | `mssql`      | Microsoft SQL Server          | schema browser, T-SQL editor, table data, jobs, users, DDL helpers, audit           |
 | `oracle`     | Oracle Database               | schemas, SQL editor, PL/SQL objects, sessions, tablespaces, DDL helpers, audit      |
 | `cockroachdb` | CockroachDB access            | schemas, SQL editor, table data, ranges, jobs, sessions, DDL helpers, audit         |
+| `clickhouse` | ClickHouse analytics DB       | databases, tables, views, dictionaries, mutations, merges, processes, SQL editor    |
 | `vnc`        | Remote desktop via VNC/RFB    | `remote_desktop` over an RFB stream, clipboard, keyboard/mouse                      |
 
 ## P1: Filesystem And Storage Protocols
@@ -86,7 +87,6 @@ These plugins should prove the core architecture first.
 | --------------- | ------------------------ | ------------------------------------------------------- |
 | `mariadb`       | MariaDB access           | schema browser, query editor, users, replication status |
 | `sqlite`        | SQLite database files    | schema browser, query editor, table data                |
-| `clickhouse`    | ClickHouse analytics DB  | query editor, databases, tables, mutations              |
 | `cassandra`     | Cassandra access         | keyspaces, tables, CQL query                            |
 | `elasticsearch` | Elasticsearch/OpenSearch | indexes, documents, search, mappings, cluster health    |
 | `opensearch`    | OpenSearch               | indexes, documents, search, mappings, cluster health    |

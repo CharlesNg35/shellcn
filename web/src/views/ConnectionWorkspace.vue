@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { API_BASE, api, ApiError, getCsrfToken } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useSessionsStore } from "../stores/sessions";
@@ -111,6 +111,10 @@ watch(
 // survives in-app navigation, resetting only on a full reload).
 const connected = computed(() => ws.isConnected(props.id));
 const channelPrefix = computed(() => `${props.id}:`);
+const sessionPath = computed(
+  () => `/connections/${encodeURIComponent(props.id)}/session`,
+);
+const sessionURL = computed(() => `${API_BASE}${sessionPath.value}`);
 
 function connect(): void {
   showEnroll.value = false;
@@ -118,11 +122,40 @@ function connect(): void {
   liveStatus.connecting(props.id);
 }
 
-function disconnect(): void {
+async function closeBackendSession(): Promise<void> {
+  await api.del(sessionPath.value);
+}
+
+function closeBackendSessionOnPageHide(): void {
+  if (!connected.value) return;
+  const headers = new Headers();
+  const csrf = getCsrfToken();
+  if (csrf) headers.set("X-CSRF-Token", csrf);
+  void fetch(sessionURL.value, {
+    method: "DELETE",
+    headers,
+    keepalive: true,
+  }).catch(() => {});
+}
+
+async function disconnect(): Promise<void> {
   sessions.closeWhere((key) => key.startsWith(channelPrefix.value));
   ws.setConnected(props.id, false);
   liveStatus.clear(props.id);
+  try {
+    await closeBackendSession();
+  } catch (e) {
+    notify.error("Could not close session", (e as Error).message);
+  }
 }
+
+onMounted(() => {
+  window.addEventListener("pagehide", closeBackendSessionOnPageHide);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("pagehide", closeBackendSessionOnPageHide);
+});
 
 const resourceByKind = computed(() => {
   const map = new Map<string, ResourceType>();

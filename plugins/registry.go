@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/plugins/clickhouse"
 	"github.com/charlesng/shellcn/plugins/cockroachdb"
 	"github.com/charlesng/shellcn/plugins/docker"
 	"github.com/charlesng/shellcn/plugins/ftp"
@@ -57,5 +58,6 @@ func all() []plugin.Plugin {
 		mssql.New(),
 		oracle.New(),
 		cockroachdb.New(),
+		clickhouse.New(),
 	}
 }

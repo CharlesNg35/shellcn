@@ -234,10 +234,11 @@ func (boomPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session
 // --- harness ----------------------------------------------------------------
 
 type harness struct {
-	ts         *httptest.Server
-	store      *store.Store
-	sessionMgr *auth.SessionManager
-	sessions   map[string]auth.Session // userID → platform session
+	ts             *httptest.Server
+	store          *store.Store
+	pluginSessions *session.Manager
+	sessionMgr     *auth.SessionManager
+	sessions       map[string]auth.Session // userID → platform session
 }
 
 func newHarness(t *testing.T) *harness {
@@ -287,7 +288,7 @@ func newHarness(t *testing.T) *harness {
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
-	h := &harness{ts: ts, store: st, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
+	h := &harness{ts: ts, store: st, pluginSessions: sessMgr, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
 
 	ctx := context.Background()
 	for _, u := range []struct {

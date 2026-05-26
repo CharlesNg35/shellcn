@@ -56,6 +56,8 @@ const TablePanelStub = defineComponent({
   `,
 });
 
+let requests: Array<{ url: string; init?: RequestInit }>;
+
 function router() {
   return createRouter({
     history: createMemoryHistory(),
@@ -65,7 +67,9 @@ function router() {
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  installFetch((url) => {
+  requests = [];
+  installFetch((url, init) => {
+    requests.push({ url, init });
     if (url.endsWith("/api/connections")) {
       return {
         body: [
@@ -77,6 +81,9 @@ beforeEach(() => {
           },
         ],
       };
+    }
+    if (url.endsWith("/api/connections/c1/session")) {
+      return { body: { ok: true } };
     }
     if (url.endsWith("/api/connection-folders")) return { body: [] };
     if (url.endsWith("/api/plugins/docker")) return { body: projection };
@@ -114,5 +121,40 @@ describe("ConnectionWorkspace", () => {
 
     await wrapper.get('[data-test="known"]').trigger("click");
     expect(ws.view("c1").selectedRef?.kind).toBe("container");
+  });
+
+  it("closes the backend plugin session when disconnecting", async () => {
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          DetailView: true,
+          ResourceTree: true,
+          TablePanel: TablePanelStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    const button = wrapper
+      .findAll("button")
+      .find((candidate) => candidate.text().includes("Disconnect"));
+    expect(button).toBeTruthy();
+    await button!.trigger("click");
+    await flushPromises();
+
+    expect(ws.isConnected("c1")).toBe(false);
+    expect(
+      requests.some(
+        (request) =>
+          request.url.endsWith("/api/connections/c1/session") &&
+          request.init?.method === "DELETE",
+      ),
+    ).toBe(true);
   });
 });
