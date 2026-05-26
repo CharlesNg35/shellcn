@@ -225,6 +225,11 @@
                 "node": "${resource.namespace}",
                 "vmid": "${resource.uid}"
               }
+            },
+            "config": {
+              "engine": "novnc",
+              "resize": true,
+              "clipboard": true
             }
           },
           {

@@ -186,6 +186,38 @@ func (c HTTPClientConfig) Map() map[string]any {
 	return out
 }
 
+type RemoteDesktopEngine string
+
+const (
+	RemoteDesktopEngineNoVNC     RemoteDesktopEngine = "novnc"
+	RemoteDesktopEngineGuacamole RemoteDesktopEngine = "guacamole"
+)
+
+type RemoteDesktopConfig struct {
+	Engine     RemoteDesktopEngine `json:"engine"`
+	Resize     bool                `json:"resize,omitempty"`
+	Clipboard  bool                `json:"clipboard,omitempty"`
+	Audio      bool                `json:"audio,omitempty"`
+	RepeaterID string              `json:"repeaterID,omitempty"`
+}
+
+func (c RemoteDesktopConfig) Map() map[string]any {
+	out := map[string]any{"engine": string(c.Engine)}
+	if c.Resize {
+		out["resize"] = c.Resize
+	}
+	if c.Clipboard {
+		out["clipboard"] = c.Clipboard
+	}
+	if c.Audio {
+		out["audio"] = c.Audio
+	}
+	if c.RepeaterID != "" {
+		out["repeaterID"] = c.RepeaterID
+	}
+	return out
+}
+
 // Severity styles a badge.
 type Severity string
 

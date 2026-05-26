@@ -17,6 +17,11 @@ var validMethods = map[Method]bool{
 	MethodPatch: true, MethodDelete: true, MethodWS: true,
 }
 
+var validRemoteDesktopEngines = map[RemoteDesktopEngine]bool{
+	RemoteDesktopEngineNoVNC:     true,
+	RemoteDesktopEngineGuacamole: true,
+}
+
 // Validate checks a manifest + its routes at registration, returning an
 // aggregate of all actionable problems found (not just the first).
 func Validate(m Manifest, routes []Route) error {
@@ -319,6 +324,24 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 			add("%s references route %q without a file input schema", ctx, routeID)
 		}
 	}
+	checkStreamSource := func(ctx string, ds *DataSource) {
+		if ds == nil {
+			add("%s is missing a source", ctx)
+			return
+		}
+		if ds.RouteID == "" {
+			add("%s is missing a RouteID", ctx)
+			return
+		}
+		rt, ok := routes[ds.RouteID]
+		if !ok {
+			add("%s references unknown route %q", ctx, ds.RouteID)
+			return
+		}
+		if rt.Method != MethodWS {
+			add("%s references route %q with invalid stream method %q", ctx, ds.RouteID, rt.Method)
+		}
+	}
 	checkActionIDs := func(ctx string, ids []string) {
 		for _, id := range ids {
 			if !actionIDs[id] {
@@ -328,12 +351,20 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 	}
 	checkTabs := func(ctx string, tabs []Tab) {
 		for _, t := range tabs {
-			if t.Source != nil {
+			if t.Source != nil && t.Panel != PanelRemoteDesktop {
 				checkDS(fmt.Sprintf("%s tab %q source", ctx, t.Key), *t.Source)
 			}
 			checkActionIDs(fmt.Sprintf("%s tab %q actionIds", ctx, t.Key), stringConfigList(t.Config, "actionIds"))
 			checkActionIDs(fmt.Sprintf("%s tab %q rowActionIds", ctx, t.Key), stringConfigList(t.Config, "rowActionIds"))
-			checkPanelConfigRoutes(fmt.Sprintf("%s tab %q", ctx, t.Key), t, checkRouteID, checkWriteRouteID, checkMultipartRouteID)
+			checkPanelConfigRoutes(
+				fmt.Sprintf("%s tab %q", ctx, t.Key),
+				t,
+				checkRouteID,
+				checkWriteRouteID,
+				checkMultipartRouteID,
+				checkStreamSource,
+				add,
+			)
 		}
 	}
 
@@ -372,7 +403,15 @@ func stringConfigList(config map[string]any, key string) []string {
 	}
 }
 
-func checkPanelConfigRoutes(ctx string, tab Tab, checkRouteID, checkWriteRouteID, checkMultipartRouteID func(string, string)) {
+func checkPanelConfigRoutes(
+	ctx string,
+	tab Tab,
+	checkRouteID func(string, string),
+	checkWriteRouteID func(string, string),
+	checkMultipartRouteID func(string, string),
+	checkStreamSource func(string, *DataSource),
+	add func(string, ...any),
+) {
 	route := func(key string) string {
 		if tab.Config == nil {
 			return ""
@@ -401,5 +440,28 @@ func checkPanelConfigRoutes(ctx string, tab Tab, checkRouteID, checkWriteRouteID
 		checkWriteRouteID(ctx+" deleteRouteId", route("deleteRouteId"))
 	case PanelHTTPClient:
 		checkWriteRouteID(ctx+" executeRouteId", route("executeRouteId"))
+	case PanelRemoteDesktop:
+		checkStreamSource(ctx+" source", tab.Source)
+		validateRemoteDesktopConfig(ctx, tab.Config, add)
+	}
+}
+
+func validateRemoteDesktopConfig(ctx string, config map[string]any, add func(string, ...any)) {
+	if config == nil {
+		add("%s config is missing remote desktop engine", ctx)
+		return
+	}
+	raw, ok := config["engine"]
+	if !ok {
+		add("%s config is missing remote desktop engine", ctx)
+		return
+	}
+	engine, ok := raw.(string)
+	if !ok || engine == "" {
+		add("%s config has invalid remote desktop engine %v", ctx, raw)
+		return
+	}
+	if !validRemoteDesktopEngines[RemoteDesktopEngine(engine)] {
+		add("%s config has unsupported remote desktop engine %q", ctx, engine)
 	}
 }

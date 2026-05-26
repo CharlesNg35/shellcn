@@ -49,6 +49,8 @@ function label(status: string): string {
       return "Recording failed";
     case "missing-route":
       return "Missing stream route";
+    case "unsupported-engine":
+      return "Unsupported desktop engine";
     default:
       return status;
   }

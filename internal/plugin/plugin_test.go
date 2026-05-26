@@ -46,6 +46,7 @@ func TestRegistryRegisterGetAll(t *testing.T) {
 
 func TestValidateRejectsBadManifests(t *testing.T) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
 	base := func() (plugin.Manifest, []plugin.Route) {
 		return plugin.Manifest{
 				APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
@@ -93,6 +94,20 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		}},
 		{"http client execute route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Tab{{Key: "http", Label: "HTTP", Panel: plugin.PanelHTTPClient, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"executeRouteId": "x.list"}}}
+		}},
+		{"remote desktop requires source", "missing a source", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Config: plugin.RemoteDesktopConfig{Engine: plugin.RemoteDesktopEngineNoVNC}.Map()}}
+		}},
+		{"remote desktop source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.RemoteDesktopConfig{Engine: plugin.RemoteDesktopEngineNoVNC}.Map()}}
+		}},
+		{"remote desktop requires engine", "missing remote desktop engine", func(m *plugin.Manifest, r *[]plugin.Route) {
+			*r = append(*r, plugin.Route{ID: "x.desktop", Method: plugin.MethodWS, Permission: "x.desktop", Risk: plugin.RiskPrivileged, Stream: stream})
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.desktop"}}}
+		}},
+		{"remote desktop rejects unknown engine", "unsupported remote desktop engine", func(m *plugin.Manifest, r *[]plugin.Route) {
+			*r = append(*r, plugin.Route{ID: "x.desktop", Method: plugin.MethodWS, Permission: "x.desktop", Risk: plugin.RiskPrivileged, Stream: stream})
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.desktop"}, Config: map[string]any{"engine": "spice"}}}
 		}},
 		{"action references unknown route", "references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "ghost"}}
@@ -162,6 +177,39 @@ func TestValidateAcceptsGoodManifest(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsRemoteDesktopEngines(t *testing.T) {
+	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
+	for _, engine := range []plugin.RemoteDesktopEngine{
+		plugin.RemoteDesktopEngineNoVNC,
+		plugin.RemoteDesktopEngineGuacamole,
+	} {
+		t.Run(string(engine), func(t *testing.T) {
+			m := plugin.Manifest{
+				APIVersion: plugin.CurrentAPIVersion,
+				Name:       "desktop",
+				Title:      "Desktop",
+				Layout:     plugin.LayoutTabs,
+				SupportedTransports: []plugin.Transport{
+					plugin.TransportDirect,
+				},
+				Tabs: []plugin.Tab{{
+					Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop,
+					Source: &plugin.DataSource{RouteID: "desktop.stream", Method: plugin.MethodWS},
+					Config: plugin.RemoteDesktopConfig{Engine: engine, Resize: true, Clipboard: true}.Map(),
+				}},
+				Streams: []plugin.Stream{{ID: "desktop.stream", Kind: plugin.StreamDesktop, RouteID: "desktop.stream"}},
+			}
+			routes := []plugin.Route{{
+				ID: "desktop.stream", Method: plugin.MethodWS, Permission: "desktop.use",
+				Risk: plugin.RiskPrivileged, Stream: stream,
+			}}
+			if err := plugin.Validate(m, routes); err != nil {
+				t.Fatalf("valid remote desktop manifest rejected: %v", err)
+			}
+		})
+	}
+}
+
 func TestSpecializedPanelConfigMaps(t *testing.T) {
 	kv := plugin.KVConfig{
 		ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write",
@@ -188,6 +236,16 @@ func TestSpecializedPanelConfigMaps(t *testing.T) {
 	trace := plugin.TraceConfig{ServiceField: "process.serviceName"}.Map()
 	if trace["serviceField"] != "process.serviceName" {
 		t.Fatalf("trace config map unexpected: %#v", trace)
+	}
+
+	desktop := plugin.RemoteDesktopConfig{
+		Engine:     plugin.RemoteDesktopEngineNoVNC,
+		Resize:     true,
+		Clipboard:  true,
+		RepeaterID: "console-1",
+	}.Map()
+	if desktop["engine"] != string(plugin.RemoteDesktopEngineNoVNC) || desktop["resize"] != true || desktop["repeaterID"] != "console-1" {
+		t.Fatalf("remote desktop config map unexpected: %#v", desktop)
 	}
 }
 

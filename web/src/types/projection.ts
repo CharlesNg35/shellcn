@@ -251,6 +251,16 @@ export interface HTTPClientConfig {
   defaultBody?: string;
 }
 
+export type RemoteDesktopEngine = "novnc" | "guacamole";
+
+export interface RemoteDesktopPanelConfig {
+  engine: RemoteDesktopEngine;
+  resize?: boolean;
+  clipboard?: boolean;
+  audio?: boolean;
+  repeaterID?: string;
+}
+
 export type ColumnType =
   | "text"
   | "badge"

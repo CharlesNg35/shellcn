@@ -383,11 +383,11 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 // 123-byte close-frame limit on a rune boundary so the browser receives it whole.
 func streamCloseReason(err error) string {
 	msg := err.Error()
-	const max = 120
-	if len(msg) <= max {
+	const maxCloseReasonBytes = 120
+	if len(msg) <= maxCloseReasonBytes {
 		return msg
 	}
-	b := []byte(msg)[:max]
+	b := []byte(msg)[:maxCloseReasonBytes]
 	for len(b) > 0 && !utf8.RuneStart(b[len(b)-1]) {
 		b = b[:len(b)-1]
 	}

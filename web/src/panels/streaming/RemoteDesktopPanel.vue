@@ -7,26 +7,31 @@ import {
 } from "../../composables/useDesktopRecorder";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import AppIcon from "../../components/AppIcon.vue";
+import { useConnectionStatusStore } from "../../stores/connectionStatus";
+import type { RemoteDesktopPanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
+import {
+  connectRemoteDesktop,
+  type RemoteDesktopSession,
+  type RemoteDesktopStatus,
+} from "./remoteDesktop/connect";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
+const live = useConnectionStatusStore();
 
 const loaded = ref(false);
 const status = ref("connecting");
 const error = ref<string | null>(null);
 const reconnecting = ref(false);
 const container = ref<HTMLElement | null>(null);
+let remoteSession: RemoteDesktopSession | null = null;
+let activeRun = 0;
 
-interface RfbLike {
-  scaleViewport: boolean;
-  clipViewport: boolean;
-  background: string;
-  disconnect(): void;
-  addEventListener(type: string, listener: (e: CustomEvent) => void): void;
-}
-let rfb: RfbLike | null = null;
-
+const remoteConfig = computed(
+  () => props.config as Partial<RemoteDesktopPanelConfig> | undefined,
+);
+const engine = computed(() => remoteConfig.value?.engine ?? "novnc");
 const descriptor = computed(
   () => (props.config?._recording as RecordingDescriptor | undefined) ?? null,
 );
@@ -62,10 +67,45 @@ async function beginCapture(): Promise<boolean> {
 }
 
 function disconnectRemote(): void {
+  activeRun += 1;
   recorder.stop();
-  const current = rfb;
-  rfb = null;
+  const current = remoteSession;
+  remoteSession = null;
   current?.disconnect();
+}
+
+async function handleEngineStatus(
+  run: number,
+  nextStatus: RemoteDesktopStatus,
+): Promise<void> {
+  if (run !== activeRun) return;
+  if (nextStatus === "ready") {
+    status.value = "ready";
+    loaded.value = true;
+    error.value = null;
+    live.connected(props.connectionId);
+    if (forced.value) {
+      const recordingStarted = await beginCapture();
+      if (!recordingStarted && run === activeRun) {
+        status.value = "recording-failed";
+        loaded.value = false;
+        remoteSession?.disconnect();
+        remoteSession = null;
+      }
+    }
+    return;
+  }
+
+  recorder.stop();
+  loaded.value = false;
+  if (
+    nextStatus === "disconnected" &&
+    status.value !== "ready" &&
+    status.value !== "connecting"
+  ) {
+    return;
+  }
+  status.value = nextStatus;
 }
 
 async function connectRemote(): Promise<void> {
@@ -76,69 +116,39 @@ async function connectRemote(): Promise<void> {
     return;
   }
   disconnectRemote();
+  const run = ++activeRun;
   status.value = "connecting";
   loaded.value = false;
+  live.connecting(props.connectionId);
   try {
     if (!props.source || !container.value) {
       status.value = "missing-route";
       return;
     }
-    const mod = await import("@novnc/novnc");
-    const RFB = mod.default as new (
-      target: HTMLElement,
-      url: string,
-      opts?: Record<string, unknown>,
-    ) => RfbLike;
     const stream = await prepareStream(props.connectionId, props.source, {
       resource: props.resource,
     });
-    rfb = new RFB(container.value, stream.url, {
-      shared: true,
-      repeaterID: props.config?.repeaterID,
-    });
-    const current = rfb;
-    // Scale the framebuffer to fit the panel rather than clipping/scrolling.
-    rfb.scaleViewport = true;
-    rfb.clipViewport = false;
-    rfb.background = "#000";
-
-    // Ready is driven by the protocol handshake, not by object construction.
-    rfb.addEventListener("connect", async () => {
-      if (rfb !== current) return;
-      status.value = "ready";
-      loaded.value = true;
-      if (forced.value) {
-        const recordingStarted = await beginCapture();
-        if (!recordingStarted) {
-          status.value = "recording-failed";
-          loaded.value = false;
-          rfb?.disconnect();
-          rfb = null;
-        }
-      }
-    });
-    rfb.addEventListener("disconnect", (e) => {
-      if (rfb !== current) return;
-      recorder.stop();
-      loaded.value = false;
-      // Preserve a more specific terminal state (auth/recording) if already set.
-      if (status.value === "ready" || status.value === "connecting") {
-        status.value = e.detail?.clean ? "disconnected" : "connection-lost";
-      }
-    });
-    rfb.addEventListener("securityfailure", () => {
-      if (rfb !== current) return;
-      status.value = "auth-failed";
-      loaded.value = false;
-    });
-    rfb.addEventListener("credentialsrequired", () => {
-      if (rfb !== current) return;
-      status.value = "credentials-required";
+    remoteSession = await connectRemoteDesktop(engine.value, {
+      target: container.value,
+      url: stream.url,
+      config: remoteConfig.value ?? {},
+      hooks: {
+        status: (nextStatus) => {
+          void handleEngineStatus(run, nextStatus);
+        },
+        error: (message) => {
+          if (run !== activeRun) return;
+          error.value = message;
+          live.failed(props.connectionId, message);
+        },
+      },
     });
   } catch (e) {
+    if (run !== activeRun) return;
     status.value = "error";
     error.value = (e as Error).message || "Remote desktop unavailable";
     loaded.value = false;
+    live.failed(props.connectionId, error.value);
   }
 }
 
@@ -248,7 +258,7 @@ onUnmounted(() => {
         Connection to the remote desktop was lost.
       </p>
       <p v-else-if="!loaded" class="p-4 text-sm text-surface-400">
-        Remote desktop session is waiting for a VNC route.
+        Remote desktop session is waiting for a stream route.
       </p>
     </div>
   </div>

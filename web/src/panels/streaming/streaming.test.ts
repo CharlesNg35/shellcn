@@ -3,6 +3,8 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
 
+const guacamoleTunnelUrls = vi.hoisted(() => [] as string[]);
+
 vi.mock("@xterm/xterm", () => ({
   Terminal: class {
     cols = 80;
@@ -44,11 +46,82 @@ vi.mock("@novnc/novnc", () => ({
   default: class {
     scaleViewport = false;
     clipViewport = false;
+    resizeSession = false;
     background = "";
     addEventListener() {}
     disconnect() {}
   },
 }));
+vi.mock("guacamole-common-js", () => {
+  class FakeDisplay {
+    element = document.createElement("div");
+    onresize: null | (() => void) = null;
+    getElement() {
+      return this.element;
+    }
+    getWidth() {
+      return 1024;
+    }
+    getHeight() {
+      return 768;
+    }
+    scale() {}
+  }
+  class FakeClient {
+    static State = {
+      IDLE: 0,
+      CONNECTING: 1,
+      WAITING: 2,
+      CONNECTED: 3,
+      DISCONNECTING: 4,
+      DISCONNECTED: 5,
+    };
+    display = new FakeDisplay();
+    onstatechange: null | ((state: number) => void) = null;
+    onerror = null;
+    onrequired = null;
+    constructor() {}
+    getDisplay() {
+      return this.display;
+    }
+    connect() {
+      this.onstatechange?.(FakeClient.State.CONNECTED);
+    }
+    disconnect() {
+      this.onstatechange?.(FakeClient.State.DISCONNECTED);
+    }
+    sendMouseState() {}
+    sendKeyEvent() {}
+    sendSize() {}
+  }
+  class FakeWebSocketTunnel {
+    onerror = null;
+    constructor(url: string) {
+      guacamoleTunnelUrls.push(url);
+    }
+  }
+  class FakeMouse {
+    static Touchscreen = class {
+      constructor() {}
+      onEach() {}
+    };
+    constructor() {}
+    onEach() {}
+  }
+  class FakeKeyboard {
+    onkeydown: null | ((keysym: number) => boolean) = null;
+    onkeyup: null | ((keysym: number) => void) = null;
+    constructor() {}
+    reset() {}
+  }
+  const Guacamole = {
+    Client: FakeClient,
+    Keyboard: FakeKeyboard,
+    Mouse: FakeMouse,
+    WebSocketTunnel: FakeWebSocketTunnel,
+  };
+  return { ...Guacamole, default: Guacamole };
+});
 
 class FakeResizeObserver {
   observe() {}
@@ -93,6 +166,7 @@ const props = {
 beforeEach(() => {
   setActivePinia(createPinia());
   FakeWS.instances = [];
+  guacamoleTunnelUrls.length = 0;
   vi.stubGlobal("WebSocket", FakeWS);
   installFetch((url) => {
     if (url.includes("/tickets"))
@@ -173,6 +247,22 @@ describe("streaming stub panels", () => {
 
     expect(w.find(".shellcn-monaco-host").exists()).toBe(true);
     expect(w.find("textarea.resize-none").exists()).toBe(false);
+    w.unmount();
+  });
+
+  it("renders the Guacamole engine through a lazy tunnel client", async () => {
+    const w = mount(RemoteDesktopPanel, {
+      props: {
+        ...props,
+        config: { engine: "guacamole" },
+      },
+    });
+    await flushPromises();
+
+    expect(w.text()).not.toContain("not available");
+    expect(guacamoleTunnelUrls).toHaveLength(1);
+    expect(guacamoleTunnelUrls[0]).toContain("ticket=t1");
+    expect(FakeWS.instances).toHaveLength(0);
     w.unmount();
   });
 });
