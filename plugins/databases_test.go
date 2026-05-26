@@ -10,7 +10,7 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
 
-	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle"} {
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -38,14 +38,14 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 		}
 	}
 
-	for _, name := range []string{"mysql", "redis", "mssql"} {
+	for _, name := range []string{"mysql", "redis", "mssql", "cassandra"} {
 		m, _ := reg.Manifest(name)
 		if _, ok := credentialField(m.Config, "auth_client_cert_id"); ok {
 			t.Fatalf("%s should not expose certificate authentication", name)
 		}
 	}
 
-	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle"} {
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra"} {
 		m, _ := reg.Manifest(name)
 		tlsField, ok := credentialField(m.Config, "client_cert_id")
 		if !ok {

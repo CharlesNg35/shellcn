@@ -146,7 +146,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		Password:          auth.Password,
 		TLSMode:           tlsMode,
 		CACertificate:     cfg.String("ca_certificate"),
-		ClientCertificate: cfg.String("_" + clientCertField + "_secret"),
+		ClientCertificate: dbcred.ResolvedSecret(cfg, clientCertField),
 		ReadOnly:          boolValue(cfg.Config["read_only"], true),
 		RequireConfirm:    boolValue(cfg.Config["require_write_confirmation"], true),
 		Timeout:           durationValue(cfg.Config["timeout"], defaultTimeout),

@@ -107,92 +107,201 @@ const editorSetup: Extension = [
   keymap.of([...defaultKeymap, ...historyKeymap]),
 ];
 
-const lightTheme = EditorView.theme({
-  "&": {
-    height: "100%",
-    color: "#0f172a",
-    backgroundColor: "#ffffff",
-  },
-  ".cm-scroller": {
-    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-    fontSize: "12px",
-    lineHeight: "1.65",
-  },
-  ".cm-content": {
-    minHeight: "100%",
-    padding: "12px 0",
-  },
-  ".cm-line": {
-    padding: "0 16px",
-  },
-  ".cm-gutters": {
-    color: "#64748b",
-    backgroundColor: "#ffffff",
-    borderRight: "1px solid #e2e8f0",
-  },
-  ".cm-activeLine": {
-    backgroundColor: "#f8fafc",
-  },
-  ".cm-activeLineGutter": {
-    color: "#1d4ed8",
-    backgroundColor: "#eff6ff",
-  },
-  "&.cm-focused": {
-    outline: "none",
-  },
-  "&.cm-focused .cm-cursor": {
-    borderLeftColor: "#2563eb",
-  },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection":
-    {
-      backgroundColor: "#bfdbfe",
-    },
-});
+interface EditorPalette {
+  background: string;
+  foreground: string;
+  caret: string;
+  selection: string;
+  selectionFocused: string;
+  gutterForeground: string;
+  gutterBorder: string;
+  activeLine: string;
+  activeLineGutterForeground: string;
+  activeLineGutterBackground: string;
+  matchingBracket: string;
+  scrollbarThumb: string;
+  scrollbarThumbHover: string;
+  tooltipBackground: string;
+  tooltipForeground: string;
+  tooltipBorder: string;
+  tooltipShadow: string;
+  completionSelected: string;
+  completionSelectedForeground: string;
+  completionDetail: string;
+  completionMatched: string;
+}
 
-const darkTheme = EditorView.theme(
-  {
-    "&": {
-      height: "100%",
-      color: "#e2e8f0",
-      backgroundColor: "#020617",
-    },
-    ".cm-scroller": {
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-      fontSize: "12px",
-      lineHeight: "1.65",
-    },
-    ".cm-content": {
-      minHeight: "100%",
-      padding: "12px 0",
-    },
-    ".cm-line": {
-      padding: "0 16px",
-    },
-    ".cm-gutters": {
-      color: "#94a3b8",
-      backgroundColor: "#020617",
-      borderRight: "1px solid #1e293b",
-    },
-    ".cm-activeLine": {
-      backgroundColor: "#0f172a",
-    },
-    ".cm-activeLineGutter": {
-      color: "#93c5fd",
-      backgroundColor: "#172554",
-    },
-    "&.cm-focused": {
-      outline: "none",
-    },
-    "&.cm-focused .cm-cursor": {
-      borderLeftColor: "#60a5fa",
-    },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection":
-      {
-        backgroundColor: "#1e40af",
+const monoFont = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+
+// The CodeMirror base theme styles selection, cursor, brackets, tooltips and
+// the completion list with generic greys at high specificity (e.g. the focused
+// `&dark.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground`
+// rule). To win without `!important` we mirror those selectors so our rules
+// match the same specificity and are mounted later.
+function editorTheme(c: EditorPalette, dark: boolean): Extension {
+  return EditorView.theme(
+    {
+      "&": {
+        height: "100%",
+        color: c.foreground,
+        backgroundColor: c.background,
       },
-  },
-  { dark: true },
-);
+      ".cm-scroller": {
+        fontFamily: monoFont,
+        fontSize: "12px",
+        lineHeight: "1.65",
+        scrollbarWidth: "thin",
+        scrollbarColor: `${c.scrollbarThumb} transparent`,
+      },
+      ".cm-scroller::-webkit-scrollbar": { width: "10px", height: "10px" },
+      ".cm-scroller::-webkit-scrollbar-thumb": {
+        backgroundColor: c.scrollbarThumb,
+        borderRadius: "8px",
+        border: "2px solid transparent",
+        backgroundClip: "content-box",
+      },
+      ".cm-scroller::-webkit-scrollbar-thumb:hover": {
+        backgroundColor: c.scrollbarThumbHover,
+      },
+      ".cm-content": {
+        minHeight: "100%",
+        padding: "12px 0",
+        caretColor: c.caret,
+      },
+      ".cm-line": { padding: "0 16px" },
+      ".cm-gutters": {
+        color: c.gutterForeground,
+        backgroundColor: c.background,
+        borderRight: `1px solid ${c.gutterBorder}`,
+      },
+      ".cm-activeLine": { backgroundColor: c.activeLine },
+      ".cm-activeLineGutter": {
+        color: c.activeLineGutterForeground,
+        backgroundColor: c.activeLineGutterBackground,
+      },
+      "&.cm-focused": { outline: "none" },
+      ".cm-cursor, .cm-dropCursor": {
+        borderLeftColor: c.caret,
+        borderLeftWidth: "2px",
+      },
+      ".cm-selectionBackground, .cm-content ::selection": {
+        backgroundColor: c.selection,
+      },
+      "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground":
+        {
+          backgroundColor: c.selectionFocused,
+        },
+      "&.cm-focused .cm-matchingBracket": {
+        backgroundColor: c.matchingBracket,
+        outline: `1px solid ${c.caret}`,
+        borderRadius: "2px",
+      },
+      "&.cm-focused .cm-nonmatchingBracket": {
+        backgroundColor: "transparent",
+        color: "#ef4444",
+      },
+      ".cm-tooltip": {
+        border: `1px solid ${c.tooltipBorder}`,
+        borderRadius: "8px",
+        backgroundColor: c.tooltipBackground,
+        color: c.tooltipForeground,
+        boxShadow: c.tooltipShadow,
+        overflow: "hidden",
+      },
+      ".cm-tooltip .cm-tooltip-arrow:before": {
+        borderTopColor: c.tooltipBorder,
+        borderBottomColor: c.tooltipBorder,
+      },
+      ".cm-tooltip .cm-tooltip-arrow:after": {
+        borderTopColor: c.tooltipBackground,
+        borderBottomColor: c.tooltipBackground,
+      },
+      ".cm-tooltip.cm-tooltip-autocomplete > ul": {
+        fontFamily: monoFont,
+        maxHeight: "16em",
+        padding: "4px",
+      },
+      ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
+        padding: "5px 10px",
+        lineHeight: "1.5",
+        borderRadius: "6px",
+      },
+      ".cm-tooltip-autocomplete ul li[aria-selected]": {
+        backgroundColor: c.completionSelected,
+        color: c.completionSelectedForeground,
+      },
+      ".cm-completionIcon": { color: c.completionDetail, opacity: "0.8" },
+      ".cm-completionDetail": {
+        color: c.completionDetail,
+        fontStyle: "italic",
+      },
+      ".cm-completionMatchedText": {
+        color: c.completionMatched,
+        textDecoration: "none",
+        fontWeight: "600",
+      },
+      ".cm-tooltip-autocomplete ul li[aria-selected] .cm-completionIcon, .cm-tooltip-autocomplete ul li[aria-selected] .cm-completionDetail, .cm-tooltip-autocomplete ul li[aria-selected] .cm-completionMatchedText":
+        {
+          color: "inherit",
+          opacity: "1",
+        },
+    },
+    { dark },
+  );
+}
+
+const lightPalette: EditorPalette = {
+  background: "#ffffff",
+  foreground: "#0f172a",
+  caret: "#2563eb",
+  selection: "rgba(37, 99, 235, 0.14)",
+  selectionFocused: "rgba(37, 99, 235, 0.24)",
+  gutterForeground: "#94a3b8",
+  gutterBorder: "#e2e8f0",
+  activeLine: "rgba(148, 163, 184, 0.1)",
+  activeLineGutterForeground: "#1d4ed8",
+  activeLineGutterBackground: "#eff6ff",
+  matchingBracket: "rgba(37, 99, 235, 0.16)",
+  scrollbarThumb: "#cbd5e1",
+  scrollbarThumbHover: "#94a3b8",
+  tooltipBackground: "#ffffff",
+  tooltipForeground: "#334155",
+  tooltipBorder: "#e2e8f0",
+  tooltipShadow:
+    "0 0 0 1px rgba(2, 6, 23, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)",
+  completionSelected: "#eff6ff",
+  completionSelectedForeground: "#1d4ed8",
+  completionDetail: "#64748b",
+  completionMatched: "#1d4ed8",
+};
+
+const darkPalette: EditorPalette = {
+  background: "#020617",
+  foreground: "#e2e8f0",
+  caret: "#60a5fa",
+  selection: "rgba(59, 130, 246, 0.24)",
+  selectionFocused: "rgba(59, 130, 246, 0.4)",
+  gutterForeground: "#64748b",
+  gutterBorder: "#1e293b",
+  activeLine: "rgba(148, 163, 184, 0.08)",
+  activeLineGutterForeground: "#93c5fd",
+  activeLineGutterBackground: "rgba(59, 130, 246, 0.15)",
+  matchingBracket: "rgba(96, 165, 250, 0.28)",
+  scrollbarThumb: "#334155",
+  scrollbarThumbHover: "#475569",
+  tooltipBackground: "#0f172a",
+  tooltipForeground: "#e2e8f0",
+  tooltipBorder: "#334155",
+  tooltipShadow:
+    "0 0 0 1px rgba(255, 255, 255, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.4)",
+  completionSelected: "rgba(59, 130, 246, 0.15)",
+  completionSelectedForeground: "#93c5fd",
+  completionDetail: "#94a3b8",
+  completionMatched: "#93c5fd",
+};
+
+const lightTheme = editorTheme(lightPalette, false);
+const darkTheme = editorTheme(darkPalette, true);
 
 function isDark(): boolean {
   return document.documentElement.classList.contains("dark");

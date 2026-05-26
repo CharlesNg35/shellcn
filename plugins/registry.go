@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/plugins/cassandra"
 	"github.com/charlesng/shellcn/plugins/clickhouse"
 	"github.com/charlesng/shellcn/plugins/cockroachdb"
 	"github.com/charlesng/shellcn/plugins/docker"
@@ -59,5 +60,6 @@ func all() []plugin.Plugin {
 		oracle.New(),
 		cockroachdb.New(),
 		clickhouse.New(),
+		cassandra.New(),
 	}
 }
