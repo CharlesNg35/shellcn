@@ -212,15 +212,17 @@ async function revoke(): Promise<void> {
           >
             {{ g.access }}
           </span>
-          <button
-            type="button"
-            class="rounded p-1 text-surface-400 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+          <Button
+            text
+            rounded
+            severity="danger"
+            size="small"
             :title="`Revoke ${g.username || g.subjectId}`"
             :aria-label="`Revoke ${g.username || g.subjectId}`"
             @click="requestRevoke(g)"
           >
             <AppIcon :icon="{ type: 'name', value: 'x' }" :size="15" />
-          </button>
+          </Button>
         </li>
       </ul>
       <p v-else class="text-sm text-surface-400">Not shared with anyone yet.</p>

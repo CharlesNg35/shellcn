@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import Select from "primevue/select";
+import Button from "primevue/button";
 import { api } from "../../api/client";
 import CredentialFormDialog from "../../components/CredentialFormDialog.vue";
 import AppIcon from "../../components/AppIcon.vue";
@@ -77,14 +78,10 @@ onMounted(load);
         No matching credentials yet.
       </p>
       <span v-else />
-      <button
-        type="button"
-        class="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-        @click="showCreate = true"
-      >
+      <Button link class="shrink-0 text-xs!" @click="showCreate = true">
         <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="12" />
         New credential
-      </button>
+      </Button>
     </div>
 
     <!-- Create a credential without leaving the connection form; on save the

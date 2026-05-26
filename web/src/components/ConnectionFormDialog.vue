@@ -225,14 +225,9 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
       <template v-if="projection">
         <!-- Breadcrumb: the chosen protocol, with a way back to the picker. -->
         <nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-sm">
-          <button
-            v-if="!isEdit"
-            type="button"
-            class="rounded font-medium text-primary-600 transition-colors hover:text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60 dark:text-primary-400 dark:hover:text-primary-300"
-            @click="clearProtocol"
-          >
+          <Button v-if="!isEdit" link @click="clearProtocol">
             Protocols
-          </button>
+          </Button>
           <span v-if="!isEdit" class="text-surface-400" aria-hidden="true"
             >/</span
           >

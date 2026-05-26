@@ -43,6 +43,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				ID: "ssh.snippet.run", Label: "Run", Icon: plugin.Icon{Type: plugin.IconName, Value: "play"},
 				RouteID: "ssh.snippet.run", Params: map[string]string{"id": "${resource.uid}"},
 				Confirm: true, ConfirmText: "Run this snippet on the SSH host?",
+				OnSuccess: &plugin.ActionSuccess{SelectTab: "terminal"},
 			},
 			{
 				ID: "ssh.snippet.delete", Label: "Delete", Icon: plugin.Icon{Type: plugin.IconName, Value: "trash"},

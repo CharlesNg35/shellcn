@@ -255,6 +255,10 @@ export interface ResourceRef {
   uid: string;
 }
 
+export interface ActionSuccess {
+  selectTab?: string;
+}
+
 export interface Action {
   id: string;
   label: string;
@@ -266,6 +270,7 @@ export interface Action {
   requiresConfirm: boolean;
   confirmText?: string;
   input?: Schema;
+  onSuccess?: ActionSuccess;
 }
 
 export interface Stream {

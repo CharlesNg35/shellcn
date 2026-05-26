@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Button from "primevue/button";
 import AppIcon from "../../components/AppIcon.vue";
 
 defineProps<{ path: string }>();
@@ -27,13 +28,14 @@ function crumbs(path: string): { label: string; path: string }[] {
         :size="14"
         class="text-surface-300"
       />
-      <button
-        type="button"
-        class="rounded-md px-1.5 py-0.5 text-surface-500 transition-colors hover:bg-surface-100 hover:text-surface-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/35 dark:hover:bg-surface-800 dark:hover:text-surface-100"
+      <Button
+        text
+        severity="secondary"
+        size="small"
         @click="emit('navigate', c.path)"
       >
         {{ c.label }}
-      </button>
+      </Button>
     </template>
   </div>
 </template>

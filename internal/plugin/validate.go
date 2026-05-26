@@ -73,7 +73,7 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 	}
 
 	routesByID := validateRoutes(routes, add)
-	actionIDs := validateActions(m, routesByID, add)
+	actionIDs := validateActions(m, routesByID, collectTabKeys(m), add)
 	streamsByID := validateStreams(m, routesByID, add)
 	validateLayout(m, routesByID, actionIDs, add)
 	validateRecording(m, streamsByID, add)
@@ -146,7 +146,7 @@ func validateRoutes(routes []Route, add func(string, ...any)) map[string]Route {
 }
 
 // validateActions checks action ids are unique and reference existing routes.
-func validateActions(m Manifest, routes map[string]Route, add func(string, ...any)) map[string]bool {
+func validateActions(m Manifest, routes map[string]Route, tabs map[string]bool, add func(string, ...any)) map[string]bool {
 	ids := make(map[string]bool, len(m.Actions))
 	for _, a := range m.Actions {
 		if a.ID == "" {
@@ -162,8 +162,28 @@ func validateActions(m Manifest, routes map[string]Route, add func(string, ...an
 		} else if _, ok := routes[a.RouteID]; !ok {
 			add("action %q references unknown route %q", a.ID, a.RouteID)
 		}
+		if a.OnSuccess != nil && a.OnSuccess.SelectTab != "" && !tabs[a.OnSuccess.SelectTab] {
+			add("action %q onSuccess.selectTab references unknown tab %q", a.ID, a.OnSuccess.SelectTab)
+		}
 	}
 	return ids
+}
+
+func collectTabKeys(m Manifest) map[string]bool {
+	keys := map[string]bool{}
+	for _, tab := range m.Tabs {
+		if tab.Key != "" {
+			keys[tab.Key] = true
+		}
+	}
+	for _, res := range m.Resources {
+		for _, tab := range res.Detail.Tabs {
+			if tab.Key != "" {
+				keys[tab.Key] = true
+			}
+		}
+	}
+	return keys
 }
 
 // validateStreams checks stream ids reference existing WS routes and returns the

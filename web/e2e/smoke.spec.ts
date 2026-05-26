@@ -16,6 +16,10 @@ test("SSH (tabs): terminal stream, home files, snippets", async ({ page }) => {
     .first()
     .click();
   await expect(page).toHaveURL(/\/c\/ssh-prod-web/);
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "Connect", exact: true })
+    .click();
 
   await expect(page.locator("main")).toContainText(
     "Connected to mock shell. Type and press enter.",
@@ -32,7 +36,14 @@ test("SSH (tabs): terminal stream, home files, snippets", async ({ page }) => {
   await expect(page.locator("main")).toContainText("disk usage");
   await expect(page.getByRole("button", { name: "New snippet" })).toBeVisible();
   await page.getByText("disk usage").click();
-  await expect(page.getByRole("button", { name: "Run" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Run", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm", exact: true }).click();
+  await expect(
+    page.getByRole("application", { name: "Terminal session" }),
+  ).toBeVisible();
 });
 
 test("Docker (sidebar tree): list table + resource detail", async ({
@@ -40,6 +51,10 @@ test("Docker (sidebar tree): list table + resource detail", async ({
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "docker-local" }).click();
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "Connect", exact: true })
+    .click();
 
   // Select the Containers group → resource list table.
   await page.getByRole("treeitem", { name: /Containers/ }).click();
@@ -63,6 +78,10 @@ test("Proxmox: deep tree to a VM detail with a console tab", async ({
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "pve-dc1" }).click();
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "Connect", exact: true })
+    .click();
   await page.getByRole("treeitem", { name: /Nodes/ }).click();
   await page.getByRole("treeitem", { name: /pve1$/ }).click();
   await page.getByRole("treeitem", { name: /pve1-vm-1/ }).click();
@@ -75,6 +94,10 @@ test("PostgreSQL: schema tree to a table with a query editor", async ({
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "main-db" }).click();
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "Connect", exact: true })
+    .click();
   await page.getByRole("treeitem", { name: /Databases/ }).click();
   await page.getByRole("treeitem", { name: /^app$/ }).click();
   await page.getByRole("treeitem", { name: /Tables/ }).click();

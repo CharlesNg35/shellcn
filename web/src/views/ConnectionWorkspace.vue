@@ -21,6 +21,7 @@ import ShareDialog from "../components/ShareDialog.vue";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
 import { recordingForStream } from "../composables/useRecordingControl";
 import type {
+  Action,
   PluginProjection,
   ResourceType,
   Row,
@@ -171,6 +172,13 @@ function onSelectNode(row: Row): void {
 function onSelectRow(row: Row): void {
   ws.selectRow(props.id, row);
 }
+function onActionDone(action: Action): void {
+  const tabKey = action.onSuccess?.selectTab;
+  if (!tabKey || !projection.value?.tabs?.some((tab) => tab.key === tabKey)) {
+    return;
+  }
+  ws.setActiveTab(props.id, tabKey);
+}
 function onEnrolled(): void {
   online.value = true;
 }
@@ -305,6 +313,7 @@ function onEnrolled(): void {
                 :source="activeTab.source"
                 :config="tabConfig(activeTab)"
                 :actions="projection.actions ?? []"
+                @action-done="onActionDone"
               />
             </KeepAlive>
           </div>
@@ -331,6 +340,7 @@ function onEnrolled(): void {
               :detail="detailResource.detail"
               :row="view.selectedRow"
               :actions="projection.actions ?? []"
+              @action-done="onActionDone"
             />
             <TablePanel
               v-else-if="groupResource"
@@ -343,6 +353,7 @@ function onEnrolled(): void {
               }"
               :actions="projection.actions ?? []"
               @select="onSelectRow"
+              @action-done="onActionDone"
             />
             <div
               v-else

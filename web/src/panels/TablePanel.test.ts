@@ -159,6 +159,10 @@ describe("TablePanel", () => {
 
     expect(calls.some((url) => url.includes("p.id=s1"))).toBe(true);
     expect(document.body.textContent).toContain("ran command");
+    expect(w.emitted("actionDone")?.[0]).toEqual([
+      run,
+      { ok: true, output: "ran command" },
+    ]);
     w.unmount();
   });
 });

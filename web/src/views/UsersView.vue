@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import { RouterLink } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
@@ -165,12 +164,16 @@ async function revokeInvite(): Promise<void> {
               <Column header="" :pt="{ bodyCell: 'text-right' }">
                 <template #body="{ data }">
                   <div class="flex items-center justify-end gap-1">
-                    <RouterLink
+                    <Button
+                      as="router-link"
                       :to="{
                         name: 'recordings',
                         query: { user: (data as AdminUser).id },
                       }"
-                      class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+                      text
+                      rounded
+                      severity="secondary"
+                      size="small"
                       title="View recordings"
                       :aria-label="`View recordings for ${(data as AdminUser).username}`"
                     >
@@ -178,11 +181,13 @@ async function revokeInvite(): Promise<void> {
                         :icon="{ type: 'name', value: 'video' }"
                         :size="16"
                       />
-                    </RouterLink>
-                    <button
+                    </Button>
+                    <Button
                       v-if="canEdit(data as AdminUser)"
-                      type="button"
-                      class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+                      text
+                      rounded
+                      severity="secondary"
+                      size="small"
                       title="Edit"
                       :aria-label="`Edit ${(data as AdminUser).username}`"
                       @click="openEdit(data as AdminUser)"
@@ -191,11 +196,13 @@ async function revokeInvite(): Promise<void> {
                         :icon="{ type: 'name', value: 'pencil' }"
                         :size="16"
                       />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       v-if="canDelete(data as AdminUser)"
-                      type="button"
-                      class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+                      text
+                      rounded
+                      severity="danger"
+                      size="small"
                       title="Delete"
                       :aria-label="`Delete ${(data as AdminUser).username}`"
                       @click="
@@ -207,7 +214,7 @@ async function revokeInvite(): Promise<void> {
                         :icon="{ type: 'name', value: 'trash' }"
                         :size="16"
                       />
-                    </button>
+                    </Button>
                   </div>
                 </template>
               </Column>

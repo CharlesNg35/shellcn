@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import Button from "primevue/button";
 import { resolveParams } from "../../api/dataSource";
 import {
   useRecordingControl,
@@ -44,27 +45,29 @@ const typeLabel = computed(() =>
       REC
     </span>
 
-    <button
+    <Button
       v-if="canControl && !recording"
-      type="button"
+      outlined
+      severity="secondary"
+      size="small"
       :disabled="busy"
-      class="inline-flex items-center gap-1.5 rounded-md border border-surface-300 px-2 py-1 text-surface-600 hover:border-red-400 hover:text-red-600 disabled:opacity-50 dark:border-surface-600 dark:text-surface-300"
       @click="start"
     >
       <span class="h-2 w-2 rounded-full bg-red-500" />
       Record
-    </button>
+    </Button>
 
-    <button
+    <Button
       v-if="canControl && recording && !forced"
-      type="button"
+      outlined
+      severity="secondary"
+      size="small"
       :disabled="busy"
-      class="inline-flex items-center gap-1.5 rounded-md border border-surface-300 px-2 py-1 text-surface-600 hover:bg-surface-100 disabled:opacity-50 dark:border-surface-600 dark:text-surface-300 dark:hover:bg-surface-800"
       @click="stop"
     >
       <AppIcon :icon="{ type: 'name', value: 'stop' }" :size="12" />
       Stop
-    </button>
+    </Button>
 
     <span v-if="failed" class="text-amber-500" role="alert"
       >Recording error</span

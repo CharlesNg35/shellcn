@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import { interpolate, runAction } from "../../api/dataSource";
 import type { QueryEditorConfig } from "../../types/projection";
 import { useStream } from "../../composables/useStream";
 import type { PanelProps } from "../types";
 import StubBanner from "./StubBanner.vue";
+import { useTheme } from "../../composables/useTheme";
+import { loadMonaco, syncMonacoTheme, type MonacoModule } from "../../monaco";
 
 const props = defineProps<PanelProps>();
 const queryConfig = props.config as QueryEditorConfig | undefined;
@@ -34,6 +36,8 @@ const error = ref<string | null>(null);
 const container = ref<HTMLElement | null>(null);
 const useFallback = ref(false);
 let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
+let monacoModule: MonacoModule | null = null;
+const { isDark } = useTheme();
 
 function onFrame(frame: string): void {
   try {
@@ -88,15 +92,20 @@ function recall(text: string): void {
 }
 
 onMounted(async () => {
+  await nextTick();
   if (!container.value) {
     useFallback.value = true;
     return;
   }
   try {
-    const monaco = await import("monaco-editor");
+    const monaco = await loadMonaco();
+    monacoModule = monaco;
     editor = monaco.editor.create(container.value, {
       value: query.value,
       language: "sql",
+      theme: document.documentElement.classList.contains("dark")
+        ? "vs-dark"
+        : "vs",
       minimap: { enabled: false },
       automaticLayout: true,
       scrollBeyondLastLine: false,
@@ -104,6 +113,10 @@ onMounted(async () => {
   } catch {
     useFallback.value = true;
   }
+});
+
+watch(isDark, () => {
+  if (monacoModule) syncMonacoTheme(monacoModule);
 });
 
 onUnmounted(() => {

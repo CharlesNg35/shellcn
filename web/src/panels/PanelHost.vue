@@ -17,8 +17,15 @@ const props = defineProps<{
   resource?: ResourceRef | null;
   actions?: Action[];
 }>();
+const emit = defineEmits<{
+  actionDone: [action: Action, result?: Record<string, unknown>];
+}>();
 
 const component = computed(() => resolvePanel(props.panel));
+
+function onActionDone(action: Action, result?: Record<string, unknown>): void {
+  emit("actionDone", action, result);
+}
 </script>
 
 <template>
@@ -30,6 +37,7 @@ const component = computed(() => resolvePanel(props.panel));
     :config="config"
     :resource="resource"
     :actions="actions"
+    @action-done="onActionDone"
   />
   <FallbackPanel v-else :panel="panel" />
 </template>

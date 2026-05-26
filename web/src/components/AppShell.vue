@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
+import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useAuthStore } from "../stores/auth";
@@ -119,14 +120,19 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
           <AppLogo :size="28" class="shrink-0 text-primary-600" />
           ShellCN
         </RouterLink>
-        <button
-          type="button"
-          class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+        <Button
+          text
+          rounded
+          severity="secondary"
+          size="small"
           :title="isDark ? 'Switch to light' : 'Switch to dark'"
+          :aria-label="
+            isDark ? 'Switch to light theme' : 'Switch to dark theme'
+          "
           @click="toggleTheme"
         >
           {{ isDark ? "☀" : "☾" }}
-        </button>
+        </Button>
       </div>
 
       <div class="px-3 pb-2">
@@ -155,15 +161,17 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
           >
             Connections
           </p>
-          <button
-            type="button"
-            class="rounded p-1 text-surface-400 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
+          <Button
+            text
+            rounded
+            severity="secondary"
+            size="small"
             title="Add connection"
             aria-label="Add connection"
             @click="showCreate = true"
           >
             <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
-          </button>
+          </Button>
         </div>
         <div class="space-y-1">
           <button
@@ -304,15 +312,18 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
               {{ userLabel }}
             </span>
           </RouterLink>
-          <button
-            type="button"
-            class="shrink-0 rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
+          <Button
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            class="shrink-0"
             title="Sign out"
             aria-label="Sign out"
             @click="onLogout"
           >
             <AppIcon :icon="{ type: 'name', value: 'log-out' }" :size="16" />
-          </button>
+          </Button>
         </div>
       </div>
     </aside>

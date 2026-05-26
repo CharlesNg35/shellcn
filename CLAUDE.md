@@ -12,13 +12,18 @@ invariants, code style, verification rules) and applies here in full. Read it.
 - **Verify libraries, APIs, and practices via `context7` + web search before
   using them — never from memory.** Prefer existing maintained packages over
   building from scratch.
-- **Frontend: use the committed stack — don't reinvent.** Build UI with
-  **PrimeVue** (unstyled + Tailwind pass-through preset) and **VueUse**:
-  `DataTable`/`Column`, `Tree`, `Tabs`, `Dialog`, `Toast`/`useToast`, `Button`,
-  and the form inputs. **Every clickable control is a PrimeVue `Button`** (the
-  preset styles `severity`/`variant`/`size`/`rounded`, incl. icon-only) — never
-  hand-roll a native `<button>` with ad-hoc Tailwind. Hand-roll only when
-  nothing fits, and justify it.
+- **Frontend: always prefer an existing PrimeVue component — for _every_ UI
+  element, not just buttons.** Build UI with **PrimeVue** (unstyled + Tailwind
+  pass-through preset) and **VueUse**. Before writing markup, check whether
+  PrimeVue already has the component (tables → `DataTable`/`Column`, trees →
+  `Tree`, tabs → `Tabs`, modals → `Dialog`, toasts → `Toast`/`useToast`, menus →
+  `Menu`, overlays → `Popover`/`Drawer`, forms → `InputText`/`Select`/`Checkbox`/
+  …, every clickable control → `Button`) and use it, styled via the preset.
+  **Never hand-roll what a committed component covers** (no bespoke native
+  `<button>`/`<input>`/`<select>`/menu/modal with ad-hoc Tailwind). Build your
+  own **only when PrimeVue has no equivalent** — then justify it. **Always
+  confirm the component exists and its current props/slots/events via `context7`
+  + web search before wiring it — never from memory** (PrimeVue APIs change).
 - **UX is first-class:** accessible (WAI-ARIA, keyboard, focus-visible),
   skeleton loading states, clear empty/error states, action feedback via toasts,
   motion that respects `prefers-reduced-motion`, dark/light theming. Keep UX in

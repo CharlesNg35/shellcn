@@ -19,6 +19,9 @@ const props = defineProps<{
   row: Row;
   actions: Action[];
 }>();
+const emit = defineEmits<{
+  actionDone: [action: Action, result?: Record<string, unknown>];
+}>();
 
 const resource = computed(() => props.row.ref ?? null);
 const activeTab = ref(props.detail.tabs[0]?.key);
@@ -54,6 +57,14 @@ const headerActions = computed(() =>
     .map((id) => props.actions.find((a) => a.id === id))
     .filter((a): a is Action => Boolean(a)),
 );
+
+function onActionDone(action: Action, result?: Record<string, unknown>): void {
+  const tabKey = action.onSuccess?.selectTab;
+  if (tabKey && props.detail.tabs.some((tab) => tab.key === tabKey)) {
+    activeTab.value = tabKey;
+  }
+  emit("actionDone", action, result);
+}
 </script>
 
 <template>
@@ -79,6 +90,7 @@ const headerActions = computed(() =>
           :connection-id="connectionId"
           :actions="headerActions"
           :resource="resource"
+          @done="onActionDone"
         />
       </div>
     </header>
@@ -104,6 +116,8 @@ const headerActions = computed(() =>
           :source="current.source"
           :config="current.config"
           :resource="resource"
+          :actions="actions"
+          @action-done="onActionDone"
         />
       </KeepAlive>
     </div>

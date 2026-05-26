@@ -165,33 +165,39 @@ const hasItems = computed(() => items.value.length > 0);
             v-if="canManage(data as CredentialSummary)"
             class="flex items-center justify-end gap-1"
           >
-            <button
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+            <Button
+              text
+              rounded
+              severity="secondary"
+              size="small"
               title="Edit / rotate"
               :aria-label="`Edit ${(data as CredentialSummary).name}`"
               @click="openEdit(data as CredentialSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="16" />
-            </button>
-            <button
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+            </Button>
+            <Button
+              text
+              rounded
+              severity="secondary"
+              size="small"
               title="Share"
               :aria-label="`Share ${(data as CredentialSummary).name}`"
               @click="openShare(data as CredentialSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'users' }" :size="16" />
-            </button>
-            <button
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+            </Button>
+            <Button
+              text
+              rounded
+              severity="danger"
+              size="small"
               title="Delete"
               :aria-label="`Delete ${(data as CredentialSummary).name}`"
               @click="openDelete(data as CredentialSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="16" />
-            </button>
+            </Button>
           </div>
           <span v-else class="text-xs text-surface-400">shared with you</span>
         </template>

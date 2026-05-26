@@ -136,14 +136,16 @@ async function copyLink(): Promise<void> {
         <span class="min-w-0 flex-1 truncate font-mono text-xs">{{
           result.link
         }}</span>
-        <button
-          type="button"
-          class="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-surface-100 dark:hover:bg-surface-800"
+        <Button
+          text
+          severity="secondary"
+          size="small"
+          class="shrink-0"
           @click="copyLink"
         >
           <AppIcon :icon="{ type: 'name', value: 'copy' }" :size="13" />
           {{ copied ? "Copied" : "Copy" }}
-        </button>
+        </Button>
       </div>
       <p class="text-xs text-surface-400">
         The link expires

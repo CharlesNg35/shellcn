@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import { fetchDoc, runAction } from "../../api/dataSource";
 import type { CodeEditorConfig } from "../../types/projection";
 import type { PanelProps } from "../types";
+import { useTheme } from "../../composables/useTheme";
+import { loadMonaco, syncMonacoTheme, type MonacoModule } from "../../monaco";
 
 const props = defineProps<PanelProps>();
 
@@ -16,9 +18,11 @@ const saving = ref(false);
 const saveError = ref<string | null>(null);
 const saved = ref(false);
 let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
+let monacoModule: MonacoModule | null = null;
 const editorConfig = computed(
   () => props.config as CodeEditorConfig | undefined,
 );
+const { isDark } = useTheme();
 
 const language = computed(() => editorConfig.value?.language ?? "plaintext");
 const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
@@ -36,11 +40,14 @@ async function load(): Promise<void> {
       resource: props.resource,
     });
     text.value = typeof doc === "string" ? doc : JSON.stringify(doc, null, 2);
-    await mountEditor();
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
     loading.value = false;
+  }
+  if (!error.value) {
+    await nextTick();
+    await mountEditor();
   }
 }
 
@@ -50,12 +57,16 @@ async function mountEditor(): Promise<void> {
     return;
   }
   try {
-    const monaco = await import("monaco-editor");
+    const monaco = await loadMonaco();
+    monacoModule = monaco;
     editor?.dispose();
     const ed = monaco.editor.create(container.value, {
       value: text.value,
       language: language.value,
       readOnly: !editable.value,
+      theme: document.documentElement.classList.contains("dark")
+        ? "vs-dark"
+        : "vs",
       minimap: { enabled: false },
       automaticLayout: true,
       scrollBeyondLastLine: false,
@@ -95,6 +106,9 @@ async function save(): Promise<void> {
 
 onMounted(load);
 watch(() => [props.connectionId, props.resource?.uid], load);
+watch(isDark, () => {
+  if (monacoModule) syncMonacoTheme(monacoModule);
+});
 onUnmounted(() => {
   try {
     editor?.dispose();

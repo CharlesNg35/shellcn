@@ -151,6 +151,11 @@ type Action struct {
 	Params      map[string]string `json:"params,omitempty"`
 	Confirm     bool              `json:"confirm,omitempty"`
 	ConfirmText string            `json:"confirmText,omitempty"`
+	OnSuccess   *ActionSuccess    `json:"onSuccess,omitempty"`
+}
+
+type ActionSuccess struct {
+	SelectTab string `json:"selectTab,omitempty"`
 }
 
 // Stream is a long-lived channel a panel binds to, pointing at a WS route.

@@ -23,7 +23,10 @@ import SkeletonList from "../components/SkeletonList.vue";
 import ActionBar from "./ActionBar.vue";
 
 const props = defineProps<PanelProps>();
-const emit = defineEmits<{ select: [row: Row] }>();
+const emit = defineEmits<{
+  select: [row: Row];
+  actionDone: [action: Action, result?: Record<string, unknown>];
+}>();
 
 const INTERNAL = new Set([
   "key",
@@ -129,7 +132,7 @@ async function onActionDone(
   action: Action,
   result?: Record<string, unknown>,
 ): Promise<void> {
-  if (typeof result?.output === "string") {
+  if (typeof result?.output === "string" && !action.onSuccess?.selectTab) {
     actionOutput.value = {
       title: action.label,
       output: result.output,
@@ -137,6 +140,7 @@ async function onActionDone(
     };
   }
   await load(true);
+  emit("actionDone", action, result);
 }
 
 function applyEvent(ev: ResourceEvent): void {

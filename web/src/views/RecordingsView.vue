@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
+import Button from "primevue/button";
 import { ApiError } from "../api/client";
 import { recordingsApi } from "../api/recordings";
 import { useAuthStore } from "../stores/auth";
@@ -220,36 +221,42 @@ const playable = (r: RecordingSummary): boolean => r.status === "finalized";
       <Column header="" :pt="{ bodyCell: 'text-right' }">
         <template #body="{ data }">
           <div class="flex items-center justify-end gap-1">
-            <button
+            <Button
               v-if="playable(data as RecordingSummary)"
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-primary-600 dark:hover:bg-surface-800"
+              text
+              rounded
+              severity="secondary"
+              size="small"
               title="Play"
               :aria-label="`Play recording`"
               @click="play(data as RecordingSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'play' }" :size="16" />
-            </button>
-            <button
+            </Button>
+            <Button
               v-if="playable(data as RecordingSummary)"
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+              text
+              rounded
+              severity="secondary"
+              size="small"
               title="Download"
               :aria-label="`Download recording`"
               @click="download(data as RecordingSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'download' }" :size="16" />
-            </button>
-            <button
+            </Button>
+            <Button
               v-if="canDelete(data as RecordingSummary)"
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+              text
+              rounded
+              severity="danger"
+              size="small"
               title="Delete"
               :aria-label="`Delete recording`"
               @click="openDelete(data as RecordingSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="16" />
-            </button>
+            </Button>
           </div>
         </template>
       </Column>

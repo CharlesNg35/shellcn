@@ -204,7 +204,8 @@
       "params": { "id": "${resource.uid}" },
       "risk": "privileged",
       "requiresConfirm": true,
-      "confirmText": "Run this snippet on the SSH host?"
+      "confirmText": "Run this snippet on the SSH host?",
+      "onSuccess": { "selectTab": "terminal" }
     },
     {
       "id": "ssh.snippet.delete",

@@ -75,23 +75,32 @@ projection — **adding a plugin requires zero frontend changes.**
 
 ## Frontend & UX (use the stack, don't reinvent)
 
-- **Use the committed libraries; do not hand-roll what they provide.** UI is built
-  with **PrimeVue** (unstyled mode + a Tailwind **pass-through preset** in
-  `web/src/primevue/preset.ts`) and **VueUse** composables. Reach for:
-  - `DataTable` + `Column` (tables, sorting, virtual scroll), `Tree` (lazy
-    hierarchies), `Tabs`/`TabList`/`Tab`/`TabPanels`/`TabPanel`, `Dialog`
-    (modals — built-in focus trap/Escape/aria-modal), `Toast` + `useToast`
-    (feedback), and the form inputs (`InputText`, `Password`, `Textarea`,
-    `Select`, `ToggleSwitch`, `InputNumber`).
-  - **Every clickable control is a PrimeVue `Button`** — the preset already
-    styles it by `severity` (primary/secondary/danger/…), `variant`
-    (`text`/`outlined`/`link`), `size`, and `rounded`, including icon-only
-    buttons. **Never hand-roll a native `<button>` with ad-hoc Tailwind** (no
-    bespoke `class="rounded-md px-3 …"` action buttons); reach for `<Button>`
-    and pick the props. Same for any control a committed component covers.
-  - Custom components only when no maintained lib fits — and justify it.
-- **Verify the component/composable API via `context7` + websearch before wiring
-  it** (same rule as "Verify before you build").
+- **Always prefer an existing PrimeVue component — for _every_ UI element, not
+  just buttons.** UI is built with **PrimeVue** (unstyled mode + a Tailwind
+  **pass-through preset** in `web/src/primevue/preset.ts`) and **VueUse**
+  composables. Before writing any markup, **check whether PrimeVue already
+  provides the component** ([primevue.org](https://primevue.org) component list)
+  and use it, styled through the preset. **Build your own only when PrimeVue has
+  no equivalent — and justify it in the PR.**
+  - Map the UI need to its PrimeVue component, e.g.: tables → `DataTable` +
+    `Column`; trees → `Tree`; tabs → `Tabs`/`TabList`/`Tab`/`TabPanels`/
+    `TabPanel`; modals → `Dialog` (focus trap/Escape/aria-modal built in);
+    toasts → `Toast` + `useToast`; menus → `Menu`/`TieredMenu`; overlays →
+    `Popover`/`Drawer`; forms → `InputText`, `Password`, `Textarea`, `Select`,
+    `MultiSelect`, `ToggleSwitch`, `InputNumber`, `Checkbox`, `RadioButton`,
+    `AutoComplete`, `DatePicker`, `FileUpload`; and **every clickable control →
+    `Button`** (the preset styles `severity`/`variant`
+    (`text`/`outlined`/`link`)/`size`/`rounded`, incl. icon-only).
+  - **Never hand-roll what a committed component covers** — no bespoke native
+    `<button>`/`<input>`/`<select>`/menu/modal with ad-hoc Tailwind. A raw
+    element is acceptable only where PrimeVue genuinely offers nothing (e.g. an
+    xterm/noVNC/Monaco host, a plain layout `<div>`, a semantic nav row), and
+    must still be styled via the preset's shared classes.
+- **Always confirm the component via `context7` + websearch — never from
+  memory.** Before using any PrimeVue/VueUse component or composable, look it up:
+  (1) does PrimeVue have it, and (2) its **current** props/slots/events/pass-through
+  keys and usage. PrimeVue APIs change between versions; do not guess. This is the
+  same rule as "Verify before you build" — it applies to every component you wire.
 - **UX is a first-class requirement — follow best practices:**
   - **Accessible by default** (WAI-ARIA): correct roles, labels, keyboard
     operability, visible `focus-visible` rings, focus management in dialogs.
