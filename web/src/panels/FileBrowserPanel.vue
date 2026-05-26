@@ -468,6 +468,8 @@ watch(
           <Button
             type="button"
             label="Cancel"
+            severity="secondary"
+            outlined
             :disabled="mutating"
             @click="mkdirOpen = false"
           />
@@ -483,6 +485,8 @@ watch(
           <Button
             type="button"
             label="Cancel"
+            severity="secondary"
+            outlined
             :disabled="mutating"
             @click="renameOpen = false"
           />
@@ -499,12 +503,15 @@ watch(
         <Button
           type="button"
           label="Cancel"
+          severity="secondary"
+          outlined
           :disabled="mutating"
           @click="deleteOpen = false"
         />
         <Button
           type="button"
           label="Delete"
+          severity="danger"
           :disabled="mutating"
           @click="deleteEntry"
         />

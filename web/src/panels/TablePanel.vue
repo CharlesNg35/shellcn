@@ -14,6 +14,7 @@ import type {
   DataSource,
   ResourceEvent,
   Row,
+  TablePanelConfig,
 } from "../types/projection";
 import type { PanelProps } from "./types";
 import { formatBytes } from "./file/fileTypes";
@@ -49,10 +50,13 @@ const actionOutput = ref<{
 } | null>(null);
 
 const declaredColumns = computed(
-  () => props.config?.columns as ColumnSpec[] | undefined,
+  () => (props.config as TablePanelConfig | undefined)?.columns,
 );
-const actionIds = computed(() => stringList(props.config?.actionIds));
-const rowActionIds = computed(() => stringList(props.config?.rowActionIds));
+const tableConfig = computed(
+  () => props.config as TablePanelConfig | undefined,
+);
+const actionIds = computed(() => tableConfig.value?.actionIds ?? []);
+const rowActionIds = computed(() => tableConfig.value?.rowActionIds ?? []);
 const globalActions = computed(() => resolveActions(actionIds.value));
 const rowActions = computed(() => resolveActions(rowActionIds.value));
 
@@ -115,12 +119,6 @@ function onRowClick(e: DataTableRowClickEvent): void {
   if (row.ref) emit("select", row);
 }
 
-function stringList(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((v): v is string => typeof v === "string")
-    : [];
-}
-
 function resolveActions(ids: string[]): Action[] {
   return ids
     .map((id) => props.actions?.find((a) => a.id === id))
@@ -154,7 +152,7 @@ function applyEvent(ev: ResourceEvent): void {
 
 let stopWatch: (() => void) | undefined;
 function startWatch(): void {
-  const ds = props.config?.watch as DataSource | undefined;
+  const ds = tableConfig.value?.watch as DataSource | undefined;
   stopWatch?.();
   stopWatch = ds
     ? watchResource(
@@ -298,7 +296,12 @@ onUnmounted(() => {
         Output truncated.
       </p>
       <template #footer>
-        <Button type="button" label="Close" @click="actionOutput = null" />
+        <Button
+          type="button"
+          label="Close"
+          severity="secondary"
+          @click="actionOutput = null"
+        />
       </template>
     </Dialog>
   </div>

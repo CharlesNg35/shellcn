@@ -64,17 +64,25 @@ const downloadHref = computed(
       />
       <Button
         type="button"
+        severity="secondary"
         :label="paused ? 'Resume' : 'Pause'"
         @click="paused = !paused"
       />
       <Button
         type="button"
+        severity="secondary"
         :label="follow ? 'Following' : 'Follow'"
         @click="follow = !follow"
       />
-      <Button type="button" label="Clear" @click="lines = []" />
+      <Button
+        type="button"
+        severity="secondary"
+        label="Clear"
+        @click="lines = []"
+      />
       <Button
         as="a"
+        severity="secondary"
         :href="downloadHref"
         download="logs.txt"
         label="Download"

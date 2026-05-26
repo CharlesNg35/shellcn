@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 3 (M2 SSH/SFTP) complete. Core runtime and platform management remain complete; the shipped placeholder `noop` plugin has been removed. SSH/SFTP are now real first-party plugins: `ssh` provides terminal + SFTP files + command snippets, `sftp` provides file-only access, and both share the same SSH/SFTP session + route implementation. **Next: Phase 4 (M3 Docker + agent transport).**_
+_Last updated: 2026-05-26 — Phase 3 (M2 SSH/SFTP) complete. Core runtime and platform management remain complete; the shipped placeholder `noop` plugin has been removed. SSH/SFTP are now real first-party plugins: `ssh` provides terminal + SFTP files + command snippets, `sftp` provides file-only access, and both share the same SSH/SFTP session + route implementation. Plugin-owned credential kinds and table action config are now part of the manifest/projection contract: SSH declares `ssh_private_key` and `ssh_password`, registry-derived compatibility feeds credential selectors, and snippets use declarative toolbar/row actions. **Next: Phase 4 (M3 Docker + agent transport).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -38,7 +38,7 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 - [x] 2.7 Session, channel, and transport runtime
 - [x] 2.8 chi server and route wrapper
 - [x] 2.9 Audit and telemetry
-- [x] 2.10 Noop plugin and end-to-end validation
+- [x] 2.10 Test plugin and end-to-end validation
 
 ## Phase 2b — M1.5 · Platform management (make it usable)
 
@@ -79,7 +79,7 @@ link, with email as a best-effort extra when SMTP is enabled._
 
 ## Phase 3 — M2 · SSH/SFTP reference plugin
 
-_Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP session and file-route code. `ssh` exposes Terminal, Files, and command Snippets; `sftp` exposes the same generic file browser only. SSH/SFTP auth supports password, private key, and stored credential without extra trust or SSH-agent configuration. SFTP opens lazily over the same SSH client, guarded by the session mutex. Terminal streaming is real xterm.js ↔ `ssh.shell` with resize control frames; file browser routes implement list/read/download/upload/mkdir/rename/delete with core-streamed downloads and audit/authz wrapper coverage. SSH snippets use manifest-declared table actions for create/run/delete. The shipped placeholder `noop` plugin was removed; server e2e now uses an internal test-only plugin._
+_Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP session and file-route code. `ssh` exposes Terminal, Files, and command Snippets; `sftp` exposes the same generic file browser only. SSH/SFTP auth supports password, private key, and stored credential without extra trust or SSH-agent configuration. SFTP opens lazily over the same SSH client, guarded by the session mutex. Terminal streaming is real xterm.js ↔ `ssh.shell` with resize control frames; file browser routes implement list/read/download/upload/mkdir/rename/delete with core-streamed downloads and audit/authz wrapper coverage. SSH snippets use manifest-declared table actions for create/run/delete; the generic table renderer now understands toolbar and selected-row actions. The shipped placeholder `noop` plugin was removed; server e2e now uses an internal test-only plugin._
 
 - [x] 3.1 SSH session and Connect
 - [x] 3.2 SSH routes and manifest

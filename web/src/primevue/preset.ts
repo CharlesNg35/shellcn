@@ -2,6 +2,8 @@
 // single place component styling lives; panels use PrimeVue components and
 // inherit these classes.
 
+import type { ButtonPassThroughMethodOptions } from "primevue/button";
+
 // Shared field building blocks — composed below and re-exported so hand-rolled
 // inputs (search boxes, etc.) reuse the exact same look instead of duplicating it.
 export const fieldSurface =
@@ -30,6 +32,99 @@ export const btnPrimary =
   "inline-flex items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50";
 export const btnGhost =
   "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800";
+
+const buttonBase =
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-50";
+const buttonSize = {
+  small: "px-2.5 py-1 text-xs",
+  normal: "px-3 py-1.5",
+  large: "px-4 py-2 text-base",
+};
+const buttonSolid = {
+  primary: "bg-primary-600 text-white hover:bg-primary-700",
+  secondary:
+    "border border-surface-300 bg-surface-0 text-surface-700 hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200 dark:hover:bg-surface-800",
+  success: "bg-emerald-600 text-white hover:bg-emerald-700",
+  info: "bg-sky-600 text-white hover:bg-sky-700",
+  warn: "bg-amber-600 text-white hover:bg-amber-700",
+  help: "bg-violet-600 text-white hover:bg-violet-700",
+  danger: "bg-red-600 text-white hover:bg-red-700",
+  contrast:
+    "bg-surface-900 text-white hover:bg-surface-800 dark:bg-surface-100 dark:text-surface-950 dark:hover:bg-surface-200",
+};
+const buttonText = {
+  primary:
+    "text-primary-700 hover:bg-primary-50 dark:text-primary-300 dark:hover:bg-primary-500/10",
+  secondary:
+    "text-surface-600 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-800",
+  success:
+    "text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10",
+  info: "text-sky-700 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-500/10",
+  warn: "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10",
+  help: "text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-500/10",
+  danger:
+    "text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10",
+  contrast:
+    "text-surface-900 hover:bg-surface-100 dark:text-surface-100 dark:hover:bg-surface-800",
+};
+const buttonOutlined = {
+  primary:
+    "border border-primary-300 text-primary-700 hover:bg-primary-50 dark:border-primary-700 dark:text-primary-300 dark:hover:bg-primary-500/10",
+  secondary:
+    "border border-surface-300 text-surface-700 hover:bg-surface-100 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800",
+  success:
+    "border border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-300 dark:hover:bg-emerald-500/10",
+  info: "border border-sky-300 text-sky-700 hover:bg-sky-50 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-500/10",
+  warn: "border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-500/10",
+  help: "border border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-500/10",
+  danger:
+    "border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-500/10",
+  contrast:
+    "border border-surface-600 text-surface-900 hover:bg-surface-100 dark:border-surface-400 dark:text-surface-100 dark:hover:bg-surface-800",
+};
+
+type ButtonTone = keyof typeof buttonSolid;
+
+function buttonTone(
+  severity: ButtonPassThroughMethodOptions<unknown>["props"]["severity"],
+): ButtonTone {
+  if (
+    severity === "secondary" ||
+    severity === "success" ||
+    severity === "info" ||
+    severity === "warn" ||
+    severity === "help" ||
+    severity === "danger" ||
+    severity === "contrast"
+  ) {
+    return severity;
+  }
+  return "primary";
+}
+
+function buttonRoot(options: ButtonPassThroughMethodOptions<unknown>): string {
+  const props = options.props;
+  const tone = buttonTone(props.severity);
+  const size =
+    props.size === "small"
+      ? buttonSize.small
+      : props.size === "large"
+        ? buttonSize.large
+        : buttonSize.normal;
+  const shape = props.rounded ? "rounded-full" : "rounded-md";
+  const width = props.fluid ? "w-full" : "";
+  const variant = props.variant;
+  if (props.link || variant === "link") {
+    return `${buttonBase} ${shape} ${width} px-0 py-0 text-primary-700 hover:text-primary-800 hover:underline dark:text-primary-300 dark:hover:text-primary-200`;
+  }
+  if (props.text || variant === "text") {
+    return `${buttonBase} ${shape} ${width} ${size} ${buttonText[tone]}`;
+  }
+  if (props.outlined || variant === "outlined") {
+    return `${buttonBase} ${shape} ${width} ${size} ${buttonOutlined[tone]}`;
+  }
+  return `${buttonBase} ${shape} ${width} ${size} ${buttonSolid[tone]}`;
+}
 
 const overlay =
   "mt-1.5 origin-top overflow-hidden rounded-lg border border-surface-200 bg-surface-0 p-1 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5";
@@ -125,10 +220,11 @@ export const primeVuePassthrough = {
   },
 
   fileupload: {
-    root: "inline-flex",
+    root: "inline-flex items-center",
+    input: "sr-only",
     basicContent: "inline-flex items-center gap-2",
     pcChooseButton: {
-      root: "inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-surface-300 bg-surface-0 px-3 py-1.5 text-sm font-medium text-surface-700 transition-colors hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-950 dark:text-surface-200 dark:hover:bg-surface-800",
+      root: `${buttonBase} ${buttonSize.normal} ${buttonSolid.secondary} cursor-pointer`,
     },
   },
 
@@ -140,7 +236,17 @@ export const primeVuePassthrough = {
   },
 
   button: {
-    root: "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50",
+    root: buttonRoot,
+    label: "truncate",
+  },
+
+  selectbutton: {
+    root: "inline-flex gap-0.5 rounded-md border border-surface-300 bg-surface-0 p-0.5 dark:border-surface-700 dark:bg-surface-950",
+    pcToggleButton: {
+      root: "inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded text-surface-500 transition-colors hover:bg-surface-100 hover:text-surface-800 data-[p-checked=true]:bg-surface-100 data-[p-checked=true]:text-surface-900 dark:hover:bg-surface-800 dark:hover:text-surface-100 dark:data-[p-checked=true]:bg-surface-800 dark:data-[p-checked=true]:text-surface-0",
+      content: "inline-flex items-center justify-center",
+      label: "sr-only",
+    },
   },
 
   dialog: {

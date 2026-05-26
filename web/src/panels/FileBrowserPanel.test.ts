@@ -155,6 +155,7 @@ describe("FileBrowserPanel", () => {
     expect(w.text()).toContain("home");
     expect(w.text()).toContain("deploy");
     expect(w.text()).toContain("app.json");
+    expect(w.text()).not.toContain("/ /");
   });
 
   it("offers a grid view that opens file previews in a dialog", async () => {
@@ -167,7 +168,10 @@ describe("FileBrowserPanel", () => {
       },
     });
     await flushPromises();
-    await w.find('button[title="Grid view"]').trigger("click");
+    await w
+      .findAll("button")
+      .find((b) => b.text().includes("Grid view"))!
+      .trigger("click");
     await w
       .findAll("button")
       .find((b) => b.text().includes("README.md"))!

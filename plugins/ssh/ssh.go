@@ -62,15 +62,15 @@ func snippetsTab() plugin.Tab {
 	return plugin.Tab{
 		Key: "snippets", Label: "Snippets", Icon: plugin.Icon{Type: plugin.IconName, Value: "code"},
 		Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ssh.snippet.list"},
-		Config: map[string]any{
-			"columns": []plugin.Column{
+		Config: plugin.TableConfig{
+			Columns: []plugin.Column{
 				{Key: "name", Label: "Name", Sortable: true},
 				{Key: "body", Label: "Command"},
 				{Key: "updatedAt", Label: "Updated", Type: plugin.ColumnDateTime, Sortable: true},
 			},
-			"actionIds":    []string{"ssh.snippet.create"},
-			"rowActionIds": []string{"ssh.snippet.run", "ssh.snippet.delete"},
-		},
+			ActionIDs:    []string{"ssh.snippet.create"},
+			RowActionIDs: []string{"ssh.snippet.run", "ssh.snippet.delete"},
+		}.Map(),
 	}
 }
 

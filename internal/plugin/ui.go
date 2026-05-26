@@ -61,6 +61,31 @@ type Column struct {
 	Width    string     `json:"width,omitempty"`
 }
 
+// TableConfig is the declarative config consumed by the generic table panel.
+type TableConfig struct {
+	Columns      []Column    `json:"columns,omitempty"`
+	Watch        *DataSource `json:"watch,omitempty"`
+	ActionIDs    []string    `json:"actionIds,omitempty"`
+	RowActionIDs []string    `json:"rowActionIds,omitempty"`
+}
+
+func (c TableConfig) Map() map[string]any {
+	out := map[string]any{}
+	if len(c.Columns) > 0 {
+		out["columns"] = c.Columns
+	}
+	if c.Watch != nil {
+		out["watch"] = c.Watch
+	}
+	if len(c.ActionIDs) > 0 {
+		out["actionIds"] = c.ActionIDs
+	}
+	if len(c.RowActionIDs) > 0 {
+		out["rowActionIds"] = c.RowActionIDs
+	}
+	return out
+}
+
 // Severity styles a badge.
 type Severity string
 

@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import Button from "primevue/button";
 import FileUpload from "primevue/fileupload";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
+import SelectButton from "primevue/selectbutton";
 import AppIcon from "../../components/AppIcon.vue";
 
-defineProps<{
+const props = defineProps<{
   viewMode: "split" | "grid";
   canUpload: boolean;
   canMkdir: boolean;
@@ -29,43 +31,36 @@ const emit = defineEmits<{
   delete: [];
   refresh: [];
 }>();
+
+const mode = computed({
+  get: () => props.viewMode,
+  set: (value) => emit("update:viewMode", value as "split" | "grid"),
+});
+
+const viewOptions = [
+  { label: "Split view", value: "split", icon: "list" },
+  { label: "Grid view", value: "grid", icon: "grid" },
+];
 </script>
 
 <template>
   <div
     class="flex min-h-12 flex-wrap items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
   >
-    <div
-      class="mr-2 inline-flex rounded-md border border-surface-300 p-0.5 dark:border-surface-700"
+    <SelectButton
+      v-model="mode"
+      class="mr-2"
+      :options="viewOptions"
+      option-label="label"
+      option-value="value"
+      :allow-empty="false"
       aria-label="File browser view"
     >
-      <button
-        type="button"
-        class="rounded px-2 py-1 text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800"
-        :class="
-          viewMode === 'split'
-            ? 'bg-surface-100 text-surface-900 dark:bg-surface-800 dark:text-surface-0'
-            : ''
-        "
-        title="Split view"
-        @click="emit('update:viewMode', 'split')"
-      >
-        <AppIcon :icon="{ type: 'name', value: 'list' }" :size="15" />
-      </button>
-      <button
-        type="button"
-        class="rounded px-2 py-1 text-surface-500 hover:bg-surface-100 dark:hover:bg-surface-800"
-        :class="
-          viewMode === 'grid'
-            ? 'bg-surface-100 text-surface-900 dark:bg-surface-800 dark:text-surface-0'
-            : ''
-        "
-        title="Grid view"
-        @click="emit('update:viewMode', 'grid')"
-      >
-        <AppIcon :icon="{ type: 'name', value: 'grid' }" :size="15" />
-      </button>
-    </div>
+      <template #option="{ option }">
+        <AppIcon :icon="{ type: 'name', value: option.icon }" :size="15" />
+        <span class="sr-only">{{ option.label }}</span>
+      </template>
+    </SelectButton>
     <FileUpload
       v-if="canUpload"
       mode="basic"
@@ -77,10 +72,15 @@ const emit = defineEmits<{
       choose-label="Upload"
       :disabled="mutating"
       @uploader="emit('upload', $event)"
-    />
+    >
+      <template #chooseicon>
+        <AppIcon :icon="{ type: 'name', value: 'upload' }" :size="15" />
+      </template>
+    </FileUpload>
     <Button
       v-if="canMkdir"
       type="button"
+      severity="secondary"
       :disabled="mutating"
       label="New folder"
       @click="emit('mkdir')"
@@ -88,6 +88,7 @@ const emit = defineEmits<{
     <Button
       v-if="canShowRename"
       type="button"
+      severity="secondary"
       :disabled="!canRename || mutating"
       label="Rename"
       @click="emit('rename')"
@@ -95,6 +96,8 @@ const emit = defineEmits<{
     <Button
       v-if="canShowDelete"
       type="button"
+      severity="danger"
+      outlined
       :disabled="!canDelete || mutating"
       label="Delete"
       @click="emit('delete')"
@@ -102,12 +105,14 @@ const emit = defineEmits<{
     <Button
       v-if="downloadHref"
       as="a"
+      severity="secondary"
       :href="downloadHref"
       :download="downloadName"
       label="Download"
     />
     <Button
       type="button"
+      severity="secondary"
       :disabled="loading"
       label="Refresh"
       @click="emit('refresh')"

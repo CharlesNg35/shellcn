@@ -195,6 +195,13 @@ export interface FileBrowserConfig {
   uploadFieldName?: string;
 }
 
+export interface TablePanelConfig {
+  columns?: Column[];
+  watch?: DataSource;
+  actionIds?: string[];
+  rowActionIds?: string[];
+}
+
 export interface FormPanelConfig {
   submitRouteId?: string;
   submitMethod?: Exclude<Method, "GET" | "WS">;

@@ -165,33 +165,35 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
             <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
           </button>
         </div>
-        <button
-          v-for="c in filtered"
-          :key="c.id"
-          type="button"
-          class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-200 dark:hover:bg-surface-800"
-          :class="
-            activeId === c.id
-              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-              : ''
-          "
-          @click="go(c)"
-        >
-          <AppIcon :icon="c.icon" :size="16" class="text-surface-500" />
-          <span class="flex min-w-0 flex-1 flex-col">
-            <span class="truncate text-surface-800 dark:text-surface-100">{{
-              c.name
-            }}</span>
-            <span class="truncate text-xs text-surface-400">{{
-              c.protocol
-            }}</span>
-          </span>
-          <span
-            class="h-2 w-2 shrink-0 rounded-full"
-            :class="dotClass(c)"
-            :title="dotTitle(c)"
-          />
-        </button>
+        <div class="space-y-1">
+          <button
+            v-for="c in filtered"
+            :key="c.id"
+            type="button"
+            class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+            :class="
+              activeId === c.id
+                ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
+                : ''
+            "
+            @click="go(c)"
+          >
+            <AppIcon :icon="c.icon" :size="16" class="text-surface-500" />
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate text-surface-800 dark:text-surface-100">{{
+                c.name
+              }}</span>
+              <span class="truncate text-xs text-surface-400">{{
+                c.protocol
+              }}</span>
+            </span>
+            <span
+              class="h-2 w-2 shrink-0 rounded-full"
+              :class="dotClass(c)"
+              :title="dotTitle(c)"
+            />
+          </button>
+        </div>
         <!-- Loading: skeleton rows while the catalog is fetched. -->
         <div v-if="!conns.loaded && !error" class="space-y-1.5 px-1 pt-1">
           <div
@@ -230,10 +232,10 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
         <RouterLink
           v-if="auth.isAdmin"
           :to="{ name: 'users' }"
-          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          class="mx-2 mt-2 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
           :class="
             route.name === 'users'
-              ? 'font-medium text-primary-700 dark:text-primary-200'
+              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
               : ''
           "
         >
@@ -242,10 +244,10 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
         </RouterLink>
         <RouterLink
           :to="{ name: 'credentials' }"
-          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
           :class="
             route.name === 'credentials'
-              ? 'font-medium text-primary-700 dark:text-primary-200'
+              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
               : ''
           "
         >
@@ -254,10 +256,10 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
         </RouterLink>
         <RouterLink
           :to="{ name: 'recordings' }"
-          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
           :class="
             route.name === 'recordings'
-              ? 'font-medium text-primary-700 dark:text-primary-200'
+              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
               : ''
           "
         >
@@ -266,10 +268,10 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
         </RouterLink>
         <RouterLink
           :to="{ name: 'settings' }"
-          class="flex items-center gap-2.5 px-4 py-2.5 text-sm text-surface-500 hover:bg-surface-200 dark:hover:bg-surface-800"
+          class="mx-2 my-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
           :class="
             route.name === 'settings'
-              ? 'font-medium text-primary-700 dark:text-primary-200'
+              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
               : ''
           "
         >

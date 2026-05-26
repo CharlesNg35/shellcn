@@ -126,8 +126,8 @@ func nameSchema(label string) *plugin.Schema {
 
 func snippetSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Snippet", Fields: []plugin.Field{
-		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
-		{Key: "body", Label: "Command", Type: plugin.FieldTextarea, Required: true},
+		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true, Placeholder: "Restart web service"},
+		{Key: "body", Label: "Command", Type: plugin.FieldTextarea, Required: true, Placeholder: "sudo systemctl restart nginx"},
 	}}}}
 }
 

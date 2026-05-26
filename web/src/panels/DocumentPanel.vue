@@ -61,11 +61,13 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       <div class="flex items-center gap-2">
         <Button
           type="button"
+          severity="secondary"
           :label="mode === 'tree' ? 'Raw' : 'Tree'"
           @click="mode = mode === 'tree' ? 'raw' : 'tree'"
         />
         <Button
           type="button"
+          severity="secondary"
           label="Refresh"
           :disabled="loading"
           @click="load"
@@ -74,11 +76,13 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       <div class="flex items-center gap-2">
         <Button
           type="button"
+          severity="secondary"
           :label="copied ? 'Copied' : 'Copy'"
           @click="copy"
         />
         <Button
           as="a"
+          severity="secondary"
           :href="downloadHref"
           download="document.json"
           label="Download"
