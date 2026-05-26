@@ -33,6 +33,7 @@ require (
 	github.com/studio-b12/gowebdav v0.12.0
 	github.com/willscott/go-nfs-client v0.0.0-20251022144359-801f10d98886
 	github.com/x90skysn3k/grdp v1.0.2
+	go.mongodb.org/mongo-driver/v2 v2.6.0
 	golang.org/x/crypto v0.52.0
 	golang.org/x/time v0.15.0
 	gorm.io/driver/mysql v1.6.0
@@ -82,6 +83,7 @@ require (
 	github.com/jinzhu/copier v0.3.4 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/lunixbochs/struc v0.0.0-20241101090106-8d528fa2c543 // indirect
@@ -104,6 +106,10 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
+	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
+	github.com/xdg-go/scram v1.2.0 // indirect
+	github.com/xdg-go/stringprep v1.0.4 // indirect
+	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.60.0 // indirect
 	go.opentelemetry.io/otel v1.35.0 // indirect

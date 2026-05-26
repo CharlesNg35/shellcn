@@ -6,6 +6,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/ftp"
 	"github.com/charlesng/shellcn/plugins/ftps"
 	"github.com/charlesng/shellcn/plugins/minio"
+	"github.com/charlesng/shellcn/plugins/mongodb"
 	"github.com/charlesng/shellcn/plugins/mysql"
 	"github.com/charlesng/shellcn/plugins/nfs"
 	"github.com/charlesng/shellcn/plugins/postgresql"
@@ -49,5 +50,6 @@ func all() []plugin.Plugin {
 		postgresql.New(),
 		mysql.New(),
 		redis.New(),
+		mongodb.New(),
 	}
 }
