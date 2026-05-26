@@ -12,9 +12,6 @@ const props = defineProps<{
 const emit = defineEmits<{ connect: []; enroll: [] }>();
 
 const isAgent = computed(() => props.connection?.transport === "agent");
-const transportLabel = computed(() =>
-  props.connection?.transport === "agent" ? "Agent" : "Direct",
-);
 
 const agent = useAgentState(props.connectionId);
 const canConnect = computed(() => !isAgent.value || agent.online.value);
@@ -67,7 +64,6 @@ onMounted(() => {
       <p class="text-sm text-surface-500 dark:text-surface-400">
         {{ connection?.name ?? connectionId }} · {{ connection?.protocol }}
       </p>
-      <p class="text-xs text-surface-400">{{ transportLabel }} connection</p>
     </div>
 
     <!-- Agent reachability: a session can only open once the tunnel is up. -->

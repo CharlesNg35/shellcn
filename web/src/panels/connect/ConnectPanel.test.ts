@@ -51,7 +51,7 @@ describe("ConnectPanel", () => {
     });
     await flushPromises();
     expect(w.text()).not.toContain("Agent");
-    expect(w.text()).toContain("Direct connection");
+    expect(w.text()).not.toContain("Direct connection");
     expect(w.text()).not.toContain("Credential id");
     expect(calls.some((url) => url.match(/\/connections\/[^/]+$/))).toBe(false);
     expect(connectDisabled(w)).toBe(false);
