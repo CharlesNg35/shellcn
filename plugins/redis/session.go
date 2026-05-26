@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	redisclient "github.com/redis/go-redis/v9"
 
@@ -12,6 +13,7 @@ import (
 type Session struct {
 	client *redisclient.Client
 	opts   options
+	closed atomic.Bool
 }
 
 func connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {
@@ -48,6 +50,9 @@ func unwrap(sess plugin.Session) (*Session, error) {
 }
 
 func (s *Session) HealthCheck(ctx context.Context) error {
+	if err := s.ensureOpen(); err != nil {
+		return err
+	}
 	if err := s.client.Ping(ctx).Err(); err != nil {
 		return fmt.Errorf("%w: Redis ping: %v", plugin.ErrUnavailable, err)
 	}
@@ -59,5 +64,16 @@ func (s *Session) OpenChannel(context.Context, plugin.ChannelRequest) (plugin.Ch
 }
 
 func (s *Session) Close() error {
+	s.closed.Store(true)
+	if s.client == nil {
+		return nil
+	}
 	return s.client.Close()
+}
+
+func (s *Session) ensureOpen() error {
+	if s == nil || s.closed.Load() {
+		return fmt.Errorf("%w: Redis session closed", plugin.ErrUnavailable)
+	}
+	return nil
 }

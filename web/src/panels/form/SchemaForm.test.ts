@@ -163,6 +163,10 @@ describe("SchemaForm", () => {
     expect(w.findComponent({ name: "ToggleSwitch" }).props("modelValue")).toBe(
       true,
     );
+    expect(w.find('input[role="switch"]').attributes("checked")).toBeDefined();
+    expect(w.find('[data-pc-section="slider"]').classes()).toContain(
+      "data-[p~=checked]:bg-primary-500",
+    );
     expect(w.emitted("update:modelValue")?.at(-1)?.[0]).toMatchObject({
       read_only: true,
     });

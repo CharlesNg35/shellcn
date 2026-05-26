@@ -61,7 +61,14 @@ func routes() []plugin.Route {
 }
 
 func redisSession(rc *plugin.RequestContext) (*Session, error) {
-	return unwrap(rc.Session)
+	s, err := unwrap(rc.Session)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureOpen(); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func overview(rc *plugin.RequestContext) (any, error) {
@@ -407,6 +414,9 @@ func completionRoute(*plugin.RequestContext) (any, error) {
 }
 
 func executeCommandRequest(parent context.Context, s *Session, req sqldb.QueryRequest) (sqldb.QueryResult, error) {
+	if err := s.ensureOpen(); err != nil {
+		return sqldb.QueryResult{}, err
+	}
 	args, err := parseCommand(req.Query)
 	if err != nil {
 		return sqldb.QueryResult{}, err

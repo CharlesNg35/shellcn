@@ -168,9 +168,45 @@ const dialogTransition = {
 const checkbox = {
   root: "relative inline-flex h-4 w-4 shrink-0",
   input: "absolute inset-0 cursor-pointer opacity-0",
-  box: "flex h-4 w-4 items-center justify-center rounded border border-surface-300 bg-surface-0 transition-colors dark:border-surface-600 dark:bg-surface-950 data-[p-checked=true]:border-primary-500 data-[p-checked=true]:bg-primary-500 data-[p-checked=true]:text-white",
+  box: "flex h-4 w-4 items-center justify-center rounded border border-surface-300 bg-surface-0 transition-colors dark:border-surface-600 dark:bg-surface-950 data-[p~=checked]:border-primary-500 data-[p~=checked]:bg-primary-500 data-[p~=checked]:text-white dark:data-[p~=checked]:border-primary-500 dark:data-[p~=checked]:bg-primary-500",
   icon: "h-3 w-3 text-white",
 };
+
+const radioButton = {
+  root: "relative inline-flex h-4 w-4 shrink-0",
+  input: "absolute inset-0 cursor-pointer opacity-0",
+  box: "flex h-4 w-4 items-center justify-center rounded-full border border-surface-300 bg-surface-0 transition-colors dark:border-surface-600 dark:bg-surface-950 data-[p~=checked]:border-primary-500 data-[p~=checked]:bg-primary-500 dark:data-[p~=checked]:border-primary-500 dark:data-[p~=checked]:bg-primary-500",
+  icon: "h-2 w-2 rounded-full bg-white",
+};
+
+type SeverityOptions = { props?: { severity?: string } };
+
+const severitySurface: Record<string, string> = {
+  success:
+    "border-emerald-500/30 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200",
+  info: "border-sky-500/30 bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-200",
+  warn: "border-amber-500/30 bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
+  error:
+    "border-red-500/30 bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-200",
+  danger:
+    "border-red-500/30 bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-200",
+  secondary:
+    "border-surface-300 bg-surface-100 text-surface-700 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200",
+  contrast:
+    "border-surface-900 bg-surface-900 text-white dark:border-surface-100 dark:bg-surface-100 dark:text-surface-950",
+};
+
+function severitySurfaceClass(options: SeverityOptions): string {
+  return severitySurface[options.props?.severity ?? ""] ?? severitySurface.info;
+}
+
+function tagRoot(options: SeverityOptions): string {
+  return `inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${severitySurfaceClass(options)}`;
+}
+
+function messageRoot(options: SeverityOptions): string {
+  return `flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${severitySurfaceClass(options)}`;
+}
 
 const paginatorButton =
   "inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-surface-600 transition-colors hover:bg-surface-100 disabled:pointer-events-none disabled:opacity-40 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
@@ -230,6 +266,7 @@ export const primeVuePassthrough = {
 
   // Standalone Checkbox (also reused inside MultiSelect rows).
   checkbox,
+  radiobutton: radioButton,
   multiselect: {
     root: `flex w-full items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
     labelContainer: "min-w-0 flex-1 overflow-hidden",
@@ -281,16 +318,22 @@ export const primeVuePassthrough = {
 
   progressbar: {
     root: "relative overflow-hidden rounded-full bg-surface-200 dark:bg-surface-800",
-    value:
-      "h-full rounded-full bg-primary-500 transition-[width] duration-150 data-[p-progressbar-value=true]:bg-primary-500",
+    value: "h-full rounded-full bg-primary-500 transition-[width] duration-150",
     label: "hidden",
+  },
+
+  slider: {
+    root: "relative h-5 w-full",
+    range: "absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary-500",
+    handle:
+      "absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-primary-500 bg-surface-0 shadow-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:bg-surface-950",
   },
 
   toggleswitch: {
     root: "relative inline-flex h-5 w-9 cursor-pointer",
     input: "absolute inset-0 z-10 cursor-pointer opacity-0",
     slider:
-      "absolute inset-0 rounded-full bg-surface-300 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform data-[p-checked=true]:bg-primary-500 data-[p-checked=true]:before:translate-x-4 dark:bg-surface-700",
+      "absolute inset-0 rounded-full bg-surface-300 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform data-[p~=checked]:bg-primary-500 data-[p~=checked]:before:translate-x-4 dark:bg-surface-700 dark:data-[p~=checked]:bg-primary-500",
   },
 
   button: {
@@ -298,6 +341,40 @@ export const primeVuePassthrough = {
     icon: "h-4 w-4 shrink-0",
     loadingIcon: "h-4 w-4 shrink-0 animate-spin",
     label: "truncate",
+  },
+
+  badge: {
+    root: tagRoot,
+  },
+
+  tag: {
+    root: tagRoot,
+    icon: "h-3.5 w-3.5",
+    label: "truncate",
+  },
+
+  message: {
+    root: messageRoot,
+    contentWrapper: "flex min-w-0 flex-1 items-start gap-2",
+    content: "flex min-w-0 flex-1 items-start gap-2",
+    icon: "mt-0.5 h-4 w-4 shrink-0",
+    text: "min-w-0 flex-1",
+    closeButton:
+      "ml-auto shrink-0 rounded p-0.5 text-current/60 transition-colors hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
+    closeIcon: "h-4 w-4",
+  },
+
+  toast: {
+    root: "fixed z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2",
+    message: messageRoot,
+    messageContent: "flex min-w-0 flex-1 items-start gap-2",
+    messageIcon: "mt-0.5 h-4 w-4 shrink-0",
+    messageText: "min-w-0 flex-1",
+    summary: "font-medium",
+    detail: "text-current/80",
+    closeButton:
+      "ml-auto shrink-0 rounded p-0.5 text-current/60 transition-colors hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
+    closeIcon: "h-4 w-4",
   },
 
   menu: {
@@ -347,6 +424,115 @@ export const primeVuePassthrough = {
     root: "z-50 mt-1.5 rounded-lg border border-surface-200 bg-surface-0 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5",
     content: "p-3",
     transition: overlayTransition,
+  },
+
+  card: {
+    root: "overflow-hidden rounded-lg border border-surface-200 bg-surface-0 text-surface-800 shadow-sm dark:border-surface-800 dark:bg-surface-950 dark:text-surface-100",
+    header: "border-b border-surface-200 dark:border-surface-800",
+    body: "p-4",
+    caption: "mb-3",
+    title: "text-base font-semibold text-surface-900 dark:text-surface-0",
+    subtitle: "mt-1 text-sm text-surface-500 dark:text-surface-400",
+    content: "text-sm",
+    footer: "mt-4 flex items-center justify-end gap-2",
+  },
+
+  panel: {
+    root: "rounded-lg border border-surface-200 bg-surface-0 text-surface-800 dark:border-surface-800 dark:bg-surface-950 dark:text-surface-100",
+    header:
+      "flex items-center justify-between gap-3 border-b border-surface-200 px-4 py-3 dark:border-surface-800",
+    title: "min-w-0 flex-1 truncate text-sm font-semibold",
+    headerActions: "flex shrink-0 items-center gap-1",
+    pcToggleButton: {
+      root: `${buttonBase} h-8 w-8 rounded-md ${buttonText.secondary}`,
+      icon: "h-4 w-4",
+    },
+    contentContainer: "overflow-hidden",
+    contentWrapper: "p-4",
+    content: "text-sm",
+    footer: "border-t border-surface-200 px-4 py-3 dark:border-surface-800",
+    transition: overlayTransition,
+  },
+
+  toolbar: {
+    root: "flex flex-wrap items-center justify-between gap-3 rounded-md border border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950",
+    start: "flex min-w-0 items-center gap-2",
+    center: "flex min-w-0 items-center gap-2",
+    end: "flex min-w-0 items-center justify-end gap-2",
+  },
+
+  divider: {
+    root: "my-3 flex items-center border-0 text-xs font-medium text-surface-400 before:h-px before:flex-1 before:bg-surface-200 after:h-px after:flex-1 after:bg-surface-200 dark:before:bg-surface-800 dark:after:bg-surface-800",
+    content:
+      "mx-3 inline-flex shrink-0 items-center gap-1 bg-surface-0 px-1 dark:bg-surface-950",
+  },
+
+  skeleton: {
+    root: "animate-pulse rounded-md bg-surface-100 dark:bg-surface-800",
+  },
+
+  datepicker: {
+    root: "relative block w-full",
+    pcInputText: { root: inputBase },
+    dropdown:
+      "absolute right-0 top-0 flex h-full items-center px-2 text-surface-400 transition-colors hover:text-surface-700 dark:hover:text-surface-200",
+    dropdownIcon: "h-4 w-4",
+    inputIconContainer:
+      "absolute right-3 top-1/2 -translate-y-1/2 text-surface-400",
+    inputIcon: "h-4 w-4",
+    clearIcon:
+      "absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 cursor-pointer text-surface-400 hover:text-surface-700 dark:hover:text-surface-200",
+    panel: overlay,
+    transition: overlayTransition,
+    calendarContainer: "p-2",
+    calendar: "min-w-64",
+    header:
+      "flex items-center justify-between gap-2 border-b border-surface-200 px-2 py-2 dark:border-surface-800",
+    title: "flex items-center gap-1 text-sm font-medium",
+    pcPrevButton: {
+      root: `${buttonBase} h-8 w-8 rounded-md ${buttonText.secondary}`,
+      icon: "h-4 w-4",
+    },
+    pcNextButton: {
+      root: `${buttonBase} h-8 w-8 rounded-md ${buttonText.secondary}`,
+      icon: "h-4 w-4",
+    },
+    selectMonth:
+      "rounded px-2 py-1 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800",
+    selectYear:
+      "rounded px-2 py-1 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800",
+    dayView: "w-full border-collapse",
+    weekDay: "text-xs font-medium text-surface-400",
+    dayCell: "p-0.5 text-center",
+    day: "mx-auto flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-500 data-[p-selected=true]:text-white data-[p-today=true]:font-semibold dark:hover:bg-surface-800",
+    monthView: "grid grid-cols-3 gap-1 p-2",
+    month:
+      "rounded-md px-3 py-2 text-center text-sm transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-500 data-[p-selected=true]:text-white dark:hover:bg-surface-800",
+    yearView: "grid grid-cols-3 gap-1 p-2",
+    year: "rounded-md px-3 py-2 text-center text-sm transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-500 data-[p-selected=true]:text-white dark:hover:bg-surface-800",
+    timePicker:
+      "flex items-center justify-center gap-2 border-t border-surface-200 p-2 dark:border-surface-800",
+    hourPicker: "flex flex-col items-center gap-1",
+    minutePicker: "flex flex-col items-center gap-1",
+    secondPicker: "flex flex-col items-center gap-1",
+    ampmPicker: "flex flex-col items-center gap-1",
+    separator: "text-sm",
+    buttonbar:
+      "flex items-center justify-between border-t border-surface-200 p-2 dark:border-surface-800",
+    pcIncrementButton: {
+      root: `${buttonBase} h-7 w-7 rounded-md ${buttonText.secondary}`,
+      icon: "h-3.5 w-3.5",
+    },
+    pcDecrementButton: {
+      root: `${buttonBase} h-7 w-7 rounded-md ${buttonText.secondary}`,
+      icon: "h-3.5 w-3.5",
+    },
+    pcTodayButton: {
+      root: `${buttonBase} ${buttonSize.small} ${buttonText.primary}`,
+    },
+    pcClearButton: {
+      root: `${buttonBase} ${buttonSize.small} ${buttonText.secondary}`,
+    },
   },
 
   tabs: { root: "flex min-h-0 flex-col" },

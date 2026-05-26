@@ -30,6 +30,9 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if !reg.CredentialKindSupportsProtocol(plugin.CredentialTLSClientCert, protocolName) {
 		t.Fatal("TLS client certificate credential should support Redis")
 	}
+	if got := m.Config.Defaults()["read_only"]; got != true {
+		t.Fatalf("read_only manifest default = %#v, want true", got)
+	}
 	if err := plugin.Validate(m, New().Routes()); err != nil {
 		t.Fatalf("manifest invalid: %v", err)
 	}
@@ -73,6 +76,17 @@ func TestCommandSafetyStopsBeforeRedis(t *testing.T) {
 	var confirmErr confirmationError
 	if !errors.As(err, &confirmErr) {
 		t.Fatalf("expected confirmation error, got %v", err)
+	}
+}
+
+func TestClosedSessionStopsBeforeSafetyChecks(t *testing.T) {
+	s := &Session{opts: options{ReadOnly: true}}
+	if err := s.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	_, err := executeCommandRequest(context.Background(), s, sqldb.QueryRequest{Query: "DEL session:1"})
+	if !errors.Is(err, plugin.ErrUnavailable) {
+		t.Fatalf("expected closed session error, got %v", err)
 	}
 }
 

@@ -153,6 +153,24 @@ func (m *Manager) Close(key Key) {
 	}
 }
 
+// CloseConnection closes and removes every live session for a connection across
+// all owner scopes. Callers use this after connection config changes so cached
+// plugin options cannot outlive the saved connection state.
+func (m *Manager) CloseConnection(connectionID string) {
+	m.mu.Lock()
+	entries := make([]*entry, 0)
+	for key, e := range m.sessions {
+		if key.ConnectionID == connectionID {
+			entries = append(entries, e)
+			delete(m.sessions, key)
+		}
+	}
+	m.mu.Unlock()
+	for _, e := range entries {
+		e.shutdown()
+	}
+}
+
 // Shutdown stops the janitor and closes every live session.
 func (m *Manager) Shutdown() {
 	close(m.stop)

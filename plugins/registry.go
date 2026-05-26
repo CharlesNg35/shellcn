@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/plugins/cockroachdb"
 	"github.com/charlesng/shellcn/plugins/docker"
 	"github.com/charlesng/shellcn/plugins/ftp"
 	"github.com/charlesng/shellcn/plugins/ftps"
@@ -55,5 +56,6 @@ func all() []plugin.Plugin {
 		mongodb.New(),
 		mssql.New(),
 		oracle.New(),
+		cockroachdb.New(),
 	}
 }

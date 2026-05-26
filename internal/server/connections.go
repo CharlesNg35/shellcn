@@ -145,6 +145,7 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	s.deps.Sessions.CloseConnection(conn.ID)
 	s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
 	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(ctx, user.ID, updated))
 }
@@ -180,6 +181,7 @@ func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) 
 // agent tunnel, deletes sharing grants, and revokes outstanding enrollments.
 // Best-effort — the connection is already gone, so failures are logged not fatal.
 func (s *Server) cleanupConnectionDependents(ctx context.Context, connID string) {
+	s.deps.Sessions.CloseConnection(connID)
 	if s.deps.Tunnels != nil {
 		s.deps.Tunnels.Remove(connID)
 	}
