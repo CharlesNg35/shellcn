@@ -1,0 +1,205 @@
+package mysql
+
+import (
+	"context"
+	"net"
+	"net/url"
+	"os"
+	"os/exec"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/internal/transport"
+	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	mysqldriver "github.com/go-sql-driver/mysql"
+)
+
+func TestMySQLPluginIntegration(t *testing.T) {
+	if os.Getenv("SHELLCN_MYSQL_INTEGRATION") != "1" {
+		t.Skip("set SHELLCN_MYSQL_INTEGRATION=1 to run against MySQL or MariaDB")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	cfg := integrationConfig(ctx, t)
+	cfg["read_only"] = false
+	cfg["require_destructive_confirmation"] = true
+	cfg["row_limit"] = 50
+	cfg["query_timeout"] = "10s"
+
+	sess, err := connect(ctx, plugin.ConnectConfig{
+		Config: cfg,
+		Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	s := sess.(*Session)
+
+	if _, err := s.db.ExecContext(ctx, `
+CREATE TABLE IF NOT EXISTS shellcn_people (
+  id bigint unsigned auto_increment PRIMARY KEY,
+  name varchar(255) NOT NULL,
+  access_token varchar(255) NOT NULL
+);
+TRUNCATE TABLE shellcn_people;
+INSERT INTO shellcn_people (name, access_token) VALUES ('alice', 'secret-token')`); err != nil {
+		t.Fatalf("seed database: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, `DROP TABLE IF EXISTS shellcn_people`)
+	})
+
+	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
+	list, err := listTables(rc)
+	if err != nil {
+		t.Fatalf("list tables: %v", err)
+	}
+	if !pageHasName(list.(plugin.Page[row]), "shellcn_people") {
+		t.Fatalf("created table was not listed: %#v", list)
+	}
+
+	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}, nil, nil))
+	if err != nil {
+		t.Fatalf("table rows: %v", err)
+	}
+	page := rows.(plugin.Page[row])
+	if len(page.Items) != 1 || page.Items[0]["access_token"] != sqldb.RedactedValue {
+		t.Fatalf("expected redacted table data, got %#v", page.Items)
+	}
+
+	result, err := executeQueryRequest(ctx, s, sqldb.QueryRequest{Query: `SELECT name, access_token FROM shellcn_people`})
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if len(result.Rows) != 1 || result.Rows[0][1] != sqldb.RedactedValue {
+		t.Fatalf("expected redacted query result, got %#v", result.Rows)
+	}
+}
+
+func integrationConfig(ctx context.Context, t *testing.T) map[string]any {
+	t.Helper()
+	if raw := os.Getenv("SHELLCN_MYSQL_DSN"); raw != "" {
+		return configFromDSN(t, raw)
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker CLI unavailable and SHELLCN_MYSQL_DSN is not set")
+	}
+	name := "shellcn-mysql-it-" + time.Now().UTC().Format("20060102150405")
+	run(ctx, t, "docker", "run", "-d", "--rm", "--name", name,
+		"-e", "MYSQL_ROOT_PASSWORD=shellcn",
+		"-e", "MYSQL_DATABASE=shellcn",
+		"-p", "127.0.0.1::3306",
+		"mysql:8.4")
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "docker", "rm", "-f", name).Run()
+	})
+	out := run(ctx, t, "docker", "port", name, "3306/tcp")
+	host, portText, err := net.SplitHostPort(strings.TrimSpace(out))
+	if err != nil {
+		t.Fatalf("unexpected docker port output: %q", out)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		t.Fatalf("parse docker port %q: %v", portText, err)
+	}
+	cfg := map[string]any{
+		"host":      host,
+		"port":      port,
+		"database":  "shellcn",
+		"username":  "root",
+		"password":  "shellcn",
+		"tls_mode":  "disable",
+		"read_only": false,
+	}
+	deadline := time.Now().Add(45 * time.Second)
+	for {
+		sess, err := connect(ctx, plugin.ConnectConfig{
+			Config: cfg,
+			Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+		})
+		if err == nil {
+			_ = sess.Close()
+			return cfg
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("mysql container did not become ready: %v", err)
+		}
+		time.Sleep(750 * time.Millisecond)
+	}
+}
+
+func configFromDSN(t *testing.T, raw string) map[string]any {
+	t.Helper()
+	if !strings.Contains(raw, "://") {
+		cfg, err := mysqldriver.ParseDSN(raw)
+		if err != nil {
+			t.Fatalf("parse SHELLCN_MYSQL_DSN: %v", err)
+		}
+		host, portText, err := net.SplitHostPort(cfg.Addr)
+		if err != nil {
+			t.Fatalf("parse DSN address %q: %v", cfg.Addr, err)
+		}
+		port, err := strconv.Atoi(portText)
+		if err != nil {
+			t.Fatalf("parse DSN port: %v", err)
+		}
+		return map[string]any{
+			"host":      host,
+			"port":      port,
+			"database":  cfg.DBName,
+			"username":  cfg.User,
+			"password":  cfg.Passwd,
+			"tls_mode":  stringDefault(cfg.TLSConfig, "disable"),
+			"read_only": false,
+		}
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("parse SHELLCN_MYSQL_DSN: %v", err)
+	}
+	port := defaultPort
+	if u.Port() != "" {
+		if port, err = strconv.Atoi(u.Port()); err != nil {
+			t.Fatalf("parse DSN port: %v", err)
+		}
+	}
+	password, _ := u.User.Password()
+	return map[string]any{
+		"host":      u.Hostname(),
+		"port":      port,
+		"database":  strings.TrimPrefix(u.Path, "/"),
+		"username":  u.User.Username(),
+		"password":  password,
+		"tls_mode":  stringDefault(u.Query().Get("tls"), "disable"),
+		"read_only": false,
+	}
+}
+
+func run(ctx context.Context, t *testing.T, name string, args ...string) string {
+	t.Helper()
+	cmd := exec.CommandContext(ctx, name, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s %s: %v\n%s", name, strings.Join(args, " "), err, out)
+	}
+	return string(out)
+}
+
+func pageHasName(page plugin.Page[row], name string) bool {
+	for _, item := range page.Items {
+		if item["name"] == name {
+			return true
+		}
+	}
+	return false
+}

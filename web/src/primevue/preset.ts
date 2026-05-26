@@ -348,7 +348,7 @@ export const primeVuePassthrough = {
       bodyCell:
         "border-b border-surface-100 px-4 py-2 text-surface-700 dark:border-surface-800/60 dark:text-surface-200",
       columnHeaderContent: "flex items-center gap-1",
-      sort: "text-surface-400",
+      sortIcon: "h-3.5 w-3.5 text-surface-400",
     },
     bodyRow:
       "cursor-pointer transition-colors hover:bg-surface-50 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:data-[p-selected=true]:bg-primary-500/10",
@@ -361,7 +361,7 @@ export const primeVuePassthrough = {
     nodeContent:
       "flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:text-primary-700 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/10 dark:data-[p-selected=true]:text-primary-200",
     nodeToggleButton:
-      "flex h-5 w-5 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-700 dark:hover:text-surface-100",
+      "flex h-5 w-5 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 data-[p-leaf=true]:invisible dark:hover:bg-surface-700 dark:hover:text-surface-100",
     nodeLabel: "flex-1 truncate text-surface-700 dark:text-surface-200",
     nodeChildren: "pl-3",
   },

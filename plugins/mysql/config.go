@@ -1,0 +1,183 @@
+package mysql
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"strconv"
+	"strings"
+	"time"
+
+	mysqldriver "github.com/go-sql-driver/mysql"
+
+	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+)
+
+const (
+	defaultPort       = 3306
+	defaultRowLimit   = 1000
+	defaultTimeout    = 30 * time.Second
+	defaultMaxConns   = 4
+	protocolName      = "mysql"
+	credentialIDField = "credential_id"
+	clientCertField   = "client_cert_id"
+)
+
+type options struct {
+	Host              string
+	Port              int
+	Database          string
+	Username          string
+	Password          string
+	TLSMode           string
+	CACertificate     string
+	ClientCertificate string
+	ReadOnly          bool
+	RequireConfirm    bool
+	QueryTimeout      time.Duration
+	RowLimit          int
+	MaxConns          int
+	RedactPatterns    []string
+}
+
+func configSchema() plugin.Schema {
+	needsInlinePassword := plugin.Condition{AllOf: []plugin.Rule{{Field: credentialIDField, Op: plugin.OpEmpty}}}
+	tlsEnabled := plugin.Condition{AllOf: []plugin.Rule{{Field: "tls_mode", Op: plugin.OpNeq, Value: "disable"}}}
+	verifyTLS := plugin.Condition{AnyOf: []plugin.Rule{
+		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-ca"},
+		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-full"},
+	}}
+	return plugin.Schema{Groups: []plugin.Group{
+		{Name: "Server", Fields: []plugin.Field{
+			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "mysql.example.internal"},
+			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Required: true, Default: defaultPort, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
+			{Key: "database", Label: "Default database", Type: plugin.FieldText, Required: true, Default: "mysql"},
+		}},
+		{Name: "Authentication", Fields: []plugin.Field{
+			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "root"},
+			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+				Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{protocolName},
+			}, Help: "Reusable database password. The credential identity can also supply the username."},
+			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &needsInlinePassword},
+		}},
+		{Name: "TLS", Fields: []plugin.Field{
+			{Key: "tls_mode", Label: "TLS mode", Type: plugin.FieldSelect, Required: true, Default: "disable", Options: []plugin.Option{
+				{Label: "Disable", Value: "disable"},
+				{Label: "Require encryption", Value: "require"},
+				{Label: "Verify CA", Value: "verify-ca"},
+				{Label: "Verify full", Value: "verify-full"},
+			}},
+			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &verifyTLS, Help: "PEM CA bundle used for verify-ca and verify-full."},
+			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
+			}, VisibleWhen: &tlsEnabled, Help: "Optional PEM containing the client certificate and private key."},
+		}},
+		{Name: "Safety", Fields: []plugin.Field{
+			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks INSERT, UPDATE, DELETE, DDL, TRUNCATE, OPTIMIZE, GRANT, and other write statements."},
+			{Key: "require_destructive_confirmation", Label: "Confirm destructive statements", Type: plugin.FieldToggle, Default: true, Help: "Requires explicit confirmation before write, DDL, and privileged statements execute."},
+			{Key: "query_timeout", Label: "Query timeout", Type: plugin.FieldDuration, Default: defaultTimeout.String()},
+			{Key: "row_limit", Label: "Row limit", Type: plugin.FieldNumber, Default: defaultRowLimit, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: plugin.MaxPageLimit}}},
+			{Key: "max_connections", Label: "Pool size", Type: plugin.FieldNumber, Default: defaultMaxConns, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 20}}},
+			{Key: "redact_columns", Label: "Redacted columns", Type: plugin.FieldTextarea, Help: "Comma or newline separated regular expressions for result columns that must be masked."},
+		}},
+	}}
+}
+
+func parseOptions(cfg plugin.ConnectConfig) (options, error) {
+	host := strings.TrimSpace(cfg.String("host"))
+	if host == "" {
+		return options{}, fmt.Errorf("%w: host is required", plugin.ErrInvalidInput)
+	}
+	port, ok := cfg.Int("port")
+	if !ok || port == 0 {
+		port = defaultPort
+	}
+	if port < 1 || port > 65535 {
+		return options{}, fmt.Errorf("%w: port must be between 1 and 65535", plugin.ErrInvalidInput)
+	}
+	database := strings.TrimSpace(cfg.String("database"))
+	if database == "" {
+		return options{}, fmt.Errorf("%w: database is required", plugin.ErrInvalidInput)
+	}
+	username := strings.TrimSpace(cfg.String("username"))
+	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
+		username = identity
+	}
+	if username == "" {
+		return options{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
+	}
+	password := cfg.String("password")
+	if secret := cfg.String(service.CredentialSecret); secret != "" {
+		password = secret
+	}
+	rowLimit, ok := cfg.Int("row_limit")
+	if !ok || rowLimit <= 0 {
+		rowLimit = defaultRowLimit
+	}
+	if rowLimit > plugin.MaxPageLimit {
+		rowLimit = plugin.MaxPageLimit
+	}
+	maxConns, ok := cfg.Int("max_connections")
+	if !ok || maxConns <= 0 {
+		maxConns = defaultMaxConns
+	}
+	if maxConns > 20 {
+		maxConns = 20
+	}
+	return options{
+		Host:              host,
+		Port:              port,
+		Database:          database,
+		Username:          username,
+		Password:          password,
+		TLSMode:           stringDefault(cfg.String("tls_mode"), "disable"),
+		CACertificate:     cfg.String("ca_certificate"),
+		ClientCertificate: cfg.String("_" + clientCertField + "_secret"),
+		ReadOnly:          sqldb.BoolValue(cfg.Config["read_only"], true),
+		RequireConfirm:    sqldb.BoolValue(cfg.Config["require_destructive_confirmation"], true),
+		QueryTimeout:      sqldb.DurationValue(cfg.Config["query_timeout"], defaultTimeout),
+		RowLimit:          rowLimit,
+		MaxConns:          maxConns,
+		RedactPatterns:    sqldb.ParsePatterns(cfg.String("redact_columns"), sqldb.DefaultRedactColumnPatterns()),
+	}, nil
+}
+
+func driverConfig(opts options, netTransport plugin.NetTransport) (*mysqldriver.Config, error) {
+	cfg := mysqldriver.NewConfig()
+	cfg.User = opts.Username
+	cfg.Passwd = opts.Password
+	cfg.Net = "tcp"
+	cfg.Addr = net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
+	cfg.DBName = opts.Database
+	cfg.ParseTime = true
+	cfg.MultiStatements = false
+	cfg.AllowNativePasswords = true
+	cfg.CheckConnLiveness = true
+	cfg.Timeout = opts.QueryTimeout
+	cfg.ReadTimeout = opts.QueryTimeout
+	cfg.WriteTimeout = opts.QueryTimeout
+	cfg.Collation = "utf8mb4_unicode_ci"
+	cfg.DialFunc = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		return netTransport.DialContext(ctx, network, addr)
+	}
+	tlsConfig, err := sqldb.TLSConfig(sqldb.TLSOptions{
+		Mode:              opts.TLSMode,
+		Host:              opts.Host,
+		CACertificate:     opts.CACertificate,
+		ClientCertificate: opts.ClientCertificate,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cfg.TLS = tlsConfig
+	return cfg, nil
+}
+
+func stringDefault(v, def string) string {
+	if strings.TrimSpace(v) == "" {
+		return def
+	}
+	return strings.TrimSpace(v)
+}

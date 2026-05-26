@@ -6,6 +6,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/ftp"
 	"github.com/charlesng/shellcn/plugins/ftps"
 	"github.com/charlesng/shellcn/plugins/minio"
+	"github.com/charlesng/shellcn/plugins/mysql"
 	"github.com/charlesng/shellcn/plugins/nfs"
 	"github.com/charlesng/shellcn/plugins/postgresql"
 	"github.com/charlesng/shellcn/plugins/proxmox"
@@ -45,5 +46,6 @@ func all() []plugin.Plugin {
 		rdp.New(),
 		proxmox.New(),
 		postgresql.New(),
+		mysql.New(),
 	}
 }

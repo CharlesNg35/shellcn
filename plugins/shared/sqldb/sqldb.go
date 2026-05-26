@@ -241,7 +241,7 @@ func FirstKeyword(statement string) string {
 
 func IsReadOnlyStatement(statement string) bool {
 	switch FirstKeyword(statement) {
-	case "SELECT", "SHOW", "EXPLAIN", "WITH", "VALUES":
+	case "SELECT", "SHOW", "EXPLAIN", "WITH", "VALUES", "DESCRIBE", "DESC":
 		return true
 	default:
 		return false
@@ -250,7 +250,7 @@ func IsReadOnlyStatement(statement string) bool {
 
 func IsDestructiveStatement(statement string) bool {
 	switch FirstKeyword(statement) {
-	case "DELETE", "DROP", "TRUNCATE", "ALTER", "UPDATE", "INSERT", "CREATE", "REINDEX", "VACUUM", "GRANT", "REVOKE":
+	case "DELETE", "DROP", "TRUNCATE", "ALTER", "UPDATE", "INSERT", "CREATE", "REINDEX", "VACUUM", "GRANT", "REVOKE", "OPTIMIZE", "ANALYZE", "LOCK", "UNLOCK", "CALL":
 		return true
 	default:
 		return false
