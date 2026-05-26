@@ -651,13 +651,17 @@ function handleHTTP(
 
   if (path === "/api/connections/layout" && method === "PUT") {
     return void readBody(req).then((raw) => {
-      const body = raw as { items?: Json[] };
+      const body = raw as { items?: Json[]; folders?: Json[] };
       for (const item of body.items ?? []) {
         const conn = connections().find((c) => c.id === item.connectionId);
         if (!conn) continue;
         if (item.folderId) conn.folderId = item.folderId;
         else delete conn.folderId;
         conn.sortOrder = item.sortOrder ?? 0;
+      }
+      for (const item of body.folders ?? []) {
+        const folder = connectionFolders().find((f) => f.id === item.folderId);
+        if (folder) folder.sortOrder = item.sortOrder ?? 0;
       }
       send(res, 200, { ok: true });
     });

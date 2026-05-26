@@ -107,6 +107,7 @@ describe("ConnectionSidebar", () => {
     await flushPromises();
 
     expect(saved).toMatchObject({
+      folders: expect.arrayContaining([{ folderId: "f1", sortOrder: 0 }]),
       items: expect.arrayContaining([
         { connectionId: "c-root", sortOrder: 0 },
         { connectionId: "c-prod", folderId: "f1", sortOrder: 0 },

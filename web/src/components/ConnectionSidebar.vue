@@ -29,6 +29,8 @@ const { confirmDanger } = useConfirmAction();
 
 const rootConnections = ref<ConnectionSummary[]>([]);
 const folderConnections = ref<Record<string, ConnectionSummary[]>>({});
+const folderList = ref<ConnectionFolder[]>([]);
+const dragging = ref(false);
 const expanded = useStorage<Record<string, boolean>>(
   "shellcn:connection-folders:expanded",
   {},
@@ -89,18 +91,12 @@ const colorClasses: Record<
   },
 };
 
-const sortedFolders = computed(() =>
-  [...conns.folders].sort(
-    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
-  ),
-);
-
 const visibleFolders = computed(() =>
   props.query.trim()
-    ? sortedFolders.value.filter(
+    ? folderList.value.filter(
         (folder) => folderConnections.value[folder.id]?.length,
       )
-    : sortedFolders.value,
+    : folderList.value,
 );
 
 const emptyFiltered = computed(
@@ -135,6 +131,9 @@ function rebuildLists(): void {
     conns.folders.map((f) => [f.id, []]),
   );
   const root: ConnectionSummary[] = [];
+  folderList.value = [...conns.folders].sort(
+    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+  );
   for (const c of conns.connections) {
     if (q && !`${c.name} ${c.protocol}`.toLowerCase().includes(q)) continue;
     if (c.folderId && folderIds.has(c.folderId)) lists[c.folderId].push(c);
@@ -179,11 +178,6 @@ function shareTitle(c: ConnectionSummary): string {
   return "";
 }
 
-function go(c: ConnectionSummary): void {
-  ws.open(c.id);
-  void router.push({ name: "connection", params: { id: c.id } });
-}
-
 function openNewFolder(): void {
   editingFolder.value = null;
   showFolderDialog.value = true;
@@ -223,7 +217,7 @@ async function persistLayout(): Promise<void> {
     rootConnections.value.forEach((c, index) =>
       items.push({ connectionId: c.id, sortOrder: index }),
     );
-    for (const folder of conns.folders) {
+    for (const folder of folderList.value) {
       (folderConnections.value[folder.id] ?? []).forEach((c, index) =>
         items.push({
           connectionId: c.id,
@@ -232,7 +226,11 @@ async function persistLayout(): Promise<void> {
         }),
       );
     }
-    await conns.saveLayout(items);
+    const folders = folderList.value.map((folder, index) => ({
+      folderId: folder.id,
+      sortOrder: index,
+    }));
+    await conns.saveLayout(items, folders);
     rebuildLists();
   } catch (e) {
     notify.error("Could not save sidebar order", (e as Error).message);
@@ -245,6 +243,23 @@ async function persistLayout(): Promise<void> {
 function onDragEnd(): void {
   if (props.query.trim()) return;
   void nextTick(() => persistLayout());
+}
+
+function onDragStart(): void {
+  dragging.value = true;
+}
+
+function afterDragEnd(): void {
+  onDragEnd();
+  window.setTimeout(() => {
+    dragging.value = false;
+  }, 0);
+}
+
+function go(c: ConnectionSummary): void {
+  if (dragging.value) return;
+  ws.open(c.id);
+  void router.push({ name: "connection", params: { id: c.id } });
 }
 </script>
 
@@ -279,38 +294,38 @@ function onDragEnd(): void {
         :animation="150"
         ghost-class="opacity-40"
         class="min-h-3 space-y-1"
-        @end="onDragEnd"
+        @start="onDragStart"
+        @end="afterDragEnd"
       >
-        <button
+        <div
           v-for="c in rootConnections"
           :key="c.id"
-          type="button"
-          class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+          class="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
           :class="
             activeId === c.id
               ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
               : ''
           "
-          @click="go(c)"
         >
           <span
-            class="connection-drag-handle cursor-grab text-surface-300 opacity-0 transition-opacity group-hover:opacity-100"
-            aria-hidden="true"
+            class="connection-drag-handle cursor-grab touch-none rounded p-0.5 text-surface-500 active:cursor-grabbing"
+            title="Drag connection"
+            aria-label="Drag connection"
           >
-            <AppIcon
-              :icon="{ type: 'name', value: 'grip-vertical' }"
-              :size="14"
-            />
+            <AppIcon :icon="c.icon" :size="16" />
           </span>
-          <AppIcon :icon="c.icon" :size="16" class="text-surface-500" />
-          <span class="flex min-w-0 flex-1 flex-col">
+          <button
+            type="button"
+            class="flex min-w-0 flex-1 flex-col text-left"
+            @click="go(c)"
+          >
             <span class="truncate text-surface-800 dark:text-surface-100">{{
               c.name
             }}</span>
             <span class="truncate text-xs text-surface-400">{{
               c.protocol
             }}</span>
-          </span>
+          </button>
           <span
             class="h-2 w-2 shrink-0 rounded-full"
             :class="dotClass(c)"
@@ -326,146 +341,162 @@ function onDragEnd(): void {
             class="shrink-0 text-surface-400"
             :title="shareTitle(c)"
           />
-        </button>
+        </div>
       </VueDraggable>
 
-      <section
-        v-for="folder in visibleFolders"
-        :key="folder.id"
-        class="mt-2 rounded-md border-l-2"
-        :class="folderAccentClass(folder)"
+      <VueDraggable
+        v-model="folderList"
+        handle=".folder-drag-handle"
+        :disabled="Boolean(query.trim())"
+        :animation="150"
+        ghost-class="opacity-40"
+        @start="onDragStart"
+        @end="afterDragEnd"
       >
-        <div
-          class="group flex items-center gap-1 rounded-md px-1 py-1"
-          :class="folderClass(folder)"
+        <section
+          v-for="folder in visibleFolders"
+          :key="folder.id"
+          class="mt-2 rounded-md border-l-2"
+          :class="folderAccentClass(folder)"
         >
-          <Button
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            :aria-label="
-              expanded[folder.id] ? 'Collapse folder' : 'Expand folder'
-            "
-            @click="toggleFolder(folder.id)"
+          <div
+            class="group flex items-center gap-1 rounded-md px-1 py-1"
+            :class="folderClass(folder)"
           >
-            <AppIcon
-              :icon="{
-                type: 'name',
-                value: expanded[folder.id] ? 'chevron-down' : 'chevron-right',
-              }"
-              :size="14"
-            />
-          </Button>
-          <AppIcon
-            :icon="{
-              type: 'name',
-              value: expanded[folder.id] ? 'folder-open' : 'folder',
-            }"
-            :size="16"
-            :class="folderIconClass(folder)"
-          />
-          <button
-            type="button"
-            class="min-w-0 flex-1 truncate text-left text-sm font-medium"
-            @click="toggleFolder(folder.id)"
-          >
-            {{ folder.name }}
-          </button>
-          <span class="text-xs text-surface-400">
-            {{ folderConnections[folder.id]?.length ?? 0 }}
-          </span>
-          <Button
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            class="opacity-0 group-hover:opacity-100"
-            title="Edit folder"
-            aria-label="Edit folder"
-            @click="editFolder(folder)"
-          >
-            <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="14" />
-          </Button>
-          <Button
-            text
-            rounded
-            severity="danger"
-            size="small"
-            class="opacity-0 group-hover:opacity-100"
-            title="Delete folder"
-            aria-label="Delete folder"
-            @click="askDeleteFolder(folder)"
-          >
-            <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="14" />
-          </Button>
-        </div>
-
-        <VueDraggable
-          v-show="expanded[folder.id]"
-          v-model="folderConnections[folder.id]"
-          group="connections"
-          handle=".connection-drag-handle"
-          :disabled="Boolean(query.trim())"
-          :animation="150"
-          ghost-class="opacity-40"
-          class="min-h-3 space-y-1 pt-1 pl-3"
-          @end="onDragEnd"
-        >
-          <button
-            v-for="c in folderConnections[folder.id]"
-            :key="c.id"
-            type="button"
-            class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-            :class="
-              activeId === c.id
-                ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-                : ''
-            "
-            @click="go(c)"
-          >
-            <span
-              class="connection-drag-handle cursor-grab text-surface-300 opacity-0 transition-opacity group-hover:opacity-100"
-              aria-hidden="true"
+            <Button
+              text
+              rounded
+              severity="secondary"
+              size="small"
+              :aria-label="
+                expanded[folder.id] ? 'Collapse folder' : 'Expand folder'
+              "
+              @click="toggleFolder(folder.id)"
             >
               <AppIcon
-                :icon="{ type: 'name', value: 'grip-vertical' }"
+                :icon="{
+                  type: 'name',
+                  value: expanded[folder.id] ? 'chevron-down' : 'chevron-right',
+                }"
                 :size="14"
               />
-            </span>
-            <AppIcon :icon="c.icon" :size="16" class="text-surface-500" />
-            <span class="flex min-w-0 flex-1 flex-col">
-              <span class="truncate text-surface-800 dark:text-surface-100">{{
-                c.name
-              }}</span>
-              <span class="truncate text-xs text-surface-400">{{
-                c.protocol
-              }}</span>
-            </span>
+            </Button>
             <span
-              class="h-2 w-2 shrink-0 rounded-full"
-              :class="dotClass(c)"
-              :title="dotTitle(c)"
-            />
-            <AppIcon
-              v-if="c.sharedWithMe || c.sharedByMe"
-              :icon="{
-                type: 'name',
-                value: c.sharedWithMe ? 'users' : 'share-2',
-              }"
-              :size="14"
-              class="shrink-0 text-surface-400"
-              :title="shareTitle(c)"
-            />
-          </button>
-        </VueDraggable>
-        <p
-          v-if="expanded[folder.id] && !folderConnections[folder.id]?.length"
-          class="px-5 py-2 text-xs text-surface-400"
-        >
-          Empty folder
-        </p>
-      </section>
+              class="folder-drag-handle cursor-grab touch-none rounded p-0.5 active:cursor-grabbing"
+              :class="folderIconClass(folder)"
+              title="Drag folder"
+              aria-label="Drag folder"
+            >
+              <AppIcon
+                :icon="{
+                  type: 'name',
+                  value: expanded[folder.id] ? 'folder-open' : 'folder',
+                }"
+                :size="16"
+              />
+            </span>
+            <button
+              type="button"
+              class="min-w-0 flex-1 truncate text-left text-sm font-medium"
+              @click="toggleFolder(folder.id)"
+            >
+              {{ folder.name }}
+            </button>
+            <span class="text-xs text-surface-400">
+              {{ folderConnections[folder.id]?.length ?? 0 }}
+            </span>
+            <Button
+              text
+              rounded
+              severity="secondary"
+              size="small"
+              class="opacity-0 group-hover:opacity-100"
+              title="Edit folder"
+              aria-label="Edit folder"
+              @click="editFolder(folder)"
+            >
+              <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="14" />
+            </Button>
+            <Button
+              text
+              rounded
+              severity="danger"
+              size="small"
+              class="opacity-0 group-hover:opacity-100"
+              title="Delete folder"
+              aria-label="Delete folder"
+              @click="askDeleteFolder(folder)"
+            >
+              <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="14" />
+            </Button>
+          </div>
+
+          <VueDraggable
+            v-show="expanded[folder.id]"
+            v-model="folderConnections[folder.id]"
+            group="connections"
+            handle=".connection-drag-handle"
+            :disabled="Boolean(query.trim())"
+            :animation="150"
+            ghost-class="opacity-40"
+            class="min-h-3 space-y-1 pt-1 pl-3"
+            @start="onDragStart"
+            @end="afterDragEnd"
+          >
+            <div
+              v-for="c in folderConnections[folder.id]"
+              :key="c.id"
+              class="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              :class="
+                activeId === c.id
+                  ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
+                  : ''
+              "
+            >
+              <span
+                class="connection-drag-handle cursor-grab touch-none rounded p-0.5 text-surface-500 active:cursor-grabbing"
+                title="Drag connection"
+                aria-label="Drag connection"
+              >
+                <AppIcon :icon="c.icon" :size="16" />
+              </span>
+              <button
+                type="button"
+                class="flex min-w-0 flex-1 flex-col text-left"
+                @click="go(c)"
+              >
+                <span class="truncate text-surface-800 dark:text-surface-100">{{
+                  c.name
+                }}</span>
+                <span class="truncate text-xs text-surface-400">{{
+                  c.protocol
+                }}</span>
+              </button>
+              <span
+                class="h-2 w-2 shrink-0 rounded-full"
+                :class="dotClass(c)"
+                :title="dotTitle(c)"
+              />
+              <AppIcon
+                v-if="c.sharedWithMe || c.sharedByMe"
+                :icon="{
+                  type: 'name',
+                  value: c.sharedWithMe ? 'users' : 'share-2',
+                }"
+                :size="14"
+                class="shrink-0 text-surface-400"
+                :title="shareTitle(c)"
+              />
+            </div>
+          </VueDraggable>
+          <p
+            v-if="expanded[folder.id] && !folderConnections[folder.id]?.length"
+            class="px-5 py-2 text-xs text-surface-400"
+          >
+            Empty folder
+          </p>
+        </section>
+      </VueDraggable>
 
       <div v-if="!conns.loaded" class="space-y-1.5 px-1 pt-1">
         <div

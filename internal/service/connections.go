@@ -69,6 +69,12 @@ type ConnectionPlacementInput struct {
 	SortOrder    int    `json:"sortOrder"`
 }
 
+// ConnectionFolderOrderInput is one sidebar folder position.
+type ConnectionFolderOrderInput struct {
+	FolderID  string `json:"folderId"`
+	SortOrder int    `json:"sortOrder"`
+}
+
 // ConnectionDetail is the edit/detail read: non-secret config plus a per-secret
 // field presence map ("set" / "not set"). It never carries secret values.
 type ConnectionDetail struct {
@@ -303,6 +309,36 @@ func SaveConnectionLayout(ctx context.Context, placements store.ConnectionPlacem
 			SortOrder: item.SortOrder, UpdatedAt: now,
 		}
 		if err := placements.Set(ctx, &p); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SaveConnectionFolderOrder validates and persists a user's folder ordering.
+func SaveConnectionFolderOrder(ctx context.Context, folderStore store.ConnectionFolderStore, userID string, in []ConnectionFolderOrderInput) error {
+	existing, err := folderStore.ListByUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	byID := map[string]models.ConnectionFolder{}
+	for _, folder := range existing {
+		byID[folder.ID] = folder
+	}
+	seen := map[string]bool{}
+	now := time.Now()
+	for _, item := range in {
+		folder, ok := byID[item.FolderID]
+		if !ok {
+			return fmt.Errorf("%w: unknown folder %q", plugin.ErrInvalidInput, item.FolderID)
+		}
+		if seen[item.FolderID] {
+			return fmt.Errorf("%w: duplicate folder %q", plugin.ErrInvalidInput, item.FolderID)
+		}
+		seen[item.FolderID] = true
+		folder.SortOrder = item.SortOrder
+		folder.UpdatedAt = now
+		if err := folderStore.Update(ctx, &folder); err != nil {
 			return err
 		}
 	}

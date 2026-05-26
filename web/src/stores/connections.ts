@@ -90,8 +90,9 @@ export const useConnectionsStore = defineStore("connections", () => {
       folderId?: string;
       sortOrder: number;
     }>,
+    folderItems: Array<{ folderId: string; sortOrder: number }> = [],
   ): Promise<void> {
-    await api.put("/connections/layout", { items });
+    await api.put("/connections/layout", { items, folders: folderItems });
     const byId = new Map(items.map((i) => [i.connectionId, i]));
     connections.value = connections.value.map((c) => {
       const item = byId.get(c.id);
@@ -103,6 +104,15 @@ export const useConnectionsStore = defineStore("connections", () => {
           }
         : c;
     });
+    const folderById = new Map(folderItems.map((f) => [f.folderId, f]));
+    folders.value = folders.value
+      .map((folder) => {
+        const item = folderById.get(folder.id);
+        return item ? { ...folder, sortOrder: item.sortOrder } : folder;
+      })
+      .sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+      );
   }
 
   return {

@@ -311,7 +311,7 @@ func TestConnectionFoldersAndLayout(t *testing.T) {
 	}
 
 	resp = h.do(t, http.MethodPut, "/api/connections/layout", "op",
-		strings.NewReader(`{"items":[{"connectionId":"c-boom","folderId":"`+folder.ID+`","sortOrder":0},{"connectionId":"c-op","folderId":"`+folder.ID+`","sortOrder":1},{"connectionId":"c-internal","sortOrder":0}]}`))
+		strings.NewReader(`{"folders":[{"folderId":"`+folder.ID+`","sortOrder":4}],"items":[{"connectionId":"c-boom","folderId":"`+folder.ID+`","sortOrder":0},{"connectionId":"c-op","folderId":"`+folder.ID+`","sortOrder":1},{"connectionId":"c-internal","sortOrder":0}]}`))
 	if resp.Status != http.StatusOK {
 		t.Fatalf("save layout: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -326,7 +326,7 @@ func TestConnectionFoldersAndLayout(t *testing.T) {
 	}
 
 	resp = h.do(t, http.MethodGet, "/api/connection-folders", "op", nil)
-	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), "Production") {
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), "Production") || !strings.Contains(string(resp.Body), `"sortOrder":4`) {
 		t.Fatalf("list folders: status=%d body=%s", resp.Status, resp.Body)
 	}
 

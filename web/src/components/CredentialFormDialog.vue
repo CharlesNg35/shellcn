@@ -11,6 +11,7 @@ import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import CredentialProtocolBadges from "./CredentialProtocolBadges.vue";
+import ShareDialog from "./ShareDialog.vue";
 import type {
   CredentialKindInfo,
   CredentialSelector,
@@ -42,6 +43,7 @@ const busy = ref(false);
 const kindCatalog = ref<CredentialKindInfo[]>([]);
 const catalogLoading = ref(false);
 const catalogError = ref<string | null>(null);
+const showShare = ref(false);
 
 const selectorKinds = computed(() => props.selector?.kinds ?? []);
 const scopedToSelector = computed(
@@ -335,24 +337,46 @@ async function save(): Promise<void> {
     </div>
 
     <template #footer>
-      <div class="flex justify-end gap-2">
+      <div class="flex items-center justify-between gap-3">
         <Button
+          v-if="isEdit && credential"
           type="button"
-          :disabled="busy"
+          severity="secondary"
           :pt="{ root: btnGhost }"
-          @click="emit('update:visible', false)"
+          @click="showShare = true"
         >
-          Cancel
+          Share
         </Button>
-        <Button
-          type="button"
-          :disabled="busy || catalogLoading || Boolean(catalogError)"
-          :pt="{ root: btnPrimary }"
-          @click="save"
-        >
-          {{ busy ? "Saving…" : isEdit ? "Save changes" : "Create credential" }}
-        </Button>
+        <span v-else />
+        <div class="flex justify-end gap-2">
+          <Button
+            type="button"
+            :disabled="busy"
+            :pt="{ root: btnGhost }"
+            @click="emit('update:visible', false)"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            :disabled="busy || catalogLoading || Boolean(catalogError)"
+            :pt="{ root: btnPrimary }"
+            @click="save"
+          >
+            {{
+              busy ? "Saving…" : isEdit ? "Save changes" : "Create credential"
+            }}
+          </Button>
+        </div>
       </div>
     </template>
   </Dialog>
+
+  <ShareDialog
+    v-if="credential"
+    v-model:visible="showShare"
+    resource="credentials"
+    :resource-id="credential.id"
+    :resource-name="credential.name"
+  />
 </template>

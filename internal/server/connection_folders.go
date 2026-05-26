@@ -18,7 +18,8 @@ type connectionFolderRequest struct {
 }
 
 type connectionLayoutRequest struct {
-	Items []service.ConnectionPlacementInput `json:"items"`
+	Items   []service.ConnectionPlacementInput   `json:"items"`
+	Folders []service.ConnectionFolderOrderInput `json:"folders"`
 }
 
 func (s *Server) handleListConnectionFolders(w http.ResponseWriter, r *http.Request) {
@@ -144,6 +145,11 @@ func (s *Server) handleSaveConnectionLayout(w http.ResponseWriter, r *http.Reque
 			result = models.AuditDenied
 		}
 		s.auditConnEvent(ctx, user, "", connLayoutUpdateEvent, plugin.RiskWrite, result, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	if err := service.SaveConnectionFolderOrder(ctx, s.deps.Store.ConnectionFolders, user.ID, req.Folders); err != nil {
+		s.auditConnEvent(ctx, user, "", connLayoutUpdateEvent, plugin.RiskWrite, models.AuditError, err)
 		writeError(w, s.deps.Logger, err)
 		return
 	}

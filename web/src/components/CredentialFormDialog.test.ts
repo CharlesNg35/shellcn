@@ -4,6 +4,7 @@ import { setActivePinia, createPinia } from "pinia";
 import Button from "primevue/button";
 import { installFetch } from "../test/fetchMock";
 import CredentialFormDialog from "./CredentialFormDialog.vue";
+import ShareDialog from "./ShareDialog.vue";
 
 const credentialKinds = [
   {
@@ -172,6 +173,41 @@ describe("CredentialFormDialog", () => {
 
     expect(document.body.textContent).not.toContain("Username");
     expect(document.body.textContent).toContain("Certificate and private key");
+    wrapper.unmount();
+  });
+
+  it("opens credential sharing from the credential dialog", async () => {
+    installFetch((url) => {
+      if (url.includes("/credential-kinds")) return { body: credentialKinds };
+      if (url.includes("/credentials/c1/grants")) return { body: [] };
+      return { body: [] };
+    });
+    const wrapper = mount(CredentialFormDialog, {
+      props: {
+        visible: true,
+        credential: {
+          id: "c1",
+          name: "ops key",
+          kind: "ssh_password",
+          ownerId: "u-demo",
+        },
+      },
+    });
+    await flushPromises();
+
+    const share = wrapper
+      .findAllComponents(Button)
+      .find((b) => b.text().includes("Share"));
+    await share?.trigger("click");
+    await flushPromises();
+
+    const dialog = wrapper.findComponent(ShareDialog);
+    expect(dialog.exists()).toBe(true);
+    expect(dialog.props()).toMatchObject({
+      resource: "credentials",
+      resourceId: "c1",
+      resourceName: "ops key",
+    });
     wrapper.unmount();
   });
 });
