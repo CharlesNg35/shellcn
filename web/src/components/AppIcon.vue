@@ -1,91 +1,12 @@
 <script setup lang="ts">
-import type { Component } from "vue";
 import { computed, ref, useAttrs } from "vue";
 import DOMPurify from "dompurify";
-import {
-  Box,
-  Camera,
-  ChevronDown,
-  ChevronRight,
-  Circle,
-  TriangleAlert,
-  Code2,
-  Copy,
-  Database,
-  Download,
-  EllipsisVertical,
-  Folder,
-  FolderOpen,
-  FolderPlus,
-  Globe,
-  KeyRound,
-  Layers,
-  LayoutGrid,
-  List,
-  LogOut,
-  Pencil,
-  Play,
-  Plus,
-  RefreshCw,
-  Search,
-  Server,
-  Share2,
-  SlidersHorizontal,
-  Square,
-  Terminal,
-  Trash2,
-  Upload,
-  User,
-  Users,
-  Video,
-  X,
-} from "@lucide/vue";
+import { FALLBACK_ICON, iconComponents } from "./appIconRegistry";
 import type { Icon } from "../types/projection";
 
 defineOptions({ inheritAttrs: false });
 
-const FALLBACK_ICON = "circle";
 const attrs = useAttrs();
-
-const iconComponents: Record<string, Component> = {
-  alert: TriangleAlert,
-  box: Box,
-  camera: Camera,
-  "chevron-down": ChevronDown,
-  "chevron-right": ChevronRight,
-  circle: Circle,
-  code: Code2,
-  copy: Copy,
-  database: Database,
-  download: Download,
-  "ellipsis-vertical": EllipsisVertical,
-  folder: Folder,
-  "folder-open": FolderOpen,
-  "folder-plus": FolderPlus,
-  globe: Globe,
-  key: KeyRound,
-  layers: Layers,
-  grid: LayoutGrid,
-  list: List,
-  "log-out": LogOut,
-  pencil: Pencil,
-  play: Play,
-  plus: Plus,
-  refresh: RefreshCw,
-  search: Search,
-  server: Server,
-  settings: SlidersHorizontal,
-  share: Share2,
-  "share-2": Share2,
-  stop: Square,
-  terminal: Terminal,
-  trash: Trash2,
-  upload: Upload,
-  user: User,
-  users: Users,
-  video: Video,
-  x: X,
-};
 
 const props = withDefaults(
   defineProps<{
