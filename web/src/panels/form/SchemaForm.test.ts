@@ -138,6 +138,36 @@ describe("SchemaForm", () => {
     );
   });
 
+  it("applies manifest defaults to toggle fields", async () => {
+    const w = mount(SchemaForm, {
+      props: {
+        schema: {
+          groups: [
+            {
+              name: "Safety",
+              fields: [
+                {
+                  key: "read_only",
+                  label: "Read-only mode",
+                  type: "toggle",
+                  default: true,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.findComponent({ name: "ToggleSwitch" }).props("modelValue")).toBe(
+      true,
+    );
+    expect(w.emitted("update:modelValue")?.at(-1)?.[0]).toMatchObject({
+      read_only: true,
+    });
+  });
+
   it("omits hidden conditional fields from submit payloads", async () => {
     const w = mount(SchemaForm, {
       props: {

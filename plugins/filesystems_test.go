@@ -65,6 +65,25 @@ func TestPluginConfigDefaultsSatisfyNumericValidators(t *testing.T) {
 	}
 }
 
+func TestPasswordAndStoredCredentialAreMutuallyExclusiveByDefault(t *testing.T) {
+	reg := plugin.NewRegistry()
+	Register(reg)
+
+	for _, p := range reg.All() {
+		m := p.Manifest()
+		fields := fieldMap(m.Config)
+		if !fields["password"] || !fields["credential_id"] {
+			continue
+		}
+		visible := m.Config.VisibleValues(m.Config.ValuesWithDefaults(map[string]any{}), nil)
+		if _, passwordVisible := visible["password"]; passwordVisible {
+			if _, credentialVisible := visible["credential_id"]; credentialVisible {
+				t.Fatalf("%s shows password and credential selector together by default", m.Name)
+			}
+		}
+	}
+}
+
 func TestSharedBasicAuthCredentialCompatibility(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)

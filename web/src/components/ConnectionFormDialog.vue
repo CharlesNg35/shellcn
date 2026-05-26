@@ -8,9 +8,11 @@ import { api, ApiError } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import SchemaForm from "../panels/form/SchemaForm.vue";
+import { mergeSchemaDefaults } from "../panels/form/defaults";
 import ProtocolPicker from "./ProtocolPicker.vue";
 import AppIcon from "./AppIcon.vue";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
+import { TRANSPORT_DIRECT } from "../types/projection";
 import type {
   ConnectionDetail,
   ConnectionSummary,
@@ -36,7 +38,7 @@ const selectedPlugin = computed(
 const projection = ref<PluginProjection | null>(null);
 const name = ref("");
 const nameError = ref<string | null>(null);
-const transport = ref<Transport>("direct");
+const transport = ref<Transport>(TRANSPORT_DIRECT);
 const configModel = ref<Record<string, unknown>>({});
 const secretsSet = ref<Record<string, boolean>>({});
 const credentialStates = ref<ConnectionDetail["credentials"]>({});
@@ -46,7 +48,7 @@ const busy = ref(false);
 const formRef = ref<{ submit: () => void } | null>(null);
 
 const transportChoices = computed(() =>
-  (projection.value?.supportedTransports ?? ["direct"]).map((t) => ({
+  (projection.value?.supportedTransports ?? [TRANSPORT_DIRECT]).map((t) => ({
     label: t === "agent" ? "Agent" : "Direct",
     value: t,
   })),
@@ -82,7 +84,7 @@ function reset(): void {
   projection.value = null;
   name.value = "";
   nameError.value = null;
-  transport.value = "direct";
+  transport.value = TRANSPORT_DIRECT;
   configModel.value = {};
   secretsSet.value = {};
   credentialStates.value = {};
@@ -92,7 +94,8 @@ function reset(): void {
 async function selectPlugin(nextProtocol: string): Promise<void> {
   protocol.value = nextProtocol;
   projection.value = await conns.projection(nextProtocol);
-  transport.value = projection.value.supportedTransports[0] ?? "direct";
+  transport.value = projection.value.supportedTransports[0] ?? TRANSPORT_DIRECT;
+  configModel.value = mergeSchemaDefaults(projection.value.config);
   recordingModel.value = {};
 }
 
@@ -114,7 +117,6 @@ async function loadForEdit(id: string): Promise<void> {
     const detail = await api.get<ConnectionDetail>(`/connections/${id}`);
     name.value = detail.name;
     transport.value = detail.transport;
-    configModel.value = detail.config ?? {};
     secretsSet.value = Object.fromEntries(
       Object.entries(detail.secrets ?? {}).map(([k, v]) => [k, v === "set"]),
     );
@@ -122,6 +124,10 @@ async function loadForEdit(id: string): Promise<void> {
     recordingModel.value = { ...(detail.recording ?? {}) };
     protocol.value = detail.protocol;
     projection.value = await conns.projection(detail.protocol);
+    configModel.value = mergeSchemaDefaults(
+      projection.value.config,
+      detail.config,
+    );
   } finally {
     loading.value = false;
   }
@@ -302,6 +308,7 @@ async function onConfig(
           :credential-states="credentialStates"
           :context="schemaContext"
           :protocol="protocol"
+          @update:model-value="configModel = $event"
           @submit="onConfig"
         />
 

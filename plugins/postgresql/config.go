@@ -23,6 +23,8 @@ const (
 	protocolName      = "postgresql"
 	credentialIDField = "credential_id"
 	clientCertField   = "client_cert_id"
+	authPassword      = "password"
+	authCredential    = "credential"
 )
 
 type options struct {
@@ -44,7 +46,8 @@ type options struct {
 }
 
 func configSchema() plugin.Schema {
-	needsInlinePassword := plugin.Condition{AllOf: []plugin.Rule{{Field: credentialIDField, Op: plugin.OpEmpty}}}
+	passwordAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}}}
+	credentialAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authCredential}, {Field: credentialIDField, Op: plugin.OpNotEmpty}}}
 	tlsEnabled := plugin.Condition{AllOf: []plugin.Rule{{Field: "tls_mode", Op: plugin.OpNeq, Value: "disable"}}}
 	verifyTLS := plugin.Condition{AnyOf: []plugin.Rule{
 		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-ca"},
@@ -57,11 +60,15 @@ func configSchema() plugin.Schema {
 			{Key: "database", Label: "Database", Type: plugin.FieldText, Required: true, Default: "postgres"},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
-			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "postgres"},
-			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
+				{Label: "Password", Value: authPassword},
+				{Label: "Stored credential", Value: authCredential},
+			}},
+			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "postgres", VisibleWhen: &passwordAuth},
+			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{protocolName},
-			}, Help: "Reusable database password. The credential identity can also supply the username."},
-			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &needsInlinePassword},
+			}, VisibleWhen: &credentialAuth, Help: "Reusable database password. The credential identity can also supply the username."},
+			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
 		}},
 		{Name: "TLS", Fields: []plugin.Field{
 			{Key: "tls_mode", Label: "TLS mode", Type: plugin.FieldSelect, Required: true, Default: "disable", Options: []plugin.Option{

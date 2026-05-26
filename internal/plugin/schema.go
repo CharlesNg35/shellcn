@@ -113,6 +113,29 @@ type Schema struct {
 	Groups []Group `json:"groups"`
 }
 
+// Defaults returns the manifest-declared default values keyed by field.
+func (s Schema) Defaults() map[string]any {
+	out := map[string]any{}
+	for _, group := range s.Groups {
+		for _, field := range group.Fields {
+			if field.Default != nil {
+				out[field.Key] = field.Default
+			}
+		}
+	}
+	return out
+}
+
+// ValuesWithDefaults returns a copy of values with missing schema defaults
+// filled in. Explicit false/zero/empty values are preserved.
+func (s Schema) ValuesWithDefaults(values map[string]any) map[string]any {
+	out := s.Defaults()
+	for key, value := range values {
+		out[key] = value
+	}
+	return out
+}
+
 // HasFileField reports whether the schema can submit browser File values and
 // therefore requires multipart/form-data binding at the server boundary.
 func (s Schema) HasFileField() bool {

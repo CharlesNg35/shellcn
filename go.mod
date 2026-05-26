@@ -30,6 +30,7 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.19.0
 	github.com/reiver/go-telnet v0.0.0-20250617105250-7da9ad70a2b2
+	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/spf13/viper v1.21.0
 	github.com/studio-b12/gowebdav v0.12.0
 	github.com/willscott/go-nfs-client v0.0.0-20251022144359-801f10d98886

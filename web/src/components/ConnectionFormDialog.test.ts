@@ -106,6 +106,71 @@ describe("ConnectionFormDialog", () => {
     });
   });
 
+  it("seeds create config from manifest defaults", async () => {
+    let posted: Record<string, unknown> | null = null;
+    const withDefaults: PluginProjection = {
+      ...projection,
+      config: {
+        groups: [
+          {
+            name: "Safety",
+            fields: [
+              {
+                key: "read_only",
+                label: "Read-only mode",
+                type: "toggle",
+                default: true,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    installFetch((url, init) => {
+      if (url.endsWith("/api/plugins/tester")) return { body: withDefaults };
+      if (url.endsWith("/api/connections") && init?.method === "POST") {
+        posted = JSON.parse(String(init.body));
+        return {
+          status: 201,
+          body: { id: "conn-default", name: posted?.name },
+        };
+      }
+      return { body: [] };
+    });
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
+    ];
+
+    const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
+    await flushPromises();
+    await wrapper
+      .findComponent(ProtocolPicker)
+      .vm.$emit("update:modelValue", "tester");
+    await flushPromises();
+    expect(wrapper.findComponent(SchemaForm).props("modelValue")).toMatchObject(
+      {
+        read_only: true,
+      },
+    );
+
+    wrapper
+      .findAllComponents(InputText)[0]
+      .vm.$emit("update:modelValue", "redis");
+    await flushPromises();
+    wrapper.findComponent(SchemaForm).vm.$emit("submit", { read_only: true });
+    await flushPromises();
+
+    expect(posted).toMatchObject({
+      config: { read_only: true },
+    });
+  });
+
   it("shows recording options only for plugins that declare support", async () => {
     let posted: Record<string, unknown> | null = null;
     const recordable: PluginProjection = {
@@ -326,6 +391,69 @@ describe("ConnectionFormDialog", () => {
     expect(updated).toMatchObject({
       config: { host: "10.0.0.2" },
       preserveCredentials: ["credential_id"],
+    });
+  });
+
+  it("merges manifest defaults into edit config without overwriting stored values", async () => {
+    const withDefaults: PluginProjection = {
+      ...projection,
+      config: {
+        groups: [
+          {
+            name: "Safety",
+            fields: [
+              {
+                key: "read_only",
+                label: "Read-only mode",
+                type: "toggle",
+                default: true,
+              },
+              {
+                key: "require_confirm",
+                label: "Confirm writes",
+                type: "toggle",
+                default: true,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    installFetch((url) => {
+      if (url.endsWith("/api/connections/c2")) {
+        return {
+          body: {
+            id: "c2",
+            name: "redis",
+            protocol: "tester",
+            transport: "direct",
+            config: { read_only: false },
+            secrets: {},
+          },
+        };
+      }
+      if (url.endsWith("/api/plugins/tester")) return { body: withDefaults };
+      return { body: [] };
+    });
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
+    ];
+
+    const wrapper = mount(ConnectionFormDialog, {
+      props: { visible: true, connectionId: "c2" },
+    });
+    await flushPromises();
+
+    const form = wrapper.findComponent(SchemaForm);
+    expect(form.props("modelValue")).toMatchObject({
+      read_only: false,
+      require_confirm: true,
     });
   });
 });

@@ -25,6 +25,8 @@ const (
 	defaultValueLimit = 500
 	credentialIDField = "credential_id"
 	clientCertField   = "client_cert_id"
+	authPassword      = "password"
+	authCredential    = "credential"
 )
 
 type options struct {
@@ -46,7 +48,8 @@ type options struct {
 }
 
 func configSchema() plugin.Schema {
-	needsInlinePassword := plugin.Condition{AllOf: []plugin.Rule{{Field: credentialIDField, Op: plugin.OpEmpty}}}
+	passwordAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}}}
+	credentialAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authCredential}, {Field: credentialIDField, Op: plugin.OpNotEmpty}}}
 	tlsEnabled := plugin.Condition{AllOf: []plugin.Rule{{Field: "tls_mode", Op: plugin.OpNeq, Value: "disable"}}}
 	verifyTLS := plugin.Condition{AnyOf: []plugin.Rule{
 		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-ca"},
@@ -59,11 +62,15 @@ func configSchema() plugin.Schema {
 			{Key: "database", Label: "Database", Type: plugin.FieldNumber, Default: 0, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}, {Type: plugin.ValidatorMax, Value: 15}}},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
-			{Key: "username", Label: "Username", Type: plugin.FieldText, Placeholder: "default"},
-			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
+				{Label: "Password", Value: authPassword},
+				{Label: "Stored credential", Value: authCredential},
+			}},
+			{Key: "username", Label: "Username", Type: plugin.FieldText, Placeholder: "default", VisibleWhen: &passwordAuth},
+			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{protocolName},
-			}, Help: "Reusable Redis password. The credential identity can also supply the ACL username."},
-			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &needsInlinePassword},
+			}, VisibleWhen: &credentialAuth, Help: "Reusable Redis password. The credential identity can also supply the ACL username."},
+			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
 		}},
 		{Name: "TLS", Fields: []plugin.Field{
 			{Key: "tls_mode", Label: "TLS mode", Type: plugin.FieldSelect, Required: true, Default: "disable", Options: []plugin.Option{
@@ -78,7 +85,7 @@ func configSchema() plugin.Schema {
 			}, VisibleWhen: &tlsEnabled, Help: "Optional PEM containing the client certificate and private key."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
-			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: false, Help: "Blocks writes and deletes from the key browser and terminal when enabled."},
+			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks writes and deletes from the key browser and terminal when enabled."},
 			{Key: "require_write_confirmation", Label: "Confirm write commands", Type: plugin.FieldToggle, Default: true, Help: "Requires confirmation before write, delete, and administrative Redis commands execute from the command console."},
 			{Key: "timeout", Label: "Command timeout", Type: plugin.FieldDuration, Default: defaultTimeout.String()},
 			{Key: "pool_size", Label: "Pool size", Type: plugin.FieldNumber, Default: defaultPoolSize, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 50}}},
@@ -137,7 +144,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		TLSMode:           stringDefault(cfg.String("tls_mode"), "disable"),
 		CACertificate:     cfg.String("ca_certificate"),
 		ClientCertificate: cfg.String("_" + clientCertField + "_secret"),
-		ReadOnly:          boolValue(cfg.Config["read_only"], false),
+		ReadOnly:          boolValue(cfg.Config["read_only"], true),
 		RequireConfirm:    boolValue(cfg.Config["require_write_confirmation"], true),
 		Timeout:           durationValue(cfg.Config["timeout"], defaultTimeout),
 		PoolSize:          intValue(cfg.Config["pool_size"], defaultPoolSize),

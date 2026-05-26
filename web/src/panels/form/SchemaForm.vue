@@ -42,12 +42,18 @@ const visibleGroups = computed(() =>
 
 function seed(resetTouched = true): void {
   if (resetTouched) touched.value = {};
+  const next: Record<string, unknown> = {};
   for (const group of groups.value) {
     for (const field of group.fields ?? []) {
       const incoming = props.modelValue?.[field.key];
-      values[field.key] = incoming !== undefined ? incoming : field.default;
+      next[field.key] = incoming !== undefined ? incoming : field.default;
     }
   }
+  for (const key of Object.keys(values)) {
+    if (!(key in next)) delete values[key];
+  }
+  Object.assign(values, next);
+  emit("update:modelValue", { ...values });
 }
 
 function modelMatchesValues(model?: Record<string, unknown>): boolean {

@@ -10,6 +10,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/mssql"
 	"github.com/charlesng/shellcn/plugins/mysql"
 	"github.com/charlesng/shellcn/plugins/nfs"
+	"github.com/charlesng/shellcn/plugins/oracle"
 	"github.com/charlesng/shellcn/plugins/postgresql"
 	"github.com/charlesng/shellcn/plugins/proxmox"
 	"github.com/charlesng/shellcn/plugins/rdp"
@@ -53,5 +54,6 @@ func all() []plugin.Plugin {
 		redis.New(),
 		mongodb.New(),
 		mssql.New(),
+		oracle.New(),
 	}
 }

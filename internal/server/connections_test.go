@@ -124,6 +124,37 @@ func TestConnectionConfigVisibilityFollowsTransport(t *testing.T) {
 	}
 }
 
+func TestConnectionConfigAppliesManifestDefaults(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	resp := h.do(t, http.MethodPost, "/api/connections", "op",
+		strings.NewReader(`{"name":"defaults","protocol":"tester","config":{"host":"h"}}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	id := createConnID(t, resp)
+	conn, _ := h.store.Connections.Get(ctx, id)
+	if conn.Config["read_only"] != true {
+		t.Fatalf("default toggle not stored on create: %#v", conn.Config)
+	}
+
+	resp = h.do(t, http.MethodGet, "/api/connections/"+id, "op", nil)
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"read_only":true`) {
+		t.Fatalf("detail missing default toggle: status=%d body=%s", resp.Status, resp.Body)
+	}
+
+	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "op",
+		strings.NewReader(`{"name":"defaults","config":{"host":"h","read_only":false}}`))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("update: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	conn, _ = h.store.Connections.Get(ctx, id)
+	if conn.Config["read_only"] != false {
+		t.Fatalf("explicit false toggle was not preserved: %#v", conn.Config)
+	}
+}
+
 func TestConnectionRecordingPolicy(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()

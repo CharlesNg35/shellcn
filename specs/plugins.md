@@ -38,20 +38,20 @@ These plugins should prove the core architecture first.
 | `postgresql` | PostgreSQL access      | schema browser, query editor, table data, snippets, audit |
 
 > **`ssh` vs `sftp`:** an `ssh` connection exposes SFTP as its **Files** tab over
-> the *same* `ssh.Client` (no second connection / re-auth). The standalone `sftp`
+> the _same_ `ssh.Client` (no second connection / re-auth). The standalone `sftp`
 > plugin is for users who want **file access only** (no shell). Both
 > render the same `file_browser` panel and share the SFTP route handlers — the
 > only difference is the manifest each declares. The frontend special-cases
 > neither (v2 §12, §13).
 
-> **SQL plugins:** PostgreSQL, MySQL/MariaDB, MSSQL, SQLite, and later SQL
+> **SQL plugins:** PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, SQLite, and later SQL
 > engines share only driver-neutral helpers from `plugins/shared/sqldb`
 > (query editor envelopes, identifier/DDL helpers, statement safety checks,
 > audit metadata/result redaction, and TLS/config parsing). Dialect catalog
 > queries, driver connection code, actions, and manifests remain inside each
-> plugin. PostgreSQL, MySQL/MariaDB, MSSQL, Redis, and MongoDB are implemented
-> as direct-only database/data-store plugins; agent transport is reserved for
-> private control-plane targets such as Docker and Kubernetes.
+> plugin. PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, Redis, and MongoDB are
+> implemented as direct-only database/data-store plugins; agent transport is
+> reserved for private control-plane targets such as Docker and Kubernetes.
 
 ## P1: Core Infrastructure
 
@@ -63,6 +63,7 @@ These plugins should prove the core architecture first.
 | `mongodb`    | MongoDB access                | databases, collections, document editor, command console, indexes                   |
 | `redis`      | Redis access                  | key browser, strings, hashes, lists, sets, sorted sets, command console, pub/sub    |
 | `mssql`      | Microsoft SQL Server          | schema browser, T-SQL editor, table data, jobs, users, DDL helpers, audit           |
+| `oracle`     | Oracle Database               | schemas, SQL editor, PL/SQL objects, sessions, tablespaces, DDL helpers, audit      |
 | `vnc`        | Remote desktop via VNC/RFB    | `remote_desktop` over an RFB stream, clipboard, keyboard/mouse                      |
 
 ## P1: Filesystem And Storage Protocols
@@ -83,7 +84,6 @@ These plugins should prove the core architecture first.
 | --------------- | ------------------------ | ------------------------------------------------------- |
 | `mariadb`       | MariaDB access           | schema browser, query editor, users, replication status |
 | `sqlite`        | SQLite database files    | schema browser, query editor, table data                |
-| `oracle`        | Oracle Database          | schema browser, query editor, sessions, tablespaces     |
 | `cockroachdb`   | CockroachDB access       | schema browser, query editor, cluster info              |
 | `clickhouse`    | ClickHouse analytics DB  | query editor, databases, tables, mutations              |
 | `cassandra`     | Cassandra access         | keyspaces, tables, CQL query                            |
@@ -107,14 +107,14 @@ These plugins should prove the core architecture first.
 
 ## P2: Virtualization And Remote Desktop
 
-| Plugin           | Purpose                     | Main Capabilities                                       |
-| ---------------- | --------------------------- | ------------------------------------------------------- |
+| Plugin           | Purpose                     | Main Capabilities                                               |
+| ---------------- | --------------------------- | --------------------------------------------------------------- |
 | `rdp`            | Windows/Linux RDP access    | `remote_desktop`; server-side RDP decoding bridged to noVNC/RFB |
-| `xenserver`      | XenServer/XCP-ng management | hosts, VMs, storage, networks, console                  |
-| `vmware-vsphere` | VMware vSphere              | datacenters, clusters, hosts, VMs, datastores, console  |
-| `libvirt`        | libvirt/KVM management      | domains, networks, storage pools, console               |
-| `incus`          | Incus/LXD management        | instances, images, profiles, networks, storage, console |
-| `lxd`            | LXD management              | containers, VMs, images, profiles, networks, storage    |
+| `xenserver`      | XenServer/XCP-ng management | hosts, VMs, storage, networks, console                          |
+| `vmware-vsphere` | VMware vSphere              | datacenters, clusters, hosts, VMs, datastores, console          |
+| `libvirt`        | libvirt/KVM management      | domains, networks, storage pools, console                       |
+| `incus`          | Incus/LXD management        | instances, images, profiles, networks, storage, console         |
+| `lxd`            | LXD management              | containers, VMs, images, profiles, networks, storage            |
 
 ## P2: Cloud Providers
 
@@ -229,12 +229,13 @@ These plugins should prove the core architecture first.
 8. `redis`
 9. `mongodb`
 10. `mssql`
-11. `kubernetes`
-12. `s3`
-13. `webdav`
-14. `smb`
-15. `nfs`
-16. `rdp` as optional sidecar-based plugin
+11. `oracle`
+12. `kubernetes`
+13. `s3`
+14. `webdav`
+15. `smb`
+16. `nfs`
+17. `rdp` as optional sidecar-based plugin
 
 Kubernetes should remain later than SSH/SFTP, Docker, Proxmox, and PostgreSQL
 because it exercises the largest surface area: resource trees, watches, logs,

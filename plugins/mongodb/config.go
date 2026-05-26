@@ -24,6 +24,8 @@ const (
 	defaultDocLimit   = 500
 	credentialIDField = "credential_id"
 	clientCertField   = "client_cert_id"
+	authPassword      = "password"
+	authCredential    = "credential"
 )
 
 type optionsData struct {
@@ -45,7 +47,8 @@ type optionsData struct {
 }
 
 func configSchema() plugin.Schema {
-	needsInlinePassword := plugin.Condition{AllOf: []plugin.Rule{{Field: credentialIDField, Op: plugin.OpEmpty}}}
+	passwordAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}}}
+	credentialAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authCredential}, {Field: credentialIDField, Op: plugin.OpNotEmpty}}}
 	tlsEnabled := plugin.Condition{AllOf: []plugin.Rule{{Field: "tls_mode", Op: plugin.OpNeq, Value: "disable"}}}
 	verifyTLS := plugin.Condition{AnyOf: []plugin.Rule{
 		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-ca"},
@@ -58,11 +61,15 @@ func configSchema() plugin.Schema {
 			{Key: "database", Label: "Default database", Type: plugin.FieldText, Required: true, Default: "admin"},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
-			{Key: "username", Label: "Username", Type: plugin.FieldText},
-			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
+				{Label: "Password", Value: authPassword},
+				{Label: "Stored credential", Value: authCredential},
+			}},
+			{Key: "username", Label: "Username", Type: plugin.FieldText, VisibleWhen: &passwordAuth},
+			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{protocolName},
-			}, Help: "Reusable MongoDB password. The credential identity can also supply the username."},
-			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &needsInlinePassword},
+			}, VisibleWhen: &credentialAuth, Help: "Reusable MongoDB password. The credential identity can also supply the username."},
+			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
 			{Key: "auth_source", Label: "Auth source", Type: plugin.FieldText, Default: "admin"},
 			{Key: "auth_mechanism", Label: "Auth mechanism", Type: plugin.FieldSelect, Options: []plugin.Option{
 				{Label: "Default", Value: ""},

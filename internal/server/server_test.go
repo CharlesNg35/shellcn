@@ -53,6 +53,7 @@ func (testPlugin) Manifest() plugin.Manifest {
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{
 			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, VisibleWhen: &directOnly},
+			{Key: "read_only", Label: "Read-only", Type: plugin.FieldToggle, Default: true},
 			{Key: "direct_secret", Label: "Direct secret", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &directOnly},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true},
 			{

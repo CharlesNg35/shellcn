@@ -76,20 +76,20 @@ func TestCommandSafetyStopsBeforeRedis(t *testing.T) {
 	}
 }
 
-func TestReadOnlyModeDefaultsOff(t *testing.T) {
+func TestReadOnlyModeDefaultsOn(t *testing.T) {
 	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{"host": "127.0.0.1"}})
 	if err != nil {
 		t.Fatalf("parse options: %v", err)
 	}
-	if opts.ReadOnly {
-		t.Fatal("read-only mode should be disabled unless the connection config enables it")
+	if !opts.ReadOnly {
+		t.Fatal("read-only mode should be enabled by default")
 	}
-	opts, err = parseOptions(plugin.ConnectConfig{Config: map[string]any{"host": "127.0.0.1", "read_only": true}})
+	opts, err = parseOptions(plugin.ConnectConfig{Config: map[string]any{"host": "127.0.0.1", "read_only": false}})
 	if err != nil {
 		t.Fatalf("parse options with read_only: %v", err)
 	}
-	if !opts.ReadOnly {
-		t.Fatal("read-only mode should be enabled when configured")
+	if opts.ReadOnly {
+		t.Fatal("read-only mode should be disabled when configured")
 	}
 }
 
