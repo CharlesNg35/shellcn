@@ -6,6 +6,7 @@ import { api } from "../../api/client";
 import CredentialFormDialog from "../../components/CredentialFormDialog.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import type {
+  CredentialKindInfo,
   CredentialRefState,
   CredentialSelector,
   CredentialSummary,
@@ -20,6 +21,7 @@ const props = defineProps<{
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 
 const options = ref<CredentialSummary[]>([]);
+const kindCatalog = ref<CredentialKindInfo[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const showCreate = ref(false);
@@ -31,9 +33,13 @@ const requestProtocol = computed(
 const choices = computed(() =>
   options.value.map((c) => ({
     value: c.id,
-    label: `${c.name} · ${c.kind}${c.identity ? ` (${c.identity})` : ""}`,
+    label: `${c.name} · ${kindLabel(c.kind)}${c.identity ? ` (${c.identity})` : ""}`,
   })),
 );
+
+function kindLabel(kind: string): string {
+  return kindCatalog.value.find((k) => k.kind === kind)?.label ?? kind;
+}
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -43,9 +49,16 @@ async function load(): Promise<void> {
     sp.set("kind", props.selector.kinds.join(","));
   if (requestProtocol.value) sp.set("protocol", requestProtocol.value);
   try {
-    options.value = await api.get<CredentialSummary[]>(
-      `/credentials${sp.toString() ? `?${sp.toString()}` : ""}`,
-    );
+    const [nextOptions, nextKinds] = await Promise.all([
+      api.get<CredentialSummary[]>(
+        `/credentials${sp.toString() ? `?${sp.toString()}` : ""}`,
+      ),
+      kindCatalog.value.length
+        ? Promise.resolve(kindCatalog.value)
+        : api.get<CredentialKindInfo[]>("/credential-kinds"),
+    ]);
+    options.value = Array.isArray(nextOptions) ? nextOptions : [];
+    kindCatalog.value = Array.isArray(nextKinds) ? nextKinds : [];
   } catch (e) {
     error.value = (e as Error).message;
   } finally {

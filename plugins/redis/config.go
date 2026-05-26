@@ -13,7 +13,7 @@ import (
 	redisclient "github.com/redis/go-redis/v9"
 
 	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng/shellcn/plugins/shared/dbcred"
 )
 
 const (
@@ -64,7 +64,7 @@ func configSchema() plugin.Schema {
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
 				{Label: "Password", Value: authPassword},
-				{Label: "Stored credential", Value: authCredential},
+				{Label: "Stored password", Value: authCredential},
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Placeholder: "default", VisibleWhen: &passwordAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
@@ -115,14 +115,8 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	if database < 0 {
 		return options{}, fmt.Errorf("%w: database must be >= 0", plugin.ErrInvalidInput)
 	}
-	username := strings.TrimSpace(cfg.String("username"))
-	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
-		username = identity
-	}
-	password := cfg.String("password")
-	if secret := cfg.String(service.CredentialSecret); secret != "" {
-		password = secret
-	}
+	auth := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
+	tlsMode := stringDefault(cfg.String("tls_mode"), "disable")
 	scanCount := intValue(cfg.Config["scan_count"], defaultScanCount)
 	if scanCount > plugin.MaxPageLimit {
 		scanCount = plugin.MaxPageLimit
@@ -139,9 +133,9 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		Host:              host,
 		Port:              port,
 		Database:          database,
-		Username:          username,
-		Password:          password,
-		TLSMode:           stringDefault(cfg.String("tls_mode"), "disable"),
+		Username:          auth.Username,
+		Password:          auth.Password,
+		TLSMode:           tlsMode,
 		CACertificate:     cfg.String("ca_certificate"),
 		ClientCertificate: cfg.String("_" + clientCertField + "_secret"),
 		ReadOnly:          boolValue(cfg.Config["read_only"], true),

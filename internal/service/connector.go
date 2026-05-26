@@ -17,6 +17,7 @@ const (
 	CredentialField    = "credential_id"
 	CredentialSecret   = "_credential_secret"
 	CredentialIdentity = "_credential_identity"
+	CredentialKind     = "_credential_kind"
 )
 
 // Connector assembles a plugin.ConnectConfig for a connection: it decrypts inline
@@ -108,6 +109,7 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
 					}
 					cfg[credentialSecretKey(key)] = string(material)
+					cfg[credentialKindKey(key)] = cred.Kind
 					if cred.Username != "" {
 						cfg[credentialIdentityKey(key)] = cred.Username
 					}
@@ -143,4 +145,11 @@ func credentialIdentityKey(key string) string {
 		return CredentialIdentity
 	}
 	return "_" + key + "_identity"
+}
+
+func credentialKindKey(key string) string {
+	if key == CredentialField {
+		return CredentialKind
+	}
+	return "_" + key + "_kind"
 }

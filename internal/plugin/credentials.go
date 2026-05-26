@@ -36,7 +36,7 @@ var builtInCredentialKindCatalog = []CredentialKindInfo{
 	},
 	{
 		Kind: CredentialTLSClientCert, Label: "TLS client certificate", SecretLabel: "Certificate and private key",
-		SecretMultiline: true,
+		SecretMultiline: true, IdentityLabel: "Certificate subject / username",
 	},
 	{
 		Kind: CredentialCloudAccessKey, Label: "Cloud access key", SecretLabel: "Secret access key",

@@ -11,7 +11,7 @@ import (
 	mysqldriver "github.com/go-sql-driver/mysql"
 
 	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng/shellcn/plugins/shared/sqldb"
 )
 
@@ -61,7 +61,7 @@ func configSchema() plugin.Schema {
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
 				{Label: "Password", Value: authPassword},
-				{Label: "Stored credential", Value: authCredential},
+				{Label: "Stored password", Value: authCredential},
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "root", VisibleWhen: &passwordAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
@@ -108,17 +108,12 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	if database == "" {
 		return options{}, fmt.Errorf("%w: database is required", plugin.ErrInvalidInput)
 	}
-	username := strings.TrimSpace(cfg.String("username"))
-	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
-		username = identity
-	}
-	if username == "" {
+	auth := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
+	if auth.Username == "" {
 		return options{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
 	}
-	password := cfg.String("password")
-	if secret := cfg.String(service.CredentialSecret); secret != "" {
-		password = secret
-	}
+	tlsMode := stringDefault(cfg.String("tls_mode"), "disable")
+	clientCertificate := dbcred.ResolvedSecret(cfg, clientCertField)
 	rowLimit, ok := cfg.Int("row_limit")
 	if !ok || rowLimit <= 0 {
 		rowLimit = defaultRowLimit
@@ -137,11 +132,11 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		Host:              host,
 		Port:              port,
 		Database:          database,
-		Username:          username,
-		Password:          password,
-		TLSMode:           stringDefault(cfg.String("tls_mode"), "disable"),
+		Username:          auth.Username,
+		Password:          auth.Password,
+		TLSMode:           tlsMode,
 		CACertificate:     cfg.String("ca_certificate"),
-		ClientCertificate: cfg.String("_" + clientCertField + "_secret"),
+		ClientCertificate: clientCertificate,
 		ReadOnly:          sqldb.BoolValue(cfg.Config["read_only"], true),
 		RequireConfirm:    sqldb.BoolValue(cfg.Config["require_destructive_confirmation"], true),
 		QueryTimeout:      sqldb.DurationValue(cfg.Config["query_timeout"], defaultTimeout),

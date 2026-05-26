@@ -68,6 +68,7 @@ const builtInCredentialKinds: CredentialKindInfo[] = [
     label: "TLS client certificate",
     secretLabel: "Certificate and private key",
     secretMultiline: true,
+    identityLabel: "Certificate subject / username",
   },
   {
     kind: "cloud_access_key",

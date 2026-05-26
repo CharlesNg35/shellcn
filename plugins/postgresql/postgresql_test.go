@@ -48,6 +48,22 @@ func TestQuerySafetyStopsBeforeDatabase(t *testing.T) {
 	}
 }
 
+func TestParseOptionsUsesTLSCredentialAsClientCertificate(t *testing.T) {
+	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
+		"host":                          "db.local",
+		"database":                      "postgres",
+		"auth":                          authClientCert,
+		"_auth_client_cert_id_identity": "cert-user",
+		"_auth_client_cert_id_secret":   "pem-material",
+	}})
+	if err != nil {
+		t.Fatalf("parse options: %v", err)
+	}
+	if opts.Username != "cert-user" || opts.Password != "" || opts.ClientCertificate != "pem-material" || opts.TLSMode != "require" {
+		t.Fatalf("unexpected credential material: %+v", opts)
+	}
+}
+
 func TestRedactRowsMasksConfiguredColumns(t *testing.T) {
 	rows := []row{{"id": int64(1), "password": "plain", "name": "alice"}}
 	redactRows(rows, sqldb.DefaultRedactColumnPatterns())

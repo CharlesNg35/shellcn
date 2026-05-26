@@ -64,7 +64,7 @@ func configSchema() plugin.Schema {
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
 				{Label: "Password", Value: authPassword},
-				{Label: "Stored credential", Value: authCredential},
+				{Label: "Stored password", Value: authCredential},
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "SYSTEM", VisibleWhen: &passwordAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{

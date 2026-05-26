@@ -13,7 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng/shellcn/plugins/shared/dbcred"
 )
 
 const (
@@ -23,9 +23,11 @@ const (
 	defaultPoolSize   = 8
 	defaultDocLimit   = 500
 	credentialIDField = "credential_id"
+	authCertField     = "auth_client_cert_id"
 	clientCertField   = "client_cert_id"
 	authPassword      = "password"
 	authCredential    = "credential"
+	authClientCert    = "client_certificate"
 )
 
 type optionsData struct {
@@ -47,9 +49,11 @@ type optionsData struct {
 }
 
 func configSchema() plugin.Schema {
-	passwordAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}}}
+	passwordAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}, {Field: authCertField, Op: plugin.OpEmpty}}}
+	usernameAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: "auth", Op: plugin.OpEq, Value: authClientCert}, {Field: authCertField, Op: plugin.OpNotEmpty}}}
 	credentialAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authCredential}, {Field: credentialIDField, Op: plugin.OpNotEmpty}}}
-	tlsEnabled := plugin.Condition{AllOf: []plugin.Rule{{Field: "tls_mode", Op: plugin.OpNeq, Value: "disable"}}}
+	passwordMechanismAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpNeq, Value: authClientCert}, {Field: authCertField, Op: plugin.OpEmpty}}}
+	optionalClientCertificate := plugin.Condition{AllOf: []plugin.Rule{{Field: "tls_mode", Op: plugin.OpNeq, Value: "disable"}, {Field: "auth", Op: plugin.OpNeq, Value: authClientCert}}}
 	verifyTLS := plugin.Condition{AnyOf: []plugin.Rule{
 		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-ca"},
 		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-full"},
@@ -63,19 +67,22 @@ func configSchema() plugin.Schema {
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
 				{Label: "Password", Value: authPassword},
-				{Label: "Stored credential", Value: authCredential},
+				{Label: "Stored password", Value: authCredential},
+				{Label: "Client certificate", Value: authClientCert},
 			}},
-			{Key: "username", Label: "Username", Type: plugin.FieldText, VisibleWhen: &passwordAuth},
+			{Key: "username", Label: "Username", Type: plugin.FieldText, VisibleWhen: &usernameAuth},
 			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{protocolName},
 			}, VisibleWhen: &credentialAuth, Help: "Reusable MongoDB password. The credential identity can also supply the username."},
+			{Key: authCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
+			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authClientCert}}}, Help: "Reusable X.509 client certificate and private key."},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
-			{Key: "auth_source", Label: "Auth source", Type: plugin.FieldText, Default: "admin"},
-			{Key: "auth_mechanism", Label: "Auth mechanism", Type: plugin.FieldSelect, Options: []plugin.Option{
+			{Key: "auth_source", Label: "Auth source", Type: plugin.FieldText, Default: "admin", VisibleWhen: &passwordMechanismAuth},
+			{Key: "auth_mechanism", Label: "Auth mechanism", Type: plugin.FieldSelect, VisibleWhen: &passwordMechanismAuth, Options: []plugin.Option{
 				{Label: "Default", Value: ""},
 				{Label: "SCRAM-SHA-256", Value: "SCRAM-SHA-256"},
 				{Label: "SCRAM-SHA-1", Value: "SCRAM-SHA-1"},
-				{Label: "MONGODB-X509", Value: "MONGODB-X509"},
 				{Label: "PLAIN", Value: "PLAIN"},
 			}},
 		}},
@@ -89,7 +96,7 @@ func configSchema() plugin.Schema {
 			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &verifyTLS, Help: "PEM CA bundle used for verify-ca and verify-full."},
 			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
-			}, VisibleWhen: &tlsEnabled, Help: "Optional PEM containing the client certificate and private key."},
+			}, VisibleWhen: &optionalClientCertificate, Help: "Optional PEM containing the client certificate and private key for mTLS when password authentication is used."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
 			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks inserts, updates, deletes, collection drops, and write commands."},
@@ -117,13 +124,23 @@ func parseOptions(cfg plugin.ConnectConfig) (optionsData, error) {
 	if database == "" {
 		database = "admin"
 	}
-	username := strings.TrimSpace(cfg.String("username"))
-	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
-		username = identity
+	tlsMode := stringDefault(cfg.String("tls_mode"), "disable")
+	auth := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
+	clientCertificate := dbcred.ResolvedSecret(cfg, clientCertField)
+	authMechanism := strings.TrimSpace(cfg.String("auth_mechanism"))
+	authSource := stringDefault(cfg.String("auth_source"), "admin")
+	certAuthMode := cfg.String("auth") == authClientCert || dbcred.ResolvedSecret(cfg, authCertField) != ""
+	if certAuthMode {
+		certAuth := dbcred.ApplyClientCertificateCredential(cfg, authCertField, cfg.String("username"), tlsMode, "")
+		auth.Username = certAuth.Username
+		auth.Password = ""
+		tlsMode = certAuth.TLSMode
+		clientCertificate = certAuth.ClientCertificate
+		authMechanism = "MONGODB-X509"
+		authSource = "$external"
 	}
-	password := cfg.String("password")
-	if secret := cfg.String(service.CredentialSecret); secret != "" {
-		password = secret
+	if certAuthMode && clientCertificate == "" {
+		return optionsData{}, fmt.Errorf("%w: client certificate is required", plugin.ErrInvalidInput)
 	}
 	limit := intValue(cfg.Config["document_limit"], defaultDocLimit)
 	if limit > plugin.MaxPageLimit {
@@ -133,13 +150,13 @@ func parseOptions(cfg plugin.ConnectConfig) (optionsData, error) {
 		Host:              host,
 		Port:              port,
 		Database:          database,
-		AuthSource:        stringDefault(cfg.String("auth_source"), "admin"),
-		AuthMechanism:     strings.TrimSpace(cfg.String("auth_mechanism")),
-		Username:          username,
-		Password:          password,
-		TLSMode:           stringDefault(cfg.String("tls_mode"), "disable"),
+		AuthSource:        authSource,
+		AuthMechanism:     authMechanism,
+		Username:          auth.Username,
+		Password:          auth.Password,
+		TLSMode:           tlsMode,
 		CACertificate:     cfg.String("ca_certificate"),
-		ClientCertificate: cfg.String("_" + clientCertField + "_secret"),
+		ClientCertificate: clientCertificate,
 		ReadOnly:          boolValue(cfg.Config["read_only"], true),
 		RequireConfirm:    boolValue(cfg.Config["require_write_confirmation"], true),
 		Timeout:           durationValue(cfg.Config["timeout"], defaultTimeout),

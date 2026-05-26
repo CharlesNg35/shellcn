@@ -80,6 +80,9 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	if got := cfg.Config["_api_credential_identity"]; got != "svc-api" {
 		t.Fatalf("resolved credential identity = %#v, want svc-api", got)
 	}
+	if got := cfg.Config["_api_credential_kind"]; got != "api_token" {
+		t.Fatalf("resolved credential kind = %#v, want api_token", got)
+	}
 	if got := cfg.Config["api_credential"]; got != cred.ID {
 		t.Fatalf("credential id field should remain stored id, got %#v", got)
 	}
