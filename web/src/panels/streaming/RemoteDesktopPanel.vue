@@ -32,7 +32,6 @@ let activeRun = 0;
 const remoteConfig = computed(
   () => props.config as Partial<RemoteDesktopPanelConfig> | undefined,
 );
-const engine = computed(() => remoteConfig.value?.engine ?? "novnc");
 const descriptor = computed(
   () => (props.config?._recording as RecordingDescriptor | undefined) ?? null,
 );
@@ -142,7 +141,7 @@ async function connectRemote(): Promise<void> {
     const stream = await prepareStream(props.connectionId, props.source, {
       resource: props.resource,
     });
-    remoteSession = await connectRemoteDesktop(engine.value, {
+    remoteSession = await connectRemoteDesktop({
       target: container.value,
       url: stream.url,
       config: remoteConfig.value ?? {},

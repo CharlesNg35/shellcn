@@ -781,16 +781,16 @@ func TestWSHappyPathEcho(t *testing.T) {
 	}
 }
 
-func TestWSAcceptsGuacamoleSubprotocol(t *testing.T) {
+func TestWSAcceptsBinarySubprotocol(t *testing.T) {
 	h := newHarness(t)
 	tok := h.mintTicket(t, "op", "c-op", "t.ws", nil)
-	c, err := h.dialWSWithSubprotocol(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok, "guacamole")
+	c, err := h.dialWSWithSubprotocol(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok, "binary")
 	if err != nil {
-		t.Fatalf("dial with guacamole subprotocol: %v", err)
+		t.Fatalf("dial with binary subprotocol: %v", err)
 	}
 	defer func() { _ = c.CloseNow() }()
-	if got := c.Subprotocol(); got != "guacamole" {
-		t.Fatalf("subprotocol = %q, want guacamole", got)
+	if got := c.Subprotocol(); got != "binary" {
+		t.Fatalf("subprotocol = %q, want binary", got)
 	}
 }
 

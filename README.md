@@ -22,7 +22,7 @@ Early development. Work proceeds **UI-first** through the phased plan — see
 
 ## Develop
 
-Requires Go 1.25+ and Node 24.11+.
+Requires Go 1.26+ and Node 24.11+.
 
 ```sh
 make build      # vite build → embed → single binary (bin/shellcn)
@@ -38,4 +38,4 @@ want the fixture-backed mock API.
 
 ## License
 
-[MIT](LICENSE)
+[GPL-3.0](LICENSE)

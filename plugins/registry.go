@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/plugins/docker"
 	"github.com/charlesng/shellcn/plugins/sftp"
 	"github.com/charlesng/shellcn/plugins/ssh"
 )
@@ -19,5 +20,6 @@ func all() []plugin.Plugin {
 	return []plugin.Plugin{
 		ssh.New(),
 		sftp.New(),
+		docker.New(),
 	}
 }

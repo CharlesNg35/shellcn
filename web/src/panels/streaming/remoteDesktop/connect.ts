@@ -1,20 +1,12 @@
-import type { RemoteDesktopEngine } from "../../../types/projection";
 import type { RemoteDesktopEngineOptions, RemoteDesktopSession } from "./types";
 
+// Remote desktops render through noVNC. VNC streams raw RFB; RDP is bridged to
+// RFB server-side, so both protocols share this single browser engine.
 export async function connectRemoteDesktop(
-  engine: RemoteDesktopEngine,
   options: RemoteDesktopEngineOptions,
 ): Promise<RemoteDesktopSession> {
-  switch (engine) {
-    case "novnc": {
-      const { connectNoVNCDesktop } = await import("./novncEngine");
-      return connectNoVNCDesktop(options);
-    }
-    case "guacamole": {
-      const { connectGuacamoleDesktop } = await import("./guacamoleEngine");
-      return connectGuacamoleDesktop(options);
-    }
-  }
+  const { connectNoVNCDesktop } = await import("./novncEngine");
+  return connectNoVNCDesktop(options);
 }
 
 export type { RemoteDesktopSession, RemoteDesktopStatus } from "./types";

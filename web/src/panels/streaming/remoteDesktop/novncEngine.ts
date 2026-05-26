@@ -22,7 +22,7 @@ export async function connectNoVNCDesktop({
     opts?: Record<string, unknown>,
   ) => RfbLike;
 
-  const socket = new WebSocket(url);
+  const socket = new WebSocket(url, ["binary"]);
   socket.binaryType = "arraybuffer";
   socket.addEventListener("close", (ev) => {
     if (ev.reason) hooks.error(ev.reason);

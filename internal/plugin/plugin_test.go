@@ -181,7 +181,6 @@ func TestValidateAcceptsRemoteDesktopEngines(t *testing.T) {
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
 	for _, engine := range []plugin.RemoteDesktopEngine{
 		plugin.RemoteDesktopEngineNoVNC,
-		plugin.RemoteDesktopEngineGuacamole,
 	} {
 		t.Run(string(engine), func(t *testing.T) {
 			m := plugin.Manifest{
