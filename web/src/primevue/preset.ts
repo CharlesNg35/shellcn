@@ -251,6 +251,13 @@ export const primeVuePassthrough = {
     },
   },
 
+  progressbar: {
+    root: "relative overflow-hidden rounded-full bg-surface-200 dark:bg-surface-800",
+    value:
+      "h-full rounded-full bg-primary-500 transition-[width] duration-150 data-[p-progressbar-value=true]:bg-primary-500",
+    label: "hidden",
+  },
+
   toggleswitch: {
     root: "relative inline-flex h-5 w-9 cursor-pointer",
     input: "absolute inset-0 z-10 cursor-pointer opacity-0",

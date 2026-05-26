@@ -12,6 +12,7 @@ import {
   runAction,
   uploadFiles,
 } from "../../api/dataSource";
+import type { UploadProgress } from "../../api/dataSource";
 import type {
   FileBrowserConfig,
   FileContent,
@@ -25,6 +26,7 @@ import FileEntryGrid from "./FileEntryGrid.vue";
 import FileEntryList from "./FileEntryList.vue";
 import FilePreview from "./FilePreview.vue";
 import FileToolbar from "./FileToolbar.vue";
+import { formatBytes } from "./fileTypes";
 
 const props = defineProps<PanelProps>();
 const toast = useToast();
@@ -58,7 +60,13 @@ const selected = ref<FileEntry | null>(null);
 const content = ref<FileContent | null>(null);
 const editContent = ref("");
 const loadingContent = ref(false);
+const contentError = ref<string | null>(null);
 const mutating = ref(false);
+const operation = ref<"upload" | "save" | "mkdir" | "rename" | "delete" | null>(
+  null,
+);
+const uploadProgress = ref<UploadProgress | null>(null);
+const uploadLabel = ref("");
 const mkdirOpen = ref(false);
 const renameOpen = ref(false);
 const deleteOpen = ref(false);
@@ -110,6 +118,15 @@ const downloadHref = computed(() => {
     operationParams(selected.value.path),
   );
 });
+const statusLabel = computed(() => {
+  if (uploadProgress.value) return `Uploading ${uploadLabel.value}`;
+  if (operation.value === "save") return "Saving file";
+  if (operation.value === "mkdir") return "Creating folder";
+  if (operation.value === "rename") return "Renaming item";
+  if (operation.value === "delete") return "Deleting item";
+  if (loadingList.value) return "Loading folder";
+  return "";
+});
 
 function operationParams(path: string): Record<string, string> {
   return { ...(props.source?.params ?? {}), [pathParam.value]: path };
@@ -134,6 +151,7 @@ async function loadList(path: string): Promise<void> {
   listError.value = null;
   selected.value = null;
   content.value = null;
+  contentError.value = null;
   try {
     const page = (await fetchPage<FileEntry>(
       props.connectionId,
@@ -155,6 +173,7 @@ async function loadList(path: string): Promise<void> {
 async function selectEntry(entry: FileEntry): Promise<void> {
   selected.value = entry;
   content.value = null;
+  contentError.value = null;
   editContent.value = "";
   if (entry.isDir) return;
   if (!readRouteId.value) return;
@@ -169,6 +188,8 @@ async function selectEntry(entry: FileEntry): Promise<void> {
       operationCtx.value,
     );
     editContent.value = content.value.content ?? "";
+  } catch (e) {
+    contentError.value = (e as Error).message;
   } finally {
     loadingContent.value = false;
   }
@@ -179,6 +200,7 @@ async function saveFile(): Promise<void> {
   const entry = selected.value;
   if (!routeId || !entry || !dirty.value) return;
   mutating.value = true;
+  operation.value = "save";
   try {
     await runAction(
       props.connectionId,
@@ -204,6 +226,7 @@ async function saveFile(): Promise<void> {
     notifyError(e);
   } finally {
     mutating.value = false;
+    operation.value = null;
   }
 }
 
@@ -233,7 +256,19 @@ async function upload(event: FileUploadUploaderEvent): Promise<void> {
   if (!routeId) return;
   const files = Array.isArray(event.files) ? event.files : [event.files];
   if (files.length === 0) return;
+  const total = files.reduce((sum, file) => sum + file.size, 0);
+  uploadLabel.value =
+    files.length === 1
+      ? (files[0]?.name ?? "file")
+      : `${files.length} files (${formatBytes(total)})`;
+  uploadProgress.value = {
+    loaded: 0,
+    total,
+    percent: 0,
+    indeterminate: total <= 0,
+  };
   mutating.value = true;
+  operation.value = "upload";
   try {
     await uploadFiles(
       props.connectionId,
@@ -242,6 +277,11 @@ async function upload(event: FileUploadUploaderEvent): Promise<void> {
       files,
       operationParams(cwd.value),
       uploadFieldName.value,
+      {
+        onProgress: (progress) => {
+          uploadProgress.value = progress;
+        },
+      },
     );
     notifySuccess(
       files.length === 1
@@ -253,6 +293,9 @@ async function upload(event: FileUploadUploaderEvent): Promise<void> {
     notifyError(e);
   } finally {
     mutating.value = false;
+    operation.value = null;
+    uploadProgress.value = null;
+    uploadLabel.value = "";
   }
 }
 
@@ -261,6 +304,7 @@ async function createFolder(): Promise<void> {
   const name = newFolderName.value.trim();
   if (!routeId || !name) return;
   mutating.value = true;
+  operation.value = "mkdir";
   try {
     await runAction(
       props.connectionId,
@@ -277,6 +321,7 @@ async function createFolder(): Promise<void> {
     notifyError(e);
   } finally {
     mutating.value = false;
+    operation.value = null;
   }
 }
 
@@ -292,6 +337,7 @@ async function renameEntry(): Promise<void> {
   const name = renameName.value.trim();
   if (!routeId || !entry || !name || name === entry.name) return;
   mutating.value = true;
+  operation.value = "rename";
   try {
     await runAction(
       props.connectionId,
@@ -308,6 +354,7 @@ async function renameEntry(): Promise<void> {
     notifyError(e);
   } finally {
     mutating.value = false;
+    operation.value = null;
   }
 }
 
@@ -316,6 +363,7 @@ async function deleteEntry(): Promise<void> {
   const entry = selected.value;
   if (!routeId || !entry) return;
   mutating.value = true;
+  operation.value = "delete";
   try {
     await runAction(
       props.connectionId,
@@ -332,7 +380,12 @@ async function deleteEntry(): Promise<void> {
     notifyError(e);
   } finally {
     mutating.value = false;
+    operation.value = null;
   }
+}
+
+async function retryContent(): Promise<void> {
+  if (selected.value) await selectEntry(selected.value);
 }
 
 watch(
@@ -361,6 +414,8 @@ watch(
       :upload-field-name="uploadFieldName"
       :mutating="mutating"
       :loading="loadingList"
+      :status-label="statusLabel"
+      :upload-progress="uploadProgress"
       @upload="upload"
       @mkdir="mkdirOpen = true"
       @rename="beginRename"
@@ -406,6 +461,8 @@ watch(
           :name="selected?.name ?? ''"
           :content="content"
           :loading="loadingContent"
+          :error="contentError"
+          @retry="retryContent"
         />
       </div>
     </div>
@@ -453,6 +510,8 @@ watch(
           :name="selected?.name ?? ''"
           :content="content"
           :loading="loadingContent"
+          :error="contentError"
+          @retry="retryContent"
         />
       </div>
     </Dialog>

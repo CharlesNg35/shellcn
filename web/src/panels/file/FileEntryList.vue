@@ -46,6 +46,7 @@ const emit = defineEmits<{
           :aria-label="
             entry.isDir ? `Open ${entry.name}` : `Select ${entry.name}`
           "
+          :title="entry.path"
           @click="entry.isDir ? emit('open', entry) : emit('select', entry)"
           @dblclick="emit('open', entry)"
         >
@@ -56,6 +57,7 @@ const emit = defineEmits<{
           />
           <span
             class="min-w-0 flex-1 truncate text-surface-700 dark:text-surface-200"
+            :title="entry.name"
           >
             {{ entry.name }}
           </span>

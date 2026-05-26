@@ -3,6 +3,7 @@ import { computed } from "vue";
 import Button from "primevue/button";
 import SkeletonList from "../../components/SkeletonList.vue";
 import type { FileContent } from "../../types/projection";
+import PanelError from "../shared/PanelError.vue";
 import FileCodeEditor from "./FileCodeEditor.vue";
 import { formatBytes, viewerFor } from "./fileTypes";
 
@@ -10,9 +11,15 @@ const props = defineProps<{
   name: string;
   content: FileContent | null;
   loading?: boolean;
+  error?: string | null;
 }>();
 
+const emit = defineEmits<{ retry: [] }>();
+
 const viewer = computed(() => viewerFor(props.name, props.content?.mime));
+const showTruncatedNotice = computed(
+  () => props.content?.truncated === true && viewer.value === "code",
+);
 
 const src = computed(() => {
   const c = props.content;
@@ -30,6 +37,12 @@ const src = computed(() => {
 <template>
   <div class="flex h-full flex-col">
     <SkeletonList v-if="loading" />
+    <PanelError
+      v-else-if="error"
+      :message="error"
+      retryable
+      @retry="emit('retry')"
+    />
 
     <template v-else-if="content">
       <FileCodeEditor
@@ -91,7 +104,7 @@ const src = computed(() => {
       </div>
 
       <p
-        v-if="content.truncated"
+        v-if="showTruncatedNotice"
         class="border-t border-surface-200 px-4 py-1.5 text-xs text-amber-500 dark:border-surface-800"
       >
         Preview truncated — download for the full file.

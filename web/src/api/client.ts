@@ -32,17 +32,31 @@ export function setApiErrorHandler(fn: ApiErrorHandler | null): void {
 
 const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
-async function responseError(res: Response): Promise<ApiError> {
-  let message = res.statusText;
+export function reportApiError(err: ApiError): void {
+  errorHandler?.(err);
+}
+
+export function apiErrorFromResponse(
+  status: number,
+  statusText: string,
+  body: string,
+  authRequired = false,
+): ApiError {
+  let message = statusText;
   try {
-    const parsed = (await res.json()) as { error?: string };
+    const parsed = JSON.parse(body) as { error?: string };
     if (parsed.error) message = parsed.error;
   } catch {
-    // body was not JSON; keep statusText
+    if (body) message = body;
   }
-  return new ApiError(
+  return new ApiError(status, message, authRequired);
+}
+
+async function responseError(res: Response): Promise<ApiError> {
+  return apiErrorFromResponse(
     res.status,
-    message,
+    res.statusText,
+    await res.text(),
     res.headers.get("X-ShellCN-Auth") === "required",
   );
 }
@@ -62,13 +76,13 @@ export async function apiFetch(
     res = await fetch(input, { ...init, method, headers });
   } catch {
     const err = new ApiError(0, "Network error — is the gateway reachable?");
-    errorHandler?.(err);
+    reportApiError(err);
     throw err;
   }
 
   if (!res.ok) {
     const err = await responseError(res);
-    errorHandler?.(err);
+    reportApiError(err);
     throw err;
   }
   return res;

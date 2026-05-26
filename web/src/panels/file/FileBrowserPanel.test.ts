@@ -155,10 +155,55 @@ describe("FileBrowserPanel", () => {
     await flushPromises();
     const items = w.findAll("li button");
     expect(items[0].text()).toContain("etc"); // directory sorts first
+    expect(items[0].attributes("title")).toBe("/etc");
     expect(w.text()).toContain("README.md");
 
     const file = items.find((b) => b.text().includes("README.md"));
     await file!.trigger("click");
+    await flushPromises();
+    await vi.waitFor(() =>
+      expect(w.find(".shellcn-monaco-host").exists()).toBe(true),
+    );
+  });
+
+  it("shows an inline file preview error with retry", async () => {
+    let failRead = true;
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("sftp.read") && failRead) {
+        return { status: 500, body: { error: "read failed" } };
+      }
+      if (url.includes("sftp.read")) {
+        return {
+          body: {
+            path: "/README.md",
+            mime: "text/plain",
+            encoding: "utf8",
+            content: "# Hello",
+          },
+        };
+      }
+      return { body: { items: rootEntries, nextCursor: "" } };
+    });
+
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("li button")
+      .find((b) => b.text().includes("README.md"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(w.text()).toContain("read failed");
+    failRead = false;
+    await panelButton(w, "Retry").trigger("click");
     await flushPromises();
     await vi.waitFor(() =>
       expect(w.find(".shellcn-monaco-host").exists()).toBe(true),

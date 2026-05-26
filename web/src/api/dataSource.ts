@@ -1,5 +1,12 @@
 import { getActivePinia } from "pinia";
-import { API_BASE, apiFetch, ApiError } from "./client";
+import {
+  API_BASE,
+  apiErrorFromResponse,
+  apiFetch,
+  ApiError,
+  getCsrfToken,
+  reportApiError,
+} from "./client";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { SocketLike } from "../stores/sessions";
 import type {
@@ -148,6 +155,17 @@ export interface ActionResult {
   [key: string]: unknown;
 }
 
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percent: number;
+  indeterminate: boolean;
+}
+
+export interface UploadFilesOptions {
+  onProgress?: (progress: UploadProgress) => void;
+}
+
 export async function runAction(
   connectionId: string,
   routeId: string,
@@ -227,14 +245,89 @@ export async function uploadFiles(
   files: File[],
   params: Record<string, string> = {},
   fieldName = "files",
+  options: UploadFilesOptions = {},
 ): Promise<ActionResult> {
   const body = new FormData();
   for (const file of files) body.append(fieldName, file, file.name);
-  const res = await apiFetch(routeURL(connectionId, routeId, ctx, params), {
-    method: "POST",
-    body,
-  });
+  const url = routeURL(connectionId, routeId, ctx, params);
+  if (options.onProgress) {
+    return track(connectionId, uploadForm(url, body, options.onProgress));
+  }
+  const res = await apiFetch(url, { method: "POST", body });
   return (await res.json()) as ActionResult;
+}
+
+function progress(
+  loaded: number,
+  total: number,
+  indeterminate = total <= 0,
+): UploadProgress {
+  return {
+    loaded,
+    total,
+    indeterminate,
+    percent: indeterminate
+      ? 0
+      : Math.min(100, Math.round((loaded / total) * 100)),
+  };
+}
+
+function parseActionResult(body: string): ActionResult {
+  if (!body) return { ok: true };
+  return JSON.parse(body) as ActionResult;
+}
+
+function uploadForm(
+  url: string,
+  body: FormData,
+  onProgress: (progress: UploadProgress) => void,
+): Promise<ActionResult> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let lastTotal = 0;
+    xhr.open("POST", url, true);
+    const csrf = getCsrfToken();
+    if (csrf) xhr.setRequestHeader("X-CSRF-Token", csrf);
+    xhr.upload.onprogress = (event) => {
+      lastTotal = event.lengthComputable ? event.total : 0;
+      onProgress(
+        progress(
+          event.loaded,
+          event.lengthComputable ? event.total : 0,
+          !event.lengthComputable,
+        ),
+      );
+    };
+    xhr.onload = () => {
+      const authRequired =
+        xhr.getResponseHeader("X-ShellCN-Auth") === "required";
+      if (xhr.status < 200 || xhr.status >= 300) {
+        const err = apiErrorFromResponse(
+          xhr.status,
+          xhr.statusText,
+          xhr.responseText,
+          authRequired,
+        );
+        reportApiError(err);
+        reject(err);
+        return;
+      }
+      onProgress(
+        lastTotal > 0 ? progress(lastTotal, lastTotal) : progress(1, 1),
+      );
+      try {
+        resolve(parseActionResult(xhr.responseText));
+      } catch {
+        reject(new ApiError(xhr.status, "Invalid upload response"));
+      }
+    };
+    xhr.onerror = () => {
+      const err = new ApiError(0, "Network error — is the gateway reachable?");
+      reportApiError(err);
+      reject(err);
+    };
+    xhr.send(body);
+  });
 }
 
 async function requestTicket(

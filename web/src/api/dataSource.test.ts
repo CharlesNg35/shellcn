@@ -121,6 +121,75 @@ describe("dataSource resolver", () => {
     expect((init?.body as FormData).getAll("files")).toEqual([file]);
   });
 
+  it("reports custom upload progress and keeps CSRF headers", async () => {
+    class FakeXHR {
+      static latest: FakeXHR | null = null;
+      readonly upload: {
+        onprogress?: (event: ProgressEvent) => void;
+      } = {};
+      method = "";
+      url = "";
+      body: BodyInit | null = null;
+      status = 200;
+      statusText = "OK";
+      responseText = '{"ok":true}';
+      onload?: () => void;
+      onerror?: () => void;
+      headers: Record<string, string> = {};
+
+      constructor() {
+        FakeXHR.latest = this;
+      }
+
+      open(method: string, url: string): void {
+        this.method = method;
+        this.url = url;
+      }
+
+      setRequestHeader(name: string, value: string): void {
+        this.headers[name] = value;
+      }
+
+      getResponseHeader(): string | null {
+        return null;
+      }
+
+      send(body: BodyInit): void {
+        this.body = body;
+        this.upload.onprogress?.({
+          loaded: 5,
+          total: 10,
+          lengthComputable: true,
+        } as ProgressEvent);
+        this.onload?.();
+      }
+    }
+
+    vi.stubGlobal("XMLHttpRequest", FakeXHR);
+    setCsrfToken("tok-progress");
+    const progress: number[] = [];
+    const file = new File(["hello"], "hello.txt", { type: "text/plain" });
+
+    const result = await uploadFiles(
+      "conn",
+      "ssh.sftp.upload",
+      {},
+      [file],
+      { path: "/" },
+      "files",
+      { onProgress: (p) => progress.push(p.percent) },
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(progress).toEqual([50, 100]);
+    expect(FakeXHR.latest?.method).toBe("POST");
+    expect(FakeXHR.latest?.url).toContain(
+      "/api/connections/conn/x/ssh.sftp.upload?p.path=%2F",
+    );
+    expect(FakeXHR.latest?.headers["X-CSRF-Token"]).toBe("tok-progress");
+    expect(FakeXHR.latest?.body).toBeInstanceOf(FormData);
+  });
+
   it("promotes action bodies with files to multipart form data", async () => {
     const fetchMock = installFetch(() => ({ body: { ok: true } }));
     setCsrfToken("tok-form");

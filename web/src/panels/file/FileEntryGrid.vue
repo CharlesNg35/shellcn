@@ -47,7 +47,11 @@ const emit = defineEmits<{
             ? 'border-primary-400 bg-primary-50 dark:border-primary-500 dark:bg-primary-500/10'
             : ''
         "
-        @click="emit('select', entry)"
+        :aria-label="
+          entry.isDir ? `Open ${entry.name}` : `Select ${entry.name}`
+        "
+        :title="entry.path"
+        @click="entry.isDir ? emit('open', entry) : emit('select', entry)"
         @dblclick="emit('open', entry)"
       >
         <AppIcon
@@ -57,6 +61,7 @@ const emit = defineEmits<{
         />
         <span
           class="block truncate text-sm font-medium text-surface-800 dark:text-surface-100"
+          :title="entry.name"
         >
           {{ entry.name }}
         </span>
