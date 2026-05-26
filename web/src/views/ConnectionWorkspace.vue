@@ -13,6 +13,7 @@ import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import PanelHost from "../panels/core/PanelHost.vue";
 import EnrollPanel from "../panels/enroll/EnrollPanel.vue";
+import ConnectPanel from "../panels/connect/ConnectPanel.vue";
 import ResourceTree from "../panels/tree/ResourceTree.vue";
 import TablePanel from "../panels/table/TablePanel.vue";
 import DetailView from "../panels/detail/DetailView.vue";
@@ -65,7 +66,8 @@ async function onDelete(): Promise<void> {
 const projection = ref<PluginProjection | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
-const online = ref(true);
+// The connect screen can hand off to the agent enrollment screen and back.
+const showEnroll = ref(false);
 
 const connection = computed(() => conns.byId(props.id));
 const view = computed(() => ws.view(props.id));
@@ -79,7 +81,6 @@ async function load(): Promise<void> {
     const c = conns.byId(props.id);
     if (!c) throw new Error(`Unknown connection "${props.id}".`);
     ws.open(props.id);
-    online.value = c.online !== false;
     const proj = await conns.projection(c.protocol);
     projection.value = proj;
     if (!ws.view(props.id).activeTab && proj.tabs?.length) {
@@ -94,35 +95,21 @@ async function load(): Promise<void> {
 
 watch(() => props.id, load, { immediate: true });
 
-const needsEnroll = computed(
-  () => connection.value?.transport === "agent" && !online.value,
-);
-
 // A connection does not open on its own: the user connects explicitly, so a
 // page refresh lands on the prompt rather than dialing the target again. The
-// flag is per-connection (each connection owns its workspace instance) and is
-// kept alive across in-app navigation by the parent <KeepAlive>.
-const connected = ref(false);
-
+// connected set lives in the store so the sidebar dot can reflect it (and it
+// survives in-app navigation, resetting only on a full reload).
+const connected = computed(() => ws.isConnected(props.id));
 const channelPrefix = computed(() => `${props.id}:`);
-const hasLiveStream = computed(() =>
-  Object.entries(sessions.statuses).some(
-    ([key, status]) => key.startsWith(channelPrefix.value) && status === "open",
-  ),
-);
-
-// Reflect a stream opening or its last one closing in the sidebar dot promptly,
-// instead of waiting for the slow background poll.
-watch(hasLiveStream, () => void conns.refresh().catch(() => undefined));
 
 function connect(): void {
-  connected.value = true;
+  showEnroll.value = false;
+  ws.setConnected(props.id, true);
 }
 
 function disconnect(): void {
   sessions.closeWhere((key) => key.startsWith(channelPrefix.value));
-  connected.value = false;
-  void conns.refresh().catch(() => undefined);
+  ws.setConnected(props.id, false);
 }
 
 const resourceByKind = computed(() => {
@@ -181,9 +168,6 @@ function onActionDone(action: Action): void {
     return;
   }
   ws.setActiveTab(props.id, tabKey);
-}
-function onEnrolled(): void {
-  online.value = true;
 }
 </script>
 
@@ -259,36 +243,18 @@ function onEnrolled(): void {
       <p v-else-if="error" class="p-6 text-red-500">{{ error }}</p>
 
       <EnrollPanel
-        v-else-if="needsEnroll"
+        v-else-if="!connected && showEnroll"
         :connection-id="id"
-        @online="onEnrolled"
+        @online="showEnroll = false"
       />
 
-      <div
+      <ConnectPanel
         v-else-if="!connected"
-        class="flex h-full flex-col items-center justify-center gap-5 p-8 text-center"
-      >
-        <span
-          class="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-100 text-surface-500 dark:bg-surface-800 dark:text-surface-400"
-        >
-          <AppIcon :icon="connection?.icon ?? projection?.icon" :size="28" />
-        </span>
-        <div class="space-y-1">
-          <h2
-            class="text-lg font-semibold text-surface-900 dark:text-surface-0"
-          >
-            Not connected
-          </h2>
-          <p class="text-sm text-surface-500 dark:text-surface-400">
-            {{ connection?.name ?? id }} ·
-            {{ projection?.title ?? connection?.protocol }}
-          </p>
-        </div>
-        <Button @click="connect">
-          <AppIcon :icon="{ type: 'name', value: 'play' }" :size="16" />
-          Connect
-        </Button>
-      </div>
+        :connection-id="id"
+        :connection="connection"
+        @connect="connect"
+        @enroll="showEnroll = true"
+      />
 
       <template v-else-if="projection">
         <!-- Flat tab layout. The tab bar is PrimeVue; content is rendered through

@@ -7,7 +7,12 @@ import { useStream } from "../../composables/useStream";
 import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import { useTheme } from "../../composables/useTheme";
-import { loadMonaco, syncMonacoTheme, type MonacoModule } from "../../monaco";
+import {
+  currentMonacoTheme,
+  loadMonaco,
+  syncMonacoTheme,
+  type MonacoModule,
+} from "../../monaco";
 
 const props = defineProps<PanelProps>();
 const queryConfig = props.config as QueryEditorConfig | undefined;
@@ -118,9 +123,7 @@ onMounted(async () => {
     editor = monaco.editor.create(container.value, {
       value: query.value,
       language: "sql",
-      theme: document.documentElement.classList.contains("dark")
-        ? "vs-dark"
-        : "vs",
+      theme: currentMonacoTheme(),
       minimap: { enabled: false },
       automaticLayout: true,
       scrollBeyondLastLine: false,
@@ -182,7 +185,11 @@ onUnmounted(() => {
         v-model="query"
         class="h-full w-full resize-none bg-surface-0 p-3 font-mono text-xs outline-none dark:bg-surface-950"
       />
-      <div v-show="!useFallback" ref="container" class="h-full" />
+      <div
+        v-show="!useFallback"
+        ref="container"
+        class="shellcn-monaco-host h-full"
+      />
     </div>
 
     <div

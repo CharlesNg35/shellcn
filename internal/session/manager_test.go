@@ -134,51 +134,6 @@ func TestChannelTrackingAndLimit(t *testing.T) {
 	}
 }
 
-func TestActivePresence(t *testing.T) {
-	m := session.New(session.Options{})
-	defer m.Shutdown()
-
-	keyA := session.Key{ConnectionID: "a", OwnerScope: "u1"}
-	keyB := session.Key{ConnectionID: "b", OwnerScope: "u1"}
-	keyC := session.Key{ConnectionID: "c", OwnerScope: "u2"}
-
-	hA, _ := m.Acquire(context.Background(), keyA, "u1", connector(&fakeSession{}, nil))
-	m.Acquire(context.Background(), keyB, "u1", connector(&fakeSession{}, nil)) //nolint:errcheck
-	hC, _ := m.Acquire(context.Background(), keyC, "u2", connector(&fakeSession{}, nil))
-
-	// A connection is active only while a stream is attached.
-	chA, err := hA.OpenChannel(context.Background(), plugin.ChannelRequest{Kind: plugin.StreamTerminal})
-	if err != nil {
-		t.Fatalf("open A: %v", err)
-	}
-	chC, err := hC.OpenChannel(context.Background(), plugin.ChannelRequest{Kind: plugin.StreamTerminal})
-	if err != nil {
-		t.Fatalf("open C: %v", err)
-	}
-
-	active := m.Active("u1")
-	if !active["a"] {
-		t.Error("connection a should be active for u1")
-	}
-	if active["b"] {
-		t.Error("connection b has no attached stream; must not be active")
-	}
-	if active["c"] {
-		t.Error("connection c belongs to u2; must not appear for u1")
-	}
-
-	// Detaching the last stream (e.g. a refresh) drops presence immediately,
-	// even though the session lingers for resume.
-	_ = chA.Close()
-	if m.Active("u1")["a"] {
-		t.Error("connection a should be inactive after its stream detaches")
-	}
-	if !m.Active("u2")["c"] {
-		t.Error("connection c should still be active for u2")
-	}
-	_ = chC.Close()
-}
-
 func TestPerUserSessionLimit(t *testing.T) {
 	m := session.New(session.Options{MaxSessionsPerUser: 1})
 	defer m.Shutdown()

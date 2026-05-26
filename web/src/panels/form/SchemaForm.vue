@@ -87,7 +87,7 @@ defineExpose({ submit: onSubmit });
       class="flex min-w-0 flex-col gap-4"
     >
       <legend
-        class="text-xs font-semibold uppercase tracking-wide text-surface-400"
+        class="text-xs font-semibold tracking-wide text-surface-400 uppercase"
       >
         {{ group.name }}
       </legend>

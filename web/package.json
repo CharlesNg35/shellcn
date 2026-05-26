@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "type-check": "vue-tsc -b",
     "lint": "eslint .",
-    "format": "prettier --write .",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,cjs,vue,json,jsonc,css,html,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,cjs,vue,json,jsonc,css,html,md,yml,yaml}\"",
     "test:unit": "vitest run",
     "test:e2e": "playwright test"
   },
@@ -51,6 +52,7 @@
     "jiti": "^2.7.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
+    "prettier-plugin-tailwindcss": "^0.8.0",
     "tailwindcss-primeui": "^0.6.1",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.4",

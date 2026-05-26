@@ -29,7 +29,7 @@ const emit = defineEmits<{
       <li v-for="entry in entries" :key="entry.path">
         <button
           type="button"
-          class="group flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-100 focus-visible:bg-surface-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500/35 dark:hover:bg-surface-800 dark:focus-visible:bg-surface-800"
+          class="group flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-100 focus-visible:bg-surface-100 focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none focus-visible:ring-inset dark:hover:bg-surface-800 dark:focus-visible:bg-surface-800"
           :class="
             selectedPath === entry.path
               ? 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-200'

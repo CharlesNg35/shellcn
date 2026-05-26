@@ -206,7 +206,7 @@ async function revoke(grant: ShareGrant): Promise<void> {
             {{ g.username || g.subjectId }}
           </span>
           <span
-            class="rounded bg-surface-100 px-1.5 py-0.5 text-xs capitalize text-surface-500 dark:bg-surface-800"
+            class="rounded bg-surface-100 px-1.5 py-0.5 text-xs text-surface-500 capitalize dark:bg-surface-800"
           >
             {{ g.access }}
           </span>

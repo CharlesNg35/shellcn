@@ -5,7 +5,12 @@ import { fetchDoc, runAction } from "../../api/dataSource";
 import type { CodeEditorConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import { useTheme } from "../../composables/useTheme";
-import { loadMonaco, syncMonacoTheme, type MonacoModule } from "../../monaco";
+import {
+  currentMonacoTheme,
+  loadMonaco,
+  syncMonacoTheme,
+  type MonacoModule,
+} from "../../monaco";
 
 const props = defineProps<PanelProps>();
 
@@ -64,9 +69,7 @@ async function mountEditor(): Promise<void> {
       value: text.value,
       language: language.value,
       readOnly: !editable.value,
-      theme: document.documentElement.classList.contains("dark")
-        ? "vs-dark"
-        : "vs",
+      theme: currentMonacoTheme(),
       minimap: { enabled: false },
       automaticLayout: true,
       scrollBeyondLastLine: false,
@@ -148,7 +151,7 @@ onUnmounted(() => {
     <div
       v-show="!loading && !error && !useFallback"
       ref="container"
-      class="min-h-0 flex-1"
+      class="shellcn-monaco-host min-h-0 flex-1"
     />
   </div>
 </template>

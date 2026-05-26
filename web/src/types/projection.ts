@@ -409,9 +409,10 @@ export interface ConnectionSummary {
   protocol: string;
   icon?: Icon;
   transport: Transport;
-  // online gates the agent enroll panel; status drives the presence dot.
+  // online gates the agent enroll panel; "offline" (agent with no tunnel) shows
+  // a red dot. The green "connected" state is client-side (the connect gate).
   online?: boolean;
-  status?: "active" | "offline";
+  status?: "offline";
   canManage?: boolean;
   recording?: Record<string, string>;
 }

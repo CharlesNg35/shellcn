@@ -168,7 +168,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
             Select a node.
           </p>
           <template v-else>
-            <p class="text-xs uppercase text-surface-400">
+            <p class="text-xs text-surface-400 uppercase">
               {{ selected.group || selected.type || "Node" }}
             </p>
             <h3 class="mt-1 font-semibold text-surface-900 dark:text-surface-0">

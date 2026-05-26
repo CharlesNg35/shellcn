@@ -69,25 +69,15 @@ const filtered = computed(() => {
 });
 
 function dotClass(c: ConnectionSummary): string {
-  switch (c.status) {
-    case "active":
-      return "bg-emerald-400";
-    case "offline":
-      return "bg-red-500";
-    default:
-      return "bg-surface-300 dark:bg-surface-600";
-  }
+  if (c.status === "offline") return "bg-red-500";
+  if (ws.isConnected(c.id)) return "bg-emerald-400";
+  return "bg-surface-300 dark:bg-surface-600";
 }
 
 function dotTitle(c: ConnectionSummary): string {
-  switch (c.status) {
-    case "active":
-      return "Open — live session";
-    case "offline":
-      return "Agent offline";
-    default:
-      return "Idle";
-  }
+  if (c.status === "offline") return "Agent offline";
+  if (ws.isConnected(c.id)) return "Connected";
+  return "Idle";
 }
 
 function go(c: ConnectionSummary): void {
@@ -138,7 +128,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
       <div class="px-3 pb-2">
         <label class="relative block">
           <span
-            class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-surface-400"
+            class="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-surface-400"
           >
             <AppIcon :icon="{ type: 'name', value: 'search' }" :size="15" />
           </span>
@@ -155,9 +145,9 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
       <nav class="flex-1 overflow-y-auto px-2 pb-3">
         <p v-if="error" class="px-2 py-4 text-sm text-red-500">{{ error }}</p>
 
-        <div class="flex items-center justify-between px-2 pb-1 pt-3">
+        <div class="flex items-center justify-between px-2 pt-3 pb-1">
           <p
-            class="text-xs font-medium uppercase tracking-wide text-surface-400"
+            class="text-xs font-medium tracking-wide text-surface-400 uppercase"
           >
             Connections
           </p>

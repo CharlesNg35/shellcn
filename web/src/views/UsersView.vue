@@ -144,7 +144,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
               </Column>
               <Column header="Roles">
                 <template #body="{ data }">
-                  <span class="capitalize text-surface-500">{{
+                  <span class="text-surface-500 capitalize">{{
                     (data as AdminUser).roles.join(", ")
                   }}</span>
                 </template>
@@ -234,7 +234,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
               <Column field="email" header="Email" />
               <Column header="Role">
                 <template #body="{ data }">
-                  <span class="capitalize text-surface-500">{{
+                  <span class="text-surface-500 capitalize">{{
                     (data as InvitationSummary).role
                   }}</span>
                 </template>

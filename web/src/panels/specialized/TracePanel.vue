@@ -225,7 +225,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       >
         <p v-if="!selected" class="text-sm text-surface-400">Select a span.</p>
         <template v-else>
-          <p class="text-xs uppercase text-surface-400">
+          <p class="text-xs text-surface-400 uppercase">
             {{ selected.service || "unknown" }}
           </p>
           <h3 class="mt-1 font-semibold text-surface-900 dark:text-surface-0">
@@ -234,11 +234,11 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           <dl class="mt-4 space-y-2 text-sm">
             <div>
               <dt class="text-surface-400">Span ID</dt>
-              <dd class="break-all font-mono text-xs">{{ selected.id }}</dd>
+              <dd class="font-mono text-xs break-all">{{ selected.id }}</dd>
             </div>
             <div v-if="selected.parentId">
               <dt class="text-surface-400">Parent</dt>
-              <dd class="break-all font-mono text-xs">
+              <dd class="font-mono text-xs break-all">
                 {{ selected.parentId }}
               </dd>
             </div>

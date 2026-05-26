@@ -1,46 +1,29 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { onMounted, watch, ref } from "vue";
 import Button from "primevue/button";
 import { api } from "../../api/client";
-import type {
-  AgentState,
-  Enrollment,
-  InstallArtifact,
-} from "../../types/projection";
+import type { Enrollment, InstallArtifact } from "../../types/projection";
 import type { PanelProps } from "../core/types";
+import { useAgentState } from "../../composables/useAgentState";
 import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{ online: [] }>();
 
 const enrollment = ref<Enrollment | null>(null);
-const status = ref<AgentState["status"]>("pending");
-const message = ref<string | undefined>();
 const error = ref<string | null>(null);
 const copied = ref<string | null>(null);
 
-let poll: ReturnType<typeof setInterval> | undefined;
+const { status, message, online, refresh, start, stop } = useAgentState(
+  props.connectionId,
+);
 
-async function checkStatus(): Promise<void> {
-  try {
-    const state = await api.get<AgentState>(
-      `/connections/${props.connectionId}/agent/state`,
-    );
-    status.value = state.status;
-    message.value = state.message;
-    if (state.status === "online") {
-      stopPolling();
-      emit("online");
-    }
-  } catch {
-    // transient; keep polling
+watch(online, (isOnline) => {
+  if (isOnline) {
+    stop();
+    emit("online");
   }
-}
-
-function stopPolling(): void {
-  if (poll) clearInterval(poll);
-  poll = undefined;
-}
+});
 
 async function enroll(): Promise<void> {
   error.value = null;
@@ -48,9 +31,7 @@ async function enroll(): Promise<void> {
     enrollment.value = await api.post<Enrollment>(
       `/connections/${props.connectionId}/agent/enrollments`,
     );
-    stopPolling();
-    poll = setInterval(checkStatus, 2000);
-    void checkStatus();
+    void refresh();
   } catch (e) {
     error.value = (e as Error).message;
   }
@@ -67,10 +48,7 @@ async function copy(artifact: InstallArtifact): Promise<void> {
   }
 }
 
-onMounted(() => {
-  void checkStatus();
-});
-onUnmounted(stopPolling);
+onMounted(() => start());
 </script>
 
 <template>
@@ -79,7 +57,7 @@ onUnmounted(stopPolling);
       <span
         class="h-2.5 w-2.5 rounded-full"
         :class="
-          status === 'online' ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'
+          status === 'online' ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'
         "
       />
       <h2 class="text-lg font-semibold text-surface-900 dark:text-surface-0">

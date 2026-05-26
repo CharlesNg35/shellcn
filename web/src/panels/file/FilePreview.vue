@@ -29,7 +29,7 @@ const src = computed(() => {
     <template v-else-if="content">
       <pre
         v-if="viewer === 'code'"
-        class="m-0 h-full overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
+        class="m-0 h-full overflow-auto p-4 font-mono text-xs leading-relaxed break-words whitespace-pre-wrap text-surface-700 dark:text-surface-200"
         >{{ content.content }}</pre
       >
 

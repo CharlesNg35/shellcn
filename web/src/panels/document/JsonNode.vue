@@ -30,7 +30,7 @@ const preview = computed(() => {
   <div class="font-mono text-xs leading-relaxed">
     <details v-if="kind === 'object' || kind === 'array'" :open="depth === 0">
       <summary
-        class="cursor-pointer select-none text-surface-700 dark:text-surface-200"
+        class="cursor-pointer text-surface-700 select-none dark:text-surface-200"
       >
         <span
           v-if="name !== undefined"
