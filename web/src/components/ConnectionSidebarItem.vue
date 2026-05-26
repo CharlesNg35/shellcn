@@ -68,7 +68,7 @@ function shareTitle(c: ConnectionSummary): string {
 
 <template>
   <div
-    class="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+    class="flex min-h-10 w-full items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
     :data-connection-id="connection.id"
     :class="
       active
@@ -77,7 +77,7 @@ function shareTitle(c: ConnectionSummary): string {
     "
   >
     <span
-      class="connection-drag-handle cursor-grab touch-none rounded p-0.5 text-surface-500 active:cursor-grabbing"
+      class="connection-drag-handle shrink-0 cursor-grab touch-none rounded p-0.5 text-surface-500 active:cursor-grabbing"
       title="Drag connection"
       aria-label="Drag connection"
     >
@@ -85,13 +85,21 @@ function shareTitle(c: ConnectionSummary): string {
     </span>
     <button
       type="button"
-      class="flex min-w-0 flex-1 flex-col text-left"
+      class="flex min-w-0 flex-1 flex-col overflow-hidden text-left"
+      :title="connection.name"
+      :aria-label="`Open ${connection.name}`"
       @click="emit('open', connection)"
     >
-      <span class="truncate text-surface-800 dark:text-surface-100">
+      <span
+        class="block max-w-full truncate text-surface-800 dark:text-surface-100"
+        :title="connection.name"
+      >
         {{ connection.name }}
       </span>
-      <span class="truncate text-xs text-surface-400">
+      <span
+        class="block max-w-full truncate text-xs text-surface-400"
+        :title="connection.protocol"
+      >
         {{ connection.protocol }}
       </span>
     </button>
