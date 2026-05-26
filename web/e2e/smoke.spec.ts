@@ -69,6 +69,7 @@ test("Docker (sidebar tree): list table + resource detail", async ({
 test("Docker agent connection shows the enroll panel", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /edge-host/ }).click();
+  await page.getByRole("button", { name: "Set up agent" }).click();
   await expect(page.locator("main")).toContainText("Connect the agent");
   await expect(page.locator("main")).toContainText("Generate install command");
 });
