@@ -72,23 +72,26 @@ const groups = computed<PluginGroup[]>(() => {
       />
     </div>
 
-    <div role="radiogroup" aria-label="Protocol" class="max-h-72 overflow-auto">
+    <div
+      role="radiogroup"
+      aria-label="Protocol"
+      class="max-h-72 overflow-auto pr-3"
+    >
       <section
         v-for="group in groups"
         :key="group.category.key"
         class="flex min-w-0 flex-col gap-2 pb-4 last:pb-0"
       >
         <header
-          class="sticky top-0 z-10 flex items-center gap-2 border-b border-surface-200 bg-surface-0/95 py-1.5 text-xs font-semibold tracking-wide text-surface-500 uppercase backdrop-blur dark:border-surface-800 dark:bg-surface-950/95 dark:text-surface-400"
+          class="py-1 text-xs font-semibold tracking-wide text-surface-500 uppercase dark:text-surface-400"
         >
-          <AppIcon :icon="group.category.icon" :size="14" />
           <span>{{ group.category.label }}</span>
           <span class="font-normal text-surface-400">{{
             group.plugins.length
           }}</span>
         </header>
 
-        <div class="grid grid-cols-2 gap-2 pr-0.5">
+        <div class="grid grid-cols-2 gap-2">
           <button
             v-for="p in group.plugins"
             :key="p.name"
