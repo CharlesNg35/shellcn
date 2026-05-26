@@ -11,7 +11,7 @@ type Plugin struct{}
 
 func New() *Plugin { return &Plugin{} }
 
-const clickHouseIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="4" fill="#ffcc01"/><path d="M4 5h4v22H4zM10 5h4v22h-4zM16 5h4v22h-4zM22 11h4v10h-4zM28 5h2v22h-2z" fill="#111"/></svg>`
+const clickHouseIconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150"><rect y="0" width="150" height="150" rx="18" fill="#ffcc01"/><path fill="#161616" d="M30,28.3c0-.6.5-1.1,1.1-1.1h8.4c.6,0,1.1.5,1.1,1.1v93.3c0,.6-.5,1.1-1.1,1.1h-8.4c-.6,0-1.1-.5-1.1-1.1V28.3Z"/><path fill="#161616" d="M51.2,28.3c0-.6.5-1.1,1.1-1.1h8.4c.6,0,1.1.5,1.1,1.1v93.3c0,.6-.5,1.1-1.1,1.1h-8.4c-.6,0-1.1-.5-1.1-1.1V28.3Z"/><path fill="#161616" d="M72.4,28.3c0-.6.5-1.1,1.1-1.1h8.4c.6,0,1.1.5,1.1,1.1v93.3c0,.6-.5,1.1-1.1,1.1h-8.4c-.6,0-1.1-.5-1.1-1.1V28.3Z"/><path fill="#161616" d="M93.7,28.3c0-.6.5-1.1,1.1-1.1h8.4c.6,0,1.1.5,1.1,1.1v93.3c0,.6-.5,1.1-1.1,1.1h-8.4c-.6,0-1.1-.5-1.1-1.1V28.3Z"/><path fill="#161616" d="M114.9,65.5c0-.6.5-1.1,1.1-1.1h8.4c.6,0,1.1.5,1.1,1.1v19c0,.6-.5,1.1-1.1,1.1h-8.4c-.6,0-1.1-.5-1.1-1.1v-19Z"/></svg>`
 
 func (p *Plugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
