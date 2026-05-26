@@ -41,15 +41,20 @@ func TestMySQLPluginIntegration(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 	s := sess.(*Session)
 
-	if _, err := s.db.ExecContext(ctx, `
+	seedStatements := []string{
+		`
 CREATE TABLE IF NOT EXISTS shellcn_people (
   id bigint unsigned auto_increment PRIMARY KEY,
   name varchar(255) NOT NULL,
   access_token varchar(255) NOT NULL
-);
-TRUNCATE TABLE shellcn_people;
-INSERT INTO shellcn_people (name, access_token) VALUES ('alice', 'secret-token')`); err != nil {
-		t.Fatalf("seed database: %v", err)
+);`,
+		`TRUNCATE TABLE shellcn_people`,
+		`INSERT INTO shellcn_people (name, access_token) VALUES ('alice', 'secret-token')`,
+	}
+	for _, statement := range seedStatements {
+		if _, err := s.db.ExecContext(ctx, statement); err != nil {
+			t.Fatalf("seed database: %v", err)
+		}
 	}
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)

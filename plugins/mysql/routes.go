@@ -184,8 +184,8 @@ func relationList(rc *plugin.RequestContext, tableType string, refKind string) (
 		return nil, err
 	}
 	sqlText := `
-SELECT TABLE_NAME AS name, TABLE_SCHEMA AS database, ENGINE AS engine,
-       TABLE_ROWS AS rows, COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0) AS size,
+SELECT TABLE_NAME AS name, TABLE_SCHEMA AS ` + "`database`" + `, ENGINE AS engine,
+       TABLE_ROWS AS ` + "`rows`" + `, COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0) AS size,
        TABLE_COLLATION AS collation, NULL AS definer, NULL AS updatable
 FROM information_schema.TABLES
 WHERE TABLE_TYPE = ? AND TABLE_SCHEMA NOT IN ('information_schema', 'performance_schema', 'sys')
@@ -193,8 +193,8 @@ WHERE TABLE_TYPE = ? AND TABLE_SCHEMA NOT IN ('information_schema', 'performance
 ORDER BY TABLE_SCHEMA, TABLE_NAME`
 	if tableType == "VIEW" {
 		sqlText = `
-SELECT t.TABLE_NAME AS name, t.TABLE_SCHEMA AS database, t.ENGINE AS engine,
-       t.TABLE_ROWS AS rows, COALESCE(t.DATA_LENGTH, 0) + COALESCE(t.INDEX_LENGTH, 0) AS size,
+SELECT t.TABLE_NAME AS name, t.TABLE_SCHEMA AS ` + "`database`" + `, t.ENGINE AS engine,
+       t.TABLE_ROWS AS ` + "`rows`" + `, COALESCE(t.DATA_LENGTH, 0) + COALESCE(t.INDEX_LENGTH, 0) AS size,
        t.TABLE_COLLATION AS collation, v.DEFINER AS definer,
        CASE WHEN v.IS_UPDATABLE = 'YES' THEN true ELSE false END AS updatable
 FROM information_schema.TABLES t
@@ -224,8 +224,8 @@ func listRoutines(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	rows, err := queryRows(rc.Ctx, s, `
-SELECT ROUTINE_NAME AS name, ROUTINE_SCHEMA AS database, ROUTINE_TYPE AS type,
-       DATA_TYPE AS returns, DEFINER AS definer, LAST_ALTERED AS modified
+SELECT ROUTINE_NAME AS name, ROUTINE_SCHEMA AS `+"`database`"+`, ROUTINE_TYPE AS `+"`type`"+`,
+       DATA_TYPE AS `+"`returns`"+`, DEFINER AS definer, LAST_ALTERED AS modified
 FROM information_schema.ROUTINES
 WHERE ROUTINE_SCHEMA NOT IN ('information_schema', 'performance_schema', 'sys')
   AND (? = '' OR ROUTINE_SCHEMA = ?)
@@ -246,7 +246,7 @@ func listUsers(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	rows, err := queryRows(rc.Ctx, s, `
-SELECT User AS user, Host AS host, plugin, false AS locked
+SELECT User AS `+"`user`"+`, Host AS host, plugin, false AS locked
 FROM mysql.user
 ORDER BY User, Host`, nil)
 	if err != nil {
@@ -270,7 +270,7 @@ func userOverview(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	rows, err := queryRows(rc.Ctx, s, `
-SELECT User AS user, Host AS host, plugin, false AS locked
+SELECT User AS `+"`user`"+`, Host AS host, plugin, false AS locked
 FROM mysql.user
 WHERE User = ? AND Host = ?`, []any{user, host})
 	if err != nil {
