@@ -5,6 +5,7 @@ import { fetchDoc, runFormAction } from "../../api/dataSource";
 import type { FormPanelConfig, Schema } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
 import SchemaForm from "./SchemaForm.vue";
 
 const props = defineProps<PanelProps>();
@@ -72,7 +73,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
 
 <template>
   <div class="h-full overflow-auto p-5">
-    <p v-if="loading" class="text-sm text-surface-400">Loading…</p>
+    <SkeletonList v-if="loading" />
     <PanelError v-else-if="error" :message="error" retryable @retry="load" />
     <SchemaForm
       v-else-if="schema"

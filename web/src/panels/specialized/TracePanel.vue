@@ -8,6 +8,7 @@ import { fetchDoc } from "../../api/dataSource";
 import type { TracePanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
 
 interface TraceSpan {
   id: string;
@@ -169,9 +170,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
 
     <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_20rem]">
       <div class="min-h-0 overflow-hidden">
-        <p v-if="loading" class="p-4 text-sm text-surface-400">
-          Loading trace...
-        </p>
+        <SkeletonList v-if="loading" />
         <PanelError
           v-else-if="error"
           :message="error"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Button from "primevue/button";
+import SkeletonList from "../../components/SkeletonList.vue";
 import type { FileContent } from "../../types/projection";
 import { formatBytes, viewerFor } from "./fileTypes";
 
@@ -24,7 +25,7 @@ const src = computed(() => {
 
 <template>
   <div class="flex h-full flex-col">
-    <p v-if="loading" class="p-6 text-sm text-surface-400">Loading preview…</p>
+    <SkeletonList v-if="loading" />
 
     <template v-else-if="content">
       <pre

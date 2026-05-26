@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { FileEntry } from "../../types/projection";
 import { formatBytes } from "./fileTypes";
@@ -19,7 +20,7 @@ const emit = defineEmits<{
 
 <template>
   <div class="h-full overflow-y-auto">
-    <p v-if="loading" class="p-3 text-sm text-surface-400">Loading…</p>
+    <SkeletonList v-if="loading" />
     <PanelError
       v-else-if="error"
       :message="error"

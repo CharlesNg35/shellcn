@@ -14,6 +14,7 @@ import "@vue-flow/minimap/dist/style.css";
 import { fetchDoc } from "../../api/dataSource";
 import type { GraphPanelConfig } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
 
@@ -143,9 +144,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
     </div>
 
     <div class="min-h-0 flex-1">
-      <p v-if="loading" class="p-4 text-sm text-surface-400">
-        Loading graph...
-      </p>
+      <SkeletonList v-if="loading" />
       <PanelError v-else-if="error" :message="error" retryable @retry="load" />
       <div
         v-else-if="!nodes.length"

@@ -4,6 +4,7 @@ import Button from "primevue/button";
 import { fetchDoc } from "../../api/dataSource";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
 import JsonNode from "./JsonNode.vue";
 
 const props = defineProps<PanelProps>();
@@ -92,7 +93,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto p-4">
-      <p v-if="loading" class="text-sm text-surface-400">Loading…</p>
+      <SkeletonList v-if="loading" />
       <PanelError v-else-if="error" :message="error" retryable @retry="load" />
       <JsonNode v-else-if="mode === 'tree'" :value="doc" :depth="0" />
       <pre
