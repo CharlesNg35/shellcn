@@ -28,10 +28,13 @@ export type KnownPanelType =
   | "query_editor"
   | "remote_desktop"
   | "form"
-  | "enroll";
+  | "enroll"
+  | "graph"
+  | "trace"
+  | "kv"
+  | "http_client";
 
 // Open union: the renderer must handle a type it does not recognize.
-// graph/trace/kv/http_client land with their plugin.
 export type PanelType = KnownPanelType | (string & {});
 
 export type StreamKind = "terminal" | "logs" | "desktop" | "metrics" | "file";
@@ -220,6 +223,32 @@ export interface QueryEditorConfig {
   initialQuery?: string;
   cancelRouteId?: string;
   cancelParams?: Record<string, string>;
+}
+
+export interface GraphPanelConfig {
+  layout?: "grid" | "manual";
+  fitView?: boolean;
+}
+
+export interface TracePanelConfig {
+  serviceField?: string;
+}
+
+export interface KVPanelConfig {
+  readRouteId?: string;
+  writeRouteId?: string;
+  deleteRouteId?: string;
+  keyParam?: string;
+  writable?: boolean;
+}
+
+export interface HTTPClientConfig {
+  executeRouteId?: string;
+  methods?: string[];
+  defaultMethod?: string;
+  defaultUrl?: string;
+  defaultHeaders?: Array<{ key: string; value: string }>;
+  defaultBody?: string;
 }
 
 export type ColumnType =

@@ -5,9 +5,9 @@ import PanelHost from "./PanelHost.vue";
 describe("PanelHost", () => {
   it("renders a graceful fallback for an unknown panel type", () => {
     const w = mount(PanelHost, {
-      props: { panel: "graph", connectionId: "c1" },
+      props: { panel: "totally-made-up", connectionId: "c1" },
     });
     expect(w.text()).toContain("No renderer for panel type");
-    expect(w.text()).toContain("graph");
+    expect(w.text()).toContain("totally-made-up");
   });
 });

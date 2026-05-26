@@ -86,6 +86,106 @@ func (c TableConfig) Map() map[string]any {
 	return out
 }
 
+type GraphLayout string
+
+const (
+	GraphLayoutGrid   GraphLayout = "grid"
+	GraphLayoutManual GraphLayout = "manual"
+)
+
+type GraphConfig struct {
+	Layout  GraphLayout `json:"layout,omitempty"`
+	FitView bool        `json:"fitView,omitempty"`
+}
+
+func (c GraphConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.Layout != "" {
+		out["layout"] = c.Layout
+	}
+	if c.FitView {
+		out["fitView"] = c.FitView
+	}
+	return out
+}
+
+type TraceConfig struct {
+	ServiceField string `json:"serviceField,omitempty"`
+}
+
+func (c TraceConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.ServiceField != "" {
+		out["serviceField"] = c.ServiceField
+	}
+	return out
+}
+
+type KVConfig struct {
+	ReadRouteID   string `json:"readRouteId,omitempty"`
+	WriteRouteID  string `json:"writeRouteId,omitempty"`
+	DeleteRouteID string `json:"deleteRouteId,omitempty"`
+	KeyParam      string `json:"keyParam,omitempty"`
+	Writable      bool   `json:"writable,omitempty"`
+}
+
+func (c KVConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.ReadRouteID != "" {
+		out["readRouteId"] = c.ReadRouteID
+	}
+	if c.WriteRouteID != "" {
+		out["writeRouteId"] = c.WriteRouteID
+	}
+	if c.DeleteRouteID != "" {
+		out["deleteRouteId"] = c.DeleteRouteID
+	}
+	if c.KeyParam != "" {
+		out["keyParam"] = c.KeyParam
+	}
+	if c.Writable {
+		out["writable"] = c.Writable
+	}
+	return out
+}
+
+type HeaderDefault struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type HTTPClientConfig struct {
+	ExecuteRouteID string          `json:"executeRouteId,omitempty"`
+	Methods        []string        `json:"methods,omitempty"`
+	DefaultMethod  string          `json:"defaultMethod,omitempty"`
+	DefaultURL     string          `json:"defaultUrl,omitempty"`
+	DefaultHeaders []HeaderDefault `json:"defaultHeaders,omitempty"`
+	DefaultBody    string          `json:"defaultBody,omitempty"`
+}
+
+func (c HTTPClientConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.ExecuteRouteID != "" {
+		out["executeRouteId"] = c.ExecuteRouteID
+	}
+	if len(c.Methods) > 0 {
+		out["methods"] = c.Methods
+	}
+	if c.DefaultMethod != "" {
+		out["defaultMethod"] = c.DefaultMethod
+	}
+	if c.DefaultURL != "" {
+		out["defaultUrl"] = c.DefaultURL
+	}
+	if len(c.DefaultHeaders) > 0 {
+		out["defaultHeaders"] = c.DefaultHeaders
+	}
+	if c.DefaultBody != "" {
+		out["defaultBody"] = c.DefaultBody
+	}
+	return out
+}
+
 // Severity styles a badge.
 type Severity string
 

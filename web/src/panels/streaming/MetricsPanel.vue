@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useStream } from "../../composables/useStream";
-import type { PanelProps } from "../types";
+import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();

@@ -3,10 +3,10 @@ import { ref } from "vue";
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import { useToast } from "primevue/usetoast";
-import { runFormAction } from "../api/dataSource";
-import type { Action, ResourceRef, RiskLevel } from "../types/projection";
-import AppIcon from "../components/AppIcon.vue";
-import SchemaForm from "./form/SchemaForm.vue";
+import { runFormAction } from "../../api/dataSource";
+import type { Action, ResourceRef, RiskLevel } from "../../types/projection";
+import AppIcon from "../../components/AppIcon.vue";
+import SchemaForm from "../form/SchemaForm.vue";
 
 const props = defineProps<{
   connectionId: string;

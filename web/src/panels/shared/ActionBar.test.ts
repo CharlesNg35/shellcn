@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import { installFetch } from "../test/fetchMock";
+import { installFetch } from "../../test/fetchMock";
 import ActionBar from "./ActionBar.vue";
-import type { Action } from "../types/projection";
+import type { Action } from "../../types/projection";
 
 const stop: Action = {
   id: "stop",

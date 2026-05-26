@@ -7,7 +7,7 @@ import {
 } from "../../composables/useDesktopRecorder";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import AppIcon from "../../components/AppIcon.vue";
-import type { PanelProps } from "../types";
+import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();

@@ -3,15 +3,15 @@ import { computed, ref, watch } from "vue";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
-import { interpolate } from "../api/dataSource";
+import { interpolate } from "../../api/dataSource";
 import type {
   Action,
   DetailView as DetailViewSpec,
   Row,
-} from "../types/projection";
-import AppIcon from "../components/AppIcon.vue";
-import PanelHost from "./PanelHost.vue";
-import ActionBar from "./ActionBar.vue";
+} from "../../types/projection";
+import AppIcon from "../../components/AppIcon.vue";
+import PanelHost from "../core/PanelHost.vue";
+import ActionBar from "../shared/ActionBar.vue";
 
 const props = defineProps<{
   connectionId: string;

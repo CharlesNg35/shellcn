@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import { installFetch } from "../test/fetchMock";
+import { installFetch } from "../../test/fetchMock";
 import TablePanel from "./TablePanel.vue";
-import type { Action, Column } from "../types/projection";
+import type { Action, Column } from "../../types/projection";
 
 const columns: Column[] = [
   { key: "name", label: "Name", sortable: true },

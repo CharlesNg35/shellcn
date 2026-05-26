@@ -4,7 +4,7 @@ import Button from "primevue/button";
 import { interpolate, runAction } from "../../api/dataSource";
 import type { QueryEditorConfig } from "../../types/projection";
 import { useStream } from "../../composables/useStream";
-import type { PanelProps } from "../types";
+import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import { useTheme } from "../../composables/useTheme";
 import { loadMonaco, syncMonacoTheme, type MonacoModule } from "../../monaco";

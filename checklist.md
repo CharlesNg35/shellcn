@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-26 — Phase 3 (M2 SSH/SFTP) complete. Core runtime and platform management remain complete; the shipped placeholder `noop` plugin has been removed. SSH/SFTP are now real first-party plugins: `ssh` provides terminal + SFTP files + command snippets, `sftp` provides file-only access, and both share the same SSH/SFTP session + route implementation. Plugin-owned credential kinds, table action config, and validated action success navigation are now part of the manifest/projection contract: SSH declares `ssh_private_key` and `ssh_password`, registry-derived compatibility feeds credential selectors, snippets use declarative toolbar/row actions, and snippet run returns to the Terminal tab after execution. **Next: Phase 4 (M3 Docker + agent transport).**_
+_Last updated: 2026-05-26 — Phase 3 (M2 SSH/SFTP) complete. Core runtime and platform management remain complete; the shipped placeholder `noop` plugin has been removed. SSH/SFTP are now real first-party plugins: `ssh` provides terminal + SFTP files + command snippets, `sftp` provides file-only access, and both share the same SSH/SFTP session + route implementation. Plugin-owned credential kinds, table action config, validated action success navigation, specialized lazy panels (`graph`, `trace`, `kv`, `http_client`), and a grouped panel source layout are now part of the manifest/projection contract. **Next: Phase 4 (M3 Docker + agent transport).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -24,7 +24,7 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 - [x] 1.3 App shell, stores, and routing
 - [x] 1.4 Manifest renderer and panel dispatch
 - [x] 1.5 DataSource resolver
-- [x] 1.6 Declarative panels
+- [x] 1.6 Declarative panels, including specialized graph/trace/kv/http-client renderers and grouped panel source layout
 - [x] 1.7 Stub streaming panels
 
 ## Phase 2 — M1 · Core runtime

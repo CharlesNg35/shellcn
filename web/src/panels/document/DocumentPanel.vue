@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
-import { fetchDoc } from "../api/dataSource";
-import type { PanelProps } from "./types";
-import JsonNode from "./document/JsonNode.vue";
+import { fetchDoc } from "../../api/dataSource";
+import type { PanelProps } from "../core/types";
+import JsonNode from "./JsonNode.vue";
 
 const props = defineProps<PanelProps>();
 

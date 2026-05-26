@@ -12,19 +12,19 @@ import {
   routeURL,
   runAction,
   uploadFiles,
-} from "../api/dataSource";
+} from "../../api/dataSource";
 import type {
   FileBrowserConfig,
   FileContent,
   FileEntry,
   Page,
-} from "../types/projection";
-import type { PanelProps } from "./types";
-import FileCrumbs from "./file/FileCrumbs.vue";
-import FileEntryGrid from "./file/FileEntryGrid.vue";
-import FileEntryList from "./file/FileEntryList.vue";
-import FilePreview from "./file/FilePreview.vue";
-import FileToolbar from "./file/FileToolbar.vue";
+} from "../../types/projection";
+import type { PanelProps } from "../core/types";
+import FileCrumbs from "./FileCrumbs.vue";
+import FileEntryGrid from "./FileEntryGrid.vue";
+import FileEntryList from "./FileEntryList.vue";
+import FilePreview from "./FilePreview.vue";
+import FileToolbar from "./FileToolbar.vue";
 
 const props = defineProps<PanelProps>();
 const toast = useToast();

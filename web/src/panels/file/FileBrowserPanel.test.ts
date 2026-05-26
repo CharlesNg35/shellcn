@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
-import { installFetch } from "../test/fetchMock";
+import { installFetch } from "../../test/fetchMock";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
 
 const rootEntries = [

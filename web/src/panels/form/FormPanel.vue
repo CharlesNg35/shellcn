@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useToast } from "primevue/usetoast";
-import { fetchDoc, runFormAction } from "../api/dataSource";
-import type { FormPanelConfig, Schema } from "../types/projection";
-import type { PanelProps } from "./types";
-import SchemaForm from "./form/SchemaForm.vue";
+import { fetchDoc, runFormAction } from "../../api/dataSource";
+import type { FormPanelConfig, Schema } from "../../types/projection";
+import type { PanelProps } from "../core/types";
+import SchemaForm from "./SchemaForm.vue";
 
 const props = defineProps<PanelProps>();
 const toast = useToast();

@@ -395,5 +395,11 @@ func checkPanelConfigRoutes(ctx string, tab Tab, checkRouteID, checkWriteRouteID
 		checkWriteRouteID(ctx+" saveRouteId", route("saveRouteId"))
 	case PanelQueryEditor:
 		checkWriteRouteID(ctx+" cancelRouteId", route("cancelRouteId"))
+	case PanelKV:
+		checkRouteID(ctx+" readRouteId", route("readRouteId"))
+		checkWriteRouteID(ctx+" writeRouteId", route("writeRouteId"))
+		checkWriteRouteID(ctx+" deleteRouteId", route("deleteRouteId"))
+	case PanelHTTPClient:
+		checkWriteRouteID(ctx+" executeRouteId", route("executeRouteId"))
 	}
 }

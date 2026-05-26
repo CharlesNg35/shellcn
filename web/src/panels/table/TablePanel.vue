@@ -7,7 +7,7 @@ import DataTable, {
 import Column from "primevue/column";
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
-import { fetchPage, watch as watchResource } from "../api/dataSource";
+import { fetchPage, watch as watchResource } from "../../api/dataSource";
 import type {
   Action,
   Column as ColumnSpec,
@@ -15,12 +15,12 @@ import type {
   ResourceEvent,
   Row,
   TablePanelConfig,
-} from "../types/projection";
-import type { PanelProps } from "./types";
-import { formatBytes } from "./file/fileTypes";
-import { inputClass } from "../primevue/preset";
-import SkeletonList from "../components/SkeletonList.vue";
-import ActionBar from "./ActionBar.vue";
+} from "../../types/projection";
+import type { PanelProps } from "../core/types";
+import { formatBytes } from "../file/fileTypes";
+import { inputClass } from "../../primevue/preset";
+import SkeletonList from "../../components/SkeletonList.vue";
+import ActionBar from "../shared/ActionBar.vue";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{

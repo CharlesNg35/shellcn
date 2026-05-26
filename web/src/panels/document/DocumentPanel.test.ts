@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
-import { installFetch } from "../test/fetchMock";
+import { installFetch } from "../../test/fetchMock";
 import DocumentPanel from "./DocumentPanel.vue";
 
 afterEach(() => vi.unstubAllGlobals());

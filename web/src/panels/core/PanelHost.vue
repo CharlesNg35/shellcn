@@ -7,7 +7,7 @@ import type {
   DataSource,
   PanelType,
   ResourceRef,
-} from "../types/projection";
+} from "../../types/projection";
 
 const props = defineProps<{
   panel: PanelType;

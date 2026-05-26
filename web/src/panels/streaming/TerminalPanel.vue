@@ -6,7 +6,7 @@ import { useStream } from "../../composables/useStream";
 import { useTheme } from "../../composables/useTheme";
 import RecordingControls from "../../components/recordings/RecordingControls.vue";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
-import type { PanelProps } from "../types";
+import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();

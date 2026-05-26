@@ -88,6 +88,12 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"form submit route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"submitRouteId": "x.list"}}}
 		}},
+		{"kv write route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "kv", Label: "KV", Panel: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"writeRouteId": "x.list"}}}
+		}},
+		{"http client execute route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "http", Label: "HTTP", Panel: plugin.PanelHTTPClient, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"executeRouteId": "x.list"}}}
+		}},
 		{"action references unknown route", "references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "ghost"}}
 		}},
@@ -153,6 +159,35 @@ func TestValidateAcceptsGoodManifest(t *testing.T) {
 	m, routes := sampleManifest()
 	if err := plugin.Validate(m, routes); err != nil {
 		t.Errorf("valid manifest rejected: %v", err)
+	}
+}
+
+func TestSpecializedPanelConfigMaps(t *testing.T) {
+	kv := plugin.KVConfig{
+		ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write",
+		DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,
+	}.Map()
+	if kv["readRouteId"] != "redis.key.read" || kv["writable"] != true {
+		t.Fatalf("kv config map unexpected: %#v", kv)
+	}
+
+	http := plugin.HTTPClientConfig{
+		ExecuteRouteID: "http.execute", Methods: []string{"GET", "POST"},
+		DefaultMethod: "GET", DefaultURL: "/health",
+		DefaultHeaders: []plugin.HeaderDefault{{Key: "Accept", Value: "application/json"}},
+	}.Map()
+	if http["executeRouteId"] != "http.execute" || len(http["methods"].([]string)) != 2 {
+		t.Fatalf("http config map unexpected: %#v", http)
+	}
+
+	graph := plugin.GraphConfig{Layout: plugin.GraphLayoutManual, FitView: true}.Map()
+	if graph["layout"] != plugin.GraphLayoutManual || graph["fitView"] != true {
+		t.Fatalf("graph config map unexpected: %#v", graph)
+	}
+
+	trace := plugin.TraceConfig{ServiceField: "process.serviceName"}.Map()
+	if trace["serviceField"] != "process.serviceName" {
+		t.Fatalf("trace config map unexpected: %#v", trace)
 	}
 }
 

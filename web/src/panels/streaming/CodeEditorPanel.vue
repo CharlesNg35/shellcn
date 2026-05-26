@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import { fetchDoc, runAction } from "../../api/dataSource";
 import type { CodeEditorConfig } from "../../types/projection";
-import type { PanelProps } from "../types";
+import type { PanelProps } from "../core/types";
 import { useTheme } from "../../composables/useTheme";
 import { loadMonaco, syncMonacoTheme, type MonacoModule } from "../../monaco";
 

@@ -3,7 +3,7 @@ import { computed, nextTick, ref } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import { useStream } from "../../composables/useStream";
-import type { PanelProps } from "../types";
+import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();

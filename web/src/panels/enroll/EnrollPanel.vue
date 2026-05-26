@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
 import Button from "primevue/button";
-import { api } from "../api/client";
+import { api } from "../../api/client";
 import type {
   AgentState,
   Enrollment,
   InstallArtifact,
-} from "../types/projection";
-import type { PanelProps } from "./types";
-import AppIcon from "../components/AppIcon.vue";
+} from "../../types/projection";
+import type { PanelProps } from "../core/types";
+import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{ online: [] }>();

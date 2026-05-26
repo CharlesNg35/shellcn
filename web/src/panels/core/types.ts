@@ -1,4 +1,4 @@
-import type { Action, DataSource, ResourceRef } from "../types/projection";
+import type { Action, DataSource, ResourceRef } from "../../types/projection";
 
 // Every panel component receives this shape; PanelHost binds it uniformly.
 export interface PanelProps {
