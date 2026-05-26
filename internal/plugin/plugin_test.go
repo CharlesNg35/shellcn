@@ -41,6 +41,31 @@ func TestRegistryRegisterGetAll(t *testing.T) {
 	}
 	if s := reg.Summaries(); len(s) != 1 || s[0].Name != "sample" {
 		t.Errorf("Summaries unexpected: %+v", s)
+	} else if s[0].Category.Key != plugin.CategoryShell {
+		t.Errorf("Summary category = %+v, want %q", s[0].Category, plugin.CategoryShell)
+	}
+}
+
+func TestRegistrySummariesSortByCategory(t *testing.T) {
+	m, routes := sampleManifest()
+	db := plugin.Manifest{
+		APIVersion:          plugin.CurrentAPIVersion,
+		Name:                "aaa-db",
+		Title:               "AAA Database",
+		Category:            plugin.CategoryDatabases,
+		Layout:              plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+	}
+	reg := plugin.NewRegistry()
+	if err := reg.Register(&stubPlugin{manifest: db}); err != nil {
+		t.Fatalf("register db: %v", err)
+	}
+	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("register shell: %v", err)
+	}
+	s := reg.Summaries()
+	if got := []string{s[0].Name, s[1].Name}; got[0] != "sample" || got[1] != "aaa-db" {
+		t.Fatalf("summary order = %v, want [sample aaa-db]", got)
 	}
 }
 
@@ -50,7 +75,7 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 	base := func() (plugin.Manifest, []plugin.Route) {
 		return plugin.Manifest{
 				APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
-				Layout: plugin.LayoutTabs, SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+				Category: plugin.CategoryOther, Layout: plugin.LayoutTabs, SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 			}, []plugin.Route{
 				{ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop},
 			}
@@ -63,6 +88,8 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 	}{
 		{"unsupported api version", "APIVersion", func(m *plugin.Manifest, _ *[]plugin.Route) { m.APIVersion = 99 }},
 		{"missing name", "Name is required", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Name = "" }},
+		{"missing category", "Category is required", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Category = "" }},
+		{"unknown category", "not a built-in category", func(m *plugin.Manifest, _ *[]plugin.Route) { m.Category = "weird" }},
 		{"missing direct transport", "must include", func(m *plugin.Manifest, _ *[]plugin.Route) { m.SupportedTransports = nil }},
 		{"agent without profile", "AgentProfile is required", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.SupportedTransports = []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent}
@@ -179,6 +206,7 @@ func TestValidateAcceptsRemoteDesktopConfig(t *testing.T) {
 		APIVersion: plugin.CurrentAPIVersion,
 		Name:       "desktop",
 		Title:      "Desktop",
+		Category:   plugin.CategoryRemoteDesktop,
 		Layout:     plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{
 			plugin.TransportDirect,
@@ -280,7 +308,7 @@ func recordingBase() (plugin.Manifest, []plugin.Route) {
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
 	m := plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion, Name: "rec", Title: "Rec",
-		Layout: plugin.LayoutTabs, SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs, SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Streams: []plugin.Stream{
 			{ID: "rec.shell", Kind: plugin.StreamTerminal, RouteID: "rec.shell"},
 			{ID: "rec.screen", Kind: plugin.StreamDesktop, RouteID: "rec.screen"},

@@ -82,6 +82,7 @@ type Manifest struct {
 	Title       string
 	Description string
 	Icon        Icon
+	Category    Category
 
 	Config       Schema
 	Capabilities []Capability

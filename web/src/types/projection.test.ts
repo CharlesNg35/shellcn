@@ -17,6 +17,12 @@ describe("projection contract", () => {
       title: "SSH",
       description: "Secure Shell",
       icon: { type: "lucide", value: "terminal" },
+      category: {
+        key: "shell",
+        label: "Shell & terminal",
+        icon: { type: "lucide", value: "terminal" },
+        order: 10,
+      },
       config: {
         groups: [
           {

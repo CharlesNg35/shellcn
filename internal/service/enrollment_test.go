@@ -19,6 +19,7 @@ func (agentTestPlugin) Manifest() plugin.Manifest {
 		APIVersion: plugin.CurrentAPIVersion,
 		Name:       "agenttest",
 		Title:      "Agent Test",
+		Category:   plugin.CategoryOther,
 		Layout:     plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{
 			plugin.TransportDirect,

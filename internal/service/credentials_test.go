@@ -22,7 +22,7 @@ const (
 
 func (credentialCatalogPlugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
-		APIVersion: plugin.CurrentAPIVersion, Name: "catalog", Title: "Catalog",
+		APIVersion: plugin.CurrentAPIVersion, Name: "catalog", Title: "Catalog", Category: plugin.CategoryOther,
 		Layout:              plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{

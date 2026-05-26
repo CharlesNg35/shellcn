@@ -21,6 +21,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Title:       "Docker",
 		Description: "Docker Engine cockpit with containers, images, volumes, networks, logs, exec, events, and raw API access.",
 		Icon:        plugin.Icon{Type: plugin.IconSVG, Value: dockerIconSVG},
+		Category:    plugin.CategoryContainers,
 		Config:      configSchema(),
 		Capabilities: []plugin.Capability{
 			"containers", "images", "volumes", "networks", "logs", "terminal", "events",

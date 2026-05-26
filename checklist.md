@@ -42,7 +42,7 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 
 ## Phase 2b — M1.5 · Platform management (make it usable)
 
-_Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps [phase-2b](specs/plans/phase-2b-m1.5-platform-management/)). Connection/credential CRUD + sharing endpoints with authn→authz→audit; auth gate + global error UX; manifest-driven connection create/edit/delete; credential management + sharing UI. Shared connections can use already-bound credentials without exposing those credentials; shared managers see keep-or-replace credential refs, and credential grants remain managed from the credentials surface. All secrets write-only end to end._
+_Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps [phase-2b](specs/plans/phase-2b-m1.5-platform-management/)). Connection/credential CRUD + sharing endpoints with authn→authz→audit; auth gate + global error UX; manifest-driven connection create/edit/delete with category-grouped protocol picking; credential management + sharing UI. Shared connections can use already-bound credentials without exposing those credentials; shared managers see keep-or-replace credential refs, and credential grants remain managed from the credentials surface. All secrets write-only end to end._
 
 - [x] 2b.1 Backend — connection CRUD endpoints (schema-validated, secret-encrypted, authz'd)
 - [x] 2b.2 Backend — credential CRUD + rotation (write-only secret material)

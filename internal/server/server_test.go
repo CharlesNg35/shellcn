@@ -48,7 +48,7 @@ var schemaOnlyCalls atomic.Int32
 func (testPlugin) Manifest() plugin.Manifest {
 	directOnly := plugin.Condition{AllOf: []plugin.Rule{{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)}}}
 	return plugin.Manifest{
-		APIVersion: plugin.CurrentAPIVersion, Name: "tester", Version: "0", Title: "Tester",
+		APIVersion: plugin.CurrentAPIVersion, Name: "tester", Version: "0", Title: "Tester", Category: plugin.CategoryOther,
 		Layout:              plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{
@@ -171,6 +171,7 @@ func (internalPlugin) Manifest() plugin.Manifest {
 		Name:                "internal",
 		Version:             "0",
 		Title:               "Internal Test",
+		Category:            plugin.CategoryOther,
 		Layout:              plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Tabs: []plugin.Tab{
@@ -214,7 +215,7 @@ type boomPlugin struct{}
 func (boomPlugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion, Name: "boom", Version: "0", Title: "Boom",
-		Layout: plugin.LayoutTabs, SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs, SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 	}
 }
 

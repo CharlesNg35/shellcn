@@ -5,6 +5,12 @@
   "title": "SSH",
   "description": "Secure Shell — terminal, files, and command snippets.",
   "icon": { "type": "lucide", "value": "terminal" },
+  "category": {
+    "key": "shell",
+    "label": "Shell & terminal",
+    "icon": { "type": "lucide", "value": "terminal" },
+    "order": 10
+  },
   "capabilities": ["terminal", "filesystem"],
   "credentialKinds": [
     {

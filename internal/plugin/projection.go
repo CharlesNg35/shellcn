@@ -2,10 +2,11 @@ package plugin
 
 // Summary is the lightweight catalog entry the connection list needs.
 type Summary struct {
-	Name        string `json:"name"`
-	Title       string `json:"title"`
-	Icon        Icon   `json:"icon"`
-	Description string `json:"description,omitempty"`
+	Name        string       `json:"name"`
+	Title       string       `json:"title"`
+	Icon        Icon         `json:"icon"`
+	Category    CategoryInfo `json:"category"`
+	Description string       `json:"description,omitempty"`
 }
 
 // ProjectedAgentProfile is the render-only view of agent connectivity.
@@ -49,6 +50,7 @@ type Projection struct {
 	Title               string                 `json:"title"`
 	Description         string                 `json:"description"`
 	Icon                Icon                   `json:"icon"`
+	Category            CategoryInfo           `json:"category"`
 	Config              Schema                 `json:"config"`
 	Capabilities        []Capability           `json:"capabilities"`
 	CredentialKinds     []CredentialKindInfo   `json:"credentialKinds,omitempty"`
@@ -73,6 +75,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 		Title:               m.Title,
 		Description:         m.Description,
 		Icon:                m.Icon,
+		Category:            pluginCategoryInfo(m.Category),
 		Config:              m.Config,
 		Capabilities:        nonNil(m.Capabilities),
 		CredentialKinds:     nonNil(m.CredentialKinds),

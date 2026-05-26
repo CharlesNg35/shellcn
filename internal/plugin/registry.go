@@ -125,10 +125,19 @@ func (r *Registry) Summaries() []Summary {
 			Name:        e.manifest.Name,
 			Title:       e.manifest.Title,
 			Icon:        e.manifest.Icon,
+			Category:    pluginCategoryInfo(e.manifest.Category),
 			Description: e.manifest.Description,
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Category.Order != out[j].Category.Order {
+			return out[i].Category.Order < out[j].Category.Order
+		}
+		if out[i].Title != out[j].Title {
+			return out[i].Title < out[j].Title
+		}
+		return out[i].Name < out[j].Name
+	})
 	return out
 }
 

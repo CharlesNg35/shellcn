@@ -21,6 +21,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Title:               "SSH",
 		Description:         "Secure shell with terminal, SFTP files, and command snippets.",
 		Icon:                plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
+		Category:            plugin.CategoryShell,
 		Config:              configSchema("ssh"),
 		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
 		CredentialKinds:     sshsftp.CredentialKinds(),

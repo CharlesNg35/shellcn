@@ -8,6 +8,12 @@
     "type": "lucide",
     "value": "database"
   },
+  "category": {
+    "key": "databases",
+    "label": "Databases",
+    "icon": { "type": "lucide", "value": "database" },
+    "order": 60
+  },
   "capabilities": ["sql", "schema"],
   "supportedTransports": ["direct", "agent"],
   "agent": {

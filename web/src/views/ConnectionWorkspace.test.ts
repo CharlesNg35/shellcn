@@ -15,6 +15,12 @@ const projection: PluginProjection = {
   title: "Docker",
   description: "Docker test projection",
   icon: { type: "lucide", value: "box" },
+  category: {
+    key: "containers",
+    label: "Containers",
+    icon: { type: "lucide", value: "boxes" },
+    order: 30,
+  },
   config: { groups: [] },
   capabilities: [],
   supportedTransports: ["direct"],

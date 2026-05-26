@@ -28,6 +28,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Title:               "RDP",
 		Description:         "Windows Remote Desktop rendered with noVNC.",
 		Icon:                icon,
+		Category:            plugin.CategoryRemoteDesktop,
 		Config:              configSchema("rdp"),
 		Capabilities:        []plugin.Capability{"remote_desktop"},
 		CredentialKinds:     credentialKinds(),

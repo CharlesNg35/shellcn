@@ -22,6 +22,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Title:               "Sample",
 		Description:         "A representative plugin used by the golden test.",
 		Icon:                plugin.Icon{Type: plugin.IconSVG, Value: "<svg viewBox=\"0 0 1 1\"></svg>"},
+		Category:            plugin.CategoryShell,
 		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{{
@@ -173,10 +174,14 @@ func TestProjectionMatchesContract(t *testing.T) {
 	if err := json.Unmarshal(b, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	for _, key := range []string{"apiVersion", "name", "version", "title", "description", "icon", "config", "capabilities", "supportedTransports", "layout", "tabs", "tree", "resources", "actions", "streams"} {
+	for _, key := range []string{"apiVersion", "name", "version", "title", "description", "icon", "category", "config", "capabilities", "supportedTransports", "layout", "tabs", "tree", "resources", "actions", "streams"} {
 		if _, ok := raw[key]; !ok {
 			t.Errorf("projection missing required key %q", key)
 		}
+	}
+	category, _ := raw["category"].(map[string]any)
+	if category["key"] != string(plugin.CategoryShell) || category["label"] != "Shell & terminal" {
+		t.Errorf("projection category unexpected: %+v", category)
 	}
 
 	actions, _ := raw["actions"].([]any)

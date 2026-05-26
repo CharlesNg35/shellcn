@@ -8,6 +8,15 @@
     "type": "svg",
     "value": "\u003csvg viewBox=\"0 0 1 1\"\u003e\u003c/svg\u003e"
   },
+  "category": {
+    "key": "shell",
+    "label": "Shell \u0026 terminal",
+    "icon": {
+      "type": "lucide",
+      "value": "terminal"
+    },
+    "order": 10
+  },
   "config": {
     "groups": [
       {

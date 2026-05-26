@@ -8,6 +8,12 @@
     "type": "url",
     "value": "https://www.proxmox.com/favicon.ico"
   },
+  "category": {
+    "key": "virtualization",
+    "label": "Virtualization",
+    "icon": { "type": "lucide", "value": "server" },
+    "order": 40
+  },
   "capabilities": ["virtualization", "console", "snapshots"],
   "supportedTransports": ["direct"],
   "layout": "sidebar_tree",

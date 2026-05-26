@@ -9,6 +9,13 @@ export interface Icon {
   value: string;
 }
 
+export interface PluginCategoryInfo {
+  key: string;
+  label: string;
+  icon: Icon;
+  order: number;
+}
+
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "WS";
 
 export type RiskLevel = "safe" | "write" | "destructive" | "privileged";
@@ -384,6 +391,7 @@ export interface PluginSummary {
   name: string;
   title: string;
   icon: Icon;
+  category: PluginCategoryInfo;
   description?: string;
 }
 
@@ -394,6 +402,7 @@ export interface PluginProjection {
   title: string;
   description: string;
   icon: Icon;
+  category: PluginCategoryInfo;
   config: Schema;
   capabilities: string[];
   credentialKinds?: CredentialKindInfo[];

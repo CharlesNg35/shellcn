@@ -40,6 +40,7 @@ interface PluginFixture {
   name: string;
   title: string;
   icon: unknown;
+  category: unknown;
   description: string;
   credentialKinds?: CredentialKindInfo[];
   config?: {
@@ -437,20 +438,32 @@ function handleHTTP(
   }
 
   if (path === "/api/plugins" && method === "GET") {
-    const summaries = pluginNames().map((name) => {
-      const p = readJSON<{
-        name: string;
-        title: string;
-        icon: unknown;
-        description: string;
-      }>(`${name}.json`);
-      return {
-        name: p.name,
-        title: p.title,
-        icon: p.icon,
-        description: p.description,
-      };
-    });
+    const summaries = pluginNames()
+      .map((name) => {
+        const p = readJSON<{
+          name: string;
+          title: string;
+          icon: unknown;
+          category: unknown;
+          description: string;
+        }>(`${name}.json`);
+        return {
+          name: p.name,
+          title: p.title,
+          icon: p.icon,
+          category: p.category,
+          description: p.description,
+        };
+      })
+      .sort((a, b) => {
+        const ac = a.category as { order?: number; label?: string };
+        const bc = b.category as { order?: number; label?: string };
+        return (
+          (ac.order ?? 1000) - (bc.order ?? 1000) ||
+          String(ac.label ?? "").localeCompare(String(bc.label ?? "")) ||
+          a.title.localeCompare(b.title)
+        );
+      });
     return send(res, 200, summaries);
   }
 

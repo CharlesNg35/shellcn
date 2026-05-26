@@ -8,6 +8,12 @@
     "type": "emoji",
     "value": "\ud83d\udc33"
   },
+  "category": {
+    "key": "containers",
+    "label": "Containers",
+    "icon": { "type": "lucide", "value": "boxes" },
+    "order": 30
+  },
   "capabilities": ["containers", "images", "volumes", "networks"],
   "supportedTransports": ["direct", "agent"],
   "agent": {

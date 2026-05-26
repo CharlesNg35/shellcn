@@ -17,6 +17,12 @@ const projection: PluginProjection = {
   title: "Tester",
   description: "",
   icon: { type: "lucide", value: "box" },
+  category: {
+    key: "other",
+    label: "Other",
+    icon: { type: "lucide", value: "plug" },
+    order: 1000,
+  },
   config: {
     groups: [
       {
@@ -62,6 +68,7 @@ describe("ConnectionFormDialog", () => {
         name: "tester",
         title: "Tester",
         icon: { type: "lucide", value: "box" },
+        category: projection.category,
       },
     ];
 
@@ -127,6 +134,7 @@ describe("ConnectionFormDialog", () => {
         name: "tester",
         title: "Tester",
         icon: { type: "lucide", value: "box" },
+        category: projection.category,
       },
     ];
 
@@ -165,6 +173,7 @@ describe("ConnectionFormDialog", () => {
         name: "tester",
         title: "Tester",
         icon: { type: "lucide", value: "box" },
+        category: projection.category,
       },
     ];
     const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
@@ -216,6 +225,7 @@ describe("ConnectionFormDialog", () => {
         name: "tester",
         title: "Tester",
         icon: { type: "lucide", value: "box" },
+        category: projection.category,
       },
     ];
 
@@ -296,6 +306,7 @@ describe("ConnectionFormDialog", () => {
         name: "tester",
         title: "Tester",
         icon: { type: "lucide", value: "box" },
+        category: projection.category,
       },
     ];
 

@@ -24,6 +24,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Title:               "Proxmox VE",
 		Description:         "Proxmox Virtual Environment cockpit: nodes, VMs, containers, storage, consoles, snapshots, and backups.",
 		Icon:                plugin.Icon{Type: plugin.IconSVG, Value: iconSVG},
+		Category:            plugin.CategoryVirtualization,
 		Config:              configSchema("proxmox"),
 		Capabilities:        []plugin.Capability{"nodes", "vms", "containers", "storage", "remote_desktop", "terminal", "snapshots", "backups"},
 		CredentialKinds:     credentialKinds(),
