@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import Button from "primevue/button";
 import { resolveParams } from "../../api/dataSource";
 import {
@@ -8,12 +8,14 @@ import {
 } from "../../composables/useRecordingControl";
 import AppIcon from "../AppIcon.vue";
 import type { DataSource, ResourceRef } from "../../types/projection";
+import type { ChannelStatus } from "../../stores/sessions";
 
 const props = defineProps<{
   connectionId: string;
   source: DataSource;
   resource?: ResourceRef | null;
   descriptor: RecordingDescriptor;
+  streamStatus?: ChannelStatus;
 }>();
 
 const streamRef = computed(() => ({
@@ -24,8 +26,35 @@ const streamRef = computed(() => ({
 const { recording, forced, failed, busy, canControl, start, stop } =
   useRecordingControl(props.connectionId, streamRef.value, props.descriptor);
 
+let resumeOnOpen = false;
+
 const typeLabel = computed(() =>
   props.descriptor.class === "desktop" ? "desktop" : "terminal",
+);
+
+async function startRecording(): Promise<void> {
+  resumeOnOpen = true;
+  await start();
+}
+
+async function stopRecording(): Promise<void> {
+  resumeOnOpen = false;
+  await stop();
+}
+
+watch(
+  () => props.streamStatus,
+  (next) => {
+    if (!canControl.value || !next) return;
+    if ((next === "closed" || next === "error") && recording.value) {
+      resumeOnOpen = true;
+      recording.value = false;
+      return;
+    }
+    if (next === "open" && resumeOnOpen && !recording.value && !busy.value) {
+      void start();
+    }
+  },
 );
 </script>
 
@@ -51,7 +80,7 @@ const typeLabel = computed(() =>
       severity="secondary"
       size="small"
       :disabled="busy"
-      @click="start"
+      @click="startRecording"
     >
       <span class="h-2 w-2 rounded-full bg-red-500" />
       Record
@@ -63,7 +92,7 @@ const typeLabel = computed(() =>
       severity="secondary"
       size="small"
       :disabled="busy"
-      @click="stop"
+      @click="stopRecording"
     >
       <AppIcon :icon="{ type: 'name', value: 'stop' }" :size="12" />
       Stop

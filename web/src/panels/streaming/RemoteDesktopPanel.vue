@@ -25,6 +25,7 @@ const status = ref("connecting");
 const error = ref<string | null>(null);
 const reconnecting = ref(false);
 const container = ref<HTMLElement | null>(null);
+const resumeRecording = ref(false);
 let remoteSession: RemoteDesktopSession | null = null;
 let activeRun = 0;
 
@@ -66,9 +67,21 @@ async function beginCapture(): Promise<boolean> {
   return recorder.start(canvas);
 }
 
+async function startDesiredRecording(): Promise<boolean> {
+  resumeRecording.value = true;
+  const started = await beginCapture();
+  if (!started) resumeRecording.value = false;
+  return started;
+}
+
+async function stopDesiredRecording(): Promise<void> {
+  resumeRecording.value = false;
+  await recorder.stop();
+}
+
 function disconnectRemote(): void {
   activeRun += 1;
-  recorder.stop();
+  void recorder.stop();
   const current = remoteSession;
   remoteSession = null;
   current?.disconnect();
@@ -84,9 +97,9 @@ async function handleEngineStatus(
     loaded.value = true;
     error.value = null;
     live.connected(props.connectionId);
-    if (forced.value) {
+    if (forced.value || resumeRecording.value) {
       const recordingStarted = await beginCapture();
-      if (!recordingStarted && run === activeRun) {
+      if (!recordingStarted && forced.value && run === activeRun) {
         status.value = "recording-failed";
         loaded.value = false;
         remoteSession?.disconnect();
@@ -96,7 +109,8 @@ async function handleEngineStatus(
     return;
   }
 
-  recorder.stop();
+  if (recorder.recording.value) resumeRecording.value = true;
+  void recorder.stop();
   loaded.value = false;
   if (
     nextStatus === "disconnected" &&
@@ -167,6 +181,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   disconnectRemote();
+  recorder.dispose();
   loaded.value = false;
 });
 </script>
@@ -194,7 +209,7 @@ onUnmounted(() => {
         type="button"
         :disabled="unsupported || !loaded"
         class="inline-flex items-center gap-1.5 rounded-md border border-surface-600 px-2 py-1 text-surface-300 hover:border-red-400 hover:text-red-400 disabled:opacity-50"
-        @click="beginCapture"
+        @click="startDesiredRecording"
       >
         <span class="h-2 w-2 rounded-full bg-red-500" />
         Record
@@ -203,7 +218,7 @@ onUnmounted(() => {
         v-if="!forced && recorder.recording.value"
         type="button"
         class="inline-flex items-center gap-1.5 rounded-md border border-surface-600 px-2 py-1 text-surface-300 hover:bg-white/5"
-        @click="recorder.stop()"
+        @click="stopDesiredRecording"
       >
         <AppIcon :icon="{ type: 'name', value: 'stop' }" :size="12" />
         Stop

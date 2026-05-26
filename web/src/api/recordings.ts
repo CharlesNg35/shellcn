@@ -17,13 +17,40 @@ export interface StreamRef {
   params?: Record<string, string>;
 }
 
-async function postBinary(path: string, body: BodyInit): Promise<void> {
+interface RecordingRequestOptions {
+  keepalive?: boolean;
+}
+
+async function postBinary(
+  path: string,
+  body: BodyInit,
+  options: RecordingRequestOptions = {},
+): Promise<void> {
   const res = await fetch(API_BASE + path, {
     method: "POST",
     headers: { "X-CSRF-Token": getCsrfToken() },
     body,
+    keepalive: options.keepalive,
   });
   if (!res.ok) throw new ApiError(res.status, res.statusText);
+}
+
+async function postJSON<T>(
+  path: string,
+  body: unknown,
+  options: RecordingRequestOptions = {},
+): Promise<T> {
+  const res = await fetch(API_BASE + path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRF-Token": getCsrfToken(),
+    },
+    body: JSON.stringify(body ?? {}),
+    keepalive: options.keepalive,
+  });
+  if (!res.ok) throw new ApiError(res.status, res.statusText);
+  return (await res.json()) as T;
 }
 
 export const recordingsApi = {
@@ -52,10 +79,27 @@ export const recordingsApi = {
       `/connections/${connectionId}/recordings/desktop`,
       { ...ref, format },
     ),
-  uploadChunk: (recordingId: string, index: number, chunk: Blob) =>
-    postBinary(`/recordings/${recordingId}/chunks?index=${index}`, chunk),
-  finalize: (recordingId: string) =>
-    api.post<RecordingSummary>(`/recordings/${recordingId}/finalize`),
-  abort: (recordingId: string) =>
-    api.post<{ ok: true }>(`/recordings/${recordingId}/abort`),
+  uploadChunk: (
+    recordingId: string,
+    index: number,
+    chunk: Blob,
+    options: RecordingRequestOptions = {},
+  ) =>
+    postBinary(
+      `/recordings/${recordingId}/chunks?index=${index}`,
+      chunk,
+      options,
+    ),
+  finalize: (recordingId: string, options: RecordingRequestOptions = {}) =>
+    options.keepalive
+      ? postJSON<RecordingSummary>(
+          `/recordings/${recordingId}/finalize`,
+          {},
+          options,
+        )
+      : api.post<RecordingSummary>(`/recordings/${recordingId}/finalize`),
+  abort: (recordingId: string, options: RecordingRequestOptions = {}) =>
+    options.keepalive
+      ? postJSON<{ ok: true }>(`/recordings/${recordingId}/abort`, {}, options)
+      : api.post<{ ok: true }>(`/recordings/${recordingId}/abort`),
 };

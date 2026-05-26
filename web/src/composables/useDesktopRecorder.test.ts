@@ -5,7 +5,12 @@ const startDesktop = vi.fn<(...a: unknown[]) => Promise<{ id: string }>>(
   async () => ({ id: "rec1" }),
 );
 const uploadChunk = vi.fn<
-  (id: string, index: number, chunk: Blob) => Promise<void>
+  (
+    id: string,
+    index: number,
+    chunk: Blob,
+    options?: { keepalive?: boolean },
+  ) => Promise<void>
 >(async () => undefined);
 const finalize = vi.fn<(...a: unknown[]) => Promise<{ id: string }>>(
   async () => ({
@@ -18,8 +23,12 @@ const abort = vi.fn<(...a: unknown[]) => Promise<{ ok: true }>>(async () => ({
 vi.mock("../api/recordings", () => ({
   recordingsApi: {
     startDesktop: (...a: unknown[]) => startDesktop(...a),
-    uploadChunk: (id: string, index: number, chunk: Blob) =>
-      uploadChunk(id, index, chunk),
+    uploadChunk: (
+      id: string,
+      index: number,
+      chunk: Blob,
+      options?: { keepalive?: boolean },
+    ) => uploadChunk(id, index, chunk, options),
     finalize: (...a: unknown[]) => finalize(...a),
     abort: (...a: unknown[]) => abort(...a),
   },
@@ -48,6 +57,9 @@ class FakeMediaRecorder {
   stop(): void {
     this.state = "inactive";
     this.onstop?.();
+  }
+  requestData(): void {
+    this.emit(fakeBlob(1));
   }
   emit(data: Blob): void {
     this.ondataavailable?.({ data });
@@ -93,10 +105,10 @@ describe("useDesktopRecorder", () => {
     expect(uploadChunk.mock.calls[0][1]).toBe(0);
     expect(uploadChunk.mock.calls[1][1]).toBe(1);
 
-    rec.stop();
-    await flushPromises();
+    await rec.stop();
     expect(finalize).toHaveBeenCalledWith("rec1");
     expect(rec.recording.value).toBe(false);
+    rec.dispose();
   });
 
   it("reports unsupported when MediaRecorder is unavailable", async () => {
@@ -109,6 +121,7 @@ describe("useDesktopRecorder", () => {
     const ok = await rec.start(canvas);
     expect(ok).toBe(false);
     expect(rec.failed.value).toBe(true);
+    rec.dispose();
   });
 
   it("aborts instead of finalizing when a chunk upload fails", async () => {
@@ -121,11 +134,29 @@ describe("useDesktopRecorder", () => {
     expect(await rec.start(canvas)).toBe(true);
     instances[0].emit(fakeBlob(10));
     await flushPromises();
-    rec.stop();
-    await flushPromises();
+    await rec.stop();
 
     expect(finalize).not.toHaveBeenCalled();
     expect(abort).toHaveBeenCalledWith("rec1");
     expect(rec.failed.value).toBe(true);
+    rec.dispose();
+  });
+
+  it("stops active recording with keepalive when the page is hidden", async () => {
+    const rec = useDesktopRecorder("c1", { routeId: "vnc.screen" });
+    const canvas = document.createElement("canvas") as HTMLCanvasElement & {
+      captureStream(): MediaStream;
+    };
+
+    expect(await rec.start(canvas)).toBe(true);
+    window.dispatchEvent(new Event("pagehide"));
+    await flushPromises();
+
+    expect(uploadChunk).toHaveBeenCalledWith("rec1", 0, expect.anything(), {
+      keepalive: true,
+    });
+    expect(finalize).toHaveBeenCalledWith("rec1", { keepalive: true });
+    expect(rec.recording.value).toBe(false);
+    rec.dispose();
   });
 });

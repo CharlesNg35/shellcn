@@ -211,6 +211,7 @@ onUnmounted(() => {
         :source="source"
         :resource="resource"
         :descriptor="recording!"
+        :stream-status="status"
       />
     </div>
     <StreamStatusBar
