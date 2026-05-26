@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 	"text/template"
 	"time"
@@ -114,20 +116,77 @@ func (s *EnrollmentService) Create(ctx context.Context, connectionID, connectURL
 }
 
 func renderArtifacts(specs []plugin.InstallArtifact, connectURL, token string) ([]InstallArtifact, error) {
-	data := struct{ ConnectURL, Token, Image string }{ConnectURL: connectURL, Token: token, Image: DefaultProxyImage}
 	out := make([]InstallArtifact, 0, len(specs))
 	for _, spec := range specs {
-		tmpl, err := template.New(spec.Kind).Parse(spec.Template)
+		tmpl, err := template.New(spec.Kind).Funcs(template.FuncMap{
+			"shellquote": shellQuote,
+		}).Parse(spec.Template)
 		if err != nil {
 			return nil, fmt.Errorf("render artifact %q: %w", spec.Kind, err)
 		}
 		var sb strings.Builder
-		if err := tmpl.Execute(&sb, data); err != nil {
+		if err := tmpl.Execute(&sb, artifactRenderData(connectURL, token, spec.ConnectURL)); err != nil {
 			return nil, fmt.Errorf("render artifact %q: %w", spec.Kind, err)
 		}
 		out = append(out, InstallArtifact{Label: spec.Label, Kind: spec.Kind, Command: sb.String()})
 	}
 	return out, nil
+}
+
+type artifactData struct {
+	GatewayConnectURL     string
+	ConnectURL            string
+	Token                 string
+	Image                 string
+	Insecure              bool
+	LocalhostHost         string
+	LocalhostHostRequired bool
+}
+
+func artifactRenderData(connectURL, token string, target plugin.ArtifactConnectURL) artifactData {
+	renderedURL, localhostRequired := rewriteConnectURL(connectURL, target)
+	return artifactData{
+		GatewayConnectURL:     connectURL,
+		ConnectURL:            renderedURL,
+		Token:                 token,
+		Image:                 DefaultProxyImage,
+		Insecure:              insecureConnectURL(connectURL),
+		LocalhostHost:         target.LocalhostHost,
+		LocalhostHostRequired: localhostRequired,
+	}
+}
+
+func insecureConnectURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Scheme == "ws"
+}
+
+func rewriteConnectURL(raw string, target plugin.ArtifactConnectURL) (string, bool) {
+	if strings.TrimSpace(target.LocalhostHost) == "" {
+		return raw, false
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw, false
+	}
+	switch u.Hostname() {
+	case "localhost", "127.0.0.1", "::1":
+		if port := u.Port(); port != "" {
+			u.Host = net.JoinHostPort(target.LocalhostHost, port)
+		} else {
+			u.Host = target.LocalhostHost
+		}
+		return u.String(), true
+	default:
+		return raw, false
+	}
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 // Redeem validates an agent-presented token and returns the connection it binds

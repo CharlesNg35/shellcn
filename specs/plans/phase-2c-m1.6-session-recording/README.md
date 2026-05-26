@@ -14,7 +14,7 @@ Two recording classes are supported:
 - **Terminal/event recording** — SSH, Docker exec, Kubernetes exec, telnet,
   serial. Stored as asciicast v2 (`.cast`) so playback is lightweight and
   protocol-neutral.
-- **Desktop/graphical recording** — VNC now, RDP/Guacamole later. Stored through
+- **Desktop/graphical recording** — VNC/RDP remote desktops. Stored through
   a generic recording contract using browser canvas capture (`webm_canvas`).
 
 ## Steps
@@ -41,6 +41,6 @@ sessions they created. Tests prove recording is opt-in, not panel-type automatic
   policy, stream taps, asciicast, browser WebM, storage, authz, retention, and
   playback. Plugins only **declare** capability in their manifest; they never ship
   a recording subsystem.
-- Protocol-specific SSH/VNC implementation details: those land with their plugin
+- Protocol-specific SSH/VNC/RDP implementation details: those land with their plugin
   phases, using this foundation.
 - Full recording export/transcoding pipeline beyond first playback/download.

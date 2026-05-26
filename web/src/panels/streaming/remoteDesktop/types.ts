@@ -9,16 +9,16 @@ export type RemoteDesktopStatus =
   | "credentials-required"
   | "error";
 
-export interface RemoteDesktopEngineHooks {
+export interface RemoteDesktopHooks {
   status(status: RemoteDesktopStatus): void;
   error(message: string): void;
 }
 
-export interface RemoteDesktopEngineOptions {
+export interface RemoteDesktopConnectOptions {
   target: HTMLElement;
   url: string;
   config: Partial<RemoteDesktopPanelConfig>;
-  hooks: RemoteDesktopEngineHooks;
+  hooks: RemoteDesktopHooks;
 }
 
 export interface RemoteDesktopSession {

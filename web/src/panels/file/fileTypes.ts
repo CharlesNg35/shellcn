@@ -1,6 +1,6 @@
 // Maps a file (by extension/MIME) to a built-in preview viewer. Data-driven and
 // extensible — a new viewer is a one-time core addition, reused by every
-// filesystem plugin (sftp/ftp/webdav/smb/nfs/s3/…).
+// filesystem plugin.
 
 export type ViewerKind =
   | "code"

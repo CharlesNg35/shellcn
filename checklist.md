@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-26 — Phase 4 (M3 Docker + agent transport) complete. Core runtime, platform management, recording, and SSH/SFTP remain complete. Docker is now a real first-party plugin with Docker Engine access over the current `cfg.Net.DialContext` path for both direct and agent transports; it declares sidebar-tree resources for containers, Compose projects, images, volumes, and networks; supports inspect, logs, exec terminal, events/watch updates, lifecycle/removal actions, raw Engine API access, Docker SVG branding, and privileged Docker-socket agent enrollment. `shellcn-agent` now refuses proxy-target overrides and forwards only the gateway-declared TCP/unix target. Separately, the **VNC and RDP remote-desktop plugins landed ahead of phase order**: both render through a single **noVNC** engine (the Guacamole engine + `guacamole-common-js` were removed). VNC streams raw RFB after gateway-side authentication (the password never reaches the browser); RDP is decoded in-process by the pure-Go GPL `grdp` client and bridged to a synthetic RFB stream — **no `guacd` daemon**. Shared protocol code lives in `plugins/shared/{rfb,sshsftp}`, and the WS wrapper now negotiates a `binary` subprotocol so noVNC gets binary frames. Adopting `grdp` switched the license to **GPL-3.0** and the toolchain to **Go 1.26**. Recording for both rides the existing manual `webm_canvas` desktop path. **Next: Phase 5 (M4 Proxmox).**_
+_Last updated: 2026-05-26 — Phase 4 (M3 Docker + agent transport) complete. Core runtime, platform management, recording, and SSH/SFTP remain complete. Docker is now a real first-party plugin with Docker Engine access over the current `cfg.Net.DialContext` path for both direct and agent transports; it declares sidebar-tree resources for containers, Compose projects, images, volumes, and networks; supports inspect, logs, exec terminal, events/watch updates, lifecycle/removal actions, raw Engine API access, Docker SVG branding, and privileged Docker-socket agent enrollment. `shellcn-agent` now refuses proxy-target overrides and forwards only the gateway-declared TCP/unix target. Separately, the **VNC and RDP remote-desktop plugins landed ahead of phase order**: both render through noVNC/RFB without a plugin-selected browser engine. VNC streams raw RFB after gateway-side authentication (the password never reaches the browser); RDP is decoded in-process by the pure-Go GPL `grdp` client and bridged to a synthetic RFB stream. Shared protocol code lives in `plugins/shared/{rfb,sshsftp}`, and the WS wrapper now negotiates a `binary` subprotocol so noVNC gets binary frames. Adopting `grdp` switched the license to **GPL-3.0** and the toolchain to **Go 1.26**. Recording for both rides the existing manual `webm_canvas` desktop path. **Next: Phase 5 (M4 Proxmox).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -99,7 +99,7 @@ _Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP ses
 
 - [ ] 5.1 Proxmox session and API client
 - [ ] 5.2 Proxmox manifest (nodes, VMs, LXC, storage)
-- [ ] 5.3 Real engine-pluggable remote-desktop panel (noVNC + Guacamole contract)
+- [ ] 5.3 Real noVNC/RFB remote-desktop panel
 - [ ] 5.4 Snapshots, backups, and lifecycle actions
 
 ## Phase 6 — M5 · PostgreSQL

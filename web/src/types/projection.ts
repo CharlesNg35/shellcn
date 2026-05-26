@@ -251,10 +251,7 @@ export interface HTTPClientConfig {
   defaultBody?: string;
 }
 
-export type RemoteDesktopEngine = "novnc";
-
 export interface RemoteDesktopPanelConfig {
-  engine: RemoteDesktopEngine;
   resize?: boolean;
   clipboard?: boolean;
   audio?: boolean;

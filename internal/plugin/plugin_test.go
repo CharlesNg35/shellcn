@@ -96,18 +96,14 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			m.Tabs = []plugin.Tab{{Key: "http", Label: "HTTP", Panel: plugin.PanelHTTPClient, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"executeRouteId": "x.list"}}}
 		}},
 		{"remote desktop requires source", "missing a source", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Config: plugin.RemoteDesktopConfig{Engine: plugin.RemoteDesktopEngineNoVNC}.Map()}}
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Config: plugin.RemoteDesktopConfig{}.Map()}}
 		}},
 		{"remote desktop source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.RemoteDesktopConfig{Engine: plugin.RemoteDesktopEngineNoVNC}.Map()}}
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.RemoteDesktopConfig{}.Map()}}
 		}},
-		{"remote desktop requires engine", "missing remote desktop engine", func(m *plugin.Manifest, r *[]plugin.Route) {
+		{"remote desktop rejects stale engine selector", "no longer accepts remote desktop engine", func(m *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.desktop", Method: plugin.MethodWS, Permission: "x.desktop", Risk: plugin.RiskPrivileged, Stream: stream})
-			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.desktop"}}}
-		}},
-		{"remote desktop rejects unknown engine", "unsupported remote desktop engine", func(m *plugin.Manifest, r *[]plugin.Route) {
-			*r = append(*r, plugin.Route{ID: "x.desktop", Method: plugin.MethodWS, Permission: "x.desktop", Risk: plugin.RiskPrivileged, Stream: stream})
-			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.desktop"}, Config: map[string]any{"engine": "spice"}}}
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.desktop"}, Config: map[string]any{"engine": "novnc"}}}
 		}},
 		{"action references unknown route", "references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "ghost"}}
@@ -177,35 +173,29 @@ func TestValidateAcceptsGoodManifest(t *testing.T) {
 	}
 }
 
-func TestValidateAcceptsRemoteDesktopEngines(t *testing.T) {
+func TestValidateAcceptsRemoteDesktopConfig(t *testing.T) {
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
-	for _, engine := range []plugin.RemoteDesktopEngine{
-		plugin.RemoteDesktopEngineNoVNC,
-	} {
-		t.Run(string(engine), func(t *testing.T) {
-			m := plugin.Manifest{
-				APIVersion: plugin.CurrentAPIVersion,
-				Name:       "desktop",
-				Title:      "Desktop",
-				Layout:     plugin.LayoutTabs,
-				SupportedTransports: []plugin.Transport{
-					plugin.TransportDirect,
-				},
-				Tabs: []plugin.Tab{{
-					Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop,
-					Source: &plugin.DataSource{RouteID: "desktop.stream", Method: plugin.MethodWS},
-					Config: plugin.RemoteDesktopConfig{Engine: engine, Resize: true, Clipboard: true}.Map(),
-				}},
-				Streams: []plugin.Stream{{ID: "desktop.stream", Kind: plugin.StreamDesktop, RouteID: "desktop.stream"}},
-			}
-			routes := []plugin.Route{{
-				ID: "desktop.stream", Method: plugin.MethodWS, Permission: "desktop.use",
-				Risk: plugin.RiskPrivileged, Stream: stream,
-			}}
-			if err := plugin.Validate(m, routes); err != nil {
-				t.Fatalf("valid remote desktop manifest rejected: %v", err)
-			}
-		})
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "desktop",
+		Title:      "Desktop",
+		Layout:     plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{
+			plugin.TransportDirect,
+		},
+		Tabs: []plugin.Tab{{
+			Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop,
+			Source: &plugin.DataSource{RouteID: "desktop.stream", Method: plugin.MethodWS},
+			Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true}.Map(),
+		}},
+		Streams: []plugin.Stream{{ID: "desktop.stream", Kind: plugin.StreamDesktop, RouteID: "desktop.stream"}},
+	}
+	routes := []plugin.Route{{
+		ID: "desktop.stream", Method: plugin.MethodWS, Permission: "desktop.use",
+		Risk: plugin.RiskPrivileged, Stream: stream,
+	}}
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("valid remote desktop manifest rejected: %v", err)
 	}
 }
 
@@ -238,12 +228,11 @@ func TestSpecializedPanelConfigMaps(t *testing.T) {
 	}
 
 	desktop := plugin.RemoteDesktopConfig{
-		Engine:     plugin.RemoteDesktopEngineNoVNC,
 		Resize:     true,
 		Clipboard:  true,
 		RepeaterID: "console-1",
 	}.Map()
-	if desktop["engine"] != string(plugin.RemoteDesktopEngineNoVNC) || desktop["resize"] != true || desktop["repeaterID"] != "console-1" {
+	if desktop["engine"] != nil || desktop["resize"] != true || desktop["repeaterID"] != "console-1" {
 		t.Fatalf("remote desktop config map unexpected: %#v", desktop)
 	}
 }

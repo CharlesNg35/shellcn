@@ -14,9 +14,9 @@ import DocumentPanel from "../document/DocumentPanel.vue";
 const lazy = (loader: AsyncComponentLoader): Component =>
   defineAsyncComponent({ loader, loadingComponent: LoadingPanel });
 
-// Lightweight declarative panels are bundled up front; heavy ones (xterm,
-// Monaco, noVNC, charts) are dynamically imported on first use so first paint
-// stays constant regardless of how many plugins exist.
+// Lightweight declarative panels are bundled up front; heavy panel engines are
+// dynamically imported on first use so first paint stays constant regardless of
+// how many plugins exist.
 export const panelRegistry: Record<string, Component> = {
   table: TablePanel,
   form: FormPanel,

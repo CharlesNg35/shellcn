@@ -45,7 +45,6 @@ type AgentMode string
 const (
 	AgentTCP  AgentMode = "tcp"
 	AgentUnix AgentMode = "unix"
-	AgentK8s  AgentMode = "k8s_reverse_proxy"
 	AgentHTTP AgentMode = "http_proxy"
 )
 
@@ -58,9 +57,14 @@ type ProxyTarget struct {
 
 // InstallArtifact is a launch recipe shown to the user to start an agent.
 type InstallArtifact struct {
-	Label    string
-	Kind     string
-	Template string
+	Label      string
+	Kind       string
+	Template   string
+	ConnectURL ArtifactConnectURL
+}
+
+type ArtifactConnectURL struct {
+	LocalhostHost string
 }
 
 // AgentProfile is required iff a plugin declares TransportAgent.

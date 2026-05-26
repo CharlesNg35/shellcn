@@ -186,22 +186,15 @@ func (c HTTPClientConfig) Map() map[string]any {
 	return out
 }
 
-type RemoteDesktopEngine string
-
-const (
-	RemoteDesktopEngineNoVNC RemoteDesktopEngine = "novnc"
-)
-
 type RemoteDesktopConfig struct {
-	Engine     RemoteDesktopEngine `json:"engine"`
-	Resize     bool                `json:"resize,omitempty"`
-	Clipboard  bool                `json:"clipboard,omitempty"`
-	Audio      bool                `json:"audio,omitempty"`
-	RepeaterID string              `json:"repeaterID,omitempty"`
+	Resize     bool   `json:"resize,omitempty"`
+	Clipboard  bool   `json:"clipboard,omitempty"`
+	Audio      bool   `json:"audio,omitempty"`
+	RepeaterID string `json:"repeaterID,omitempty"`
 }
 
 func (c RemoteDesktopConfig) Map() map[string]any {
-	out := map[string]any{"engine": string(c.Engine)}
+	out := map[string]any{}
 	if c.Resize {
 		out["resize"] = c.Resize
 	}

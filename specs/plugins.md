@@ -47,7 +47,7 @@ These plugins should prove the core architecture first.
 | `mysql`      | MySQL/MariaDB access          | schema browser, query editor, table data, users, snippets                           |
 | `mongodb`    | MongoDB access                | databases, collections, document editor, query, indexes                             |
 | `redis`      | Redis access                  | key browser, strings, hashes, lists, sets, sorted sets, pub/sub                     |
-| `vnc`        | Remote desktop via VNC/RFB    | `remote_desktop` with `engine: "novnc"`, clipboard, keyboard/mouse                  |
+| `vnc`        | Remote desktop via VNC/RFB    | `remote_desktop` over an RFB stream, clipboard, keyboard/mouse                      |
 
 ## P1: Filesystem And Storage Protocols
 
@@ -94,7 +94,7 @@ These plugins should prove the core architecture first.
 
 | Plugin           | Purpose                     | Main Capabilities                                       |
 | ---------------- | --------------------------- | ------------------------------------------------------- |
-| `rdp`            | Windows/Linux RDP access    | `remote_desktop` with `engine: "guacamole"` through optional guacd sidecar |
+| `rdp`            | Windows/Linux RDP access    | `remote_desktop`; server-side RDP decoding bridged to noVNC/RFB |
 | `xenserver`      | XenServer/XCP-ng management | hosts, VMs, storage, networks, console                  |
 | `vmware-vsphere` | VMware vSphere              | datacenters, clusters, hosts, VMs, datastores, console  |
 | `libvirt`        | libvirt/KVM management      | domains, networks, storage pools, console               |
