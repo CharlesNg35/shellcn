@@ -25,6 +25,7 @@ const (
 	defaultValueLimit = 500
 	credentialIDField = "credential_id"
 	clientCertField   = "client_cert_id"
+	authNone          = "none"
 	authPassword      = "password"
 	authCredential    = "credential"
 )
@@ -62,7 +63,8 @@ func configSchema() plugin.Schema {
 			{Key: "database", Label: "Database", Type: plugin.FieldNumber, Default: 0, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}, {Type: plugin.ValidatorMax, Value: 15}}},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
-			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
+			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authNone, Options: []plugin.Option{
+				{Label: "None", Value: authNone},
 				{Label: "Password", Value: authPassword},
 				{Label: "Stored password", Value: authCredential},
 			}},
@@ -115,7 +117,14 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	if database < 0 {
 		return options{}, fmt.Errorf("%w: database must be >= 0", plugin.ErrInvalidInput)
 	}
-	auth := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
+	auth := dbcred.AuthMaterial{}
+	switch strings.TrimSpace(cfg.String("auth")) {
+	case "", authNone:
+	case authPassword, authCredential:
+		auth = dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
+	default:
+		return options{}, fmt.Errorf("%w: unsupported authentication method", plugin.ErrInvalidInput)
+	}
 	tlsMode := stringDefault(cfg.String("tls_mode"), "disable")
 	scanCount := intValue(cfg.Config["scan_count"], defaultScanCount)
 	if scanCount > plugin.MaxPageLimit {

@@ -107,6 +107,27 @@ func TestReadOnlyModeDefaultsOn(t *testing.T) {
 	}
 }
 
+func TestAuthDefaultsToNone(t *testing.T) {
+	m := New().Manifest()
+	visible := m.Config.VisibleValues(m.Config.ValuesWithDefaults(map[string]any{}), nil)
+	if visible["auth"] != authNone {
+		t.Fatalf("default auth = %#v, want none", visible["auth"])
+	}
+	if _, ok := visible["username"]; ok {
+		t.Fatal("username should be hidden when Redis auth is none")
+	}
+	if _, ok := visible["password"]; ok {
+		t.Fatal("password should be hidden when Redis auth is none")
+	}
+	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{"host": "127.0.0.1"}})
+	if err != nil {
+		t.Fatalf("parse options: %v", err)
+	}
+	if opts.Username != "" || opts.Password != "" {
+		t.Fatalf("default auth should not set credentials: %+v", opts)
+	}
+}
+
 func TestValueParsers(t *testing.T) {
 	m, err := stringMapValue(`{"name":"ada","role":"admin"}`)
 	if err != nil || m["name"] != "ada" || m["role"] != "admin" {

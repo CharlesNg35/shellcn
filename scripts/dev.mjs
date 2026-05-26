@@ -11,6 +11,7 @@ const children = [
     env: {
       ...process.env,
       SHELLCN_MASTER_KEY: process.env.SHELLCN_MASTER_KEY || DEV_MASTER_KEY,
+      SHELLCN_SERVER_LOG_LEVEL: process.env.SHELLCN_SERVER_LOG_LEVEL || "debug",
     },
   }),
   spawn("pnpm", ["dev"], { cwd: "web", stdio: "inherit" }),
