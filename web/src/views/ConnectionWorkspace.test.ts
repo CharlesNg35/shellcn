@@ -29,7 +29,8 @@ const projection: PluginProjection = {
     {
       key: "containers",
       label: "Containers",
-      source: { routeId: "docker.container.list" },
+      source: { routeId: "docker.container.tree" },
+      resourceKind: "container",
     },
   ],
   resources: [

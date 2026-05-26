@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-26 — Phase 4 (M3 Docker + agent transport) complete. Core runtime, platform management, recording, and SSH/SFTP remain complete. Docker is now a real first-party plugin with Docker Engine access over the current `cfg.Net.DialContext` path for both direct and agent transports; it declares sidebar-tree resources for containers, Compose projects, images, volumes, and networks; supports inspect, logs, exec terminal, events/watch updates, lifecycle/removal actions, raw Engine API access, Docker SVG branding, and privileged Docker-socket agent enrollment. `shellcn-agent` now refuses proxy-target overrides and forwards only the gateway-declared TCP/unix target. Separately, the **VNC and RDP remote-desktop plugins landed ahead of phase order**: both render through noVNC/RFB without a plugin-selected browser engine. VNC streams raw RFB after gateway-side authentication (the password never reaches the browser); RDP is decoded in-process by the pure-Go GPL `grdp` client and bridged to a synthetic RFB stream. Shared protocol code lives in `plugins/shared/{rfb,sshsftp}`, and the WS wrapper now negotiates a `binary` subprotocol so noVNC gets binary frames. Adopting `grdp` switched the license to **GPL-3.0** and the toolchain to **Go 1.26**. Recording for both rides the existing manual `webm_canvas` desktop path. **Phase 5 (M4 Proxmox) is now complete**: a first-party `proxmox` plugin renders a deep `LayoutSidebarTree` (Datacenter → nodes → VMs/containers/storage) with VM/LXC/node/storage detail views — live CPU/memory metrics, QEMU consoles over noVNC (RFB) and LXC/node shells over xterm (termproxy), snapshots (create/rollback/delete), backups (vzdump/delete), and lifecycle/migrate actions, all audited with confirm on destructive ops. REST runs through the maintained `github.com/luthermonson/go-proxmox` client injected with an `http.Client` wired to `cfg.Net`; the console websocket is hand-bridged with `coder/websocket` so it shares the same transport (go-proxmox's own gorilla-based WS would bypass it). Auth supports API token, username/password (gateway owns the PVE ticket), or a stored `proxmox_api_token` credential. Verified by unit tests + a fake-PVE TLS server exercising the net-wired client and row mapping; `make fmt`/`lint`/`test` and the FE e2e are green. **Live validation against a real Proxmox cluster is still pending** (console pixel/auth flow, like RDP). **Next: Phase 6 (M5 PostgreSQL).**_
+_Last updated: 2026-05-26 — Phase 6 (M5 PostgreSQL) is complete. PostgreSQL is a direct-only first-party database plugin: pgxpool over `cfg.Net.DialContext`, reusable `db_password` and `tls_client_cert` credentials, schema/table/view/function/sequence routes, direct table browsing through the generic paginated table renderer, schema-aware completion, and a protocol-neutral executable `query_editor` panel whose language and labels come from manifest config. SQL plugins share driver-neutral helpers in `plugins/shared/sqldb` for query envelopes, identifier/DDL validation, statement safety checks, TLS config, common config parsing, audit metadata, and result redaction. The renderer contract includes `treeGroup.resourceKind` so lazy tree sources and group-click resource lists stay explicit instead of inferred from route IDs. PostgreSQL agent transport is intentionally not part of M5; agent remains for Docker and later Kubernetes-style private control planes. Earlier phases through M5 are complete; live validation against a real Proxmox cluster is still pending._
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -104,9 +104,9 @@ _Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP ses
 
 ## Phase 6 — M5 · PostgreSQL
 
-- [ ] 6.1 PostgreSQL session and schema browser
-- [ ] 6.2 Real query editor and results panel
-- [ ] 6.3 Database safety controls
+- [x] 6.1 PostgreSQL session and schema browser
+- [x] 6.2 Real query editor and results panel
+- [x] 6.3 Database safety controls
 
 ## Phase 7 — M6 · Kubernetes
 

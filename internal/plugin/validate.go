@@ -369,8 +369,15 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 	}
 
 	checkTabs("connection", m.Tabs)
+	resourceKinds := map[string]bool{}
+	for _, rt := range m.Resources {
+		resourceKinds[rt.Kind] = true
+	}
 	for _, g := range m.Tree {
 		checkDS(fmt.Sprintf("tree group %q source", g.Key), g.Source)
+		if g.ResourceKind != "" && !resourceKinds[g.ResourceKind] {
+			add("tree group %q references unknown resource kind %q", g.Key, g.ResourceKind)
+		}
 	}
 	for _, rt := range m.Resources {
 		checkDS(fmt.Sprintf("resource %q list", rt.Kind), rt.List)
@@ -378,6 +385,8 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 			checkDS(fmt.Sprintf("resource %q watch", rt.Kind), *rt.Watch)
 		}
 		checkActionIDs(fmt.Sprintf("resource %q", rt.Kind), rt.ActionIDs)
+		checkActionIDs(fmt.Sprintf("resource %q list", rt.Kind), rt.ListActionIDs)
+		checkActionIDs(fmt.Sprintf("resource %q row", rt.Kind), rt.RowActionIDs)
 		checkActionIDs(fmt.Sprintf("resource %q header", rt.Kind), rt.Detail.Header.ActionIDs)
 		checkTabs(fmt.Sprintf("resource %q detail", rt.Kind), rt.Detail.Tabs)
 	}
@@ -434,6 +443,7 @@ func checkPanelConfigRoutes(
 		checkWriteRouteID(ctx+" saveRouteId", route("saveRouteId"))
 	case PanelQueryEditor:
 		checkWriteRouteID(ctx+" cancelRouteId", route("cancelRouteId"))
+		checkRouteID(ctx+" completionRouteId", route("completionRouteId"))
 	case PanelKV:
 		checkRouteID(ctx+" readRouteId", route("readRouteId"))
 		checkWriteRouteID(ctx+" writeRouteId", route("writeRouteId"))

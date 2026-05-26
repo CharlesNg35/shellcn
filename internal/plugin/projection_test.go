@@ -64,7 +64,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 			},
 		}},
 		Tree: []plugin.TreeGroup{{
-			Key: "containers", Label: "Containers", Source: plugin.DataSource{RouteID: "sample.list"},
+			Key: "containers", Label: "Containers", Source: plugin.DataSource{RouteID: "sample.list"}, ResourceKind: "container",
 		}},
 		Resources: []plugin.ResourceType{{
 			Kind: "container", Title: "Containers", List: plugin.DataSource{RouteID: "sample.list"},

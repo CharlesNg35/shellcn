@@ -142,7 +142,8 @@
       "label": "Containers",
       "source": {
         "routeId": "sample.list"
-      }
+      },
+      "resourceKind": "container"
     }
   ],
   "resources": [

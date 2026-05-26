@@ -33,6 +33,7 @@ vi.mock("../../codemirror", () => ({
   createCodeMirrorEditor: () => ({ view: { destroy() {} } }),
   editorValue: () => "",
   setEditorValue: () => {},
+  setEditorCompletions: () => {},
   setEditorLanguage: () => {},
   setEditorReadOnly: () => {},
   syncCodeMirrorTheme: () => {},

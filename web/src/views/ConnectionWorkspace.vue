@@ -138,6 +138,7 @@ const groupResource = computed(() => {
   if (!key) return undefined;
   const group = projection.value?.tree?.find((g) => g.key === key);
   if (!group) return undefined;
+  if (group.resourceKind) return resourceByKind.value.get(group.resourceKind);
   return (projection.value?.resources ?? []).find(
     (r) => r.list.routeId === group.source.routeId,
   );
@@ -337,6 +338,9 @@ function onActionDone(action: Action): void {
               :config="{
                 columns: groupResource.columns,
                 watch: groupResource.watch,
+                actionIds: groupResource.listActionIds ?? [],
+                rowActionIds:
+                  groupResource.rowActionIds ?? groupResource.actionIds,
               }"
               :actions="projection.actions ?? []"
               @select="onSelectRow"
