@@ -13,6 +13,7 @@ import type { PanelProps } from "../core/types";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
+import AppIcon from "../../components/AppIcon.vue";
 
 interface KVEntry {
   key: string;
@@ -242,11 +243,16 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         <Button
           type="button"
           severity="secondary"
-          label="Refresh"
-          :loading="loading"
           :disabled="loading"
           @click="load"
-        />
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'refresh-cw' }"
+            :size="14"
+            :loading="loading"
+          />
+          Refresh
+        </Button>
         <Button
           v-if="writable && config?.createRouteId"
           type="button"

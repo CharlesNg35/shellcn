@@ -146,15 +146,15 @@ function onVisible(visible: boolean): void {
             </Button>
             <Button
               type="button"
+              label="Confirm"
+              :loading="busy"
               :disabled="busy"
               autofocus
               :pt="{
-                root: `rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${pending.risk === 'destructive' ? 'bg-red-500' : 'bg-primary-500'}`,
+                root: `inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${pending.risk === 'destructive' ? 'bg-red-500' : 'bg-primary-500'}`,
               }"
               @click="execute(pending)"
-            >
-              {{ busy ? "Working…" : "Confirm" }}
-            </Button>
+            />
           </div>
         </template>
       </template>

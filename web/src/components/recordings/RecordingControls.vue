@@ -82,7 +82,13 @@ watch(
       :disabled="busy"
       @click="startRecording"
     >
-      <span class="h-2 w-2 rounded-full bg-red-500" />
+      <AppIcon
+        v-if="busy"
+        :icon="{ type: 'lucide', value: 'circle' }"
+        :size="12"
+        loading
+      />
+      <span v-else class="h-2 w-2 rounded-full bg-red-500" />
       Record
     </Button>
 
@@ -94,7 +100,11 @@ watch(
       :disabled="busy"
       @click="stopRecording"
     >
-      <AppIcon :icon="{ type: 'lucide', value: 'square' }" :size="12" />
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'square' }"
+        :size="12"
+        :loading="busy"
+      />
       Stop
     </Button>
 

@@ -7,6 +7,7 @@ import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import JsonNode from "./JsonNode.vue";
+import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
 
@@ -80,11 +81,16 @@ onUnmounted(clearCopiedTimer);
         <Button
           type="button"
           severity="secondary"
-          label="Refresh"
-          :loading="loading"
           :disabled="loading"
           @click="load"
-        />
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'refresh-cw' }"
+            :size="14"
+            :loading="loading"
+          />
+          Refresh
+        </Button>
       </div>
       <div class="flex items-center gap-2">
         <Button

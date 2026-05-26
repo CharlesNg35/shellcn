@@ -78,7 +78,7 @@ func configSchema() plugin.Schema {
 			}, VisibleWhen: &tlsEnabled, Help: "Optional PEM containing the client certificate and private key."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
-			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks writes and deletes from the key browser."},
+			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: false, Help: "Blocks writes and deletes from the key browser and terminal when enabled."},
 			{Key: "require_write_confirmation", Label: "Confirm write commands", Type: plugin.FieldToggle, Default: true, Help: "Requires confirmation before write, delete, and administrative Redis commands execute from the command console."},
 			{Key: "timeout", Label: "Command timeout", Type: plugin.FieldDuration, Default: defaultTimeout.String()},
 			{Key: "pool_size", Label: "Pool size", Type: plugin.FieldNumber, Default: defaultPoolSize, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 50}}},
@@ -137,7 +137,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		TLSMode:           stringDefault(cfg.String("tls_mode"), "disable"),
 		CACertificate:     cfg.String("ca_certificate"),
 		ClientCertificate: cfg.String("_" + clientCertField + "_secret"),
-		ReadOnly:          boolValue(cfg.Config["read_only"], true),
+		ReadOnly:          boolValue(cfg.Config["read_only"], false),
 		RequireConfirm:    boolValue(cfg.Config["require_write_confirmation"], true),
 		Timeout:           durationValue(cfg.Config["timeout"], defaultTimeout),
 		PoolSize:          intValue(cfg.Config["pool_size"], defaultPoolSize),

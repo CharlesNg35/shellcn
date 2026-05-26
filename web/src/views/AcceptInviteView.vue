@@ -137,13 +137,13 @@ async function onSubmit(): Promise<void> {
 
         <Button
           type="submit"
+          label="Create account"
+          :loading="busy"
           :disabled="busy"
           :pt="{
-            root: 'flex w-full items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50',
+            root: 'flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50',
           }"
-        >
-          {{ busy ? "Creating account…" : "Create account" }}
-        </Button>
+        />
       </form>
     </div>
   </div>

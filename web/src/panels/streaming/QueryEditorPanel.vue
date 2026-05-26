@@ -51,7 +51,6 @@ const editorLanguage = queryConfig?.language ?? "plaintext";
 const editorLabel = queryConfig?.label ?? "Editor";
 const executeLabel = queryConfig?.executeLabel ?? "Execute";
 const cancelLabel = queryConfig?.cancelLabel ?? "Cancel";
-const runningLabel = queryConfig?.runningLabel ?? "Executing…";
 const emptyText = queryConfig?.emptyText ?? "Execute to see results.";
 
 function onFrame(frame: string): void {
@@ -216,9 +215,14 @@ onUnmounted(() => {
         >
           {{ cancelLabel }}
         </Button>
-        <Button type="button" size="small" :disabled="running" @click="run()">
-          {{ running ? runningLabel : executeLabel }}
-        </Button>
+        <Button
+          type="button"
+          size="small"
+          :label="executeLabel"
+          :loading="running"
+          :disabled="running"
+          @click="run()"
+        />
       </div>
     </div>
 

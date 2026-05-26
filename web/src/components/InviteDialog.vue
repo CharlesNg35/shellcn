@@ -180,12 +180,12 @@ onUnmounted(clearCopiedTimer);
         <Button
           v-if="!result"
           type="button"
+          label="Create invitation"
+          :loading="busy"
           :disabled="busy"
           :pt="{ root: btnPrimary }"
           @click="invite"
-        >
-          {{ busy ? "Creating…" : "Create invitation" }}
-        </Button>
+        />
         <Button
           v-else
           type="button"

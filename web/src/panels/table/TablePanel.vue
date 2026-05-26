@@ -23,6 +23,7 @@ import { inputClass } from "../../primevue/preset";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import PanelError from "../shared/PanelError.vue";
+import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
@@ -239,13 +240,18 @@ onUnmounted(() => {
       />
       <Button
         type="button"
-        label="Refresh"
         :disabled="loading"
-        :loading="loading"
         severity="secondary"
         class="ml-auto"
         @click="load(first)"
-      />
+      >
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'refresh-cw' }"
+          :size="14"
+          :loading="loading"
+        />
+        Refresh
+      </Button>
     </div>
 
     <div class="min-h-0 flex-1 overflow-hidden">

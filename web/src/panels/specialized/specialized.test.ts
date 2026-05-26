@@ -216,13 +216,13 @@ describe("specialized panels", () => {
     const refresh = () =>
       w
         .findAllComponents(Button)
-        .find((button) => button.props("label") === "Refresh")!;
+        .find((button) => button.text().includes("Refresh"))!;
     await refresh().trigger("click");
 
-    expect(refresh().props("loading")).toBe(true);
+    expect(refresh().find(".animate-spin").exists()).toBe(true);
     resolveRefresh?.();
     await flushPromises();
-    expect(refresh().props("loading")).toBe(false);
+    expect(refresh().find(".animate-spin").exists()).toBe(false);
   });
 
   it("shows key creation only when the generic kv create route is declared", async () => {

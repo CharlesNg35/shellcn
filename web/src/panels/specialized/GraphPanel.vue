@@ -136,11 +136,16 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       <Button
         type="button"
         severity="secondary"
-        label="Refresh"
-        :loading="loading"
         :disabled="loading"
         @click="load"
-      />
+      >
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'refresh-cw' }"
+          :size="14"
+          :loading="loading"
+        />
+        Refresh
+      </Button>
     </div>
 
     <div class="min-h-0 flex-1">

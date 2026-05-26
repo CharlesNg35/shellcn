@@ -363,11 +363,14 @@ async function onConfig(
           @click="requestSubmit"
         >
           <AppIcon
-            v-if="!busy"
-            :icon="{ type: 'lucide', value: isEdit ? 'pencil' : 'plus' }"
+            :icon="{
+              type: 'lucide',
+              value: isEdit ? 'pencil' : 'plus',
+            }"
             :size="15"
+            :loading="busy"
           />
-          {{ busy ? "Saving…" : isEdit ? "Save changes" : "Create connection" }}
+          {{ isEdit ? "Save changes" : "Create connection" }}
         </Button>
       </div>
     </template>

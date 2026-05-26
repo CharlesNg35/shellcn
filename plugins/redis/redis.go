@@ -23,7 +23,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Icon:                plugin.Icon{Type: plugin.IconSVG, Value: redisIconSvg},
 		Category:            plugin.CategoryDatabases,
 		Config:              configSchema(),
-		Capabilities:        []plugin.Capability{"kv", "keys", "pubsub"},
+		Capabilities:        []plugin.Capability{"kv", "keys", "pubsub", "terminal"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
 		Tabs: []plugin.Tab{
@@ -31,10 +31,14 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			{Key: "keys", Label: "Keys", Icon: icon("key-round"), Panel: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "redis.keys.list"}, Config: plugin.KVConfig{
 				CreateRouteID: "redis.key.write", ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write", DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,
 			}.Map()},
-			{Key: "console", Label: "Console", Icon: icon("terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "redis.command", Method: plugin.MethodWS}, Config: commandConfig()},
+			{Key: "console", Label: "Console", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "redis.terminal", Method: plugin.MethodWS}},
 			{Key: "clients", Label: "Clients", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: plugin.TableConfig{Columns: clientColumns()}.Map()},
 			{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: plugin.TableConfig{Columns: channelColumns()}.Map()},
 			{Key: "info", Label: "Info", Icon: icon("file-text"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.info"}},
+		},
+		Streams: []plugin.Stream{
+			{ID: "redis.terminal", Kind: plugin.StreamTerminal, RouteID: "redis.terminal"},
+			{ID: "redis.command", Kind: plugin.StreamLogs, RouteID: "redis.command"},
 		},
 	}
 }
@@ -47,18 +51,6 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 
 func icon(name string) plugin.Icon {
 	return plugin.Icon{Type: plugin.IconLucide, Value: name}
-}
-
-func commandConfig() map[string]any {
-	return map[string]any{
-		"language":          "plaintext",
-		"label":             "Redis command",
-		"executeLabel":      "Run command",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a Redis command to see results.",
-		"initialQuery":      "INFO server",
-		"completionRouteId": "redis.completion",
-	}
 }
 
 func clientColumns() []plugin.Column {

@@ -172,6 +172,34 @@ const checkbox = {
   icon: "h-3 w-3 text-white",
 };
 
+const paginatorButton =
+  "inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-surface-600 transition-colors hover:bg-surface-100 disabled:pointer-events-none disabled:opacity-40 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
+const paginator = {
+  root: "flex flex-wrap items-center justify-end gap-2 border-t border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950",
+  content: "flex flex-wrap items-center gap-1",
+  pages: "flex items-center gap-1",
+  first: paginatorButton,
+  prev: paginatorButton,
+  next: paginatorButton,
+  last: paginatorButton,
+  page: paginatorButton,
+  firstIcon: "h-4 w-4",
+  prevIcon: "h-4 w-4",
+  nextIcon: "h-4 w-4",
+  lastIcon: "h-4 w-4",
+  current: "px-2 text-xs text-surface-500 dark:text-surface-400",
+  pcRowPerPageDropdown: {
+    root: `flex min-w-20 items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
+    label:
+      "min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
+    dropdown: "shrink-0 px-2 text-surface-400",
+    overlay,
+    transition: overlayTransition,
+    listContainer: "max-h-60 overflow-auto p-1",
+    option,
+  },
+};
+
 export const primeVuePassthrough = {
   inputtext: { root: inputBase },
   textarea: { root: `${inputBase} min-h-20 font-mono` },
@@ -342,6 +370,7 @@ export const primeVuePassthrough = {
     root: "relative flex h-full flex-col overflow-hidden rounded-md border border-surface-200 bg-surface-0 text-sm dark:border-surface-800 dark:bg-surface-950",
     mask: "absolute inset-0 z-20 flex items-center justify-center bg-surface-0/70 backdrop-blur-[1px] dark:bg-surface-950/70",
     loadingIcon: "h-5 w-5 animate-spin text-primary-500",
+    pcPaginator: paginator,
     tableContainer: "min-h-0 flex-1 overflow-auto",
     table: "w-full border-collapse",
     thead:
@@ -358,6 +387,8 @@ export const primeVuePassthrough = {
       "cursor-pointer transition-colors hover:bg-surface-50 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:data-[p-selected=true]:bg-primary-500/10",
     emptyMessageCell: "px-4 py-6 text-center text-surface-400",
   },
+
+  paginator,
 
   tree: {
     root: "overflow-y-auto p-2 text-sm",

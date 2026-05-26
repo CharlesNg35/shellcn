@@ -30,6 +30,19 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if !reg.CredentialKindSupportsProtocol(plugin.CredentialTLSClientCert, protocolName) {
 		t.Fatal("TLS client certificate credential should support Redis")
 	}
+	if err := plugin.Validate(m, New().Routes()); err != nil {
+		t.Fatalf("manifest invalid: %v", err)
+	}
+	var console *plugin.Tab
+	for i := range m.Tabs {
+		if m.Tabs[i].Key == "console" {
+			console = &m.Tabs[i]
+			break
+		}
+	}
+	if console == nil || console.Panel != plugin.PanelTerminal || console.Source == nil || console.Source.RouteID != "redis.terminal" {
+		t.Fatalf("console should be a terminal panel backed by redis.terminal, got %+v", console)
+	}
 }
 
 func TestParseCommand(t *testing.T) {
@@ -60,6 +73,23 @@ func TestCommandSafetyStopsBeforeRedis(t *testing.T) {
 	var confirmErr confirmationError
 	if !errors.As(err, &confirmErr) {
 		t.Fatalf("expected confirmation error, got %v", err)
+	}
+}
+
+func TestReadOnlyModeDefaultsOff(t *testing.T) {
+	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{"host": "127.0.0.1"}})
+	if err != nil {
+		t.Fatalf("parse options: %v", err)
+	}
+	if opts.ReadOnly {
+		t.Fatal("read-only mode should be disabled unless the connection config enables it")
+	}
+	opts, err = parseOptions(plugin.ConnectConfig{Config: map[string]any{"host": "127.0.0.1", "read_only": true}})
+	if err != nil {
+		t.Fatalf("parse options with read_only: %v", err)
+	}
+	if !opts.ReadOnly {
+		t.Fatal("read-only mode should be enabled when configured")
 	}
 }
 

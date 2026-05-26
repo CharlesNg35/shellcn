@@ -54,6 +54,7 @@ func routes() []plugin.Route {
 		{ID: "redis.key.delete", Method: plugin.MethodDelete, Path: "/keys/{key}", Permission: "redis.keys.delete", Risk: plugin.RiskDestructive, AuditEvent: "redis.key.delete", Handle: deleteKey},
 		{ID: "redis.clients.list", Method: plugin.MethodGet, Path: "/clients", Permission: "redis.clients.read", Risk: plugin.RiskSafe, AuditEvent: "redis.clients.list", Handle: listClients},
 		{ID: "redis.channels.list", Method: plugin.MethodGet, Path: "/channels", Permission: "redis.pubsub.read", Risk: plugin.RiskSafe, AuditEvent: "redis.channels.list", Handle: listChannels},
+		{ID: "redis.terminal", Method: plugin.MethodWS, Path: "/terminal", Permission: "redis.command.execute", Risk: plugin.RiskPrivileged, AuditEvent: "redis.terminal", Stream: terminalStream},
 		{ID: "redis.command", Method: plugin.MethodWS, Path: "/command", Permission: "redis.command.execute", Risk: plugin.RiskPrivileged, AuditEvent: "redis.command", Stream: commandStream},
 		{ID: "redis.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "redis.read", Risk: plugin.RiskSafe, AuditEvent: "redis.completion", Handle: completionRoute},
 	}
@@ -270,6 +271,87 @@ func listChannels(rc *plugin.RequestContext) (any, error) {
 		rows = append(rows, map[string]any{"name": channel, "subscribers": counts[channel]})
 	}
 	return pageRows(rc, rows)
+}
+
+func terminalStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
+	s, err := redisSession(rc)
+	if err != nil {
+		return err
+	}
+	prompt := redisPrompt(s)
+	if err := writeTerminal(client, "\r\nRedis console\r\n"+prompt); err != nil {
+		return err
+	}
+	var line strings.Builder
+	buf := make([]byte, 4096)
+	for {
+		n, err := client.Read(buf)
+		if n > 0 {
+			if len(buf[:n]) > 0 && buf[0] == 0 {
+				continue
+			}
+			for _, b := range buf[:n] {
+				switch b {
+				case '\r', '\n':
+					command := strings.TrimSpace(line.String())
+					line.Reset()
+					if err := writeTerminal(client, "\r\n"); err != nil {
+						return err
+					}
+					if strings.EqualFold(command, "exit") || strings.EqualFold(command, "quit") {
+						return writeTerminal(client, "Bye.\r\n")
+					}
+					if command != "" {
+						result, err := executeCommandRequest(client.Context(), s, sqldb.QueryRequest{Query: command})
+						rc.Audit(commandAuditResult(err), commandAuditParams(command, result, err), err)
+						if err != nil {
+							if err := writeTerminal(client, terminalError(err)); err != nil {
+								return err
+							}
+						} else if err := writeTerminal(client, formatTerminalResult(result)); err != nil {
+							return err
+						}
+					}
+					if err := writeTerminal(client, prompt); err != nil {
+						return err
+					}
+				case 3:
+					line.Reset()
+					if err := writeTerminal(client, "^C\r\n"+prompt); err != nil {
+						return err
+					}
+				case 4:
+					return writeTerminal(client, "\r\nBye.\r\n")
+				case 12:
+					if err := writeTerminal(client, "\x1b[2J\x1b[H"+prompt+line.String()); err != nil {
+						return err
+					}
+				case 8, 127:
+					if line.Len() > 0 {
+						current := line.String()
+						line.Reset()
+						line.WriteString(current[:len(current)-1])
+						if err := writeTerminal(client, "\b \b"); err != nil {
+							return err
+						}
+					}
+				default:
+					if b >= 0x20 && b != 0x7f {
+						line.WriteByte(b)
+						if _, err := client.Write([]byte{b}); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+		if err != nil {
+			if client.Context().Err() != nil || errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 func commandStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
@@ -633,6 +715,61 @@ func parseCommand(input string) ([]string, error) {
 		args = append(args, b.String())
 	}
 	return args, nil
+}
+
+func redisPrompt(s *Session) string {
+	return fmt.Sprintf("redis:%d> ", s.opts.Database)
+}
+
+func writeTerminal(w io.Writer, text string) error {
+	_, err := io.WriteString(w, text)
+	return err
+}
+
+func terminalError(err error) string {
+	var confirmErr confirmationError
+	if errors.As(err, &confirmErr) {
+		return "(error) command requires confirmation; use a non-destructive command or disable required confirmation for this connection\r\n"
+	}
+	return "(error) " + err.Error() + "\r\n"
+}
+
+func formatTerminalResult(result sqldb.QueryResult) string {
+	if len(result.Rows) == 0 {
+		return "(empty)\r\n"
+	}
+	var b strings.Builder
+	for _, row := range result.Rows {
+		if len(result.Columns) == 1 && len(row) == 1 {
+			b.WriteString(formatTerminalValue(row[0]))
+			b.WriteString("\r\n")
+			continue
+		}
+		for i, value := range row {
+			if i > 0 {
+				b.WriteString("\t")
+			}
+			if i < len(result.Columns) {
+				b.WriteString(result.Columns[i])
+				b.WriteString(": ")
+			}
+			b.WriteString(formatTerminalValue(value))
+		}
+		b.WriteString("\r\n")
+	}
+	return b.String()
+}
+
+func formatTerminalValue(value any) string {
+	if value == nil {
+		return "(nil)"
+	}
+	switch v := value.(type) {
+	case string:
+		return v
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 func stringValue(value any) string {

@@ -13,8 +13,9 @@ const props = withDefaults(
     icon?: Icon | null;
     size?: number;
     fallback?: string;
+    loading?: boolean;
   }>(),
-  { icon: null, size: 18, fallback: FALLBACK_ICON },
+  { icon: null, size: 18, fallback: FALLBACK_ICON, loading: false },
 );
 
 const imgFailed = ref(false);
@@ -22,9 +23,15 @@ const imgFailed = ref(false);
 // Bound inline SVG markup so a hostile manifest can't ship a huge payload.
 const MAX_SVG_BYTES = 64 * 1024;
 
+const resolvedIcon = computed<Icon | null>(() =>
+  props.loading
+    ? { type: "lucide", value: "loader-circle" }
+    : (props.icon ?? null),
+);
+
 const kind = computed(() => {
-  const t = props.icon?.type;
-  const v = props.icon?.value;
+  const t = resolvedIcon.value?.type;
+  const v = resolvedIcon.value?.value;
   if (!t || !v) return "glyph";
   if ((t === "url" || t === "base64") && !imgFailed.value) {
     const safe =
@@ -40,13 +47,14 @@ const kind = computed(() => {
 // resolve the same way). resolveLucideIcon falls back to a placeholder for an
 // empty or unknown name.
 const glyphComponent = computed(() =>
-  resolveLucideIcon(props.icon?.value || props.fallback),
+  resolveLucideIcon(resolvedIcon.value?.value || props.fallback),
 );
 
 // Sanitize raw inline SVG (svg profile only — no HTML/MathML, scripts and event
 // handlers stripped) before it is ever injected into the DOM.
 const safeSvg = computed(() => {
-  const v = props.icon?.type === "svg" ? props.icon.value : "";
+  const v =
+    !props.loading && props.icon?.type === "svg" ? props.icon.value : "";
   if (!v || v.length > MAX_SVG_BYTES) return "";
   return DOMPurify.sanitize(v, {
     USE_PROFILES: { svg: true, svgFilters: true },
@@ -65,6 +73,7 @@ const safeSvg = computed(() => {
       v-if="kind === 'glyph'"
       :size="size"
       :stroke-width="2"
+      :class="{ 'animate-spin': loading }"
       aria-hidden="true"
     />
     <span
@@ -72,7 +81,7 @@ const safeSvg = computed(() => {
       :style="{ fontSize: `${size}px`, lineHeight: 1 }"
       role="img"
     >
-      {{ icon?.value }}
+      {{ resolvedIcon?.value }}
     </span>
     <!-- eslint-disable vue/no-v-html -- safeSvg is sanitized with DOMPurify's SVG profile. -->
     <span
@@ -85,7 +94,7 @@ const safeSvg = computed(() => {
     <!-- eslint-enable vue/no-v-html -->
     <img
       v-else-if="kind === 'image'"
-      :src="icon?.value"
+      :src="resolvedIcon?.value"
       :width="size"
       :height="size"
       alt=""

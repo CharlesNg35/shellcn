@@ -449,6 +449,7 @@ watch(
             <Button
               type="button"
               label="Save"
+              :loading="operation === 'save'"
               :disabled="!dirty || mutating"
               @click="saveFile"
             />
@@ -501,6 +502,7 @@ watch(
             <Button
               type="button"
               label="Save"
+              :loading="operation === 'save'"
               :disabled="!dirty || mutating"
               @click="saveFile"
             />
@@ -541,7 +543,12 @@ watch(
             :disabled="mutating"
             @click="mkdirOpen = false"
           />
-          <Button type="submit" label="Create" :disabled="mutating" />
+          <Button
+            type="submit"
+            label="Create"
+            :loading="operation === 'mkdir'"
+            :disabled="mutating"
+          />
         </div>
       </form>
     </Dialog>
@@ -558,7 +565,12 @@ watch(
             :disabled="mutating"
             @click="renameOpen = false"
           />
-          <Button type="submit" label="Rename" :disabled="mutating" />
+          <Button
+            type="submit"
+            label="Rename"
+            :loading="operation === 'rename'"
+            :disabled="mutating"
+          />
         </div>
       </form>
     </Dialog>
@@ -580,6 +592,7 @@ watch(
           type="button"
           label="Delete"
           severity="danger"
+          :loading="operation === 'delete'"
           :disabled="mutating"
           @click="deleteEntry"
         />

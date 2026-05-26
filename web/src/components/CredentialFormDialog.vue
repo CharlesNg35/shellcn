@@ -359,14 +359,12 @@ async function save(): Promise<void> {
           </Button>
           <Button
             type="button"
+            :label="isEdit ? 'Save changes' : 'Create credential'"
+            :loading="busy"
             :disabled="busy || catalogLoading || Boolean(catalogError)"
             :pt="{ root: btnPrimary }"
             @click="save"
-          >
-            {{
-              busy ? "Saving…" : isEdit ? "Save changes" : "Create credential"
-            }}
-          </Button>
+          />
         </div>
       </div>
     </template>

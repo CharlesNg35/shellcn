@@ -157,9 +157,12 @@ defineExpose({ submit: onSubmit });
     </fieldset>
 
     <div v-if="submitLabel" class="flex justify-end">
-      <Button type="submit" :disabled="busy">
-        {{ busy ? "Working…" : submitLabel }}
-      </Button>
+      <Button
+        type="submit"
+        :label="submitLabel"
+        :loading="busy"
+        :disabled="busy"
+      />
     </div>
   </form>
 </template>

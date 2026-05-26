@@ -177,12 +177,12 @@ async function revoke(grant: ShareGrant): Promise<void> {
         </div>
         <Button
           type="button"
+          label="Add"
+          :loading="busy"
           :disabled="busy || !subject"
           :pt="{ root: btnPrimary }"
           @click="add"
-        >
-          Add
-        </Button>
+        />
       </div>
 
       <!-- Current grants -->

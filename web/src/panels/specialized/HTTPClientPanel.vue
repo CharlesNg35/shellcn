@@ -166,7 +166,12 @@ async function send(): Promise<void> {
         class="min-w-0 flex-1"
       />
       <Button type="button" :disabled="loading" @click="send">
-        {{ loading ? "Sending..." : "Send" }}
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'send' }"
+          :size="14"
+          :loading="loading"
+        />
+        Send
       </Button>
     </div>
 
