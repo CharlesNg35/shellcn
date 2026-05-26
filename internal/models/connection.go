@@ -44,6 +44,7 @@ func (Connection) TableName() string { return "connections" }
 type ConnectionFolder struct {
 	ID        string `gorm:"primaryKey"`
 	UserID    string `gorm:"index"`
+	ParentID  string `gorm:"index"`
 	Name      string
 	Color     string
 	SortOrder int

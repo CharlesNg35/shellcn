@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -13,8 +14,9 @@ import (
 )
 
 type connectionFolderRequest struct {
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	Name     string `json:"name"`
+	Color    string `json:"color"`
+	ParentID string `json:"parentId"`
 }
 
 type connectionLayoutRequest struct {
@@ -45,7 +47,7 @@ func (s *Server) handleCreateConnectionFolder(w http.ResponseWriter, r *http.Req
 		return
 	}
 	folder, err := s.deps.Connections.CreateFolder(ctx, s.deps.Store.ConnectionFolders, user.ID, service.ConnectionFolderInput{
-		Name: req.Name, Color: req.Color,
+		Name: req.Name, Color: req.Color, ParentID: req.ParentID,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, "", connFolderCreateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -99,7 +101,26 @@ func (s *Server) handleDeleteConnectionFolder(w http.ResponseWriter, r *http.Req
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
-	if err := s.deps.Store.ConnectionPlacements.ClearFolder(ctx, folder.UserID, folder.ID); err != nil {
+	folders, err := s.deps.Store.ConnectionFolders.ListByUser(ctx, folder.UserID)
+	if err != nil {
+		s.auditConnEvent(ctx, user, "", connFolderDeleteEvent, plugin.RiskDestructive, models.AuditError, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	now := time.Now()
+	for _, child := range folders {
+		if child.ParentID != folder.ID {
+			continue
+		}
+		child.ParentID = folder.ParentID
+		child.UpdatedAt = now
+		if err := s.deps.Store.ConnectionFolders.Update(ctx, &child); err != nil {
+			s.auditConnEvent(ctx, user, "", connFolderDeleteEvent, plugin.RiskDestructive, models.AuditError, err)
+			writeError(w, s.deps.Logger, err)
+			return
+		}
+	}
+	if err := s.deps.Store.ConnectionPlacements.MoveFolder(ctx, folder.UserID, folder.ID, folder.ParentID); err != nil {
 		s.auditConnEvent(ctx, user, "", connFolderDeleteEvent, plugin.RiskDestructive, models.AuditError, err)
 		writeError(w, s.deps.Logger, err)
 		return

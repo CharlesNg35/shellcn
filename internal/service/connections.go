@@ -50,13 +50,15 @@ type ConnectionInput struct {
 
 // ConnectionFolderInput is a sidebar folder create/update request.
 type ConnectionFolderInput struct {
-	Name  string
-	Color string
+	Name     string
+	Color    string
+	ParentID string
 }
 
 // ConnectionFolderDTO is the client-facing folder record.
 type ConnectionFolderDTO struct {
 	ID        string `json:"id"`
+	ParentID  string `json:"parentId,omitempty"`
 	Name      string `json:"name"`
 	Color     string `json:"color"`
 	SortOrder int    `json:"sortOrder"`
@@ -72,6 +74,7 @@ type ConnectionPlacementInput struct {
 // ConnectionFolderOrderInput is one sidebar folder position.
 type ConnectionFolderOrderInput struct {
 	FolderID  string `json:"folderId"`
+	ParentID  string `json:"parentId"`
 	SortOrder int    `json:"sortOrder"`
 }
 
@@ -254,10 +257,13 @@ func (s *ConnectionService) CreateFolder(ctx context.Context, folders store.Conn
 	if err != nil {
 		return models.ConnectionFolder{}, err
 	}
+	if in.ParentID != "" && !folderExists(existing, in.ParentID) {
+		return models.ConnectionFolder{}, fmt.Errorf("%w: unknown parent folder %q", plugin.ErrInvalidInput, in.ParentID)
+	}
 	now := time.Now()
 	folder := models.ConnectionFolder{
 		ID: uuid.NewString(), UserID: userID, Name: name, Color: color,
-		SortOrder: nextFolderOrder(existing), CreatedAt: now, UpdatedAt: now,
+		ParentID: in.ParentID, SortOrder: nextFolderOrder(existing, in.ParentID), CreatedAt: now, UpdatedAt: now,
 	}
 	if err := folders.Create(ctx, &folder); err != nil {
 		return models.ConnectionFolder{}, err
@@ -286,7 +292,7 @@ func (s *ConnectionService) UpdateFolder(ctx context.Context, folders store.Conn
 
 // FolderDTO projects a folder for the browser.
 func FolderDTO(f models.ConnectionFolder) ConnectionFolderDTO {
-	return ConnectionFolderDTO{ID: f.ID, Name: f.Name, Color: f.Color, SortOrder: f.SortOrder}
+	return ConnectionFolderDTO{ID: f.ID, ParentID: f.ParentID, Name: f.Name, Color: f.Color, SortOrder: f.SortOrder}
 }
 
 // SaveConnectionLayout validates and persists a user's connection placements.
@@ -325,17 +331,37 @@ func SaveConnectionFolderOrder(ctx context.Context, folderStore store.Connection
 	for _, folder := range existing {
 		byID[folder.ID] = folder
 	}
+	parentByID := map[string]string{}
+	for _, folder := range existing {
+		parentByID[folder.ID] = folder.ParentID
+	}
 	seen := map[string]bool{}
 	now := time.Now()
 	for _, item := range in {
-		folder, ok := byID[item.FolderID]
+		_, ok := byID[item.FolderID]
 		if !ok {
 			return fmt.Errorf("%w: unknown folder %q", plugin.ErrInvalidInput, item.FolderID)
 		}
 		if seen[item.FolderID] {
 			return fmt.Errorf("%w: duplicate folder %q", plugin.ErrInvalidInput, item.FolderID)
 		}
+		if item.ParentID == item.FolderID {
+			return fmt.Errorf("%w: folder cannot contain itself", plugin.ErrInvalidInput)
+		}
+		if item.ParentID != "" {
+			if _, ok := byID[item.ParentID]; !ok {
+				return fmt.Errorf("%w: unknown parent folder %q", plugin.ErrInvalidInput, item.ParentID)
+			}
+		}
 		seen[item.FolderID] = true
+		parentByID[item.FolderID] = item.ParentID
+	}
+	if hasFolderCycle(parentByID) {
+		return fmt.Errorf("%w: folder nesting contains a cycle", plugin.ErrInvalidInput)
+	}
+	for _, item := range in {
+		folder := byID[item.FolderID]
+		folder.ParentID = item.ParentID
 		folder.SortOrder = item.SortOrder
 		folder.UpdatedAt = now
 		if err := folderStore.Update(ctx, &folder); err != nil {
@@ -451,9 +477,48 @@ func resolveFolderColor(color string) (string, error) {
 	return color, nil
 }
 
-func nextFolderOrder(folders []models.ConnectionFolder) int {
+func folderExists(folders []models.ConnectionFolder, id string) bool {
+	for _, f := range folders {
+		if f.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFolderCycle(parentByID map[string]string) bool {
+	visiting := map[string]bool{}
+	visited := map[string]bool{}
+	var visit func(string) bool
+	visit = func(id string) bool {
+		if id == "" || visited[id] {
+			return false
+		}
+		if visiting[id] {
+			return true
+		}
+		visiting[id] = true
+		if visit(parentByID[id]) {
+			return true
+		}
+		visiting[id] = false
+		visited[id] = true
+		return false
+	}
+	for id := range parentByID {
+		if visit(id) {
+			return true
+		}
+	}
+	return false
+}
+
+func nextFolderOrder(folders []models.ConnectionFolder, parentID string) int {
 	maxOrder := -1
 	for _, f := range folders {
+		if f.ParentID != parentID {
+			continue
+		}
 		if f.SortOrder > maxOrder {
 			maxOrder = f.SortOrder
 		}

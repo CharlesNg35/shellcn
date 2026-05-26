@@ -53,6 +53,7 @@ type ConnectionPlacementStore interface {
 	Delete(ctx context.Context, userID, connectionID string) error
 	DeleteByConnection(ctx context.Context, connectionID string) error
 	ClearFolder(ctx context.Context, userID, folderID string) error
+	MoveFolder(ctx context.Context, userID, folderID, targetFolderID string) error
 }
 
 // CredentialStore persists reusable credentials (with ciphertext material).

@@ -310,8 +310,21 @@ func TestConnectionFoldersAndLayout(t *testing.T) {
 		t.Fatalf("folder fields: %+v", folder)
 	}
 
+	resp = h.do(t, http.MethodPost, "/api/connection-folders", "op",
+		strings.NewReader(`{"name":"Databases","color":"teal","parentId":"`+folder.ID+`"}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create child folder: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	var child struct {
+		ID       string `json:"id"`
+		ParentID string `json:"parentId"`
+	}
+	if err := json.Unmarshal(resp.Body, &child); err != nil || child.ID == "" || child.ParentID != folder.ID {
+		t.Fatalf("create child folder response: %s", resp.Body)
+	}
+
 	resp = h.do(t, http.MethodPut, "/api/connections/layout", "op",
-		strings.NewReader(`{"folders":[{"folderId":"`+folder.ID+`","sortOrder":4}],"items":[{"connectionId":"c-boom","folderId":"`+folder.ID+`","sortOrder":0},{"connectionId":"c-op","folderId":"`+folder.ID+`","sortOrder":1},{"connectionId":"c-internal","sortOrder":0}]}`))
+		strings.NewReader(`{"folders":[{"folderId":"`+folder.ID+`","sortOrder":4},{"folderId":"`+child.ID+`","parentId":"`+folder.ID+`","sortOrder":0}],"items":[{"connectionId":"c-boom","folderId":"`+child.ID+`","sortOrder":0},{"connectionId":"c-op","folderId":"`+folder.ID+`","sortOrder":1},{"connectionId":"c-internal","sortOrder":0}]}`))
 	if resp.Status != http.StatusOK {
 		t.Fatalf("save layout: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
@@ -321,12 +334,12 @@ func TestConnectionFoldersAndLayout(t *testing.T) {
 		t.Fatalf("list connections: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 	body := string(resp.Body)
-	if !strings.Contains(body, `"folderId":"`+folder.ID+`"`) || !strings.Contains(body, `"sortOrder":1`) {
+	if !strings.Contains(body, `"folderId":"`+child.ID+`"`) || !strings.Contains(body, `"sortOrder":1`) {
 		t.Fatalf("connection list missing placement data: %s", resp.Body)
 	}
 
 	resp = h.do(t, http.MethodGet, "/api/connection-folders", "op", nil)
-	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), "Production") || !strings.Contains(string(resp.Body), `"sortOrder":4`) {
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), "Production") || !strings.Contains(string(resp.Body), `"parentId":"`+folder.ID+`"`) || !strings.Contains(string(resp.Body), `"sortOrder":4`) {
 		t.Fatalf("list folders: status=%d body=%s", resp.Status, resp.Body)
 	}
 
@@ -342,7 +355,11 @@ func TestConnectionFoldersAndLayout(t *testing.T) {
 	}
 	resp = h.do(t, http.MethodGet, "/api/connections", "op", nil)
 	if strings.Contains(string(resp.Body), `"folderId":"`+folder.ID+`"`) {
-		t.Fatalf("folder deletion should move placements to root: %s", resp.Body)
+		t.Fatalf("folder deletion should move placements up: %s", resp.Body)
+	}
+	resp = h.do(t, http.MethodGet, "/api/connection-folders", "op", nil)
+	if strings.Contains(string(resp.Body), `"parentId":"`+folder.ID+`"`) {
+		t.Fatalf("folder deletion should reparent child folders: %s", resp.Body)
 	}
 }
 
@@ -366,5 +383,10 @@ func TestConnectionFolderValidation(t *testing.T) {
 		strings.NewReader(`{"name":"Bad","color":"neon"}`))
 	if resp.Status != http.StatusBadRequest {
 		t.Fatalf("bad folder color: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+	resp = h.do(t, http.MethodPost, "/api/connection-folders", "op",
+		strings.NewReader(`{"name":"Child","color":"blue","parentId":"missing"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("bad parent folder: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
 }

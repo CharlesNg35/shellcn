@@ -45,7 +45,7 @@ const connections: ConnectionSummary[] = [
     protocol: "postgres",
     icon,
     transport: "direct",
-    folderId: "f1",
+    folderId: "f2",
     sortOrder: 0,
   },
 ];
@@ -63,6 +63,13 @@ describe("ConnectionSidebar", () => {
     conns.loaded = true;
     conns.folders = [
       { id: "f1", name: "Production", color: "blue", sortOrder: 0 },
+      {
+        id: "f2",
+        parentId: "f1",
+        name: "Databases",
+        color: "teal",
+        sortOrder: 0,
+      },
     ];
     conns.connections = connections;
 
@@ -73,6 +80,7 @@ describe("ConnectionSidebar", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("Production");
+    expect(wrapper.text()).toContain("Databases");
     expect(wrapper.text()).toContain("Prod DB");
     expect(
       JSON.parse(
@@ -80,6 +88,7 @@ describe("ConnectionSidebar", () => {
       ),
     ).toMatchObject({
       f1: true,
+      f2: true,
     });
   });
 
@@ -95,6 +104,13 @@ describe("ConnectionSidebar", () => {
     conns.loaded = true;
     conns.folders = [
       { id: "f1", name: "Production", color: "blue", sortOrder: 0 },
+      {
+        id: "f2",
+        parentId: "f1",
+        name: "Databases",
+        color: "teal",
+        sortOrder: 0,
+      },
     ];
     conns.connections = connections;
 
@@ -107,10 +123,13 @@ describe("ConnectionSidebar", () => {
     await flushPromises();
 
     expect(saved).toMatchObject({
-      folders: expect.arrayContaining([{ folderId: "f1", sortOrder: 0 }]),
+      folders: expect.arrayContaining([
+        { folderId: "f1", sortOrder: 0 },
+        { folderId: "f2", parentId: "f1", sortOrder: 0 },
+      ]),
       items: expect.arrayContaining([
         { connectionId: "c-root", sortOrder: 0 },
-        { connectionId: "c-prod", folderId: "f1", sortOrder: 0 },
+        { connectionId: "c-prod", folderId: "f2", sortOrder: 0 },
       ]),
     });
   });

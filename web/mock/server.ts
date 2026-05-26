@@ -616,6 +616,7 @@ function handleHTTP(
       const body = raw as Json;
       const folder: Json = {
         id: uid("folder"),
+        parentId: body.parentId || undefined,
         name: body.name,
         color: body.color ?? "slate",
         sortOrder: connectionFolders().length,
@@ -638,10 +639,15 @@ function handleHTTP(
       });
     }
     if (method === "DELETE") {
+      const targetParentId = folder.parentId;
       connectionFoldersState = connectionFolders().filter((f) => f.id !== id);
+      for (const child of connectionFolders()) {
+        if (child.parentId === id) child.parentId = targetParentId;
+      }
       for (const conn of connections()) {
         if (conn.folderId === id) {
-          delete conn.folderId;
+          if (targetParentId) conn.folderId = targetParentId;
+          else delete conn.folderId;
           conn.sortOrder = 0;
         }
       }
@@ -661,7 +667,10 @@ function handleHTTP(
       }
       for (const item of body.folders ?? []) {
         const folder = connectionFolders().find((f) => f.id === item.folderId);
-        if (folder) folder.sortOrder = item.sortOrder ?? 0;
+        if (folder) {
+          folder.parentId = item.parentId || undefined;
+          folder.sortOrder = item.sortOrder ?? 0;
+        }
       }
       send(res, 200, { ok: true });
     });

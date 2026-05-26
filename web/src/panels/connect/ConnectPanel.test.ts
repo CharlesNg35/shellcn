@@ -34,31 +34,26 @@ describe("ConnectPanel", () => {
   beforeEach(() => {
     installFetch((url) => {
       if (url.includes("/agent/state")) return { body: { status: "pending" } };
-      if (url.match(/\/connections\/[^/]+$/)) {
-        return {
-          body: {
-            id: "c1",
-            name: "prod-web",
-            protocol: "ssh",
-            transport: "direct",
-            ownerId: "u1",
-            config: { host: "10.0.0.5", port: 22, user: "root" },
-            secrets: {},
-          },
-        };
-      }
       return { body: {} };
     });
   });
 
-  it("direct connection: Connect is enabled and shows details", async () => {
+  it("direct connection: Connect is enabled without fetching raw config", async () => {
+    const calls: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      calls.push(url);
+      if (url.includes("/agent/state")) return { body: { status: "pending" } };
+      return { body: {} };
+    });
     const w = mount(ConnectPanel, {
       props: { connectionId: "c1", connection: direct },
     });
     await flushPromises();
     expect(w.text()).not.toContain("Agent");
-    expect(w.text()).toContain("Host");
-    expect(w.text()).toContain("10.0.0.5");
+    expect(w.text()).toContain("Direct connection");
+    expect(w.text()).not.toContain("Credential id");
+    expect(calls.some((url) => url.match(/\/connections\/[^/]+$/))).toBe(false);
     expect(connectDisabled(w)).toBe(false);
     await connectBtn(w)?.trigger("click");
     expect(w.emitted("connect")).toBeTruthy();
@@ -86,17 +81,7 @@ describe("ConnectPanel", () => {
         calls++;
         return { body: { status: calls <= 1 ? "pending" : "online" } };
       }
-      return {
-        body: {
-          id: "edge",
-          name: "edge",
-          protocol: "docker",
-          transport: "agent",
-          ownerId: "u1",
-          config: {},
-          secrets: {},
-        },
-      };
+      return { body: {} };
     });
     vi.useFakeTimers();
     const w = mount(ConnectPanel, {

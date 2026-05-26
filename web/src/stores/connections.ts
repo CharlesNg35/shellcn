@@ -53,6 +53,7 @@ export const useConnectionsStore = defineStore("connections", () => {
   async function createFolder(input: {
     name: string;
     color: ConnectionFolder["color"];
+    parentId?: string;
   }): Promise<ConnectionFolder> {
     const folder = await api.post<ConnectionFolder>(
       "/connection-folders",
@@ -77,10 +78,15 @@ export const useConnectionsStore = defineStore("connections", () => {
   }
 
   async function deleteFolder(id: string): Promise<void> {
+    const deleted = folders.value.find((f) => f.id === id);
+    const targetParentId = deleted?.parentId;
     await api.del(`/connection-folders/${id}`);
     folders.value = folders.value.filter((f) => f.id !== id);
+    folders.value = folders.value.map((f) =>
+      f.parentId === id ? { ...f, parentId: targetParentId } : f,
+    );
     connections.value = connections.value.map((c) =>
-      c.folderId === id ? { ...c, folderId: undefined } : c,
+      c.folderId === id ? { ...c, folderId: targetParentId } : c,
     );
   }
 
@@ -90,7 +96,11 @@ export const useConnectionsStore = defineStore("connections", () => {
       folderId?: string;
       sortOrder: number;
     }>,
-    folderItems: Array<{ folderId: string; sortOrder: number }> = [],
+    folderItems: Array<{
+      folderId: string;
+      parentId?: string;
+      sortOrder: number;
+    }> = [],
   ): Promise<void> {
     await api.put("/connections/layout", { items, folders: folderItems });
     const byId = new Map(items.map((i) => [i.connectionId, i]));
@@ -108,7 +118,9 @@ export const useConnectionsStore = defineStore("connections", () => {
     folders.value = folders.value
       .map((folder) => {
         const item = folderById.get(folder.id);
-        return item ? { ...folder, sortOrder: item.sortOrder } : folder;
+        return item
+          ? { ...folder, parentId: item.parentId, sortOrder: item.sortOrder }
+          : folder;
       })
       .sort(
         (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),

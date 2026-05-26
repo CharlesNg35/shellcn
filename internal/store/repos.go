@@ -157,7 +157,7 @@ func (s *gormConnectionFolderStore) ListByUser(ctx context.Context, userID strin
 
 func (s *gormConnectionFolderStore) Update(ctx context.Context, f *models.ConnectionFolder) error {
 	res := s.db.WithContext(ctx).Model(&models.ConnectionFolder{}).Where("id = ?", f.ID).
-		Select("name", "color", "sort_order", "updated_at").Updates(f)
+		Select("parent_id", "name", "color", "sort_order", "updated_at").Updates(f)
 	return rowsOrNotFound(res)
 }
 
@@ -191,9 +191,13 @@ func (s *gormConnectionPlacementStore) DeleteByConnection(ctx context.Context, c
 }
 
 func (s *gormConnectionPlacementStore) ClearFolder(ctx context.Context, userID, folderID string) error {
+	return s.MoveFolder(ctx, userID, folderID, "")
+}
+
+func (s *gormConnectionPlacementStore) MoveFolder(ctx context.Context, userID, folderID, targetFolderID string) error {
 	return s.db.WithContext(ctx).Model(&models.ConnectionPlacement{}).
 		Where("user_id = ? AND folder_id = ?", userID, folderID).
-		Updates(map[string]any{"folder_id": "", "updated_at": time.Now()}).Error
+		Updates(map[string]any{"folder_id": targetFolderID, "updated_at": time.Now()}).Error
 }
 
 type gormCredentialStore struct{ db *gorm.DB }

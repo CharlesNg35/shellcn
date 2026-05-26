@@ -9,12 +9,14 @@ import { useWorkspaceStore } from "../stores/workspace";
 import { useNotify } from "../composables/useNotify";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import AppIcon from "./AppIcon.vue";
+import ConnectionFolderBranch from "./ConnectionFolderBranch.vue";
 import ConnectionFolderDialog from "./ConnectionFolderDialog.vue";
+import ConnectionSidebarItem from "./ConnectionSidebarItem.vue";
 import type {
-  ConnectionFolder,
-  ConnectionSummary,
-  FolderColor,
-} from "../types/projection";
+  ConnectionFolderMenuAction,
+  ConnectionFolderNode,
+} from "./connectionTree";
+import type { ConnectionFolder, ConnectionSummary } from "../types/projection";
 
 const props = defineProps<{
   activeId: string | null;
@@ -28,8 +30,7 @@ const notify = useNotify();
 const { confirmDanger } = useConfirmAction();
 
 const rootConnections = ref<ConnectionSummary[]>([]);
-const folderConnections = ref<Record<string, ConnectionSummary[]>>({});
-const folderList = ref<ConnectionFolder[]>([]);
+const folderTree = ref<ConnectionFolderNode[]>([]);
 const dragging = ref(false);
 const expanded = useStorage<Record<string, boolean>>(
   "shellcn:connection-folders:expanded",
@@ -39,72 +40,15 @@ const expanded = useStorage<Record<string, boolean>>(
 );
 const showFolderDialog = ref(false);
 const editingFolder = ref<ConnectionFolder | null>(null);
+const newFolderParentId = ref<string | null>(null);
 const savingLayout = ref(false);
-
-const colorClasses: Record<
-  FolderColor,
-  { icon: string; accent: string; active: string }
-> = {
-  slate: {
-    icon: "text-slate-500",
-    accent: "border-l-slate-500",
-    active:
-      "bg-slate-50 text-slate-800 dark:bg-slate-500/10 dark:text-slate-200",
-  },
-  blue: {
-    icon: "text-blue-500",
-    accent: "border-l-blue-500",
-    active: "bg-blue-50 text-blue-800 dark:bg-blue-500/10 dark:text-blue-200",
-  },
-  teal: {
-    icon: "text-teal-500",
-    accent: "border-l-teal-500",
-    active: "bg-teal-50 text-teal-800 dark:bg-teal-500/10 dark:text-teal-200",
-  },
-  emerald: {
-    icon: "text-emerald-500",
-    accent: "border-l-emerald-500",
-    active:
-      "bg-emerald-50 text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200",
-  },
-  amber: {
-    icon: "text-amber-500",
-    accent: "border-l-amber-500",
-    active:
-      "bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200",
-  },
-  rose: {
-    icon: "text-rose-500",
-    accent: "border-l-rose-500",
-    active: "bg-rose-50 text-rose-800 dark:bg-rose-500/10 dark:text-rose-200",
-  },
-  violet: {
-    icon: "text-violet-500",
-    accent: "border-l-violet-500",
-    active:
-      "bg-violet-50 text-violet-800 dark:bg-violet-500/10 dark:text-violet-200",
-  },
-  cyan: {
-    icon: "text-cyan-500",
-    accent: "border-l-cyan-500",
-    active: "bg-cyan-50 text-cyan-800 dark:bg-cyan-500/10 dark:text-cyan-200",
-  },
-};
-
-const visibleFolders = computed(() =>
-  props.query.trim()
-    ? folderList.value.filter(
-        (folder) => folderConnections.value[folder.id]?.length,
-      )
-    : folderList.value,
-);
 
 const emptyFiltered = computed(
   () =>
     conns.loaded &&
     Boolean(props.query.trim()) &&
     !rootConnections.value.length &&
-    !visibleFolders.value.length,
+    !folderTree.value.length,
 );
 
 watch(
@@ -118,80 +62,112 @@ watch(
   (id) => {
     if (!id) return;
     const conn = conns.byId(id);
-    if (conn?.folderId)
-      expanded.value = { ...expanded.value, [conn.folderId]: true };
+    if (!conn?.folderId) return;
+    openFolderAncestors(conn.folderId);
   },
   { immediate: true },
 );
 
 function rebuildLists(): void {
   const q = props.query.trim().toLowerCase();
-  const folderIds = new Set(conns.folders.map((f) => f.id));
-  const lists: Record<string, ConnectionSummary[]> = Object.fromEntries(
-    conns.folders.map((f) => [f.id, []]),
-  );
-  const root: ConnectionSummary[] = [];
-  folderList.value = [...conns.folders].sort(
-    (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
-  );
-  for (const c of conns.connections) {
-    if (q && !`${c.name} ${c.protocol}`.toLowerCase().includes(q)) continue;
-    if (c.folderId && folderIds.has(c.folderId)) lists[c.folderId].push(c);
-    else root.push(c);
-  }
   const sortConnections = (a: ConnectionSummary, b: ConnectionSummary) =>
     (a.sortOrder ?? Number.MAX_SAFE_INTEGER) -
       (b.sortOrder ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name);
+  const sortFolders = (a: ConnectionFolderNode, b: ConnectionFolderNode) =>
+    a.sortOrder - b.sortOrder || a.name.localeCompare(b.name);
+
+  const folderIds = new Set(conns.folders.map((f) => f.id));
+  const nodeById = new Map<string, ConnectionFolderNode>();
+  for (const folder of conns.folders) {
+    nodeById.set(folder.id, {
+      ...folder,
+      children: [],
+      connections: [],
+    });
+  }
+
+  const root: ConnectionSummary[] = [];
+  for (const connection of conns.connections) {
+    if (
+      q &&
+      !`${connection.name} ${connection.protocol}`.toLowerCase().includes(q)
+    ) {
+      continue;
+    }
+    if (connection.folderId && folderIds.has(connection.folderId)) {
+      nodeById.get(connection.folderId)?.connections.push(connection);
+    } else {
+      root.push(connection);
+    }
+  }
+
+  for (const node of nodeById.values()) {
+    node.connections.sort(sortConnections);
+  }
+
+  const roots: ConnectionFolderNode[] = [];
+  for (const node of nodeById.values()) {
+    if (node.parentId && nodeById.has(node.parentId)) {
+      nodeById.get(node.parentId)?.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  const sortTree = (nodes: ConnectionFolderNode[]): ConnectionFolderNode[] => {
+    nodes.sort(sortFolders);
+    for (const node of nodes) sortTree(node.children);
+    return nodes;
+  };
+
+  const tree = sortTree(roots);
   rootConnections.value = root.sort(sortConnections);
-  for (const id of Object.keys(lists))
-    lists[id] = lists[id].sort(sortConnections);
-  folderConnections.value = lists;
+  folderTree.value = q ? filterTree(tree) : tree;
 }
 
-function folderClass(folder: ConnectionFolder): string {
-  return colorClasses[folder.color]?.active ?? colorClasses.slate.active;
+function filterTree(nodes: ConnectionFolderNode[]): ConnectionFolderNode[] {
+  const out: ConnectionFolderNode[] = [];
+  for (const node of nodes) {
+    const children = filterTree(node.children);
+    if (node.connections.length || children.length) {
+      out.push({ ...node, children });
+      if (children.length || node.connections.length) {
+        expanded.value = { ...expanded.value, [node.id]: true };
+      }
+    }
+  }
+  return out;
 }
 
-function folderIconClass(folder: ConnectionFolder): string {
-  return colorClasses[folder.color]?.icon ?? colorClasses.slate.icon;
+function openFolderAncestors(folderId: string): void {
+  const byID = new Map(conns.folders.map((folder) => [folder.id, folder]));
+  const next = { ...expanded.value };
+  let current = byID.get(folderId);
+  while (current) {
+    next[current.id] = true;
+    current = current.parentId ? byID.get(current.parentId) : undefined;
+  }
+  expanded.value = next;
 }
 
-function folderAccentClass(folder: ConnectionFolder): string {
-  return colorClasses[folder.color]?.accent ?? colorClasses.slate.accent;
-}
-
-function dotClass(c: ConnectionSummary): string {
-  if (c.status === "offline") return "bg-red-500";
-  if (ws.isConnected(c.id)) return "bg-emerald-400";
-  return "bg-surface-300 dark:bg-surface-600";
-}
-
-function dotTitle(c: ConnectionSummary): string {
-  if (c.status === "offline") return "Agent offline";
-  if (ws.isConnected(c.id)) return "Connected";
-  return "Idle";
-}
-
-function shareTitle(c: ConnectionSummary): string {
-  if (c.sharedWithMe) return `Shared with you · ${c.access ?? "use"}`;
-  if (c.sharedByMe) return "Shared by you";
-  return "";
-}
-
-function openNewFolder(): void {
+function openNewFolder(parentId?: string): void {
   editingFolder.value = null;
+  newFolderParentId.value = parentId ?? null;
   showFolderDialog.value = true;
 }
 
 function editFolder(folder: ConnectionFolder): void {
   editingFolder.value = folder;
+  newFolderParentId.value = null;
   showFolderDialog.value = true;
 }
 
 function askDeleteFolder(folder: ConnectionFolder): void {
   confirmDanger({
     header: "Delete folder",
-    message: `Delete “${folder.name}”? Connections inside it will move to the main list.`,
+    message: folder.parentId
+      ? `Delete "${folder.name}"? Its connections and subfolders will move up one level.`
+      : `Delete "${folder.name}"? Its connections and subfolders will move to the main list.`,
     acceptLabel: "Delete",
     accept: async () => {
       await conns.deleteFolder(folder.id);
@@ -199,6 +175,17 @@ function askDeleteFolder(folder: ConnectionFolder): void {
       rebuildLists();
     },
   });
+}
+
+function handleFolderMenu(action: ConnectionFolderMenuAction): void {
+  if (action.key === "new-child") {
+    expanded.value = { ...expanded.value, [action.folder.id]: true };
+    openNewFolder(action.folder.id);
+  } else if (action.key === "rename") {
+    editFolder(action.folder);
+  } else if (action.key === "delete") {
+    askDeleteFolder(action.folder);
+  }
 }
 
 function toggleFolder(id: string): void {
@@ -214,22 +201,17 @@ async function persistLayout(): Promise<void> {
       folderId?: string;
       sortOrder: number;
     }> = [];
-    rootConnections.value.forEach((c, index) =>
-      items.push({ connectionId: c.id, sortOrder: index }),
+    const folders: Array<{
+      folderId: string;
+      parentId?: string;
+      sortOrder: number;
+    }> = [];
+
+    rootConnections.value.forEach((connection, index) =>
+      items.push({ connectionId: connection.id, sortOrder: index }),
     );
-    for (const folder of folderList.value) {
-      (folderConnections.value[folder.id] ?? []).forEach((c, index) =>
-        items.push({
-          connectionId: c.id,
-          folderId: folder.id,
-          sortOrder: index,
-        }),
-      );
-    }
-    const folders = folderList.value.map((folder, index) => ({
-      folderId: folder.id,
-      sortOrder: index,
-    }));
+    collectLayout(folderTree.value, undefined, items, folders);
+
     await conns.saveLayout(items, folders);
     rebuildLists();
   } catch (e) {
@@ -238,6 +220,25 @@ async function persistLayout(): Promise<void> {
   } finally {
     savingLayout.value = false;
   }
+}
+
+function collectLayout(
+  nodes: ConnectionFolderNode[],
+  parentId: string | undefined,
+  items: Array<{ connectionId: string; folderId?: string; sortOrder: number }>,
+  folders: Array<{ folderId: string; parentId?: string; sortOrder: number }>,
+): void {
+  nodes.forEach((folder, index) => {
+    folders.push({ folderId: folder.id, parentId, sortOrder: index });
+    folder.connections.forEach((connection, connectionIndex) =>
+      items.push({
+        connectionId: connection.id,
+        folderId: folder.id,
+        sortOrder: connectionIndex,
+      }),
+    );
+    collectLayout(folder.children, folder.id, items, folders);
+  });
 }
 
 function onDragEnd(): void {
@@ -256,10 +257,10 @@ function afterDragEnd(): void {
   }, 0);
 }
 
-function go(c: ConnectionSummary): void {
+function go(connection: ConnectionSummary): void {
   if (dragging.value) return;
-  ws.open(c.id);
-  void router.push({ name: "connection", params: { id: c.id } });
+  ws.open(connection.id);
+  void router.push({ name: "connection", params: { id: connection.id } });
 }
 </script>
 
@@ -277,7 +278,7 @@ function go(c: ConnectionSummary): void {
           size="small"
           title="New folder"
           aria-label="New folder"
-          @click="openNewFolder"
+          @click="openNewFolder()"
         >
           <AppIcon :icon="{ type: 'name', value: 'folder-plus' }" :size="15" />
         </Button>
@@ -297,206 +298,27 @@ function go(c: ConnectionSummary): void {
         @start="onDragStart"
         @end="afterDragEnd"
       >
-        <div
-          v-for="c in rootConnections"
-          :key="c.id"
-          class="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-          :class="
-            activeId === c.id
-              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-              : ''
-          "
-        >
-          <span
-            class="connection-drag-handle cursor-grab touch-none rounded p-0.5 text-surface-500 active:cursor-grabbing"
-            title="Drag connection"
-            aria-label="Drag connection"
-          >
-            <AppIcon :icon="c.icon" :size="16" />
-          </span>
-          <button
-            type="button"
-            class="flex min-w-0 flex-1 flex-col text-left"
-            @click="go(c)"
-          >
-            <span class="truncate text-surface-800 dark:text-surface-100">{{
-              c.name
-            }}</span>
-            <span class="truncate text-xs text-surface-400">{{
-              c.protocol
-            }}</span>
-          </button>
-          <span
-            class="h-2 w-2 shrink-0 rounded-full"
-            :class="dotClass(c)"
-            :title="dotTitle(c)"
-          />
-          <AppIcon
-            v-if="c.sharedWithMe || c.sharedByMe"
-            :icon="{
-              type: 'name',
-              value: c.sharedWithMe ? 'users' : 'share-2',
-            }"
-            :size="14"
-            class="shrink-0 text-surface-400"
-            :title="shareTitle(c)"
-          />
-        </div>
+        <ConnectionSidebarItem
+          v-for="connection in rootConnections"
+          :key="connection.id"
+          :connection="connection"
+          :active="activeId === connection.id"
+          @open="go"
+        />
       </VueDraggable>
 
-      <VueDraggable
-        v-model="folderList"
-        handle=".folder-drag-handle"
+      <ConnectionFolderBranch
+        v-model="folderTree"
+        :active-id="activeId"
+        :expanded="expanded"
         :disabled="Boolean(query.trim())"
-        :animation="150"
-        ghost-class="opacity-40"
-        @start="onDragStart"
-        @end="afterDragEnd"
-      >
-        <section
-          v-for="folder in visibleFolders"
-          :key="folder.id"
-          class="mt-2 rounded-md border-l-2"
-          :class="folderAccentClass(folder)"
-        >
-          <div
-            class="group flex items-center gap-1 rounded-md px-1 py-1"
-            :class="folderClass(folder)"
-          >
-            <Button
-              text
-              rounded
-              severity="secondary"
-              size="small"
-              :aria-label="
-                expanded[folder.id] ? 'Collapse folder' : 'Expand folder'
-              "
-              @click="toggleFolder(folder.id)"
-            >
-              <AppIcon
-                :icon="{
-                  type: 'name',
-                  value: expanded[folder.id] ? 'chevron-down' : 'chevron-right',
-                }"
-                :size="14"
-              />
-            </Button>
-            <span
-              class="folder-drag-handle cursor-grab touch-none rounded p-0.5 active:cursor-grabbing"
-              :class="folderIconClass(folder)"
-              title="Drag folder"
-              aria-label="Drag folder"
-            >
-              <AppIcon
-                :icon="{
-                  type: 'name',
-                  value: expanded[folder.id] ? 'folder-open' : 'folder',
-                }"
-                :size="16"
-              />
-            </span>
-            <button
-              type="button"
-              class="min-w-0 flex-1 truncate text-left text-sm font-medium"
-              @click="toggleFolder(folder.id)"
-            >
-              {{ folder.name }}
-            </button>
-            <span class="text-xs text-surface-400">
-              {{ folderConnections[folder.id]?.length ?? 0 }}
-            </span>
-            <Button
-              text
-              rounded
-              severity="secondary"
-              size="small"
-              class="opacity-0 group-hover:opacity-100"
-              title="Edit folder"
-              aria-label="Edit folder"
-              @click="editFolder(folder)"
-            >
-              <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="14" />
-            </Button>
-            <Button
-              text
-              rounded
-              severity="danger"
-              size="small"
-              class="opacity-0 group-hover:opacity-100"
-              title="Delete folder"
-              aria-label="Delete folder"
-              @click="askDeleteFolder(folder)"
-            >
-              <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="14" />
-            </Button>
-          </div>
-
-          <VueDraggable
-            v-show="expanded[folder.id]"
-            v-model="folderConnections[folder.id]"
-            group="connections"
-            handle=".connection-drag-handle"
-            :disabled="Boolean(query.trim())"
-            :animation="150"
-            ghost-class="opacity-40"
-            class="min-h-3 space-y-1 pt-1 pl-3"
-            @start="onDragStart"
-            @end="afterDragEnd"
-          >
-            <div
-              v-for="c in folderConnections[folder.id]"
-              :key="c.id"
-              class="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-              :class="
-                activeId === c.id
-                  ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-                  : ''
-              "
-            >
-              <span
-                class="connection-drag-handle cursor-grab touch-none rounded p-0.5 text-surface-500 active:cursor-grabbing"
-                title="Drag connection"
-                aria-label="Drag connection"
-              >
-                <AppIcon :icon="c.icon" :size="16" />
-              </span>
-              <button
-                type="button"
-                class="flex min-w-0 flex-1 flex-col text-left"
-                @click="go(c)"
-              >
-                <span class="truncate text-surface-800 dark:text-surface-100">{{
-                  c.name
-                }}</span>
-                <span class="truncate text-xs text-surface-400">{{
-                  c.protocol
-                }}</span>
-              </button>
-              <span
-                class="h-2 w-2 shrink-0 rounded-full"
-                :class="dotClass(c)"
-                :title="dotTitle(c)"
-              />
-              <AppIcon
-                v-if="c.sharedWithMe || c.sharedByMe"
-                :icon="{
-                  type: 'name',
-                  value: c.sharedWithMe ? 'users' : 'share-2',
-                }"
-                :size="14"
-                class="shrink-0 text-surface-400"
-                :title="shareTitle(c)"
-              />
-            </div>
-          </VueDraggable>
-          <p
-            v-if="expanded[folder.id] && !folderConnections[folder.id]?.length"
-            class="px-5 py-2 text-xs text-surface-400"
-          >
-            Empty folder
-          </p>
-        </section>
-      </VueDraggable>
+        class="mt-2"
+        @toggle-folder="toggleFolder"
+        @menu-action="handleFolderMenu"
+        @drag-start="onDragStart"
+        @drag-end="afterDragEnd"
+        @open="go"
+      />
 
       <div v-if="!conns.loaded" class="space-y-1.5 px-1 pt-1">
         <div
@@ -532,6 +354,7 @@ function go(c: ConnectionSummary): void {
     <ConnectionFolderDialog
       v-model:visible="showFolderDialog"
       :folder="editingFolder"
+      :parent-id="newFolderParentId"
       @saved="rebuildLists"
     />
   </div>

@@ -22,6 +22,7 @@ describe("ConnectionFolderDialog", () => {
           body: {
             id: "f1",
             name: posted?.name,
+            parentId: posted?.parentId,
             color: posted?.color,
             sortOrder: 0,
           },
@@ -30,7 +31,9 @@ describe("ConnectionFolderDialog", () => {
       return { body: [] };
     });
 
-    const wrapper = mount(ConnectionFolderDialog, { props: { visible: true } });
+    const wrapper = mount(ConnectionFolderDialog, {
+      props: { visible: true, parentId: "parent-folder" },
+    });
     await flushPromises();
 
     wrapper
@@ -48,7 +51,11 @@ describe("ConnectionFolderDialog", () => {
       ?.trigger("click");
     await flushPromises();
 
-    expect(posted).toMatchObject({ name: "Production", color: "teal" });
+    expect(posted).toMatchObject({
+      name: "Production",
+      color: "teal",
+      parentId: "parent-folder",
+    });
     expect(wrapper.emitted("saved")?.[0][0]).toMatchObject({
       id: "f1",
       color: "teal",

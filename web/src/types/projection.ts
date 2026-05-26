@@ -435,6 +435,7 @@ export type FolderColor =
 
 export interface ConnectionFolder {
   id: string;
+  parentId?: string;
   name: string;
   color: FolderColor;
   sortOrder: number;

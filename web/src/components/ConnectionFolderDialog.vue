@@ -11,6 +11,7 @@ import type { ConnectionFolder, FolderColor } from "../types/projection";
 const props = defineProps<{
   visible: boolean;
   folder?: ConnectionFolder | null;
+  parentId?: string | null;
 }>();
 const emit = defineEmits<{
   "update:visible": [value: boolean];
@@ -67,7 +68,11 @@ async function save(): Promise<void> {
           name: trimmed,
           color: color.value,
         })
-      : await conns.createFolder({ name: trimmed, color: color.value });
+      : await conns.createFolder({
+          name: trimmed,
+          color: color.value,
+          parentId: props.parentId ?? undefined,
+        });
     notify.success(
       props.folder ? "Folder updated" : "Folder created",
       saved.name,

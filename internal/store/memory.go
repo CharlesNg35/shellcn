@@ -295,12 +295,16 @@ func (s *memConnectionPlacementStore) DeleteByConnection(_ context.Context, conn
 	return nil
 }
 
-func (s *memConnectionPlacementStore) ClearFolder(_ context.Context, userID, folderID string) error {
+func (s *memConnectionPlacementStore) ClearFolder(ctx context.Context, userID, folderID string) error {
+	return s.MoveFolder(ctx, userID, folderID, "")
+}
+
+func (s *memConnectionPlacementStore) MoveFolder(_ context.Context, userID, folderID, targetFolderID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for key, p := range s.m {
 		if p.UserID == userID && p.FolderID == folderID {
-			p.FolderID = ""
+			p.FolderID = targetFolderID
 			p.UpdatedAt = time.Now()
 			s.m[key] = p
 		}

@@ -263,6 +263,15 @@ export const primeVuePassthrough = {
     label: "truncate",
   },
 
+  menu: {
+    root: overlay,
+    list: "flex min-w-40 flex-col gap-0.5",
+    itemContent:
+      "flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors hover:bg-surface-100 dark:text-surface-200 dark:hover:bg-surface-800",
+    itemLabel: "min-w-0 flex-1 truncate",
+    separator: "my-1 border-t border-surface-200 dark:border-surface-800",
+  },
+
   selectbutton: {
     root: "inline-flex gap-0.5 rounded-md border border-surface-300 bg-surface-0 p-0.5 dark:border-surface-700 dark:bg-surface-950",
     pcToggleButton: {

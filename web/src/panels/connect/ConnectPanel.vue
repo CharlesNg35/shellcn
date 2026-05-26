@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted } from "vue";
 import Button from "primevue/button";
-import { api } from "../../api/client";
 import { useAgentState } from "../../composables/useAgentState";
 import AppIcon from "../../components/AppIcon.vue";
-import type {
-  ConnectionDetail,
-  ConnectionSummary,
-} from "../../types/projection";
+import type { ConnectionSummary } from "../../types/projection";
 
 const props = defineProps<{
   connectionId: string;
@@ -16,24 +12,9 @@ const props = defineProps<{
 const emit = defineEmits<{ connect: []; enroll: [] }>();
 
 const isAgent = computed(() => props.connection?.transport === "agent");
-
-const detail = ref<ConnectionDetail | null>(null);
-const details = computed<{ key: string; label: string; value: string }[]>(
-  () => {
-    const config = detail.value?.config ?? {};
-    return Object.entries(config)
-      .filter(
-        ([, v]) =>
-          v !== null && v !== undefined && v !== "" && typeof v !== "object",
-      )
-      .map(([key, v]) => ({ key, label: prettify(key), value: String(v) }));
-  },
+const transportLabel = computed(() =>
+  props.connection?.transport === "agent" ? "Agent" : "Direct",
 );
-
-function prettify(key: string): string {
-  const spaced = key.replace(/_/g, " ");
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
 
 const agent = useAgentState(props.connectionId);
 const canConnect = computed(() => !isAgent.value || agent.online.value);
@@ -64,15 +45,8 @@ const agentLabel = computed(() => {
   }
 });
 
-onMounted(async () => {
+onMounted(() => {
   if (isAgent.value) agent.start();
-  try {
-    detail.value = await api.get<ConnectionDetail>(
-      `/connections/${props.connectionId}`,
-    );
-  } catch {
-    // details are best-effort; the connect action does not depend on them
-  }
 });
 </script>
 
@@ -93,6 +67,7 @@ onMounted(async () => {
       <p class="text-sm text-surface-500 dark:text-surface-400">
         {{ connection?.name ?? connectionId }} · {{ connection?.protocol }}
       </p>
+      <p class="text-xs text-surface-400">{{ transportLabel }} connection</p>
     </div>
 
     <!-- Agent reachability: a session can only open once the tunnel is up. -->
@@ -105,25 +80,6 @@ onMounted(async () => {
         {{ agentLabel }}
       </span>
     </div>
-
-    <!-- Connection details (non-secret config). -->
-    <dl
-      v-if="details.length"
-      class="w-full max-w-xs divide-y divide-surface-200 rounded-lg border border-surface-200 text-left text-xs dark:divide-surface-800 dark:border-surface-800"
-    >
-      <div
-        v-for="d in details"
-        :key="d.key"
-        class="flex items-center justify-between gap-3 px-3 py-1.5"
-      >
-        <dt class="text-surface-400">{{ d.label }}</dt>
-        <dd
-          class="min-w-0 truncate font-medium text-surface-700 dark:text-surface-200"
-        >
-          {{ d.value }}
-        </dd>
-      </div>
-    </dl>
 
     <div class="flex items-center gap-2">
       <Button v-if="gated" @click="emit('enroll')">Set up agent</Button>
