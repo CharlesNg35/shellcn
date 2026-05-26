@@ -28,6 +28,7 @@ const emit = defineEmits<{
   "toggle-folder": [folderId: string];
   "menu-action": [action: ConnectionFolderMenuAction];
   "drag-start": [];
+  "drag-add": [preference?: ConnectionTreeDropPreference];
   "drag-end": [preference?: ConnectionTreeDropPreference];
   open: [connection: ConnectionSummary];
 }>();
@@ -40,39 +41,15 @@ const items = computed({
 const menu = ref<{ toggle: (event: Event) => void } | null>(null);
 const menuFolder = ref<ConnectionFolderNode | null>(null);
 
-const colorClasses: Record<FolderColor, { icon: string; active: string }> = {
-  slate: {
-    icon: "text-slate-500",
-    active: "bg-slate-50/80 dark:bg-slate-500/10",
-  },
-  blue: {
-    icon: "text-blue-500",
-    active: "bg-blue-50/80 dark:bg-blue-500/10",
-  },
-  teal: {
-    icon: "text-teal-500",
-    active: "bg-teal-50/80 dark:bg-teal-500/10",
-  },
-  emerald: {
-    icon: "text-emerald-500",
-    active: "bg-emerald-50/80 dark:bg-emerald-500/10",
-  },
-  amber: {
-    icon: "text-amber-500",
-    active: "bg-amber-50/80 dark:bg-amber-500/10",
-  },
-  rose: {
-    icon: "text-rose-500",
-    active: "bg-rose-50/80 dark:bg-rose-500/10",
-  },
-  violet: {
-    icon: "text-violet-500",
-    active: "bg-violet-50/80 dark:bg-violet-500/10",
-  },
-  cyan: {
-    icon: "text-cyan-500",
-    active: "bg-cyan-50/80 dark:bg-cyan-500/10",
-  },
+const colorClasses: Record<FolderColor, { icon: string }> = {
+  slate: { icon: "text-slate-500" },
+  blue: { icon: "text-blue-500" },
+  teal: { icon: "text-teal-500" },
+  emerald: { icon: "text-emerald-500" },
+  amber: { icon: "text-amber-500" },
+  rose: { icon: "text-rose-500" },
+  violet: { icon: "text-violet-500" },
+  cyan: { icon: "text-cyan-500" },
 };
 
 const menuItems = computed(() => [
@@ -116,12 +93,6 @@ function folderIconClass(folder: ConnectionFolderNode): string {
   return colorClasses[folder.color]?.icon ?? colorClasses.slate.icon;
 }
 
-function folderRowClass(folder: ConnectionFolderNode): string {
-  return isExpanded(folder)
-    ? (colorClasses[folder.color]?.active ?? colorClasses.slate.active)
-    : "";
-}
-
 function dragEnd(event: unknown): void {
   const sortable = (event ?? {}) as {
     item?: HTMLElement;
@@ -131,6 +102,17 @@ function dragEnd(event: unknown): void {
     connectionId: sortable.item?.dataset.connectionId,
     folderId: sortable.item?.dataset.folderId,
     targetParentId: sortable.to?.dataset.parentFolderId || undefined,
+  });
+}
+
+function dragAdd(event: unknown): void {
+  const sortable = (event ?? {}) as {
+    item?: HTMLElement;
+  };
+  emit("drag-add", {
+    connectionId: sortable.item?.dataset.connectionId,
+    folderId: sortable.item?.dataset.folderId,
+    targetParentId: props.parentId,
   });
 }
 </script>
@@ -147,6 +129,7 @@ function dragEnd(event: unknown): void {
       ghost-class="opacity-40"
       class="min-h-3 space-y-1"
       @start="emit('drag-start')"
+      @add="dragAdd"
       @end="dragEnd"
     >
       <template
@@ -163,7 +146,6 @@ function dragEnd(event: unknown): void {
         <section v-else class="min-w-0" :data-folder-id="item.id">
           <div
             class="group flex min-h-10 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
-            :class="folderRowClass(item)"
           >
             <span
               class="folder-drag-handle cursor-grab touch-none rounded p-0.5 active:cursor-grabbing"
@@ -198,7 +180,7 @@ function dragEnd(event: unknown): void {
               rounded
               severity="secondary"
               size="small"
-              class="h-7 w-7 p-0 opacity-70 transition-opacity group-hover:opacity-100"
+              class="m-0 h-7 w-2 justify-start p-0 opacity-70 transition-opacity group-hover:opacity-100"
               title="Folder actions"
               aria-label="Folder actions"
               aria-haspopup="true"
@@ -223,6 +205,7 @@ function dragEnd(event: unknown): void {
             @toggle-folder="emit('toggle-folder', $event)"
             @menu-action="emit('menu-action', $event)"
             @drag-start="emit('drag-start')"
+            @drag-add="emit('drag-add', $event)"
             @drag-end="emit('drag-end', $event)"
             @open="emit('open', $event)"
           />

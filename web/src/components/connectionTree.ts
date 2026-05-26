@@ -33,8 +33,11 @@ export function dedupeConnectionTree(
     preference,
   );
   const keepFolderInParent = preferredParent(items, "folder", preference);
+  const lastConnectionOccurrence = lastOccurrence(items, "connection");
+  const lastFolderOccurrence = lastOccurrence(items, "folder");
   const seenConnections = new Set<string>();
   const seenFolders = new Set<string>();
+  let visitIndex = 0;
 
   function normalize(
     nodes: ConnectionTreeItem[],
@@ -42,12 +45,20 @@ export function dedupeConnectionTree(
   ): ConnectionTreeItem[] {
     const out: ConnectionTreeItem[] = [];
     for (const item of nodes) {
+      const currentIndex = visitIndex;
+      visitIndex += 1;
       if (item.kind === "connection") {
         const id = item.connection.id;
         const preferredParent = keepConnectionInParent.get(id);
         if (
           preferredParent !== undefined &&
           preferredParent !== (parentId ?? "")
+        ) {
+          continue;
+        }
+        if (
+          preferredParent === undefined &&
+          lastConnectionOccurrence.get(id) !== currentIndex
         ) {
           continue;
         }
@@ -64,6 +75,12 @@ export function dedupeConnectionTree(
       ) {
         continue;
       }
+      if (
+        preferredParent === undefined &&
+        lastFolderOccurrence.get(item.id) !== currentIndex
+      ) {
+        continue;
+      }
       if (seenFolders.has(item.id)) continue;
       seenFolders.add(item.id);
       out.push({ ...item, children: normalize(item.children, item.id) });
@@ -72,6 +89,28 @@ export function dedupeConnectionTree(
   }
 
   return normalize(items, undefined);
+}
+
+function lastOccurrence(
+  items: ConnectionTreeItem[],
+  kind: "connection" | "folder",
+): Map<string, number> {
+  const out = new Map<string, number>();
+  let index = 0;
+  function visit(nodes: ConnectionTreeItem[]): void {
+    for (const item of nodes) {
+      const current = index;
+      index += 1;
+      if (item.kind === "connection") {
+        if (kind === "connection") out.set(item.connection.id, current);
+        continue;
+      }
+      if (kind === "folder") out.set(item.id, current);
+      visit(item.children);
+    }
+  }
+  visit(items);
+  return out;
 }
 
 function preferredParent(

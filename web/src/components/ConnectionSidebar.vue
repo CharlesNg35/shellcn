@@ -33,6 +33,7 @@ const { confirmDanger } = useConfirmAction();
 
 const rootItems = ref<ConnectionTreeItem[]>([]);
 const dragging = ref(false);
+const treeRenderKey = ref(0);
 const expanded = useStorage<Record<string, boolean>>(
   "shellcn:connection-folders:expanded",
   {},
@@ -195,6 +196,10 @@ function toggleFolder(id: string): void {
   expanded.value = { ...expanded.value, [id]: !expanded.value[id] };
 }
 
+function remountTree(): void {
+  treeRenderKey.value += 1;
+}
+
 async function persistLayout(): Promise<void> {
   if (savingLayout.value) return;
   savingLayout.value = true;
@@ -213,10 +218,14 @@ async function persistLayout(): Promise<void> {
     collectLayout(rootItems.value, undefined, items, folders);
 
     await conns.saveLayout(items, folders);
+    await conns.refresh();
     rebuildLists();
+    remountTree();
   } catch (e) {
     notify.error("Could not save sidebar order", (e as Error).message);
     await conns.refresh();
+    rebuildLists();
+    remountTree();
   } finally {
     savingLayout.value = false;
   }
@@ -246,7 +255,15 @@ function onDragEnd(preference?: ConnectionTreeDropPreference): void {
   if (props.query.trim()) return;
   void nextTick(() => {
     rootItems.value = dedupeConnectionTree(rootItems.value, preference);
+    remountTree();
     return persistLayout();
+  });
+}
+
+function onDragAdd(preference?: ConnectionTreeDropPreference): void {
+  if (props.query.trim()) return;
+  void nextTick(() => {
+    rootItems.value = dedupeConnectionTree(rootItems.value, preference);
   });
 }
 
@@ -290,8 +307,9 @@ function go(connection: ConnectionSummary): void {
       </div>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 overflow-y-auto py-1">
       <ConnectionFolderBranch
+        :key="treeRenderKey"
         v-model="rootItems"
         :active-id="activeId"
         :expanded="expanded"
@@ -299,6 +317,7 @@ function go(connection: ConnectionSummary): void {
         @toggle-folder="toggleFolder"
         @menu-action="handleFolderMenu"
         @drag-start="onDragStart"
+        @drag-add="onDragAdd"
         @drag-end="afterDragEnd"
         @open="go"
       />

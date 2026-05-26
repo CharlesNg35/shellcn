@@ -20,7 +20,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Version:             "0.1.0",
 		Title:               "SFTP",
 		Description:         "File browser over SSH SFTP.",
-		Icon:                plugin.Icon{Type: plugin.IconName, Value: "folder"},
+		Icon:                plugin.Icon{Type: plugin.IconName, Value: "server"},
 		Config:              configSchema(),
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},

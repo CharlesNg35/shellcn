@@ -98,6 +98,21 @@ describe("ConnectionSidebar", () => {
       if (url.endsWith("/api/connections/layout") && init?.method === "PUT") {
         saved = JSON.parse(String(init.body));
       }
+      if (url.endsWith("/api/connections")) return { body: connections };
+      if (url.endsWith("/api/connection-folders")) {
+        return {
+          body: [
+            { id: "f1", name: "Production", color: "blue", sortOrder: 0 },
+            {
+              id: "f2",
+              parentId: "f1",
+              name: "Databases",
+              color: "teal",
+              sortOrder: 0,
+            },
+          ],
+        };
+      }
       return { body: { ok: true } };
     });
     const conns = useConnectionsStore();
