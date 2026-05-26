@@ -20,7 +20,7 @@ jobs:
           cache-dependency-path: web/pnpm-lock.yaml
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: true
       - run: pnpm -C web install --frozen-lockfile
       - run: pnpm -C web build
@@ -28,7 +28,7 @@ jobs:
       - run: go test -race ./...
       - uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.4
+          version: v2.12
 
   frontend:
     runs-on: ubuntu-latest

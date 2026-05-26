@@ -3,8 +3,10 @@ package plugins
 import (
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/plugins/docker"
+	"github.com/charlesng/shellcn/plugins/rdp"
 	"github.com/charlesng/shellcn/plugins/sftp"
 	"github.com/charlesng/shellcn/plugins/ssh"
+	"github.com/charlesng/shellcn/plugins/vnc"
 )
 
 // Register wires every first-party plugin into the registry. This is the single
@@ -21,5 +23,7 @@ func all() []plugin.Plugin {
 		ssh.New(),
 		sftp.New(),
 		docker.New(),
+		vnc.New(),
+		rdp.New(),
 	}
 }
