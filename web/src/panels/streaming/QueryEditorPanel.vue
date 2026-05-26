@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
+import Button from "primevue/button";
 import { interpolate, runAction } from "../../api/dataSource";
 import type { QueryEditorConfig } from "../../types/projection";
 import { useStream } from "../../composables/useStream";
@@ -123,22 +124,19 @@ onUnmounted(() => {
       <span class="text-xs text-surface-400">SQL</span>
       <div class="flex items-center gap-2">
         <span v-if="error" class="text-xs text-red-500">{{ error }}</span>
-        <button
+        <Button
           v-if="running"
           type="button"
-          class="rounded-md border border-surface-300 px-3 py-1 text-xs font-medium dark:border-surface-700"
+          size="small"
+          severity="secondary"
+          outlined
           @click="cancel"
         >
           Cancel
-        </button>
-        <button
-          type="button"
-          class="rounded-md bg-primary-500 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
-          :disabled="running"
-          @click="run"
-        >
+        </Button>
+        <Button type="button" size="small" :disabled="running" @click="run">
           {{ running ? "Running…" : "Run" }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -158,15 +156,18 @@ onUnmounted(() => {
       class="border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <div class="flex flex-wrap gap-2">
-        <button
+        <Button
           v-for="item in history"
           :key="item"
           type="button"
-          class="max-w-72 truncate rounded border border-surface-300 px-2 py-1 text-xs text-surface-500 hover:bg-surface-100 dark:border-surface-700 dark:hover:bg-surface-800"
+          size="small"
+          severity="secondary"
+          outlined
+          class="max-w-72"
           @click="recall(item)"
         >
           {{ item }}
-        </button>
+        </Button>
       </div>
     </div>
 

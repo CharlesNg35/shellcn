@@ -4,9 +4,11 @@ import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
+import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useSessionsStore } from "../stores/sessions";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import PanelHost from "../panels/PanelHost.vue";
@@ -28,6 +30,7 @@ import type {
 const props = defineProps<{ id: string }>();
 const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
+const sessions = useSessionsStore();
 const router = useRouter();
 const notify = useNotify();
 
@@ -90,6 +93,33 @@ watch(() => props.id, load, { immediate: true });
 const needsEnroll = computed(
   () => connection.value?.transport === "agent" && !online.value,
 );
+
+// A connection does not open on its own: the user connects explicitly, so a
+// page refresh lands on the prompt rather than dialing the target again. The
+// flag is per-connection (each connection owns its workspace instance) and is
+// kept alive across in-app navigation by the parent <KeepAlive>.
+const connected = ref(false);
+
+const channelPrefix = computed(() => `${props.id}:`);
+const hasLiveStream = computed(() =>
+  Object.entries(sessions.statuses).some(
+    ([key, status]) => key.startsWith(channelPrefix.value) && status === "open",
+  ),
+);
+
+// Reflect a stream opening or its last one closing in the sidebar dot promptly,
+// instead of waiting for the slow background poll.
+watch(hasLiveStream, () => void conns.refresh().catch(() => undefined));
+
+function connect(): void {
+  connected.value = true;
+}
+
+function disconnect(): void {
+  sessions.closeWhere((key) => key.startsWith(channelPrefix.value));
+  connected.value = false;
+  void conns.refresh().catch(() => undefined);
+}
 
 const resourceByKind = computed(() => {
   const map = new Map<string, ResourceType>();
@@ -166,34 +196,50 @@ function onEnrolled(): void {
         </p>
       </div>
 
-      <div v-if="canManage" class="ml-auto flex items-center gap-1">
-        <button
-          type="button"
-          class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
-          title="Share"
-          aria-label="Share connection"
-          @click="showShare = true"
+      <div class="ml-auto flex items-center gap-1">
+        <Button
+          v-if="connected"
+          severity="secondary"
+          size="small"
+          title="Close the live session"
+          class="mr-1"
+          @click="disconnect"
         >
-          <AppIcon :icon="{ type: 'name', value: 'users' }" :size="17" />
-        </button>
-        <button
-          type="button"
-          class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-800"
-          title="Edit"
-          aria-label="Edit connection"
-          @click="showEdit = true"
-        >
-          <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="17" />
-        </button>
-        <button
-          type="button"
-          class="rounded-md p-1.5 text-surface-500 hover:bg-surface-200 hover:text-red-500 dark:hover:bg-surface-800"
-          title="Delete"
-          aria-label="Delete connection"
-          @click="showDelete = true"
-        >
-          <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="17" />
-        </button>
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          Disconnect
+        </Button>
+        <template v-if="canManage">
+          <Button
+            text
+            rounded
+            severity="secondary"
+            title="Share"
+            aria-label="Share connection"
+            @click="showShare = true"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'users' }" :size="17" />
+          </Button>
+          <Button
+            text
+            rounded
+            severity="secondary"
+            title="Edit"
+            aria-label="Edit connection"
+            @click="showEdit = true"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="17" />
+          </Button>
+          <Button
+            text
+            rounded
+            severity="danger"
+            title="Delete"
+            aria-label="Delete connection"
+            @click="showDelete = true"
+          >
+            <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="17" />
+          </Button>
+        </template>
       </div>
     </header>
 
@@ -206,6 +252,32 @@ function onEnrolled(): void {
         :connection-id="id"
         @online="onEnrolled"
       />
+
+      <div
+        v-else-if="!connected"
+        class="flex h-full flex-col items-center justify-center gap-5 p-8 text-center"
+      >
+        <span
+          class="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-100 text-surface-500 dark:bg-surface-800 dark:text-surface-400"
+        >
+          <AppIcon :icon="connection?.icon ?? projection?.icon" :size="28" />
+        </span>
+        <div class="space-y-1">
+          <h2
+            class="text-lg font-semibold text-surface-900 dark:text-surface-0"
+          >
+            Not connected
+          </h2>
+          <p class="text-sm text-surface-500 dark:text-surface-400">
+            {{ connection?.name ?? id }} ·
+            {{ projection?.title ?? connection?.protocol }}
+          </p>
+        </div>
+        <Button @click="connect">
+          <AppIcon :icon="{ type: 'name', value: 'play' }" :size="16" />
+          Connect
+        </Button>
+      </div>
 
       <template v-else-if="projection">
         <!-- Flat tab layout. The tab bar is PrimeVue; content is rendered through

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
+import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
@@ -115,14 +116,10 @@ const hasItems = computed(() => items.value.length > 0);
           Credentials
         </h1>
       </div>
-      <button
-        type="button"
-        class="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
-        @click="openCreate"
-      >
+      <Button type="button" @click="openCreate">
         <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
         New credential
-      </button>
+      </Button>
     </div>
 
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
@@ -138,13 +135,9 @@ const hasItems = computed(() => items.value.length > 0);
         class="text-surface-400"
       />
       <p class="text-surface-500">No credentials yet.</p>
-      <button
-        type="button"
-        class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
-        @click="openCreate"
-      >
+      <Button type="button" @click="openCreate">
         Create your first credential
-      </button>
+      </Button>
     </div>
 
     <DataTable v-else :value="items" scrollable scroll-height="flex">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
+import Button from "primevue/button";
 import type { Field, Schema } from "../../types/projection";
 import FormField from "./FormField.vue";
 import { isVisible, validateField } from "./condition";
@@ -103,13 +104,9 @@ defineExpose({ submit: onSubmit });
     </fieldset>
 
     <div v-if="submitLabel" class="flex justify-end">
-      <button
-        type="submit"
-        :disabled="busy"
-        class="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
-      >
+      <Button type="submit" :disabled="busy">
         {{ busy ? "Working…" : submitLabel }}
-      </button>
+      </Button>
     </div>
   </form>
 </template>

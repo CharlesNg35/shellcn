@@ -14,8 +14,11 @@ invariants, code style, verification rules) and applies here in full. Read it.
   building from scratch.
 - **Frontend: use the committed stack — don't reinvent.** Build UI with
   **PrimeVue** (unstyled + Tailwind pass-through preset) and **VueUse**:
-  `DataTable`/`Column`, `Tree`, `Tabs`, `Dialog`, `Toast`/`useToast`, and the
-  form inputs. Hand-roll only when nothing fits, and justify it.
+  `DataTable`/`Column`, `Tree`, `Tabs`, `Dialog`, `Toast`/`useToast`, `Button`,
+  and the form inputs. **Every clickable control is a PrimeVue `Button`** (the
+  preset styles `severity`/`variant`/`size`/`rounded`, incl. icon-only) — never
+  hand-roll a native `<button>` with ad-hoc Tailwind. Hand-roll only when
+  nothing fits, and justify it.
 - **UX is first-class:** accessible (WAI-ARIA, keyboard, focus-visible),
   skeleton loading states, clear empty/error states, action feedback via toasts,
   motion that respects `prefers-reduced-motion`, dark/light theming. Keep UX in

@@ -370,7 +370,7 @@ watch(
 
     <div v-if="viewMode === 'split'" class="flex min-h-0 flex-1">
       <div
-        class="w-72 shrink-0 border-r border-surface-200 dark:border-surface-800"
+        class="w-80 shrink-0 border-r border-surface-200 bg-surface-50/40 dark:border-surface-800 dark:bg-surface-950/30"
       >
         <FileEntryList
           :entries="sorted"

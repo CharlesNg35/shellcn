@@ -218,14 +218,15 @@ onUnmounted(() => {
         :resource="selectedRow.ref"
         @done="onActionDone"
       />
-      <button
+      <Button
         type="button"
         :disabled="loading"
-        class="ml-auto rounded-md border border-surface-300 px-3 py-1 text-sm hover:bg-surface-100 disabled:opacity-50 dark:border-surface-700 dark:hover:bg-surface-800"
+        severity="secondary"
+        class="ml-auto"
         @click="load(true)"
       >
         Refresh
-      </button>
+      </Button>
     </div>
 
     <div class="min-h-0 flex-1 overflow-hidden">
@@ -268,14 +269,14 @@ onUnmounted(() => {
       v-if="nextCursor"
       class="border-t border-surface-200 p-2 text-center dark:border-surface-800"
     >
-      <button
+      <Button
         type="button"
         :disabled="loading"
-        class="rounded-md border border-surface-300 px-3 py-1 text-sm hover:bg-surface-100 disabled:opacity-50 dark:border-surface-700 dark:hover:bg-surface-800"
+        severity="secondary"
         @click="load(false)"
       >
         {{ loading ? "Loading…" : "Load more" }}
-      </button>
+      </Button>
     </div>
 
     <Dialog

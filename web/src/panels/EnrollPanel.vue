@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from "vue";
+import Button from "primevue/button";
 import { api } from "../api/client";
 import type {
   AgentState,
@@ -93,14 +94,14 @@ onUnmounted(stopPolling);
     <p v-if="message" class="text-sm text-surface-400">{{ message }}</p>
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
 
-    <button
+    <Button
       v-if="!enrollment && status !== 'online'"
       type="button"
-      class="self-start rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
+      class="self-start"
       @click="enroll"
     >
       Generate install command
-    </button>
+    </Button>
 
     <div
       v-for="artifact in enrollment?.artifacts ?? []"
@@ -111,14 +112,15 @@ onUnmounted(stopPolling);
         class="flex items-center justify-between border-b border-surface-200 px-3 py-2 text-sm font-medium dark:border-surface-800"
       >
         <span>{{ artifact.label }}</span>
-        <button
+        <Button
           type="button"
-          class="flex items-center gap-1 rounded px-2 py-1 text-xs text-primary-500 hover:bg-surface-100 dark:hover:bg-surface-800"
+          size="small"
+          variant="text"
           @click="copy(artifact)"
         >
           <AppIcon :icon="{ type: 'name', value: 'copy' }" :size="13" />
           {{ copied === artifact.kind ? "Copied" : "Copy" }}
-        </button>
+        </Button>
       </div>
       <pre
         class="m-0 overflow-auto p-3 font-mono text-xs text-surface-700 dark:text-surface-200"

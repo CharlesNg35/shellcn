@@ -8,6 +8,7 @@ import TabPanels from "primevue/tabpanels";
 import TabPanel from "primevue/tabpanel";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
+import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
@@ -117,14 +118,10 @@ async function revokeInvite(): Promise<void> {
         <!-- Users -->
         <TabPanel value="users" class="flex h-full flex-col">
           <div class="mb-3 flex shrink-0 justify-end">
-            <button
-              type="button"
-              class="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
-              @click="openCreate"
-            >
+            <Button type="button" @click="openCreate">
               <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
               New user
-            </button>
+            </Button>
           </div>
           <div class="min-h-0 flex-1">
             <DataTable :value="users" scrollable scroll-height="flex">
@@ -222,14 +219,10 @@ async function revokeInvite(): Promise<void> {
         <!-- Invitations -->
         <TabPanel value="invitations" class="flex h-full flex-col">
           <div class="mb-3 flex shrink-0 justify-end">
-            <button
-              type="button"
-              class="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
-              @click="showInvite = true"
-            >
+            <Button type="button" @click="showInvite = true">
               <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
               Invite user
-            </button>
+            </Button>
           </div>
           <div class="min-h-0 flex-1">
             <DataTable :value="invitations" scrollable scroll-height="flex">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import Button from "primevue/button";
 import type { FileContent } from "../../types/projection";
 import { formatBytes, viewerFor } from "./fileTypes";
 
@@ -74,13 +75,13 @@ const src = computed(() => {
         <p class="text-sm text-surface-400">
           {{ name }} · {{ formatBytes(content.size) }}
         </p>
-        <a
+        <Button
           v-if="src"
+          as="a"
           :href="src"
           :download="name"
-          class="rounded-md bg-primary-500 px-3 py-1.5 text-sm font-medium text-white"
-          >Download</a
-        >
+          label="Download"
+        />
       </div>
 
       <p

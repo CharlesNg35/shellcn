@@ -29,7 +29,7 @@ function crumbs(path: string): { label: string; path: string }[] {
       />
       <button
         type="button"
-        class="rounded px-1.5 py-0.5 text-surface-500 hover:bg-surface-100 hover:text-surface-800 dark:hover:bg-surface-800"
+        class="rounded-md px-1.5 py-0.5 text-surface-500 transition-colors hover:bg-surface-100 hover:text-surface-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/35 dark:hover:bg-surface-800 dark:hover:text-surface-100"
         @click="emit('navigate', c.path)"
       >
         {{ c.label }}

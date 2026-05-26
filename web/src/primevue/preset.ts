@@ -85,21 +85,22 @@ const buttonOutlined = {
 
 type ButtonTone = keyof typeof buttonSolid;
 
+const buttonTones = [
+  "secondary",
+  "success",
+  "info",
+  "warn",
+  "help",
+  "danger",
+  "contrast",
+] as const;
+
 function buttonTone(
   severity: ButtonPassThroughMethodOptions<unknown>["props"]["severity"],
 ): ButtonTone {
-  if (
-    severity === "secondary" ||
-    severity === "success" ||
-    severity === "info" ||
-    severity === "warn" ||
-    severity === "help" ||
-    severity === "danger" ||
-    severity === "contrast"
-  ) {
-    return severity;
-  }
-  return "primary";
+  return (buttonTones as readonly string[]).includes(severity ?? "")
+    ? (severity as ButtonTone)
+    : "primary";
 }
 
 function buttonRoot(options: ButtonPassThroughMethodOptions<unknown>): string {
@@ -280,7 +281,7 @@ export const primeVuePassthrough = {
   tablist: {
     root: "shrink-0 border-b border-surface-200 dark:border-surface-800",
     content: "flex",
-    tabList: "flex gap-1",
+    tabList: "flex gap-1 px-1",
     // We indicate the active tab with a per-tab underline, so hide PrimeVue's
     // sliding active bar (it would render unstyled in unstyled mode).
     activeBar: "hidden",
@@ -294,20 +295,21 @@ export const primeVuePassthrough = {
   tabpanel: { root: "h-full focus-visible:outline-none" },
 
   datatable: {
-    root: "flex h-full flex-col text-sm",
+    root: "flex h-full flex-col overflow-hidden rounded-md border border-surface-200 bg-surface-0 text-sm dark:border-surface-800 dark:bg-surface-950",
     tableContainer: "min-h-0 flex-1 overflow-auto",
     table: "w-full border-collapse",
-    thead: "sticky top-0 z-10 bg-surface-50 dark:bg-surface-900",
+    thead:
+      "sticky top-0 z-10 bg-surface-50/95 backdrop-blur dark:bg-surface-900/95",
     column: {
       headerCell:
-        "border-b border-surface-200 px-4 py-2 text-left font-medium text-surface-500 dark:border-surface-800",
+        "border-b border-surface-200 px-4 py-2.5 text-left font-medium text-surface-500 dark:border-surface-800",
       bodyCell:
-        "border-b border-surface-100 px-4 py-1.5 text-surface-700 dark:border-surface-800/60 dark:text-surface-200",
+        "border-b border-surface-100 px-4 py-2 text-surface-700 dark:border-surface-800/60 dark:text-surface-200",
       columnHeaderContent: "flex items-center gap-1",
       sort: "text-surface-400",
     },
     bodyRow:
-      "cursor-pointer transition-colors hover:bg-surface-50 data-[p-selected=true]:bg-surface-100 dark:hover:bg-surface-900 dark:data-[p-selected=true]:bg-surface-800",
+      "cursor-pointer transition-colors hover:bg-surface-50 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:data-[p-selected=true]:bg-primary-500/10",
     emptyMessageCell: "px-4 py-6 text-center text-surface-400",
   },
 
@@ -315,9 +317,9 @@ export const primeVuePassthrough = {
     root: "overflow-y-auto p-2 text-sm",
     node: "",
     nodeContent:
-      "flex items-center gap-1.5 rounded px-2 py-1 hover:bg-surface-100 data-[p-selected=true]:bg-surface-100 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-surface-800",
+      "flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:text-primary-700 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/10 dark:data-[p-selected=true]:text-primary-200",
     nodeToggleButton:
-      "flex h-4 w-4 shrink-0 items-center justify-center text-surface-400",
+      "flex h-5 w-5 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-700 dark:hover:text-surface-100",
     nodeLabel: "flex-1 truncate text-surface-700 dark:text-surface-200",
     nodeChildren: "pl-3",
   },

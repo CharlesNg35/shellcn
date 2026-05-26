@@ -19,6 +19,12 @@ const emit = defineEmits<{
   <div class="h-full overflow-auto p-4">
     <p v-if="loading" class="text-sm text-surface-400">Loading…</p>
     <p v-else-if="error" class="text-sm text-red-500">{{ error }}</p>
+    <p
+      v-else-if="!entries.length"
+      class="py-12 text-center text-sm text-surface-400"
+    >
+      This folder is empty.
+    </p>
     <div
       v-else
       class="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3"

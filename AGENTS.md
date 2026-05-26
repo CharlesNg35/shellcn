@@ -83,6 +83,12 @@ projection — **adding a plugin requires zero frontend changes.**
     (modals — built-in focus trap/Escape/aria-modal), `Toast` + `useToast`
     (feedback), and the form inputs (`InputText`, `Password`, `Textarea`,
     `Select`, `ToggleSwitch`, `InputNumber`).
+  - **Every clickable control is a PrimeVue `Button`** — the preset already
+    styles it by `severity` (primary/secondary/danger/…), `variant`
+    (`text`/`outlined`/`link`), `size`, and `rounded`, including icon-only
+    buttons. **Never hand-roll a native `<button>` with ad-hoc Tailwind** (no
+    bespoke `class="rounded-md px-3 …"` action buttons); reach for `<Button>`
+    and pick the props. Same for any control a committed component covers.
   - Custom components only when no maintained lib fits — and justify it.
 - **Verify the component/composable API via `context7` + websearch before wiring
   it** (same rule as "Verify before you build").
