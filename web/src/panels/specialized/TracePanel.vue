@@ -161,11 +161,11 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         type="button"
         severity="secondary"
         class="ml-auto"
+        label="Refresh"
+        :loading="loading"
         :disabled="loading"
         @click="load"
-      >
-        Refresh
-      </Button>
+      />
     </div>
 
     <div class="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_20rem]">

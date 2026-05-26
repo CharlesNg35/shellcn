@@ -12,6 +12,7 @@ import type { KVPanelConfig, Page } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
 
 interface KVEntry {
   key: string;
@@ -241,21 +242,21 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         <Button
           type="button"
           severity="secondary"
+          label="Refresh"
+          :loading="loading"
           :disabled="loading"
           @click="load"
-        >
-          Refresh
-        </Button>
+        />
         <Button
           v-if="writable && config?.createRouteId"
           type="button"
+          label="New"
           :disabled="saving"
           @click="createOpen = true"
-        >
-          New
-        </Button>
+        />
       </div>
       <PanelError v-if="error" :message="error" retryable @retry="load" />
+      <SkeletonList v-else-if="loading && !entries.length" :rows="8" />
       <DataTable
         v-else
         :value="visibleEntries"
@@ -263,7 +264,6 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         scrollable
         scroll-height="flex"
         selection-mode="single"
-        :loading="loading"
         @row-click="loadDetail($event.data as KVEntry)"
       >
         <Column field="key" header="Key" />
@@ -289,21 +289,20 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           <Button
             v-if="config?.deleteRouteId"
             type="button"
+            label="Delete"
             severity="danger"
             outlined
             :disabled="saving"
             @click="remove"
-          >
-            Delete
-          </Button>
+          />
           <Button
             v-if="config?.writeRouteId"
             type="button"
+            label="Save"
+            :loading="saving"
             :disabled="saving"
             @click="save"
-          >
-            Save
-          </Button>
+          />
         </div>
       </div>
 
@@ -378,17 +377,16 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           type="button"
           severity="secondary"
           outlined
+          label="Cancel"
           @click="createOpen = false"
-        >
-          Cancel
-        </Button>
+        />
         <Button
           type="button"
+          label="Create"
+          :loading="saving"
           :disabled="saving || !createKeyName.trim()"
           @click="createKey"
-        >
-          Create
-        </Button>
+        />
       </template>
     </Dialog>
   </div>

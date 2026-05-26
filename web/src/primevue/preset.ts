@@ -267,6 +267,8 @@ export const primeVuePassthrough = {
 
   button: {
     root: buttonRoot,
+    icon: "h-4 w-4 shrink-0",
+    loadingIcon: "h-4 w-4 shrink-0 animate-spin",
     label: "truncate",
   },
 
@@ -337,7 +339,9 @@ export const primeVuePassthrough = {
   tabpanel: { root: "h-full focus-visible:outline-none" },
 
   datatable: {
-    root: "flex h-full flex-col overflow-hidden rounded-md border border-surface-200 bg-surface-0 text-sm dark:border-surface-800 dark:bg-surface-950",
+    root: "relative flex h-full flex-col overflow-hidden rounded-md border border-surface-200 bg-surface-0 text-sm dark:border-surface-800 dark:bg-surface-950",
+    mask: "absolute inset-0 z-20 flex items-center justify-center bg-surface-0/70 backdrop-blur-[1px] dark:bg-surface-950/70",
+    loadingIcon: "h-5 w-5 animate-spin text-primary-500",
     tableContainer: "min-h-0 flex-1 overflow-auto",
     table: "w-full border-collapse",
     thead:

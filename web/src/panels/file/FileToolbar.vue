@@ -136,6 +136,7 @@ const statusText = computed(() => {
         type="button"
         severity="secondary"
         :disabled="loading || mutating"
+        :loading="loading"
         label="Refresh"
         title="Refresh folder"
         @click="emit('refresh')"

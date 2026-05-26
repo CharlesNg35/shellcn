@@ -239,13 +239,13 @@ onUnmounted(() => {
       />
       <Button
         type="button"
+        label="Refresh"
         :disabled="loading"
+        :loading="loading"
         severity="secondary"
         class="ml-auto"
         @click="load(first)"
-      >
-        Refresh
-      </Button>
+      />
     </div>
 
     <div class="min-h-0 flex-1 overflow-hidden">

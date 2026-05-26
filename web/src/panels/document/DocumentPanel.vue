@@ -81,6 +81,7 @@ onUnmounted(clearCopiedTimer);
           type="button"
           severity="secondary"
           label="Refresh"
+          :loading="loading"
           :disabled="loading"
           @click="load"
         />

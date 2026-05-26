@@ -2,6 +2,7 @@
 import { defineComponent } from "vue";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import Button from "primevue/button";
 import { installFetch } from "../../test/fetchMock";
 import GraphPanel from "./GraphPanel.vue";
 import TracePanel from "./TracePanel.vue";
@@ -153,6 +154,75 @@ describe("specialized panels", () => {
 
     expect(w.text()).toContain("session:1");
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
+  });
+
+  it("keeps KV refresh loading state on the refresh button", async () => {
+    let listCalls = 0;
+    let resolveRefresh: (() => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("kv.read")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                key: "session:1",
+                type: "json",
+                value: { user: "ada" },
+              }),
+              { headers: { "Content-Type": "application/json" } },
+            ),
+          );
+        }
+        if (url.includes("kv.list")) {
+          listCalls += 1;
+          if (listCalls === 1) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  items: [{ key: "session:1", type: "json" }],
+                  nextCursor: "",
+                }),
+                { headers: { "Content-Type": "application/json" } },
+              ),
+            );
+          }
+          return new Promise((resolve) => {
+            resolveRefresh = () =>
+              resolve(
+                new Response(
+                  JSON.stringify({
+                    items: [{ key: "session:1", type: "json" }],
+                    nextCursor: "",
+                  }),
+                  { headers: { "Content-Type": "application/json" } },
+                ),
+              );
+          });
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+    );
+    const w = mount(KVPanel, {
+      props: { connectionId: "c1", source: { routeId: "kv.list" } },
+    });
+    await flushPromises();
+
+    const refresh = () =>
+      w
+        .findAllComponents(Button)
+        .find((button) => button.props("label") === "Refresh")!;
+    await refresh().trigger("click");
+
+    expect(refresh().props("loading")).toBe(true);
+    resolveRefresh?.();
+    await flushPromises();
+    expect(refresh().props("loading")).toBe(false);
   });
 
   it("shows key creation only when the generic kv create route is declared", async () => {
