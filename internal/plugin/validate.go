@@ -18,8 +18,7 @@ var validMethods = map[Method]bool{
 }
 
 var validRemoteDesktopEngines = map[RemoteDesktopEngine]bool{
-	RemoteDesktopEngineNoVNC:     true,
-	RemoteDesktopEngineGuacamole: true,
+	RemoteDesktopEngineNoVNC: true,
 }
 
 // Validate checks a manifest + its routes at registration, returning an

@@ -166,6 +166,67 @@ describe("ConnectionFormDialog", () => {
     expect(wrapper.findAllComponents(Select)).toHaveLength(0);
   });
 
+  it("passes transport context into the manifest schema", async () => {
+    let posted: Record<string, unknown> | null = null;
+    const contextual: PluginProjection = {
+      ...projection,
+      supportedTransports: ["direct", "agent"],
+      config: {
+        groups: [
+          {
+            name: "Endpoint",
+            fields: [
+              {
+                key: "endpoint",
+                label: "Endpoint",
+                type: "text",
+                required: true,
+                visibleWhen: {
+                  allOf: [{ field: "$transport", op: "eq", value: "direct" }],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    installFetch((url, init) => {
+      if (url.endsWith("/api/plugins/tester")) return { body: contextual };
+      if (url.endsWith("/api/connections") && init?.method === "POST") {
+        posted = JSON.parse(String(init.body));
+        return { status: 201, body: { id: "conn-agent", name: posted?.name } };
+      }
+      return { body: [] };
+    });
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      { name: "tester", title: "Tester", icon: { type: "name", value: "box" } },
+    ];
+
+    const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
+    await flushPromises();
+    await wrapper
+      .findComponent(ProtocolPicker)
+      .vm.$emit("update:modelValue", "tester");
+    await flushPromises();
+
+    const form = wrapper.findComponent(SchemaForm);
+    expect(form.text()).toContain("Endpoint");
+    wrapper.findComponent(Select).vm.$emit("update:modelValue", "agent");
+    await flushPromises();
+    expect(form.text()).not.toContain("Endpoint");
+
+    wrapper.findAllComponents(InputText)[0].vm.$emit("update:modelValue", "a1");
+    await flushPromises();
+    wrapper.findComponent(SchemaForm).vm.$emit("submit", {});
+    await flushPromises();
+
+    expect(posted).toMatchObject({
+      transport: "agent",
+      config: {},
+    });
+  });
+
   it("preserves unreadable credential refs when editing a shared connection", async () => {
     let updated: Record<string, unknown> | null = null;
     const withCredential: PluginProjection = {

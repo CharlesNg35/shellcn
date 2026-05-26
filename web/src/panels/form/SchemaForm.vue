@@ -10,6 +10,7 @@ const props = defineProps<{
   modelValue?: Record<string, unknown>;
   secretsSet?: Record<string, boolean>;
   credentialStates?: Record<string, CredentialRefState>;
+  context?: Record<string, unknown>;
   protocol?: string;
   submitLabel?: string;
   busy?: boolean;
@@ -29,6 +30,15 @@ const touched = ref<Record<string, boolean>>({});
 // A plugin may declare a config schema with no groups. Normalize so every
 // consumer iterates safely.
 const groups = computed(() => props.schema?.groups ?? []);
+const conditionValues = computed(() => ({
+  ...values,
+  ...(props.context ?? {}),
+}));
+const visibleGroups = computed(() =>
+  groups.value
+    .map((group) => ({ ...group, fields: visibleFields(group.fields ?? []) }))
+    .filter((group) => group.fields.length > 0),
+);
 
 function seed(resetTouched = true): void {
   if (resetTouched) touched.value = {};
@@ -72,7 +82,7 @@ function set(field: Field, value: unknown): void {
 }
 
 function visibleFields(fields: Field[]): Field[] {
-  return fields.filter((f) => isVisible(f.visibleWhen, values));
+  return fields.filter((f) => isVisible(f.visibleWhen, conditionValues.value));
 }
 
 function isBlank(value: unknown): boolean {
@@ -124,7 +134,7 @@ defineExpose({ submit: onSubmit });
 <template>
   <form class="flex min-w-0 flex-col gap-6" @submit.prevent="onSubmit">
     <fieldset
-      v-for="group in groups"
+      v-for="group in visibleGroups"
       :key="group.name"
       class="flex min-w-0 flex-col gap-4"
     >
@@ -134,7 +144,7 @@ defineExpose({ submit: onSubmit });
         {{ group.name }}
       </legend>
       <FormField
-        v-for="field in visibleFields(group.fields)"
+        v-for="field in group.fields"
         :key="field.key"
         :field="field"
         :model-value="values[field.key]"

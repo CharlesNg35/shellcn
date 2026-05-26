@@ -348,7 +348,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
-		Subprotocols:       []string{"guacamole"},
+		Subprotocols:       []string{"binary"},
 	})
 	if err != nil {
 		return // Accept already wrote the response
@@ -371,7 +371,13 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	conn := websocket.NetConn(streamCtx, c, websocket.MessageText)
+	// noVNC streams raw RFB bytes over the negotiated "binary" subprotocol;
+	// terminal/log/query streams stay on text frames.
+	msgType := websocket.MessageText
+	if c.Subprotocol() == "binary" {
+		msgType = websocket.MessageBinary
+	}
+	conn := websocket.NetConn(streamCtx, c, msgType)
 	client := pending.Attach(&wsClientStream{Conn: conn, ctx: streamCtx})
 
 	rc := plugin.NewRequestContext(streamCtx, res.user, handle, res.params, r.URL.Query(), nil)

@@ -17,6 +17,11 @@ const (
 	FieldCredentialRef FieldType = "credential_ref"
 )
 
+const (
+	SchemaContextTransport = "$transport"
+	SchemaContextProtocol  = "$protocol"
+)
+
 // CredentialKind tags the type of secret material a reusable credential holds.
 type CredentialKind string
 

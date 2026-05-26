@@ -45,12 +45,14 @@ type testPlugin struct{}
 var schemaOnlyCalls atomic.Int32
 
 func (testPlugin) Manifest() plugin.Manifest {
+	directOnly := plugin.Condition{AllOf: []plugin.Rule{{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)}}}
 	return plugin.Manifest{
 		APIVersion: plugin.CurrentAPIVersion, Name: "tester", Version: "0", Title: "Tester",
 		Layout:              plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{
-			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true},
+			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, VisibleWhen: &directOnly},
+			{Key: "direct_secret", Label: "Direct secret", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &directOnly},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true},
 			{
 				Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef,
@@ -781,16 +783,16 @@ func TestWSHappyPathEcho(t *testing.T) {
 	}
 }
 
-func TestWSAcceptsGuacamoleSubprotocol(t *testing.T) {
+func TestWSAcceptsBinarySubprotocol(t *testing.T) {
 	h := newHarness(t)
 	tok := h.mintTicket(t, "op", "c-op", "t.ws", nil)
-	c, err := h.dialWSWithSubprotocol(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok, "guacamole")
+	c, err := h.dialWSWithSubprotocol(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok, "binary")
 	if err != nil {
-		t.Fatalf("dial with guacamole subprotocol: %v", err)
+		t.Fatalf("dial with binary subprotocol: %v", err)
 	}
 	defer func() { _ = c.CloseNow() }()
-	if got := c.Subprotocol(); got != "guacamole" {
-		t.Fatalf("subprotocol = %q, want guacamole", got)
+	if got := c.Subprotocol(); got != "binary" {
+		t.Fatalf("subprotocol = %q, want binary", got)
 	}
 }
 

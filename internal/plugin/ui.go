@@ -189,8 +189,7 @@ func (c HTTPClientConfig) Map() map[string]any {
 type RemoteDesktopEngine string
 
 const (
-	RemoteDesktopEngineNoVNC     RemoteDesktopEngine = "novnc"
-	RemoteDesktopEngineGuacamole RemoteDesktopEngine = "guacamole"
+	RemoteDesktopEngineNoVNC RemoteDesktopEngine = "novnc"
 )
 
 type RemoteDesktopConfig struct {
@@ -241,6 +240,13 @@ type ResourceRef struct {
 	Namespace string `json:"namespace,omitempty"`
 	Name      string `json:"name"`
 	UID       string `json:"uid"`
+}
+
+// ResourceEvent is emitted by watch streams to patch a resource list.
+type ResourceEvent struct {
+	Type     string      `json:"type"`
+	Ref      ResourceRef `json:"ref"`
+	Resource any         `json:"resource,omitempty"`
 }
 
 // Tab is one connection-level or resource-level panel.

@@ -54,25 +54,44 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 	}
 
 	cfg := map[string]any{}
-	maps.Copy(cfg, conn.Config)
+	manifest, hasManifest := c.plugins.Manifest(conn.Protocol)
+	if hasManifest {
+		context := connectionSchemaContext(conn.Protocol, conn.Transport)
+		maps.Copy(cfg, manifest.Config.VisibleValues(conn.Config, context))
+	} else {
+		maps.Copy(cfg, conn.Config)
+	}
 
 	// Decrypt inline secrets into the config.
 	inline, err := secrets.DecryptMap(ctx, c.vault, conn.Secrets)
 	if err != nil {
 		return plugin.ConnectConfig{}, nil, fmt.Errorf("decrypt inline secrets: %w", err)
 	}
-	for k, v := range inline {
-		cfg[k] = v
+	usedInline := false
+	if hasManifest {
+		context := connectionSchemaContext(conn.Protocol, conn.Transport)
+		visibleSecrets := stringSet(manifest.Config.VisibleSecretKeys(conn.Config, context))
+		for k, v := range inline {
+			if visibleSecrets[k] {
+				cfg[k] = v
+				usedInline = true
+			}
+		}
+	} else {
+		for k, v := range inline {
+			cfg[k] = v
+			usedInline = true
+		}
 	}
-	if len(inline) > 0 && c.onSecretAccess != nil {
+	if usedInline && c.onSecretAccess != nil {
 		c.onSecretAccess()
 	}
 
 	// Resolve referenced reusable credentials through the connection owner. The
 	// route wrapper has already authorized the acting user against the connection;
 	// credential records remain hidden unless separately shared.
-	if m, ok := c.plugins.Manifest(conn.Protocol); ok {
-		for _, group := range m.Config.Groups {
+	if hasManifest {
+		for _, group := range manifest.Config.Groups {
 			for _, field := range group.Fields {
 				if field.Type != plugin.FieldCredentialRef {
 					continue
@@ -95,7 +114,9 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 		}
 	}
 
-	net, err := transport.Build(conn, c.tunnels)
+	transportConn := conn
+	transportConn.Config = cfg
+	net, err := transport.Build(transportConn, c.tunnels)
 	if err != nil {
 		return plugin.ConnectConfig{}, nil, err
 	}

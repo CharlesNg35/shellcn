@@ -20,7 +20,7 @@ import (
 )
 
 // DefaultProxyImage is the container image install artifacts default to.
-const DefaultProxyImage = "shellcn-proxy:latest"
+const DefaultProxyImage = "ghcr.io/charlesng35/shellcn-agent:latest"
 
 // DefaultEnrollmentTTL is how long an unused enrollment token stays valid.
 const DefaultEnrollmentTTL = 15 * time.Minute

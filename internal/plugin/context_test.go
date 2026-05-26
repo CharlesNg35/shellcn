@@ -64,6 +64,46 @@ func TestValidateSchemaSkipsHiddenRequiredField(t *testing.T) {
 	}
 }
 
+func TestValidateValuesUsesAmbientContext(t *testing.T) {
+	schema := plugin.Schema{Groups: []plugin.Group{{Name: "Target", Fields: []plugin.Field{
+		{Key: "endpoint", Label: "Endpoint", Type: plugin.FieldText, Required: true, VisibleWhen: &plugin.Condition{
+			AllOf: []plugin.Rule{{Field: plugin.SchemaContextTransport, Op: plugin.OpEq, Value: string(plugin.TransportDirect)}},
+		}},
+	}}}}
+	directContext := map[string]any{plugin.SchemaContextTransport: string(plugin.TransportDirect)}
+	if err := schema.ValidateValuesWithContext(map[string]any{}, nil, directContext); err == nil {
+		t.Fatal("direct transport should require the visible endpoint")
+	}
+	agentContext := map[string]any{plugin.SchemaContextTransport: string(plugin.TransportAgent)}
+	if err := schema.ValidateValuesWithContext(map[string]any{}, nil, agentContext); err != nil {
+		t.Fatalf("agent transport should hide the endpoint: %v", err)
+	}
+	values := schema.VisibleValues(map[string]any{"endpoint": "127.0.0.1:2375"}, agentContext)
+	if len(values) != 0 {
+		t.Fatalf("hidden endpoint should be omitted from visible values, got %#v", values)
+	}
+}
+
+func TestConditionRequiresAllOfAndAnyOfWhenBothAreSet(t *testing.T) {
+	schema := plugin.Schema{Groups: []plugin.Group{{Name: "Main", Fields: []plugin.Field{
+		{Key: "enabled", Label: "Enabled", Type: plugin.FieldToggle},
+		{Key: "mode", Label: "Mode", Type: plugin.FieldText},
+		{Key: "token", Label: "Token", Type: plugin.FieldPassword, Required: true, VisibleWhen: &plugin.Condition{
+			AllOf: []plugin.Rule{{Field: "enabled", Op: plugin.OpEq, Value: true}},
+			AnyOf: []plugin.Rule{
+				{Field: "mode", Op: plugin.OpEq, Value: "password"},
+				{Field: "mode", Op: plugin.OpEq, Value: "token"},
+			},
+		}},
+	}}}}
+	if err := schema.ValidateValues(map[string]any{"enabled": true, "mode": "other"}, nil); err != nil {
+		t.Fatalf("field should be hidden when anyOf fails: %v", err)
+	}
+	if err := schema.ValidateValues(map[string]any{"enabled": true, "mode": "token"}, nil); err == nil {
+		t.Fatal("field should be visible and required when allOf and anyOf pass")
+	}
+}
+
 func TestValidateSchemaRejectsTypeAndOptionFailures(t *testing.T) {
 	tests := []struct {
 		name string

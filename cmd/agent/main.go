@@ -35,13 +35,11 @@ func main() {
 		showVersion bool
 		connectURL  string
 		token       string
-		target      string
 		insecure    bool
 	)
 	flag.BoolVar(&showVersion, "version", false, "print version and exit")
 	flag.StringVar(&connectURL, "connect", os.Getenv("SHELLCN_CONNECT_URL"), "gateway agent-connect URL (wss://host/api/agent/connect)")
 	flag.StringVar(&token, "token", os.Getenv("SHELLCN_ENROLL_TOKEN"), "enrollment token")
-	flag.StringVar(&target, "target", os.Getenv("SHELLCN_TARGET"), "override the local target address the gateway told us to proxy")
 	flag.BoolVar(&insecure, "insecure", os.Getenv("SHELLCN_INSECURE") == "1", "DEVELOPMENT ONLY: allow ws:// and skip TLS verification")
 	flag.Parse()
 
@@ -66,7 +64,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	run(ctx, logger, connectURL, token, target, insecure)
+	run(ctx, logger, connectURL, token, insecure)
 }
 
 // checkConnectURL enforces wss:// (encrypted, CA-validated) unless the operator
@@ -94,11 +92,11 @@ func checkConnectURL(connectURL string, insecure bool) error {
 var errEnrollmentRejected = errors.New("enrollment rejected by gateway")
 
 // run keeps a tunnel up, reconnecting with backoff until the context is cancelled.
-func run(ctx context.Context, logger *slog.Logger, connectURL, token, targetOverride string, insecure bool) {
+func run(ctx context.Context, logger *slog.Logger, connectURL, token string, insecure bool) {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 	for {
-		err := serve(ctx, logger, connectURL, token, targetOverride, insecure)
+		err := serve(ctx, logger, connectURL, token, insecure)
 		if errors.Is(err, errEnrollmentRejected) {
 			logger.Error("enrollment rejected — token is invalid, used, or expired; not retrying", "err", err)
 			return
@@ -122,7 +120,7 @@ func run(ctx context.Context, logger *slog.Logger, connectURL, token, targetOver
 
 // serve runs a single tunnel lifetime: dial, handshake, then accept + proxy
 // multiplexed streams until the tunnel closes.
-func serve(ctx context.Context, logger *slog.Logger, connectURL, token, targetOverride string, insecure bool) error {
+func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, insecure bool) error {
 	dialCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	var opts *websocket.DialOptions
 	if insecure {
@@ -154,9 +152,6 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token, targetOv
 	}
 
 	target := resp.Proxy
-	if targetOverride != "" {
-		target.Address = targetOverride
-	}
 	logger.Info("tunnel online", "mode", target.Mode, "address", target.Address)
 
 	nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
@@ -182,9 +177,15 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token, targetOv
 func proxyStream(logger *slog.Logger, stream net.Conn, target transport.AgentProxyTarget) {
 	defer func() { _ = stream.Close() }()
 
-	network := "tcp"
-	if target.Mode == "unix" {
+	var network string
+	switch target.Mode {
+	case "tcp":
+		network = "tcp"
+	case "unix":
 		network = "unix"
+	default:
+		logger.Warn("refusing unsupported proxy mode", "mode", target.Mode)
+		return
 	}
 	up, err := net.DialTimeout(network, target.Address, 10*time.Second)
 	if err != nil {

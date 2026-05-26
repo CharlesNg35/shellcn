@@ -5,7 +5,7 @@ import (
 	"context"
 
 	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/sshsftp"
+	"github.com/charlesng/shellcn/plugins/shared/sshsftp"
 )
 
 // Plugin exposes file-only SFTP access over SSH.
