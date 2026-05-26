@@ -2,7 +2,6 @@
 import { computed, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
-import MultiSelect from "primevue/multiselect";
 import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 import Textarea from "primevue/textarea";
@@ -11,6 +10,7 @@ import { api, ApiError } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
+import CredentialProtocolBadges from "./CredentialProtocolBadges.vue";
 import type {
   CredentialKindInfo,
   CredentialSelector,
@@ -35,7 +35,6 @@ const isEdit = computed(() => Boolean(props.credential));
 const name = ref("");
 const kind = ref("");
 const identity = ref("");
-const protocols = ref<string[]>([]);
 const secret = ref("");
 const replacing = ref(true);
 const errors = ref<Record<string, string>>({});
@@ -52,8 +51,15 @@ const scopedToSelector = computed(
 );
 const kindOptions = computed(() => {
   const allowed = new Set(selectorKinds.value);
+  const requiredProtocol =
+    props.protocol ?? props.selector?.protocols?.[0] ?? "";
   return kindCatalog.value
     .filter((k) => !allowed.size || allowed.has(k.kind))
+    .filter(
+      (k) =>
+        !requiredProtocol ||
+        (k.compatibleProtocols ?? []).includes(requiredProtocol),
+    )
     .map((k) => ({ label: k.label, value: k.kind }));
 });
 const showKindSelect = computed(
@@ -69,16 +75,9 @@ const selectedKind = computed(
 const compatibleProtocols = computed(
   () => selectedKind.value?.compatibleProtocols ?? [],
 );
-const protocolOptions = computed(() => {
-  const selectorProtocols = props.selector?.protocols ?? [];
-  const allowed = conns.plugins.filter((p) => {
-    if (!compatibleProtocols.value.includes(p.name)) {
-      return false;
-    }
-    return !selectorProtocols.length || selectorProtocols.includes(p.name);
-  });
-  return allowed.map((p) => ({ label: p.title, value: p.name }));
-});
+const protocolLabels = computed(() =>
+  Object.fromEntries(conns.plugins.map((p) => [p.name, p.title])),
+);
 const multiline = computed(() => selectedKind.value?.secretMultiline === true);
 const secretLabel = computed(
   () => selectedKind.value?.secretLabel ?? "Secret material",
@@ -109,16 +108,6 @@ function firstAllowedKind(): string {
   return kindOptions.value[0]?.value ?? "";
 }
 
-function defaultProtocols(): string[] {
-  const options = new Set(protocolOptions.value.map((p) => p.value));
-  if (props.protocol && options.has(props.protocol)) return [props.protocol];
-  if (props.selector?.protocols?.length === 1) {
-    const only = props.selector.protocols[0];
-    if (options.has(only)) return [only];
-  }
-  return [];
-}
-
 function normalizeForKind(): void {
   if (
     kindOptions.value.length &&
@@ -127,11 +116,6 @@ function normalizeForKind(): void {
     kind.value = firstAllowedKind();
   }
   if (!showIdentity.value) identity.value = "";
-  const allowedProtocols = new Set(protocolOptions.value.map((p) => p.value));
-  protocols.value = protocols.value.filter((p) => allowedProtocols.has(p));
-  if (!isEdit.value && protocols.value.length === 0) {
-    protocols.value = defaultProtocols();
-  }
 }
 
 watch(
@@ -150,13 +134,11 @@ watch(
         (props.credential as CredentialSummary & { username?: string })
           .username ??
         "";
-      protocols.value = props.credential.protocols ?? [];
       replacing.value = false;
     } else {
       name.value = "";
       kind.value = firstAllowedKind();
       identity.value = "";
-      protocols.value = defaultProtocols();
       replacing.value = true;
     }
     normalizeForKind();
@@ -184,7 +166,6 @@ async function save(): Promise<void> {
     name: name.value.trim(),
     kind: kind.value,
     identity: showIdentity.value ? identity.value.trim() : undefined,
-    protocols: protocols.value.length ? protocols.value : undefined,
     // Blank secret on edit keeps the stored material (write-only).
     secret: replacing.value ? secret.value : "",
   };
@@ -295,22 +276,17 @@ async function save(): Promise<void> {
       </div>
 
       <div
-        v-if="!catalogLoading && !catalogError && !scopedToSelector"
+        v-if="!catalogLoading && !catalogError && selectedKind"
         class="flex min-w-0 flex-col gap-1.5"
       >
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
-          Allowed protocols
+          Compatible protocols
         </label>
-        <MultiSelect
-          :model-value="protocols"
-          :options="protocolOptions"
-          option-label="label"
-          option-value="value"
-          display="chip"
-          :placeholder="'Any compatible protocol'"
-          @update:model-value="protocols = $event"
+        <CredentialProtocolBadges
+          :protocols="compatibleProtocols"
+          :labels="protocolLabels"
         />
       </div>
 

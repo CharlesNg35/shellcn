@@ -9,6 +9,7 @@ import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import SkeletonList from "../components/SkeletonList.vue";
 import CredentialFormDialog from "../components/CredentialFormDialog.vue";
+import CredentialProtocolBadges from "../components/CredentialProtocolBadges.vue";
 import ShareDialog from "../components/ShareDialog.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import type {
@@ -46,6 +47,10 @@ function identityLabel(c: CredentialSummary): string {
   const label = kindInfo(c.kind)?.identityLabel;
   if (!label || !c.identity) return "—";
   return `${label}: ${c.identity}`;
+}
+
+function credentialProtocols(c: CredentialSummary): string[] {
+  return kindInfo(c.kind)?.compatibleProtocols ?? c.protocols ?? [];
 }
 
 async function load(): Promise<void> {
@@ -150,9 +155,9 @@ const hasItems = computed(() => items.value.length > 0);
       </Column>
       <Column header="Protocols">
         <template #body="{ data }">
-          <span class="text-surface-500">{{
-            (data as CredentialSummary).protocols?.join(", ") || "any"
-          }}</span>
+          <CredentialProtocolBadges
+            :protocols="credentialProtocols(data as CredentialSummary)"
+          />
         </template>
       </Column>
       <Column header="" :pt="{ bodyCell: 'text-right' }">

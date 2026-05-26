@@ -84,13 +84,22 @@ func TestCredentialKindsEndpoint(t *testing.T) {
 	}
 }
 
-func TestCredentialCreateRejectsUnknownAndIncompatibleKinds(t *testing.T) {
+func TestCredentialCreateRejectsUnknownAndDerivesProtocols(t *testing.T) {
 	h := newHarness(t)
 
 	resp := h.do(t, http.MethodPost, "/api/credentials", "op",
-		strings.NewReader(`{"name":"bad","kind":"kubeconfig","protocols":["ssh"],"secret":"x"}`))
-	if resp.Status != http.StatusBadRequest {
-		t.Fatalf("kubeconfig scoped to ssh: want 400, got %d (%s)", resp.Status, resp.Body)
+		strings.NewReader(`{"name":"db","kind":"db_password","protocols":["ssh"],"secret":"x"}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create with ignored manual protocols: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	var created struct {
+		Protocols []string `json:"protocols"`
+	}
+	if err := json.Unmarshal(resp.Body, &created); err != nil {
+		t.Fatalf("decode created credential: %v", err)
+	}
+	if len(created.Protocols) != 1 || created.Protocols[0] != "tester" {
+		t.Fatalf("created protocols = %+v, want derived [tester]", created.Protocols)
 	}
 
 	resp = h.do(t, http.MethodPost, "/api/credentials", "op",

@@ -62,17 +62,16 @@ func (s *CredentialService) SetSecretAccessHook(fn func()) {
 // NewCredentialInput describes a credential to create (secret in plaintext;
 // encrypted before it touches the store).
 type NewCredentialInput struct {
-	OwnerID   string
-	Name      string
-	Kind      string
-	Identity  string
-	Protocols []string
-	Secret    string
+	OwnerID  string
+	Name     string
+	Kind     string
+	Identity string
+	Secret   string
 }
 
 // Create encrypts the secret material and persists the credential.
 func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (models.Credential, error) {
-	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Identity, in.Protocols, true, in.Secret)
+	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Identity, true, in.Secret)
 	if err != nil {
 		return models.Credential{}, err
 	}
@@ -101,11 +100,10 @@ func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (
 // UpdateCredentialInput updates a credential's metadata and optionally rotates
 // its secret. A blank Secret keeps the stored material (write-only).
 type UpdateCredentialInput struct {
-	Name      string
-	Kind      string
-	Identity  string
-	Protocols []string
-	Secret    string
+	Name     string
+	Kind     string
+	Identity string
+	Secret   string
 }
 
 // Update applies metadata changes and, when Secret is non-blank, rotates the
@@ -116,7 +114,7 @@ func (s *CredentialService) Update(ctx context.Context, id string, in UpdateCred
 	if err != nil {
 		return models.Credential{}, err
 	}
-	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Identity, in.Protocols, false, in.Secret)
+	normalized, err := s.normalizeCredentialInput(in.Name, in.Kind, in.Identity, false, in.Secret)
 	if err != nil {
 		return models.Credential{}, err
 	}
@@ -145,7 +143,7 @@ type normalizedCredentialInput struct {
 	protocols []string
 }
 
-func (s *CredentialService) normalizeCredentialInput(name, kind, identity string, protocols []string, requireSecret bool, secret string) (normalizedCredentialInput, error) {
+func (s *CredentialService) normalizeCredentialInput(name, kind, identity string, requireSecret bool, secret string) (normalizedCredentialInput, error) {
 	out := normalizedCredentialInput{
 		name:     strings.TrimSpace(name),
 		kind:     strings.TrimSpace(kind),
@@ -167,18 +165,7 @@ func (s *CredentialService) normalizeCredentialInput(name, kind, identity string
 	if info.IdentityLabel == "" && out.identity != "" {
 		return normalizedCredentialInput{}, fmt.Errorf("%w: credential kind %q does not use identity metadata", plugin.ErrInvalidInput, out.kind)
 	}
-	seen := map[string]bool{}
-	for _, protocol := range protocols {
-		protocol = strings.TrimSpace(protocol)
-		if protocol == "" || seen[protocol] {
-			continue
-		}
-		if !s.kinds.CredentialKindSupportsProtocol(plugin.CredentialKind(out.kind), protocol) {
-			return normalizedCredentialInput{}, fmt.Errorf("%w: credential kind %q is not compatible with protocol %q", plugin.ErrInvalidInput, out.kind, protocol)
-		}
-		seen[protocol] = true
-		out.protocols = append(out.protocols, protocol)
-	}
+	out.protocols = append(out.protocols, info.CompatibleProtocols...)
 	return out, nil
 }
 

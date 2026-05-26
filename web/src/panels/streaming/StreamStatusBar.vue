@@ -65,7 +65,10 @@ function reconnectable(status: string): boolean {
 </script>
 
 <template>
+  <!-- Once connected the bar carries no useful signal, so it hides and hands the
+       space back to the panel; it reappears only while connecting/lost/errored. -->
   <div
+    v-if="status !== 'open' && status !== 'ready'"
     class="flex min-h-10 items-center justify-between gap-3 border-b border-surface-200 bg-surface-0 px-3 py-1.5 text-xs text-surface-600 dark:border-surface-800 dark:bg-surface-950 dark:text-surface-300"
   >
     <div class="flex min-w-0 items-center gap-2">

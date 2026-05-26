@@ -88,7 +88,7 @@ func TestCredentialCreateEncryptsAtRest(t *testing.T) {
 	svc, st := newCredentialService(t)
 
 	cred, err := svc.Create(ctx, service.NewCredentialInput{
-		OwnerID: "owner", Name: "ops", Kind: "ssh_password", Protocols: []string{"ssh"}, Secret: "hunter2",
+		OwnerID: "owner", Name: "ops", Kind: "ssh_password", Secret: "hunter2",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -101,6 +101,9 @@ func TestCredentialCreateEncryptsAtRest(t *testing.T) {
 	}
 	if string(stored.EncryptedSecret) == "hunter2" || containsBytes(stored.EncryptedSecret, "hunter2") {
 		t.Error("plaintext leaked into stored credential")
+	}
+	if len(stored.Protocols) != 1 || stored.Protocols[0] != "ssh" {
+		t.Fatalf("stored protocols = %+v, want derived [ssh]", stored.Protocols)
 	}
 	// The summary never carries secret material.
 	sum := stored.Summary()
@@ -189,9 +192,9 @@ func TestCredentialResolveNotFound(t *testing.T) {
 func TestCredentialListUsableFilters(t *testing.T) {
 	ctx := context.Background()
 	svc, _ := newCredentialService(t)
-	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "ssh-key", Kind: "ssh_private_key", Protocols: []string{"ssh"}, Secret: "a"})
-	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "db-pw", Kind: "db_password", Protocols: []string{"postgres"}, Secret: "b"})
-	anyCred, _ := svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "wildcard", Kind: "api_token", Secret: "c"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "ssh-key", Kind: "ssh_private_key", Secret: "a"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "db-pw", Kind: "db_password", Secret: "b"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "api-token", Kind: "api_token", Secret: "c"})
 	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "kube", Kind: "kubeconfig", Secret: "d"})
 
 	// Filter by kind.
@@ -203,7 +206,7 @@ func TestCredentialListUsableFilters(t *testing.T) {
 		t.Errorf("kind filter: %+v", got)
 	}
 
-	// Filter by protocol — the wildcard (empty Protocols) always matches.
+	// Filter by protocol uses kind-derived protocol compatibility.
 	got, _ = svc.ListUsable(ctx, "u", nil, "postgres")
 	kinds := map[string]bool{}
 	for _, c := range got {
@@ -218,21 +221,16 @@ func TestCredentialListUsableFilters(t *testing.T) {
 
 	// A summary never leaks anything secret.
 	for _, c := range got {
-		if c.ID == anyCred.ID && c.Name != "wildcard" {
+		if c.Name == "" {
 			t.Errorf("summary corrupted: %+v", c)
 		}
 	}
 }
 
-func TestCredentialCreateValidatesKindAndProtocolCompatibility(t *testing.T) {
+func TestCredentialCreateValidatesKindAndSecret(t *testing.T) {
 	ctx := context.Background()
 	svc, _ := newCredentialService(t)
 
-	if _, err := svc.Create(ctx, service.NewCredentialInput{
-		OwnerID: "u", Name: "bad", Kind: "kubeconfig", Protocols: []string{"ssh"}, Secret: "x",
-	}); !errors.Is(err, plugin.ErrInvalidInput) {
-		t.Fatalf("kubeconfig scoped to ssh: want ErrInvalidInput, got %v", err)
-	}
 	if _, err := svc.Create(ctx, service.NewCredentialInput{
 		OwnerID: "u", Name: "bad", Kind: "made_up", Secret: "x",
 	}); !errors.Is(err, plugin.ErrInvalidInput) {

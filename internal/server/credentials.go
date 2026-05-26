@@ -21,12 +21,11 @@ const (
 )
 
 type credentialWriteRequest struct {
-	Name      string   `json:"name"`
-	Kind      string   `json:"kind"`
-	Identity  string   `json:"identity"`
-	Username  string   `json:"username"`
-	Protocols []string `json:"protocols"`
-	Secret    string   `json:"secret"`
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+	Identity string `json:"identity"`
+	Username string `json:"username"`
+	Secret   string `json:"secret"`
 }
 
 func (r credentialWriteRequest) principal() string {
@@ -58,7 +57,7 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 	}
 	cred, err := s.deps.Credentials.Create(ctx, service.NewCredentialInput{
 		OwnerID: user.ID, Name: req.Name, Kind: req.Kind,
-		Identity: req.principal(), Protocols: req.Protocols, Secret: req.Secret,
+		Identity: req.principal(), Secret: req.Secret,
 	})
 	if err != nil {
 		s.auditCredEvent(ctx, user, "", credCreateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -90,7 +89,7 @@ func (s *Server) handleUpdateCredential(w http.ResponseWriter, r *http.Request) 
 	}
 	updated, err := s.deps.Credentials.Update(ctx, cred.ID, service.UpdateCredentialInput{
 		Name: req.Name, Kind: req.Kind, Identity: req.principal(),
-		Protocols: req.Protocols, Secret: req.Secret,
+		Secret: req.Secret,
 	})
 	if err != nil {
 		s.auditCredEvent(ctx, user, cred.ID, credUpdateEvent, plugin.RiskWrite, models.AuditError, err)

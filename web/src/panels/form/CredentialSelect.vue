@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import Select from "primevue/select";
 import Button from "primevue/button";
 import { api } from "../../api/client";
@@ -21,6 +21,9 @@ const options = ref<CredentialSummary[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const showCreate = ref(false);
+const requestProtocol = computed(
+  () => props.protocol ?? props.selector.protocols?.[0] ?? "",
+);
 
 const choices = computed(() =>
   options.value.map((c) => ({
@@ -35,11 +38,10 @@ async function load(): Promise<void> {
   const sp = new URLSearchParams();
   if (props.selector.kinds.length)
     sp.set("kind", props.selector.kinds.join(","));
-  const protocol = props.protocol ?? props.selector.protocols?.[0];
-  if (protocol) sp.set("protocol", protocol);
+  if (requestProtocol.value) sp.set("protocol", requestProtocol.value);
   try {
     options.value = await api.get<CredentialSummary[]>(
-      `/credentials?${sp.toString()}`,
+      `/credentials${sp.toString() ? `?${sp.toString()}` : ""}`,
     );
   } catch (e) {
     error.value = (e as Error).message;
@@ -55,7 +57,7 @@ async function onCreated(credential?: CredentialSummary): Promise<void> {
   }
 }
 
-onMounted(load);
+watch(() => [props.selector, requestProtocol.value], load, { immediate: true });
 </script>
 
 <template>
@@ -91,7 +93,7 @@ onMounted(load);
       v-if="showCreate"
       v-model:visible="showCreate"
       :selector="selector"
-      :protocol="protocol"
+      :protocol="requestProtocol"
       @saved="onCreated"
     />
   </div>

@@ -60,6 +60,34 @@ describe("CredentialSelect", () => {
     expect(credentialCall).toContain("protocol=ssh");
   });
 
+  it("reloads selectable credentials when the selected protocol changes", async () => {
+    const calls: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      calls.push(url);
+      if (url.includes("/credentials")) return { body: [] };
+      return { body: {} };
+    });
+
+    const wrapper = mount(CredentialSelect, {
+      props: {
+        protocol: "ssh",
+        selector: {
+          kinds: ["ssh_password"],
+          protocols: ["ssh", "sftp"],
+        },
+      },
+    });
+    await flushPromises();
+    await wrapper.setProps({ protocol: "sftp" });
+    await flushPromises();
+
+    const credentialCalls = calls.filter((url) =>
+      url.includes("/credentials?"),
+    );
+    expect(credentialCalls.at(-1)).toContain("protocol=sftp");
+  });
+
   it("opens one create dialog scoped to the manifest selector", async () => {
     const wrapper = mount(CredentialSelect, {
       props: {

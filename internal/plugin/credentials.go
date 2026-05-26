@@ -8,7 +8,7 @@ import (
 
 // CredentialKindInfo is the public metadata for a reusable credential kind.
 // It describes how the control-plane UI should label non-secret fields and
-// which protocols a scoped credential may target.
+// which protocols can consume the kind.
 type CredentialKindInfo struct {
 	Kind                CredentialKind `json:"kind"`
 	Label               string         `json:"label"`

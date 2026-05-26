@@ -10,7 +10,7 @@ type Credential struct {
 	Kind      string   `gorm:"index"` // ssh_private_key, ssh_password, tls_client_cert, db_password, api_token, …
 	OwnerID   string   `gorm:"index"`
 	Username  string   // optional identity/principal metadata; column name kept for existing databases
-	Protocols []string `gorm:"serializer:json"` // allowed protocols; empty = any compatible
+	Protocols []string `gorm:"serializer:json"` // derived from credential-kind compatibility
 	// EncryptedSecret is opaque ciphertext; the store never sees plaintext.
 	EncryptedSecret []byte
 	CreatedAt       time.Time
