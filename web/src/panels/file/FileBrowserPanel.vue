@@ -20,13 +20,13 @@ import type {
   Page,
 } from "../../types/projection";
 import type { PanelProps } from "../core/types";
-import FileCodeEditor from "./FileCodeEditor.vue";
+import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import FileCrumbs from "./FileCrumbs.vue";
 import FileEntryGrid from "./FileEntryGrid.vue";
 import FileEntryList from "./FileEntryList.vue";
 import FilePreview from "./FilePreview.vue";
 import FileToolbar from "./FileToolbar.vue";
-import { formatBytes } from "./fileTypes";
+import { formatBytes, languageFor } from "./fileTypes";
 
 const props = defineProps<PanelProps>();
 const toast = useToast();
@@ -107,6 +107,9 @@ const canEdit = computed(
 );
 const dirty = computed(
   () => canEdit.value && editContent.value !== (content.value?.content ?? ""),
+);
+const selectedEditorLanguage = computed(() =>
+  languageFor(selected.value?.name ?? ""),
 );
 const downloadHref = computed(() => {
   if (!downloadRouteId.value || !selected.value || selected.value.isDir)
@@ -450,10 +453,13 @@ watch(
               @click="saveFile"
             />
           </div>
-          <FileCodeEditor
+          <CodeTextEditor
             v-model:value="editContent"
-            :name="selected?.name ?? ''"
+            :language="selectedEditorLanguage"
             :disabled="mutating"
+            :aria-label="
+              selected?.name ? `${selected.name} editor` : 'File editor'
+            "
           />
         </div>
         <FilePreview
@@ -499,10 +505,13 @@ watch(
               @click="saveFile"
             />
           </div>
-          <FileCodeEditor
+          <CodeTextEditor
             v-model:value="editContent"
-            :name="selected?.name ?? ''"
+            :language="selectedEditorLanguage"
             :disabled="mutating"
+            :aria-label="
+              selected?.name ? `${selected.name} editor` : 'File editor'
+            "
           />
         </div>
         <FilePreview

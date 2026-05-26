@@ -5,6 +5,7 @@ import { fetchDoc } from "../../api/dataSource";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
+import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import JsonNode from "./JsonNode.vue";
 
 const props = defineProps<PanelProps>();
@@ -92,15 +93,19 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       </div>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-auto p-4">
+    <div class="min-h-0 flex-1">
       <SkeletonList v-if="loading" />
       <PanelError v-else-if="error" :message="error" retryable @retry="load" />
-      <JsonNode v-else-if="mode === 'tree'" :value="doc" :depth="0" />
-      <pre
+      <div v-else-if="mode === 'tree'" class="h-full overflow-auto p-4">
+        <JsonNode :value="doc" :depth="0" />
+      </div>
+      <CodeTextEditor
         v-else
-        class="m-0 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
-        >{{ pretty }}</pre
-      >
+        :value="pretty"
+        language="json"
+        readonly
+        aria-label="Raw JSON document"
+      />
     </div>
   </div>
 </template>

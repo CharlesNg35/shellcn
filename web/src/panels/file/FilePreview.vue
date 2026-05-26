@@ -3,9 +3,9 @@ import { computed } from "vue";
 import Button from "primevue/button";
 import SkeletonList from "../../components/SkeletonList.vue";
 import type { FileContent } from "../../types/projection";
+import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
-import FileCodeEditor from "./FileCodeEditor.vue";
-import { formatBytes, viewerFor } from "./fileTypes";
+import { formatBytes, languageFor, viewerFor } from "./fileTypes";
 
 const props = defineProps<{
   name: string;
@@ -17,6 +17,7 @@ const props = defineProps<{
 const emit = defineEmits<{ retry: [] }>();
 
 const viewer = computed(() => viewerFor(props.name, props.content?.mime));
+const codeLanguage = computed(() => languageFor(props.name));
 const showTruncatedNotice = computed(
   () => props.content?.truncated === true && viewer.value === "code",
 );
@@ -45,11 +46,12 @@ const src = computed(() => {
     />
 
     <template v-else-if="content">
-      <FileCodeEditor
+      <CodeTextEditor
         v-if="viewer === 'code'"
-        :name="name"
         :value="content.content ?? ''"
+        :language="codeLanguage"
         readonly
+        :aria-label="name ? `${name} preview` : 'File preview'"
       />
 
       <div

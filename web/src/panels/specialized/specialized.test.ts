@@ -25,6 +25,37 @@ vi.mock("@vue-flow/controls", () => ({
 vi.mock("@vue-flow/minimap", () => ({
   MiniMap: defineComponent({ template: "<div />" }),
 }));
+vi.mock("monaco-editor/min/vs/editor/editor.main.css", () => ({}));
+vi.mock("monaco-editor/esm/vs/editor/editor.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor/esm/vs/language/json/json.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor/esm/vs/language/css/css.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor/esm/vs/language/html/html.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor/esm/vs/language/typescript/ts.worker?worker", () => ({
+  default: class {},
+}));
+vi.mock("monaco-editor", () => ({
+  editor: {
+    create: () => ({
+      getValue: () => "",
+      setValue() {},
+      getModel: () => ({}),
+      onDidChangeModelContent() {},
+      updateOptions() {},
+      dispose() {},
+    }),
+    defineTheme() {},
+    setTheme() {},
+    setModelLanguage() {},
+  },
+}));
 
 beforeEach(() => {
   installFetch((url, init) => {
@@ -141,9 +172,7 @@ describe("specialized panels", () => {
     await flushPromises();
 
     expect(w.text()).toContain("session:1");
-    expect((w.find("textarea").element as HTMLTextAreaElement).value).toContain(
-      "ada",
-    );
+    expect(w.find(".shellcn-monaco-host").exists()).toBe(true);
   });
 
   it("executes a declarative HTTP request", async () => {
@@ -162,8 +191,6 @@ describe("specialized panels", () => {
     await flushPromises();
 
     expect(w.text()).toContain("200");
-    expect(
-      (w.findAll("textarea")[1].element as HTMLTextAreaElement).value,
-    ).toContain("ok");
+    expect(w.findAll(".shellcn-monaco-host")).toHaveLength(2);
   });
 });

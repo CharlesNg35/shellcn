@@ -3,7 +3,6 @@ import { computed, ref } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
-import Textarea from "primevue/textarea";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import { useToast } from "primevue/usetoast";
@@ -11,6 +10,7 @@ import { runFormAction } from "../../api/dataSource";
 import type { HTTPClientConfig } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
 import type { PanelProps } from "../core/types";
+import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
 
 interface HeaderRow {
@@ -58,6 +58,18 @@ const responseBody = computed(() => {
     ? response.value.body
     : JSON.stringify(response.value.body ?? null, null, 2);
 });
+const requestLanguage = computed(() =>
+  languageForContentType(
+    headerValue(headers.value, "content-type"),
+    body.value,
+  ),
+);
+const responseLanguage = computed(() =>
+  languageForContentType(
+    headerValue(responseHeaders.value, "content-type"),
+    responseBody.value,
+  ),
+);
 
 const responseHeaders = computed<HeaderRow[]>(() => {
   const raw = response.value?.headers;
@@ -72,6 +84,31 @@ function addHeader(): void {
 
 function removeHeader(index: number): void {
   headers.value = headers.value.filter((_, i) => i !== index);
+}
+
+function headerValue(rows: HeaderRow[], name: string): string {
+  const needle = name.toLowerCase();
+  return (
+    rows.find((header) => header.key.toLowerCase() === needle)?.value ?? ""
+  );
+}
+
+function languageForContentType(contentType: string, value: string): string {
+  const normalized = contentType.toLowerCase();
+  const trimmed = value.trim();
+  if (
+    normalized.includes("json") ||
+    ((!normalized || normalized.includes("text/plain")) &&
+      (trimmed.startsWith("{") || trimmed.startsWith("[")))
+  ) {
+    return "json";
+  }
+  if (normalized.includes("xml")) return "xml";
+  if (normalized.includes("html")) return "html";
+  if (normalized.includes("yaml") || normalized.includes("yml")) return "yaml";
+  if (normalized.includes("javascript")) return "javascript";
+  if (normalized.includes("css")) return "css";
+  return "plaintext";
 }
 
 async function send(): Promise<void> {
@@ -181,9 +218,10 @@ async function send(): Promise<void> {
           >
             Body
           </label>
-          <Textarea
-            v-model="body"
-            class="min-h-0 flex-1 font-mono text-xs"
+          <CodeTextEditor
+            v-model:value="body"
+            class="min-h-0 flex-1"
+            :language="requestLanguage"
             aria-label="Request body"
           />
         </div>
@@ -231,10 +269,11 @@ async function send(): Promise<void> {
             <Column field="key" header="Header" />
             <Column field="value" header="Value" />
           </DataTable>
-          <Textarea
-            :model-value="responseBody"
+          <CodeTextEditor
+            :value="responseBody"
+            class="min-h-0 flex-1"
+            :language="responseLanguage"
             readonly
-            class="min-h-0 flex-1 rounded-none border-0 font-mono text-xs"
             aria-label="Response body"
           />
         </template>

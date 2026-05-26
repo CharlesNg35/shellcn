@@ -5,11 +5,11 @@ import Column from "primevue/column";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
-import Textarea from "primevue/textarea";
 import { useToast } from "primevue/usetoast";
 import { fetchDoc, fetchPage, runFormAction } from "../../api/dataSource";
 import type { KVPanelConfig, Page } from "../../types/projection";
 import type { PanelProps } from "../core/types";
+import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
 
 interface KVEntry {
@@ -42,6 +42,13 @@ const keyParam = computed(() => config.value?.keyParam ?? "key");
 const writable = computed(() => config.value?.writable === true);
 const typeOptions = ["string", "hash", "list", "set", "zset", "json"].map(
   (value) => ({ label: value, value }),
+);
+const editorLanguage = computed(() =>
+  type.value === "json" ||
+  editor.value.trim().startsWith("{") ||
+  editor.value.trim().startsWith("[")
+    ? "json"
+    : "plaintext",
 );
 
 const visibleEntries = computed(() => {
@@ -268,11 +275,12 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
             :disabled="!writable"
           />
         </div>
-        <Textarea
-          v-model="editor"
+        <CodeTextEditor
+          v-model:value="editor"
+          class="min-h-0 flex-1"
+          :language="editorLanguage"
           :readonly="!writable"
           :disabled="loadingDetail"
-          class="min-h-0 flex-1 font-mono text-xs"
           aria-label="Key value"
         />
       </div>
