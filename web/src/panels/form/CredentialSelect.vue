@@ -6,6 +6,7 @@ import { api } from "../../api/client";
 import CredentialFormDialog from "../../components/CredentialFormDialog.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import type {
+  CredentialRefState,
   CredentialSelector,
   CredentialSummary,
 } from "../../types/projection";
@@ -14,6 +15,7 @@ const props = defineProps<{
   selector: CredentialSelector;
   protocol?: string;
   modelValue?: string;
+  state?: CredentialRefState;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 
@@ -21,6 +23,7 @@ const options = ref<CredentialSummary[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const showCreate = ref(false);
+const replacingHidden = ref(false);
 const requestProtocol = computed(
   () => props.protocol ?? props.selector.protocols?.[0] ?? "",
 );
@@ -53,8 +56,14 @@ async function load(): Promise<void> {
 async function onCreated(credential?: CredentialSummary): Promise<void> {
   await load();
   if (credential?.id) {
+    replacingHidden.value = true;
     emit("update:modelValue", credential.id);
   }
+}
+
+function replaceHidden(): void {
+  replacingHidden.value = true;
+  emit("update:modelValue", "");
 }
 
 watch(() => [props.selector, requestProtocol.value], load, { immediate: true });
@@ -62,7 +71,23 @@ watch(() => [props.selector, requestProtocol.value], load, { immediate: true });
 
 <template>
   <div>
+    <div
+      v-if="state?.state === 'set' && !state.readable && !replacingHidden"
+      class="flex items-center justify-between gap-3 rounded-md border border-surface-300 px-3 py-2 text-sm dark:border-surface-700"
+    >
+      <span
+        class="flex min-w-0 items-center gap-2 text-surface-600 dark:text-surface-300"
+      >
+        <AppIcon :icon="{ type: 'name', value: 'lock' }" :size="14" />
+        <span class="truncate">Credential configured</span>
+      </span>
+      <Button link class="shrink-0 text-xs!" @click="replaceHidden">
+        Replace
+      </Button>
+    </div>
+
     <Select
+      v-else
       :model-value="modelValue"
       :options="choices"
       option-label="label"

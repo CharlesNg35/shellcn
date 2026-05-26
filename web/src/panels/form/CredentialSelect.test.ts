@@ -114,4 +114,28 @@ describe("CredentialSelect", () => {
     });
     expect(dialog.props("protocol")).toBe("ssh");
   });
+
+  it("shows an unreadable configured credential as replace-only", async () => {
+    const wrapper = mount(CredentialSelect, {
+      props: {
+        protocol: "ssh",
+        selector: {
+          kinds: ["ssh_password"],
+          protocols: ["ssh"],
+        },
+        state: { state: "set", readable: false },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Credential configured");
+    expect(wrapper.text()).toContain("Replace");
+    expect(wrapper.findComponent({ name: "Select" }).exists()).toBe(false);
+
+    await wrapper.find("button").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.emitted("update:modelValue")?.[0]).toEqual([""]);
+    expect(wrapper.findComponent({ name: "Select" }).exists()).toBe(true);
+  });
 });

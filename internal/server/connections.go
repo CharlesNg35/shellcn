@@ -14,9 +14,13 @@ import (
 )
 
 const (
-	connCreateEvent = "connection.create"
-	connUpdateEvent = "connection.update"
-	connDeleteEvent = "connection.delete"
+	connCreateEvent       = "connection.create"
+	connUpdateEvent       = "connection.update"
+	connDeleteEvent       = "connection.delete"
+	connFolderCreateEvent = "connection_folder.create"
+	connFolderUpdateEvent = "connection_folder.update"
+	connFolderDeleteEvent = "connection_folder.delete"
+	connLayoutUpdateEvent = "connection_layout.update"
 )
 
 // Surfaced on a connection to drive the sidebar dot. The "connected" (green)
@@ -24,11 +28,12 @@ const (
 const connStatusOffline = "offline"
 
 type connectionWriteRequest struct {
-	Name      string            `json:"name"`
-	Protocol  string            `json:"protocol"`
-	Transport string            `json:"transport"`
-	Config    map[string]any    `json:"config"`
-	Recording map[string]string `json:"recording"`
+	Name                string            `json:"name"`
+	Protocol            string            `json:"protocol"`
+	Transport           string            `json:"transport"`
+	Config              map[string]any    `json:"config"`
+	PreserveCredentials []string          `json:"preserveCredentials"`
+	Recording           map[string]string `json:"recording"`
 }
 
 // toConnectionDTO projects a stored connection for the client.
@@ -83,7 +88,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 	conn, err := s.deps.Connections.Create(ctx, user.ID, service.ConnectionInput{
 		Name: req.Name, Protocol: req.Protocol, Transport: req.Transport,
-		Config: req.Config, Recording: req.Recording,
+		Config: req.Config, ActorID: user.ID, Recording: req.Recording,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, "", connCreateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -92,7 +97,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 	s.auditConnEvent(ctx, user, conn.ID, connCreateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
 	dto := s.toConnectionDTO(conn)
-	dto.CanManage = true
+	s.decorateConnectionAccess(ctx, user, conn, &dto)
 	writeJSON(w, http.StatusCreated, dto)
 }
 
@@ -108,7 +113,7 @@ func (s *Server) handleConnectionDetail(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(conn))
+	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(ctx, user.ID, conn))
 }
 
 func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) {
@@ -131,7 +136,9 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	updated, err := s.deps.Connections.Update(ctx, conn, service.ConnectionInput{
-		Name: req.Name, Transport: req.Transport, Config: req.Config, Recording: req.Recording,
+		Name: req.Name, Transport: req.Transport, Config: req.Config,
+		ActorID: user.ID, PreserveCredentials: req.PreserveCredentials,
+		Recording: req.Recording,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -139,7 +146,7 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
-	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(updated))
+	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(ctx, user.ID, updated))
 }
 
 func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) {
@@ -159,6 +166,9 @@ func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) 
 		s.auditConnEvent(ctx, user, conn.ID, connDeleteEvent, plugin.RiskDestructive, models.AuditError, err)
 		writeError(w, s.deps.Logger, err)
 		return
+	}
+	if err := s.deps.Store.ConnectionPlacements.DeleteByConnection(ctx, conn.ID); err != nil {
+		s.deps.Logger.Warn("cleanup connection placements failed", "connection", conn.ID, "err", err)
 	}
 	s.cleanupConnectionDependents(ctx, conn.ID)
 	s.auditConnEvent(ctx, user, conn.ID, connDeleteEvent, plugin.RiskDestructive, models.AuditAllowed, nil)

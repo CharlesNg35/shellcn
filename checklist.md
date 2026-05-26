@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-26 — Phase 3 (M2 SSH/SFTP) complete. Core runtime and platform management remain complete; the shipped placeholder `noop` plugin has been removed. SSH/SFTP are now real first-party plugins: `ssh` provides terminal + SFTP files + command snippets, `sftp` provides file-only access, and both share the same SSH/SFTP session + route implementation. Plugin-owned credential kinds, table action config, validated action success navigation, specialized lazy panels (`graph`, `trace`, `kv`, `http_client`), and a grouped panel source layout are now part of the manifest/projection contract. **Next: Phase 4 (M3 Docker + agent transport).**_
+_Last updated: 2026-05-26 — Phase 3 (M2 SSH/SFTP) complete. Core runtime and platform management remain complete; the shipped placeholder `noop` plugin has been removed. SSH/SFTP are now real first-party plugins: `ssh` provides terminal + SFTP files + command snippets, `sftp` provides file-only access, and both share the same SSH/SFTP session + route implementation. Plugin-owned credential kinds, shared-connection credential redaction/preservation, table action config, validated action success navigation, specialized lazy panels (`graph`, `trace`, `kv`, `http_client`), and a grouped panel source layout are now part of the manifest/projection contract. **Next: Phase 4 (M3 Docker + agent transport).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -42,7 +42,7 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 
 ## Phase 2b — M1.5 · Platform management (make it usable)
 
-_Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps [phase-2b](specs/plans/phase-2b-m1.5-platform-management/)). Connection/credential CRUD + sharing endpoints with authn→authz→audit; auth gate + global error UX; manifest-driven connection create/edit/delete; credential management + sharing UI. All secrets write-only end to end._
+_Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps [phase-2b](specs/plans/phase-2b-m1.5-platform-management/)). Connection/credential CRUD + sharing endpoints with authn→authz→audit; auth gate + global error UX; manifest-driven connection create/edit/delete; credential management + sharing UI. Shared connections can use already-bound credentials without exposing those credentials; shared managers see keep-or-replace credential refs, and credential grants remain managed from the credentials surface. All secrets write-only end to end._
 
 - [x] 2b.1 Backend — connection CRUD endpoints (schema-validated, secret-encrypted, authz'd)
 - [x] 2b.2 Backend — credential CRUD + rotation (write-only secret material)

@@ -39,6 +39,7 @@ const nameError = ref<string | null>(null);
 const transport = ref<Transport>("direct");
 const configModel = ref<Record<string, unknown>>({});
 const secretsSet = ref<Record<string, boolean>>({});
+const credentialStates = ref<ConnectionDetail["credentials"]>({});
 const recordingModel = ref<Record<string, string>>({});
 const loading = ref(false);
 const busy = ref(false);
@@ -80,6 +81,7 @@ function reset(): void {
   transport.value = "direct";
   configModel.value = {};
   secretsSet.value = {};
+  credentialStates.value = {};
   recordingModel.value = {};
 }
 
@@ -97,6 +99,7 @@ function clearProtocol(): void {
   projection.value = null;
   configModel.value = {};
   secretsSet.value = {};
+  credentialStates.value = {};
   recordingModel.value = {};
   nameError.value = null;
 }
@@ -111,6 +114,7 @@ async function loadForEdit(id: string): Promise<void> {
     secretsSet.value = Object.fromEntries(
       Object.entries(detail.secrets ?? {}).map(([k, v]) => [k, v === "set"]),
     );
+    credentialStates.value = detail.credentials ?? {};
     recordingModel.value = { ...(detail.recording ?? {}) };
     protocol.value = detail.protocol;
     projection.value = await conns.projection(detail.protocol);
@@ -139,7 +143,10 @@ function requestSubmit(): void {
   formRef.value?.submit();
 }
 
-async function onConfig(config: Record<string, unknown>): Promise<void> {
+async function onConfig(
+  config: Record<string, unknown>,
+  meta: { preserveCredentials?: string[] } = {},
+): Promise<void> {
   busy.value = true;
   try {
     if (isEdit.value && props.connectionId) {
@@ -149,6 +156,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           name: name.value.trim(),
           transport: transport.value,
           config,
+          preserveCredentials: meta.preserveCredentials ?? [],
           recording: recordingModel.value,
         },
       );
@@ -161,6 +169,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
         protocol: protocol.value,
         transport: transport.value,
         config,
+        preserveCredentials: [],
         recording: recordingModel.value,
       });
       await conns.refresh();
@@ -282,6 +291,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           :schema="projection.config"
           :model-value="configModel"
           :secrets-set="secretsSet"
+          :credential-states="credentialStates"
           :protocol="protocol"
           @submit="onConfig"
         />

@@ -37,6 +37,24 @@ type ConnectionStore interface {
 	Delete(ctx context.Context, id string) error
 }
 
+// ConnectionFolderStore persists per-user connection folders.
+type ConnectionFolderStore interface {
+	Create(ctx context.Context, f *models.ConnectionFolder) error
+	Get(ctx context.Context, id string) (models.ConnectionFolder, error)
+	ListByUser(ctx context.Context, userID string) ([]models.ConnectionFolder, error)
+	Update(ctx context.Context, f *models.ConnectionFolder) error
+	Delete(ctx context.Context, id string) error
+}
+
+// ConnectionPlacementStore persists per-user connection ordering and foldering.
+type ConnectionPlacementStore interface {
+	ListByUser(ctx context.Context, userID string) ([]models.ConnectionPlacement, error)
+	Set(ctx context.Context, p *models.ConnectionPlacement) error
+	Delete(ctx context.Context, userID, connectionID string) error
+	DeleteByConnection(ctx context.Context, connectionID string) error
+	ClearFolder(ctx context.Context, userID, folderID string) error
+}
+
 // CredentialStore persists reusable credentials (with ciphertext material).
 type CredentialStore interface {
 	Create(ctx context.Context, c *models.Credential) error
@@ -151,18 +169,20 @@ type InvitationStore interface {
 
 // Store aggregates every repository plus lifecycle controls.
 type Store struct {
-	Users            UserStore
-	Connections      ConnectionStore
-	Credentials      CredentialStore
-	Grants           GrantStore
-	CredentialGrants CredentialGrantStore
-	Audit            AuditStore
-	Snippets         SnippetStore
-	Preferences      PreferenceStore
-	Enrollments      EnrollmentStore
-	Policies         PolicyStore
-	Invitations      InvitationStore
-	Recordings       RecordingStore
+	Users                UserStore
+	Connections          ConnectionStore
+	ConnectionFolders    ConnectionFolderStore
+	ConnectionPlacements ConnectionPlacementStore
+	Credentials          CredentialStore
+	Grants               GrantStore
+	CredentialGrants     CredentialGrantStore
+	Audit                AuditStore
+	Snippets             SnippetStore
+	Preferences          PreferenceStore
+	Enrollments          EnrollmentStore
+	Policies             PolicyStore
+	Invitations          InvitationStore
+	Recordings           RecordingStore
 
 	close func() error
 }

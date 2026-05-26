@@ -21,6 +21,16 @@ func TestConnectionGrantUseVsManage(t *testing.T) {
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "viewer", nil); resp.Status != http.StatusOK {
 		t.Errorf("use grant should allow opening: got %d", resp.Status)
 	}
+	if resp := h.do(t, http.MethodGet, "/api/connections", "viewer", nil); resp.Status != http.StatusOK ||
+		!strings.Contains(string(resp.Body), `"sharedWithMe":true`) ||
+		!strings.Contains(string(resp.Body), `"access":"use"`) {
+		t.Fatalf("shared connection list should mark grant access: status=%d body=%s", resp.Status, resp.Body)
+	}
+	if resp := h.do(t, http.MethodGet, "/api/connections", "op", nil); resp.Status != http.StatusOK ||
+		!strings.Contains(string(resp.Body), `"sharedByMe":true`) ||
+		!strings.Contains(string(resp.Body), `"access":"owner"`) {
+		t.Fatalf("owner connection list should mark shared-out state: status=%d body=%s", resp.Status, resp.Body)
+	}
 	// …but not edit it (edit needs manage).
 	if resp := h.do(t, http.MethodPut, "/api/connections/c-op", "viewer",
 		strings.NewReader(`{"name":"hax","config":{"host":"h"}}`)); resp.Status != http.StatusForbidden {

@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import { api } from "../api/client";
 import type {
+  ConnectionFolder,
   ConnectionSummary,
   PluginProjection,
   PluginSummary,
@@ -9,16 +10,19 @@ import type {
 
 export const useConnectionsStore = defineStore("connections", () => {
   const connections = ref<ConnectionSummary[]>([]);
+  const folders = ref<ConnectionFolder[]>([]);
   const plugins = ref<PluginSummary[]>([]);
   const projections = ref<Record<string, PluginProjection>>({});
   const loaded = ref(false);
 
   async function load(): Promise<void> {
-    const [c, p] = await Promise.all([
+    const [c, f, p] = await Promise.all([
       api.get<ConnectionSummary[]>("/connections"),
+      api.get<ConnectionFolder[]>("/connection-folders"),
       api.get<PluginSummary[]>("/plugins"),
     ]);
     connections.value = c;
+    folders.value = f;
     plugins.value = p;
     loaded.value = true;
   }
@@ -38,16 +42,81 @@ export const useConnectionsStore = defineStore("connections", () => {
 
   // refresh re-fetches just the connection list after a control-plane mutation.
   async function refresh(): Promise<void> {
-    connections.value = await api.get<ConnectionSummary[]>("/connections");
+    const [c, f] = await Promise.all([
+      api.get<ConnectionSummary[]>("/connections"),
+      api.get<ConnectionFolder[]>("/connection-folders"),
+    ]);
+    connections.value = c;
+    folders.value = f;
+  }
+
+  async function createFolder(input: {
+    name: string;
+    color: ConnectionFolder["color"];
+  }): Promise<ConnectionFolder> {
+    const folder = await api.post<ConnectionFolder>(
+      "/connection-folders",
+      input,
+    );
+    folders.value = [...folders.value, folder].sort(
+      (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+    );
+    return folder;
+  }
+
+  async function updateFolder(
+    id: string,
+    input: { name: string; color: ConnectionFolder["color"] },
+  ): Promise<ConnectionFolder> {
+    const folder = await api.put<ConnectionFolder>(
+      `/connection-folders/${id}`,
+      input,
+    );
+    folders.value = folders.value.map((f) => (f.id === id ? folder : f));
+    return folder;
+  }
+
+  async function deleteFolder(id: string): Promise<void> {
+    await api.del(`/connection-folders/${id}`);
+    folders.value = folders.value.filter((f) => f.id !== id);
+    connections.value = connections.value.map((c) =>
+      c.folderId === id ? { ...c, folderId: undefined } : c,
+    );
+  }
+
+  async function saveLayout(
+    items: Array<{
+      connectionId: string;
+      folderId?: string;
+      sortOrder: number;
+    }>,
+  ): Promise<void> {
+    await api.put("/connections/layout", { items });
+    const byId = new Map(items.map((i) => [i.connectionId, i]));
+    connections.value = connections.value.map((c) => {
+      const item = byId.get(c.id);
+      return item
+        ? {
+            ...c,
+            folderId: item.folderId || undefined,
+            sortOrder: item.sortOrder,
+          }
+        : c;
+    });
   }
 
   return {
     connections,
+    folders,
     plugins,
     projections,
     loaded,
     load,
     refresh,
+    createFolder,
+    updateFolder,
+    deleteFolder,
+    saveLayout,
     projection,
     byId,
   };

@@ -414,7 +414,30 @@ export interface ConnectionSummary {
   online?: boolean;
   status?: "offline";
   canManage?: boolean;
+  access?: "owner" | "admin" | GrantAccess;
+  owned?: boolean;
+  sharedWithMe?: boolean;
+  sharedByMe?: boolean;
   recording?: Record<string, string>;
+  folderId?: string;
+  sortOrder?: number;
+}
+
+export type FolderColor =
+  | "slate"
+  | "blue"
+  | "teal"
+  | "emerald"
+  | "amber"
+  | "rose"
+  | "violet"
+  | "cyan";
+
+export interface ConnectionFolder {
+  id: string;
+  name: string;
+  color: FolderColor;
+  sortOrder: number;
 }
 
 export type GrantAccess = "use" | "manage";
@@ -472,7 +495,14 @@ export interface ConnectionDetail {
   ownerId: string;
   config: Record<string, unknown>;
   secrets: Record<string, string>;
+  credentials?: Record<string, CredentialRefState>;
   recording?: Record<string, string>;
+}
+
+export interface CredentialRefState {
+  state: "set" | "not_set";
+  readable: boolean;
+  summary?: CredentialSummary;
 }
 
 // Lists, pagination, watch

@@ -34,6 +34,9 @@ opens → create + share a reusable credential → all state-changing calls carr
 CSRF, 401 redirects to login, 403/validation errors surface as toasts. Backend
 CRUD covered by unit/integration tests; FE covered by component + e2e tests.
 Connection grant semantics are explicit: `use` opens/uses, `manage` edits/shares/deletes.
+Credential grants are separate from connection grants: shared connections can
+use their already-bound credentials without exposing credential records, while
+credential sharing remains managed from the credentials page.
 Credential deletion is blocked while referenced.
 
 ## Out of scope here → **M-Admin** (later, additive, v2 §12.2)

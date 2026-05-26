@@ -47,6 +47,7 @@ describe("connections store", () => {
   it("loads connections and plugins", async () => {
     installFetch((url) => {
       if (url.endsWith("/api/connections")) return { body: connections };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
       if (url.endsWith("/api/plugins")) return { body: plugins };
       return { status: 404, body: { error: "nope" } };
     });

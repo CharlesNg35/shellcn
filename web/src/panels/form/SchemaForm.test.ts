@@ -176,4 +176,76 @@ describe("SchemaForm", () => {
     // The kept secret is neither blocked nor resubmitted.
     expect(submitted?.[0][0]).not.toHaveProperty("token");
   });
+
+  it("preserves an unreadable configured credential without submitting its id", async () => {
+    const requiredCredential: Schema = {
+      groups: [
+        {
+          name: "Auth",
+          fields: [
+            {
+              key: "credential_id",
+              label: "Credential",
+              type: "credential_ref",
+              required: true,
+              credential: { kinds: ["ssh_password"], protocols: ["ssh"] },
+            },
+          ],
+        },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: {
+        schema: requiredCredential,
+        credentialStates: {
+          credential_id: { state: "set", readable: false },
+        },
+      },
+    });
+
+    (w.vm as unknown as { submit: () => void }).submit();
+    await flushPromises();
+
+    const submitted = w.emitted("submit");
+    expect(submitted).toBeTruthy();
+    expect(submitted?.[0][0]).not.toHaveProperty("credential_id");
+    expect(submitted?.[0][1]).toEqual({
+      preserveCredentials: ["credential_id"],
+    });
+  });
+
+  it("requires a new credential after the user chooses to replace a hidden one", async () => {
+    const requiredCredential: Schema = {
+      groups: [
+        {
+          name: "Auth",
+          fields: [
+            {
+              key: "credential_id",
+              label: "Credential",
+              type: "credential_ref",
+              required: true,
+              credential: { kinds: ["ssh_password"], protocols: ["ssh"] },
+            },
+          ],
+        },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: {
+        schema: requiredCredential,
+        credentialStates: {
+          credential_id: { state: "set", readable: false },
+        },
+      },
+    });
+    await flushPromises();
+
+    await w.find("button").trigger("click");
+    (w.vm as unknown as { submit: () => void }).submit();
+    await flushPromises();
+
+    expect(w.emitted("submit")).toBeUndefined();
+    expect(w.text()).toContain("required");
+  });
 });

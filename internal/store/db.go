@@ -17,9 +17,10 @@ import (
 func allModels() []any {
 	return []any{
 		&models.User{}, &models.Connection{}, &models.Credential{}, &models.Grant{},
-		&models.CredentialGrant{}, &models.AuditEntry{}, &models.Snippet{},
-		&models.Preference{}, &models.AgentEnrollment{}, &models.PolicyRule{},
-		&models.Invitation{}, &models.Recording{},
+		&models.ConnectionFolder{}, &models.ConnectionPlacement{}, &models.CredentialGrant{},
+		&models.AuditEntry{}, &models.Snippet{}, &models.Preference{},
+		&models.AgentEnrollment{}, &models.PolicyRule{}, &models.Invitation{},
+		&models.Recording{},
 	}
 }
 
@@ -88,18 +89,20 @@ func dialector(cfg Config) (gorm.Dialector, error) {
 // newGormStore wires the GORM-backed repositories.
 func newGormStore(db *gorm.DB) *Store {
 	return &Store{
-		Users:            &gormUserStore{db: db},
-		Connections:      &gormConnectionStore{db: db},
-		Credentials:      &gormCredentialStore{db: db},
-		Grants:           &gormGrantStore{db: db},
-		CredentialGrants: &gormCredentialGrantStore{db: db},
-		Audit:            &gormAuditStore{db: db},
-		Snippets:         &gormSnippetStore{db: db},
-		Preferences:      &gormPreferenceStore{db: db},
-		Enrollments:      &gormEnrollmentStore{db: db},
-		Policies:         &gormPolicyStore{db: db},
-		Invitations:      &gormInvitationStore{db: db},
-		Recordings:       &gormRecordingStore{db: db},
+		Users:                &gormUserStore{db: db},
+		Connections:          &gormConnectionStore{db: db},
+		ConnectionFolders:    &gormConnectionFolderStore{db: db},
+		ConnectionPlacements: &gormConnectionPlacementStore{db: db},
+		Credentials:          &gormCredentialStore{db: db},
+		Grants:               &gormGrantStore{db: db},
+		CredentialGrants:     &gormCredentialGrantStore{db: db},
+		Audit:                &gormAuditStore{db: db},
+		Snippets:             &gormSnippetStore{db: db},
+		Preferences:          &gormPreferenceStore{db: db},
+		Enrollments:          &gormEnrollmentStore{db: db},
+		Policies:             &gormPolicyStore{db: db},
+		Invitations:          &gormInvitationStore{db: db},
+		Recordings:           &gormRecordingStore{db: db},
 		close: func() error {
 			sqlDB, err := db.DB()
 			if err != nil {

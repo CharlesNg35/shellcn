@@ -154,6 +154,31 @@ func testConnections(t *testing.T, s *store.Store) {
 		t.Errorf("update not persisted: %q", reloaded.Name)
 	}
 
+	folder := &models.ConnectionFolder{ID: "f1", UserID: "u1", Name: "Production", Color: "blue", SortOrder: 1}
+	if err := s.ConnectionFolders.Create(ctx, folder); err != nil {
+		t.Fatalf("folder create: %v", err)
+	}
+	if err := s.ConnectionPlacements.Set(ctx, &models.ConnectionPlacement{
+		UserID: "u1", ConnectionID: "c1", FolderID: "f1", SortOrder: 3,
+	}); err != nil {
+		t.Fatalf("placement set: %v", err)
+	}
+	folders, _ := s.ConnectionFolders.ListByUser(ctx, "u1")
+	if len(folders) != 1 || folders[0].Color != "blue" {
+		t.Fatalf("folders not listed: %+v", folders)
+	}
+	placements, _ := s.ConnectionPlacements.ListByUser(ctx, "u1")
+	if len(placements) != 1 || placements[0].FolderID != "f1" || placements[0].SortOrder != 3 {
+		t.Fatalf("placement not listed: %+v", placements)
+	}
+	if err := s.ConnectionPlacements.ClearFolder(ctx, "u1", "f1"); err != nil {
+		t.Fatalf("clear folder: %v", err)
+	}
+	placements, _ = s.ConnectionPlacements.ListByUser(ctx, "u1")
+	if placements[0].FolderID != "" {
+		t.Fatalf("clear folder did not move placement to root: %+v", placements)
+	}
+
 	if err := s.Connections.Delete(ctx, "c1"); err != nil {
 		t.Fatalf("delete: %v", err)
 	}

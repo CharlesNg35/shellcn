@@ -4,17 +4,15 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
 import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
-import { useWorkspaceStore } from "../stores/workspace";
 import { useAuthStore } from "../stores/auth";
 import { useTheme } from "../composables/useTheme";
 import AppIcon from "./AppIcon.vue";
 import AppLogo from "./AppLogo.vue";
 import ConnectionFormDialog from "./ConnectionFormDialog.vue";
+import ConnectionSidebar from "./ConnectionSidebar.vue";
 import { searchInputClass } from "../primevue/preset";
-import type { ConnectionSummary } from "../types/projection";
 
 const conns = useConnectionsStore();
-const ws = useWorkspaceStore();
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
@@ -60,36 +58,10 @@ const activeId = computed(() =>
   route.name === "connection" ? String(route.params.id) : null,
 );
 
-const filtered = computed(() => {
-  const q = query.value.trim().toLowerCase();
-  if (!q) return conns.connections;
-  return conns.connections.filter((c) =>
-    `${c.name} ${c.protocol}`.toLowerCase().includes(q),
-  );
-});
-
-function dotClass(c: ConnectionSummary): string {
-  if (c.status === "offline") return "bg-red-500";
-  if (ws.isConnected(c.id)) return "bg-emerald-400";
-  return "bg-surface-300 dark:bg-surface-600";
-}
-
-function dotTitle(c: ConnectionSummary): string {
-  if (c.status === "offline") return "Agent offline";
-  if (ws.isConnected(c.id)) return "Connected";
-  return "Idle";
-}
-
-function go(c: ConnectionSummary): void {
-  ws.open(c.id);
-  router.push({ name: "connection", params: { id: c.id } });
-}
-
 const showCreate = ref(false);
 
 function onConnectionSaved(payload: { id: string; created: boolean }): void {
   if (payload.created) {
-    ws.open(payload.id);
     void router.push({ name: "connection", params: { id: payload.id } });
   }
 }
@@ -142,88 +114,23 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
         </label>
       </div>
 
-      <nav class="flex-1 overflow-y-auto px-2 pb-3">
+      <nav class="flex min-h-0 flex-1 flex-col overflow-hidden px-2 pb-3">
         <p v-if="error" class="px-2 py-4 text-sm text-red-500">{{ error }}</p>
-
-        <div class="flex items-center justify-between px-2 pt-3 pb-1">
-          <p
-            class="text-xs font-medium tracking-wide text-surface-400 uppercase"
-          >
-            Connections
-          </p>
-          <Button
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            title="Add connection"
-            aria-label="Add connection"
-            @click="showCreate = true"
-          >
-            <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
-          </Button>
-        </div>
-        <div class="space-y-1">
-          <button
-            v-for="c in filtered"
-            :key="c.id"
-            type="button"
-            class="group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-            :class="
-              activeId === c.id
-                ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-                : ''
-            "
-            @click="go(c)"
-          >
-            <AppIcon :icon="c.icon" :size="16" class="text-surface-500" />
-            <span class="flex min-w-0 flex-1 flex-col">
-              <span class="truncate text-surface-800 dark:text-surface-100">{{
-                c.name
-              }}</span>
-              <span class="truncate text-xs text-surface-400">{{
-                c.protocol
-              }}</span>
-            </span>
-            <span
-              class="h-2 w-2 shrink-0 rounded-full"
-              :class="dotClass(c)"
-              :title="dotTitle(c)"
-            />
-          </button>
-        </div>
-        <!-- Loading: skeleton rows while the catalog is fetched. -->
-        <div v-if="!conns.loaded && !error" class="space-y-1.5 px-1 pt-1">
-          <div
-            v-for="n in 5"
-            :key="n"
-            class="h-9 animate-pulse rounded-md bg-surface-200/60 dark:bg-surface-800/60"
-          />
-        </div>
-        <p
-          v-else-if="conns.loaded && !filtered.length && query"
-          class="px-2 py-6 text-center text-sm text-surface-400"
-        >
-          No connections match “{{ query }}”.
-        </p>
-        <!-- Empty: a single create affordance lives in the header (+), so this
-             stays purely informational. -->
-        <div
-          v-else-if="conns.loaded && !conns.connections.length"
-          class="flex flex-col items-center gap-1.5 px-4 py-10 text-center"
-        >
-          <span
-            class="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-surface-100 text-surface-400 dark:bg-surface-800"
-          >
-            <AppIcon :icon="{ type: 'name', value: 'server' }" :size="18" />
-          </span>
-          <p class="text-sm font-medium text-surface-600 dark:text-surface-300">
-            No connections yet
-          </p>
-          <p class="text-xs text-surface-400">
-            Use the + above to add your first one.
-          </p>
-        </div>
+        <ConnectionSidebar v-else :active-id="activeId" :query="query">
+          <template #create>
+            <Button
+              text
+              rounded
+              severity="secondary"
+              size="small"
+              title="Add connection"
+              aria-label="Add connection"
+              @click="showCreate = true"
+            >
+              <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
+            </Button>
+          </template>
+        </ConnectionSidebar>
       </nav>
 
       <div class="border-t border-surface-200 dark:border-surface-800">

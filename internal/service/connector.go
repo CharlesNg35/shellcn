@@ -47,7 +47,7 @@ func (c *Connector) Plugin(conn models.Connection) (plugin.Plugin, bool) {
 }
 
 // Build produces the ConnectConfig + plugin for a connection on behalf of user.
-func (c *Connector) Build(ctx context.Context, user models.User, conn models.Connection) (plugin.ConnectConfig, plugin.Plugin, error) {
+func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connection) (plugin.ConnectConfig, plugin.Plugin, error) {
 	plg, ok := c.plugins.Get(conn.Protocol)
 	if !ok {
 		return plugin.ConnectConfig{}, nil, fmt.Errorf("%w: protocol %q", plugin.ErrNotFound, conn.Protocol)
@@ -68,7 +68,9 @@ func (c *Connector) Build(ctx context.Context, user models.User, conn models.Con
 		c.onSecretAccess()
 	}
 
-	// Resolve referenced reusable credentials (authorized for this user).
+	// Resolve referenced reusable credentials through the connection owner. The
+	// route wrapper has already authorized the acting user against the connection;
+	// credential records remain hidden unless separately shared.
 	if m, ok := c.plugins.Manifest(conn.Protocol); ok {
 		for _, group := range m.Config.Groups {
 			for _, field := range group.Fields {
@@ -77,10 +79,10 @@ func (c *Connector) Build(ctx context.Context, user models.User, conn models.Con
 				}
 				key := field.Key
 				if credID, _ := cfg[key].(string); credID != "" {
-					if err := c.creds.EnsureUsableFor(ctx, user.ID, credID, credentialSelectorKinds(field.Credential), conn.Protocol); err != nil {
+					if err := c.creds.EnsureUsableFor(ctx, conn.OwnerID, credID, credentialSelectorKinds(field.Credential), conn.Protocol); err != nil {
 						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
 					}
-					cred, material, err := c.creds.ResolveWithMetadata(ctx, user.ID, credID)
+					cred, material, err := c.creds.ResolveWithMetadata(ctx, conn.OwnerID, credID)
 					if err != nil {
 						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
 					}

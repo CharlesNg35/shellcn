@@ -127,14 +127,19 @@ func (s *Server) routes() chi.Router {
 			pr.Get("/plugins/{name}", s.handleGetPlugin)
 
 			pr.Get("/connections", s.handleListConnections)
+			pr.Get("/connection-folders", s.handleListConnectionFolders)
 			pr.Get("/credentials", s.handleListCredentials)
 			pr.Get("/credential-kinds", s.handleListCredentialKinds)
 
 			if s.deps.Connections != nil {
 				pr.Post("/connections", s.handleCreateConnection)
+				pr.Put("/connections/layout", s.handleSaveConnectionLayout)
 				pr.Get("/connections/{id}", s.handleConnectionDetail)
 				pr.Put("/connections/{id}", s.handleUpdateConnection)
 				pr.Delete("/connections/{id}", s.handleDeleteConnection)
+				pr.Post("/connection-folders", s.handleCreateConnectionFolder)
+				pr.Put("/connection-folders/{folderId}", s.handleUpdateConnectionFolder)
+				pr.Delete("/connection-folders/{folderId}", s.handleDeleteConnectionFolder)
 			}
 			if s.deps.Credentials != nil {
 				pr.Post("/credentials", s.handleCreateCredential)

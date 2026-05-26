@@ -40,6 +40,31 @@ type Connection struct {
 
 func (Connection) TableName() string { return "connections" }
 
+// ConnectionFolder is a per-user sidebar grouping for visible connections.
+type ConnectionFolder struct {
+	ID        string `gorm:"primaryKey"`
+	UserID    string `gorm:"index"`
+	Name      string
+	Color     string
+	SortOrder int
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (ConnectionFolder) TableName() string { return "connection_folders" }
+
+// ConnectionPlacement stores a user's folder and ordering preference for one
+// accessible connection. FolderID is empty for the root list.
+type ConnectionPlacement struct {
+	UserID       string `gorm:"primaryKey"`
+	ConnectionID string `gorm:"primaryKey"`
+	FolderID     string `gorm:"index"`
+	SortOrder    int
+	UpdatedAt    time.Time
+}
+
+func (ConnectionPlacement) TableName() string { return "connection_placements" }
+
 // Grant is an explicit per-connection sharing grant to a subject (user).
 type Grant struct {
 	ID           string `gorm:"primaryKey"`

@@ -238,6 +238,12 @@ function connections(): Json[] {
   return connectionsState;
 }
 
+let connectionFoldersState: Json[] | null = null;
+function connectionFolders(): Json[] {
+  connectionFoldersState ??= [];
+  return connectionFoldersState;
+}
+
 let credentialsState: Json[] | null = null;
 function credentials(): Json[] {
   if (!credentialsState)
@@ -300,6 +306,7 @@ function uid(prefix: string): string {
 
 function resetControlPlaneState(): void {
   connectionsState = null;
+  connectionFoldersState = null;
   credentialsState = null;
   recordingsState = null;
   adminUsersState = null;
@@ -598,6 +605,61 @@ function handleHTTP(
       };
       connections().push(conn);
       send(res, 201, conn);
+    });
+  }
+
+  if (path === "/api/connection-folders" && method === "GET") {
+    return send(res, 200, connectionFolders());
+  }
+  if (path === "/api/connection-folders" && method === "POST") {
+    return void readBody(req).then((raw) => {
+      const body = raw as Json;
+      const folder: Json = {
+        id: uid("folder"),
+        name: body.name,
+        color: body.color ?? "slate",
+        sortOrder: connectionFolders().length,
+      };
+      connectionFolders().push(folder);
+      send(res, 201, folder);
+    });
+  }
+  const folderMatch = path.match(/^\/api\/connection-folders\/([^/]+)$/);
+  if (folderMatch) {
+    const id = folderMatch[1];
+    const folder = connectionFolders().find((f) => f.id === id);
+    if (!folder) return send(res, 404, { error: "unknown folder" });
+    if (method === "PUT") {
+      return void readBody(req).then((raw) => {
+        const body = raw as Json;
+        folder.name = body.name ?? folder.name;
+        folder.color = body.color ?? folder.color;
+        send(res, 200, folder);
+      });
+    }
+    if (method === "DELETE") {
+      connectionFoldersState = connectionFolders().filter((f) => f.id !== id);
+      for (const conn of connections()) {
+        if (conn.folderId === id) {
+          delete conn.folderId;
+          conn.sortOrder = 0;
+        }
+      }
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  if (path === "/api/connections/layout" && method === "PUT") {
+    return void readBody(req).then((raw) => {
+      const body = raw as { items?: Json[] };
+      for (const item of body.items ?? []) {
+        const conn = connections().find((c) => c.id === item.connectionId);
+        if (!conn) continue;
+        if (item.folderId) conn.folderId = item.folderId;
+        else delete conn.folderId;
+        conn.sortOrder = item.sortOrder ?? 0;
+      }
+      send(res, 200, { ok: true });
     });
   }
 

@@ -83,3 +83,41 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 		t.Fatalf("credential id field should remain stored id, got %#v", got)
 	}
 }
+
+func TestConnectorResolvesSharedConnectionCredentialAsConnectionOwner(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	key, _ := secrets.GenerateMasterKey()
+	vault, _ := secrets.NewVault(key)
+	reg := plugin.NewRegistry()
+	reg.MustRegister(credentialRefPlugin{})
+	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
+
+	cred, err := creds.Create(ctx, service.NewCredentialInput{
+		OwnerID: "owner",
+		Name:    "token",
+		Kind:    "api_token",
+		Secret:  "owner-secret",
+	})
+	if err != nil {
+		t.Fatalf("create credential: %v", err)
+	}
+
+	connector := service.NewConnector(reg, creds, vault, transport.NewRegistry())
+	cfg, _, err := connector.Build(ctx,
+		models.User{ID: "viewer"},
+		models.Connection{
+			ID:        "c1",
+			Protocol:  "http-api",
+			Transport: string(plugin.TransportDirect),
+			OwnerID:   "owner",
+			Config:    map[string]any{"api_credential": cred.ID},
+		},
+	)
+	if err != nil {
+		t.Fatalf("shared connection should resolve owner credential: %v", err)
+	}
+	if got := cfg.Config["_api_credential_secret"]; got != "owner-secret" {
+		t.Fatalf("resolved credential secret = %#v, want owner-secret", got)
+	}
+}

@@ -195,6 +195,22 @@ func (s *CredentialService) EnsureUsable(ctx context.Context, userID, credential
 	return s.ensureUsableCredential(ctx, userID, cred)
 }
 
+// SummaryIfUsable returns the non-secret credential summary only when userID
+// has direct use access. It intentionally collapses not-found/forbidden/errors
+// to false for redacted edit views.
+func (s *CredentialService) SummaryIfUsable(ctx context.Context, userID, credentialID string) (models.CredentialSummary, bool) {
+	cred, err := s.creds.Get(ctx, credentialID)
+	if err != nil {
+		return models.CredentialSummary{}, false
+	}
+	ok, err := s.canUse(ctx, userID, cred)
+	if err != nil || !ok {
+		return models.CredentialSummary{}, false
+	}
+	summary := cred.Summary()
+	return summary, true
+}
+
 // EnsureUsableFor verifies that userID may use credentialID and that the
 // credential matches the selector constraints for the connection protocol.
 func (s *CredentialService) EnsureUsableFor(ctx context.Context, userID, credentialID string, kinds []string, protocol string) error {
