@@ -82,6 +82,19 @@ describe("ConnectionSidebar", () => {
     expect(wrapper.text()).toContain("Production");
     expect(wrapper.text()).toContain("Databases");
     expect(wrapper.text()).toContain("Prod DB");
+
+    const connectionButton = wrapper.get(
+      '[data-connection-id="c-prod"] button',
+    );
+    expect(connectionButton.attributes("title")).toBe("Prod DB");
+    expect(connectionButton.attributes("aria-label")).toBe("Open Prod DB");
+    expect(
+      wrapper.get('[data-connection-id="c-prod"] button span').classes(),
+    ).toEqual(expect.arrayContaining(["block", "max-w-full", "truncate"]));
+
+    const folderButton = wrapper.get('[data-folder-id="f1"] > div button');
+    expect(folderButton.attributes("title")).toBe("Production");
+    expect(folderButton.attributes("aria-label")).toBe("Collapse Production");
     expect(
       JSON.parse(
         localStorage.getItem("shellcn:connection-folders:expanded") ?? "{}",

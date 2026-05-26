@@ -39,7 +39,6 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			Icon:   icon,
 			Panel:  plugin.PanelRemoteDesktop,
 			Source: &plugin.DataSource{RouteID: "rdp.desktop", Method: plugin.MethodWS},
-			Config: plugin.RemoteDesktopConfig{Engine: plugin.RemoteDesktopEngineNoVNC}.Map(),
 		}},
 		Streams: []plugin.Stream{{ID: "rdp.desktop", Kind: plugin.StreamDesktop, RouteID: "rdp.desktop"}},
 		Recording: []plugin.RecordingCapability{{

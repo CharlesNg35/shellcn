@@ -17,10 +17,6 @@ var validMethods = map[Method]bool{
 	MethodPatch: true, MethodDelete: true, MethodWS: true,
 }
 
-var validRemoteDesktopEngines = map[RemoteDesktopEngine]bool{
-	RemoteDesktopEngineNoVNC: true,
-}
-
 // Validate checks a manifest + its routes at registration, returning an
 // aggregate of all actionable problems found (not just the first).
 func Validate(m Manifest, routes []Route) error {
@@ -446,21 +442,7 @@ func checkPanelConfigRoutes(
 }
 
 func validateRemoteDesktopConfig(ctx string, config map[string]any, add func(string, ...any)) {
-	if config == nil {
-		add("%s config is missing remote desktop engine", ctx)
-		return
-	}
-	raw, ok := config["engine"]
-	if !ok {
-		add("%s config is missing remote desktop engine", ctx)
-		return
-	}
-	engine, ok := raw.(string)
-	if !ok || engine == "" {
-		add("%s config has invalid remote desktop engine %v", ctx, raw)
-		return
-	}
-	if !validRemoteDesktopEngines[RemoteDesktopEngine(engine)] {
-		add("%s config has unsupported remote desktop engine %q", ctx, engine)
+	if _, ok := config["engine"]; ok {
+		add("%s config no longer accepts remote desktop engine; desktop rendering is core-owned", ctx)
 	}
 }

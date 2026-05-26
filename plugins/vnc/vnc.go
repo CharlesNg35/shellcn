@@ -37,7 +37,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			Icon:   plugin.Icon{Type: plugin.IconSVG, Value: iconSVG},
 			Panel:  plugin.PanelRemoteDesktop,
 			Source: &plugin.DataSource{RouteID: "vnc.desktop", Method: plugin.MethodWS},
-			Config: plugin.RemoteDesktopConfig{Engine: plugin.RemoteDesktopEngineNoVNC, Resize: true}.Map(),
+			Config: plugin.RemoteDesktopConfig{Resize: true}.Map(),
 		}},
 		Streams: []plugin.Stream{{ID: "vnc.desktop", Kind: plugin.StreamDesktop, RouteID: "vnc.desktop"}},
 		Recording: []plugin.RecordingCapability{{

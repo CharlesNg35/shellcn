@@ -16,8 +16,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   const recent = ref<string[]>([]);
   const views = ref<Record<string, ConnectionView>>({});
   // Connections the user has explicitly connected this session. Drives the
-  // sidebar presence dot — protocol-agnostic, unlike a server stream channel
-  // (SFTP/Docker/k8s hold a pooled session but no channel). Cleared on reload.
+  // sidebar presence dot without assuming a live stream channel. Cleared on reload.
   const connected = ref<Record<string, boolean>>({});
 
   function view(id: string): ConnectionView {

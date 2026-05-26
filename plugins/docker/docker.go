@@ -29,13 +29,16 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Agent: &plugin.AgentProfile{
 			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: "/var/run/docker.sock", Risk: plugin.RiskPrivileged},
 			Install: []plugin.InstallArtifact{{
-				Label: "Docker",
-				Kind:  "docker-run",
+				Label:      "Docker",
+				Kind:       "docker-run",
+				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
 				Template: "docker run --rm --name shellcn-agent " +
-					"-e SHELLCN_CONNECT_URL={{.ConnectURL}} " +
-					"-e SHELLCN_ENROLL_TOKEN={{.Token}} " +
-					"-v /var/run/docker.sock:/var/run/docker.sock " +
-					"{{.Image}}",
+					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
+					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +
+					"{{if .Insecure}}-e SHELLCN_INSECURE=1 {{end}}" +
+					"-e SHELLCN_ENROLL_TOKEN={{shellquote .Token}} " +
+					"-v {{shellquote \"/var/run/docker.sock:/var/run/docker.sock\"}} " +
+					"{{shellquote .Image}}",
 			}},
 		},
 		Layout:    plugin.LayoutSidebarTree,

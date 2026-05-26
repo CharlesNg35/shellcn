@@ -1,4 +1,7 @@
-import type { RemoteDesktopEngineOptions, RemoteDesktopSession } from "./types";
+import type {
+  RemoteDesktopConnectOptions,
+  RemoteDesktopSession,
+} from "./types";
 
 interface RfbLike {
   scaleViewport: boolean;
@@ -14,7 +17,7 @@ export async function connectNoVNCDesktop({
   url,
   config,
   hooks,
-}: RemoteDesktopEngineOptions): Promise<RemoteDesktopSession> {
+}: RemoteDesktopConnectOptions): Promise<RemoteDesktopSession> {
   const mod = await import("@novnc/novnc");
   const RFB = mod.default as new (
     target: HTMLElement,

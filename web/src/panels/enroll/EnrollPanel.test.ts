@@ -24,9 +24,9 @@ beforeEach(() => {
           expiresAt: "",
           artifacts: [
             {
-              label: "Docker",
-              kind: "docker-run",
-              command: "docker run shellcn-proxy",
+              label: "Container",
+              kind: "container-run",
+              command: "run shellcn-agent",
             },
           ],
         },
@@ -49,7 +49,7 @@ describe("EnrollPanel", () => {
     await generate!.trigger("click");
     await flushPromises();
 
-    expect(w.text()).toContain("docker run shellcn-proxy");
+    expect(w.text()).toContain("run shellcn-agent");
     // the immediate post-enroll status check returns online
     expect(w.emitted("online")).toBeTruthy();
     expect(w.text()).toContain("Agent online");

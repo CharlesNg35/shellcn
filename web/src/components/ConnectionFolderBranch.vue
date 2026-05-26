@@ -145,10 +145,10 @@ function dragAdd(event: unknown): void {
 
         <section v-else class="min-w-0" :data-folder-id="item.id">
           <div
-            class="group flex min-h-10 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+            class="group flex min-h-10 w-full items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
           >
             <span
-              class="folder-drag-handle cursor-grab touch-none rounded p-0.5 active:cursor-grabbing"
+              class="folder-drag-handle shrink-0 cursor-grab touch-none rounded p-0.5 active:cursor-grabbing"
               :class="folderIconClass(item)"
               title="Drag folder"
               aria-label="Drag folder"
@@ -164,14 +164,20 @@ function dragAdd(event: unknown): void {
 
             <button
               type="button"
-              class="flex min-w-0 flex-1 flex-col text-left font-medium text-surface-800 dark:text-surface-100"
+              class="flex min-w-0 flex-1 flex-col overflow-hidden text-left font-medium text-surface-800 dark:text-surface-100"
+              :title="item.name"
+              :aria-label="`${isExpanded(item) ? 'Collapse' : 'Expand'} ${item.name}`"
               @click="emit('toggle-folder', item.id)"
             >
-              <span class="truncate">{{ item.name }}</span>
-              <span class="truncate text-xs text-surface-400"> Folder </span>
+              <span class="block max-w-full truncate" :title="item.name">{{
+                item.name
+              }}</span>
+              <span class="block max-w-full truncate text-xs text-surface-400">
+                Folder
+              </span>
             </button>
 
-            <span class="min-w-5 text-right text-xs text-surface-400">
+            <span class="min-w-5 shrink-0 text-right text-xs text-surface-400">
               {{ totalConnections(item) }}
             </span>
 
@@ -180,7 +186,7 @@ function dragAdd(event: unknown): void {
               rounded
               severity="secondary"
               size="small"
-              class="m-0 h-7 w-2 justify-start p-0 opacity-70 transition-opacity group-hover:opacity-100"
+              class="m-0 h-7 w-7 shrink-0 justify-center p-0 opacity-70 transition-opacity group-hover:opacity-100"
               title="Folder actions"
               aria-label="Folder actions"
               aria-haspopup="true"

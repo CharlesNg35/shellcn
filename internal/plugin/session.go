@@ -11,11 +11,10 @@ import (
 // builds it wired for the connection's mode; the plugin picks a layer and never
 // branches on direct-vs-agent.
 type NetTransport interface {
-	// L4 — socket/TCP protocols (SSH, Docker, Postgres, …). Identical for direct
-	// and agent transport.
+	// L4 socket/TCP protocols. Identical for direct and agent transport.
 	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
-	// L7 — fat HTTP clients (Kubernetes client-go, private REST APIs). ok=false
-	// unless an L7 agent mode is in use.
+	// L7 clients that need an injected HTTP transport. ok=false unless an L7
+	// agent mode is in use.
 	HTTP() (baseURL string, rt http.RoundTripper, ok bool)
 }
 
@@ -56,7 +55,7 @@ type ChannelRequest struct {
 	Params map[string]string
 }
 
-// Channel is one tracked upstream stream (terminal, sftp, logs, desktop, …).
+// Channel is one tracked upstream stream.
 type Channel interface {
 	io.ReadWriteCloser
 	Kind() StreamKind

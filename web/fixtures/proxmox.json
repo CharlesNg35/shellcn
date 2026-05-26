@@ -227,7 +227,6 @@
               }
             },
             "config": {
-              "engine": "novnc",
               "resize": true,
               "clipboard": true
             }
