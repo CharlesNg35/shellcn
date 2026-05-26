@@ -36,6 +36,7 @@ function shareTitle(c: ConnectionSummary): string {
 <template>
   <div
     class="flex min-h-10 w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+    :data-connection-id="connection.id"
     :class="
       active
         ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'

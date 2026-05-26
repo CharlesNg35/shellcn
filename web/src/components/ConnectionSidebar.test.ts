@@ -37,7 +37,7 @@ const connections: ConnectionSummary[] = [
     protocol: "ssh",
     icon,
     transport: "direct",
-    sortOrder: 0,
+    sortOrder: 1,
   },
   {
     id: "c-prod",
@@ -128,7 +128,7 @@ describe("ConnectionSidebar", () => {
         { folderId: "f2", parentId: "f1", sortOrder: 0 },
       ]),
       items: expect.arrayContaining([
-        { connectionId: "c-root", sortOrder: 0 },
+        { connectionId: "c-root", sortOrder: 1 },
         { connectionId: "c-prod", folderId: "f2", sortOrder: 0 },
       ]),
     });

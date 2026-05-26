@@ -2,7 +2,6 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useStorage } from "@vueuse/core";
-import { VueDraggable } from "vue-draggable-plus";
 import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -11,11 +10,14 @@ import { useConfirmAction } from "../composables/useConfirmAction";
 import AppIcon from "./AppIcon.vue";
 import ConnectionFolderBranch from "./ConnectionFolderBranch.vue";
 import ConnectionFolderDialog from "./ConnectionFolderDialog.vue";
-import ConnectionSidebarItem from "./ConnectionSidebarItem.vue";
 import type {
   ConnectionFolderMenuAction,
   ConnectionFolderNode,
+  ConnectionNode,
+  ConnectionTreeDropPreference,
+  ConnectionTreeItem,
 } from "./connectionTree";
+import { dedupeConnectionTree } from "./connectionTree";
 import type { ConnectionFolder, ConnectionSummary } from "../types/projection";
 
 const props = defineProps<{
@@ -29,8 +31,7 @@ const router = useRouter();
 const notify = useNotify();
 const { confirmDanger } = useConfirmAction();
 
-const rootConnections = ref<ConnectionSummary[]>([]);
-const folderTree = ref<ConnectionFolderNode[]>([]);
+const rootItems = ref<ConnectionTreeItem[]>([]);
 const dragging = ref(false);
 const expanded = useStorage<Record<string, boolean>>(
   "shellcn:connection-folders:expanded",
@@ -44,11 +45,7 @@ const newFolderParentId = ref<string | null>(null);
 const savingLayout = ref(false);
 
 const emptyFiltered = computed(
-  () =>
-    conns.loaded &&
-    Boolean(props.query.trim()) &&
-    !rootConnections.value.length &&
-    !folderTree.value.length,
+  () => conns.loaded && Boolean(props.query.trim()) && !rootItems.value.length,
 );
 
 watch(
@@ -70,23 +67,21 @@ watch(
 
 function rebuildLists(): void {
   const q = props.query.trim().toLowerCase();
-  const sortConnections = (a: ConnectionSummary, b: ConnectionSummary) =>
-    (a.sortOrder ?? Number.MAX_SAFE_INTEGER) -
-      (b.sortOrder ?? Number.MAX_SAFE_INTEGER) || a.name.localeCompare(b.name);
-  const sortFolders = (a: ConnectionFolderNode, b: ConnectionFolderNode) =>
-    a.sortOrder - b.sortOrder || a.name.localeCompare(b.name);
+  const sortItems = (a: ConnectionTreeItem, b: ConnectionTreeItem) =>
+    itemSortOrder(a) - itemSortOrder(b) ||
+    itemLabel(a).localeCompare(itemLabel(b));
 
   const folderIds = new Set(conns.folders.map((f) => f.id));
   const nodeById = new Map<string, ConnectionFolderNode>();
   for (const folder of conns.folders) {
     nodeById.set(folder.id, {
       ...folder,
+      kind: "folder",
       children: [],
-      connections: [],
     });
   }
 
-  const root: ConnectionSummary[] = [];
+  const roots: ConnectionTreeItem[] = [];
   for (const connection of conns.connections) {
     if (
       q &&
@@ -94,18 +89,14 @@ function rebuildLists(): void {
     ) {
       continue;
     }
+    const item: ConnectionNode = { kind: "connection", connection };
     if (connection.folderId && folderIds.has(connection.folderId)) {
-      nodeById.get(connection.folderId)?.connections.push(connection);
+      nodeById.get(connection.folderId)?.children.push(item);
     } else {
-      root.push(connection);
+      roots.push(item);
     }
   }
 
-  for (const node of nodeById.values()) {
-    node.connections.sort(sortConnections);
-  }
-
-  const roots: ConnectionFolderNode[] = [];
   for (const node of nodeById.values()) {
     if (node.parentId && nodeById.has(node.parentId)) {
       nodeById.get(node.parentId)?.children.push(node);
@@ -114,26 +105,38 @@ function rebuildLists(): void {
     }
   }
 
-  const sortTree = (nodes: ConnectionFolderNode[]): ConnectionFolderNode[] => {
-    nodes.sort(sortFolders);
-    for (const node of nodes) sortTree(node.children);
-    return nodes;
+  const sortTree = (items: ConnectionTreeItem[]): ConnectionTreeItem[] => {
+    items.sort(sortItems);
+    for (const item of items) {
+      if (item.kind === "folder") sortTree(item.children);
+    }
+    return items;
   };
 
   const tree = sortTree(roots);
-  rootConnections.value = root.sort(sortConnections);
-  folderTree.value = q ? filterTree(tree) : tree;
+  rootItems.value = q ? filterTree(tree) : tree;
 }
 
-function filterTree(nodes: ConnectionFolderNode[]): ConnectionFolderNode[] {
-  const out: ConnectionFolderNode[] = [];
-  for (const node of nodes) {
-    const children = filterTree(node.children);
-    if (node.connections.length || children.length) {
-      out.push({ ...node, children });
-      if (children.length || node.connections.length) {
-        expanded.value = { ...expanded.value, [node.id]: true };
-      }
+function itemSortOrder(item: ConnectionTreeItem): number {
+  if (item.kind === "folder") return item.sortOrder;
+  return item.connection.sortOrder ?? Number.MAX_SAFE_INTEGER;
+}
+
+function itemLabel(item: ConnectionTreeItem): string {
+  return item.kind === "folder" ? item.name : item.connection.name;
+}
+
+function filterTree(items: ConnectionTreeItem[]): ConnectionTreeItem[] {
+  const out: ConnectionTreeItem[] = [];
+  for (const item of items) {
+    if (item.kind === "connection") {
+      out.push(item);
+      continue;
+    }
+    const children = filterTree(item.children);
+    if (children.length) {
+      out.push({ ...item, children });
+      expanded.value = { ...expanded.value, [item.id]: true };
     }
   }
   return out;
@@ -207,10 +210,7 @@ async function persistLayout(): Promise<void> {
       sortOrder: number;
     }> = [];
 
-    rootConnections.value.forEach((connection, index) =>
-      items.push({ connectionId: connection.id, sortOrder: index }),
-    );
-    collectLayout(folderTree.value, undefined, items, folders);
+    collectLayout(rootItems.value, undefined, items, folders);
 
     await conns.saveLayout(items, folders);
     rebuildLists();
@@ -223,35 +223,39 @@ async function persistLayout(): Promise<void> {
 }
 
 function collectLayout(
-  nodes: ConnectionFolderNode[],
+  nodes: ConnectionTreeItem[],
   parentId: string | undefined,
   items: Array<{ connectionId: string; folderId?: string; sortOrder: number }>,
   folders: Array<{ folderId: string; parentId?: string; sortOrder: number }>,
 ): void {
-  nodes.forEach((folder, index) => {
-    folders.push({ folderId: folder.id, parentId, sortOrder: index });
-    folder.connections.forEach((connection, connectionIndex) =>
+  nodes.forEach((item, index) => {
+    if (item.kind === "connection") {
       items.push({
-        connectionId: connection.id,
-        folderId: folder.id,
-        sortOrder: connectionIndex,
-      }),
-    );
-    collectLayout(folder.children, folder.id, items, folders);
+        connectionId: item.connection.id,
+        folderId: parentId,
+        sortOrder: index,
+      });
+      return;
+    }
+    folders.push({ folderId: item.id, parentId, sortOrder: index });
+    collectLayout(item.children, item.id, items, folders);
   });
 }
 
-function onDragEnd(): void {
+function onDragEnd(preference?: ConnectionTreeDropPreference): void {
   if (props.query.trim()) return;
-  void nextTick(() => persistLayout());
+  void nextTick(() => {
+    rootItems.value = dedupeConnectionTree(rootItems.value, preference);
+    return persistLayout();
+  });
 }
 
 function onDragStart(): void {
   dragging.value = true;
 }
 
-function afterDragEnd(): void {
-  onDragEnd();
+function afterDragEnd(preference?: ConnectionTreeDropPreference): void {
+  onDragEnd(preference);
   window.setTimeout(() => {
     dragging.value = false;
   }, 0);
@@ -287,32 +291,11 @@ function go(connection: ConnectionSummary): void {
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto">
-      <VueDraggable
-        v-model="rootConnections"
-        group="connections"
-        handle=".connection-drag-handle"
-        :disabled="Boolean(query.trim())"
-        :animation="150"
-        ghost-class="opacity-40"
-        class="min-h-3 space-y-1"
-        @start="onDragStart"
-        @end="afterDragEnd"
-      >
-        <ConnectionSidebarItem
-          v-for="connection in rootConnections"
-          :key="connection.id"
-          :connection="connection"
-          :active="activeId === connection.id"
-          @open="go"
-        />
-      </VueDraggable>
-
       <ConnectionFolderBranch
-        v-model="folderTree"
+        v-model="rootItems"
         :active-id="activeId"
         :expanded="expanded"
         :disabled="Boolean(query.trim())"
-        class="mt-2"
         @toggle-folder="toggleFolder"
         @menu-action="handleFolderMenu"
         @drag-start="onDragStart"
