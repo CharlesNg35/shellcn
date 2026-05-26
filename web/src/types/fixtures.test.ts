@@ -14,7 +14,7 @@ import type {
 const projections: Record<string, unknown> = { ssh, docker, proxmox, postgres };
 
 const risks: RiskLevel[] = ["safe", "write", "destructive", "privileged"];
-const iconTypes = ["name", "url", "base64", "emoji"];
+const iconTypes = ["lucide", "url", "base64", "emoji"];
 
 function assertDataSource(ds: DataSource, where: string) {
   expect(typeof ds.routeId, `${where}: routeId`).toBe("string");
@@ -27,6 +27,10 @@ function validate(name: string, raw: unknown): PluginProjection {
   expect(typeof p.apiVersion).toBe("number");
   expect(typeof p.title).toBe("string");
   expect(iconTypes).toContain(p.icon.type);
+  expect(typeof p.category.key).toBe("string");
+  expect(typeof p.category.label).toBe("string");
+  expect(iconTypes).toContain(p.category.icon.type);
+  expect(typeof p.category.order).toBe("number");
   expect(["tabs", "sidebar_tree"]).toContain(p.layout);
   expect(Array.isArray(p.supportedTransports)).toBe(true);
   expect(Array.isArray(p.config.groups)).toBe(true);

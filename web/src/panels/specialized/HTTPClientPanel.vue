@@ -207,7 +207,7 @@ async function send(): Promise<void> {
                 aria-label="Remove header"
                 @click="removeHeader(index)"
               >
-                <AppIcon :icon="{ type: 'name', value: 'x' }" :size="14" />
+                <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
               </Button>
             </div>
           </div>

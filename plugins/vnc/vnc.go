@@ -1,6 +1,6 @@
 // Package vnc implements the VNC remote-desktop plugin. The gateway performs
 // RFB authentication to the upstream server (keeping the password server-side)
-// and streams the raw RFB session to the browser's noVNC engine.
+// and streams the raw RFB session to the browser's noVNC client.
 package vnc
 
 import (
@@ -26,6 +26,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Title:               "VNC",
 		Description:         "VNC remote desktop rendered with noVNC.",
 		Icon:                plugin.Icon{Type: plugin.IconSVG, Value: iconSVG},
+		Category:            plugin.CategoryRemoteDesktop,
 		Config:              configSchema("vnc"),
 		Capabilities:        []plugin.Capability{"remote_desktop"},
 		CredentialKinds:     credentialKinds(),

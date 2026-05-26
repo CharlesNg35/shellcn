@@ -55,7 +55,7 @@ const emit = defineEmits<{
         @dblclick="emit('open', entry)"
       >
         <AppIcon
-          :icon="{ type: 'name', value: entry.isDir ? 'folder' : 'code' }"
+          :icon="{ type: 'lucide', value: entry.isDir ? 'folder' : 'code' }"
           :size="28"
           class="mb-2 text-surface-400"
         />

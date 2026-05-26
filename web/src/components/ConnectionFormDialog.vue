@@ -213,7 +213,11 @@ async function onConfig(
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
-          Protocol <span class="text-red-500">*</span>
+          Protocol
+          <span class="font-normal text-surface-400"
+            >({{ conns.plugins.length }})</span
+          >
+          <span class="text-red-500">*</span>
         </label>
         <ProtocolPicker
           :model-value="protocol"
@@ -308,7 +312,7 @@ async function onConfig(
           <legend
             class="flex items-center gap-1.5 px-1 text-sm font-medium text-surface-700 dark:text-surface-200"
           >
-            <AppIcon :icon="{ type: 'name', value: 'video' }" :size="14" />
+            <AppIcon :icon="{ type: 'lucide', value: 'video' }" :size="14" />
             Recording Policy
           </legend>
           <div
@@ -360,7 +364,7 @@ async function onConfig(
         >
           <AppIcon
             v-if="!busy"
-            :icon="{ type: 'name', value: isEdit ? 'pencil' : 'plus' }"
+            :icon="{ type: 'lucide', value: isEdit ? 'pencil' : 'plus' }"
             :size="15"
           />
           {{ busy ? "Saving…" : isEdit ? "Save changes" : "Create connection" }}

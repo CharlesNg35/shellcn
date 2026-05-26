@@ -118,7 +118,7 @@ const hasItems = computed(() => items.value.length > 0);
         </h1>
       </div>
       <Button type="button" @click="openCreate">
-        <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
+        <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="15" />
         New credential
       </Button>
     </div>
@@ -131,7 +131,7 @@ const hasItems = computed(() => items.value.length > 0);
       class="flex flex-col items-center gap-3 rounded-lg border border-dashed border-surface-300 py-16 text-center dark:border-surface-700"
     >
       <AppIcon
-        :icon="{ type: 'name', value: 'key' }"
+        :icon="{ type: 'lucide', value: 'key' }"
         :size="28"
         class="text-surface-400"
       />
@@ -175,7 +175,7 @@ const hasItems = computed(() => items.value.length > 0);
               :aria-label="`Edit ${(data as CredentialSummary).name}`"
               @click="openEdit(data as CredentialSummary)"
             >
-              <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="16" />
+              <AppIcon :icon="{ type: 'lucide', value: 'pencil' }" :size="16" />
             </Button>
             <Button
               text
@@ -186,7 +186,7 @@ const hasItems = computed(() => items.value.length > 0);
               :aria-label="`Share ${(data as CredentialSummary).name}`"
               @click="openShare(data as CredentialSummary)"
             >
-              <AppIcon :icon="{ type: 'name', value: 'users' }" :size="16" />
+              <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="16" />
             </Button>
             <Button
               text
@@ -197,7 +197,7 @@ const hasItems = computed(() => items.value.length > 0);
               :aria-label="`Delete ${(data as CredentialSummary).name}`"
               @click="openDelete(data as CredentialSummary)"
             >
-              <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="16" />
+              <AppIcon :icon="{ type: 'lucide', value: 'trash' }" :size="16" />
             </Button>
           </div>
           <span v-else class="text-xs text-surface-400">shared with you</span>

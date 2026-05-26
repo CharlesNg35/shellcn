@@ -22,6 +22,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Title:               "Sample",
 		Description:         "A representative plugin used by the golden test.",
 		Icon:                plugin.Icon{Type: plugin.IconSVG, Value: "<svg viewBox=\"0 0 1 1\"></svg>"},
+		Category:            plugin.CategoryShell,
 		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		CredentialKinds: []plugin.CredentialKindInfo{{
@@ -45,10 +46,10 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 			},
 		}}},
 		Tabs: []plugin.Tab{{
-			Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconName, Value: "terminal"},
+			Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
 			Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "sample.shell", Method: plugin.MethodWS},
 		}, {
-			Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconName, Value: "folder"},
+			Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
 			Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "sample.files.list", Params: map[string]string{"path": "/"}},
 			Config: map[string]any{
 				"pathParam":       "path",
@@ -93,7 +94,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 			},
 		}},
 		Actions: []plugin.Action{{
-			ID: "sample.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconName, Value: "play"},
+			ID: "sample.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"},
 			RouteID: "sample.start", Confirm: true, ConfirmText: "Start it?",
 		}},
 		Streams: []plugin.Stream{{ID: "sample.shell", Kind: plugin.StreamTerminal, RouteID: "sample.shell"}},
@@ -173,10 +174,14 @@ func TestProjectionMatchesContract(t *testing.T) {
 	if err := json.Unmarshal(b, &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	for _, key := range []string{"apiVersion", "name", "version", "title", "description", "icon", "config", "capabilities", "supportedTransports", "layout", "tabs", "tree", "resources", "actions", "streams"} {
+	for _, key := range []string{"apiVersion", "name", "version", "title", "description", "icon", "category", "config", "capabilities", "supportedTransports", "layout", "tabs", "tree", "resources", "actions", "streams"} {
 		if _, ok := raw[key]; !ok {
 			t.Errorf("projection missing required key %q", key)
 		}
+	}
+	category, _ := raw["category"].(map[string]any)
+	if category["key"] != string(plugin.CategoryShell) || category["label"] != "Shell & terminal" {
+		t.Errorf("projection category unexpected: %+v", category)
 	}
 
 	actions, _ := raw["actions"].([]any)

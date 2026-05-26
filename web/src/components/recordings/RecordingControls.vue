@@ -94,7 +94,7 @@ watch(
       :disabled="busy"
       @click="stopRecording"
     >
-      <AppIcon :icon="{ type: 'name', value: 'stop' }" :size="12" />
+      <AppIcon :icon="{ type: 'lucide', value: 'square' }" :size="12" />
       Stop
     </Button>
 

@@ -24,7 +24,7 @@ function crumbs(path: string): { label: string; path: string }[] {
     <template v-for="(c, i) in crumbs(path)" :key="c.path">
       <AppIcon
         v-if="i > 0"
-        :icon="{ type: 'name', value: 'chevron-right' }"
+        :icon="{ type: 'lucide', value: 'chevron-right' }"
         :size="14"
         class="text-surface-300"
       />

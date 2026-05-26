@@ -59,7 +59,7 @@ async function onSubmit(): Promise<void> {
         <span
           class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-600 text-white"
         >
-          <AppIcon :icon="{ type: 'name', value: 'user' }" :size="24" />
+          <AppIcon :icon="{ type: 'lucide', value: 'user' }" :size="24" />
         </span>
         <h1
           class="text-xl font-semibold tracking-tight text-surface-900 dark:text-surface-0"

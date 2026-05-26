@@ -93,7 +93,7 @@ function reconnectable(status: string): boolean {
         aria-label="Show error details"
         @click="showError"
       >
-        <AppIcon :icon="{ type: 'name', value: 'info' }" :size="14" />
+        <AppIcon :icon="{ type: 'lucide', value: 'info' }" :size="14" />
         Details
       </button>
     </div>
@@ -103,7 +103,7 @@ function reconnectable(status: string): boolean {
           class="flex items-center gap-1.5 text-xs font-semibold text-surface-700 dark:text-surface-100"
         >
           <AppIcon
-            :icon="{ type: 'name', value: 'alert' }"
+            :icon="{ type: 'lucide', value: 'triangle-alert' }"
             :size="13"
             class="text-amber-500"
           />
@@ -122,7 +122,7 @@ function reconnectable(status: string): boolean {
       :disabled="reconnecting"
       @click="emit('reconnect')"
     >
-      <AppIcon :icon="{ type: 'name', value: 'refresh' }" :size="14" />
+      <AppIcon :icon="{ type: 'lucide', value: 'refresh-cw' }" :size="14" />
       {{ reconnecting ? "Reconnecting..." : "Reconnect" }}
     </Button>
   </div>

@@ -2,11 +2,18 @@
 // Mirrors the Go manifest projection. Carries no server-only fields
 // (handlers, raw mount paths, permission keys, audit-event names).
 
-export type IconType = "name" | "url" | "base64" | "emoji" | "svg";
+export type IconType = "lucide" | "url" | "base64" | "emoji" | "svg";
 
 export interface Icon {
   type: IconType;
   value: string;
+}
+
+export interface PluginCategoryInfo {
+  key: string;
+  label: string;
+  icon: Icon;
+  order: number;
 }
 
 export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "WS";
@@ -384,6 +391,7 @@ export interface PluginSummary {
   name: string;
   title: string;
   icon: Icon;
+  category: PluginCategoryInfo;
   description?: string;
 }
 
@@ -394,6 +402,7 @@ export interface PluginProjection {
   title: string;
   description: string;
   icon: Icon;
+  category: PluginCategoryInfo;
   config: Schema;
   capabilities: string[];
   credentialKinds?: CredentialKindInfo[];

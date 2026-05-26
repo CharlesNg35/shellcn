@@ -87,8 +87,8 @@ func checkConnectURL(connectURL string, insecure bool) error {
 	}
 }
 
-// errEnrollmentRejected marks a fatal handshake rejection (bad/used/expired
-// token): retrying with the same token will never succeed, so the agent stops.
+// errEnrollmentRejected marks a fatal handshake rejection (bad, revoked, or
+// never-enrolled expired token): retrying with the same token will not succeed.
 var errEnrollmentRejected = errors.New("enrollment rejected by gateway")
 
 // run keeps a tunnel up, reconnecting with backoff until the context is cancelled.
@@ -98,7 +98,7 @@ func run(ctx context.Context, logger *slog.Logger, connectURL, token string, ins
 	for {
 		err := serve(ctx, logger, connectURL, token, insecure)
 		if errors.Is(err, errEnrollmentRejected) {
-			logger.Error("enrollment rejected — token is invalid, used, or expired; not retrying", "err", err)
+			logger.Error("enrollment rejected — token is invalid, revoked, or expired before first use; not retrying", "err", err)
 			return
 		}
 		if err != nil && ctx.Err() == nil {

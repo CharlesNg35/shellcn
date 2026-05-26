@@ -16,7 +16,13 @@ const projection: PluginProjection = {
   version: "0",
   title: "Tester",
   description: "",
-  icon: { type: "name", value: "box" },
+  icon: { type: "lucide", value: "box" },
+  category: {
+    key: "other",
+    label: "Other",
+    icon: { type: "lucide", value: "plug" },
+    order: 1000,
+  },
   config: {
     groups: [
       {
@@ -58,7 +64,12 @@ describe("ConnectionFormDialog", () => {
 
     const conns = useConnectionsStore();
     conns.plugins = [
-      { name: "tester", title: "Tester", icon: { type: "name", value: "box" } },
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
     ];
 
     const wrapper = mount(ConnectionFormDialog, {
@@ -119,7 +130,12 @@ describe("ConnectionFormDialog", () => {
 
     const conns = useConnectionsStore();
     conns.plugins = [
-      { name: "tester", title: "Tester", icon: { type: "name", value: "box" } },
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
     ];
 
     const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
@@ -153,7 +169,12 @@ describe("ConnectionFormDialog", () => {
     });
     const conns = useConnectionsStore();
     conns.plugins = [
-      { name: "tester", title: "Tester", icon: { type: "name", value: "box" } },
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
     ];
     const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
     await flushPromises();
@@ -200,7 +221,12 @@ describe("ConnectionFormDialog", () => {
     });
     const conns = useConnectionsStore();
     conns.plugins = [
-      { name: "tester", title: "Tester", icon: { type: "name", value: "box" } },
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
     ];
 
     const wrapper = mount(ConnectionFormDialog, { props: { visible: true } });
@@ -276,7 +302,12 @@ describe("ConnectionFormDialog", () => {
 
     const conns = useConnectionsStore();
     conns.plugins = [
-      { name: "tester", title: "Tester", icon: { type: "name", value: "box" } },
+      {
+        name: "tester",
+        title: "Tester",
+        icon: { type: "lucide", value: "box" },
+        category: projection.category,
+      },
     ];
 
     const wrapper = mount(ConnectionFormDialog, {

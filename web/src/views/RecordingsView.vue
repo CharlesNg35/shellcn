@@ -142,7 +142,7 @@ const playable = (r: RecordingSummary): boolean => r.status === "finalized";
       class="flex flex-col items-center gap-3 rounded-lg border border-dashed border-surface-300 py-16 text-center dark:border-surface-700"
     >
       <AppIcon
-        :icon="{ type: 'name', value: 'video' }"
+        :icon="{ type: 'lucide', value: 'video' }"
         :size="28"
         class="text-surface-400"
       />
@@ -168,7 +168,7 @@ const playable = (r: RecordingSummary): boolean => r.status === "finalized";
           >
             <AppIcon
               :icon="{
-                type: 'name',
+                type: 'lucide',
                 value:
                   (data as RecordingSummary).class === 'desktop'
                     ? 'server'
@@ -227,7 +227,7 @@ const playable = (r: RecordingSummary): boolean => r.status === "finalized";
               :aria-label="`Play recording`"
               @click="play(data as RecordingSummary)"
             >
-              <AppIcon :icon="{ type: 'name', value: 'play' }" :size="16" />
+              <AppIcon :icon="{ type: 'lucide', value: 'play' }" :size="16" />
             </Button>
             <Button
               v-if="playable(data as RecordingSummary)"
@@ -239,7 +239,10 @@ const playable = (r: RecordingSummary): boolean => r.status === "finalized";
               :aria-label="`Download recording`"
               @click="download(data as RecordingSummary)"
             >
-              <AppIcon :icon="{ type: 'name', value: 'download' }" :size="16" />
+              <AppIcon
+                :icon="{ type: 'lucide', value: 'download' }"
+                :size="16"
+              />
             </Button>
             <Button
               v-if="canDelete(data as RecordingSummary)"
@@ -251,7 +254,7 @@ const playable = (r: RecordingSummary): boolean => r.status === "finalized";
               :aria-label="`Delete recording`"
               @click="openDelete(data as RecordingSummary)"
             >
-              <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="16" />
+              <AppIcon :icon="{ type: 'lucide', value: 'trash' }" :size="16" />
             </Button>
           </div>
         </template>

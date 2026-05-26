@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-26 — Phase 4 (M3 Docker + agent transport) complete. Core runtime, platform management, recording, and SSH/SFTP remain complete. Docker is now a real first-party plugin with Docker Engine access over the current `cfg.Net.DialContext` path for both direct and agent transports; it declares sidebar-tree resources for containers, Compose projects, images, volumes, and networks; supports inspect, logs, exec terminal, events/watch updates, lifecycle/removal actions, raw Engine API access, Docker SVG branding, and privileged Docker-socket agent enrollment. `shellcn-agent` now refuses proxy-target overrides and forwards only the gateway-declared TCP/unix target. Separately, the **VNC and RDP remote-desktop plugins landed ahead of phase order**: both render through noVNC/RFB without a plugin-selected browser engine. VNC streams raw RFB after gateway-side authentication (the password never reaches the browser); RDP is decoded in-process by the pure-Go GPL `grdp` client and bridged to a synthetic RFB stream. Shared protocol code lives in `plugins/shared/{rfb,sshsftp}`, and the WS wrapper now negotiates a `binary` subprotocol so noVNC gets binary frames. Adopting `grdp` switched the license to **GPL-3.0** and the toolchain to **Go 1.26**. Recording for both rides the existing manual `webm_canvas` desktop path. **Next: Phase 5 (M4 Proxmox).**_
+_Last updated: 2026-05-26 — Phase 4 (M3 Docker + agent transport) complete. Core runtime, platform management, recording, and SSH/SFTP remain complete. Docker is now a real first-party plugin with Docker Engine access over the current `cfg.Net.DialContext` path for both direct and agent transports; it declares sidebar-tree resources for containers, Compose projects, images, volumes, and networks; supports inspect, logs, exec terminal, events/watch updates, lifecycle/removal actions, raw Engine API access, Docker SVG branding, and privileged Docker-socket agent enrollment. `shellcn-agent` now refuses proxy-target overrides and forwards only the gateway-declared TCP/unix target. Separately, the **VNC and RDP remote-desktop plugins landed ahead of phase order**: both render through noVNC/RFB without a plugin-selected browser engine. VNC streams raw RFB after gateway-side authentication (the password never reaches the browser); RDP is decoded in-process by the pure-Go GPL `grdp` client and bridged to a synthetic RFB stream. Shared protocol code lives in `plugins/shared/{rfb,sshsftp}`, and the WS wrapper now negotiates a `binary` subprotocol so noVNC gets binary frames. Adopting `grdp` switched the license to **GPL-3.0** and the toolchain to **Go 1.26**. Recording for both rides the existing manual `webm_canvas` desktop path. **Phase 5 (M4 Proxmox) is now complete**: a first-party `proxmox` plugin renders a deep `LayoutSidebarTree` (Datacenter → nodes → VMs/containers/storage) with VM/LXC/node/storage detail views — live CPU/memory metrics, QEMU consoles over noVNC (RFB) and LXC/node shells over xterm (termproxy), snapshots (create/rollback/delete), backups (vzdump/delete), and lifecycle/migrate actions, all audited with confirm on destructive ops. REST runs through the maintained `github.com/luthermonson/go-proxmox` client injected with an `http.Client` wired to `cfg.Net`; the console websocket is hand-bridged with `coder/websocket` so it shares the same transport (go-proxmox's own gorilla-based WS would bypass it). Auth supports API token, username/password (gateway owns the PVE ticket), or a stored `proxmox_api_token` credential. Verified by unit tests + a fake-PVE TLS server exercising the net-wired client and row mapping; `make fmt`/`lint`/`test` and the FE e2e are green. **Live validation against a real Proxmox cluster is still pending** (console pixel/auth flow, like RDP). **Next: Phase 6 (M5 PostgreSQL).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -42,7 +42,7 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 
 ## Phase 2b — M1.5 · Platform management (make it usable)
 
-_Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps [phase-2b](specs/plans/phase-2b-m1.5-platform-management/)). Connection/credential CRUD + sharing endpoints with authn→authz→audit; auth gate + global error UX; manifest-driven connection create/edit/delete; credential management + sharing UI. Shared connections can use already-bound credentials without exposing those credentials; shared managers see keep-or-replace credential refs, and credential grants remain managed from the credentials surface. All secrets write-only end to end._
+_Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps [phase-2b](specs/plans/phase-2b-m1.5-platform-management/)). Connection/credential CRUD + sharing endpoints with authn→authz→audit; auth gate + global error UX; manifest-driven connection create/edit/delete with category-grouped protocol picking; credential management + sharing UI. Shared connections can use already-bound credentials without exposing those credentials; shared managers see keep-or-replace credential refs, and credential grants remain managed from the credentials surface. All secrets write-only end to end._
 
 - [x] 2b.1 Backend — connection CRUD endpoints (schema-validated, secret-encrypted, authz'd)
 - [x] 2b.2 Backend — credential CRUD + rotation (write-only secret material)
@@ -97,10 +97,10 @@ _Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP ses
 
 ## Phase 5 — M4 · Proxmox
 
-- [ ] 5.1 Proxmox session and API client
-- [ ] 5.2 Proxmox manifest (nodes, VMs, LXC, storage)
-- [ ] 5.3 Real noVNC/RFB remote-desktop panel
-- [ ] 5.4 Snapshots, backups, and lifecycle actions
+- [x] 5.1 Proxmox session and API client
+- [x] 5.2 Proxmox manifest (nodes, VMs, LXC, storage)
+- [x] 5.3 Real noVNC/RFB remote-desktop panel
+- [x] 5.4 Snapshots, backups, and lifecycle actions
 
 ## Phase 6 — M5 · PostgreSQL
 

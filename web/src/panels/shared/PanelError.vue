@@ -15,7 +15,7 @@ const emit = defineEmits<{ retry: [] }>();
     <span
       class="flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-500 dark:bg-amber-950/40 dark:text-amber-400"
     >
-      <AppIcon :icon="{ type: 'name', value: 'alert' }" :size="20" />
+      <AppIcon :icon="{ type: 'lucide', value: 'triangle-alert' }" :size="20" />
     </span>
     <p class="max-w-sm text-sm text-surface-500 dark:text-surface-400">
       {{ message }}
@@ -27,7 +27,7 @@ const emit = defineEmits<{ retry: [] }>();
       outlined
       @click="emit('retry')"
     >
-      <AppIcon :icon="{ type: 'name', value: 'refresh' }" :size="14" />
+      <AppIcon :icon="{ type: 'lucide', value: 'refresh-cw' }" :size="14" />
       Retry
     </Button>
   </div>

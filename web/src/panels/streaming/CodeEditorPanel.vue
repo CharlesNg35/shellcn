@@ -7,12 +7,7 @@ import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import { useTheme } from "../../composables/useTheme";
-import {
-  currentMonacoTheme,
-  loadMonaco,
-  syncMonacoTheme,
-  type MonacoModule,
-} from "../../monaco";
+import type { CodeMirrorEditor } from "../../codemirror";
 
 const props = defineProps<PanelProps>();
 
@@ -24,8 +19,8 @@ const useFallback = ref(false);
 const saving = ref(false);
 const saveError = ref<string | null>(null);
 const saved = ref(false);
-let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
-let monacoModule: MonacoModule | null = null;
+let editor: CodeMirrorEditor | null = null;
+let codeMirror: typeof import("../../codemirror") | null = null;
 const editorConfig = computed(
   () => props.config as CodeEditorConfig | undefined,
 );
@@ -64,22 +59,18 @@ async function mountEditor(): Promise<void> {
     return;
   }
   try {
-    const monaco = await loadMonaco();
-    monacoModule = monaco;
-    editor?.dispose();
-    const ed = monaco.editor.create(container.value, {
+    const helpers = await import("../../codemirror");
+    codeMirror = helpers;
+    editor?.view.destroy();
+    editor = helpers.createCodeMirrorEditor(container.value, {
       value: text.value,
       language: language.value,
       readOnly: !editable.value,
-      theme: currentMonacoTheme(),
-      minimap: { enabled: false },
-      automaticLayout: true,
-      scrollBeyondLastLine: false,
-    });
-    editor = ed;
-    ed.onDidChangeModelContent(() => {
-      text.value = ed.getValue();
-      saved.value = false;
+      ariaLabel: "Code editor",
+      onChange(value) {
+        text.value = value;
+        saved.value = false;
+      },
     });
   } catch {
     useFallback.value = true;
@@ -89,7 +80,7 @@ async function mountEditor(): Promise<void> {
 async function save(): Promise<void> {
   const routeId = saveRouteId.value;
   if (!routeId) return;
-  if (editor) text.value = editor.getValue();
+  if (editor) text.value = codeMirror?.editorValue(editor) ?? text.value;
   saving.value = true;
   saveError.value = null;
   try {
@@ -111,12 +102,21 @@ async function save(): Promise<void> {
 
 onMounted(load);
 watch(() => [props.connectionId, props.resource?.uid], load);
+watch(language, (next) => {
+  codeMirror?.setEditorLanguage(editor, next);
+});
+watch(editable, (next) => {
+  codeMirror?.setEditorReadOnly(editor, !next);
+});
+watch(text, (value) => {
+  codeMirror?.setEditorValue(editor, value);
+});
 watch(isDark, () => {
-  if (monacoModule) syncMonacoTheme(monacoModule);
+  codeMirror?.syncCodeMirrorTheme(editor);
 });
 onUnmounted(() => {
   try {
-    editor?.dispose();
+    editor?.view.destroy();
   } catch {
     /* already disposed */
   }
@@ -153,7 +153,7 @@ onUnmounted(() => {
     <div
       v-show="!loading && !error && !useFallback"
       ref="container"
-      class="shellcn-monaco-host min-h-0 flex-1"
+      class="shellcn-codemirror-host min-h-0 flex-1"
     />
   </div>
 </template>

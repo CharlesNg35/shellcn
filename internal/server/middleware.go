@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strings"
 
 	"github.com/charlesng/shellcn/internal/audit"
 	"github.com/charlesng/shellcn/internal/auth"
@@ -86,7 +87,47 @@ func isStateChanging(method string) bool {
 }
 
 func isTLS(r *http.Request) bool {
-	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	return r.TLS != nil || forwardedProto(r) == "https"
+}
+
+func requestHost(r *http.Request) string {
+	if host := forwardedValue(r.Header.Get("Forwarded"), "host"); host != "" {
+		return host
+	}
+	if host := firstHeaderValue(r.Header.Get("X-Forwarded-Host")); host != "" {
+		return host
+	}
+	return r.Host
+}
+
+func forwardedProto(r *http.Request) string {
+	if proto := forwardedValue(r.Header.Get("Forwarded"), "proto"); proto != "" {
+		return strings.ToLower(proto)
+	}
+	return strings.ToLower(firstHeaderValue(r.Header.Get("X-Forwarded-Proto")))
+}
+
+func firstHeaderValue(value string) string {
+	if value == "" {
+		return ""
+	}
+	value = strings.Split(value, ",")[0]
+	return strings.Trim(strings.TrimSpace(value), `"`)
+}
+
+func forwardedValue(header, key string) string {
+	if header == "" {
+		return ""
+	}
+	part := strings.Split(header, ",")[0]
+	for _, pair := range strings.Split(part, ";") {
+		name, value, ok := strings.Cut(pair, "=")
+		if !ok || strings.ToLower(strings.TrimSpace(name)) != key {
+			continue
+		}
+		return strings.Trim(strings.TrimSpace(value), `"`)
+	}
+	return ""
 }
 
 // withRemoteAddr stashes the direct peer address on the request context so every

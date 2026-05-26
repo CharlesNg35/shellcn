@@ -63,7 +63,7 @@ onUnmounted(() => setApiErrorHandler(null));
     <template #message="{ message }">
       <div class="flex items-start gap-3">
         <AppIcon
-          :icon="{ type: 'name', value: 'alert' }"
+          :icon="{ type: 'lucide', value: 'triangle-alert' }"
           :size="20"
           class="mt-0.5 shrink-0 text-red-500"
         />

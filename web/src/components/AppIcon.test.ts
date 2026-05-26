@@ -1,65 +1,55 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import AppIcon from "./AppIcon.vue";
-import { appIconNames } from "./appIconRegistry";
+import { iconExists, toPascalCase } from "./lucideIconRegistry";
+import type { Icon } from "../types/projection";
 
-const usedIconNames = [
-  "alert",
-  "box",
-  "camera",
-  "chevron-right",
-  "code",
-  "copy",
-  "database",
-  "download",
-  "ellipsis-vertical",
-  "folder",
-  "folder-open",
-  "folder-plus",
-  "globe",
-  "grid",
-  "key",
-  "layers",
-  "list",
-  "lock",
-  "log-out",
-  "pencil",
-  "play",
-  "plus",
-  "refresh",
-  "refresh-cw",
-  "search",
-  "server",
-  "settings",
-  "share",
-  "share-2",
-  "stop",
-  "terminal",
-  "trash",
-  "upload",
-  "user",
-  "users",
-  "video",
-  "workflow",
-  "x",
-];
+describe("lucideIconRegistry", () => {
+  it("normalizes any separator/casing to Lucide PascalCase", () => {
+    for (const input of [
+      "ellipsis-vertical",
+      "EllipsisVertical",
+      "Ellipsis Vertical",
+      "ellipsis_vertical",
+      "ellipsisVertical",
+    ]) {
+      expect(toPascalCase(input)).toBe("EllipsisVertical");
+    }
+    expect(toPascalCase("trash-2")).toBe("Trash2");
+  });
+
+  it("knows real Lucide names and rejects unknown ones", () => {
+    expect(iconExists("ellipsis-vertical")).toBe(true);
+    expect(iconExists("Terminal")).toBe(true);
+    expect(iconExists("no-such-glyph")).toBe(false);
+  });
+});
 
 describe("AppIcon", () => {
-  it("renders a named Lucide icon as inline svg", () => {
+  it("renders a Lucide icon as inline svg", () => {
     const w = mount(AppIcon, {
-      props: { icon: { type: "name", value: "terminal" } },
+      props: { icon: { type: "lucide", value: "terminal" } },
     });
     expect(w.find("svg").exists()).toBe(true);
   });
 
-  it("registers every icon name used by templates and fixture manifests", () => {
-    for (const name of usedIconNames) {
-      expect(appIconNames).toContain(name);
-      const w = mount(AppIcon, {
-        props: { icon: { type: "name", value: name } },
-      });
+  it("resolves any-cased name the same way", () => {
+    for (const value of ["ellipsis-vertical", "EllipsisVertical"]) {
+      const w = mount(AppIcon, { props: { icon: { type: "lucide", value } } });
       expect(w.find("svg").exists()).toBe(true);
     }
+  });
+
+  it("accepts legacy name icons from persisted projections", () => {
+    const legacy = mount(AppIcon, {
+      props: {
+        icon: { type: "name", value: "terminal" } as unknown as Icon,
+      },
+    });
+    const lucide = mount(AppIcon, {
+      props: { icon: { type: "lucide", value: "terminal" } },
+    });
+    expect(legacy.html()).toBe(lucide.html());
   });
 
   it("renders emoji as text", () => {
@@ -95,7 +85,7 @@ describe("AppIcon", () => {
     ).toBe(true);
     expect(
       mount(AppIcon, {
-        props: { icon: { type: "name", value: "no-such-glyph" } },
+        props: { icon: { type: "lucide", value: "no-such-glyph" } },
       })
         .find("svg")
         .exists(),

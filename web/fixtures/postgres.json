@@ -5,8 +5,14 @@
   "title": "PostgreSQL",
   "description": "PostgreSQL \u2014 schema browser, query editor.",
   "icon": {
-    "type": "name",
+    "type": "lucide",
     "value": "database"
+  },
+  "category": {
+    "key": "databases",
+    "label": "Databases",
+    "icon": { "type": "lucide", "value": "database" },
+    "order": 60
   },
   "capabilities": ["sql", "schema"],
   "supportedTransports": ["direct", "agent"],
@@ -104,7 +110,7 @@
       "key": "databases",
       "label": "Databases",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "database"
       },
       "source": {
@@ -197,7 +203,7 @@
       "id": "postgres.table.truncate",
       "label": "Truncate",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "trash"
       },
       "routeId": "postgres.table.truncate",

@@ -196,7 +196,7 @@ async function revoke(grant: ShareGrant): Promise<void> {
           class="flex items-center gap-2 px-3 py-2"
         >
           <AppIcon
-            :icon="{ type: 'name', value: 'user' }"
+            :icon="{ type: 'lucide', value: 'user' }"
             :size="15"
             class="text-surface-400"
           />
@@ -219,7 +219,7 @@ async function revoke(grant: ShareGrant): Promise<void> {
             :aria-label="`Revoke ${g.username || g.subjectId}`"
             @click="requestRevoke(g)"
           >
-            <AppIcon :icon="{ type: 'name', value: 'x' }" :size="15" />
+            <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="15" />
           </Button>
         </li>
       </ul>

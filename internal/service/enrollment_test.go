@@ -19,6 +19,7 @@ func (agentTestPlugin) Manifest() plugin.Manifest {
 		APIVersion: plugin.CurrentAPIVersion,
 		Name:       "agenttest",
 		Title:      "Agent Test",
+		Category:   plugin.CategoryOther,
 		Layout:     plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{
 			plugin.TransportDirect,
@@ -85,15 +86,24 @@ func TestEnrollmentArtifactsAndRedeem(t *testing.T) {
 	if connectionID != "agent-conn" || proxy.Mode != plugin.AgentTCP || proxy.Address != "127.0.0.1:1" || proxy.Risk != plugin.RiskPrivileged {
 		t.Fatalf("redeem target mismatch: connection=%q proxy=%+v", connectionID, proxy)
 	}
-	if _, _, err := svc.Redeem(ctx, token); err != service.ErrEnrollmentInvalid {
-		t.Fatalf("token replay error = %v, want ErrEnrollmentInvalid", err)
-	}
 	if state := svc.State(ctx, "agent-conn"); state.Status != string(models.EnrollmentOnline) {
 		t.Fatalf("state after redeem = %+v", state)
+	}
+	if _, _, err := svc.Redeem(ctx, token); err != nil {
+		t.Fatalf("active agent should be able to reconnect with same token: %v", err)
 	}
 	svc.MarkOffline(ctx, "agent-conn")
 	if state := svc.State(ctx, "agent-conn"); state.Status != string(models.EnrollmentOffline) {
 		t.Fatalf("state after offline = %+v", state)
+	}
+	if state := svc.State(ctx, "agent-conn"); state.Message != "Agent disconnected." {
+		t.Fatalf("offline state should explain the disconnect: %+v", state)
+	}
+	if _, _, err := svc.Redeem(ctx, token); err != nil {
+		t.Fatalf("offline agent should reconnect with same token: %v", err)
+	}
+	if state := svc.State(ctx, "agent-conn"); state.Status != string(models.EnrollmentOnline) {
+		t.Fatalf("state after reconnect = %+v", state)
 	}
 }
 

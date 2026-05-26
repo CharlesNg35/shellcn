@@ -36,7 +36,9 @@ describe("file type mapping", () => {
     expect(extensionOf("noext")).toBe("");
     expect(languageFor("schema.sql")).toBe("sql");
     expect(languageFor(".env")).toBe("ini");
-    expect(languageFor("main.tf")).toBe("hcl");
+    expect(languageFor("Dockerfile")).toBe("dockerfile");
+    expect(languageFor("deploy.sh")).toBe("shell");
+    expect(languageFor("main.tf")).toBe("plaintext");
     expect(languageFor("data.bin")).toBe("plaintext");
   });
 

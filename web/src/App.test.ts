@@ -11,13 +11,23 @@ const connections = [
     id: "a",
     name: "alpha-host",
     protocol: "ssh",
-    icon: { type: "name", value: "terminal" },
+    icon: { type: "lucide", value: "terminal" },
     transport: "direct",
     online: true,
   },
 ];
 const plugins = [
-  { name: "ssh", title: "SSH", icon: { type: "name", value: "terminal" } },
+  {
+    name: "ssh",
+    title: "SSH",
+    icon: { type: "lucide", value: "terminal" },
+    category: {
+      key: "shell",
+      label: "Shell & terminal",
+      icon: { type: "lucide", value: "terminal" },
+      order: 10,
+    },
+  },
 ];
 
 function testRouter(): Router {

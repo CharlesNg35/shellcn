@@ -35,7 +35,10 @@ beforeEach(() => {
     return { body: {} };
   });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe("EnrollPanel", () => {
   it("generates an install command and transitions to online", async () => {
@@ -66,5 +69,39 @@ describe("EnrollPanel", () => {
     expect(w.findAll("button").some((b) => b.text().includes("Copy"))).toBe(
       true,
     );
+  });
+
+  it("keeps polling after the agent first comes online", async () => {
+    vi.useFakeTimers();
+    installFetch((url) => {
+      if (url.includes("/agent/state")) {
+        stateCalls++;
+        return {
+          body:
+            stateCalls <= 1
+              ? { status: "pending", message: "waiting" }
+              : stateCalls <= 2
+                ? { status: "online", message: "connected" }
+                : { status: "offline", message: "offline" },
+        };
+      }
+      return { body: {} };
+    });
+
+    const w = mount(EnrollPanel, { props: { connectionId: "edge" } });
+    await flushPromises();
+    expect(w.text()).toContain("Connect the agent");
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await flushPromises();
+    expect(w.text()).toContain("Agent online");
+    expect(w.emitted("online")).toBeTruthy();
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await flushPromises();
+    expect(w.text()).toContain("Agent disconnected");
+    expect(w.text()).toContain("offline");
+
+    w.unmount();
   });
 });

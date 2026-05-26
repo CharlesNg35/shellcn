@@ -20,6 +20,7 @@ func (credentialRefPlugin) Manifest() plugin.Manifest {
 		Name:       "http-api",
 		Version:    "0",
 		Title:      "Credential Ref",
+		Category:   plugin.CategoryDevOps,
 		Layout:     plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{
 			plugin.TransportDirect,

@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/coder/websocket"
@@ -36,7 +38,60 @@ func (s *Server) agentConnectURL(r *http.Request) string {
 	if isTLS(r) {
 		scheme = "wss"
 	}
-	return scheme + "://" + r.Host + "/api/agent/connect"
+	return scheme + "://" + gatewayConnectHost(r) + "/api/agent/connect"
+}
+
+func gatewayConnectHost(r *http.Request) string {
+	host := requestHost(r)
+	if !isLoopbackRequestHost(host) {
+		return host
+	}
+	port := requestLocalPort(r)
+	if port == "" {
+		return host
+	}
+	hostname := hostWithoutPort(host)
+	if hostname == "" {
+		return host
+	}
+	if _, currentPort, err := net.SplitHostPort(host); err == nil && currentPort == port {
+		return host
+	}
+	return net.JoinHostPort(hostname, port)
+}
+
+func requestLocalPort(r *http.Request) string {
+	addr, _ := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	if addr == nil {
+		return ""
+	}
+	if tcp, ok := addr.(*net.TCPAddr); ok && tcp.Port > 0 {
+		return strconv.Itoa(tcp.Port)
+	}
+	_, port, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return ""
+	}
+	return port
+}
+
+func isLoopbackRequestHost(host string) bool {
+	hostname := hostWithoutPort(host)
+	if hostname == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(hostname)
+	return ip != nil && ip.IsLoopback()
+}
+
+func hostWithoutPort(host string) string {
+	if hostname, _, err := net.SplitHostPort(host); err == nil {
+		return hostname
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.String()
+	}
+	return host
 }
 
 func (s *Server) auditAgentEvent(ctx context.Context, user models.User, connectionID, event string, result models.AuditResult, err error) {
@@ -86,7 +141,12 @@ func (s *Server) handleAgentState(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.deps.Enrollments.State(ctx, conn.ID))
+	state := s.deps.Enrollments.State(ctx, conn.ID)
+	if state.Status == string(models.EnrollmentOnline) && !s.tunnelRegistered(conn.ID) {
+		s.deps.Enrollments.MarkOffline(ctx, conn.ID)
+		state = s.deps.Enrollments.State(ctx, conn.ID)
+	}
+	writeJSON(w, http.StatusOK, state)
 }
 
 // handleAgentConnect is the agent tunnel endpoint. The agent authenticates with
@@ -131,11 +191,13 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 	s.auditAgentEvent(r.Context(), agentUser, connID, agentConnectEvent, models.AuditAllowed, nil)
 	s.deps.Logger.Info("agent tunnel online", "connection", connID, "mode", proxy.Mode)
 	tunnelErr := transport.ServeGatewayTunnel(c, connID, s.deps.Tunnels)
-	s.deps.Enrollments.MarkOffline(r.Context(), connID)
+	teardownCtx, teardownCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+	defer teardownCancel()
+	s.deps.Enrollments.MarkOffline(teardownCtx, connID)
 	result := models.AuditAllowed
 	if tunnelErr != nil {
 		result = models.AuditError
 	}
-	s.auditAgentEvent(r.Context(), agentUser, connID, agentDisconnectEvent, result, tunnelErr)
+	s.auditAgentEvent(teardownCtx, agentUser, connID, agentDisconnectEvent, result, tunnelErr)
 	s.deps.Logger.Info("agent tunnel offline", "connection", connID)
 }

@@ -144,9 +144,8 @@ type EnrollmentStore interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (models.AgentEnrollment, error)
 	ListByConnection(ctx context.Context, connectionID string) ([]models.AgentEnrollment, error)
 	UpdateStatus(ctx context.Context, id string, status models.AgentEnrollmentStatus) error
-	// Consume atomically transitions a still-pending, unexpired enrollment to
-	// online. It returns true only for the single caller that performed the
-	// transition, so a token cannot be redeemed by two racing agents.
+	// Consume atomically transitions an install token to online. Pending tokens
+	// must be unexpired; already enrolled offline/online tokens may reconnect.
 	Consume(ctx context.Context, id string, now time.Time) (bool, error)
 }
 

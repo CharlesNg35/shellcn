@@ -20,7 +20,8 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Version:             "0.1.0",
 		Title:               "SSH",
 		Description:         "Secure shell with terminal, SFTP files, and command snippets.",
-		Icon:                plugin.Icon{Type: plugin.IconName, Value: "terminal"},
+		Icon:                plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
+		Category:            plugin.CategoryShell,
 		Config:              configSchema("ssh"),
 		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
 		CredentialKinds:     sshsftp.CredentialKinds(),
@@ -28,7 +29,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Layout:              plugin.LayoutTabs,
 		Tabs: []plugin.Tab{
 			{
-				Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconName, Value: "terminal"},
+				Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
 				Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "ssh.shell", Method: plugin.MethodWS, Params: map[string]string{"cols": "80", "rows": "24"}},
 			},
 			filesTab("ssh"),
@@ -36,17 +37,17 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		},
 		Actions: []plugin.Action{
 			{
-				ID: "ssh.snippet.create", Label: "New snippet", Icon: plugin.Icon{Type: plugin.IconName, Value: "plus"},
+				ID: "ssh.snippet.create", Label: "New snippet", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"},
 				RouteID: "ssh.snippet.create",
 			},
 			{
-				ID: "ssh.snippet.run", Label: "Run", Icon: plugin.Icon{Type: plugin.IconName, Value: "play"},
+				ID: "ssh.snippet.run", Label: "Run", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"},
 				RouteID: "ssh.snippet.run", Params: map[string]string{"id": "${resource.uid}"},
 				Confirm: true, ConfirmText: "Run this snippet on the SSH host?",
 				OnSuccess: &plugin.ActionSuccess{SelectTab: "terminal"},
 			},
 			{
-				ID: "ssh.snippet.delete", Label: "Delete", Icon: plugin.Icon{Type: plugin.IconName, Value: "trash"},
+				ID: "ssh.snippet.delete", Label: "Delete", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"},
 				RouteID: "ssh.snippet.delete", Params: map[string]string{"id": "${resource.uid}"},
 				Confirm: true, ConfirmText: "Delete this snippet?",
 			},
@@ -61,7 +62,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 
 func snippetsTab() plugin.Tab {
 	return plugin.Tab{
-		Key: "snippets", Label: "Snippets", Icon: plugin.Icon{Type: plugin.IconName, Value: "code"},
+		Key: "snippets", Label: "Snippets", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"},
 		Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ssh.snippet.list"},
 		Config: plugin.TableConfig{
 			Columns: []plugin.Column{
@@ -108,7 +109,7 @@ func configSchema(protocol string) plugin.Schema {
 
 func filesTab(prefix string) plugin.Tab {
 	return plugin.Tab{
-		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconName, Value: "folder"},
+		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
 		Panel:  plugin.PanelFileBrowser,
 		Source: &plugin.DataSource{RouteID: prefix + ".sftp.list", Params: map[string]string{"path": "."}},
 		Config: map[string]any{

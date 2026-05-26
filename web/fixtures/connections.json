@@ -3,7 +3,7 @@
     "id": "ssh-prod-web",
     "name": "prod-web-01",
     "protocol": "ssh",
-    "icon": { "type": "name", "value": "terminal" },
+    "icon": { "type": "lucide", "value": "terminal" },
     "transport": "direct",
     "online": true
   },
@@ -11,7 +11,7 @@
     "id": "ssh-bastion",
     "name": "bastion",
     "protocol": "ssh",
-    "icon": { "type": "name", "value": "terminal" },
+    "icon": { "type": "lucide", "value": "terminal" },
     "transport": "direct",
     "online": true
   },
@@ -44,7 +44,7 @@
     "id": "postgres-main",
     "name": "main-db",
     "protocol": "postgres",
-    "icon": { "type": "name", "value": "database" },
+    "icon": { "type": "lucide", "value": "database" },
     "transport": "direct",
     "online": true
   }

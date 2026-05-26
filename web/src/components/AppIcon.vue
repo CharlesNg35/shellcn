@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useAttrs } from "vue";
 import DOMPurify from "dompurify";
-import { FALLBACK_ICON, iconComponents } from "./appIconRegistry";
+import { FALLBACK_ICON, resolveLucideIcon } from "./lucideIconRegistry";
 import type { Icon } from "../types/projection";
 
 defineOptions({ inheritAttrs: false });
@@ -36,14 +36,12 @@ const kind = computed(() => {
   return "glyph";
 });
 
-const glyphComponent = computed(() => {
-  const name = props.icon?.type === "name" ? props.icon.value : props.fallback;
-  return (
-    iconComponents[name] ??
-    iconComponents[props.fallback] ??
-    iconComponents[FALLBACK_ICON]
-  );
-});
+// A glyph's value is a Lucide name (legacy projections used type "name"; both
+// resolve the same way). resolveLucideIcon falls back to a placeholder for an
+// empty or unknown name.
+const glyphComponent = computed(() =>
+  resolveLucideIcon(props.icon?.value || props.fallback),
+);
 
 // Sanitize raw inline SVG (svg profile only — no HTML/MathML, scripts and event
 // handlers stripped) before it is ever injected into the DOM.

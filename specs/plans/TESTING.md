@@ -32,7 +32,7 @@ A milestone (phase) cannot be marked done until its end-to-end tests pass.
   a mock WebSocket is never acceptance.**
 - **Security** — authz deny-by-default; WS ticket validity/expiry/single-use;
   secrets never serialized/logged; SSRF/egress allow-deny; destructive-action
-  gating; enrollment-token single-use.
+  gating; unused enrollment-token expiry and enrolled-agent reconnect/revoke.
 - **Race/leak** — `go test -race`; sessions/channels close cleanly (no goroutine
   leaks); idle timeout reclaims.
 

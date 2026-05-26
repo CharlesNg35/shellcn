@@ -3,6 +3,7 @@ package plugins
 import (
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/plugins/docker"
+	"github.com/charlesng/shellcn/plugins/proxmox"
 	"github.com/charlesng/shellcn/plugins/rdp"
 	"github.com/charlesng/shellcn/plugins/sftp"
 	"github.com/charlesng/shellcn/plugins/ssh"
@@ -25,5 +26,6 @@ func all() []plugin.Plugin {
 		docker.New(),
 		vnc.New(),
 		rdp.New(),
+		proxmox.New(),
 	}
 }

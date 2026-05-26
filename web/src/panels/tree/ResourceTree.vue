@@ -51,6 +51,21 @@ function toNode(n: TreeNode): PVNode {
   };
 }
 
+function selectedNodeKey(uid: string): string {
+  const found = findNodeByUid(nodes.value, uid);
+  return found ? String(found.key) : uid;
+}
+
+function findNodeByUid(items: PVNode[], uid: string): PVNode | undefined {
+  for (const item of items) {
+    const data = item.data as NodeData;
+    if (data.ref?.uid === uid) return item;
+    const child = item.children ? findNodeByUid(item.children, uid) : undefined;
+    if (child) return child;
+  }
+  return undefined;
+}
+
 watchEffect(() => {
   nodes.value = props.groups.map((g) => ({
     key: g.key,
@@ -88,7 +103,7 @@ async function onNodeSelect(node: PVNode): Promise<void> {
 watch(
   () => [props.selectedGroup, props.selectedUid] as const,
   ([group, uid]) => {
-    const selected = uid ?? group;
+    const selected = uid ? selectedNodeKey(uid) : group;
     selectionKeys.value = selected ? { [selected]: true } : {};
   },
   { immediate: true },
@@ -123,7 +138,10 @@ onMounted(async () => {
     @node-select="onNodeSelect"
   >
     <template #default="{ node }">
-      <span class="flex w-full items-center gap-1.5">
+      <span
+        class="flex w-full cursor-pointer items-center gap-1.5"
+        :title="String(node.label ?? '')"
+      >
         <AppIcon
           :icon="(node as PVNode).data.icon"
           :size="15"

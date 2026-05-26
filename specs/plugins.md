@@ -13,6 +13,12 @@ material are declared by the plugin that owns them. Protocol compatibility is
 derived from registered plugin `credential_ref` selectors; it is not maintained
 as a hardcoded list on the kind itself.
 
+Plugin categories are also core-owned. Each manifest declares one builtin
+category key so management UI can group protocols without hardcoded frontend
+protocol lists. Current groups are shell, files/storage, containers,
+virtualization, remote desktop, databases, orchestration, cloud, network,
+security, DevOps/CI, observability, messaging, and other.
+
 ## Priority Legend
 
 - `P0`: MVP foundation.

@@ -11,6 +11,11 @@ export default defineConfig(({ mode }) => {
   return {
     base: "/",
     plugins: [vue(), tailwindcss(), ...(useMock ? [mockApiPlugin()] : [])],
+    // Pre-bundle the full Lucide set so dev never re-optimizes (and reloads) when a
+    // lazily-loaded panel first pulls an icon.
+    optimizeDeps: {
+      include: ["@lucide/vue"],
+    },
     build: {
       outDir: "dist",
     },

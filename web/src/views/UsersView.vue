@@ -119,7 +119,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
         <TabPanel value="users" class="flex h-full flex-col">
           <div class="mb-3 flex shrink-0 justify-end">
             <Button type="button" @click="openCreate">
-              <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
+              <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="15" />
               New user
             </Button>
           </div>
@@ -179,7 +179,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
                       :aria-label="`View recordings for ${(data as AdminUser).username}`"
                     >
                       <AppIcon
-                        :icon="{ type: 'name', value: 'video' }"
+                        :icon="{ type: 'lucide', value: 'video' }"
                         :size="16"
                       />
                     </Button>
@@ -194,7 +194,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
                       @click="openEdit(data as AdminUser)"
                     >
                       <AppIcon
-                        :icon="{ type: 'name', value: 'pencil' }"
+                        :icon="{ type: 'lucide', value: 'pencil' }"
                         :size="16"
                       />
                     </Button>
@@ -209,7 +209,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
                       @click="askDeleteUser(data as AdminUser)"
                     >
                       <AppIcon
-                        :icon="{ type: 'name', value: 'trash' }"
+                        :icon="{ type: 'lucide', value: 'trash' }"
                         :size="16"
                       />
                     </Button>
@@ -225,7 +225,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
         <TabPanel value="invitations" class="flex h-full flex-col">
           <div class="mb-3 flex shrink-0 justify-end">
             <Button type="button" @click="showInvite = true">
-              <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
+              <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="15" />
               Invite user
             </Button>
           </div>
@@ -267,7 +267,10 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
                     :aria-label="`Revoke ${(data as InvitationSummary).email}`"
                     @click="askRevoke(data as InvitationSummary)"
                   >
-                    <AppIcon :icon="{ type: 'name', value: 'x' }" :size="16" />
+                    <AppIcon
+                      :icon="{ type: 'lucide', value: 'x' }"
+                      :size="16"
+                    />
                   </Button>
                 </template>
               </Column>

@@ -8,6 +8,12 @@
     "type": "url",
     "value": "https://www.proxmox.com/favicon.ico"
   },
+  "category": {
+    "key": "virtualization",
+    "label": "Virtualization",
+    "icon": { "type": "lucide", "value": "server" },
+    "order": 40
+  },
   "capabilities": ["virtualization", "console", "snapshots"],
   "supportedTransports": ["direct"],
   "layout": "sidebar_tree",
@@ -108,7 +114,7 @@
       "key": "nodes",
       "label": "Nodes",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "server"
       },
       "source": {
@@ -119,7 +125,7 @@
       "key": "storage",
       "label": "Storage",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "database"
       },
       "source": {
@@ -130,7 +136,7 @@
       "key": "network",
       "label": "Network",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "share"
       },
       "source": {
@@ -141,7 +147,7 @@
       "key": "datacenter",
       "label": "Datacenter",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "globe"
       },
       "source": {
@@ -276,7 +282,7 @@
       "id": "proxmox.vm.start",
       "label": "Start",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "play"
       },
       "routeId": "proxmox.vm.start",
@@ -292,8 +298,8 @@
       "id": "proxmox.vm.stop",
       "label": "Stop",
       "icon": {
-        "type": "name",
-        "value": "stop"
+        "type": "lucide",
+        "value": "square"
       },
       "routeId": "proxmox.vm.stop",
       "method": "POST",
@@ -309,8 +315,8 @@
       "id": "proxmox.vm.reboot",
       "label": "Reboot",
       "icon": {
-        "type": "name",
-        "value": "refresh"
+        "type": "lucide",
+        "value": "refresh-cw"
       },
       "routeId": "proxmox.vm.reboot",
       "method": "POST",
@@ -325,7 +331,7 @@
       "id": "proxmox.vm.snapshot",
       "label": "Snapshot",
       "icon": {
-        "type": "name",
+        "type": "lucide",
         "value": "camera"
       },
       "routeId": "proxmox.vm.snapshot.create",

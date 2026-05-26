@@ -56,6 +56,11 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 	if m.Title == "" {
 		add("Title is required")
 	}
+	if m.Category == "" {
+		add("Category is required")
+	} else if _, ok := CategoryLookup(m.Category); !ok {
+		add("Category %q is not a built-in category", m.Category)
+	}
 	switch m.Layout {
 	case LayoutTabs, LayoutSidebarTree:
 	default:
