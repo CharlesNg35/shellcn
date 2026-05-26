@@ -1,6 +1,4 @@
 import type { RemoteDesktopEngine } from "../../../types/projection";
-import { connectGuacamoleDesktop } from "./guacamoleEngine";
-import { connectNoVNCDesktop } from "./novncEngine";
 import type { RemoteDesktopEngineOptions, RemoteDesktopSession } from "./types";
 
 export async function connectRemoteDesktop(
@@ -8,10 +6,14 @@ export async function connectRemoteDesktop(
   options: RemoteDesktopEngineOptions,
 ): Promise<RemoteDesktopSession> {
   switch (engine) {
-    case "novnc":
+    case "novnc": {
+      const { connectNoVNCDesktop } = await import("./novncEngine");
       return connectNoVNCDesktop(options);
-    case "guacamole":
+    }
+    case "guacamole": {
+      const { connectGuacamoleDesktop } = await import("./guacamoleEngine");
       return connectGuacamoleDesktop(options);
+    }
   }
 }
 

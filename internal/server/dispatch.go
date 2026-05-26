@@ -346,7 +346,10 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	}
 	defer pending.Finish()
 
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+		Subprotocols:       []string{"guacamole"},
+	})
 	if err != nil {
 		return // Accept already wrote the response
 	}

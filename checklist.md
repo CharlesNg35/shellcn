@@ -99,7 +99,7 @@ _Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP ses
 
 - [ ] 5.1 Proxmox session and API client
 - [ ] 5.2 Proxmox manifest (nodes, VMs, LXC, storage)
-- [ ] 5.3 Real noVNC remote-desktop panel
+- [ ] 5.3 Real engine-pluggable remote-desktop panel (noVNC + Guacamole contract)
 - [ ] 5.4 Snapshots, backups, and lifecycle actions
 
 ## Phase 6 — M5 · PostgreSQL

@@ -588,6 +588,24 @@ func (h *harness) dialWS(t *testing.T, userID, path string) (*websocket.Conn, er
 	return c, err
 }
 
+func (h *harness) dialWSWithSubprotocol(t *testing.T, userID, path string, subprotocol string) (*websocket.Conn, error) {
+	t.Helper()
+	sess := h.sessions[userID]
+	hdr := http.Header{}
+	hdr.Set("Cookie", auth.SessionCookieName+"="+sess.ID)
+	hdr.Set("Origin", h.ts.URL)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	c, resp, err := websocket.Dial(ctx, h.wsURL(path), &websocket.DialOptions{
+		HTTPHeader:   hdr,
+		Subprotocols: []string{subprotocol},
+	})
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	return c, err
+}
+
 func (h *harness) mintTicket(t *testing.T, userID, connID, routeID string, params map[string]string) string {
 	t.Helper()
 	body := `{"routeId":"` + routeID + `","params":{`
@@ -760,6 +778,19 @@ func TestWSHappyPathEcho(t *testing.T) {
 	}
 	if string(data) != "ping" {
 		t.Errorf("echo mismatch: got %q", data)
+	}
+}
+
+func TestWSAcceptsGuacamoleSubprotocol(t *testing.T) {
+	h := newHarness(t)
+	tok := h.mintTicket(t, "op", "c-op", "t.ws", nil)
+	c, err := h.dialWSWithSubprotocol(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok, "guacamole")
+	if err != nil {
+		t.Fatalf("dial with guacamole subprotocol: %v", err)
+	}
+	defer func() { _ = c.CloseNow() }()
+	if got := c.Subprotocol(); got != "guacamole" {
+		t.Fatalf("subprotocol = %q, want guacamole", got)
 	}
 }
 
