@@ -202,7 +202,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           Refresh
         </Button>
       </div>
-      <PanelError v-if="error" :message="error" />
+      <PanelError v-if="error" :message="error" retryable @retry="load" />
       <DataTable
         v-else
         :value="visibleEntries"

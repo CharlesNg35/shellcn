@@ -379,6 +379,7 @@ watch(
           :error="listError"
           @select="selectEntry"
           @open="openEntry"
+          @retry="loadList(cwd)"
         />
       </div>
 
@@ -419,6 +420,7 @@ watch(
       :error="listError"
       @select="selectEntry"
       @open="openEntry"
+      @retry="loadList(cwd)"
     />
 
     <Dialog

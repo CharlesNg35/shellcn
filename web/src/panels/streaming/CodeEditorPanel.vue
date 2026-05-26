@@ -138,7 +138,7 @@ onUnmounted(() => {
       </div>
     </div>
     <p v-if="loading" class="p-4 text-sm text-surface-400">Loading…</p>
-    <PanelError v-else-if="error" :message="error" />
+    <PanelError v-else-if="error" :message="error" retryable @retry="load" />
     <textarea
       v-else-if="useFallback && editable"
       v-model="text"

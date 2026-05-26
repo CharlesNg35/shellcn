@@ -11,6 +11,7 @@ import { runFormAction } from "../../api/dataSource";
 import type { HTTPClientConfig } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
 import type { PanelProps } from "../core/types";
+import PanelError from "../shared/PanelError.vue";
 
 interface HeaderRow {
   key: string;
@@ -210,23 +211,33 @@ async function send(): Promise<void> {
               {{ response.durationMs.toFixed(1) }} ms
             </span>
           </div>
-          <span v-if="error" class="text-xs text-red-500">{{ error }}</span>
+          <span v-if="error && response" class="text-xs text-red-500">{{
+            error
+          }}</span>
         </div>
-        <DataTable
-          v-if="responseHeaders.length"
-          :value="responseHeaders"
-          scrollable
-          scroll-height="10rem"
-        >
-          <Column field="key" header="Header" />
-          <Column field="value" header="Value" />
-        </DataTable>
-        <Textarea
-          :model-value="responseBody"
-          readonly
-          class="min-h-0 flex-1 rounded-none border-0 font-mono text-xs"
-          aria-label="Response body"
+        <PanelError
+          v-if="error && !response"
+          :message="error"
+          retryable
+          @retry="send"
         />
+        <template v-else>
+          <DataTable
+            v-if="responseHeaders.length"
+            :value="responseHeaders"
+            scrollable
+            scroll-height="10rem"
+          >
+            <Column field="key" header="Header" />
+            <Column field="value" header="Value" />
+          </DataTable>
+          <Textarea
+            :model-value="responseBody"
+            readonly
+            class="min-h-0 flex-1 rounded-none border-0 font-mono text-xs"
+            aria-label="Response body"
+          />
+        </template>
       </section>
     </div>
   </div>

@@ -13,13 +13,19 @@ defineProps<{
 const emit = defineEmits<{
   select: [entry: FileEntry];
   open: [entry: FileEntry];
+  retry: [];
 }>();
 </script>
 
 <template>
   <div class="h-full overflow-auto p-4">
     <p v-if="loading" class="text-sm text-surface-400">Loading…</p>
-    <PanelError v-else-if="error" :message="error" />
+    <PanelError
+      v-else-if="error"
+      :message="error"
+      retryable
+      @retry="emit('retry')"
+    />
     <p
       v-else-if="!entries.length"
       class="py-12 text-center text-sm text-surface-400"

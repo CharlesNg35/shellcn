@@ -73,7 +73,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
 <template>
   <div class="h-full overflow-auto p-5">
     <p v-if="loading" class="text-sm text-surface-400">Loading…</p>
-    <PanelError v-else-if="error" :message="error" />
+    <PanelError v-else-if="error" :message="error" retryable @retry="load" />
     <SchemaForm
       v-else-if="schema"
       :schema="schema"

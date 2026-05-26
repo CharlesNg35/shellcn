@@ -146,7 +146,13 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       <p v-if="loading" class="p-4 text-sm text-surface-400">
         Loading graph...
       </p>
-      <PanelError v-else-if="error" :message="error" />
+      <PanelError v-else-if="error" :message="error" retryable @retry="load" />
+      <div
+        v-else-if="!nodes.length"
+        class="flex h-full items-center justify-center p-6 text-sm text-surface-400"
+      >
+        No graph data.
+      </div>
       <div v-else class="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_18rem]">
         <div
           class="min-h-0 border-r border-surface-200 dark:border-surface-800"

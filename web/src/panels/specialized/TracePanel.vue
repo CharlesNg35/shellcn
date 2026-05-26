@@ -172,7 +172,12 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         <p v-if="loading" class="p-4 text-sm text-surface-400">
           Loading trace...
         </p>
-        <PanelError v-else-if="error" :message="error" />
+        <PanelError
+          v-else-if="error"
+          :message="error"
+          retryable
+          @retry="load"
+        />
         <DataTable
           v-else
           :value="visibleRows"
@@ -182,6 +187,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           selection-mode="single"
           @row-click="selectRow"
         >
+          <template #empty>No spans.</template>
           <Column header="Span">
             <template #body="{ data }">
               <div
@@ -227,7 +233,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         <p v-if="!selected" class="text-sm text-surface-400">Select a span.</p>
         <template v-else>
           <p class="text-xs text-surface-400 uppercase">
-            {{ selected.service || "unknown" }}
+            {{ spanService(selected) }}
           </p>
           <h3 class="mt-1 font-semibold text-surface-900 dark:text-surface-0">
             {{ selected.name }}
