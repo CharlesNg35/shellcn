@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import AppIcon from "./AppIcon.vue";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { ConnectionSummary } from "../types/projection";
 
-defineProps<{
+const props = defineProps<{
   connection: ConnectionSummary;
   active: boolean;
 }>();
@@ -13,18 +15,49 @@ const emit = defineEmits<{
 }>();
 
 const ws = useWorkspaceStore();
+const live = useConnectionStatusStore();
 
-function dotClass(c: ConnectionSummary): string {
-  if (c.status === "offline") return "bg-red-500";
-  if (ws.isConnected(c.id)) return "bg-emerald-400";
-  return "bg-surface-300 dark:bg-surface-600";
-}
+type DotState = "offline" | "error" | "connecting" | "connected" | "idle";
+// The dot reflects real connection health, not the intent to connect: agent
+// reachability (server), then the live state observed from actual traffic.
+const dotState = computed<DotState>(() => {
+  const c = props.connection;
+  if (c.status === "offline") return "offline";
+  if (!ws.isConnected(c.id)) return "idle";
+  const state = live.get(c.id)?.state;
+  if (state === "connected") return "connected";
+  if (state === "error") return "error";
+  return "connecting";
+});
 
-function dotTitle(c: ConnectionSummary): string {
-  if (c.status === "offline") return "Agent offline";
-  if (ws.isConnected(c.id)) return "Connected";
-  return "Idle";
-}
+const dotClass = computed(() => {
+  switch (dotState.value) {
+    case "connected":
+      return "bg-emerald-400";
+    case "connecting":
+      return "bg-amber-400 animate-pulse";
+    case "error":
+    case "offline":
+      return "bg-red-500";
+    default:
+      return "bg-surface-300 dark:bg-surface-600";
+  }
+});
+
+const dotTitle = computed(() => {
+  switch (dotState.value) {
+    case "connected":
+      return "Connected";
+    case "connecting":
+      return "Connecting…";
+    case "error":
+      return live.get(props.connection.id)?.reason ?? "Connection failed";
+    case "offline":
+      return "Agent offline";
+    default:
+      return "Idle";
+  }
+});
 
 function shareTitle(c: ConnectionSummary): string {
   if (c.sharedWithMe) return `Shared with you · ${c.access ?? "use"}`;
@@ -64,8 +97,8 @@ function shareTitle(c: ConnectionSummary): string {
     </button>
     <span
       class="h-2 w-2 shrink-0 rounded-full"
-      :class="dotClass(connection)"
-      :title="dotTitle(connection)"
+      :class="dotClass"
+      :title="dotTitle"
     />
     <AppIcon
       v-if="connection.sharedWithMe || connection.sharedByMe"

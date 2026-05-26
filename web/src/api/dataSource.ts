@@ -1,4 +1,6 @@
-import { API_BASE, apiFetch } from "./client";
+import { getActivePinia } from "pinia";
+import { API_BASE, apiFetch, ApiError } from "./client";
+import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { SocketLike } from "../stores/sessions";
 import type {
   DataSource,
@@ -7,6 +9,25 @@ import type {
   ResourceEvent,
   ResourceRef,
 } from "../types/projection";
+
+// Reflect a request's outcome in the connection's live health: a success proves
+// the upstream is reachable; a 5xx/network failure is a connection-level fault
+// (a 4xx is an operation-level error — a missing file — and must NOT redden the
+// connection). Guarded so callers without an active Pinia (unit tests) are noops.
+async function track<T>(connectionId: string, run: Promise<T>): Promise<T> {
+  if (!getActivePinia()) return run;
+  const live = useConnectionStatusStore();
+  try {
+    const result = await run;
+    live.connected(connectionId);
+    return result;
+  } catch (e) {
+    if (e instanceof ApiError && (e.status === 0 || e.status >= 500)) {
+      live.failed(connectionId, e.message);
+    }
+    throw e;
+  }
+}
 
 export interface ResolveContext {
   resource?: ResourceRef | null;
@@ -106,7 +127,7 @@ export async function fetchPage<T = unknown>(
     routePath(connectionId, ds.routeId),
     queryParams(params, page),
   );
-  return getJSON<Page<T>>(url);
+  return track(connectionId, getJSON<Page<T>>(url));
 }
 
 export async function fetchDoc<T = unknown>(
@@ -119,7 +140,7 @@ export async function fetchDoc<T = unknown>(
     routePath(connectionId, ds.routeId),
     queryParams(params),
   );
-  return getJSON<T>(url);
+  return track(connectionId, getJSON<T>(url));
 }
 
 export interface ActionResult {
@@ -139,12 +160,14 @@ export async function runAction(
     routePath(connectionId, routeId),
     queryParams(resolveParams(params, ctx)),
   );
-  const res = await apiFetch(url, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body ?? {}),
-  });
-  return (await res.json()) as ActionResult;
+  return track(
+    connectionId,
+    apiFetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body ?? {}),
+    }).then((res) => res.json() as Promise<ActionResult>),
+  );
 }
 
 function isFile(value: unknown): value is File {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppIcon from "../../components/AppIcon.vue";
+import PanelError from "../shared/PanelError.vue";
 import type { FileEntry } from "../../types/projection";
 import { formatBytes } from "./fileTypes";
 
@@ -18,7 +19,7 @@ const emit = defineEmits<{
 <template>
   <div class="h-full overflow-auto p-4">
     <p v-if="loading" class="text-sm text-surface-400">Loading…</p>
-    <p v-else-if="error" class="text-sm text-red-500">{{ error }}</p>
+    <PanelError v-else-if="error" :message="error" />
     <p
       v-else-if="!entries.length"
       class="py-12 text-center text-sm text-surface-400"

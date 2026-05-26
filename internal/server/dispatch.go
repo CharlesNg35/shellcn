@@ -11,6 +11,7 @@ import (
 	"path"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
@@ -345,13 +346,6 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	}
 	defer pending.Finish()
 
-	handle, err := s.acquireSession(ctx, res)
-	if err != nil {
-		s.auditEvent(ctx, res, models.AuditError, err)
-		writeError(w, s.deps.Logger, err)
-		return
-	}
-
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil {
 		return // Accept already wrote the response
@@ -359,6 +353,16 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	if s.deps.Metrics != nil {
 		s.deps.Metrics.WSOpened()
 		defer s.deps.Metrics.WSClosed()
+	}
+
+	// Open the upstream only after the socket is accepted: a failed WS *upgrade*
+	// carries no body the browser can read, so a dial/auth failure here is sent as
+	// a close reason instead — giving the UI an actual reason for the disconnect.
+	handle, err := s.acquireSession(ctx, res)
+	if err != nil {
+		s.auditEvent(ctx, res, models.AuditError, err)
+		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
+		return
 	}
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
 
@@ -369,10 +373,25 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 
 	rc := plugin.NewRequestContext(streamCtx, res.user, handle, res.params, r.URL.Query(), nil)
 	if err := res.route.Stream(rc, client); err != nil {
-		_ = c.Close(websocket.StatusInternalError, "stream error")
+		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
 		return
 	}
 	_ = c.Close(websocket.StatusNormalClosure, "")
+}
+
+// streamCloseReason renders an error as a WebSocket close reason, trimmed to the
+// 123-byte close-frame limit on a rune boundary so the browser receives it whole.
+func streamCloseReason(err error) string {
+	msg := err.Error()
+	const max = 120
+	if len(msg) <= max {
+		return msg
+	}
+	b := []byte(msg)[:max]
+	for len(b) > 0 && !utf8.RuneStart(b[len(b)-1]) {
+		b = b[:len(b)-1]
+	}
+	return string(b)
 }
 
 func routeContext(parent context.Context, route plugin.Route) (context.Context, context.CancelFunc) {

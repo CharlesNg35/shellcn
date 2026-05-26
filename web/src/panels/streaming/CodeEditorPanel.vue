@@ -4,6 +4,7 @@ import Button from "primevue/button";
 import { fetchDoc, runAction } from "../../api/dataSource";
 import type { CodeEditorConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
+import PanelError from "../shared/PanelError.vue";
 import { useTheme } from "../../composables/useTheme";
 import {
   currentMonacoTheme,
@@ -137,7 +138,7 @@ onUnmounted(() => {
       </div>
     </div>
     <p v-if="loading" class="p-4 text-sm text-surface-400">Loading…</p>
-    <p v-else-if="error" class="p-4 text-sm text-red-500">{{ error }}</p>
+    <PanelError v-else-if="error" :message="error" />
     <textarea
       v-else-if="useFallback && editable"
       v-model="text"

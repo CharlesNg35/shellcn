@@ -4,6 +4,7 @@ import { useToast } from "primevue/usetoast";
 import { fetchDoc, runFormAction } from "../../api/dataSource";
 import type { FormPanelConfig, Schema } from "../../types/projection";
 import type { PanelProps } from "../core/types";
+import PanelError from "../shared/PanelError.vue";
 import SchemaForm from "./SchemaForm.vue";
 
 const props = defineProps<PanelProps>();
@@ -72,7 +73,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
 <template>
   <div class="h-full overflow-auto p-5">
     <p v-if="loading" class="text-sm text-surface-400">Loading…</p>
-    <p v-else-if="error" class="text-sm text-red-500">{{ error }}</p>
+    <PanelError v-else-if="error" :message="error" />
     <SchemaForm
       v-else-if="schema"
       :schema="schema"

@@ -15,6 +15,7 @@ import { fetchDoc } from "../../api/dataSource";
 import type { GraphPanelConfig } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
 import type { PanelProps } from "../core/types";
+import PanelError from "../shared/PanelError.vue";
 
 interface GraphNode {
   id: string;
@@ -145,7 +146,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       <p v-if="loading" class="p-4 text-sm text-surface-400">
         Loading graph...
       </p>
-      <p v-else-if="error" class="p-4 text-sm text-red-500">{{ error }}</p>
+      <PanelError v-else-if="error" :message="error" />
       <div v-else class="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_18rem]">
         <div
           class="min-h-0 border-r border-surface-200 dark:border-surface-800"

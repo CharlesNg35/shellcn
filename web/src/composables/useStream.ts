@@ -5,6 +5,7 @@ import {
   type ResolveContext,
 } from "../api/dataSource";
 import { useSessionsStore, type ChannelStatus } from "../stores/sessions";
+import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { DataSource } from "../types/projection";
 
 // Wires a panel to a store-owned channel. If the channel is already open (e.g.
@@ -19,8 +20,20 @@ export function useStream(
   onFrame?: (data: string) => void,
 ) {
   const store = useSessionsStore();
+  const live = useConnectionStatusStore();
   const key = ref<string | null>(null);
-  const error = ref<string | null>(null);
+  const localError = ref<string | null>(null);
+  // Prefer a setup failure (no ticket); otherwise surface the close reason so the
+  // status bar can explain *why* the stream dropped — from the channel, and
+  // falling back to the connection's last failure (the same source the sidebar
+  // dot uses) so a dial/handshake failure is always explained.
+  const error = computed(
+    () =>
+      localError.value ??
+      (key.value ? store.reason(key.value) : undefined) ??
+      live.get(connectionId)?.reason ??
+      null,
+  );
   let unsub: (() => void) | undefined;
 
   function attach(k: string): void {
@@ -33,7 +46,7 @@ export function useStream(
   async function connect(force = false): Promise<void> {
     if (!source) return;
     try {
-      error.value = null;
+      localError.value = null;
       const existing = channelKey(connectionId, source, ctx);
       if (force) {
         unsub?.();
@@ -53,7 +66,7 @@ export function useStream(
       store.ensure(handle.key, () => new WebSocket(handle.url) as never);
       attach(handle.key);
     } catch (e) {
-      error.value = (e as Error).message;
+      localError.value = (e as Error).message;
     }
   }
 

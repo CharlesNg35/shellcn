@@ -21,6 +21,7 @@ import { formatBytes } from "../file/fileTypes";
 import { inputClass } from "../../primevue/preset";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
+import PanelError from "../shared/PanelError.vue";
 
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{
@@ -234,7 +235,7 @@ onUnmounted(() => {
     </div>
 
     <div class="min-h-0 flex-1 overflow-hidden">
-      <p v-if="error" class="p-4 text-sm text-red-500">{{ error }}</p>
+      <PanelError v-if="error" :message="error" retryable @retry="load(true)" />
       <SkeletonList v-else-if="loading && !rows.length" :rows="8" />
       <DataTable
         v-else

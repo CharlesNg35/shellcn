@@ -7,6 +7,7 @@ import InputText from "primevue/inputtext";
 import { fetchDoc } from "../../api/dataSource";
 import type { TracePanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
+import PanelError from "../shared/PanelError.vue";
 
 interface TraceSpan {
   id: string;
@@ -171,7 +172,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         <p v-if="loading" class="p-4 text-sm text-surface-400">
           Loading trace...
         </p>
-        <p v-else-if="error" class="p-4 text-sm text-red-500">{{ error }}</p>
+        <PanelError v-else-if="error" :message="error" />
         <DataTable
           v-else
           :value="visibleRows"

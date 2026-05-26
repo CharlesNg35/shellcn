@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import Button from "primevue/button";
+import Popover from "primevue/popover";
 import AppIcon from "../../components/AppIcon.vue";
 
 withDefaults(
@@ -18,6 +20,11 @@ withDefaults(
 );
 
 const emit = defineEmits<{ reconnect: [] }>();
+
+const errorPopover = ref();
+function showError(event: Event): void {
+  errorPopover.value?.toggle(event);
+}
 
 function label(status: string): string {
   switch (status) {
@@ -78,10 +85,35 @@ function reconnectable(status: string): boolean {
         aria-hidden="true"
       />
       <span class="font-medium">{{ label(status) }}</span>
-      <span v-if="error" class="truncate text-red-600 dark:text-red-300">
-        {{ error }}
-      </span>
+      <button
+        v-if="error"
+        type="button"
+        class="flex shrink-0 items-center gap-1 rounded px-1 py-0.5 text-surface-400 transition hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200"
+        title="Why did it fail?"
+        aria-label="Show error details"
+        @click="showError"
+      >
+        <AppIcon :icon="{ type: 'name', value: 'info' }" :size="14" />
+        Details
+      </button>
     </div>
+    <Popover ref="errorPopover">
+      <div class="max-w-xs space-y-1">
+        <p
+          class="flex items-center gap-1.5 text-xs font-semibold text-surface-700 dark:text-surface-100"
+        >
+          <AppIcon
+            :icon="{ type: 'name', value: 'alert' }"
+            :size="13"
+            class="text-amber-500"
+          />
+          {{ label(status) }}
+        </p>
+        <p class="text-xs text-surface-500 dark:text-surface-400">
+          {{ error }}
+        </p>
+      </div>
+    </Popover>
     <Button
       v-if="canReconnect && reconnectable(status)"
       type="button"
@@ -90,7 +122,7 @@ function reconnectable(status: string): boolean {
       :disabled="reconnecting"
       @click="emit('reconnect')"
     >
-      <AppIcon :icon="{ type: 'name', value: 'refresh-cw' }" :size="14" />
+      <AppIcon :icon="{ type: 'name', value: 'refresh' }" :size="14" />
       {{ reconnecting ? "Reconnecting..." : "Reconnect" }}
     </Button>
   </div>

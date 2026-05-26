@@ -10,6 +10,7 @@ import { useToast } from "primevue/usetoast";
 import { fetchDoc, fetchPage, runFormAction } from "../../api/dataSource";
 import type { KVPanelConfig, Page } from "../../types/projection";
 import type { PanelProps } from "../core/types";
+import PanelError from "../shared/PanelError.vue";
 
 interface KVEntry {
   key: string;
@@ -201,7 +202,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           Refresh
         </Button>
       </div>
-      <p v-if="error" class="p-3 text-sm text-red-500">{{ error }}</p>
+      <PanelError v-if="error" :message="error" />
       <DataTable
         v-else
         :value="visibleEntries"

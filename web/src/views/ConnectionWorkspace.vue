@@ -9,11 +9,13 @@ import { api, ApiError } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useSessionsStore } from "../stores/sessions";
+import { useConnectionStatusStore } from "../stores/connectionStatus";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import PanelHost from "../panels/core/PanelHost.vue";
 import EnrollPanel from "../panels/enroll/EnrollPanel.vue";
 import ConnectPanel from "../panels/connect/ConnectPanel.vue";
+import PanelError from "../panels/shared/PanelError.vue";
 import ResourceTree from "../panels/tree/ResourceTree.vue";
 import TablePanel from "../panels/table/TablePanel.vue";
 import DetailView from "../panels/detail/DetailView.vue";
@@ -33,6 +35,7 @@ const props = defineProps<{ id: string }>();
 const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
 const sessions = useSessionsStore();
+const liveStatus = useConnectionStatusStore();
 const router = useRouter();
 const notify = useNotify();
 
@@ -105,11 +108,13 @@ const channelPrefix = computed(() => `${props.id}:`);
 function connect(): void {
   showEnroll.value = false;
   ws.setConnected(props.id, true);
+  liveStatus.connecting(props.id);
 }
 
 function disconnect(): void {
   sessions.closeWhere((key) => key.startsWith(channelPrefix.value));
   ws.setConnected(props.id, false);
+  liveStatus.clear(props.id);
 }
 
 const resourceByKind = computed(() => {
@@ -240,7 +245,7 @@ function onActionDone(action: Action): void {
 
     <div class="min-h-0 flex-1">
       <p v-if="loading" class="p-6 text-surface-400">Loading workspace…</p>
-      <p v-else-if="error" class="p-6 text-red-500">{{ error }}</p>
+      <PanelError v-else-if="error" :message="error" retryable @retry="load" />
 
       <EnrollPanel
         v-else-if="!connected && showEnroll"
