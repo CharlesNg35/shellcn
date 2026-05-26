@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
@@ -19,18 +19,12 @@ import type {
   Page,
 } from "../../types/projection";
 import type { PanelProps } from "../core/types";
-import SkeletonList from "../../components/SkeletonList.vue";
+import FileCodeEditor from "./FileCodeEditor.vue";
 import FileCrumbs from "./FileCrumbs.vue";
 import FileEntryGrid from "./FileEntryGrid.vue";
 import FileEntryList from "./FileEntryList.vue";
 import FilePreview from "./FilePreview.vue";
 import FileToolbar from "./FileToolbar.vue";
-
-const FileCodeEditor = defineAsyncComponent({
-  loader: () => import("./FileCodeEditor.vue"),
-  loadingComponent: SkeletonList,
-  delay: 0,
-});
 
 const props = defineProps<PanelProps>();
 const toast = useToast();

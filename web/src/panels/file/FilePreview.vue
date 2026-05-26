@@ -1,15 +1,10 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from "vue";
+import { computed } from "vue";
 import Button from "primevue/button";
 import SkeletonList from "../../components/SkeletonList.vue";
 import type { FileContent } from "../../types/projection";
+import FileCodeEditor from "./FileCodeEditor.vue";
 import { formatBytes, viewerFor } from "./fileTypes";
-
-const FileCodeEditor = defineAsyncComponent({
-  loader: () => import("./FileCodeEditor.vue"),
-  loadingComponent: SkeletonList,
-  delay: 0,
-});
 
 const props = defineProps<{
   name: string;
