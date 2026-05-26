@@ -17,7 +17,7 @@ import (
 
 const (
 	defaultPort       = 3306
-	defaultRowLimit   = 1000
+	defaultRowLimit   = 500
 	defaultTimeout    = 30 * time.Second
 	defaultMaxConns   = 4
 	protocolName      = "mysql"

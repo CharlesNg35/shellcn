@@ -29,6 +29,42 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 	}
 }
 
+func TestPluginConfigDefaultsSatisfyNumericValidators(t *testing.T) {
+	reg := plugin.NewRegistry()
+	Register(reg)
+
+	for _, p := range reg.All() {
+		m := p.Manifest()
+		for _, group := range m.Config.Groups {
+			for _, field := range group.Fields {
+				if field.Default == nil {
+					continue
+				}
+				value, ok := numericValue(field.Default)
+				if !ok {
+					continue
+				}
+				for _, validator := range field.Validators {
+					limit, ok := numericValue(validator.Value)
+					if !ok {
+						continue
+					}
+					switch validator.Type {
+					case plugin.ValidatorMin:
+						if value < limit {
+							t.Fatalf("%s config field %q default %v is below min %v", m.Name, field.Key, field.Default, validator.Value)
+						}
+					case plugin.ValidatorMax:
+						if value > limit {
+							t.Fatalf("%s config field %q default %v is above max %v", m.Name, field.Key, field.Default, validator.Value)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 func TestSharedBasicAuthCredentialCompatibility(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
@@ -111,4 +147,35 @@ func fieldMap(schema plugin.Schema) map[string]bool {
 		}
 	}
 	return fields
+}
+
+func numericValue(v any) (float64, bool) {
+	switch n := v.(type) {
+	case int:
+		return float64(n), true
+	case int8:
+		return float64(n), true
+	case int16:
+		return float64(n), true
+	case int32:
+		return float64(n), true
+	case int64:
+		return float64(n), true
+	case uint:
+		return float64(n), true
+	case uint8:
+		return float64(n), true
+	case uint16:
+		return float64(n), true
+	case uint32:
+		return float64(n), true
+	case uint64:
+		return float64(n), true
+	case float32:
+		return float64(n), true
+	case float64:
+		return n, true
+	default:
+		return 0, false
+	}
 }

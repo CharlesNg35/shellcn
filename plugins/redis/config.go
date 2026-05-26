@@ -22,7 +22,7 @@ const (
 	defaultTimeout    = 5 * time.Second
 	defaultPoolSize   = 8
 	defaultScanCount  = 200
-	defaultValueLimit = 1000
+	defaultValueLimit = 500
 	credentialIDField = "credential_id"
 	clientCertField   = "client_cert_id"
 )

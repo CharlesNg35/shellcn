@@ -21,7 +21,7 @@ const (
 	defaultPort       = 27017
 	defaultTimeout    = 10 * time.Second
 	defaultPoolSize   = 8
-	defaultDocLimit   = 1000
+	defaultDocLimit   = 500
 	credentialIDField = "credential_id"
 	clientCertField   = "client_cert_id"
 )

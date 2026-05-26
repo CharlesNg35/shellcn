@@ -129,6 +129,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     <InputNumber
       v-else-if="field.type === 'number'"
       :model-value="(modelValue as number) ?? null"
+      :use-grouping="false"
       @update:model-value="update"
     />
 

@@ -118,6 +118,26 @@ describe("SchemaForm", () => {
     expect(w.find('input[placeholder="30s, 5m, 1h"]').exists()).toBe(true);
   });
 
+  it("renders number fields without locale digit grouping", async () => {
+    const w = mount(SchemaForm, {
+      props: {
+        schema: {
+          groups: [
+            {
+              name: "Basic",
+              fields: [{ key: "port", label: "Port", type: "number" }],
+            },
+          ],
+        },
+        modelValue: { port: 6379 },
+      },
+    });
+    await flushPromises();
+    expect(w.findComponent({ name: "InputNumber" }).props("useGrouping")).toBe(
+      false,
+    );
+  });
+
   it("omits hidden conditional fields from submit payloads", async () => {
     const w = mount(SchemaForm, {
       props: {
