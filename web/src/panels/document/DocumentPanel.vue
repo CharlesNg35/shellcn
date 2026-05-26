@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import { fetchDoc } from "../../api/dataSource";
 import type { PanelProps } from "../core/types";
@@ -15,6 +15,12 @@ const loading = ref(true);
 const error = ref<string | null>(null);
 const copied = ref(false);
 const mode = ref<"tree" | "raw">("tree");
+let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+function clearCopiedTimer(): void {
+  if (copiedTimer) clearTimeout(copiedTimer);
+  copiedTimer = undefined;
+}
 
 const pretty = computed(() =>
   doc.value === null ? "" : JSON.stringify(doc.value, null, 2),
@@ -46,7 +52,8 @@ async function copy(): Promise<void> {
   if (!navigator.clipboard) return;
   await navigator.clipboard.writeText(pretty.value);
   copied.value = true;
-  window.setTimeout(() => {
+  clearCopiedTimer();
+  copiedTimer = window.setTimeout(() => {
     copied.value = false;
   }, 1500);
 }
@@ -54,6 +61,8 @@ async function copy(): Promise<void> {
 watch(() => [props.connectionId, props.resource?.uid], load, {
   immediate: true,
 });
+
+onUnmounted(clearCopiedTimer);
 </script>
 
 <template>

@@ -227,9 +227,17 @@ export interface CodeEditorConfig {
 }
 
 export interface QueryEditorConfig {
+  language?: string;
+  label?: string;
+  executeLabel?: string;
+  cancelLabel?: string;
+  runningLabel?: string;
+  emptyText?: string;
   initialQuery?: string;
   cancelRouteId?: string;
   cancelParams?: Record<string, string>;
+  completionRouteId?: string;
+  completionParams?: Record<string, string>;
 }
 
 export interface GraphPanelConfig {
@@ -336,6 +344,7 @@ export interface TreeGroup {
   label: string;
   icon?: Icon;
   source: DataSource;
+  resourceKind?: string;
   badge?: Badge;
 }
 
@@ -367,6 +376,8 @@ export interface ResourceType {
   watch?: DataSource;
   columns: Column[];
   actionIds: string[];
+  listActionIds?: string[];
+  rowActionIds?: string[];
   detail: DetailView;
 }
 

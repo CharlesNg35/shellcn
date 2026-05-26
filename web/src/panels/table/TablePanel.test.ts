@@ -20,7 +20,7 @@ beforeEach(() => {
     const filter = u.searchParams.get("filter");
     if (filter === "beta")
       return { body: { items: [row("b", "beta")], nextCursor: "", total: 1 } };
-    if (cursor === "c2")
+    if (cursor === "2")
       return { body: { items: [row("c", "gamma")], nextCursor: "", total: 3 } };
     return {
       body: {
@@ -40,7 +40,7 @@ function bodyButton(text: string): HTMLButtonElement | undefined {
 }
 
 describe("TablePanel", () => {
-  it("renders manifest columns and rows, paginates via cursor", async () => {
+  it("renders manifest columns and rows, paginates server-side", async () => {
     const w = mount(TablePanel, {
       props: {
         connectionId: "c1",
@@ -55,14 +55,13 @@ describe("TablePanel", () => {
     ]);
     expect(w.findAll("tbody tr")).toHaveLength(2);
 
-    await w.find("tbody").exists();
-    const loadMore = w
-      .findAll("button")
-      .find((b) => b.text().includes("Load more"));
-    expect(loadMore).toBeTruthy();
-    await loadMore!.trigger("click");
+    w.findComponent({ name: "DataTable" }).vm.$emit("page", {
+      first: 2,
+      rows: 50,
+    });
     await flushPromises();
-    expect(w.findAll("tbody tr")).toHaveLength(3);
+    expect(w.findAll("tbody tr")).toHaveLength(1);
+    expect(w.text()).toContain("gamma");
   });
 
   it("filters server-side and resets the list", async () => {

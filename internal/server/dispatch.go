@@ -151,10 +151,14 @@ func (s *Server) acquireSession(ctx context.Context, res resolved) (*session.Han
 }
 
 func (s *Server) auditEvent(ctx context.Context, res resolved, result models.AuditResult, err error) {
+	s.auditEventParams(ctx, res, result, res.params, err)
+}
+
+func (s *Server) auditEventParams(ctx context.Context, res resolved, result models.AuditResult, params map[string]string, err error) {
 	s.deps.Audit.Record(ctx, audit.Event{
 		User: res.user, Event: res.route.AuditEvent, ConnectionID: res.conn.ID,
 		RouteID: res.route.ID, Risk: string(res.route.Risk), Result: result,
-		Params: res.params, Err: err,
+		Params: params, Err: err,
 	})
 }
 
@@ -380,7 +384,10 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	conn := websocket.NetConn(streamCtx, c, msgType)
 	client := pending.Attach(&wsClientStream{Conn: conn, ctx: streamCtx})
 
-	rc := plugin.NewRequestContext(streamCtx, res.user, handle, res.params, r.URL.Query(), nil)
+	rc := plugin.NewRequestContext(streamCtx, res.user, handle, res.params, r.URL.Query(), nil).
+		WithAuditHook(func(ctx context.Context, result models.AuditResult, params map[string]string, err error) {
+			s.auditEventParams(ctx, res, result, params, err)
+		})
 	if err := res.route.Stream(rc, client); err != nil {
 		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
 		return

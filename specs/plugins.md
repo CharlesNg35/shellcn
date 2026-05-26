@@ -44,6 +44,12 @@ These plugins should prove the core architecture first.
 > only difference is the manifest each declares. The frontend special-cases
 > neither (v2 §12, §13).
 
+> **SQL plugins:** PostgreSQL, MySQL/MariaDB, SQLite, MSSQL, and later SQL
+> engines share only driver-neutral helpers from `plugins/shared/sqldb`
+> (query editor envelopes, identifier/DDL helpers, statement safety checks, and
+> TLS/config parsing). Dialect catalog queries, driver connection code, actions,
+> and manifests remain inside each plugin.
+
 ## P1: Core Infrastructure
 
 | Plugin       | Purpose                       | Main Capabilities                                                                   |

@@ -31,8 +31,8 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutSidebarTree,
 		Tree: []plugin.TreeGroup{
-			{Key: "nodes", Label: "Nodes", Icon: icon("server"), Source: plugin.DataSource{RouteID: "proxmox.tree.nodes"}},
-			{Key: "storage", Label: "Storage", Icon: icon("database"), Source: plugin.DataSource{RouteID: "proxmox.tree.storage"}},
+			{Key: "nodes", Label: "Nodes", Icon: icon("server"), Source: plugin.DataSource{RouteID: "proxmox.tree.nodes"}, ResourceKind: "node"},
+			{Key: "storage", Label: "Storage", Icon: icon("database"), Source: plugin.DataSource{RouteID: "proxmox.tree.storage"}, ResourceKind: "storage"},
 		},
 		Resources: resources(),
 		Actions:   actions(),

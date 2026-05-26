@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
-import { interpolate, runAction } from "../../api/dataSource";
+import Dialog from "primevue/dialog";
+import { fetchDoc, interpolate, runAction } from "../../api/dataSource";
 import type { QueryEditorConfig } from "../../types/projection";
 import { useStream } from "../../composables/useStream";
 import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import { useTheme } from "../../composables/useTheme";
-import type { CodeMirrorEditor } from "../../codemirror";
+import type { CodeMirrorCompletion, CodeMirrorEditor } from "../../codemirror";
 
 const props = defineProps<PanelProps>();
 const queryConfig = props.config as QueryEditorConfig | undefined;
@@ -17,6 +18,10 @@ interface Results {
   rows: unknown[][];
   rowCount?: number;
   elapsedMs?: number;
+  commandTag?: string;
+  error?: string;
+  requiresConfirmation?: boolean;
+  confirmMessage?: string;
 }
 
 function initialQuery(): string {
@@ -36,13 +41,32 @@ const error = ref<string | null>(null);
 const container = ref<HTMLElement | null>(null);
 const useFallback = ref(false);
 const reconnecting = ref(false);
+const pendingConfirmation = ref(false);
+const confirmationMessage = ref("");
+const completionItems = ref<CodeMirrorCompletion[]>([]);
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("../../codemirror") | null = null;
 const { isDark } = useTheme();
+const editorLanguage = queryConfig?.language ?? "plaintext";
+const editorLabel = queryConfig?.label ?? "Editor";
+const executeLabel = queryConfig?.executeLabel ?? "Execute";
+const cancelLabel = queryConfig?.cancelLabel ?? "Cancel";
+const runningLabel = queryConfig?.runningLabel ?? "Executing…";
+const emptyText = queryConfig?.emptyText ?? "Execute to see results.";
 
 function onFrame(frame: string): void {
   try {
-    results.value = JSON.parse(frame) as Results;
+    const payload = JSON.parse(frame) as Results;
+    if (payload.error) {
+      error.value = payload.error;
+      pendingConfirmation.value = payload.requiresConfirmation === true;
+      confirmationMessage.value =
+        payload.confirmMessage ??
+        "This operation requires confirmation before it can run.";
+    } else {
+      results.value = payload;
+      pendingConfirmation.value = false;
+    }
     running.value = false;
   } catch {
     /* ignore */
@@ -70,7 +94,7 @@ async function onReconnect(): Promise<void> {
   }
 }
 
-function run(): void {
+function run(confirm = false): void {
   if (editor) query.value = codeMirror?.editorValue(editor) ?? query.value;
   const text = query.value.trim();
   if (!text) return;
@@ -80,7 +104,8 @@ function run(): void {
   );
   running.value = true;
   error.value = null;
-  send(JSON.stringify({ query: query.value }));
+  pendingConfirmation.value = false;
+  send(JSON.stringify({ query: query.value, confirm }));
 }
 
 async function cancel(): Promise<void> {
@@ -101,9 +126,32 @@ async function cancel(): Promise<void> {
   }
 }
 
+async function loadCompletions(): Promise<CodeMirrorCompletion[]> {
+  const routeId = queryConfig?.completionRouteId;
+  if (!routeId) return [];
+  try {
+    const items = await fetchDoc<CodeMirrorCompletion[]>(
+      props.connectionId,
+      {
+        routeId,
+        params: queryConfig?.completionParams ?? props.source?.params,
+      },
+      { resource: props.resource },
+    );
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+}
+
 function recall(text: string): void {
   query.value = text;
   codeMirror?.setEditorValue(editor, text);
+}
+
+function confirmExecution(): void {
+  pendingConfirmation.value = false;
+  run(true);
 }
 
 onMounted(async () => {
@@ -115,10 +163,12 @@ onMounted(async () => {
   try {
     const helpers = await import("../../codemirror");
     codeMirror = helpers;
+    completionItems.value = await loadCompletions();
     editor = helpers.createCodeMirrorEditor(container.value, {
       value: query.value,
-      language: "sql",
-      ariaLabel: "SQL query editor",
+      language: editorLanguage,
+      ariaLabel: `${editorLabel} editor`,
+      completions: completionItems.value,
       onChange(value) {
         query.value = value;
       },
@@ -153,7 +203,7 @@ onUnmounted(() => {
     <div
       class="flex items-center justify-between border-b border-surface-200 px-3 py-1.5 dark:border-surface-800"
     >
-      <span class="text-xs text-surface-400">SQL</span>
+      <span class="text-xs text-surface-400">{{ editorLabel }}</span>
       <div class="flex items-center gap-2">
         <span v-if="error" class="text-xs text-red-500">{{ error }}</span>
         <Button
@@ -164,10 +214,10 @@ onUnmounted(() => {
           outlined
           @click="cancel"
         >
-          Cancel
+          {{ cancelLabel }}
         </Button>
-        <Button type="button" size="small" :disabled="running" @click="run">
-          {{ running ? "Running…" : "Run" }}
+        <Button type="button" size="small" :disabled="running" @click="run()">
+          {{ running ? runningLabel : executeLabel }}
         </Button>
       </div>
     </div>
@@ -208,6 +258,18 @@ onUnmounted(() => {
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto">
+      <div
+        v-if="results"
+        class="border-b border-surface-200 px-3 py-2 text-xs text-surface-500 dark:border-surface-800"
+      >
+        {{
+          results.commandTag ||
+          `${results.rowCount ?? results.rows.length} rows`
+        }}
+        <span v-if="results.elapsedMs != null">
+          · {{ results.elapsedMs }} ms</span
+        >
+      </div>
       <table v-if="results" class="w-full border-collapse text-xs">
         <thead class="sticky top-0 bg-surface-50 dark:bg-surface-900">
           <tr>
@@ -231,14 +293,36 @@ onUnmounted(() => {
               :key="j"
               class="px-3 py-1 text-surface-700 dark:text-surface-200"
             >
-              {{ cell }}
+              {{ cell === null || cell === undefined ? "NULL" : cell }}
             </td>
           </tr>
         </tbody>
       </table>
-      <p v-else class="p-4 text-sm text-surface-400">
-        Run a query to see results.
-      </p>
+      <p v-else class="p-4 text-sm text-surface-400">{{ emptyText }}</p>
     </div>
+
+    <Dialog
+      :visible="pendingConfirmation"
+      modal
+      header="Confirm execution"
+      :dismissable-mask="true"
+      @update:visible="(v) => !v && (pendingConfirmation = false)"
+    >
+      <p class="mb-4 text-sm text-surface-500">
+        {{ confirmationMessage }}
+      </p>
+      <div class="flex justify-end gap-2">
+        <Button
+          type="button"
+          severity="secondary"
+          @click="pendingConfirmation = false"
+        >
+          Cancel
+        </Button>
+        <Button type="button" severity="danger" @click="confirmExecution">
+          {{ executeLabel }}
+        </Button>
+      </div>
+    </Dialog>
   </div>
 </template>

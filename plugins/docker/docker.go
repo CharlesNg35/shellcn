@@ -93,11 +93,11 @@ func configSchema() plugin.Schema {
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
-		{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "box"}, Source: plugin.DataSource{RouteID: "docker.containers.tree"}},
-		{Key: "compose", Label: "Compose", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "workflow"}, Source: plugin.DataSource{RouteID: "docker.compose.tree"}},
-		{Key: "images", Label: "Images", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "layers"}, Source: plugin.DataSource{RouteID: "docker.images.tree"}},
-		{Key: "volumes", Label: "Volumes", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "database"}, Source: plugin.DataSource{RouteID: "docker.volumes.tree"}},
-		{Key: "networks", Label: "Networks", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "globe"}, Source: plugin.DataSource{RouteID: "docker.networks.tree"}},
+		{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "box"}, Source: plugin.DataSource{RouteID: "docker.containers.tree"}, ResourceKind: "container"},
+		{Key: "compose", Label: "Compose", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "workflow"}, Source: plugin.DataSource{RouteID: "docker.compose.tree"}, ResourceKind: "compose"},
+		{Key: "images", Label: "Images", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "layers"}, Source: plugin.DataSource{RouteID: "docker.images.tree"}, ResourceKind: "image"},
+		{Key: "volumes", Label: "Volumes", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "database"}, Source: plugin.DataSource{RouteID: "docker.volumes.tree"}, ResourceKind: "volume"},
+		{Key: "networks", Label: "Networks", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "globe"}, Source: plugin.DataSource{RouteID: "docker.networks.tree"}, ResourceKind: "network"},
 	}
 }
 

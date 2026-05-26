@@ -43,6 +43,10 @@ type Page[T any] struct {
 	Total      *int   `json:"total,omitempty"`
 }
 
+// AuditHook records a plugin operation that happens inside a long-lived route,
+// such as one query submitted over a WebSocket stream.
+type AuditHook func(ctx context.Context, result models.AuditResult, params map[string]string, err error)
+
 // SnippetStore is the small platform store surface exposed for generic snippet
 // routes. It keeps plugins from depending on the concrete store package.
 type SnippetStore interface {
@@ -93,6 +97,7 @@ type RequestContext struct {
 	User     models.User
 	Session  Session
 	Snippets SnippetStore
+	audit    AuditHook
 
 	params map[string]string
 	query  url.Values
@@ -105,6 +110,20 @@ type RequestContext struct {
 func (rc *RequestContext) WithSnippets(snippets SnippetStore) *RequestContext {
 	rc.Snippets = snippets
 	return rc
+}
+
+// WithAuditHook attaches the core audit writer for stream-internal operations.
+func (rc *RequestContext) WithAuditHook(hook AuditHook) *RequestContext {
+	rc.audit = hook
+	return rc
+}
+
+// Audit records one operation inside this route. It is a no-op when no core
+// audit hook is attached, which keeps plugin unit tests lightweight.
+func (rc *RequestContext) Audit(result models.AuditResult, params map[string]string, err error) {
+	if rc.audit != nil {
+		rc.audit(rc.Ctx, result, params, err)
+	}
 }
 
 // NewRequestContext builds a context for the server adapter and for tests.

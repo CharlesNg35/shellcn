@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch as vueWatch } from "vue";
 import DataTable, {
+  type DataTablePageEvent,
   type DataTableSortEvent,
   type DataTableRowClickEvent,
 } from "primevue/datatable";
@@ -39,13 +40,14 @@ const INTERNAL = new Set([
 ]);
 
 const rows = ref<Row[]>([]);
-const nextCursor = ref("");
 const total = ref<number | undefined>();
 const loading = ref(false);
 const error = ref<string | null>(null);
 const filterText = ref("");
 const sortField = ref<string | undefined>();
 const sortOrder = ref<number | undefined>();
+const first = ref(0);
+const pageSize = ref(50);
 const selectedRow = ref<Row | null>(null);
 const actionOutput = ref<{
   title: string;
@@ -82,28 +84,28 @@ function display(row: Row, col: ColumnSpec): string {
   return String(v);
 }
 
-async function load(reset: boolean): Promise<void> {
+async function load(targetFirst = first.value): Promise<void> {
   if (!props.source) return;
   loading.value = true;
   error.value = null;
-  if (reset) selectedRow.value = null;
+  selectedRow.value = null;
   try {
     const page = await fetchPage<Row>(
       props.connectionId,
       props.source,
       { resource: props.resource },
       {
-        cursor: reset ? "" : nextCursor.value,
-        limit: 50,
+        cursor: targetFirst > 0 ? String(targetFirst) : "",
+        limit: pageSize.value,
         filter: filterText.value ? { q: filterText.value } : undefined,
         sort: sortField.value
           ? [{ field: sortField.value, desc: sortOrder.value === -1 }]
           : undefined,
       },
     );
-    rows.value = reset ? page.items : [...rows.value, ...page.items];
-    nextCursor.value = page.nextCursor;
+    rows.value = page.items;
     total.value = page.total;
+    first.value = targetFirst;
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -114,7 +116,13 @@ async function load(reset: boolean): Promise<void> {
 function onSort(e: DataTableSortEvent): void {
   sortField.value = (e.sortField as string) ?? undefined;
   sortOrder.value = e.sortOrder ?? undefined;
-  load(true);
+  void load(0);
+}
+
+function onPage(e: DataTablePageEvent): void {
+  first.value = e.first;
+  pageSize.value = e.rows;
+  void load(e.first);
 }
 
 function onRowClick(e: DataTableRowClickEvent): void {
@@ -144,7 +152,7 @@ async function onActionDone(
       truncated: result.truncated === true,
     };
   }
-  await load(true);
+  await load(first.value);
   emit("actionDone", action, result);
 }
 
@@ -178,7 +186,8 @@ vueWatch(
   () => {
     filterText.value = "";
     sortField.value = undefined;
-    load(true);
+    first.value = 0;
+    load(0);
     startWatch();
   },
   { immediate: true },
@@ -187,7 +196,7 @@ vueWatch(
 let debounce: ReturnType<typeof setTimeout> | undefined;
 function onFilter(): void {
   if (debounce) clearTimeout(debounce);
-  debounce = setTimeout(() => load(true), 250);
+  debounce = setTimeout(() => load(0), 250);
 }
 
 onUnmounted(() => {
@@ -218,6 +227,7 @@ onUnmounted(() => {
         v-if="globalActions.length"
         :connection-id="connectionId"
         :actions="globalActions"
+        :resource="resource"
         @done="onActionDone"
       />
       <ActionBar
@@ -232,20 +242,32 @@ onUnmounted(() => {
         :disabled="loading"
         severity="secondary"
         class="ml-auto"
-        @click="load(true)"
+        @click="load(first)"
       >
         Refresh
       </Button>
     </div>
 
     <div class="min-h-0 flex-1 overflow-hidden">
-      <PanelError v-if="error" :message="error" retryable @retry="load(true)" />
+      <PanelError
+        v-if="error"
+        :message="error"
+        retryable
+        @retry="load(first)"
+      />
       <SkeletonList v-else-if="loading && !rows.length" :rows="8" />
       <DataTable
         v-else
         :value="rows"
         data-key="ref.uid"
         lazy
+        paginator
+        :first="first"
+        :rows="pageSize"
+        :total-records="total ?? rows.length"
+        :rows-per-page-options="[25, 50, 100, 250]"
+        paginator-template="RowsPerPageDropdown FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
+        current-page-report-template="{first} to {last} of {totalRecords}"
         removable-sort
         :sort-field="sortField"
         :sort-order="sortOrder"
@@ -253,6 +275,7 @@ onUnmounted(() => {
         scroll-height="flex"
         :row-class="rowClass"
         @sort="onSort"
+        @page="onPage"
         @row-click="onRowClick"
       >
         <Column
@@ -273,20 +296,6 @@ onUnmounted(() => {
         </Column>
         <template #empty>No rows.</template>
       </DataTable>
-    </div>
-
-    <div
-      v-if="nextCursor"
-      class="border-t border-surface-200 p-2 text-center dark:border-surface-800"
-    >
-      <Button
-        type="button"
-        :disabled="loading"
-        severity="secondary"
-        @click="load(false)"
-      >
-        {{ loading ? "Loading…" : "Load more" }}
-      </Button>
     </div>
 
     <Dialog

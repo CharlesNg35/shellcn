@@ -1,4 +1,10 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import {
+  autocompletion,
+  type Completion,
+  type CompletionContext,
+  type CompletionResult,
+} from "@codemirror/autocomplete";
 import { json } from "@codemirror/lang-json";
 import { sql } from "@codemirror/lang-sql";
 import { yaml } from "@codemirror/lang-yaml";
@@ -36,6 +42,14 @@ export interface CodeMirrorEditor {
   language: Compartment;
   readOnly: Compartment;
   theme: Compartment;
+  completions: Compartment;
+}
+
+export interface CodeMirrorCompletion {
+  label: string;
+  type?: string;
+  detail?: string;
+  apply?: string;
 }
 
 export interface CodeMirrorOptions {
@@ -43,6 +57,7 @@ export interface CodeMirrorOptions {
   language?: string;
   readOnly?: boolean;
   ariaLabel?: string;
+  completions?: CodeMirrorCompletion[];
   onChange?: (value: string) => void;
 }
 
@@ -256,6 +271,34 @@ export function readOnlyExtension(readOnly: boolean): Extension {
   ];
 }
 
+function completionExtension(items?: CodeMirrorCompletion[]): Extension {
+  if (!items?.length) return [];
+  const options: Completion[] = items.map((item) => ({
+    label: item.label,
+    type: item.type,
+    detail: item.detail,
+    apply: item.apply,
+  }));
+  return autocompletion({
+    override: [completionSource(options)],
+    activateOnTyping: true,
+    activateOnTypingDelay: 150,
+    maxRenderedOptions: 80,
+  });
+}
+
+function completionSource(options: Completion[]) {
+  return (ctx: CompletionContext): CompletionResult | null => {
+    const word = ctx.matchBefore(/[A-Za-z_][\w.$]*/);
+    if (!word && !ctx.explicit) return null;
+    return {
+      from: word?.from ?? ctx.pos,
+      options,
+      validFor: /^[\w.$]*$/,
+    };
+  };
+}
+
 export function createCodeMirrorEditor(
   parent: HTMLElement,
   options: CodeMirrorOptions,
@@ -263,6 +306,7 @@ export function createCodeMirrorEditor(
   const language = new Compartment();
   const readOnly = new Compartment();
   const theme = new Compartment();
+  const completions = new Compartment();
   const state = EditorState.create({
     doc: options.value,
     extensions: [
@@ -277,6 +321,7 @@ export function createCodeMirrorEditor(
       language.of(languageExtension(options.language)),
       readOnly.of(readOnlyExtension(options.readOnly === true)),
       theme.of(currentCodeMirrorTheme()),
+      completions.of(completionExtension(options.completions)),
     ],
   });
   return {
@@ -284,6 +329,7 @@ export function createCodeMirrorEditor(
     language,
     readOnly,
     theme,
+    completions,
   };
 }
 
@@ -322,5 +368,14 @@ export function setEditorReadOnly(
 export function syncCodeMirrorTheme(editor: CodeMirrorEditor | null): void {
   editor?.view.dispatch({
     effects: editor.theme.reconfigure(currentCodeMirrorTheme()),
+  });
+}
+
+export function setEditorCompletions(
+  editor: CodeMirrorEditor | null,
+  completions: CodeMirrorCompletion[],
+): void {
+  editor?.view.dispatch({
+    effects: editor.completions.reconfigure(completionExtension(completions)),
   });
 }

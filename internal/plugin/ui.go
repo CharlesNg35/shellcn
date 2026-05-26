@@ -254,11 +254,12 @@ type Tab struct {
 
 // TreeGroup is a connection-level sidebar root, loaded lazily.
 type TreeGroup struct {
-	Key    string     `json:"key"`
-	Label  string     `json:"label"`
-	Icon   Icon       `json:"icon,omitzero"`
-	Source DataSource `json:"source"`
-	Badge  *Badge     `json:"badge,omitempty"`
+	Key          string     `json:"key"`
+	Label        string     `json:"label"`
+	Icon         Icon       `json:"icon,omitzero"`
+	Source       DataSource `json:"source"`
+	ResourceKind string     `json:"resourceKind,omitempty"`
+	Badge        *Badge     `json:"badge,omitempty"`
 }
 
 // TreeNode is one node returned by a tree DataSource.
@@ -311,11 +312,13 @@ type DetailView struct {
 
 // ResourceType is a managed object type: columns, actions, detail.
 type ResourceType struct {
-	Kind      string      `json:"kind"`
-	Title     string      `json:"title"`
-	List      DataSource  `json:"list"`
-	Watch     *DataSource `json:"watch,omitempty"`
-	Columns   []Column    `json:"columns"`
-	ActionIDs []string    `json:"actionIds"`
-	Detail    DetailView  `json:"detail"`
+	Kind          string      `json:"kind"`
+	Title         string      `json:"title"`
+	List          DataSource  `json:"list"`
+	Watch         *DataSource `json:"watch,omitempty"`
+	Columns       []Column    `json:"columns"`
+	ActionIDs     []string    `json:"actionIds"`
+	ListActionIDs []string    `json:"listActionIds,omitempty"`
+	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
+	Detail        DetailView  `json:"detail"`
 }
