@@ -5,57 +5,46 @@ import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
 import FileBrowserPanel from "./FileBrowserPanel.vue";
 
-const monacoEditors = vi.hoisted(
+const codeMirrorEditors = vi.hoisted(
   () =>
     [] as Array<{
+      value: string;
       setValue(value: string): void;
       emitChange(): void;
     }>,
 );
 
-vi.mock("monaco-editor/min/vs/editor/editor.main.css", () => ({}));
-vi.mock("monaco-editor/esm/vs/editor/editor.worker?worker", () => ({
-  default: class {},
-}));
-vi.mock("monaco-editor/esm/vs/language/json/json.worker?worker", () => ({
-  default: class {},
-}));
-vi.mock("monaco-editor/esm/vs/language/css/css.worker?worker", () => ({
-  default: class {},
-}));
-vi.mock("monaco-editor/esm/vs/language/html/html.worker?worker", () => ({
-  default: class {},
-}));
-vi.mock("monaco-editor/esm/vs/language/typescript/ts.worker?worker", () => ({
-  default: class {},
-}));
-vi.mock("monaco-editor", () => ({
-  editor: {
-    create: (_container: HTMLElement, options: { value: string }) => {
-      let value = options.value;
-      let onChange: (() => void) | undefined;
-      const editor = {
-        getValue: () => value,
-        setValue(next: string) {
-          value = next;
-        },
-        emitChange() {
-          onChange?.();
-        },
-        getModel: () => ({}),
-        onDidChangeModelContent(callback: () => void) {
-          onChange = callback;
-        },
-        updateOptions() {},
-        dispose() {},
-      };
-      monacoEditors.push(editor);
-      return editor;
-    },
-    defineTheme() {},
-    setTheme() {},
-    setModelLanguage() {},
+vi.mock("../../codemirror", () => ({
+  createCodeMirrorEditor: (
+    _container: HTMLElement,
+    options: { value: string; onChange?: (value: string) => void },
+  ) => {
+    let value = options.value;
+    const editor = {
+      get value() {
+        return value;
+      },
+      setValue(next: string) {
+        value = next;
+      },
+      emitChange() {
+        options.onChange?.(value);
+      },
+      view: {
+        destroy() {},
+      },
+    };
+    codeMirrorEditors.push(editor);
+    return editor;
   },
+  editorValue: (editor: { value: string } | null) => editor?.value ?? "",
+  setEditorValue: (
+    editor: { setValue(value: string): void } | null,
+    value: string,
+  ) => editor?.setValue(value),
+  setEditorLanguage: () => {},
+  setEditorReadOnly: () => {},
+  syncCodeMirrorTheme: () => {},
 }));
 
 const rootEntries = [
@@ -71,7 +60,7 @@ const rootEntries = [
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  monacoEditors.length = 0;
+  codeMirrorEditors.length = 0;
   installFetch((url) => {
     const u = new URL(url, "http://h");
     if (url.includes("sftp.list")) {
@@ -162,7 +151,7 @@ describe("FileBrowserPanel", () => {
     await file!.trigger("click");
     await flushPromises();
     await vi.waitFor(() =>
-      expect(w.find(".shellcn-monaco-host").exists()).toBe(true),
+      expect(w.find(".shellcn-codemirror-host").exists()).toBe(true),
     );
   });
 
@@ -206,7 +195,7 @@ describe("FileBrowserPanel", () => {
     await panelButton(w, "Retry").trigger("click");
     await flushPromises();
     await vi.waitFor(() =>
-      expect(w.find(".shellcn-monaco-host").exists()).toBe(true),
+      expect(w.find(".shellcn-codemirror-host").exists()).toBe(true),
     );
   });
 
@@ -283,7 +272,9 @@ describe("FileBrowserPanel", () => {
 
     expect(document.body.textContent).toContain("README.md");
     await vi.waitFor(() =>
-      expect(document.body.querySelector(".shellcn-monaco-host")).toBeTruthy(),
+      expect(
+        document.body.querySelector(".shellcn-codemirror-host"),
+      ).toBeTruthy(),
     );
     w.unmount();
   });
@@ -352,8 +343,8 @@ describe("FileBrowserPanel", () => {
       .find((b) => b.text().includes("README.md"));
     await fileAgain!.trigger("click");
     await flushPromises();
-    await vi.waitFor(() => expect(monacoEditors.length).toBeGreaterThan(0));
-    const editor = monacoEditors.at(-1)!;
+    await vi.waitFor(() => expect(codeMirrorEditors.length).toBeGreaterThan(0));
+    const editor = codeMirrorEditors.at(-1)!;
     editor.setValue("# Updated");
     editor.emitChange();
     await nextTick();

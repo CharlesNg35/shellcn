@@ -29,16 +29,13 @@ vi.mock("@xterm/addon-webgl", () => ({
     dispose() {}
   },
 }));
-vi.mock("monaco-editor", () => ({
-  editor: {
-    create: () => ({
-      getValue: () => "",
-      onDidChangeModelContent() {},
-      dispose() {},
-    }),
-    defineTheme() {},
-    setTheme() {},
-  },
+vi.mock("../../codemirror", () => ({
+  createCodeMirrorEditor: () => ({ view: { destroy() {} } }),
+  editorValue: () => "",
+  setEditorValue: () => {},
+  setEditorLanguage: () => {},
+  setEditorReadOnly: () => {},
+  syncCodeMirrorTheme: () => {},
 }));
 vi.mock("@novnc/novnc", () => ({
   default: class {
@@ -169,11 +166,11 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
-  it("uses Monaco instead of the textarea fallback when the loader succeeds", async () => {
+  it("uses CodeMirror instead of the textarea fallback when the loader succeeds", async () => {
     const w = mount(QueryEditorPanel, { props });
     await flushPromises();
 
-    expect(w.find(".shellcn-monaco-host").exists()).toBe(true);
+    expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
     expect(w.find("textarea.resize-none").exists()).toBe(false);
     w.unmount();
   });

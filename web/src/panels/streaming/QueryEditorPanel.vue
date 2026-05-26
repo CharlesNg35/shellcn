@@ -7,12 +7,7 @@ import { useStream } from "../../composables/useStream";
 import type { PanelProps } from "../core/types";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import { useTheme } from "../../composables/useTheme";
-import {
-  currentMonacoTheme,
-  loadMonaco,
-  syncMonacoTheme,
-  type MonacoModule,
-} from "../../monaco";
+import type { CodeMirrorEditor } from "../../codemirror";
 
 const props = defineProps<PanelProps>();
 const queryConfig = props.config as QueryEditorConfig | undefined;
@@ -41,8 +36,8 @@ const error = ref<string | null>(null);
 const container = ref<HTMLElement | null>(null);
 const useFallback = ref(false);
 const reconnecting = ref(false);
-let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
-let monacoModule: MonacoModule | null = null;
+let editor: CodeMirrorEditor | null = null;
+let codeMirror: typeof import("../../codemirror") | null = null;
 const { isDark } = useTheme();
 
 function onFrame(frame: string): void {
@@ -76,7 +71,7 @@ async function onReconnect(): Promise<void> {
 }
 
 function run(): void {
-  if (editor) query.value = editor.getValue();
+  if (editor) query.value = codeMirror?.editorValue(editor) ?? query.value;
   const text = query.value.trim();
   if (!text) return;
   history.value = [text, ...history.value.filter((q) => q !== text)].slice(
@@ -108,7 +103,7 @@ async function cancel(): Promise<void> {
 
 function recall(text: string): void {
   query.value = text;
-  editor?.setValue?.(text);
+  codeMirror?.setEditorValue(editor, text);
 }
 
 onMounted(async () => {
@@ -118,15 +113,15 @@ onMounted(async () => {
     return;
   }
   try {
-    const monaco = await loadMonaco();
-    monacoModule = monaco;
-    editor = monaco.editor.create(container.value, {
+    const helpers = await import("../../codemirror");
+    codeMirror = helpers;
+    editor = helpers.createCodeMirrorEditor(container.value, {
       value: query.value,
       language: "sql",
-      theme: currentMonacoTheme(),
-      minimap: { enabled: false },
-      automaticLayout: true,
-      scrollBeyondLastLine: false,
+      ariaLabel: "SQL query editor",
+      onChange(value) {
+        query.value = value;
+      },
     });
   } catch {
     useFallback.value = true;
@@ -134,12 +129,12 @@ onMounted(async () => {
 });
 
 watch(isDark, () => {
-  if (monacoModule) syncMonacoTheme(monacoModule);
+  codeMirror?.syncCodeMirrorTheme(editor);
 });
 
 onUnmounted(() => {
   try {
-    editor?.dispose();
+    editor?.view.destroy();
   } catch {
     /* already disposed */
   }
@@ -188,7 +183,7 @@ onUnmounted(() => {
       <div
         v-show="!useFallback"
         ref="container"
-        class="shellcn-monaco-host h-full"
+        class="shellcn-codemirror-host h-full"
       />
     </div>
 
