@@ -11,6 +11,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/postgresql"
 	"github.com/charlesng/shellcn/plugins/proxmox"
 	"github.com/charlesng/shellcn/plugins/rdp"
+	"github.com/charlesng/shellcn/plugins/redis"
 	"github.com/charlesng/shellcn/plugins/s3"
 	"github.com/charlesng/shellcn/plugins/sftp"
 	"github.com/charlesng/shellcn/plugins/smb"
@@ -47,5 +48,6 @@ func all() []plugin.Plugin {
 		proxmox.New(),
 		postgresql.New(),
 		mysql.New(),
+		redis.New(),
 	}
 }

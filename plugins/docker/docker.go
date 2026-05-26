@@ -137,9 +137,12 @@ func containerResource() plugin.ResourceType {
 	columns := containerColumns()
 	return plugin.ResourceType{
 		Kind: "container", Title: "Containers",
-		List:      plugin.DataSource{RouteID: "docker.containers.list"},
-		Watch:     &plugin.DataSource{RouteID: "docker.events.watch", Method: plugin.MethodWS},
-		Columns:   columns,
+		List:    plugin.DataSource{RouteID: "docker.containers.list"},
+		Watch:   &plugin.DataSource{RouteID: "docker.events.watch", Method: plugin.MethodWS},
+		Columns: columns,
+		ListActionIDs: []string{
+			"docker.container.create",
+		},
 		ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.exec", "docker.container.remove"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.exec", "docker.container.remove"}},
@@ -244,6 +247,7 @@ func composeResource() plugin.ResourceType {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
+		{ID: "docker.container.create", Label: "New container", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"}, RouteID: "docker.container.create"},
 		{ID: "docker.container.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"}, RouteID: "docker.container.start", Params: map[string]string{"id": "${resource.uid}"}},
 		{ID: "docker.container.stop", Label: "Stop", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "square"}, RouteID: "docker.container.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this container?"},
 		{ID: "docker.container.restart", Label: "Restart", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "refresh-cw"}, RouteID: "docker.container.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this container?"},

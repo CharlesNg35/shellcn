@@ -229,10 +229,10 @@ func TestValidateAcceptsRemoteDesktopConfig(t *testing.T) {
 
 func TestSpecializedPanelConfigMaps(t *testing.T) {
 	kv := plugin.KVConfig{
-		ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write",
+		CreateRouteID: "redis.key.create", ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write",
 		DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,
 	}.Map()
-	if kv["readRouteId"] != "redis.key.read" || kv["writable"] != true {
+	if kv["createRouteId"] != "redis.key.create" || kv["readRouteId"] != "redis.key.read" || kv["writable"] != true {
 		t.Fatalf("kv config map unexpected: %#v", kv)
 	}
 

@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
+	shellquote "github.com/kballard/go-shellquote"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
@@ -28,6 +30,33 @@ type row map[string]any
 
 type actionResult struct {
 	OK bool `json:"ok"`
+}
+
+type createContainerResult struct {
+	OK       bool     `json:"ok"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name,omitempty"`
+	Started  bool     `json:"started"`
+	Warnings []string `json:"warnings,omitempty"`
+}
+
+type createContainerRequest struct {
+	Name           string `json:"name"`
+	Image          string `json:"image" validate:"required"`
+	Pull           *bool  `json:"pull"`
+	Start          *bool  `json:"start"`
+	Command        string `json:"command"`
+	Entrypoint     string `json:"entrypoint"`
+	User           string `json:"user"`
+	WorkingDir     string `json:"working_dir"`
+	Env            string `json:"env"`
+	Ports          string `json:"ports"`
+	Binds          string `json:"binds"`
+	Network        string `json:"network"`
+	Restart        string `json:"restart"`
+	RestartRetries int    `json:"restart_retries"`
+	TTY            bool   `json:"tty"`
+	OpenStdin      bool   `json:"open_stdin"`
 }
 
 func Routes() []plugin.Route {
@@ -54,6 +83,7 @@ func Routes() []plugin.Route {
 		{ID: "docker.volume.inspect", Method: plugin.MethodGet, Path: "/volumes/{id}/inspect", Permission: "docker.volumes.read", Risk: plugin.RiskSafe, AuditEvent: "docker.volume.inspect", Handle: inspectVolume},
 		{ID: "docker.network.inspect", Method: plugin.MethodGet, Path: "/networks/{id}/inspect", Permission: "docker.networks.read", Risk: plugin.RiskSafe, AuditEvent: "docker.network.inspect", Handle: inspectNetwork},
 		{ID: "docker.container.env", Method: plugin.MethodGet, Path: "/containers/{id}/env", Permission: "docker.containers.read", Risk: plugin.RiskSafe, AuditEvent: "docker.container.env", Handle: containerEnv},
+		{ID: "docker.container.create", Method: plugin.MethodPost, Path: "/containers", Permission: "docker.containers.write", Risk: plugin.RiskWrite, AuditEvent: "docker.container.create", Input: createContainerSchema(), Handle: createContainer},
 		{ID: "docker.container.start", Method: plugin.MethodPost, Path: "/containers/{id}/start", Permission: "docker.containers.write", Risk: plugin.RiskWrite, AuditEvent: "docker.container.start", Handle: startContainer},
 		{ID: "docker.container.stop", Method: plugin.MethodPost, Path: "/containers/{id}/stop", Permission: "docker.containers.write", Risk: plugin.RiskWrite, AuditEvent: "docker.container.stop", Handle: stopContainer},
 		{ID: "docker.container.restart", Method: plugin.MethodPost, Path: "/containers/{id}/restart", Permission: "docker.containers.write", Risk: plugin.RiskWrite, AuditEvent: "docker.container.restart", Handle: restartContainer},
@@ -390,6 +420,98 @@ func containerEnv(rc *plugin.RequestContext) (any, error) {
 	}
 	sort.Slice(rows, func(i, j int) bool { return fmt.Sprint(rows[i]["key"]) < fmt.Sprint(rows[j]["key"]) })
 	return pageRows(rc, rows)
+}
+
+func createContainer(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	var in createContainerRequest
+	if err := rc.Bind(&in); err != nil {
+		return nil, err
+	}
+	in.Image = strings.TrimSpace(in.Image)
+	if in.Image == "" {
+		return nil, fmt.Errorf("%w: image is required", plugin.ErrInvalidInput)
+	}
+	env, err := parseEnvLines(in.Env)
+	if err != nil {
+		return nil, err
+	}
+	exposed, bindings, err := parsePublishedPorts(in.Ports)
+	if err != nil {
+		return nil, err
+	}
+	restart, err := parseRestartPolicy(in.Restart, in.RestartRetries)
+	if err != nil {
+		return nil, err
+	}
+	if boolDefault(in.Pull, true) {
+		pull, err := s.cli.ImagePull(rc.Ctx, in.Image, dockerclient.ImagePullOptions{})
+		if err != nil {
+			return nil, dockerErr(err)
+		}
+		if err := pull.Wait(rc.Ctx); err != nil {
+			_ = pull.Close()
+			return nil, dockerErr(err)
+		}
+		if err := pull.Close(); err != nil {
+			return nil, dockerErr(err)
+		}
+	}
+	cmd, err := shellFields("command", in.Command)
+	if err != nil {
+		return nil, err
+	}
+	entrypoint, err := shellFields("entrypoint", in.Entrypoint)
+	if err != nil {
+		return nil, err
+	}
+	cfg := &container.Config{
+		Image:        in.Image,
+		Cmd:          cmd,
+		Entrypoint:   entrypoint,
+		Env:          env,
+		ExposedPorts: exposed,
+		User:         strings.TrimSpace(in.User),
+		WorkingDir:   strings.TrimSpace(in.WorkingDir),
+		Tty:          in.TTY,
+		OpenStdin:    in.OpenStdin,
+	}
+	host := &container.HostConfig{
+		Binds:         nonEmptyLines(in.Binds),
+		PortBindings:  bindings,
+		RestartPolicy: restart,
+	}
+	var networking *network.NetworkingConfig
+	if n := strings.TrimSpace(in.Network); n != "" {
+		host.NetworkMode = container.NetworkMode(n)
+		networking = &network.NetworkingConfig{EndpointsConfig: map[string]*network.EndpointSettings{n: {}}}
+	}
+	created, err := s.cli.ContainerCreate(rc.Ctx, dockerclient.ContainerCreateOptions{
+		Config:           cfg,
+		HostConfig:       host,
+		NetworkingConfig: networking,
+		Name:             strings.TrimSpace(in.Name),
+	})
+	if err != nil {
+		return nil, dockerErr(err)
+	}
+	started := false
+	if boolDefault(in.Start, true) {
+		if _, err := s.cli.ContainerStart(rc.Ctx, created.ID, dockerclient.ContainerStartOptions{}); err != nil {
+			return nil, dockerErr(err)
+		}
+		started = true
+	}
+	return createContainerResult{
+		OK:       true,
+		ID:       shortID(created.ID),
+		Name:     strings.TrimSpace(in.Name),
+		Started:  started,
+		Warnings: created.Warnings,
+	}, nil
 }
 
 func startContainer(rc *plugin.RequestContext) (any, error) {
@@ -980,6 +1102,39 @@ func streamParams(rc *plugin.RequestContext) map[string]string {
 	return params
 }
 
+func createContainerSchema() *plugin.Schema {
+	onFailure := plugin.Condition{AllOf: []plugin.Rule{{Field: "restart", Op: plugin.OpEq, Value: string(container.RestartPolicyOnFailure)}}}
+	return &plugin.Schema{Groups: []plugin.Group{
+		{Name: "Container", Fields: []plugin.Field{
+			{Key: "name", Label: "Name", Type: plugin.FieldText, Placeholder: "web", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: `^[A-Za-z0-9][A-Za-z0-9_.-]*$`, Message: "Use letters, numbers, dots, underscores, or dashes."}}},
+			{Key: "image", Label: "Image", Type: plugin.FieldText, Required: true, Placeholder: "nginx:latest"},
+			{Key: "pull", Label: "Pull image first", Type: plugin.FieldToggle, Default: true},
+			{Key: "start", Label: "Start after create", Type: plugin.FieldToggle, Default: true},
+		}},
+		{Name: "Runtime", Fields: []plugin.Field{
+			{Key: "command", Label: "Command", Type: plugin.FieldText, Placeholder: "sleep 3600"},
+			{Key: "entrypoint", Label: "Entrypoint", Type: plugin.FieldText, Placeholder: "/bin/sh"},
+			{Key: "user", Label: "User", Type: plugin.FieldText, Placeholder: "1000:1000"},
+			{Key: "working_dir", Label: "Working directory", Type: plugin.FieldText, Placeholder: "/app"},
+			{Key: "env", Label: "Environment", Type: plugin.FieldTextarea, Placeholder: "APP_ENV=prod\nLOG_LEVEL=info"},
+			{Key: "tty", Label: "TTY", Type: plugin.FieldToggle},
+			{Key: "open_stdin", Label: "Open stdin", Type: plugin.FieldToggle},
+		}},
+		{Name: "Host", Fields: []plugin.Field{
+			{Key: "ports", Label: "Published ports", Type: plugin.FieldTextarea, Placeholder: "8080:80/tcp\n127.0.0.1:5432:5432/tcp"},
+			{Key: "binds", Label: "Bind mounts", Type: plugin.FieldTextarea, Placeholder: "/srv/app:/app:ro\n/var/log/app:/logs"},
+			{Key: "network", Label: "Network", Type: plugin.FieldText, Placeholder: "bridge"},
+			{Key: "restart", Label: "Restart policy", Type: plugin.FieldSelect, Default: string(container.RestartPolicyDisabled), Options: []plugin.Option{
+				{Label: "No", Value: string(container.RestartPolicyDisabled)},
+				{Label: "Always", Value: string(container.RestartPolicyAlways)},
+				{Label: "Unless stopped", Value: string(container.RestartPolicyUnlessStopped)},
+				{Label: "On failure", Value: string(container.RestartPolicyOnFailure)},
+			}},
+			{Key: "restart_retries", Label: "Restart retries", Type: plugin.FieldNumber, VisibleWhen: &onFailure, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
+		}},
+	}}
+}
+
 func logsSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Logs", Fields: []plugin.Field{
 		{Key: "tail", Label: "Tail", Type: plugin.FieldNumber},
@@ -1118,6 +1273,127 @@ func firstString(values []string, fallback string) string {
 		return fallback
 	}
 	return values[0]
+}
+
+func boolDefault(value *bool, fallback bool) bool {
+	if value == nil {
+		return fallback
+	}
+	return *value
+}
+
+func shellFields(field string, value string) ([]string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	parts, err := shellquote.Split(value)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid %s: %v", plugin.ErrInvalidInput, field, err)
+	}
+	return parts, nil
+}
+
+func nonEmptyLines(value string) []string {
+	lines := strings.Split(value, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+func parseEnvLines(value string) ([]string, error) {
+	lines := nonEmptyLines(value)
+	for _, line := range lines {
+		key, _, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) == "" {
+			return nil, fmt.Errorf("%w: environment entries must be KEY=value", plugin.ErrInvalidInput)
+		}
+	}
+	return lines, nil
+}
+
+func parseRestartPolicy(value string, retries int) (container.RestartPolicy, error) {
+	switch container.RestartPolicyMode(strings.TrimSpace(value)) {
+	case "", container.RestartPolicyDisabled:
+		return container.RestartPolicy{Name: container.RestartPolicyDisabled}, nil
+	case container.RestartPolicyAlways:
+		return container.RestartPolicy{Name: container.RestartPolicyAlways}, nil
+	case container.RestartPolicyUnlessStopped:
+		return container.RestartPolicy{Name: container.RestartPolicyUnlessStopped}, nil
+	case container.RestartPolicyOnFailure:
+		if retries < 0 {
+			return container.RestartPolicy{}, fmt.Errorf("%w: restart retries cannot be negative", plugin.ErrInvalidInput)
+		}
+		return container.RestartPolicy{Name: container.RestartPolicyOnFailure, MaximumRetryCount: retries}, nil
+	default:
+		return container.RestartPolicy{}, fmt.Errorf("%w: unsupported restart policy %q", plugin.ErrInvalidInput, value)
+	}
+}
+
+func parsePublishedPorts(value string) (network.PortSet, network.PortMap, error) {
+	lines := nonEmptyLines(value)
+	if len(lines) == 0 {
+		return nil, nil, nil
+	}
+	exposed := network.PortSet{}
+	bindings := network.PortMap{}
+	for _, line := range lines {
+		hostIP, hostPort, containerPort, err := splitPublishedPort(line)
+		if err != nil {
+			return nil, nil, err
+		}
+		port, err := network.ParsePort(containerPort)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: invalid container port %q", plugin.ErrInvalidInput, containerPort)
+		}
+		binding := network.PortBinding{HostPort: hostPort}
+		if hostIP != "" {
+			ip, err := netip.ParseAddr(hostIP)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%w: invalid host IP %q", plugin.ErrInvalidInput, hostIP)
+			}
+			binding.HostIP = ip
+		}
+		exposed[port] = struct{}{}
+		bindings[port] = append(bindings[port], binding)
+	}
+	return exposed, bindings, nil
+}
+
+func splitPublishedPort(value string) (hostIP string, hostPort string, containerPort string, err error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", "", "", fmt.Errorf("%w: port entry is empty", plugin.ErrInvalidInput)
+	}
+	if strings.HasPrefix(value, "[") {
+		end := strings.Index(value, "]")
+		if end < 0 || len(value) <= end+2 || value[end+1] != ':' {
+			return "", "", "", fmt.Errorf("%w: invalid published port %q", plugin.ErrInvalidInput, value)
+		}
+		hostIP = value[1:end]
+		rest := strings.Split(value[end+2:], ":")
+		if len(rest) != 2 {
+			return "", "", "", fmt.Errorf("%w: invalid published port %q", plugin.ErrInvalidInput, value)
+		}
+		return hostIP, rest[0], rest[1], nil
+	}
+	parts := strings.Split(value, ":")
+	switch len(parts) {
+	case 1:
+		return "", "", parts[0], nil
+	case 2:
+		return "", parts[0], parts[1], nil
+	case 3:
+		return parts[0], parts[1], parts[2], nil
+	default:
+		return "", "", "", fmt.Errorf("%w: invalid published port %q", plugin.ErrInvalidInput, value)
+	}
 }
 
 func shortID(id string) string {

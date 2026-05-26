@@ -445,6 +445,7 @@ func checkPanelConfigRoutes(
 		checkWriteRouteID(ctx+" cancelRouteId", route("cancelRouteId"))
 		checkRouteID(ctx+" completionRouteId", route("completionRouteId"))
 	case PanelKV:
+		checkWriteRouteID(ctx+" createRouteId", route("createRouteId"))
 		checkRouteID(ctx+" readRouteId", route("readRouteId"))
 		checkWriteRouteID(ctx+" writeRouteId", route("writeRouteId"))
 		checkWriteRouteID(ctx+" deleteRouteId", route("deleteRouteId"))

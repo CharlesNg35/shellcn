@@ -122,6 +122,7 @@ func (c TraceConfig) Map() map[string]any {
 }
 
 type KVConfig struct {
+	CreateRouteID string `json:"createRouteId,omitempty"`
 	ReadRouteID   string `json:"readRouteId,omitempty"`
 	WriteRouteID  string `json:"writeRouteId,omitempty"`
 	DeleteRouteID string `json:"deleteRouteId,omitempty"`
@@ -131,6 +132,9 @@ type KVConfig struct {
 
 func (c KVConfig) Map() map[string]any {
 	out := map[string]any{}
+	if c.CreateRouteID != "" {
+		out["createRouteId"] = c.CreateRouteID
+	}
 	if c.ReadRouteID != "" {
 		out["readRouteId"] = c.ReadRouteID
 	}

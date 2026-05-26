@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
+import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import { useToast } from "primevue/usetoast";
@@ -37,6 +38,10 @@ const loading = ref(false);
 const loadingDetail = ref(false);
 const saving = ref(false);
 const error = ref<string | null>(null);
+const createOpen = ref(false);
+const createKeyName = ref("");
+const createType = ref("string");
+const createValue = ref("");
 const config = computed(() => props.config as KVPanelConfig | undefined);
 const keyParam = computed(() => config.value?.keyParam ?? "key");
 const writable = computed(() => config.value?.writable === true);
@@ -153,6 +158,39 @@ async function save(): Promise<void> {
   }
 }
 
+async function createKey(): Promise<void> {
+  if (!config.value?.createRouteId) return;
+  const key = createKeyName.value.trim();
+  if (!key) return;
+  saving.value = true;
+  try {
+    await runFormAction(
+      props.connectionId,
+      config.value.createRouteId,
+      { resource: props.resource },
+      { key, type: createType.value, value: createValue.value },
+      { [keyParam.value]: key },
+      "PUT",
+    );
+    toast.add({ severity: "success", summary: "Key created", life: 2200 });
+    createOpen.value = false;
+    createKeyName.value = "";
+    createValue.value = "";
+    await load();
+    const created = entries.value.find((entry) => entry.key === key);
+    if (created) await loadDetail(created);
+  } catch (e) {
+    toast.add({
+      severity: "error",
+      summary: "Create failed",
+      detail: (e as Error).message,
+      life: 4000,
+    });
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function remove(): Promise<void> {
   if (!selected.value || !config.value?.deleteRouteId) return;
   saving.value = true;
@@ -207,6 +245,14 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           @click="load"
         >
           Refresh
+        </Button>
+        <Button
+          v-if="writable && config?.createRouteId"
+          type="button"
+          :disabled="saving"
+          @click="createOpen = true"
+        >
+          New
         </Button>
       </div>
       <PanelError v-if="error" :message="error" retryable @retry="load" />
@@ -285,5 +331,65 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         />
       </div>
     </div>
+
+    <Dialog
+      v-model:visible="createOpen"
+      modal
+      header="Create key"
+      class="w-[min(42rem,calc(100vw-2rem))]"
+    >
+      <div class="flex flex-col gap-4">
+        <div>
+          <label class="mb-1 block text-xs text-surface-400">Key</label>
+          <InputText
+            v-model="createKeyName"
+            class="w-full"
+            aria-label="New key"
+            autofocus
+          />
+        </div>
+        <div class="w-44">
+          <label class="mb-1 block text-xs text-surface-400">Type</label>
+          <Select
+            v-model="createType"
+            :options="typeOptions"
+            option-label="label"
+            option-value="value"
+          />
+        </div>
+        <div class="h-56">
+          <label class="mb-1 block text-xs text-surface-400">Value</label>
+          <CodeTextEditor
+            v-model:value="createValue"
+            class="h-full"
+            :language="
+              createType === 'json' ||
+              createValue.trim().startsWith('{') ||
+              createValue.trim().startsWith('[')
+                ? 'json'
+                : 'plaintext'
+            "
+            aria-label="New key value"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <Button
+          type="button"
+          severity="secondary"
+          outlined
+          @click="createOpen = false"
+        >
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          :disabled="saving || !createKeyName.trim()"
+          @click="createKey"
+        >
+          Create
+        </Button>
+      </template>
+    </Dialog>
   </div>
 </template>

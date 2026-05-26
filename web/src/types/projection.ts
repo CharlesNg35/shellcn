@@ -250,6 +250,7 @@ export interface TracePanelConfig {
 }
 
 export interface KVPanelConfig {
+  createRouteId?: string;
   readRouteId?: string;
   writeRouteId?: string;
   deleteRouteId?: string;

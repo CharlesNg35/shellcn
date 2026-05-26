@@ -49,9 +49,9 @@ These plugins should prove the core architecture first.
 > (query editor envelopes, identifier/DDL helpers, statement safety checks,
 > audit metadata/result redaction, and TLS/config parsing). Dialect catalog
 > queries, driver connection code, actions, and manifests remain inside each
-> plugin. PostgreSQL and MySQL/MariaDB are implemented as direct-only database
-> plugins; agent transport is reserved for private control-plane targets such as
-> Docker and Kubernetes.
+> plugin. PostgreSQL, MySQL/MariaDB, and Redis are implemented as direct-only
+> database/data-store plugins; agent transport is reserved for private
+> control-plane targets such as Docker and Kubernetes.
 
 ## P1: Core Infrastructure
 
@@ -61,7 +61,7 @@ These plugins should prove the core architecture first.
 | `kubernetes` | Kubernetes cluster management | workloads, pods, services, ingress, storage, config, RBAC, logs, exec, port-forward |
 | `mysql`      | MySQL/MariaDB access          | schema browser, query editor, table data, users, DDL helpers, audit                 |
 | `mongodb`    | MongoDB access                | databases, collections, document editor, query, indexes                             |
-| `redis`      | Redis access                  | key browser, strings, hashes, lists, sets, sorted sets, pub/sub                     |
+| `redis`      | Redis access                  | key browser, strings, hashes, lists, sets, sorted sets, command console, pub/sub    |
 | `vnc`        | Remote desktop via VNC/RFB    | `remote_desktop` over an RFB stream, clipboard, keyboard/mouse                      |
 
 ## P1: Filesystem And Storage Protocols

@@ -49,6 +49,9 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if containerRes == nil {
 		t.Fatal("missing container resource")
 	}
+	if !contains(containerRes.ListActionIDs, "docker.container.create") {
+		t.Fatalf("container list actions = %#v, want create action", containerRes.ListActionIDs)
+	}
 	wantTabs := []string{"overview", "terminal", "logs", "inspect", "env", "api"}
 	if len(containerRes.Detail.Tabs) != len(wantTabs) {
 		t.Fatalf("container detail tabs = %d, want %d", len(containerRes.Detail.Tabs), len(wantTabs))
@@ -79,6 +82,27 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 		if composeRes.Detail.Tabs[i].Key != want {
 			t.Fatalf("compose tab %d = %q, want %q", i, composeRes.Detail.Tabs[i].Key, want)
 		}
+	}
+	var createAction *plugin.Action
+	for i := range m.Actions {
+		if m.Actions[i].ID == "docker.container.create" {
+			createAction = &m.Actions[i]
+			break
+		}
+	}
+	if createAction == nil || createAction.RouteID != "docker.container.create" {
+		t.Fatalf("missing create container action: %+v", createAction)
+	}
+	var createRoute *plugin.Route
+	routes := New().Routes()
+	for i := range routes {
+		if routes[i].ID == "docker.container.create" {
+			createRoute = &routes[i]
+			break
+		}
+	}
+	if createRoute == nil || createRoute.Input == nil || createRoute.Risk != plugin.RiskWrite {
+		t.Fatalf("create container route mismatch: %+v", createRoute)
 	}
 }
 
@@ -157,6 +181,20 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 		t.Fatalf("start endpoint not called: %+v", calls)
 	}
 
+	createBody := `{"name":"api","image":"nginx:latest","pull":false,"start":true,"command":"nginx -g 'daemon off;'","env":"APP_ENV=test","ports":"8080:80/tcp","binds":"/srv/app:/app:ro","network":"bridge","restart":"unless-stopped"}`
+	createRC := plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, nil, url.Values{}, []byte(createBody))
+	created, err := createContainer(createRC)
+	if err != nil {
+		t.Fatalf("create container: %v", err)
+	}
+	createResult := created.(createContainerResult)
+	if !createResult.OK || createResult.ID != "def456789abc" || !createResult.Started {
+		t.Fatalf("create result unexpected: %+v", createResult)
+	}
+	if !calls["POST /containers/create"] || !calls["POST /containers/def456789abcdef/start"] {
+		t.Fatalf("create/start endpoints not called: %+v", calls)
+	}
+
 	body := `{"method":"GET","url":"/version","headers":[]}`
 	apiRC := plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, nil, url.Values{}, []byte(body))
 	raw, err := executeAPI(apiRC)
@@ -167,6 +205,15 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	if resp.Status != http.StatusOK {
 		t.Fatalf("raw api status = %d", resp.Status)
 	}
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 type directNet struct{}
@@ -231,6 +278,35 @@ func fakeDockerDaemon(t *testing.T) (*httptest.Server, map[string]bool) {
 		case p == "/networks":
 			_ = json.NewEncoder(w).Encode([]map[string]any{{"Id": "net1", "Name": "bridge", "Driver": "bridge", "Scope": "local"}})
 		case r.Method == http.MethodPost && p == "/containers/abc123/start":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodPost && p == "/containers/create":
+			if got := r.URL.Query().Get("name"); got != "api" {
+				t.Errorf("container create name query = %q, want api", got)
+			}
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Errorf("decode create body: %v", err)
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if body["Image"] != "nginx:latest" {
+				t.Errorf("create image = %#v", body["Image"])
+			}
+			env, _ := body["Env"].([]any)
+			if len(env) != 1 || env[0] != "APP_ENV=test" {
+				t.Errorf("create env = %#v", body["Env"])
+			}
+			cmd, _ := body["Cmd"].([]any)
+			if len(cmd) != 3 || cmd[2] != "daemon off;" {
+				t.Errorf("create command = %#v", body["Cmd"])
+			}
+			host, _ := body["HostConfig"].(map[string]any)
+			if host["NetworkMode"] != "bridge" {
+				t.Errorf("network mode = %#v", host["NetworkMode"])
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{"Id": "def456789abcdef", "Warnings": []string{"created"}})
+		case r.Method == http.MethodPost && p == "/containers/def456789abcdef/start":
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			t.Logf("unexpected docker request %s %s", r.Method, p)

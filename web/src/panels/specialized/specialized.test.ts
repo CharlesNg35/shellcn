@@ -94,6 +94,9 @@ beforeEach(() => {
         },
       };
     }
+    if (url.includes("kv.write") && init?.method === "PUT") {
+      return { body: { ok: true } };
+    }
     if (url.includes("http.exec") && init?.method === "POST") {
       return {
         body: {
@@ -150,6 +153,41 @@ describe("specialized panels", () => {
 
     expect(w.text()).toContain("session:1");
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
+  });
+
+  it("shows key creation only when the generic kv create route is declared", async () => {
+    const readOnlyCreate = mount(KVPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kv.list" },
+        config: {
+          readRouteId: "kv.read",
+          writeRouteId: "kv.write",
+          keyParam: "key",
+          writable: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(readOnlyCreate.text()).not.toContain("New");
+
+    const w = mount(KVPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kv.list" },
+        config: {
+          createRouteId: "kv.write",
+          readRouteId: "kv.read",
+          writeRouteId: "kv.write",
+          keyParam: "key",
+          writable: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("New");
   });
 
   it("executes a declarative HTTP request", async () => {
