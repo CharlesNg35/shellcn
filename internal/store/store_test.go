@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -152,6 +153,49 @@ func testConnections(t *testing.T, s *store.Store) {
 	}
 	if reloaded, _ := s.Connections.Get(ctx, "c1"); reloaded.Name != "prod-web-renamed" {
 		t.Errorf("update not persisted: %q", reloaded.Name)
+	}
+
+	folder := &models.ConnectionFolder{ID: "f1", UserID: "u1", Name: "Production", Color: "blue", SortOrder: 1}
+	if err := s.ConnectionFolders.Create(ctx, folder); err != nil {
+		t.Fatalf("folder create: %v", err)
+	}
+	childFolder := &models.ConnectionFolder{ID: "f2", UserID: "u1", ParentID: "f1", Name: "Databases", Color: "teal", SortOrder: 0}
+	if err := s.ConnectionFolders.Create(ctx, childFolder); err != nil {
+		t.Fatalf("child folder create: %v", err)
+	}
+	if err := s.ConnectionPlacements.Set(ctx, &models.ConnectionPlacement{
+		UserID: "u1", ConnectionID: "c1", FolderID: "f1", SortOrder: 3,
+	}); err != nil {
+		t.Fatalf("placement set: %v", err)
+	}
+	folders, _ := s.ConnectionFolders.ListByUser(ctx, "u1")
+	if len(folders) != 2 || !slices.ContainsFunc(folders, func(f models.ConnectionFolder) bool {
+		return f.ID == "f2" && f.ParentID == "f1"
+	}) {
+		t.Fatalf("folders not listed: %+v", folders)
+	}
+	placements, _ := s.ConnectionPlacements.ListByUser(ctx, "u1")
+	if len(placements) != 1 || placements[0].FolderID != "f1" || placements[0].SortOrder != 3 {
+		t.Fatalf("placement not listed: %+v", placements)
+	}
+	if err := s.ConnectionPlacements.ClearFolder(ctx, "u1", "f1"); err != nil {
+		t.Fatalf("clear folder: %v", err)
+	}
+	placements, _ = s.ConnectionPlacements.ListByUser(ctx, "u1")
+	if placements[0].FolderID != "" {
+		t.Fatalf("clear folder did not move placement to root: %+v", placements)
+	}
+	if err := s.ConnectionPlacements.Set(ctx, &models.ConnectionPlacement{
+		UserID: "u1", ConnectionID: "c1", FolderID: "f1", SortOrder: 3,
+	}); err != nil {
+		t.Fatalf("placement set for move: %v", err)
+	}
+	if err := s.ConnectionPlacements.MoveFolder(ctx, "u1", "f1", "f2"); err != nil {
+		t.Fatalf("move folder placements: %v", err)
+	}
+	placements, _ = s.ConnectionPlacements.ListByUser(ctx, "u1")
+	if placements[0].FolderID != "f2" {
+		t.Fatalf("move folder did not update placement: %+v", placements)
 	}
 
 	if err := s.Connections.Delete(ctx, "c1"); err != nil {

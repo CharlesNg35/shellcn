@@ -39,6 +39,9 @@ func TestAsciicastHeaderAllowlistsEnv(t *testing.T) {
 	if header["version"] != float64(2) || header["width"] != float64(120) || header["height"] != float64(40) {
 		t.Fatalf("bad header: %+v", header)
 	}
+	if header["idle_time_limit"] != float64(2) {
+		t.Fatalf("idle time limit missing: %+v", header)
+	}
 	if header["timestamp"] != float64(1700000000) || header["title"] != "demo" {
 		t.Fatalf("missing timestamp/title: %+v", header)
 	}

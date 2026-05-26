@@ -2,6 +2,7 @@ import { config } from "@vue/test-utils";
 import { vi } from "vitest";
 import PrimeVue from "primevue/config";
 import ToastService from "primevue/toastservice";
+import ConfirmationService from "primevue/confirmationservice";
 import { primeVuePassthrough } from "../primevue/preset";
 
 // jsdom does not implement matchMedia; some PrimeVue widgets (Select) call it.
@@ -18,9 +19,10 @@ if (!window.matchMedia) {
   }));
 }
 
-// Register the PrimeVue plugin (+ Toast service) for every mounted component so
-// PrimeVue widgets resolve their config in unit tests.
+// Register the PrimeVue plugin (+ Toast/Confirmation services) for every mounted
+// component so PrimeVue widgets and useToast/useConfirm resolve in unit tests.
 config.global.plugins = [
   [PrimeVue, { unstyled: true, pt: primeVuePassthrough }],
   ToastService,
+  ConfirmationService,
 ];

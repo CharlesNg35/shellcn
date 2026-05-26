@@ -27,6 +27,12 @@ const router = createRouter({
           path: "users",
           name: "users",
           component: () => import("../views/UsersView.vue"),
+          meta: { admin: true },
+        },
+        {
+          path: "profile",
+          name: "profile",
+          component: () => import("../views/ProfileView.vue"),
         },
         {
           path: "c/:id",
@@ -68,6 +74,11 @@ router.beforeEach(async (to) => {
     return { name: "login", query: redirect };
   }
   if (to.name === "login" && auth.isAuthenticated) {
+    return { name: "home" };
+  }
+  // Admin-only routes (e.g. user management) are not reachable by non-admins,
+  // even via a direct URL — the backend enforces this too.
+  if (to.meta.admin && !auth.isAdmin) {
     return { name: "home" };
   }
   return true;

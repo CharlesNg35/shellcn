@@ -2,7 +2,8 @@ package plugins
 
 import (
 	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/noop"
+	"github.com/charlesng/shellcn/plugins/sftp"
+	"github.com/charlesng/shellcn/plugins/ssh"
 )
 
 // Register wires every first-party plugin into the registry. This is the single
@@ -16,6 +17,7 @@ func Register(reg *plugin.Registry) {
 // all returns the first-party plugin set in registration order.
 func all() []plugin.Plugin {
 	return []plugin.Plugin{
-		noop.New(),
+		ssh.New(),
+		sftp.New(),
 	}
 }

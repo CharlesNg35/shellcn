@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { reactive, ref } from "vue";
+import { useConnectionStatusStore } from "./connectionStatus";
 
 export type ChannelStatus = "connecting" | "open" | "closed" | "error";
 
@@ -28,10 +29,27 @@ function frameText(ev: unknown): string {
 // Streams are owned here, not by components: a panel attaches on mount and
 // detaches on unmount, but the underlying channel persists across remounts and
 // tab switches. Channels are torn down explicitly when a connection closes.
+// A channel key is `${connectionId}:${routeId}:${params}`; the connection id is
+// everything before the first colon.
+function connectionOf(key: string): string {
+  const i = key.indexOf(":");
+  return i === -1 ? key : key.slice(0, i);
+}
+
 export const useSessionsStore = defineStore("sessions", () => {
   const channels = new Map<string, Channel>();
   const statuses = reactive<Record<string, ChannelStatus>>({});
+  // Per-channel failure reason (from the WS close frame), surfaced by panels.
+  const reasons = reactive<Record<string, string>>({});
   const generation = ref(0);
+  const live = useConnectionStatusStore();
+
+  function hasOpenChannel(connectionId: string): boolean {
+    const prefix = `${connectionId}:`;
+    return Object.entries(statuses).some(
+      ([k, s]) => k.startsWith(prefix) && s === "open",
+    );
+  }
 
   function ensure(key: string, factory: () => SocketLike): void {
     if (channels.has(key)) return;
@@ -39,10 +57,27 @@ export const useSessionsStore = defineStore("sessions", () => {
     const channel: Channel = { socket, listeners: new Set(), buffer: [] };
     channels.set(key, channel);
     statuses[key] = "connecting";
+    const connectionId = connectionOf(key);
+    live.connecting(connectionId);
 
-    socket.addEventListener("open", () => (statuses[key] = "open"));
-    socket.addEventListener("error", () => (statuses[key] = "error"));
-    socket.addEventListener("close", () => (statuses[key] = "closed"));
+    socket.addEventListener("open", () => {
+      statuses[key] = "open";
+      delete reasons[key];
+      live.connected(connectionId);
+    });
+    socket.addEventListener("error", () => {
+      statuses[key] = "error";
+      reasons[key] = "The stream connection failed.";
+      if (!hasOpenChannel(connectionId))
+        live.failed(connectionId, reasons[key]);
+    });
+    socket.addEventListener("close", (ev) => {
+      statuses[key] = "closed";
+      const reason =
+        (ev as { reason?: string }).reason || "The connection was closed.";
+      reasons[key] = reason;
+      if (!hasOpenChannel(connectionId)) live.failed(connectionId, reason);
+    });
     socket.addEventListener("message", (ev) => {
       const text = frameText(ev);
       channel.buffer.push(text);
@@ -75,6 +110,10 @@ export const useSessionsStore = defineStore("sessions", () => {
     return statuses[key];
   }
 
+  function reason(key: string): string | undefined {
+    return reasons[key];
+  }
+
   function close(key: string): void {
     const channel = channels.get(key);
     if (!channel) return;
@@ -82,6 +121,7 @@ export const useSessionsStore = defineStore("sessions", () => {
     channel.listeners.clear();
     channels.delete(key);
     delete statuses[key];
+    delete reasons[key];
   }
 
   function closeWhere(predicate: (key: string) => boolean): void {
@@ -99,6 +139,7 @@ export const useSessionsStore = defineStore("sessions", () => {
     send,
     buffer,
     status,
+    reason,
     close,
     closeWhere,
   };

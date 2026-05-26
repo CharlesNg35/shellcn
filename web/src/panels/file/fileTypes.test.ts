@@ -16,18 +16,27 @@ describe("file type mapping", () => {
     expect(viewerFor("clip.mp4")).toBe("video");
     expect(viewerFor("archive.tar.gz")).toBe("download");
     expect(viewerFor("Dockerfile")).toBe("code");
+    expect(viewerFor(".env")).toBe("code");
+    expect(viewerFor("main.tfvars")).toBe("code");
+    expect(viewerFor("diagram.svg")).toBe("image");
+    expect(viewerFor("movie.ogv")).toBe("video");
+    expect(viewerFor("voice.opus")).toBe("audio");
   });
 
   it("prefers MIME when provided", () => {
     expect(viewerFor("blob", "image/png")).toBe("image");
     expect(viewerFor("data", "application/pdf")).toBe("pdf");
     expect(viewerFor("notes", "text/plain")).toBe("code");
+    expect(viewerFor("api", "application/graphql")).toBe("code");
+    expect(viewerFor("manifest", "application/manifest+json")).toBe("code");
   });
 
   it("maps code languages and detects extensions", () => {
     expect(extensionOf("a/b/c.YAML")).toBe("yaml");
     expect(extensionOf("noext")).toBe("");
     expect(languageFor("schema.sql")).toBe("sql");
+    expect(languageFor(".env")).toBe("ini");
+    expect(languageFor("main.tf")).toBe("hcl");
     expect(languageFor("data.bin")).toBe("plaintext");
   });
 

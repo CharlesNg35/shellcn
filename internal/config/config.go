@@ -4,6 +4,7 @@
 package config
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 
 type Config struct {
 	Server     ServerConfig     `mapstructure:"server"`
+	Auth       AuthConfig       `mapstructure:"auth"`
 	Database   DatabaseConfig   `mapstructure:"database"`
 	Secrets    SecretsConfig    `mapstructure:"secrets"`
 	Email      EmailConfig      `mapstructure:"email"`
@@ -28,6 +30,30 @@ type Config struct {
 type ServerConfig struct {
 	Addr     string `mapstructure:"addr"`
 	LogLevel string `mapstructure:"log_level"`
+}
+
+type AuthConfig struct {
+	SessionTTL string `mapstructure:"session_ttl"`
+	JWTSecret  string `mapstructure:"jwt_secret"`
+}
+
+// SessionTTLDuration parses SessionTTL, falling back to 24 hours.
+func (c AuthConfig) SessionTTLDuration() time.Duration {
+	if d, err := time.ParseDuration(c.SessionTTL); err == nil && d > 0 {
+		return d
+	}
+	return 24 * time.Hour
+}
+
+// JWTSigningKey returns a stable HMAC key. An explicit jwt_secret takes
+// precedence; otherwise the key is derived from the already-required master key.
+func (c AuthConfig) JWTSigningKey(masterKey []byte) []byte {
+	if c.JWTSecret != "" {
+		sum := sha256.Sum256([]byte(c.JWTSecret))
+		return sum[:]
+	}
+	sum := sha256.Sum256(append([]byte("shellcn auth jwt:"), masterKey...))
+	return sum[:]
 }
 
 type DatabaseConfig struct {
@@ -114,6 +140,8 @@ func Load(paths ...string) (*Config, error) {
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.addr", ":8081")
 	v.SetDefault("server.log_level", "info")
+	v.SetDefault("auth.session_ttl", "24h")
+	v.SetDefault("auth.jwt_secret", "")
 	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.dsn", "shellcn.db")
 	v.SetDefault("email.enabled", false)

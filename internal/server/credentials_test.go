@@ -2,9 +2,12 @@ package server_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/charlesng/shellcn/internal/plugin"
 )
 
 func createCredID(t *testing.T, h *harness, userID, body string) string {
@@ -48,6 +51,61 @@ func TestCredentialCreateRotateAuthz(t *testing.T) {
 	// admin may delete it.
 	if resp := h.do(t, http.MethodDelete, "/api/credentials/"+id, "admin", nil); resp.Status != http.StatusOK {
 		t.Errorf("admin delete: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+}
+
+func TestCredentialKindsEndpoint(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodGet, "/api/credential-kinds", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("credential kinds: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	var out []plugin.CredentialKindInfo
+	if err := json.Unmarshal(resp.Body, &out); err != nil {
+		t.Fatalf("decode credential kinds: %v", err)
+	}
+	seen := map[plugin.CredentialKind]bool{}
+	var sshPassword plugin.CredentialKindInfo
+	for _, kind := range out {
+		seen[kind.Kind] = true
+		if kind.Kind == plugin.CredentialKind("ssh_password") {
+			sshPassword = kind
+		}
+		if kind.Label == "" || kind.SecretLabel == "" {
+			t.Fatalf("credential kind missing labels: %+v", kind)
+		}
+	}
+	if !seen[plugin.CredentialDBPassword] || !seen[plugin.CredentialKind("ssh_password")] {
+		t.Fatalf("credential catalog missing expected kinds: %+v", seen)
+	}
+	if len(sshPassword.CompatibleProtocols) != 1 || sshPassword.CompatibleProtocols[0] != "ssh" {
+		t.Fatalf("ssh compatible protocols = %+v, want [ssh]", sshPassword.CompatibleProtocols)
+	}
+}
+
+func TestCredentialCreateRejectsUnknownAndDerivesProtocols(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodPost, "/api/credentials", "op",
+		strings.NewReader(`{"name":"db","kind":"db_password","protocols":["ssh"],"secret":"x"}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create with ignored manual protocols: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	var created struct {
+		Protocols []string `json:"protocols"`
+	}
+	if err := json.Unmarshal(resp.Body, &created); err != nil {
+		t.Fatalf("decode created credential: %v", err)
+	}
+	if len(created.Protocols) != 1 || created.Protocols[0] != "tester" {
+		t.Fatalf("created protocols = %+v, want derived [tester]", created.Protocols)
+	}
+
+	resp = h.do(t, http.MethodPost, "/api/credentials", "op",
+		strings.NewReader(`{"name":"bad","kind":"made_up","secret":"x"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("unknown kind: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 

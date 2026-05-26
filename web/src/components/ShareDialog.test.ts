@@ -1,10 +1,29 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
+import { defineComponent, h, type PropType } from "vue";
 import AutoComplete from "primevue/autocomplete";
 import Button from "primevue/button";
+import ConfirmDialog from "primevue/confirmdialog";
 import { installFetch } from "../test/fetchMock";
 import ShareDialog from "./ShareDialog.vue";
+
+// ShareDialog raises its revoke confirmation through PrimeVue's ConfirmationService,
+// so a global <ConfirmDialog> must be present to render the accept button.
+const Harness = defineComponent({
+  props: {
+    visible: { type: Boolean, required: true },
+    resource: {
+      type: String as PropType<"connections" | "credentials">,
+      required: true,
+    },
+    resourceId: { type: String, required: true },
+    resourceName: { type: String, required: true },
+  },
+  setup(props) {
+    return () => h("div", [h(ShareDialog, props), h(ConfirmDialog)]);
+  },
+});
 
 beforeEach(() => setActivePinia(createPinia()));
 afterEach(() => vi.unstubAllGlobals());
@@ -36,7 +55,7 @@ describe("ShareDialog", () => {
       return { body: {} };
     });
 
-    const wrapper = mount(ShareDialog, {
+    const wrapper = mount(Harness, {
       props: {
         visible: true,
         resource: "credentials",

@@ -34,12 +34,12 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(auth.SessionCookieName)
 		if err != nil {
-			writeError(w, s.deps.Logger, plugin.ErrUnauthorized)
+			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
 			return
 		}
 		sess, ok := s.deps.SessionMgr.Get(cookie.Value)
 		if !ok {
-			writeError(w, s.deps.Logger, plugin.ErrUnauthorized)
+			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
 			return
 		}
 		if isStateChanging(r.Method) && !sess.ValidateCSRF(r) {
@@ -48,13 +48,13 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		}
 		user, err := s.deps.Store.Users.GetByID(r.Context(), sess.UserID)
 		if err != nil {
-			writeError(w, s.deps.Logger, plugin.ErrUnauthorized)
+			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
 			return
 		}
 		if user.Disabled {
 			s.deps.SessionMgr.Destroy(sess.ID)
 			auth.ClearSessionCookie(w)
-			writeError(w, s.deps.Logger, plugin.ErrUnauthorized)
+			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
 			return
 		}
 		ctx := context.WithValue(r.Context(), ctxUser, user)

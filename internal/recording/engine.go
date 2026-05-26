@@ -140,9 +140,8 @@ type Pending struct {
 }
 
 // Prepare decides recording for a stream from plugin capability + connection
-// policy. For forced (`auto`) policy it starts the recorder up front; if that
-// fails it returns an error and the caller MUST deny the stream before opening
-// the upstream session.
+// policy. Forced terminal recording is armed here and starts on the first real
+// terminal input, so merely opening and closing an idle shell creates no row.
 func (e *Engine) Prepare(ctx context.Context, info StreamInfo) (*Pending, error) {
 	if e == nil {
 		return &Pending{}, nil
@@ -165,7 +164,7 @@ func (e *Engine) Prepare(ctx context.Context, info StreamInfo) (*Pending, error)
 	if sess.forced && capability.Class == plugin.RecordingDesktop && capability.DefaultFormat() == plugin.FormatWebMCanvas {
 		return nil, fmt.Errorf("%w: required desktop recording cannot be enforced by browser capture", plugin.ErrUnavailable)
 	}
-	if sess.forced {
+	if sess.forced && capability.Class != plugin.RecordingTerminal {
 		if err := e.startSession(ctx, sess); err != nil {
 			return nil, fmt.Errorf("%w: required recording could not start: %v", plugin.ErrUnavailable, err)
 		}
@@ -183,7 +182,7 @@ func (p *Pending) Attach(client plugin.ClientStream) plugin.ClientStream {
 	if p == nil || p.sess == nil {
 		return client
 	}
-	t := &tap{inner: client}
+	t := &tap{inner: client, sess: p.sess}
 	p.sess.tap = t
 	if p.sess.live.Load() {
 		t.live.Store(p.sess.lr) // forced recording already active

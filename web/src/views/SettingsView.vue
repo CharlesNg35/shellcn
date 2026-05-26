@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import Button from "primevue/button";
 import { useTheme } from "../composables/useTheme";
 import { useAuthStore } from "../stores/auth";
 import { api } from "../api/client";
@@ -32,13 +33,9 @@ onMounted(async () => {
       <p class="font-medium text-surface-800 dark:text-surface-100">
         Appearance
       </p>
-      <button
-        type="button"
-        class="rounded-md border border-surface-200 px-3 py-1.5 text-sm hover:bg-surface-100 dark:border-surface-700 dark:hover:bg-surface-800"
-        @click="toggle"
-      >
+      <Button type="button" severity="secondary" outlined @click="toggle">
         {{ isDark ? "Dark" : "Light" }}
-      </button>
+      </Button>
     </div>
 
     <div

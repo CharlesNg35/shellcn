@@ -6,10 +6,69 @@ import (
 	"testing"
 
 	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/secrets"
 	"github.com/charlesng/shellcn/internal/service"
 	"github.com/charlesng/shellcn/internal/store"
 )
+
+type credentialCatalogPlugin struct{}
+
+const (
+	testCredentialSSHPrivateKey plugin.CredentialKind = "ssh_private_key"
+	testCredentialSSHPassword   plugin.CredentialKind = "ssh_password"
+	testCredentialKubeconfig    plugin.CredentialKind = "kubeconfig"
+)
+
+func (credentialCatalogPlugin) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion, Name: "catalog", Title: "Catalog",
+		Layout:              plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		CredentialKinds: []plugin.CredentialKindInfo{
+			{
+				Kind: testCredentialSSHPrivateKey, Label: "SSH private key", SecretLabel: "Private key",
+				SecretMultiline: true, IdentityLabel: "Username",
+			},
+			{
+				Kind: testCredentialSSHPassword, Label: "SSH password", SecretLabel: "Password",
+				IdentityLabel: "Username",
+			},
+			{
+				Kind: testCredentialKubeconfig, Label: "Kubeconfig", SecretLabel: "Kubeconfig YAML",
+				SecretMultiline: true, IdentityLabel: "Context / user",
+			},
+		},
+		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Auth", Fields: []plugin.Field{
+			{
+				Key: "ssh_credential", Label: "SSH credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{
+					Kinds: []plugin.CredentialKind{testCredentialSSHPrivateKey, testCredentialSSHPassword}, Protocols: []string{"ssh"},
+				},
+			},
+			{
+				Key: "db_credential", Label: "Database credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{"postgres"}},
+			},
+			{
+				Key: "api_credential", Label: "API credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}, Protocols: []string{"http-api"}},
+			},
+			{
+				Key: "kube_credential", Label: "Kube credential", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{testCredentialKubeconfig}, Protocols: []string{"kubernetes"}},
+			},
+		}}}},
+	}
+}
+
+func (credentialCatalogPlugin) Routes() []plugin.Route {
+	return []plugin.Route{{ID: "catalog.list", Method: plugin.MethodGet, Permission: "catalog.read", Risk: plugin.RiskSafe, Handle: func(*plugin.RequestContext) (any, error) { return nil, nil }}}
+}
+
+func (credentialCatalogPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session, error) {
+	return nil, nil
+}
 
 func newCredentialService(t *testing.T) (*service.CredentialService, *store.Store) {
 	t.Helper()
@@ -19,7 +78,9 @@ func newCredentialService(t *testing.T) (*service.CredentialService, *store.Stor
 		t.Fatalf("vault: %v", err)
 	}
 	st := store.NewMemory()
-	return service.NewCredentialService(st.Credentials, st.CredentialGrants, vault), st
+	reg := plugin.NewRegistry()
+	reg.MustRegister(credentialCatalogPlugin{})
+	return service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg)), st
 }
 
 func TestCredentialCreateEncryptsAtRest(t *testing.T) {
@@ -27,7 +88,7 @@ func TestCredentialCreateEncryptsAtRest(t *testing.T) {
 	svc, st := newCredentialService(t)
 
 	cred, err := svc.Create(ctx, service.NewCredentialInput{
-		OwnerID: "owner", Name: "ops", Kind: "ssh_password", Protocols: []string{"ssh"}, Secret: "hunter2",
+		OwnerID: "owner", Name: "ops", Kind: "ssh_password", Secret: "hunter2",
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -40,6 +101,9 @@ func TestCredentialCreateEncryptsAtRest(t *testing.T) {
 	}
 	if string(stored.EncryptedSecret) == "hunter2" || containsBytes(stored.EncryptedSecret, "hunter2") {
 		t.Error("plaintext leaked into stored credential")
+	}
+	if len(stored.Protocols) != 1 || stored.Protocols[0] != "ssh" {
+		t.Fatalf("stored protocols = %+v, want derived [ssh]", stored.Protocols)
 	}
 	// The summary never carries secret material.
 	sum := stored.Summary()
@@ -128,9 +192,10 @@ func TestCredentialResolveNotFound(t *testing.T) {
 func TestCredentialListUsableFilters(t *testing.T) {
 	ctx := context.Background()
 	svc, _ := newCredentialService(t)
-	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "ssh-key", Kind: "ssh_private_key", Protocols: []string{"ssh"}, Secret: "a"})
-	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "db-pw", Kind: "db_password", Protocols: []string{"postgres"}, Secret: "b"})
-	anyCred, _ := svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "wildcard", Kind: "api_token", Secret: "c"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "ssh-key", Kind: "ssh_private_key", Secret: "a"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "db-pw", Kind: "db_password", Secret: "b"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "api-token", Kind: "api_token", Secret: "c"})
+	_, _ = svc.Create(ctx, service.NewCredentialInput{OwnerID: "u", Name: "kube", Kind: "kubeconfig", Secret: "d"})
 
 	// Filter by kind.
 	got, err := svc.ListUsable(ctx, "u", []string{"ssh_private_key"}, "")
@@ -141,21 +206,40 @@ func TestCredentialListUsableFilters(t *testing.T) {
 		t.Errorf("kind filter: %+v", got)
 	}
 
-	// Filter by protocol — the wildcard (empty Protocols) always matches.
+	// Filter by protocol uses kind-derived protocol compatibility.
 	got, _ = svc.ListUsable(ctx, "u", nil, "postgres")
 	kinds := map[string]bool{}
 	for _, c := range got {
 		kinds[c.Kind] = true
 	}
-	if !kinds["db_password"] || !kinds["api_token"] || kinds["ssh_private_key"] {
+	if !kinds["db_password"] || kinds["api_token"] || kinds["ssh_private_key"] {
 		t.Errorf("protocol filter wrong: %+v", got)
+	}
+	if kinds["kubeconfig"] {
+		t.Errorf("incompatible wildcard kind should not match postgres: %+v", got)
 	}
 
 	// A summary never leaks anything secret.
 	for _, c := range got {
-		if c.ID == anyCred.ID && c.Name != "wildcard" {
+		if c.Name == "" {
 			t.Errorf("summary corrupted: %+v", c)
 		}
+	}
+}
+
+func TestCredentialCreateValidatesKindAndSecret(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newCredentialService(t)
+
+	if _, err := svc.Create(ctx, service.NewCredentialInput{
+		OwnerID: "u", Name: "bad", Kind: "made_up", Secret: "x",
+	}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unknown kind: want ErrInvalidInput, got %v", err)
+	}
+	if _, err := svc.Create(ctx, service.NewCredentialInput{
+		OwnerID: "u", Name: "empty", Kind: "ssh_password",
+	}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("empty secret on create: want ErrInvalidInput, got %v", err)
 	}
 }
 

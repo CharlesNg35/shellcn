@@ -102,7 +102,7 @@ describe("projection contract", () => {
       id: "cred-prod-key",
       name: "Production deploy key",
       kind: "ssh_private_key",
-      username: "deploy",
+      identity: "deploy",
       protocols: ["ssh"],
     };
 
@@ -112,9 +112,9 @@ describe("projection contract", () => {
 
   it("permits an unrecognized PanelType without a type error", () => {
     const known: PanelType = "table";
-    const future: PanelType = "graph";
+    const specialized: PanelType = "graph";
     const unknown: PanelType = "something-a-plugin-invented";
-    expect([known, future, unknown]).toContain("table");
+    expect([known, specialized, unknown]).toContain("table");
   });
 
   it("contains no server-only field names", () => {

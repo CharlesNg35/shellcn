@@ -25,6 +25,8 @@ async function mount(): Promise<void> {
     await import("asciinema-player/dist/bundle/asciinema-player.css");
     player = AsciinemaPlayer.create(props.src, container.value, {
       fit: "width",
+      idleTimeLimit: 2,
+      speed: 1,
     });
   } catch {
     failed.value = true;

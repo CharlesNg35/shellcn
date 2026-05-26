@@ -61,6 +61,163 @@ type Column struct {
 	Width    string     `json:"width,omitempty"`
 }
 
+// TableConfig is the declarative config consumed by the generic table panel.
+type TableConfig struct {
+	Columns      []Column    `json:"columns,omitempty"`
+	Watch        *DataSource `json:"watch,omitempty"`
+	ActionIDs    []string    `json:"actionIds,omitempty"`
+	RowActionIDs []string    `json:"rowActionIds,omitempty"`
+}
+
+func (c TableConfig) Map() map[string]any {
+	out := map[string]any{}
+	if len(c.Columns) > 0 {
+		out["columns"] = c.Columns
+	}
+	if c.Watch != nil {
+		out["watch"] = c.Watch
+	}
+	if len(c.ActionIDs) > 0 {
+		out["actionIds"] = c.ActionIDs
+	}
+	if len(c.RowActionIDs) > 0 {
+		out["rowActionIds"] = c.RowActionIDs
+	}
+	return out
+}
+
+type GraphLayout string
+
+const (
+	GraphLayoutGrid   GraphLayout = "grid"
+	GraphLayoutManual GraphLayout = "manual"
+)
+
+type GraphConfig struct {
+	Layout  GraphLayout `json:"layout,omitempty"`
+	FitView bool        `json:"fitView,omitempty"`
+}
+
+func (c GraphConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.Layout != "" {
+		out["layout"] = c.Layout
+	}
+	if c.FitView {
+		out["fitView"] = c.FitView
+	}
+	return out
+}
+
+type TraceConfig struct {
+	ServiceField string `json:"serviceField,omitempty"`
+}
+
+func (c TraceConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.ServiceField != "" {
+		out["serviceField"] = c.ServiceField
+	}
+	return out
+}
+
+type KVConfig struct {
+	ReadRouteID   string `json:"readRouteId,omitempty"`
+	WriteRouteID  string `json:"writeRouteId,omitempty"`
+	DeleteRouteID string `json:"deleteRouteId,omitempty"`
+	KeyParam      string `json:"keyParam,omitempty"`
+	Writable      bool   `json:"writable,omitempty"`
+}
+
+func (c KVConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.ReadRouteID != "" {
+		out["readRouteId"] = c.ReadRouteID
+	}
+	if c.WriteRouteID != "" {
+		out["writeRouteId"] = c.WriteRouteID
+	}
+	if c.DeleteRouteID != "" {
+		out["deleteRouteId"] = c.DeleteRouteID
+	}
+	if c.KeyParam != "" {
+		out["keyParam"] = c.KeyParam
+	}
+	if c.Writable {
+		out["writable"] = c.Writable
+	}
+	return out
+}
+
+type HeaderDefault struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type HTTPClientConfig struct {
+	ExecuteRouteID string          `json:"executeRouteId,omitempty"`
+	Methods        []string        `json:"methods,omitempty"`
+	DefaultMethod  string          `json:"defaultMethod,omitempty"`
+	DefaultURL     string          `json:"defaultUrl,omitempty"`
+	DefaultHeaders []HeaderDefault `json:"defaultHeaders,omitempty"`
+	DefaultBody    string          `json:"defaultBody,omitempty"`
+}
+
+func (c HTTPClientConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.ExecuteRouteID != "" {
+		out["executeRouteId"] = c.ExecuteRouteID
+	}
+	if len(c.Methods) > 0 {
+		out["methods"] = c.Methods
+	}
+	if c.DefaultMethod != "" {
+		out["defaultMethod"] = c.DefaultMethod
+	}
+	if c.DefaultURL != "" {
+		out["defaultUrl"] = c.DefaultURL
+	}
+	if len(c.DefaultHeaders) > 0 {
+		out["defaultHeaders"] = c.DefaultHeaders
+	}
+	if c.DefaultBody != "" {
+		out["defaultBody"] = c.DefaultBody
+	}
+	return out
+}
+
+type RemoteDesktopEngine string
+
+const (
+	RemoteDesktopEngineNoVNC     RemoteDesktopEngine = "novnc"
+	RemoteDesktopEngineGuacamole RemoteDesktopEngine = "guacamole"
+)
+
+type RemoteDesktopConfig struct {
+	Engine     RemoteDesktopEngine `json:"engine"`
+	Resize     bool                `json:"resize,omitempty"`
+	Clipboard  bool                `json:"clipboard,omitempty"`
+	Audio      bool                `json:"audio,omitempty"`
+	RepeaterID string              `json:"repeaterID,omitempty"`
+}
+
+func (c RemoteDesktopConfig) Map() map[string]any {
+	out := map[string]any{"engine": string(c.Engine)}
+	if c.Resize {
+		out["resize"] = c.Resize
+	}
+	if c.Clipboard {
+		out["clipboard"] = c.Clipboard
+	}
+	if c.Audio {
+		out["audio"] = c.Audio
+	}
+	if c.RepeaterID != "" {
+		out["repeaterID"] = c.RepeaterID
+	}
+	return out
+}
+
 // Severity styles a badge.
 type Severity string
 
@@ -126,6 +283,11 @@ type Action struct {
 	Params      map[string]string `json:"params,omitempty"`
 	Confirm     bool              `json:"confirm,omitempty"`
 	ConfirmText string            `json:"confirmText,omitempty"`
+	OnSuccess   *ActionSuccess    `json:"onSuccess,omitempty"`
+}
+
+type ActionSuccess struct {
+	SelectTab string `json:"selectTab,omitempty"`
 }
 
 // Stream is a long-lived channel a panel binds to, pointing at a WS route.

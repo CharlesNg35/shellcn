@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
+	"path"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
@@ -221,7 +224,39 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, res resolved)
 		return
 	}
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
+	if dl, ok := result.(*plugin.Download); ok {
+		s.writeDownload(w, dl)
+		return
+	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) writeDownload(w http.ResponseWriter, dl *plugin.Download) {
+	if dl == nil || dl.Body == nil {
+		writeError(w, s.deps.Logger, plugin.ErrNotFound)
+		return
+	}
+	defer func() { _ = dl.Body.Close() }()
+	name := path.Base(dl.Name)
+	if name == "." || name == "/" || name == "" {
+		name = "download"
+	}
+	mimeType := dl.MIME
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	if dl.Size >= 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", dl.Size))
+	}
+	if !dl.ModTime.IsZero() {
+		w.Header().Set("Last-Modified", dl.ModTime.UTC().Format(http.TimeFormat))
+	}
+	w.WriteHeader(http.StatusOK)
+	if _, err := io.Copy(w, dl.Body); err != nil && s.deps.Logger != nil {
+		s.deps.Logger.Warn("download stream failed", "err", err)
+	}
 }
 
 func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolved, sess plugin.Session) (*plugin.RequestContext, func(), error) {
@@ -244,14 +279,21 @@ func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolve
 				files[field] = append(files[field], plugin.NewUploadedFile(field, header))
 			}
 		}
-		return plugin.NewMultipartRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), r.MultipartForm.Value, files), cleanup, nil
+		return plugin.NewMultipartRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), r.MultipartForm.Value, files).WithSnippets(s.snippetStore()), cleanup, nil
 	}
 
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxJSONBody))
 	if err != nil {
 		return nil, func() {}, plugin.ErrInvalidInput
 	}
-	return plugin.NewRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), body), func() {}, nil
+	return plugin.NewRequestContext(r.Context(), res.user, sess, res.params, r.URL.Query(), body).WithSnippets(s.snippetStore()), func() {}, nil
+}
+
+func (s *Server) snippetStore() plugin.SnippetStore {
+	if s.deps.Store == nil {
+		return nil
+	}
+	return s.deps.Store.Snippets
 }
 
 func isMultipart(r *http.Request) bool {
@@ -304,20 +346,26 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	}
 	defer pending.Finish()
 
-	handle, err := s.acquireSession(ctx, res)
-	if err != nil {
-		s.auditEvent(ctx, res, models.AuditError, err)
-		writeError(w, s.deps.Logger, err)
-		return
-	}
-
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
+	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+		Subprotocols:       []string{"guacamole"},
+	})
 	if err != nil {
 		return // Accept already wrote the response
 	}
 	if s.deps.Metrics != nil {
 		s.deps.Metrics.WSOpened()
 		defer s.deps.Metrics.WSClosed()
+	}
+
+	// Open the upstream only after the socket is accepted: a failed WS *upgrade*
+	// carries no body the browser can read, so a dial/auth failure here is sent as
+	// a close reason instead — giving the UI an actual reason for the disconnect.
+	handle, err := s.acquireSession(ctx, res)
+	if err != nil {
+		s.auditEvent(ctx, res, models.AuditError, err)
+		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
+		return
 	}
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
 
@@ -328,10 +376,25 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 
 	rc := plugin.NewRequestContext(streamCtx, res.user, handle, res.params, r.URL.Query(), nil)
 	if err := res.route.Stream(rc, client); err != nil {
-		_ = c.Close(websocket.StatusInternalError, "stream error")
+		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
 		return
 	}
 	_ = c.Close(websocket.StatusNormalClosure, "")
+}
+
+// streamCloseReason renders an error as a WebSocket close reason, trimmed to the
+// 123-byte close-frame limit on a rune boundary so the browser receives it whole.
+func streamCloseReason(err error) string {
+	msg := err.Error()
+	const maxCloseReasonBytes = 120
+	if len(msg) <= maxCloseReasonBytes {
+		return msg
+	}
+	b := []byte(msg)[:maxCloseReasonBytes]
+	for len(b) > 0 && !utf8.RuneStart(b[len(b)-1]) {
+		b = b[:len(b)-1]
+	}
+	return string(b)
 }
 
 func routeContext(parent context.Context, route plugin.Route) (context.Context, context.CancelFunc) {

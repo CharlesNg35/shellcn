@@ -169,10 +169,19 @@ func TestEngineAutoRecordsOutputWithMonotonicTimestamps(t *testing.T) {
 	rec := &fakeRecorder{}
 	e, st := newEngine(t, nil, rec)
 	ctx := context.Background()
+	client := newFakeClient()
 
-	wrapped, finalize, err := e.Wrap(ctx, newFakeClient(), streamInfo("auto"))
+	wrapped, finalize, err := e.Wrap(ctx, client, streamInfo("auto"))
 	if err != nil {
 		t.Fatalf("wrap forced: %v", err)
+	}
+	if _, err := wrapped.Write([]byte("banner before interaction\n")); err != nil {
+		t.Fatalf("pre-interaction write: %v", err)
+	}
+	client.reads <- []byte("ls\r")
+	buf := make([]byte, 32)
+	if n, err := wrapped.Read(buf); err != nil || string(buf[:n]) != "ls\r" {
+		t.Fatalf("first input should arm recording: n=%d err=%v data=%q", n, err, buf[:n])
 	}
 	for _, line := range []string{"hello\n", "world\n", "$ "} {
 		if _, err := wrapped.Write([]byte(line)); err != nil {
@@ -202,19 +211,53 @@ func TestEngineAutoRecordsOutputWithMonotonicTimestamps(t *testing.T) {
 	}
 }
 
-func TestEngineForcedFailureDeniesStream(t *testing.T) {
+func TestEngineAutoTerminalSkipsIdleOpenAndResize(t *testing.T) {
 	rec := &fakeRecorder{}
-	e, st := newEngine(t, failBlobs{}, rec)
-	_, _, err := e.Wrap(context.Background(), newFakeClient(), streamInfo("auto"))
-	if err == nil {
-		t.Fatal("forced recording that cannot start must deny the stream")
+	e, st := newEngine(t, nil, rec)
+	client := newFakeClient()
+	wrapped, finalize, err := e.Wrap(context.Background(), client, streamInfo("auto"))
+	if err != nil {
+		t.Fatalf("wrap forced: %v", err)
+	}
+
+	if _, err := wrapped.Write([]byte("login banner\n$ ")); err != nil {
+		t.Fatalf("idle output: %v", err)
+	}
+	client.reads <- []byte("\x00{\"type\":\"resize\",\"cols\":100,\"rows\":30}")
+	buf := make([]byte, 64)
+	if _, err := wrapped.Read(buf); err != nil {
+		t.Fatalf("resize control: %v", err)
+	}
+	finalize()
+
+	if len(rec.out) != 0 {
+		t.Fatalf("idle terminal should not record output, got %q", rec.out)
 	}
 	if recs, _ := st.Recordings.List(context.Background(), store.RecordingFilter{}); len(recs) != 0 {
-		t.Errorf("no recording row should persist on denial, got %d", len(recs))
+		t.Fatalf("idle terminal should not create recording rows, got %+v", recs)
 	}
 }
 
-func TestEngineForcedFinishBeforeAttachIsSafe(t *testing.T) {
+func TestEngineForcedTerminalFailureStopsFirstInput(t *testing.T) {
+	rec := &fakeRecorder{}
+	e, st := newEngine(t, failBlobs{}, rec)
+	client := newFakeClient()
+	wrapped, finalize, err := e.Wrap(context.Background(), client, streamInfo("auto"))
+	if err != nil {
+		t.Fatalf("wrap forced terminal: %v", err)
+	}
+	defer finalize()
+
+	client.reads <- []byte("ls\r")
+	if _, err := wrapped.Read(make([]byte, 32)); !errors.Is(err, plugin.ErrUnavailable) {
+		t.Fatalf("first input should fail closed when mandatory recording cannot start, got %v", err)
+	}
+	if recs, _ := st.Recordings.List(context.Background(), store.RecordingFilter{}); len(recs) != 0 {
+		t.Errorf("no recording row should persist on start failure, got %d", len(recs))
+	}
+}
+
+func TestEngineForcedTerminalFinishBeforeAttachIsIdle(t *testing.T) {
 	rec := &fakeRecorder{}
 	e, st := newEngine(t, nil, rec)
 	pending, err := e.Prepare(context.Background(), streamInfo("auto"))
@@ -223,8 +266,8 @@ func TestEngineForcedFinishBeforeAttachIsSafe(t *testing.T) {
 	}
 	pending.Finish()
 	recs, _ := st.Recordings.List(context.Background(), store.RecordingFilter{})
-	if len(recs) != 1 || recs[0].Status != models.RecordingFinalized {
-		t.Fatalf("forced pre-attach finish should finalize safely, got %+v", recs)
+	if len(recs) != 0 {
+		t.Fatalf("forced terminal without interaction should stay idle, got %+v", recs)
 	}
 }
 
@@ -356,9 +399,14 @@ func TestEngineBackpressureDoesNotBlockStream(t *testing.T) {
 	})
 	ctx := context.Background()
 	info := streamInfo("auto")
-	wrapped, finalize, err := e.Wrap(ctx, newFakeClient(), info)
+	client := newFakeClient()
+	wrapped, finalize, err := e.Wrap(ctx, client, info)
 	if err != nil {
 		t.Fatalf("wrap: %v", err)
+	}
+	client.reads <- []byte("yes\r")
+	if _, err := wrapped.Read(make([]byte, 32)); err != nil {
+		t.Fatalf("first input: %v", err)
 	}
 
 	// Storage is stuck (recorder blocks); writes must still return promptly. If

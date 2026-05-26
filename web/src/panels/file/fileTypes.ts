@@ -19,16 +19,25 @@ add("code", [
   "log",
   "md",
   "markdown",
+  "mdx",
   "json",
+  "jsonc",
+  "jsonl",
   "yaml",
   "yml",
   "toml",
   "ini",
   "conf",
+  "config",
   "env",
+  "properties",
+  "editorconfig",
+  "gitignore",
   "sh",
   "bash",
   "zsh",
+  "fish",
+  "ps1",
   "py",
   "go",
   "ts",
@@ -47,7 +56,20 @@ add("code", [
   "xml",
   "html",
   "css",
+  "scss",
+  "less",
   "csv",
+  "tsv",
+  "graphql",
+  "gql",
+  "proto",
+  "tf",
+  "hcl",
+  "tfvars",
+  "nginx",
+  "service",
+  "socket",
+  "timer",
   "dockerfile",
 ]);
 add("image", [
@@ -62,8 +84,8 @@ add("image", [
   "avif",
 ]);
 add("pdf", ["pdf"]);
-add("audio", ["mp3", "wav", "ogg", "flac", "m4a", "aac"]);
-add("video", ["mp4", "webm", "mov", "mkv", "m4v"]);
+add("audio", ["mp3", "wav", "ogg", "oga", "flac", "m4a", "aac", "opus"]);
+add("video", ["mp4", "webm", "ogv", "mov", "mkv", "m4v", "avi"]);
 
 const CODE_LANG: Record<string, string> = {
   md: "markdown",
@@ -80,11 +102,32 @@ const CODE_LANG: Record<string, string> = {
   tsx: "typescript",
   js: "javascript",
   jsx: "javascript",
+  css: "css",
+  scss: "scss",
+  less: "less",
+  html: "html",
+  xml: "xml",
+  csv: "csv",
+  tsv: "csv",
+  toml: "toml",
+  ini: "ini",
+  conf: "ini",
+  env: "ini",
+  graphql: "graphql",
+  gql: "graphql",
+  proto: "protobuf",
+  tf: "hcl",
+  hcl: "hcl",
+  tfvars: "hcl",
+  dockerfile: "dockerfile",
 };
 
 export function extensionOf(name: string): string {
   const base = name.split("/").pop() ?? name;
   if (base.toLowerCase() === "dockerfile") return "dockerfile";
+  if (base.startsWith(".") && base.indexOf(".", 1) === -1) {
+    return base.slice(1).toLowerCase();
+  }
   const dot = base.lastIndexOf(".");
   return dot > 0 ? base.slice(dot + 1).toLowerCase() : "";
 }
@@ -94,8 +137,20 @@ export function viewerFor(name: string, mime?: string): ViewerKind {
     if (mime.startsWith("image/")) return "image";
     if (mime.startsWith("audio/")) return "audio";
     if (mime.startsWith("video/")) return "video";
-    if (mime === "application/pdf") return "pdf";
-    if (mime.startsWith("text/") || mime === "application/json") return "code";
+    if (mime === "application/pdf" || mime === "application/x-pdf")
+      return "pdf";
+    if (
+      mime.startsWith("text/") ||
+      mime.includes("json") ||
+      mime.includes("xml") ||
+      mime.includes("yaml") ||
+      mime.includes("toml") ||
+      mime === "application/javascript" ||
+      mime === "application/x-sh" ||
+      mime === "application/graphql"
+    ) {
+      return "code";
+    }
   }
   return EXT[extensionOf(name)] ?? "download";
 }

@@ -10,7 +10,7 @@ import ToggleSwitch from "primevue/toggleswitch";
 import Button from "primevue/button";
 import FileUpload from "primevue/fileupload";
 import type { FileUploadSelectEvent } from "primevue/fileupload";
-import type { Field } from "../../types/projection";
+import type { CredentialRefState, Field } from "../../types/projection";
 import CredentialSelect from "./CredentialSelect.vue";
 
 const props = defineProps<{
@@ -18,6 +18,7 @@ const props = defineProps<{
   modelValue: unknown;
   error?: string | null;
   secretSet?: boolean;
+  credentialState?: CredentialRefState;
   protocol?: string;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
@@ -43,7 +44,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 </script>
 
 <template>
-  <div class="flex flex-col gap-1">
+  <div class="flex min-w-0 flex-col gap-1">
     <label class="text-sm font-medium text-surface-700 dark:text-surface-200">
       {{ field.label }}
       <span v-if="field.required" class="text-red-500">*</span>
@@ -54,6 +55,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
       :selector="field.credential"
       :protocol="protocol"
       :model-value="(modelValue as string) ?? ''"
+      :state="credentialState"
       @update:model-value="update"
     />
 

@@ -7,7 +7,8 @@ import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
-import ConfirmDialog from "./ConfirmDialog.vue";
+import { useConfirmAction } from "../composables/useConfirmAction";
+import { dialogRoot, btnPrimary } from "../primevue/preset";
 import type { GrantAccess, ShareGrant, UserSummary } from "../types/projection";
 
 const props = defineProps<{
@@ -30,8 +31,7 @@ const subject = ref<UserOption | null>(null);
 const access = ref<GrantAccess>("use");
 const loading = ref(false);
 const busy = ref(false);
-const revokeTarget = ref<ShareGrant | null>(null);
-const revoking = ref(false);
+const { confirmDanger } = useConfirmAction();
 
 const base = computed(() => `/${props.resource}/${props.resourceId}/grants`);
 const accessChoices = [
@@ -105,24 +105,23 @@ async function add(): Promise<void> {
 }
 
 function requestRevoke(grant: ShareGrant): void {
-  revokeTarget.value = grant;
+  confirmDanger({
+    header: "Revoke access",
+    message: `Revoke access for ${grant.username || grant.subjectId}?`,
+    acceptLabel: "Revoke",
+    accept: () => revoke(grant),
+  });
 }
 
-async function revoke(): Promise<void> {
-  if (!revokeTarget.value) return;
-  const grant = revokeTarget.value;
-  revoking.value = true;
+async function revoke(grant: ShareGrant): Promise<void> {
   try {
     await api.del(`${base.value}/${grant.id}`);
     grants.value = grants.value.filter((g) => g.id !== grant.id);
-    revokeTarget.value = null;
     notify.success("Access revoked", grant.username);
     await searchUsers("");
   } catch (e) {
     if (e instanceof ApiError)
       notify.error("Could not revoke access", e.message);
-  } finally {
-    revoking.value = false;
   }
 }
 </script>
@@ -133,7 +132,7 @@ async function revoke(): Promise<void> {
     modal
     :header="`Share “${resourceName}”`"
     :pt="{
-      root: 'w-full max-w-md rounded-lg bg-surface-0 shadow-xl dark:bg-surface-900',
+      root: dialogRoot(),
       content: 'max-h-[70vh] overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"
@@ -142,7 +141,7 @@ async function revoke(): Promise<void> {
       Loading…
     </p>
 
-    <div v-else class="flex flex-col gap-4">
+    <div v-else class="flex min-w-0 flex-col gap-4">
       <!-- Add a subject -->
       <div class="flex items-end gap-2">
         <div class="min-w-0 flex-1">
@@ -179,9 +178,7 @@ async function revoke(): Promise<void> {
         <Button
           type="button"
           :disabled="busy || !subject"
-          :pt="{
-            root: 'rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50',
-          }"
+          :pt="{ root: btnPrimary }"
           @click="add"
         >
           Add
@@ -209,36 +206,24 @@ async function revoke(): Promise<void> {
             {{ g.username || g.subjectId }}
           </span>
           <span
-            class="rounded bg-surface-100 px-1.5 py-0.5 text-xs capitalize text-surface-500 dark:bg-surface-800"
+            class="rounded bg-surface-100 px-1.5 py-0.5 text-xs text-surface-500 capitalize dark:bg-surface-800"
           >
             {{ g.access }}
           </span>
-          <button
-            type="button"
-            class="rounded p-1 text-surface-400 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+          <Button
+            text
+            rounded
+            severity="danger"
+            size="small"
             :title="`Revoke ${g.username || g.subjectId}`"
             :aria-label="`Revoke ${g.username || g.subjectId}`"
             @click="requestRevoke(g)"
           >
             <AppIcon :icon="{ type: 'name', value: 'x' }" :size="15" />
-          </button>
+          </Button>
         </li>
       </ul>
       <p v-else class="text-sm text-surface-400">Not shared with anyone yet.</p>
     </div>
   </Dialog>
-  <ConfirmDialog
-    :visible="Boolean(revokeTarget)"
-    title="Revoke access"
-    :message="`Revoke access for ${revokeTarget?.username || revokeTarget?.subjectId}?`"
-    confirm-label="Revoke"
-    danger
-    :busy="revoking"
-    @update:visible="
-      (open) => {
-        if (!open) revokeTarget = null;
-      }
-    "
-    @confirm="revoke"
-  />
 </template>

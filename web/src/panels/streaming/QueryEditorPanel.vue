@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import Button from "primevue/button";
 import { interpolate, runAction } from "../../api/dataSource";
 import type { QueryEditorConfig } from "../../types/projection";
 import { useStream } from "../../composables/useStream";
-import type { PanelProps } from "../types";
-import StubBanner from "./StubBanner.vue";
+import type { PanelProps } from "../core/types";
+import StreamStatusBar from "./StreamStatusBar.vue";
+import { useTheme } from "../../composables/useTheme";
+import {
+  currentMonacoTheme,
+  loadMonaco,
+  syncMonacoTheme,
+  type MonacoModule,
+} from "../../monaco";
 
 const props = defineProps<PanelProps>();
 const queryConfig = props.config as QueryEditorConfig | undefined;
@@ -32,8 +40,10 @@ const running = ref(false);
 const error = ref<string | null>(null);
 const container = ref<HTMLElement | null>(null);
 const useFallback = ref(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco editor loaded lazily
-let editor: any = null;
+const reconnecting = ref(false);
+let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
+let monacoModule: MonacoModule | null = null;
+const { isDark } = useTheme();
 
 function onFrame(frame: string): void {
   try {
@@ -44,12 +54,26 @@ function onFrame(frame: string): void {
   }
 }
 
-const { status, send } = useStream(
+const {
+  status,
+  error: streamError,
+  send,
+  reconnect,
+} = useStream(
   props.connectionId,
   props.source,
   { resource: props.resource },
   onFrame,
 );
+
+async function onReconnect(): Promise<void> {
+  reconnecting.value = true;
+  try {
+    await reconnect();
+  } finally {
+    reconnecting.value = false;
+  }
+}
 
 function run(): void {
   if (editor) query.value = editor.getValue();
@@ -88,15 +112,18 @@ function recall(text: string): void {
 }
 
 onMounted(async () => {
+  await nextTick();
   if (!container.value) {
     useFallback.value = true;
     return;
   }
   try {
-    const monaco = await import("monaco-editor");
+    const monaco = await loadMonaco();
+    monacoModule = monaco;
     editor = monaco.editor.create(container.value, {
       value: query.value,
       language: "sql",
+      theme: currentMonacoTheme(),
       minimap: { enabled: false },
       automaticLayout: true,
       scrollBeyondLastLine: false,
@@ -104,6 +131,10 @@ onMounted(async () => {
   } catch {
     useFallback.value = true;
   }
+});
+
+watch(isDark, () => {
+  if (monacoModule) syncMonacoTheme(monacoModule);
 });
 
 onUnmounted(() => {
@@ -117,29 +148,32 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full flex-col">
-    <StubBanner :status="status" />
+    <StreamStatusBar
+      :status="status"
+      :error="streamError"
+      :reconnecting="reconnecting"
+      can-reconnect
+      @reconnect="onReconnect"
+    />
     <div
       class="flex items-center justify-between border-b border-surface-200 px-3 py-1.5 dark:border-surface-800"
     >
       <span class="text-xs text-surface-400">SQL</span>
       <div class="flex items-center gap-2">
         <span v-if="error" class="text-xs text-red-500">{{ error }}</span>
-        <button
+        <Button
           v-if="running"
           type="button"
-          class="rounded-md border border-surface-300 px-3 py-1 text-xs font-medium dark:border-surface-700"
+          size="small"
+          severity="secondary"
+          outlined
           @click="cancel"
         >
           Cancel
-        </button>
-        <button
-          type="button"
-          class="rounded-md bg-primary-500 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
-          :disabled="running"
-          @click="run"
-        >
+        </Button>
+        <Button type="button" size="small" :disabled="running" @click="run">
           {{ running ? "Running…" : "Run" }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -151,7 +185,11 @@ onUnmounted(() => {
         v-model="query"
         class="h-full w-full resize-none bg-surface-0 p-3 font-mono text-xs outline-none dark:bg-surface-950"
       />
-      <div v-show="!useFallback" ref="container" class="h-full" />
+      <div
+        v-show="!useFallback"
+        ref="container"
+        class="shellcn-monaco-host h-full"
+      />
     </div>
 
     <div
@@ -159,15 +197,18 @@ onUnmounted(() => {
       class="border-b border-surface-200 px-3 py-2 dark:border-surface-800"
     >
       <div class="flex flex-wrap gap-2">
-        <button
+        <Button
           v-for="item in history"
           :key="item"
           type="button"
-          class="max-w-72 truncate rounded border border-surface-300 px-2 py-1 text-xs text-surface-500 hover:bg-surface-100 dark:border-surface-700 dark:hover:bg-surface-800"
+          size="small"
+          severity="secondary"
+          outlined
+          class="max-w-72"
           @click="recall(item)"
         >
           {{ item }}
-        </button>
+        </Button>
       </div>
     </div>
 

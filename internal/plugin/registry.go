@@ -16,13 +16,17 @@ type entry struct {
 // Registry holds the compiled-in plugins. It validates each manifest on
 // registration and indexes routes by id for fast resolution.
 type Registry struct {
-	mu     sync.RWMutex
-	byName map[string]*entry
+	mu              sync.RWMutex
+	byName          map[string]*entry
+	credentialKinds *credentialKindSet
 }
 
 // NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
-	return &Registry{byName: make(map[string]*entry)}
+	return &Registry{
+		byName:          make(map[string]*entry),
+		credentialKinds: mustCredentialKindSet(builtInCredentialKindCatalog),
+	}
 }
 
 // Register validates a plugin's manifest + routes and adds it. It is safe for
@@ -30,20 +34,28 @@ func NewRegistry() *Registry {
 func (r *Registry) Register(p Plugin) error {
 	m := p.Manifest()
 	routes := p.Routes()
-	if err := Validate(m, routes); err != nil {
-		return fmt.Errorf("plugin %q: %w", m.Name, err)
-	}
-
-	idx := make(map[string]Route, len(routes))
-	for _, rt := range routes {
-		idx[rt.ID] = rt
-	}
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, exists := r.byName[m.Name]; exists {
 		return fmt.Errorf("plugin %q: %w", m.Name, ErrAlreadyExists)
 	}
+	catalog := r.credentialKinds.clone()
+	if err := ValidateWithCredentialKinds(m, routes, catalog); err != nil {
+		return fmt.Errorf("plugin %q: %w", m.Name, err)
+	}
+	for _, info := range m.CredentialKinds {
+		if err := r.credentialKinds.add(info); err != nil {
+			return fmt.Errorf("plugin %q: %w", m.Name, err)
+		}
+	}
+	addCredentialKindSupports(r.credentialKinds, m)
+
+	idx := make(map[string]Route, len(routes))
+	for _, rt := range routes {
+		idx[rt.ID] = rt
+	}
+
 	r.byName[m.Name] = &entry{plugin: p, manifest: m, routes: idx}
 	return nil
 }
@@ -129,4 +141,46 @@ func (r *Registry) Projection(name string) (Projection, bool) {
 		return Projection{}, false
 	}
 	return BuildProjection(e.manifest, e.routes), true
+}
+
+// CredentialKinds returns every registered credential kind: core shared kinds
+// followed by plugin-declared kinds in plugin registration order.
+func (r *Registry) CredentialKinds() []CredentialKindInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.credentialKinds.CredentialKinds()
+}
+
+// CredentialKindLookup returns one credential kind's metadata.
+func (r *Registry) CredentialKindLookup(kind CredentialKind) (CredentialKindInfo, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.credentialKinds.CredentialKindLookup(kind)
+}
+
+// CredentialKindSupportsProtocol reports whether a credential kind may be
+// explicitly scoped to protocol.
+func (r *Registry) CredentialKindSupportsProtocol(kind CredentialKind, protocol string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.credentialKinds.CredentialKindSupportsProtocol(kind, protocol)
+}
+
+func addCredentialKindSupports(catalog *credentialKindSet, m Manifest) {
+	for _, group := range m.Config.Groups {
+		for _, field := range group.Fields {
+			if field.Type != FieldCredentialRef || field.Credential == nil {
+				continue
+			}
+			protocols := field.Credential.Protocols
+			if len(protocols) == 0 && m.Name != "" {
+				protocols = []string{m.Name}
+			}
+			for _, kind := range field.Credential.Kinds {
+				for _, protocol := range protocols {
+					catalog.addSupport(kind, protocol)
+				}
+			}
+		}
+	}
 }

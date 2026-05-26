@@ -1,0 +1,45 @@
+package ssh_test
+
+import (
+	"testing"
+
+	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/plugins/ssh"
+)
+
+func TestManifestValidates(t *testing.T) {
+	p := ssh.New()
+	if err := plugin.Validate(p.Manifest(), p.Routes()); err != nil {
+		t.Fatalf("ssh manifest invalid: %v", err)
+	}
+}
+
+func TestManifestExposesTerminalAndFiles(t *testing.T) {
+	m := ssh.New().Manifest()
+	if len(m.Tabs) != 3 {
+		t.Fatalf("tabs: got %d want 3", len(m.Tabs))
+	}
+	if m.Tabs[0].Panel != plugin.PanelTerminal || m.Tabs[0].Source.RouteID != "ssh.shell" {
+		t.Fatalf("terminal tab not wired to ssh.shell: %+v", m.Tabs[0])
+	}
+	files := m.Tabs[1]
+	if files.Panel != plugin.PanelFileBrowser {
+		t.Fatalf("files tab panel: got %q", files.Panel)
+	}
+	for _, key := range []string{"readRouteId", "downloadRouteId", "uploadRouteId", "mkdirRouteId", "renameRouteId", "deleteRouteId"} {
+		if files.Config[key] == "" {
+			t.Fatalf("files config missing %s", key)
+		}
+	}
+	if len(m.Recording) != 1 || m.Recording[0].Class != plugin.RecordingTerminal {
+		t.Fatalf("ssh should declare terminal recording: %+v", m.Recording)
+	}
+	if m.Tabs[2].Panel != plugin.PanelTable || m.Tabs[2].Source.RouteID != "ssh.snippet.list" {
+		t.Fatalf("snippets tab not wired to table/list route: %+v", m.Tabs[2])
+	}
+	for _, route := range ssh.New().Routes() {
+		if route.ID == "ssh.tunnel.list" || route.ID == "ssh.tunnel.open" || route.ID == "ssh.tunnel.close" {
+			t.Fatalf("ssh should not expose browser-local tunnel route %q", route.ID)
+		}
+	}
+}

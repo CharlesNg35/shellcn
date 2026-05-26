@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import { fetchDoc, runAction } from "../../api/dataSource";
 import type { CodeEditorConfig } from "../../types/projection";
-import type { PanelProps } from "../types";
+import type { PanelProps } from "../core/types";
+import PanelError from "../shared/PanelError.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
+import { useTheme } from "../../composables/useTheme";
+import {
+  currentMonacoTheme,
+  loadMonaco,
+  syncMonacoTheme,
+  type MonacoModule,
+} from "../../monaco";
 
 const props = defineProps<PanelProps>();
 
@@ -15,11 +24,12 @@ const useFallback = ref(false);
 const saving = ref(false);
 const saveError = ref<string | null>(null);
 const saved = ref(false);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco editor loaded lazily
-let editor: any = null;
+let editor: import("monaco-editor").editor.IStandaloneCodeEditor | null = null;
+let monacoModule: MonacoModule | null = null;
 const editorConfig = computed(
   () => props.config as CodeEditorConfig | undefined,
 );
+const { isDark } = useTheme();
 
 const language = computed(() => editorConfig.value?.language ?? "plaintext");
 const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
@@ -37,11 +47,14 @@ async function load(): Promise<void> {
       resource: props.resource,
     });
     text.value = typeof doc === "string" ? doc : JSON.stringify(doc, null, 2);
-    await mountEditor();
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
     loading.value = false;
+  }
+  if (!error.value) {
+    await nextTick();
+    await mountEditor();
   }
 }
 
@@ -51,18 +64,21 @@ async function mountEditor(): Promise<void> {
     return;
   }
   try {
-    const monaco = await import("monaco-editor");
+    const monaco = await loadMonaco();
+    monacoModule = monaco;
     editor?.dispose();
-    editor = monaco.editor.create(container.value, {
+    const ed = monaco.editor.create(container.value, {
       value: text.value,
       language: language.value,
       readOnly: !editable.value,
+      theme: currentMonacoTheme(),
       minimap: { enabled: false },
       automaticLayout: true,
       scrollBeyondLastLine: false,
     });
-    editor.onDidChangeModelContent?.(() => {
-      text.value = editor.getValue();
+    editor = ed;
+    ed.onDidChangeModelContent(() => {
+      text.value = ed.getValue();
       saved.value = false;
     });
   } catch {
@@ -95,6 +111,9 @@ async function save(): Promise<void> {
 
 onMounted(load);
 watch(() => [props.connectionId, props.resource?.uid], load);
+watch(isDark, () => {
+  if (monacoModule) syncMonacoTheme(monacoModule);
+});
 onUnmounted(() => {
   try {
     editor?.dispose();
@@ -119,8 +138,8 @@ onUnmounted(() => {
         <Button type="button" label="Save" :disabled="saving" @click="save" />
       </div>
     </div>
-    <p v-if="loading" class="p-4 text-sm text-surface-400">Loading…</p>
-    <p v-else-if="error" class="p-4 text-sm text-red-500">{{ error }}</p>
+    <SkeletonList v-if="loading" />
+    <PanelError v-else-if="error" :message="error" retryable @retry="load" />
     <textarea
       v-else-if="useFallback && editable"
       v-model="text"
@@ -134,7 +153,7 @@ onUnmounted(() => {
     <div
       v-show="!loading && !error && !useFallback"
       ref="container"
-      class="min-h-0 flex-1"
+      class="shellcn-monaco-host min-h-0 flex-1"
     />
   </div>
 </template>

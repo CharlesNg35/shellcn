@@ -27,7 +27,7 @@ import (
 	"github.com/charlesng/shellcn/internal/session"
 	"github.com/charlesng/shellcn/internal/store"
 	"github.com/charlesng/shellcn/internal/transport"
-	"github.com/charlesng/shellcn/plugins/noop"
+	shellssh "github.com/charlesng/shellcn/plugins/ssh"
 )
 
 // --- test plugins -----------------------------------------------------------
@@ -84,6 +84,10 @@ func (testPlugin) Routes() []plugin.Route {
 		{
 			ID: "t.list", Method: plugin.MethodGet, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.list",
 			Handle: func(*plugin.RequestContext) (any, error) { return plugin.Page[string]{Items: []string{"a", "b"}}, nil },
+		},
+		{
+			ID: "t.unauth", Method: plugin.MethodGet, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.unauth",
+			Handle: func(*plugin.RequestContext) (any, error) { return nil, plugin.ErrUnauthorized },
 		},
 		{
 			ID: "t.echoparam", Method: plugin.MethodGet, Permission: "t.read", Risk: plugin.RiskSafe, AuditEvent: "t.echoparam",
@@ -156,6 +160,51 @@ func (testPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session
 	return fakeSess{}, nil
 }
 
+type internalPlugin struct{}
+
+func (internalPlugin) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		APIVersion:          plugin.CurrentAPIVersion,
+		Name:                "internal",
+		Version:             "0",
+		Title:               "Internal Test",
+		Layout:              plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		Tabs: []plugin.Tab{
+			{Key: "items", Label: "Items", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "internal.list"}},
+			{Key: "echo", Label: "Echo", Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "internal.echo", Method: plugin.MethodWS}},
+		},
+		Streams: []plugin.Stream{{ID: "internal.echo", Kind: plugin.StreamTerminal, RouteID: "internal.echo"}},
+	}
+}
+
+func (internalPlugin) Routes() []plugin.Route {
+	return []plugin.Route{
+		{
+			ID: "internal.list", Method: plugin.MethodGet, Permission: "internal.read", Risk: plugin.RiskSafe, AuditEvent: "internal.list",
+			Handle: func(*plugin.RequestContext) (any, error) {
+				return plugin.Page[string]{Items: []string{"alpha", "bravo"}}, nil
+			},
+		},
+		{
+			ID: "internal.echo", Method: plugin.MethodWS, Permission: "internal.read", Risk: plugin.RiskSafe, AuditEvent: "internal.echo",
+			Stream: func(_ *plugin.RequestContext, c plugin.ClientStream) error {
+				if _, err := c.Write([]byte("internal echo ready\n")); err != nil {
+					return err
+				}
+				buf := make([]byte, 1024)
+				n, _ := c.Read(buf)
+				_, _ = c.Write(buf[:n])
+				return nil
+			},
+		},
+	}
+}
+
+func (internalPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session, error) {
+	return fakeSess{}, nil
+}
+
 // boomPlugin fails to Connect, so any route on it resolves but the session is unavailable.
 type boomPlugin struct{}
 
@@ -191,12 +240,13 @@ func newHarness(t *testing.T) *harness {
 	st := store.NewMemory()
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
-	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault)
 
 	reg := plugin.NewRegistry()
 	reg.MustRegister(testPlugin{})
 	reg.MustRegister(boomPlugin{})
-	reg.MustRegister(noop.New())
+	reg.MustRegister(internalPlugin{})
+	reg.MustRegister(shellssh.New())
+	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 
 	pol, err := policy.New()
 	if err != nil {
@@ -246,7 +296,7 @@ func newHarness(t *testing.T) *harness {
 	_ = st.Connections.Create(ctx, &models.Connection{ID: "c-op", Name: "op", Protocol: "tester", OwnerID: "op", Transport: "direct"})
 	_ = st.Connections.Create(ctx, &models.Connection{ID: "c-boom", Name: "boom", Protocol: "boom", OwnerID: "op", Transport: "direct"})
 	_ = st.Connections.Create(ctx, &models.Connection{ID: "c-view", Name: "v", Protocol: "tester", OwnerID: "viewer", Transport: "direct"})
-	_ = st.Connections.Create(ctx, &models.Connection{ID: "c-noop", Name: "noop", Protocol: "noop", OwnerID: "op", Transport: "direct"})
+	_ = st.Connections.Create(ctx, &models.Connection{ID: "c-internal", Name: "internal", Protocol: "internal", OwnerID: "op", Transport: "direct"})
 	return h
 }
 
@@ -538,6 +588,24 @@ func (h *harness) dialWS(t *testing.T, userID, path string) (*websocket.Conn, er
 	return c, err
 }
 
+func (h *harness) dialWSWithSubprotocol(t *testing.T, userID, path string, subprotocol string) (*websocket.Conn, error) {
+	t.Helper()
+	sess := h.sessions[userID]
+	hdr := http.Header{}
+	hdr.Set("Cookie", auth.SessionCookieName+"="+sess.ID)
+	hdr.Set("Origin", h.ts.URL)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	c, resp, err := websocket.Dial(ctx, h.wsURL(path), &websocket.DialOptions{
+		HTTPHeader:   hdr,
+		Subprotocols: []string{subprotocol},
+	})
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	return c, err
+}
+
 func (h *harness) mintTicket(t *testing.T, userID, connID, routeID string, params map[string]string) string {
 	t.Helper()
 	body := `{"routeId":"` + routeID + `","params":{`
@@ -648,6 +716,40 @@ func TestDisabledUserExistingSessionRejected(t *testing.T) {
 	}
 }
 
+func TestPlatformAuth401IsMarked(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodGet, "/api/connections", "", nil)
+	if resp.Status != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated request: want 401, got %d (%s)", resp.Status, resp.Body)
+	}
+	req, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/connections", nil)
+	raw, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = raw.Body.Close() }()
+	if got := raw.Header.Get("X-ShellCN-Auth"); got != "required" {
+		t.Fatalf("X-ShellCN-Auth = %q, want required", got)
+	}
+}
+
+func TestPluginRoute401IsNotMarkedAsPlatformAuth(t *testing.T) {
+	h := newHarness(t)
+	req, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/connections/c-op/x/t.unauth", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: h.sessions["op"].ID})
+	raw, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = raw.Body.Close() }()
+	if raw.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("plugin route unauthorized: want 401, got %d", raw.StatusCode)
+	}
+	if got := raw.Header.Get("X-ShellCN-Auth"); got != "" {
+		t.Fatalf("X-ShellCN-Auth = %q, want empty", got)
+	}
+}
+
 func TestWSRequiresTicket(t *testing.T) {
 	h := newHarness(t)
 	// No ticket → upgrade rejected.
@@ -676,6 +778,19 @@ func TestWSHappyPathEcho(t *testing.T) {
 	}
 	if string(data) != "ping" {
 		t.Errorf("echo mismatch: got %q", data)
+	}
+}
+
+func TestWSAcceptsGuacamoleSubprotocol(t *testing.T) {
+	h := newHarness(t)
+	tok := h.mintTicket(t, "op", "c-op", "t.ws", nil)
+	c, err := h.dialWSWithSubprotocol(t, "op", "/api/connections/c-op/x/t.ws?ticket="+tok, "guacamole")
+	if err != nil {
+		t.Fatalf("dial with guacamole subprotocol: %v", err)
+	}
+	defer func() { _ = c.CloseNow() }()
+	if got := c.Subprotocol(); got != "guacamole" {
+		t.Fatalf("subprotocol = %q, want guacamole", got)
 	}
 }
 

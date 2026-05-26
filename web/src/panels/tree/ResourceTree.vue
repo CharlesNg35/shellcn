@@ -83,16 +83,16 @@ async function onNodeSelect(node: PVNode): Promise<void> {
     expandedKeys.value = { ...expandedKeys.value, [String(node.key)]: true };
     await loadChildren(node);
   }
-
-  watch(
-    () => [props.selectedGroup, props.selectedUid] as const,
-    ([group, uid]) => {
-      const selected = uid ?? group;
-      selectionKeys.value = selected ? { [selected]: true } : {};
-    },
-    { immediate: true },
-  );
 }
+
+watch(
+  () => [props.selectedGroup, props.selectedUid] as const,
+  ([group, uid]) => {
+    const selected = uid ?? group;
+    selectionKeys.value = selected ? { [selected]: true } : {};
+  },
+  { immediate: true },
+);
 
 onMounted(async () => {
   for (const g of props.groups) {

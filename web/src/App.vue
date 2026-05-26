@@ -2,9 +2,12 @@
 import { onMounted, onUnmounted } from "vue";
 import { RouterView, useRouter } from "vue-router";
 import { useToast } from "primevue/usetoast";
+import ConfirmDialog from "primevue/confirmdialog";
 import { setApiErrorHandler, type ApiError } from "./api/client";
 import { useAuthStore } from "./stores/auth";
+import AppLogo from "./components/AppLogo.vue";
 import AppToast from "./components/AppToast.vue";
+import AppIcon from "./components/AppIcon.vue";
 
 const toast = useToast();
 const router = useRouter();
@@ -14,7 +17,7 @@ const auth = useAuthStore();
 // to the caller for inline handling so feedback isn't duplicated.
 onMounted(() => {
   setApiErrorHandler((err: ApiError) => {
-    if (err.status === 401) {
+    if (err.status === 401 && err.authRequired) {
       if (router.currentRoute.value.name !== "login") {
         auth.clear();
         void router.push({
@@ -45,10 +48,7 @@ onUnmounted(() => setApiErrorHandler(null));
     v-if="!auth.ready"
     class="flex h-full flex-col items-center justify-center gap-[18px] bg-surface-50 dark:bg-surface-950"
   >
-    <span
-      class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary-600 font-mono text-lg font-semibold text-white"
-      >&gt;_</span
-    >
+    <AppLogo :size="44" class="text-primary-600" />
     <span
       class="h-[22px] w-[22px] animate-spin rounded-full border-[2.5px] border-surface-200 border-t-primary-500 dark:border-surface-800 dark:border-t-primary-500"
       role="status"
@@ -59,4 +59,18 @@ onUnmounted(() => setApiErrorHandler(null));
     <RouterView />
   </template>
   <AppToast />
+  <ConfirmDialog>
+    <template #message="{ message }">
+      <div class="flex items-start gap-3">
+        <AppIcon
+          :icon="{ type: 'name', value: 'alert' }"
+          :size="20"
+          class="mt-0.5 shrink-0 text-red-500"
+        />
+        <p class="text-sm text-surface-600 dark:text-surface-300">
+          {{ message.message }}
+        </p>
+      </div>
+    </template>
+  </ConfirmDialog>
 </template>

@@ -3,8 +3,8 @@ import { computed, nextTick, ref } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import { useStream } from "../../composables/useStream";
-import type { PanelProps } from "../types";
-import StubBanner from "./StubBanner.vue";
+import type { PanelProps } from "../core/types";
+import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
 
@@ -14,6 +14,7 @@ const paused = ref(false);
 const follow = ref(true);
 const filterText = ref("");
 const viewport = ref<HTMLElement | null>(null);
+const reconnecting = ref(false);
 
 function append(frame: string): void {
   let text = frame;
@@ -32,12 +33,21 @@ function append(frame: string): void {
   });
 }
 
-const { status } = useStream(
+const { status, error, reconnect } = useStream(
   props.connectionId,
   props.source,
   { resource: props.resource },
   append,
 );
+
+async function onReconnect(): Promise<void> {
+  reconnecting.value = true;
+  try {
+    await reconnect();
+  } finally {
+    reconnecting.value = false;
+  }
+}
 
 const visibleLines = computed(() => {
   const q = filterText.value.trim().toLowerCase();
@@ -52,8 +62,14 @@ const downloadHref = computed(
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-[#0b0f17]">
-    <StubBanner :status="status" />
+  <div class="flex h-full flex-col bg-surface-950">
+    <StreamStatusBar
+      :status="status"
+      :error="error"
+      :reconnecting="reconnecting"
+      can-reconnect
+      @reconnect="onReconnect"
+    />
     <div
       class="flex flex-wrap items-center gap-2 border-b border-surface-800 bg-surface-950 px-3 py-2"
     >
@@ -64,17 +80,25 @@ const downloadHref = computed(
       />
       <Button
         type="button"
+        severity="secondary"
         :label="paused ? 'Resume' : 'Pause'"
         @click="paused = !paused"
       />
       <Button
         type="button"
+        severity="secondary"
         :label="follow ? 'Following' : 'Follow'"
         @click="follow = !follow"
       />
-      <Button type="button" label="Clear" @click="lines = []" />
+      <Button
+        type="button"
+        severity="secondary"
+        label="Clear"
+        @click="lines = []"
+      />
       <Button
         as="a"
+        severity="secondary"
         :href="downloadHref"
         download="logs.txt"
         label="Download"

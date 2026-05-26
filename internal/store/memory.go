@@ -12,18 +12,20 @@ import (
 // NewMemory returns a fully in-memory Store for unit tests — no DB, no gorm.
 func NewMemory() *Store {
 	return &Store{
-		Users:            &memUserStore{users: map[string]models.User{}, hashes: map[string]string{}},
-		Connections:      &memConnectionStore{m: map[string]models.Connection{}},
-		Credentials:      &memCredentialStore{m: map[string]models.Credential{}},
-		Grants:           &memGrantStore{m: map[string]models.Grant{}},
-		CredentialGrants: &memCredentialGrantStore{m: map[string]models.CredentialGrant{}},
-		Audit:            &memAuditStore{},
-		Snippets:         &memSnippetStore{m: map[string]models.Snippet{}},
-		Preferences:      &memPreferenceStore{m: map[string]models.Preference{}},
-		Enrollments:      &memEnrollmentStore{m: map[string]models.AgentEnrollment{}},
-		Policies:         &memPolicyStore{m: map[string]models.PolicyRule{}},
-		Invitations:      &memInvitationStore{m: map[string]models.Invitation{}},
-		Recordings:       &memRecordingStore{m: map[string]models.Recording{}},
+		Users:                &memUserStore{users: map[string]models.User{}, hashes: map[string]string{}},
+		Connections:          &memConnectionStore{m: map[string]models.Connection{}},
+		ConnectionFolders:    &memConnectionFolderStore{m: map[string]models.ConnectionFolder{}},
+		ConnectionPlacements: &memConnectionPlacementStore{m: map[string]models.ConnectionPlacement{}},
+		Credentials:          &memCredentialStore{m: map[string]models.Credential{}},
+		Grants:               &memGrantStore{m: map[string]models.Grant{}},
+		CredentialGrants:     &memCredentialGrantStore{m: map[string]models.CredentialGrant{}},
+		Audit:                &memAuditStore{},
+		Snippets:             &memSnippetStore{m: map[string]models.Snippet{}},
+		Preferences:          &memPreferenceStore{m: map[string]models.Preference{}},
+		Enrollments:          &memEnrollmentStore{m: map[string]models.AgentEnrollment{}},
+		Policies:             &memPolicyStore{m: map[string]models.PolicyRule{}},
+		Invitations:          &memInvitationStore{m: map[string]models.Invitation{}},
+		Recordings:           &memRecordingStore{m: map[string]models.Recording{}},
 	}
 }
 
@@ -184,6 +186,129 @@ func (s *memConnectionStore) Delete(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.m, id)
+	return nil
+}
+
+type memConnectionFolderStore struct {
+	mu sync.RWMutex
+	m  map[string]models.ConnectionFolder
+}
+
+func (s *memConnectionFolderStore) Create(_ context.Context, f *models.ConnectionFolder) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[f.ID]; ok {
+		return models.ErrConflict
+	}
+	s.m[f.ID] = *f
+	return nil
+}
+
+func (s *memConnectionFolderStore) Get(_ context.Context, id string) (models.ConnectionFolder, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	f, ok := s.m[id]
+	if !ok {
+		return models.ConnectionFolder{}, ErrNotFound
+	}
+	return f, nil
+}
+
+func (s *memConnectionFolderStore) ListByUser(_ context.Context, userID string) ([]models.ConnectionFolder, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []models.ConnectionFolder
+	for _, f := range s.m {
+		if f.UserID == userID {
+			out = append(out, f)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].SortOrder == out[j].SortOrder {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].SortOrder < out[j].SortOrder
+	})
+	return out, nil
+}
+
+func (s *memConnectionFolderStore) Update(_ context.Context, f *models.ConnectionFolder) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[f.ID]; !ok {
+		return ErrNotFound
+	}
+	s.m[f.ID] = *f
+	return nil
+}
+
+func (s *memConnectionFolderStore) Delete(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, id)
+	return nil
+}
+
+type memConnectionPlacementStore struct {
+	mu sync.RWMutex
+	m  map[string]models.ConnectionPlacement
+}
+
+func placementKey(userID, connectionID string) string {
+	return userID + "\x00" + connectionID
+}
+
+func (s *memConnectionPlacementStore) ListByUser(_ context.Context, userID string) ([]models.ConnectionPlacement, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []models.ConnectionPlacement
+	for _, p := range s.m {
+		if p.UserID == userID {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+func (s *memConnectionPlacementStore) Set(_ context.Context, p *models.ConnectionPlacement) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[placementKey(p.UserID, p.ConnectionID)] = *p
+	return nil
+}
+
+func (s *memConnectionPlacementStore) Delete(_ context.Context, userID, connectionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, placementKey(userID, connectionID))
+	return nil
+}
+
+func (s *memConnectionPlacementStore) DeleteByConnection(_ context.Context, connectionID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, p := range s.m {
+		if p.ConnectionID == connectionID {
+			delete(s.m, key)
+		}
+	}
+	return nil
+}
+
+func (s *memConnectionPlacementStore) ClearFolder(ctx context.Context, userID, folderID string) error {
+	return s.MoveFolder(ctx, userID, folderID, "")
+}
+
+func (s *memConnectionPlacementStore) MoveFolder(_ context.Context, userID, folderID, targetFolderID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for key, p := range s.m {
+		if p.UserID == userID && p.FolderID == folderID {
+			p.FolderID = targetFolderID
+			p.UpdatedAt = time.Now()
+			s.m[key] = p
+		}
+	}
 	return nil
 }
 

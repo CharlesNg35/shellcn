@@ -16,6 +16,10 @@ func (s *Server) handleListPlugins(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.deps.Plugins.Summaries())
 }
 
+func (s *Server) handleListCredentialKinds(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.deps.Plugins.CredentialKinds())
+}
+
 func (s *Server) handleGetPlugin(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	proj, ok := s.deps.Plugins.Projection(name)
@@ -27,15 +31,21 @@ func (s *Server) handleGetPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 type connectionDTO struct {
-	ID        string            `json:"id"`
-	Name      string            `json:"name"`
-	Protocol  string            `json:"protocol"`
-	Icon      *plugin.Icon      `json:"icon,omitempty"`
-	Transport string            `json:"transport"`
-	Online    bool              `json:"online"`
-	Status    string            `json:"status,omitempty"`
-	CanManage bool              `json:"canManage"`
-	Recording map[string]string `json:"recording,omitempty"`
+	ID           string            `json:"id"`
+	Name         string            `json:"name"`
+	Protocol     string            `json:"protocol"`
+	Icon         *plugin.Icon      `json:"icon,omitempty"`
+	Transport    string            `json:"transport"`
+	Online       bool              `json:"online"`
+	Status       string            `json:"status,omitempty"`
+	CanManage    bool              `json:"canManage"`
+	Access       string            `json:"access"`
+	Owned        bool              `json:"owned"`
+	SharedWithMe bool              `json:"sharedWithMe"`
+	SharedByMe   bool              `json:"sharedByMe"`
+	Recording    map[string]string `json:"recording,omitempty"`
+	FolderID     string            `json:"folderId,omitempty"`
+	SortOrder    int               `json:"sortOrder"`
 }
 
 func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
@@ -49,12 +59,43 @@ func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
 	}
 
 	out := make([]connectionDTO, 0, len(conns))
+	placements, err := s.deps.Store.ConnectionPlacements.ListByUser(ctx, user.ID)
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	placementByConnection := map[string]models.ConnectionPlacement{}
+	for _, p := range placements {
+		placementByConnection[p.ConnectionID] = p
+	}
 	for _, c := range conns {
 		dto := s.toConnectionDTO(c)
-		dto.CanManage = s.canManageConnection(ctx, user, c)
+		s.decorateConnectionAccess(ctx, user, c, &dto)
+		if p, ok := placementByConnection[c.ID]; ok {
+			dto.FolderID = p.FolderID
+			dto.SortOrder = p.SortOrder
+		}
 		out = append(out, dto)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) decorateConnectionAccess(ctx context.Context, user models.User, c models.Connection, dto *connectionDTO) {
+	dto.Owned = c.OwnerID == user.ID
+	dto.Access = string(models.AccessUse)
+	if dto.Owned {
+		dto.Access = "owner"
+	} else if user.HasRole(models.RoleAdmin) {
+		dto.Access = "admin"
+	} else if g, err := s.deps.Store.Grants.Get(ctx, c.ID, user.ID); err == nil {
+		dto.Access = string(g.Access)
+		dto.SharedWithMe = true
+	}
+	dto.CanManage = s.canManageConnection(ctx, user, c)
+	if dto.Owned {
+		grants, err := s.deps.Store.Grants.ListByConnection(ctx, c.ID)
+		dto.SharedByMe = err == nil && len(grants) > 0
+	}
 }
 
 // accessibleConnections returns the connections a user owns or has a grant on.

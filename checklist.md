@@ -6,7 +6,7 @@ Definitions of Done) live in [`specs/plans/`](specs/plans/); architecture in
 [`specs/v2.md`](specs/v2.md); test standard in
 [`specs/plans/TESTING.md`](specs/plans/TESTING.md).
 
-_Last updated: 2026-05-25 — Phase 2 (M1) complete after audit hardening: core runtime (plugin contract + registry, manifest validator + projection, GORM store in `internal/models`, AES-GCM secret vault, local auth + sessions + WS tickets, permission+risk Casbin authz with additive stored policies, session/channel/transport runtime, chi server + route wrapper, declared input-schema validation, multipart route binding, denied-route audit, audit + telemetry with secret-access and plugin-health wiring) proven end-to-end by the `noop` plugin. Entity package renamed `domain`→`models` (structs double as GORM models); added `svg` IconType (FE+BE). Transport tunnel registry + `cmd/agent` reverse-tunnel binary + enrollment endpoints implemented (gateway↔agent yamux tunnel, token single-use/connection-scoped). Phase 2b (M1.5 platform management) complete: connection/credential CRUD + sharing-grant + user-lookup endpoints (strict schema validation, write-only secrets, owner/manage/admin authz, audited); auth gate + CSRF + single error interceptor; manifest-driven connection create/edit/delete via the generic `SchemaForm`; credentials view + reusable `ShareDialog`/`ConfirmDialog`. Phase 2d M-Admin foundation complete: typed bootstrap config (`internal/config`, Viper; SMTP in config, not a table), admin user CRUD with root-admin/peer-admin protections, atomic single-use email/link invitations (`internal/email`, best-effort SMTP), and a Users view (users + invitations tabs, accept page). Phase 2c (M1.6 session recording foundation) complete — see its section below. **Next: Phase 3 (M2 SSH/SFTP).**_
+_Last updated: 2026-05-26 — Phase 3 (M2 SSH/SFTP) complete. Core runtime and platform management remain complete; the shipped placeholder `noop` plugin has been removed. SSH/SFTP are now real first-party plugins: `ssh` provides terminal + SFTP files + command snippets, `sftp` provides file-only access, and both share the same SSH/SFTP session + route implementation. Plugin-owned credential kinds, shared-connection credential redaction/preservation, table action config, validated action success navigation, specialized lazy panels (`graph`, `trace`, `kv`, `http_client`), and a grouped panel source layout are now part of the manifest/projection contract. **Next: Phase 4 (M3 Docker + agent transport).**_
 
 Legend: `[ ]` todo · `[~]` in progress · `[x]` done.
 A step is `[x]` only when its **tests pass**; a phase is done when all its steps are `[x]`.
@@ -24,7 +24,7 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 - [x] 1.3 App shell, stores, and routing
 - [x] 1.4 Manifest renderer and panel dispatch
 - [x] 1.5 DataSource resolver
-- [x] 1.6 Declarative panels
+- [x] 1.6 Declarative panels, including specialized graph/trace/kv/http-client renderers and grouped panel source layout
 - [x] 1.7 Stub streaming panels
 
 ## Phase 2 — M1 · Core runtime
@@ -38,11 +38,11 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 - [x] 2.7 Session, channel, and transport runtime
 - [x] 2.8 chi server and route wrapper
 - [x] 2.9 Audit and telemetry
-- [x] 2.10 Noop plugin and end-to-end validation
+- [x] 2.10 Test plugin and end-to-end validation
 
 ## Phase 2b — M1.5 · Platform management (make it usable)
 
-_Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps [phase-2b](specs/plans/phase-2b-m1.5-platform-management/)). Connection/credential CRUD + sharing endpoints with authn→authz→audit; auth gate + global error UX; manifest-driven connection create/edit/delete; credential management + sharing UI. All secrets write-only end to end._
+_Done — control-plane CRUD + platform UI (spec [v2 §12.2](specs/v2.md), steps [phase-2b](specs/plans/phase-2b-m1.5-platform-management/)). Connection/credential CRUD + sharing endpoints with authn→authz→audit; auth gate + global error UX; manifest-driven connection create/edit/delete; credential management + sharing UI. Shared connections can use already-bound credentials without exposing those credentials; shared managers see keep-or-replace credential refs, and credential grants remain managed from the credentials surface. All secrets write-only end to end._
 
 - [x] 2b.1 Backend — connection CRUD endpoints (schema-validated, secret-encrypted, authz'd)
 - [x] 2b.2 Backend — credential CRUD + rotation (write-only secret material)
@@ -79,10 +79,12 @@ link, with email as a best-effort extra when SMTP is enabled._
 
 ## Phase 3 — M2 · SSH/SFTP reference plugin
 
-- [ ] 3.1 SSH session and Connect
-- [ ] 3.2 SSH routes and manifest
-- [ ] 3.3 Wire the real terminal panel
-- [ ] 3.4 Wire the real file browser panel
+_Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP session and file-route code. `ssh` exposes Terminal, Files, and command Snippets; `sftp` exposes the same generic file browser only. SSH/SFTP auth supports password, private key, and stored credential without extra trust or SSH-agent configuration. SFTP opens lazily over the same SSH client, guarded by the session mutex. Terminal streaming is real xterm.js ↔ `ssh.shell` with resize control frames, theme-aware light/dark palettes, and the shared stream status/reconnect UX used by logs, metrics, query, and remote desktop panels; file browser routes implement list/read/download/upload/mkdir/rename/delete with core-streamed downloads and audit/authz wrapper coverage. SSH snippets use manifest-declared table actions for create/run/delete; the generic table renderer now understands toolbar and selected-row actions, plus validated `onSuccess.selectTab` navigation so snippet run returns to Terminal. The shipped placeholder `noop` plugin was removed; server e2e now uses an internal test-only plugin._
+
+- [x] 3.1 SSH session and Connect
+- [x] 3.2 SSH routes and manifest
+- [x] 3.3 Wire the real terminal panel
+- [x] 3.4 Wire the real file browser panel
 
 ## Phase 4 — M3 · Docker + agent transport
 
@@ -97,7 +99,7 @@ link, with email as a best-effort extra when SMTP is enabled._
 
 - [ ] 5.1 Proxmox session and API client
 - [ ] 5.2 Proxmox manifest (nodes, VMs, LXC, storage)
-- [ ] 5.3 Real noVNC remote-desktop panel
+- [ ] 5.3 Real engine-pluggable remote-desktop panel (noVNC + Guacamole contract)
 - [ ] 5.4 Snapshots, backups, and lifecycle actions
 
 ## Phase 6 — M5 · PostgreSQL

@@ -129,6 +129,19 @@ func (s *recSession) finishLocked(status models.RecordingStatus) {
 	}
 }
 
+func (s *recSession) shouldStartOnInteraction() bool {
+	return s.forced && s.capability.Class == plugin.RecordingTerminal && !s.live.Load()
+}
+
+func (s *recSession) startOnInteraction(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.shouldStartOnInteraction() {
+		return nil
+	}
+	return s.engine.startSessionLocked(ctx, s)
+}
+
 // Resize records a terminal resize for the live recording identified by key (the
 // terminal resize control channel calls this). No-op when not recording.
 func (e *Engine) Resize(key string, cols, rows int) {

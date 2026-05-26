@@ -9,6 +9,8 @@ import (
 	"github.com/charlesng/shellcn/internal/plugin"
 )
 
+const testCredentialSSHPrivateKey plugin.CredentialKind = "ssh_private_key"
+
 // sampleManifest exercises every projection-relevant shape: structured icons
 // (incl. svg), a schema with credential_ref + condition + validators, a WS tab
 // source, a tree group, a resource with detail tabs + actions, and a stream.
@@ -22,7 +24,11 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Icon:                plugin.Icon{Type: plugin.IconSVG, Value: "<svg viewBox=\"0 0 1 1\"></svg>"},
 		Capabilities:        []plugin.Capability{"terminal", "filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutSidebarTree,
+		CredentialKinds: []plugin.CredentialKindInfo{{
+			Kind: testCredentialSSHPrivateKey, Label: "SSH private key", SecretLabel: "Private key",
+			SecretMultiline: true, IdentityLabel: "Username",
+		}},
+		Layout: plugin.LayoutSidebarTree,
 		Config: plugin.Schema{Groups: []plugin.Group{{
 			Name: "Basic",
 			Fields: []plugin.Field{
@@ -34,7 +40,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 					AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}},
 				}},
 				{Key: "credential_id", Label: "Credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
-					Kinds: []plugin.CredentialKind{plugin.CredentialSSHPrivateKey}, Protocols: []string{"sample"}, Required: true,
+					Kinds: []plugin.CredentialKind{testCredentialSSHPrivateKey}, Protocols: []string{"ssh"}, Required: true,
 				}},
 			},
 		}}},

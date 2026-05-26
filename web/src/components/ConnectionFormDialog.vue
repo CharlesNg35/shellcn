@@ -10,6 +10,7 @@ import { useNotify } from "../composables/useNotify";
 import SchemaForm from "../panels/form/SchemaForm.vue";
 import ProtocolPicker from "./ProtocolPicker.vue";
 import AppIcon from "./AppIcon.vue";
+import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import type {
   ConnectionDetail,
   ConnectionSummary,
@@ -38,6 +39,7 @@ const nameError = ref<string | null>(null);
 const transport = ref<Transport>("direct");
 const configModel = ref<Record<string, unknown>>({});
 const secretsSet = ref<Record<string, boolean>>({});
+const credentialStates = ref<ConnectionDetail["credentials"]>({});
 const recordingModel = ref<Record<string, string>>({});
 const loading = ref(false);
 const busy = ref(false);
@@ -79,6 +81,7 @@ function reset(): void {
   transport.value = "direct";
   configModel.value = {};
   secretsSet.value = {};
+  credentialStates.value = {};
   recordingModel.value = {};
 }
 
@@ -96,6 +99,7 @@ function clearProtocol(): void {
   projection.value = null;
   configModel.value = {};
   secretsSet.value = {};
+  credentialStates.value = {};
   recordingModel.value = {};
   nameError.value = null;
 }
@@ -110,6 +114,7 @@ async function loadForEdit(id: string): Promise<void> {
     secretsSet.value = Object.fromEntries(
       Object.entries(detail.secrets ?? {}).map(([k, v]) => [k, v === "set"]),
     );
+    credentialStates.value = detail.credentials ?? {};
     recordingModel.value = { ...(detail.recording ?? {}) };
     protocol.value = detail.protocol;
     projection.value = await conns.projection(detail.protocol);
@@ -138,7 +143,10 @@ function requestSubmit(): void {
   formRef.value?.submit();
 }
 
-async function onConfig(config: Record<string, unknown>): Promise<void> {
+async function onConfig(
+  config: Record<string, unknown>,
+  meta: { preserveCredentials?: string[] } = {},
+): Promise<void> {
   busy.value = true;
   try {
     if (isEdit.value && props.connectionId) {
@@ -148,6 +156,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           name: name.value.trim(),
           transport: transport.value,
           config,
+          preserveCredentials: meta.preserveCredentials ?? [],
           recording: recordingModel.value,
         },
       );
@@ -160,6 +169,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
         protocol: protocol.value,
         transport: transport.value,
         config,
+        preserveCredentials: [],
         recording: recordingModel.value,
       });
       await conns.refresh();
@@ -184,7 +194,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
     :header="isEdit ? 'Edit connection' : 'Add connection'"
     :closable="!busy"
     :pt="{
-      root: 'w-full max-w-lg rounded-lg bg-surface-0 shadow-xl dark:bg-surface-900',
+      root: dialogRoot('max-w-lg'),
       content: 'max-h-[70vh] overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"
@@ -193,9 +203,9 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
       Loading…
     </p>
 
-    <div v-else class="flex flex-col gap-5">
+    <div v-else class="flex min-w-0 flex-col gap-5">
       <!-- Step 1: pick a protocol (create only, until one is chosen). -->
-      <div v-if="!isEdit && !protocol" class="flex flex-col gap-1.5">
+      <div v-if="!isEdit && !protocol" class="flex min-w-0 flex-col gap-1.5">
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
@@ -214,7 +224,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
         class="flex items-center justify-center gap-2 py-12 text-sm text-surface-400"
       >
         <span
-          class="h-4 w-4 animate-spin rounded-full border-2 border-surface-300 border-t-primary-500 dark:border-surface-700"
+          class="h-4 w-4 animate-spin rounded-full border-2 border-surface-200 border-t-primary-500 dark:border-surface-800 dark:border-t-primary-500"
           role="status"
           aria-label="Loading"
         />
@@ -224,14 +234,9 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
       <template v-if="projection">
         <!-- Breadcrumb: the chosen protocol, with a way back to the picker. -->
         <nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-sm">
-          <button
-            v-if="!isEdit"
-            type="button"
-            class="rounded font-medium text-primary-600 transition-colors hover:text-primary-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60 dark:text-primary-400 dark:hover:text-primary-300"
-            @click="clearProtocol"
-          >
+          <Button v-if="!isEdit" link @click="clearProtocol">
             Protocols
-          </button>
+          </Button>
           <span v-if="!isEdit" class="text-surface-400" aria-hidden="true"
             >/</span
           >
@@ -246,7 +251,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           </span>
         </nav>
 
-        <div class="flex flex-col gap-1.5">
+        <div class="flex min-w-0 flex-col gap-1.5">
           <label
             for="conn-name"
             class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -262,7 +267,10 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           <p v-if="nameError" class="text-xs text-red-500">{{ nameError }}</p>
         </div>
 
-        <div v-if="transportChoices.length > 1" class="flex flex-col gap-1.5">
+        <div
+          v-if="transportChoices.length > 1"
+          class="flex min-w-0 flex-col gap-1.5"
+        >
           <label
             class="text-sm font-medium text-surface-700 dark:text-surface-200"
           >
@@ -283,13 +291,14 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
           :schema="projection.config"
           :model-value="configModel"
           :secrets-set="secretsSet"
+          :credential-states="credentialStates"
           :protocol="protocol"
           @submit="onConfig"
         />
 
         <fieldset
           v-if="recordingClasses.length"
-          class="flex flex-col gap-3 rounded-md border border-surface-200 p-3 dark:border-surface-700"
+          class="flex min-w-0 flex-col gap-3 rounded-md border border-surface-200 p-3 dark:border-surface-700"
         >
           <legend
             class="flex items-center gap-1.5 px-1 text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -333,9 +342,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
         <Button
           type="button"
           :disabled="busy"
-          :pt="{
-            root: 'rounded-md px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-800',
-          }"
+          :pt="{ root: btnGhost }"
           @click="close"
         >
           Cancel
@@ -343,9 +350,7 @@ async function onConfig(config: Record<string, unknown>): Promise<void> {
         <Button
           type="button"
           :disabled="busy || !projection"
-          :pt="{
-            root: 'flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50',
-          }"
+          :pt="{ root: btnPrimary }"
           @click="requestSubmit"
         >
           <AppIcon

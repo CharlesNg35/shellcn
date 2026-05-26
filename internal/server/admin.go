@@ -135,19 +135,32 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
+	isSelf := target.ID == actor.ID
+
 	// The root admin must stay an enabled admin (no self-lockout).
 	if target.Protected && (req.Disabled || role != models.RoleAdmin) {
 		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, errForbidden("the root admin must remain an enabled admin"))
 		return
 	}
-	if target.HasRole(models.RoleAdmin) && !actor.Protected && (req.Disabled != target.Disabled || role != models.RoleAdmin) {
+	// Only the root admin may edit other admins; a regular admin manages
+	// non-admin users (and their own account) only.
+	if target.HasRole(models.RoleAdmin) && !isSelf && !actor.Protected {
 		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
-		writeError(w, s.deps.Logger, errForbidden("only the root admin may disable or change another admin's role"))
+		writeError(w, s.deps.Logger, errForbidden("only the root admin may edit another admin"))
 		return
 	}
+
+	roles := []models.Role{role}
+	disabled := req.Disabled
+	// A non-root admin editing their own account can't change their role or
+	// disable themselves (no self-escalation/lockout); profile fields still apply.
+	if isSelf && !actor.Protected {
+		roles = target.Roles
+		disabled = target.Disabled
+	}
 	updated, err := s.deps.Users.Update(ctx, target.ID, service.UpdateUserInput{
-		Email: req.Email, DisplayName: req.DisplayName, Roles: []models.Role{role}, Disabled: req.Disabled,
+		Email: req.Email, DisplayName: req.DisplayName, Roles: roles, Disabled: disabled,
 	})
 	if err != nil {
 		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditError, nil, err)

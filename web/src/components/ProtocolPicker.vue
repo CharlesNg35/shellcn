@@ -27,7 +27,7 @@ const filtered = computed(() => {
   <div class="flex flex-col gap-3">
     <div class="relative">
       <span
-        class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"
+        class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-surface-400"
         aria-hidden="true"
       >
         <AppIcon :icon="{ type: 'name', value: 'search' }" :size="16" />
@@ -53,7 +53,7 @@ const filtered = computed(() => {
         type="button"
         role="radio"
         :aria-checked="modelValue === p.name"
-        class="group flex items-start gap-3 rounded-lg border p-3 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60"
+        class="group flex items-start gap-3 rounded-lg border p-3 text-left transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-primary-500/60 focus-visible:outline-none"
         :class="
           modelValue === p.name
             ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500 dark:border-primary-500 dark:bg-primary-950/30'

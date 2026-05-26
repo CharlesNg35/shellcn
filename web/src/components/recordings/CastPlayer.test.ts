@@ -20,7 +20,7 @@ describe("CastPlayer", () => {
     const [src, el, opts] = create.mock.calls[0];
     expect(src).toBe("/api/recordings/r1/content");
     expect(el).toBeInstanceOf(HTMLElement);
-    expect(opts).toMatchObject({ fit: "width" });
+    expect(opts).toMatchObject({ fit: "width", idleTimeLimit: 2, speed: 1 });
   });
 
   it("disposes the player on unmount", async () => {

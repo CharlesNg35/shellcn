@@ -28,14 +28,7 @@
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: 12px;
-  background: #2563eb;
-  color: #fff;
-  font:
-    600 18px/1 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
+  color: #2563eb;
 }
 #boot-splash .boot-spin {
   width: 22px;

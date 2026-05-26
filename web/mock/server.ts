@@ -19,6 +19,120 @@ function readJSON<T>(file: string): T {
 
 const nonPluginFixtures = new Set(["connections.json", "credentials.json"]);
 
+interface CredentialKindInfo {
+  kind: string;
+  label: string;
+  secretLabel: string;
+  secretMultiline?: boolean;
+  identityLabel?: string;
+  compatibleProtocols?: string[];
+}
+
+interface CredentialField {
+  type?: string;
+  credential?: {
+    kinds?: string[];
+    protocols?: string[];
+  };
+}
+
+interface PluginFixture {
+  name: string;
+  title: string;
+  icon: unknown;
+  description: string;
+  credentialKinds?: CredentialKindInfo[];
+  config?: {
+    groups?: Array<{
+      fields?: CredentialField[];
+    }>;
+  };
+}
+
+const builtInCredentialKinds: CredentialKindInfo[] = [
+  {
+    kind: "db_password",
+    label: "Database password",
+    secretLabel: "Password",
+    identityLabel: "Database user",
+  },
+  {
+    kind: "api_token",
+    label: "API token",
+    secretLabel: "Token",
+    identityLabel: "Token name / subject",
+  },
+  {
+    kind: "tls_client_cert",
+    label: "TLS client certificate",
+    secretLabel: "Certificate and private key",
+    secretMultiline: true,
+  },
+  {
+    kind: "cloud_access_key",
+    label: "Cloud access key",
+    secretLabel: "Secret access key",
+    identityLabel: "Access key ID",
+  },
+  {
+    kind: "service_account_json",
+    label: "Service account JSON",
+    secretLabel: "JSON key",
+    secretMultiline: true,
+    identityLabel: "Service account",
+  },
+  {
+    kind: "basic_auth",
+    label: "Basic auth",
+    secretLabel: "Password",
+    identityLabel: "Username",
+  },
+  {
+    kind: "bearer_token",
+    label: "Bearer token",
+    secretLabel: "Token",
+    identityLabel: "Token name / subject",
+  },
+];
+
+function credentialKinds(): CredentialKindInfo[] {
+  const byKind = new Map<string, CredentialKindInfo>();
+  const supports = new Map<string, Set<string>>();
+  const addDefinition = (info: CredentialKindInfo): void => {
+    if (!byKind.has(info.kind)) {
+      const definition = { ...info };
+      delete definition.compatibleProtocols;
+      byKind.set(info.kind, definition);
+    }
+  };
+  for (const info of builtInCredentialKinds) addDefinition(info);
+  for (const name of pluginNames()) {
+    const plugin = readJSON<PluginFixture>(`${name}.json`);
+    for (const info of plugin.credentialKinds ?? []) addDefinition(info);
+    for (const group of plugin.config?.groups ?? []) {
+      for (const field of group.fields ?? []) {
+        if (field.type !== "credential_ref" || !field.credential) continue;
+        const protocols = field.credential.protocols?.length
+          ? field.credential.protocols
+          : [plugin.name];
+        for (const kind of field.credential.kinds ?? []) {
+          if (!supports.has(kind)) supports.set(kind, new Set<string>());
+          for (const protocol of protocols) supports.get(kind)?.add(protocol);
+        }
+      }
+    }
+  }
+  return [...byKind.values()].map((info) => ({
+    ...info,
+    compatibleProtocols: [...(supports.get(info.kind) ?? [])].sort(),
+  }));
+}
+
+function credentialKindSupports(kind: string, protocol: string): boolean {
+  const info = credentialKinds().find((k) => k.kind === kind);
+  return Boolean(info && (info.compatibleProtocols ?? []).includes(protocol));
+}
+
 function pluginNames(): string[] {
   return readdirSync(fixturesDir)
     .filter((f) => f.endsWith(".json") && !nonPluginFixtures.has(f))
@@ -124,6 +238,12 @@ function connections(): Json[] {
   return connectionsState;
 }
 
+let connectionFoldersState: Json[] | null = null;
+function connectionFolders(): Json[] {
+  connectionFoldersState ??= [];
+  return connectionFoldersState;
+}
+
 let credentialsState: Json[] | null = null;
 function credentials(): Json[] {
   if (!credentialsState)
@@ -186,6 +306,7 @@ function uid(prefix: string): string {
 
 function resetControlPlaneState(): void {
   connectionsState = null;
+  connectionFoldersState = null;
   credentialsState = null;
   recordingsState = null;
   adminUsersState = null;
@@ -331,6 +452,10 @@ function handleHTTP(
       };
     });
     return send(res, 200, summaries);
+  }
+
+  if (path === "/api/credential-kinds" && method === "GET") {
+    return send(res, 200, credentialKinds());
   }
 
   const pluginMatch = path.match(/^\/api\/plugins\/([^/]+)$/);
@@ -480,6 +605,74 @@ function handleHTTP(
       };
       connections().push(conn);
       send(res, 201, conn);
+    });
+  }
+
+  if (path === "/api/connection-folders" && method === "GET") {
+    return send(res, 200, connectionFolders());
+  }
+  if (path === "/api/connection-folders" && method === "POST") {
+    return void readBody(req).then((raw) => {
+      const body = raw as Json;
+      const folder: Json = {
+        id: uid("folder"),
+        parentId: body.parentId || undefined,
+        name: body.name,
+        color: body.color ?? "slate",
+        sortOrder: connectionFolders().length,
+      };
+      connectionFolders().push(folder);
+      send(res, 201, folder);
+    });
+  }
+  const folderMatch = path.match(/^\/api\/connection-folders\/([^/]+)$/);
+  if (folderMatch) {
+    const id = folderMatch[1];
+    const folder = connectionFolders().find((f) => f.id === id);
+    if (!folder) return send(res, 404, { error: "unknown folder" });
+    if (method === "PUT") {
+      return void readBody(req).then((raw) => {
+        const body = raw as Json;
+        folder.name = body.name ?? folder.name;
+        folder.color = body.color ?? folder.color;
+        send(res, 200, folder);
+      });
+    }
+    if (method === "DELETE") {
+      const targetParentId = folder.parentId;
+      connectionFoldersState = connectionFolders().filter((f) => f.id !== id);
+      for (const child of connectionFolders()) {
+        if (child.parentId === id) child.parentId = targetParentId;
+      }
+      for (const conn of connections()) {
+        if (conn.folderId === id) {
+          if (targetParentId) conn.folderId = targetParentId;
+          else delete conn.folderId;
+          conn.sortOrder = 0;
+        }
+      }
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  if (path === "/api/connections/layout" && method === "PUT") {
+    return void readBody(req).then((raw) => {
+      const body = raw as { items?: Json[]; folders?: Json[] };
+      for (const item of body.items ?? []) {
+        const conn = connections().find((c) => c.id === item.connectionId);
+        if (!conn) continue;
+        if (item.folderId) conn.folderId = item.folderId;
+        else delete conn.folderId;
+        conn.sortOrder = item.sortOrder ?? 0;
+      }
+      for (const item of body.folders ?? []) {
+        const folder = connectionFolders().find((f) => f.id === item.folderId);
+        if (folder) {
+          folder.parentId = item.parentId || undefined;
+          folder.sortOrder = item.sortOrder ?? 0;
+        }
+      }
+      send(res, 200, { ok: true });
     });
   }
 
@@ -673,6 +866,8 @@ function handleHTTP(
       const protocols = c.protocols as string[] | undefined;
       if (kinds && kinds.length > 0 && !kinds.includes(String(c.kind)))
         return false;
+      if (protocol && !credentialKindSupports(String(c.kind), protocol))
+        return false;
       if (protocol && protocols && !protocols.includes(protocol)) return false;
       return true;
     });
@@ -686,7 +881,7 @@ function handleHTTP(
         name: body.name,
         kind: body.kind,
         ownerId: "u-demo",
-        username: body.username,
+        identity: body.identity ?? body.username,
         protocols: body.protocols,
         updatedAt: new Date().toISOString(),
       };
@@ -704,7 +899,7 @@ function handleHTTP(
         const body = raw as Json;
         cred.name = body.name ?? cred.name;
         cred.kind = body.kind ?? cred.kind;
-        cred.username = body.username;
+        cred.identity = body.identity ?? body.username;
         cred.protocols = body.protocols;
         cred.updatedAt = new Date().toISOString();
         send(res, 200, cred);

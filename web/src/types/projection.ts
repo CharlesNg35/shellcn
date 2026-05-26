@@ -28,10 +28,13 @@ export type KnownPanelType =
   | "query_editor"
   | "remote_desktop"
   | "form"
-  | "enroll";
+  | "enroll"
+  | "graph"
+  | "trace"
+  | "kv"
+  | "http_client";
 
 // Open union: the renderer must handle a type it does not recognize.
-// graph/trace/kv/http_client land with their plugin.
 export type PanelType = KnownPanelType | (string & {});
 
 export type StreamKind = "terminal" | "logs" | "desktop" | "metrics" | "file";
@@ -106,13 +109,17 @@ export interface Option {
   value: string | number | boolean;
 }
 
-// Open union: plugins may declare their own credential kinds.
-export type CredentialKind =
-  | "ssh_private_key"
-  | "ssh_password"
-  | "db_password"
-  | "api_token"
-  | (string & {});
+// Credential kinds are registry data, not a frontend enum.
+export type CredentialKind = string;
+
+export interface CredentialKindInfo {
+  kind: CredentialKind;
+  label: string;
+  secretLabel: string;
+  secretMultiline?: boolean;
+  identityLabel?: string;
+  compatibleProtocols?: string[];
+}
 
 // Describes which reusable credentials a `credential_ref` field accepts. The
 // field carries only the chosen credential's id — never secret material.
@@ -180,6 +187,7 @@ export interface FileBrowserConfig {
   pathParam?: string;
   readRouteId?: string;
   downloadRouteId?: string;
+  writeRouteId?: string;
   uploadRouteId?: string;
   mkdirRouteId?: string;
   renameRouteId?: string;
@@ -188,6 +196,13 @@ export interface FileBrowserConfig {
   multipleUpload?: boolean;
   maxUploadBytes?: number;
   uploadFieldName?: string;
+}
+
+export interface TablePanelConfig {
+  columns?: Column[];
+  watch?: DataSource;
+  actionIds?: string[];
+  rowActionIds?: string[];
 }
 
 export interface FormPanelConfig {
@@ -208,6 +223,42 @@ export interface QueryEditorConfig {
   initialQuery?: string;
   cancelRouteId?: string;
   cancelParams?: Record<string, string>;
+}
+
+export interface GraphPanelConfig {
+  layout?: "grid" | "manual";
+  fitView?: boolean;
+}
+
+export interface TracePanelConfig {
+  serviceField?: string;
+}
+
+export interface KVPanelConfig {
+  readRouteId?: string;
+  writeRouteId?: string;
+  deleteRouteId?: string;
+  keyParam?: string;
+  writable?: boolean;
+}
+
+export interface HTTPClientConfig {
+  executeRouteId?: string;
+  methods?: string[];
+  defaultMethod?: string;
+  defaultUrl?: string;
+  defaultHeaders?: Array<{ key: string; value: string }>;
+  defaultBody?: string;
+}
+
+export type RemoteDesktopEngine = "novnc" | "guacamole";
+
+export interface RemoteDesktopPanelConfig {
+  engine: RemoteDesktopEngine;
+  resize?: boolean;
+  clipboard?: boolean;
+  audio?: boolean;
+  repeaterID?: string;
 }
 
 export type ColumnType =
@@ -243,6 +294,10 @@ export interface ResourceRef {
   uid: string;
 }
 
+export interface ActionSuccess {
+  selectTab?: string;
+}
+
 export interface Action {
   id: string;
   label: string;
@@ -254,6 +309,7 @@ export interface Action {
   requiresConfirm: boolean;
   confirmText?: string;
   input?: Schema;
+  onSuccess?: ActionSuccess;
 }
 
 export interface Stream {
@@ -322,7 +378,7 @@ export interface CredentialSummary {
   name: string;
   kind: CredentialKind;
   ownerId?: string;
-  username?: string;
+  identity?: string;
   protocols?: string[];
   updatedAt?: string;
 }
@@ -343,6 +399,7 @@ export interface PluginProjection {
   icon: Icon;
   config: Schema;
   capabilities: string[];
+  credentialKinds?: CredentialKindInfo[];
   supportedTransports: Transport[];
   agent?: AgentProfile;
   layout: Layout;
@@ -362,10 +419,36 @@ export interface ConnectionSummary {
   protocol: string;
   icon?: Icon;
   transport: Transport;
+  // online gates the agent enroll panel; "offline" (agent with no tunnel) shows
+  // a red dot. The green "connected" state is client-side (the connect gate).
   online?: boolean;
-  status?: string;
+  status?: "offline";
   canManage?: boolean;
+  access?: "owner" | "admin" | GrantAccess;
+  owned?: boolean;
+  sharedWithMe?: boolean;
+  sharedByMe?: boolean;
   recording?: Record<string, string>;
+  folderId?: string;
+  sortOrder?: number;
+}
+
+export type FolderColor =
+  | "slate"
+  | "blue"
+  | "teal"
+  | "emerald"
+  | "amber"
+  | "rose"
+  | "violet"
+  | "cyan";
+
+export interface ConnectionFolder {
+  id: string;
+  parentId?: string;
+  name: string;
+  color: FolderColor;
+  sortOrder: number;
 }
 
 export type GrantAccess = "use" | "manage";
@@ -423,7 +506,14 @@ export interface ConnectionDetail {
   ownerId: string;
   config: Record<string, unknown>;
   secrets: Record<string, string>;
+  credentials?: Record<string, CredentialRefState>;
   recording?: Record<string, string>;
+}
+
+export interface CredentialRefState {
+  state: "set" | "not_set";
+  readable: boolean;
+  summary?: CredentialSummary;
 }
 
 // Lists, pagination, watch

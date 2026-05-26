@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
+import Button from "primevue/button";
 import { resolveParams } from "../../api/dataSource";
 import {
   useRecordingControl,
@@ -7,12 +8,14 @@ import {
 } from "../../composables/useRecordingControl";
 import AppIcon from "../AppIcon.vue";
 import type { DataSource, ResourceRef } from "../../types/projection";
+import type { ChannelStatus } from "../../stores/sessions";
 
 const props = defineProps<{
   connectionId: string;
   source: DataSource;
   resource?: ResourceRef | null;
   descriptor: RecordingDescriptor;
+  streamStatus?: ChannelStatus;
 }>();
 
 const streamRef = computed(() => ({
@@ -23,8 +26,35 @@ const streamRef = computed(() => ({
 const { recording, forced, failed, busy, canControl, start, stop } =
   useRecordingControl(props.connectionId, streamRef.value, props.descriptor);
 
+let resumeOnOpen = false;
+
 const typeLabel = computed(() =>
   props.descriptor.class === "desktop" ? "desktop" : "terminal",
+);
+
+async function startRecording(): Promise<void> {
+  resumeOnOpen = true;
+  await start();
+}
+
+async function stopRecording(): Promise<void> {
+  resumeOnOpen = false;
+  await stop();
+}
+
+watch(
+  () => props.streamStatus,
+  (next) => {
+    if (!canControl.value || !next) return;
+    if ((next === "closed" || next === "error") && recording.value) {
+      resumeOnOpen = true;
+      recording.value = false;
+      return;
+    }
+    if (next === "open" && resumeOnOpen && !recording.value && !busy.value) {
+      void start();
+    }
+  },
 );
 </script>
 
@@ -44,27 +74,29 @@ const typeLabel = computed(() =>
       REC
     </span>
 
-    <button
+    <Button
       v-if="canControl && !recording"
-      type="button"
+      outlined
+      severity="secondary"
+      size="small"
       :disabled="busy"
-      class="inline-flex items-center gap-1.5 rounded-md border border-surface-300 px-2 py-1 text-surface-600 hover:border-red-400 hover:text-red-600 disabled:opacity-50 dark:border-surface-600 dark:text-surface-300"
-      @click="start"
+      @click="startRecording"
     >
       <span class="h-2 w-2 rounded-full bg-red-500" />
       Record
-    </button>
+    </Button>
 
-    <button
+    <Button
       v-if="canControl && recording && !forced"
-      type="button"
+      outlined
+      severity="secondary"
+      size="small"
       :disabled="busy"
-      class="inline-flex items-center gap-1.5 rounded-md border border-surface-300 px-2 py-1 text-surface-600 hover:bg-surface-100 disabled:opacity-50 dark:border-surface-600 dark:text-surface-300 dark:hover:bg-surface-800"
-      @click="stop"
+      @click="stopRecording"
     >
       <AppIcon :icon="{ type: 'name', value: 'stop' }" :size="12" />
       Stop
-    </button>
+    </Button>
 
     <span v-if="failed" class="text-amber-500" role="alert"
       >Recording error</span

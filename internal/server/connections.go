@@ -14,33 +14,60 @@ import (
 )
 
 const (
-	connCreateEvent = "connection.create"
-	connUpdateEvent = "connection.update"
-	connDeleteEvent = "connection.delete"
+	connCreateEvent       = "connection.create"
+	connUpdateEvent       = "connection.update"
+	connDeleteEvent       = "connection.delete"
+	connFolderCreateEvent = "connection_folder.create"
+	connFolderUpdateEvent = "connection_folder.update"
+	connFolderDeleteEvent = "connection_folder.delete"
+	connLayoutUpdateEvent = "connection_layout.update"
 )
 
+// Surfaced on a connection to drive the sidebar dot. The "connected" (green)
+// state is client-side; the server only reports an agent with no live tunnel.
+const connStatusOffline = "offline"
+
 type connectionWriteRequest struct {
-	Name      string            `json:"name"`
-	Protocol  string            `json:"protocol"`
-	Transport string            `json:"transport"`
-	Config    map[string]any    `json:"config"`
-	Recording map[string]string `json:"recording"`
+	Name                string            `json:"name"`
+	Protocol            string            `json:"protocol"`
+	Transport           string            `json:"transport"`
+	Config              map[string]any    `json:"config"`
+	PreserveCredentials []string          `json:"preserveCredentials"`
+	Recording           map[string]string `json:"recording"`
 }
 
+// toConnectionDTO projects a stored connection for the client.
 func (s *Server) toConnectionDTO(c models.Connection) connectionDTO {
 	dto := connectionDTO{
 		ID: c.ID, Name: c.Name, Protocol: c.Protocol,
-		Transport: c.Transport, Online: c.Transport != string(plugin.TransportAgent),
-		Recording: c.Recording,
+		Transport: c.Transport, Recording: c.Recording,
 	}
+	// A direct transport is always dialable on demand; an agent transport is
+	// reachable only while its tunnel is registered. `online` gates the enroll
+	// panel; an offline agent surfaces a red dot (the green "connected" state is
+	// tracked client-side, since a pooled session has no protocol-agnostic mark).
+	dto.Online = true
 	if dto.Transport == string(plugin.TransportAgent) {
-		dto.Status = "pending"
+		dto.Online = s.tunnelRegistered(c.ID)
+	}
+	if !dto.Online {
+		dto.Status = connStatusOffline
 	}
 	if m, ok := s.deps.Plugins.Manifest(c.Protocol); ok {
 		icon := m.Icon
 		dto.Icon = &icon
 	}
 	return dto
+}
+
+// tunnelRegistered reports whether an agent tunnel is currently live for a
+// connection — the authoritative source of agent reachability.
+func (s *Server) tunnelRegistered(connID string) bool {
+	if s.deps.Tunnels == nil {
+		return false
+	}
+	_, ok := s.deps.Tunnels.Dialer(connID)
+	return ok
 }
 
 func (s *Server) auditConnEvent(ctx context.Context, user models.User, connID, event string, risk plugin.RiskLevel, result models.AuditResult, err error) {
@@ -61,7 +88,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 	conn, err := s.deps.Connections.Create(ctx, user.ID, service.ConnectionInput{
 		Name: req.Name, Protocol: req.Protocol, Transport: req.Transport,
-		Config: req.Config, Recording: req.Recording,
+		Config: req.Config, ActorID: user.ID, Recording: req.Recording,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, "", connCreateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -70,7 +97,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 	s.auditConnEvent(ctx, user, conn.ID, connCreateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
 	dto := s.toConnectionDTO(conn)
-	dto.CanManage = true
+	s.decorateConnectionAccess(ctx, user, conn, &dto)
 	writeJSON(w, http.StatusCreated, dto)
 }
 
@@ -86,7 +113,7 @@ func (s *Server) handleConnectionDetail(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
-	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(conn))
+	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(ctx, user.ID, conn))
 }
 
 func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +136,9 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	updated, err := s.deps.Connections.Update(ctx, conn, service.ConnectionInput{
-		Name: req.Name, Transport: req.Transport, Config: req.Config, Recording: req.Recording,
+		Name: req.Name, Transport: req.Transport, Config: req.Config,
+		ActorID: user.ID, PreserveCredentials: req.PreserveCredentials,
+		Recording: req.Recording,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -117,7 +146,7 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
-	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(updated))
+	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(ctx, user.ID, updated))
 }
 
 func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) {
@@ -137,6 +166,9 @@ func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) 
 		s.auditConnEvent(ctx, user, conn.ID, connDeleteEvent, plugin.RiskDestructive, models.AuditError, err)
 		writeError(w, s.deps.Logger, err)
 		return
+	}
+	if err := s.deps.Store.ConnectionPlacements.DeleteByConnection(ctx, conn.ID); err != nil {
+		s.deps.Logger.Warn("cleanup connection placements failed", "connection", conn.ID, "err", err)
 	}
 	s.cleanupConnectionDependents(ctx, conn.ID)
 	s.auditConnEvent(ctx, user, conn.ID, connDeleteEvent, plugin.RiskDestructive, models.AuditAllowed, nil)

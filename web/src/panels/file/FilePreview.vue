@@ -1,15 +1,26 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import Button from "primevue/button";
+import SkeletonList from "../../components/SkeletonList.vue";
 import type { FileContent } from "../../types/projection";
-import { formatBytes, viewerFor } from "./fileTypes";
+import CodeTextEditor from "../shared/CodeTextEditor.vue";
+import PanelError from "../shared/PanelError.vue";
+import { formatBytes, languageFor, viewerFor } from "./fileTypes";
 
 const props = defineProps<{
   name: string;
   content: FileContent | null;
   loading?: boolean;
+  error?: string | null;
 }>();
 
+const emit = defineEmits<{ retry: [] }>();
+
 const viewer = computed(() => viewerFor(props.name, props.content?.mime));
+const codeLanguage = computed(() => languageFor(props.name));
+const showTruncatedNotice = computed(
+  () => props.content?.truncated === true && viewer.value === "code",
+);
 
 const src = computed(() => {
   const c = props.content;
@@ -17,20 +28,31 @@ const src = computed(() => {
   if (c.encoding === "url" && c.url) return c.url;
   if (c.encoding === "base64" && c.content)
     return `data:${c.mime ?? "application/octet-stream"};base64,${c.content}`;
+  if (c.encoding === "utf8" && c.content && c.mime?.startsWith("image/")) {
+    return `data:${c.mime};charset=utf-8,${encodeURIComponent(c.content)}`;
+  }
   return c.url ?? "";
 });
 </script>
 
 <template>
   <div class="flex h-full flex-col">
-    <p v-if="loading" class="p-6 text-sm text-surface-400">Loading preview…</p>
+    <SkeletonList v-if="loading" />
+    <PanelError
+      v-else-if="error"
+      :message="error"
+      retryable
+      @retry="emit('retry')"
+    />
 
     <template v-else-if="content">
-      <pre
+      <CodeTextEditor
         v-if="viewer === 'code'"
-        class="m-0 h-full overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
-        >{{ content.content }}</pre
-      >
+        :value="content.content ?? ''"
+        :language="codeLanguage"
+        readonly
+        :aria-label="name ? `${name} preview` : 'File preview'"
+      />
 
       <div
         v-else-if="viewer === 'image'"
@@ -74,17 +96,17 @@ const src = computed(() => {
         <p class="text-sm text-surface-400">
           {{ name }} · {{ formatBytes(content.size) }}
         </p>
-        <a
+        <Button
           v-if="src"
+          as="a"
           :href="src"
           :download="name"
-          class="rounded-md bg-primary-500 px-3 py-1.5 text-sm font-medium text-white"
-          >Download</a
-        >
+          label="Download"
+        />
       </div>
 
       <p
-        v-if="content.truncated"
+        v-if="showTruncatedNotice"
         class="border-t border-surface-200 px-4 py-1.5 text-xs text-amber-500 dark:border-surface-800"
       >
         Preview truncated — download for the full file.

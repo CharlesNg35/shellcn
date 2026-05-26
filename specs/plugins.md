@@ -5,6 +5,14 @@ product and architecture backlog: adding a plugin should mean adding one Go
 package that declares a manifest, routes, resources, actions, streams, and
 session behavior without requiring frontend-specific code.
 
+Credential kinds follow the same ownership rule. Core keeps only broad reusable
+shapes such as database passwords, API tokens, TLS client certs, cloud keys,
+service account JSON, basic auth, and bearer tokens. Protocol-specific kinds
+such as SSH private keys/passwords, kubeconfig, VNC/RDP/SMB passwords, and SNMP
+material are declared by the plugin that owns them. Protocol compatibility is
+derived from registered plugin `credential_ref` selectors; it is not maintained
+as a hardcoded list on the kind itself.
+
 ## Priority Legend
 
 - `P0`: MVP foundation.
@@ -18,14 +26,14 @@ These plugins should prove the core architecture first.
 
 | Plugin       | Purpose                | Main Capabilities                                         |
 | ------------ | ---------------------- | --------------------------------------------------------- |
-| `ssh`        | Remote shell access    | terminal, **SFTP (Files tab)**, tunnels, snippets         |
+| `ssh`        | Remote shell access    | terminal, **SFTP (Files tab)**, command snippets          |
 | `sftp`       | File-only access       | filesystem, upload/download, editor, permissions          |
 | `docker`     | Docker host management | containers, images, volumes, networks, logs, exec, stats  |
 | `postgresql` | PostgreSQL access      | schema browser, query editor, table data, snippets, audit |
 
 > **`ssh` vs `sftp`:** an `ssh` connection exposes SFTP as its **Files** tab over
 > the *same* `ssh.Client` (no second connection / re-auth). The standalone `sftp`
-> plugin is for users who want **file access only** (no shell/tunnels). Both
+> plugin is for users who want **file access only** (no shell). Both
 > render the same `file_browser` panel and share the SFTP route handlers — the
 > only difference is the manifest each declares. The frontend special-cases
 > neither (v2 §12, §13).
@@ -39,7 +47,7 @@ These plugins should prove the core architecture first.
 | `mysql`      | MySQL/MariaDB access          | schema browser, query editor, table data, users, snippets                           |
 | `mongodb`    | MongoDB access                | databases, collections, document editor, query, indexes                             |
 | `redis`      | Redis access                  | key browser, strings, hashes, lists, sets, sorted sets, pub/sub                     |
-| `vnc`        | Remote desktop via VNC/RFB    | remote desktop panel, clipboard, keyboard/mouse                                     |
+| `vnc`        | Remote desktop via VNC/RFB    | `remote_desktop` with `engine: "novnc"`, clipboard, keyboard/mouse                  |
 
 ## P1: Filesystem And Storage Protocols
 
@@ -86,7 +94,7 @@ These plugins should prove the core architecture first.
 
 | Plugin           | Purpose                     | Main Capabilities                                       |
 | ---------------- | --------------------------- | ------------------------------------------------------- |
-| `rdp`            | Windows/Linux RDP access    | remote desktop through optional Guacamole sidecar       |
+| `rdp`            | Windows/Linux RDP access    | `remote_desktop` with `engine: "guacamole"` through optional guacd sidecar |
 | `xenserver`      | XenServer/XCP-ng management | hosts, VMs, storage, networks, console                  |
 | `vmware-vsphere` | VMware vSphere              | datacenters, clusters, hosts, VMs, datastores, console  |
 | `libvirt`        | libvirt/KVM management      | domains, networks, storage pools, console               |

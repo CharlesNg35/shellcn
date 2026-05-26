@@ -1,14 +1,73 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
-import type { Terminal } from "@xterm/xterm";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
 import { useStream } from "../../composables/useStream";
+import { useTheme } from "../../composables/useTheme";
 import RecordingControls from "../../components/recordings/RecordingControls.vue";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
-import type { PanelProps } from "../types";
-import StubBanner from "./StubBanner.vue";
+import type { PanelProps } from "../core/types";
+import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
+const { isDark } = useTheme();
+
+const darkTerminalTheme: ITheme = {
+  background: "#020617",
+  foreground: "#e2e8f0",
+  cursor: "#93c5fd",
+  cursorAccent: "#020617",
+  selectionBackground: "#1d4ed866",
+  black: "#020617",
+  red: "#ef4444",
+  green: "#22c55e",
+  yellow: "#eab308",
+  blue: "#3b82f6",
+  magenta: "#a855f7",
+  cyan: "#06b6d4",
+  white: "#e2e8f0",
+  brightBlack: "#64748b",
+  brightRed: "#f87171",
+  brightGreen: "#4ade80",
+  brightYellow: "#facc15",
+  brightBlue: "#60a5fa",
+  brightMagenta: "#c084fc",
+  brightCyan: "#22d3ee",
+  brightWhite: "#f8fafc",
+};
+
+const lightTerminalTheme: ITheme = {
+  background: "#ffffff",
+  foreground: "#334155",
+  cursor: "#2563eb",
+  cursorAccent: "#ffffff",
+  selectionBackground: "#bfdbfe",
+  black: "#0f172a",
+  red: "#dc2626",
+  green: "#16a34a",
+  yellow: "#ca8a04",
+  blue: "#2563eb",
+  magenta: "#9333ea",
+  cyan: "#0891b2",
+  white: "#f8fafc",
+  brightBlack: "#64748b",
+  brightRed: "#ef4444",
+  brightGreen: "#22c55e",
+  brightYellow: "#eab308",
+  brightBlue: "#3b82f6",
+  brightMagenta: "#a855f7",
+  brightCyan: "#06b6d4",
+  brightWhite: "#ffffff",
+};
+
+const terminalTheme = computed(() =>
+  isDark.value ? darkTerminalTheme : lightTerminalTheme,
+);
+const terminalSurface = computed(() =>
+  isDark.value
+    ? "bg-surface-950 text-surface-100"
+    : "bg-surface-0 text-surface-800",
+);
 
 const recording = computed(
   () => (props.config?._recording as RecordingDescriptor | undefined) ?? null,
@@ -19,18 +78,20 @@ const showRecording = computed(
 
 const container = ref<HTMLElement | null>(null);
 const failed = ref(false);
+const reconnecting = ref(false);
 const pending: string[] = [];
 let term: Terminal | null = null;
 let fit: FitAddon | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+let lastSize = "";
 
 function write(data: string): void {
   if (term) term.write(data);
   else pending.push(data);
 }
 
-const { status, send } = useStream(
+const { status, error, send, reconnect } = useStream(
   props.connectionId,
   props.source,
   { resource: props.resource },
@@ -38,12 +99,19 @@ const { status, send } = useStream(
 );
 
 // Fit the grid to the container; debounced so a burst of resize events settles
-// before we re-measure. Live cols/rows propagation to the PTY is wired by the
-// protocol plugin (M2 SSH) — this keeps the local view correct in the meantime.
+// before we re-measure. The resize control frame keeps the remote PTY aligned
+// with the local grid size.
 function applyFit(): void {
   if (!fit || !term) return;
   try {
     fit.fit();
+    const size = `${term.cols}x${term.rows}`;
+    if (size !== lastSize) {
+      lastSize = size;
+      send(
+        `\0${JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows })}`,
+      );
+    }
   } catch {
     /* container not measurable yet */
   }
@@ -52,6 +120,20 @@ function applyFit(): void {
 function scheduleFit(): void {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(applyFit, 100);
+}
+
+function applyTerminalTheme(): void {
+  if (!term) return;
+  term.options.theme = { ...terminalTheme.value };
+}
+
+async function onReconnect(): Promise<void> {
+  reconnecting.value = true;
+  try {
+    await reconnect();
+  } finally {
+    reconnecting.value = false;
+  }
 }
 
 async function mountTerminal(): Promise<void> {
@@ -70,7 +152,7 @@ async function mountTerminal(): Promise<void> {
       scrollback: 5000,
       // Render an offscreen line for assistive tech (terminals are otherwise opaque).
       screenReaderMode: true,
-      theme: { background: "#0b0f17" },
+      theme: { ...terminalTheme.value },
     });
     fit = new FitAddon();
     term.loadAddon(fit);
@@ -102,6 +184,7 @@ async function mountTerminal(): Promise<void> {
 }
 
 onMounted(mountTerminal);
+watch(isDark, applyTerminalTheme);
 
 onUnmounted(() => {
   clearTimeout(resizeTimer);
@@ -118,19 +201,26 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-[#0b0f17]">
+  <div class="flex h-full flex-col" :class="terminalSurface">
     <div
       v-if="showRecording && source"
-      class="flex items-center justify-end border-b border-white/5 px-3 py-1.5"
+      class="flex items-center justify-end border-b border-surface-200 px-3 py-1.5 dark:border-white/5"
     >
       <RecordingControls
         :connection-id="connectionId"
         :source="source"
         :resource="resource"
         :descriptor="recording!"
+        :stream-status="status"
       />
     </div>
-    <StubBanner :status="status" />
+    <StreamStatusBar
+      :status="status"
+      :error="error"
+      :reconnecting="reconnecting"
+      can-reconnect
+      @reconnect="onReconnect"
+    />
     <p v-if="failed" class="p-4 text-sm text-surface-400" role="alert">
       Terminal preview unavailable in this environment.
     </p>

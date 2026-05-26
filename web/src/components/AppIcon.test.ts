@@ -1,6 +1,48 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import AppIcon from "./AppIcon.vue";
+import { appIconNames } from "./appIconRegistry";
+
+const usedIconNames = [
+  "alert",
+  "box",
+  "camera",
+  "chevron-right",
+  "code",
+  "copy",
+  "database",
+  "download",
+  "ellipsis-vertical",
+  "folder",
+  "folder-open",
+  "folder-plus",
+  "globe",
+  "grid",
+  "key",
+  "layers",
+  "list",
+  "lock",
+  "log-out",
+  "pencil",
+  "play",
+  "plus",
+  "refresh",
+  "refresh-cw",
+  "search",
+  "server",
+  "settings",
+  "share",
+  "share-2",
+  "stop",
+  "terminal",
+  "trash",
+  "upload",
+  "user",
+  "users",
+  "video",
+  "workflow",
+  "x",
+];
 
 describe("AppIcon", () => {
   it("renders a named Lucide icon as inline svg", () => {
@@ -8,6 +50,16 @@ describe("AppIcon", () => {
       props: { icon: { type: "name", value: "terminal" } },
     });
     expect(w.find("svg").exists()).toBe(true);
+  });
+
+  it("registers every icon name used by templates and fixture manifests", () => {
+    for (const name of usedIconNames) {
+      expect(appIconNames).toContain(name);
+      const w = mount(AppIcon, {
+        props: { icon: { type: "name", value: name } },
+      });
+      expect(w.find("svg").exists()).toBe(true);
+    }
   });
 
   it("renders emoji as text", () => {

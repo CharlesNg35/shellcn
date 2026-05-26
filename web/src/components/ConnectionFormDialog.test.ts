@@ -165,4 +165,75 @@ describe("ConnectionFormDialog", () => {
     // unsupported plugin, so no Select is rendered at all.
     expect(wrapper.findAllComponents(Select)).toHaveLength(0);
   });
+
+  it("preserves unreadable credential refs when editing a shared connection", async () => {
+    let updated: Record<string, unknown> | null = null;
+    const withCredential: PluginProjection = {
+      ...projection,
+      config: {
+        groups: [
+          {
+            name: "Basic",
+            fields: [
+              { key: "host", label: "Host", type: "text", required: true },
+              {
+                key: "credential_id",
+                label: "Credential",
+                type: "credential_ref",
+                required: true,
+                credential: { kinds: ["ssh_password"], protocols: ["tester"] },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    installFetch((url, init) => {
+      if (url.endsWith("/api/connections/c1") && init?.method === "PUT") {
+        updated = JSON.parse(String(init.body));
+        return { body: { id: "c1", name: "shared" } };
+      }
+      if (url.endsWith("/api/connections/c1")) {
+        return {
+          body: {
+            id: "c1",
+            name: "shared",
+            protocol: "tester",
+            transport: "direct",
+            config: { host: "10.0.0.1" },
+            secrets: {},
+            credentials: {
+              credential_id: { state: "set", readable: false },
+            },
+          },
+        };
+      }
+      if (url.endsWith("/api/plugins/tester")) return { body: withCredential };
+      if (url.includes("/api/credentials")) return { body: [] };
+      return { body: [] };
+    });
+
+    const conns = useConnectionsStore();
+    conns.plugins = [
+      { name: "tester", title: "Tester", icon: { type: "name", value: "box" } },
+    ];
+
+    const wrapper = mount(ConnectionFormDialog, {
+      props: { visible: true, connectionId: "c1" },
+    });
+    await flushPromises();
+
+    const form = wrapper.findComponent(SchemaForm);
+    form.vm.$emit(
+      "submit",
+      { host: "10.0.0.2" },
+      { preserveCredentials: ["credential_id"] },
+    );
+    await flushPromises();
+
+    expect(updated).toMatchObject({
+      config: { host: "10.0.0.2" },
+      preserveCredentials: ["credential_id"],
+    });
+  });
 });

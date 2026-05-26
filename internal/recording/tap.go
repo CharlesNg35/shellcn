@@ -2,6 +2,7 @@ package recording
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"time"
 
@@ -63,14 +64,21 @@ func (lr *liveRecording) resize(cols, rows int) {
 // browser→upstream input. With no active recording the tap is a passthrough.
 type tap struct {
 	inner plugin.ClientStream
+	sess  *recSession
 	live  atomic.Pointer[liveRecording]
 }
 
 func (t *tap) Read(p []byte) (int, error) {
 	n, err := t.inner.Read(p)
 	if n > 0 {
+		frame := p[:n]
+		if terminalUserInput(frame) {
+			if startErr := t.startFromInteraction(); startErr != nil {
+				return 0, startErr
+			}
+		}
 		if lr := t.live.Load(); lr != nil && lr.captureInput {
-			lr.input(p[:n])
+			lr.input(frame)
 		}
 	}
 	return n, err
@@ -86,3 +94,17 @@ func (t *tap) Write(p []byte) (int, error) {
 func (t *tap) Context() context.Context { return t.inner.Context() }
 
 func (t *tap) Close() error { return t.inner.Close() }
+
+func (t *tap) startFromInteraction() error {
+	if t.sess == nil || !t.sess.shouldStartOnInteraction() {
+		return nil
+	}
+	if err := t.sess.startOnInteraction(t.inner.Context()); err != nil {
+		return fmt.Errorf("%w: required recording could not start: %v", plugin.ErrUnavailable, err)
+	}
+	return nil
+}
+
+func terminalUserInput(p []byte) bool {
+	return len(p) > 0 && p[0] != 0
+}

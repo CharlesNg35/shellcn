@@ -31,7 +31,10 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
   let recordingID = "";
   let index = 0;
   let chain: Promise<void> = Promise.resolve();
+  let stopped: Promise<void> = Promise.resolve();
+  let resolveStopped: (() => void) | null = null;
   let uploadFailed = false;
+  let keepalive = false;
 
   // Release the captured canvas stream so the browser stops the capture track;
   // MediaRecorder.stop() alone leaves the track live.
@@ -57,7 +60,11 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
       recordingID = rec.id;
       index = 0;
       chain = Promise.resolve();
+      stopped = new Promise((resolve) => {
+        resolveStopped = resolve;
+      });
       uploadFailed = false;
+      keepalive = false;
       stream = canvas.captureStream(fps);
       recorder = new MediaRecorder(stream, { mimeType: MIME });
       recorder.ondataavailable = (e: BlobEvent) => {
@@ -66,7 +73,12 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
           const i = index++;
           chain = chain
             .then(async () => {
-              await recordingsApi.uploadChunk(recordingID, i, e.data);
+              await recordingsApi.uploadChunk(
+                recordingID,
+                i,
+                e.data,
+                keepalive ? { keepalive: true } : undefined,
+              );
             })
             .catch(() => {
               uploadFailed = true;
@@ -76,17 +88,36 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
       };
       recorder.onstop = () => {
         const id = recordingID;
+        const requestOptions = keepalive ? { keepalive: true } : undefined;
+        recording.value = false;
         chain = chain
           .then(async () => {
-            if (uploadFailed) await recordingsApi.abort(id);
-            else await recordingsApi.finalize(id);
+            if (uploadFailed) {
+              if (requestOptions) await recordingsApi.abort(id, requestOptions);
+              else await recordingsApi.abort(id);
+            } else if (requestOptions) {
+              await recordingsApi.finalize(id, requestOptions);
+            } else {
+              await recordingsApi.finalize(id);
+            }
           })
           .catch(async () => {
             failed.value = true;
-            if (id) await recordingsApi.abort(id).catch(() => undefined);
+            if (!id) return;
+            if (requestOptions) {
+              await recordingsApi
+                .abort(id, requestOptions)
+                .catch(() => undefined);
+            } else {
+              await recordingsApi.abort(id).catch(() => undefined);
+            }
           })
           .finally(() => {
             if (recordingID === id) recordingID = "";
+            recorder = null;
+            keepalive = false;
+            resolveStopped?.();
+            resolveStopped = null;
           });
         stopTracks();
       };
@@ -103,12 +134,39 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
     }
   }
 
-  function stop(): void {
+  async function stop(options: { keepalive?: boolean } = {}): Promise<void> {
     if (recorder && recording.value) {
+      keepalive = options.keepalive === true;
+      try {
+        if (recorder.state === "recording") recorder.requestData();
+      } catch {
+        // Some browser implementations throw if no data is currently buffered.
+      }
       recorder.stop();
       recording.value = false;
+      await stopped;
+      return;
     }
+    await chain;
   }
 
-  return { recording, failed, start, stop };
+  function stopForPageHide(): void {
+    if (!recording.value) return;
+    void stop({ keepalive: true });
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", stopForPageHide);
+    window.addEventListener("beforeunload", stopForPageHide);
+  }
+
+  function dispose(): void {
+    if (typeof window !== "undefined") {
+      window.removeEventListener("pagehide", stopForPageHide);
+      window.removeEventListener("beforeunload", stopForPageHide);
+    }
+    void stop();
+  }
+
+  return { recording, failed, start, stop, dispose };
 }

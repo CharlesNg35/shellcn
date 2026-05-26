@@ -133,9 +133,9 @@ func TestConnectionRecordingPolicy(t *testing.T) {
 		t.Fatalf("omitting recording must preserve policy, got %v", conn.Recording)
 	}
 
-	// A class the plugin does not declare is rejected (noop records nothing).
+	// A class the plugin does not declare is rejected.
 	if r := h.do(t, http.MethodPost, "/api/connections", "op",
-		strings.NewReader(`{"name":"r2","protocol":"noop","config":{},"recording":{"terminal":"auto"}}`)); r.Status != http.StatusBadRequest {
+		strings.NewReader(`{"name":"r2","protocol":"internal","config":{},"recording":{"terminal":"auto"}}`)); r.Status != http.StatusBadRequest {
 		t.Errorf("unsupported recording class: want 400, got %d (%s)", r.Status, r.Body)
 	}
 	// Invalid policy value is rejected.
@@ -234,5 +234,159 @@ func TestConnectionCredentialRefUsability(t *testing.T) {
 		strings.NewReader(`{"name":"x","protocol":"tester","config":{"host":"h","credential_id":"cred-wrong-protocol"}}`))
 	if resp.Status != http.StatusBadRequest {
 		t.Fatalf("referencing an incompatible credential protocol: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+}
+
+func TestSharedManagerCannotReadHiddenCredentialButCanPreserveOrReplace(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	_ = h.store.Credentials.Create(ctx, &models.Credential{
+		ID: "cred-owner", Name: "owner-db", Kind: "db_password", OwnerID: "op",
+	})
+	resp := h.do(t, http.MethodPost, "/api/connections", "op",
+		strings.NewReader(`{"name":"shared","protocol":"tester","config":{"host":"h","credential_id":"cred-owner"}}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create connection: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	id := createConnID(t, resp)
+	_ = h.store.Grants.Create(ctx, &models.Grant{
+		ID: "g-manage", ConnectionID: id, SubjectID: "viewer", Access: models.AccessManage,
+	})
+
+	resp = h.do(t, http.MethodGet, "/api/connections/"+id, "viewer", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("shared manager detail: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	body := string(resp.Body)
+	if strings.Contains(body, "cred-owner") || strings.Contains(body, "owner-db") {
+		t.Fatalf("shared manager detail leaked hidden credential: %s", body)
+	}
+	if !strings.Contains(body, `"credential_id":{"state":"set","readable":false`) {
+		t.Fatalf("shared manager detail missing redacted credential state: %s", body)
+	}
+
+	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "viewer",
+		strings.NewReader(`{"name":"kept","config":{"host":"h2"},"preserveCredentials":["credential_id"]}`))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("preserve hidden credential: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	conn, _ := h.store.Connections.Get(ctx, id)
+	if conn.Config["credential_id"] != "cred-owner" {
+		t.Fatalf("hidden credential should be preserved, got %#v", conn.Config["credential_id"])
+	}
+
+	_ = h.store.Credentials.Create(ctx, &models.Credential{
+		ID: "cred-viewer", Name: "viewer-db", Kind: "db_password", OwnerID: "viewer",
+	})
+	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "viewer",
+		strings.NewReader(`{"name":"replaced","config":{"host":"h3","credential_id":"cred-viewer"}}`))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("replace with viewer credential: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	conn, _ = h.store.Connections.Get(ctx, id)
+	if conn.Config["credential_id"] != "cred-viewer" {
+		t.Fatalf("credential should be replaced, got %#v", conn.Config["credential_id"])
+	}
+}
+
+func TestConnectionFoldersAndLayout(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodPost, "/api/connection-folders", "op",
+		strings.NewReader(`{"name":"Production","color":"blue"}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create folder: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	var folder struct {
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+		Color string `json:"color"`
+	}
+	if err := json.Unmarshal(resp.Body, &folder); err != nil || folder.ID == "" {
+		t.Fatalf("create folder response: %s", resp.Body)
+	}
+	if folder.Name != "Production" || folder.Color != "blue" {
+		t.Fatalf("folder fields: %+v", folder)
+	}
+
+	resp = h.do(t, http.MethodPost, "/api/connection-folders", "op",
+		strings.NewReader(`{"name":"Databases","color":"teal","parentId":"`+folder.ID+`"}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create child folder: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	var child struct {
+		ID       string `json:"id"`
+		ParentID string `json:"parentId"`
+	}
+	if err := json.Unmarshal(resp.Body, &child); err != nil || child.ID == "" || child.ParentID != folder.ID {
+		t.Fatalf("create child folder response: %s", resp.Body)
+	}
+
+	resp = h.do(t, http.MethodPut, "/api/connections/layout", "op",
+		strings.NewReader(`{"folders":[{"folderId":"`+folder.ID+`","sortOrder":4},{"folderId":"`+child.ID+`","parentId":"`+folder.ID+`","sortOrder":0}],"items":[{"connectionId":"c-boom","folderId":"`+child.ID+`","sortOrder":0},{"connectionId":"c-op","folderId":"`+folder.ID+`","sortOrder":1},{"connectionId":"c-internal","sortOrder":0}]}`))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("save layout: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+
+	resp = h.do(t, http.MethodGet, "/api/connections", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("list connections: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	body := string(resp.Body)
+	if !strings.Contains(body, `"folderId":"`+child.ID+`"`) || !strings.Contains(body, `"sortOrder":1`) {
+		t.Fatalf("connection list missing placement data: %s", resp.Body)
+	}
+
+	resp = h.do(t, http.MethodGet, "/api/connection-folders", "op", nil)
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), "Production") || !strings.Contains(string(resp.Body), `"parentId":"`+folder.ID+`"`) || !strings.Contains(string(resp.Body), `"sortOrder":4`) {
+		t.Fatalf("list folders: status=%d body=%s", resp.Status, resp.Body)
+	}
+
+	resp = h.do(t, http.MethodPut, "/api/connection-folders/"+folder.ID, "op",
+		strings.NewReader(`{"name":"Prod","color":"teal"}`))
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"color":"teal"`) {
+		t.Fatalf("update folder: status=%d body=%s", resp.Status, resp.Body)
+	}
+
+	resp = h.do(t, http.MethodDelete, "/api/connection-folders/"+folder.ID, "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("delete folder: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	resp = h.do(t, http.MethodGet, "/api/connections", "op", nil)
+	if strings.Contains(string(resp.Body), `"folderId":"`+folder.ID+`"`) {
+		t.Fatalf("folder deletion should move placements up: %s", resp.Body)
+	}
+	resp = h.do(t, http.MethodGet, "/api/connection-folders", "op", nil)
+	if strings.Contains(string(resp.Body), `"parentId":"`+folder.ID+`"`) {
+		t.Fatalf("folder deletion should reparent child folders: %s", resp.Body)
+	}
+}
+
+func TestConnectionLayoutRejectsInaccessibleConnection(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodPut, "/api/connections/layout", "op",
+		strings.NewReader(`{"items":[{"connectionId":"c-view","sortOrder":0}]}`))
+	if resp.Status != http.StatusForbidden {
+		t.Fatalf("layout with inaccessible connection: want 403, got %d (%s)", resp.Status, resp.Body)
+	}
+}
+
+func TestConnectionFolderValidation(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodPost, "/api/connection-folders", "op",
+		strings.NewReader(`{"name":"","color":"blue"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("empty folder name: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+	resp = h.do(t, http.MethodPost, "/api/connection-folders", "op",
+		strings.NewReader(`{"name":"Bad","color":"neon"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("bad folder color: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+	resp = h.do(t, http.MethodPost, "/api/connection-folders", "op",
+		strings.NewReader(`{"name":"Child","color":"blue","parentId":"missing"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("bad parent folder: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
 }

@@ -119,18 +119,27 @@ func (s *Server) routes() chi.Router {
 			pr.Use(s.requireAuth)
 			pr.Post("/auth/logout", s.handleLogout)
 			pr.Get("/auth/me", s.handleMe)
+			// Self-service account management (any authenticated user).
+			pr.Put("/auth/me", s.handleUpdateProfile)
+			pr.Post("/auth/me/password", s.handleChangePassword)
 
 			pr.Get("/plugins", s.handleListPlugins)
 			pr.Get("/plugins/{name}", s.handleGetPlugin)
 
 			pr.Get("/connections", s.handleListConnections)
+			pr.Get("/connection-folders", s.handleListConnectionFolders)
 			pr.Get("/credentials", s.handleListCredentials)
+			pr.Get("/credential-kinds", s.handleListCredentialKinds)
 
 			if s.deps.Connections != nil {
 				pr.Post("/connections", s.handleCreateConnection)
+				pr.Put("/connections/layout", s.handleSaveConnectionLayout)
 				pr.Get("/connections/{id}", s.handleConnectionDetail)
 				pr.Put("/connections/{id}", s.handleUpdateConnection)
 				pr.Delete("/connections/{id}", s.handleDeleteConnection)
+				pr.Post("/connection-folders", s.handleCreateConnectionFolder)
+				pr.Put("/connection-folders/{folderId}", s.handleUpdateConnectionFolder)
+				pr.Delete("/connection-folders/{folderId}", s.handleDeleteConnectionFolder)
 			}
 			if s.deps.Credentials != nil {
 				pr.Post("/credentials", s.handleCreateCredential)

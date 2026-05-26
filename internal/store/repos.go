@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/charlesng/shellcn/internal/models"
 )
@@ -130,6 +131,73 @@ func (s *gormConnectionStore) Update(ctx context.Context, c *models.Connection) 
 
 func (s *gormConnectionStore) Delete(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&models.Connection{}, "id = ?", id).Error
+}
+
+type gormConnectionFolderStore struct{ db *gorm.DB }
+
+func (s *gormConnectionFolderStore) Create(ctx context.Context, f *models.ConnectionFolder) error {
+	return s.db.WithContext(ctx).Create(f).Error
+}
+
+func (s *gormConnectionFolderStore) Get(ctx context.Context, id string) (models.ConnectionFolder, error) {
+	var f models.ConnectionFolder
+	if err := s.db.WithContext(ctx).First(&f, "id = ?", id).Error; err != nil {
+		return models.ConnectionFolder{}, normNotFound(err)
+	}
+	return f, nil
+}
+
+func (s *gormConnectionFolderStore) ListByUser(ctx context.Context, userID string) ([]models.ConnectionFolder, error) {
+	var list []models.ConnectionFolder
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Order("sort_order, name").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormConnectionFolderStore) Update(ctx context.Context, f *models.ConnectionFolder) error {
+	res := s.db.WithContext(ctx).Model(&models.ConnectionFolder{}).Where("id = ?", f.ID).
+		Select("parent_id", "name", "color", "sort_order", "updated_at").Updates(f)
+	return rowsOrNotFound(res)
+}
+
+func (s *gormConnectionFolderStore) Delete(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&models.ConnectionFolder{}, "id = ?", id).Error
+}
+
+type gormConnectionPlacementStore struct{ db *gorm.DB }
+
+func (s *gormConnectionPlacementStore) ListByUser(ctx context.Context, userID string) ([]models.ConnectionPlacement, error) {
+	var list []models.ConnectionPlacement
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormConnectionPlacementStore) Set(ctx context.Context, p *models.ConnectionPlacement) error {
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "user_id"}, {Name: "connection_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"folder_id", "sort_order", "updated_at"}),
+	}).Create(p).Error
+}
+
+func (s *gormConnectionPlacementStore) Delete(ctx context.Context, userID, connectionID string) error {
+	return s.db.WithContext(ctx).Delete(&models.ConnectionPlacement{}, "user_id = ? AND connection_id = ?", userID, connectionID).Error
+}
+
+func (s *gormConnectionPlacementStore) DeleteByConnection(ctx context.Context, connectionID string) error {
+	return s.db.WithContext(ctx).Delete(&models.ConnectionPlacement{}, "connection_id = ?", connectionID).Error
+}
+
+func (s *gormConnectionPlacementStore) ClearFolder(ctx context.Context, userID, folderID string) error {
+	return s.MoveFolder(ctx, userID, folderID, "")
+}
+
+func (s *gormConnectionPlacementStore) MoveFolder(ctx context.Context, userID, folderID, targetFolderID string) error {
+	return s.db.WithContext(ctx).Model(&models.ConnectionPlacement{}).
+		Where("user_id = ? AND folder_id = ?", userID, folderID).
+		Updates(map[string]any{"folder_id": targetFolderID, "updated_at": time.Now()}).Error
 }
 
 type gormCredentialStore struct{ db *gorm.DB }

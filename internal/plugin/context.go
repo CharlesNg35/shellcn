@@ -43,6 +43,16 @@ type Page[T any] struct {
 	Total      *int   `json:"total,omitempty"`
 }
 
+// SnippetStore is the small platform store surface exposed for generic snippet
+// routes. It keeps plugins from depending on the concrete store package.
+type SnippetStore interface {
+	Create(ctx context.Context, s *models.Snippet) error
+	Get(ctx context.Context, id string) (models.Snippet, error)
+	ListByOwner(ctx context.Context, ownerID, protocol string) ([]models.Snippet, error)
+	Update(ctx context.Context, s *models.Snippet) error
+	Delete(ctx context.Context, id string) error
+}
+
 // UploadedFile is a multipart file part made available to route handlers. The
 // file bytes are opened lazily so the audit/logging path never materializes them.
 type UploadedFile struct {
@@ -79,15 +89,22 @@ var validate = validator.New(validator.WithRequiredStructEnabled())
 // touching http internals. Bind decodes + validates into a struct, so handlers
 // never do panic-prone map[string]any assertions.
 type RequestContext struct {
-	Ctx     context.Context
-	User    models.User
-	Session Session
+	Ctx      context.Context
+	User     models.User
+	Session  Session
+	Snippets SnippetStore
 
 	params map[string]string
 	query  url.Values
 	body   []byte
 	form   url.Values
 	files  map[string][]UploadedFile
+}
+
+// WithSnippets attaches the platform snippet store to a request context.
+func (rc *RequestContext) WithSnippets(snippets SnippetStore) *RequestContext {
+	rc.Snippets = snippets
+	return rc
 }
 
 // NewRequestContext builds a context for the server adapter and for tests.

@@ -50,6 +50,11 @@ function testRouter(): Router {
             component: () => import("./views/CredentialsView.vue"),
           },
           {
+            path: "profile",
+            name: "profile",
+            component: () => import("./views/ProfileView.vue"),
+          },
+          {
             path: "recordings",
             name: "recordings",
             component: () => import("./views/RecordingsView.vue"),
@@ -68,6 +73,7 @@ function testRouter(): Router {
 beforeEach(() => {
   installFetch((url) => {
     if (url.endsWith("/api/connections")) return { body: connections };
+    if (url.endsWith("/api/connection-folders")) return { body: [] };
     if (url.endsWith("/api/plugins")) return { body: plugins };
     return { status: 404, body: { error: "not found" } };
   });

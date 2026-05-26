@@ -22,11 +22,15 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Database.Driver != "sqlite" || cfg.Database.DSN != "shellcn.db" {
 		t.Errorf("database defaults: got %+v", cfg.Database)
 	}
+	if cfg.Auth.SessionTTLDuration().String() != "24h0m0s" {
+		t.Errorf("auth session TTL default: got %s", cfg.Auth.SessionTTLDuration())
+	}
 }
 
 func TestEnvOverride(t *testing.T) {
 	t.Setenv("SHELLCN_SERVER_ADDR", ":9999")
 	t.Setenv("SHELLCN_DATABASE_DRIVER", "postgres")
+	t.Setenv("SHELLCN_AUTH_SESSION_TTL", "2h")
 	t.Setenv("SHELLCN_MASTER_KEY", "deadbeef") // bound to the historical name
 
 	cfg, err := config.Load(t.TempDir())
@@ -41,6 +45,9 @@ func TestEnvOverride(t *testing.T) {
 	}
 	if cfg.Secrets.MasterKey != "deadbeef" {
 		t.Errorf("master key env (legacy name): got %q", cfg.Secrets.MasterKey)
+	}
+	if cfg.Auth.SessionTTLDuration().String() != "2h0m0s" {
+		t.Errorf("auth ttl env: got %s", cfg.Auth.SessionTTLDuration())
 	}
 }
 

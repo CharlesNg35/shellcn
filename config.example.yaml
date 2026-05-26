@@ -6,6 +6,12 @@ server:
   addr: ":8081"
   log_level: info
 
+auth:
+  session_ttl: 24h
+  # Optional stable JWT signing secret. If empty, ShellCN derives the signing key
+  # from the master key
+  jwt_secret: ""
+
 database:
   driver: sqlite
   dsn: shellcn.db

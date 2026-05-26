@@ -46,6 +46,7 @@ func TestRegistryRegisterGetAll(t *testing.T) {
 
 func TestValidateRejectsBadManifests(t *testing.T) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
 	base := func() (plugin.Manifest, []plugin.Route) {
 		return plugin.Manifest{
 				APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
@@ -88,14 +89,69 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"form submit route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"submitRouteId": "x.list"}}}
 		}},
+		{"kv write route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "kv", Label: "KV", Panel: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"writeRouteId": "x.list"}}}
+		}},
+		{"http client execute route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "http", Label: "HTTP", Panel: plugin.PanelHTTPClient, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"executeRouteId": "x.list"}}}
+		}},
+		{"remote desktop requires source", "missing a source", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Config: plugin.RemoteDesktopConfig{Engine: plugin.RemoteDesktopEngineNoVNC}.Map()}}
+		}},
+		{"remote desktop source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.RemoteDesktopConfig{Engine: plugin.RemoteDesktopEngineNoVNC}.Map()}}
+		}},
+		{"remote desktop requires engine", "missing remote desktop engine", func(m *plugin.Manifest, r *[]plugin.Route) {
+			*r = append(*r, plugin.Route{ID: "x.desktop", Method: plugin.MethodWS, Permission: "x.desktop", Risk: plugin.RiskPrivileged, Stream: stream})
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.desktop"}}}
+		}},
+		{"remote desktop rejects unknown engine", "unsupported remote desktop engine", func(m *plugin.Manifest, r *[]plugin.Route) {
+			*r = append(*r, plugin.Route{ID: "x.desktop", Method: plugin.MethodWS, Permission: "x.desktop", Risk: plugin.RiskPrivileged, Stream: stream})
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.desktop"}, Config: map[string]any{"engine": "spice"}}}
+		}},
 		{"action references unknown route", "references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "ghost"}}
+		}},
+		{"action success references unknown tab", "onSuccess.selectTab", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", OnSuccess: &plugin.ActionSuccess{SelectTab: "ghost"}}}
 		}},
 		{"stream references non-ws route", "non-WS route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Streams = []plugin.Stream{{ID: "s", Kind: plugin.StreamLogs, RouteID: "x.list"}}
 		}},
 		{"resource references unknown action", "references unknown action", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Resources = []plugin.ResourceType{{Kind: "k", Title: "K", List: plugin.DataSource{RouteID: "x.list"}, ActionIDs: []string{"ghost"}}}
+		}},
+		{"credential ref missing selector", "missing Credential selector", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef})
+		}},
+		{"credential ref unknown kind", "unknown credential kind", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
+				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"made_up"}},
+			})
+		}},
+		{"credential kind duplicates existing catalog", "duplicate credential kind", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.CredentialKinds = []plugin.CredentialKindInfo{{Kind: plugin.CredentialDBPassword, Label: "Database password", SecretLabel: "Password"}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
+				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}},
+			})
+		}},
+		{"credential kind protocol list is derived", "must not declare CompatibleProtocols", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
+			m.CredentialKinds = []plugin.CredentialKindInfo{{
+				Kind: "custom_password", Label: "Custom password", SecretLabel: "Password", CompatibleProtocols: []string{"x"},
+			}}
+			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{
+				Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef,
+				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{"custom_password"}},
+			})
+		}},
+		{"credential kind declared but unused", "declared but not used", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.CredentialKinds = []plugin.CredentialKindInfo{{Kind: "custom_password", Label: "Custom password", SecretLabel: "Password"}}
 		}},
 	}
 
@@ -118,6 +174,115 @@ func TestValidateAcceptsGoodManifest(t *testing.T) {
 	m, routes := sampleManifest()
 	if err := plugin.Validate(m, routes); err != nil {
 		t.Errorf("valid manifest rejected: %v", err)
+	}
+}
+
+func TestValidateAcceptsRemoteDesktopEngines(t *testing.T) {
+	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
+	for _, engine := range []plugin.RemoteDesktopEngine{
+		plugin.RemoteDesktopEngineNoVNC,
+		plugin.RemoteDesktopEngineGuacamole,
+	} {
+		t.Run(string(engine), func(t *testing.T) {
+			m := plugin.Manifest{
+				APIVersion: plugin.CurrentAPIVersion,
+				Name:       "desktop",
+				Title:      "Desktop",
+				Layout:     plugin.LayoutTabs,
+				SupportedTransports: []plugin.Transport{
+					plugin.TransportDirect,
+				},
+				Tabs: []plugin.Tab{{
+					Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop,
+					Source: &plugin.DataSource{RouteID: "desktop.stream", Method: plugin.MethodWS},
+					Config: plugin.RemoteDesktopConfig{Engine: engine, Resize: true, Clipboard: true}.Map(),
+				}},
+				Streams: []plugin.Stream{{ID: "desktop.stream", Kind: plugin.StreamDesktop, RouteID: "desktop.stream"}},
+			}
+			routes := []plugin.Route{{
+				ID: "desktop.stream", Method: plugin.MethodWS, Permission: "desktop.use",
+				Risk: plugin.RiskPrivileged, Stream: stream,
+			}}
+			if err := plugin.Validate(m, routes); err != nil {
+				t.Fatalf("valid remote desktop manifest rejected: %v", err)
+			}
+		})
+	}
+}
+
+func TestSpecializedPanelConfigMaps(t *testing.T) {
+	kv := plugin.KVConfig{
+		ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write",
+		DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,
+	}.Map()
+	if kv["readRouteId"] != "redis.key.read" || kv["writable"] != true {
+		t.Fatalf("kv config map unexpected: %#v", kv)
+	}
+
+	http := plugin.HTTPClientConfig{
+		ExecuteRouteID: "http.execute", Methods: []string{"GET", "POST"},
+		DefaultMethod: "GET", DefaultURL: "/health",
+		DefaultHeaders: []plugin.HeaderDefault{{Key: "Accept", Value: "application/json"}},
+	}.Map()
+	if http["executeRouteId"] != "http.execute" || len(http["methods"].([]string)) != 2 {
+		t.Fatalf("http config map unexpected: %#v", http)
+	}
+
+	graph := plugin.GraphConfig{Layout: plugin.GraphLayoutManual, FitView: true}.Map()
+	if graph["layout"] != plugin.GraphLayoutManual || graph["fitView"] != true {
+		t.Fatalf("graph config map unexpected: %#v", graph)
+	}
+
+	trace := plugin.TraceConfig{ServiceField: "process.serviceName"}.Map()
+	if trace["serviceField"] != "process.serviceName" {
+		t.Fatalf("trace config map unexpected: %#v", trace)
+	}
+
+	desktop := plugin.RemoteDesktopConfig{
+		Engine:     plugin.RemoteDesktopEngineNoVNC,
+		Resize:     true,
+		Clipboard:  true,
+		RepeaterID: "console-1",
+	}.Map()
+	if desktop["engine"] != string(plugin.RemoteDesktopEngineNoVNC) || desktop["resize"] != true || desktop["repeaterID"] != "console-1" {
+		t.Fatalf("remote desktop config map unexpected: %#v", desktop)
+	}
+}
+
+func TestRegistryDerivesCredentialKindProtocolsFromSelectors(t *testing.T) {
+	m, routes := sampleManifest()
+	reg := plugin.NewRegistry()
+	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	info, ok := reg.CredentialKindLookup(testCredentialSSHPrivateKey)
+	if !ok {
+		t.Fatal("ssh private key kind not registered")
+	}
+	if len(info.CompatibleProtocols) != 1 || info.CompatibleProtocols[0] != "ssh" {
+		t.Fatalf("derived protocols = %+v, want [ssh]", info.CompatibleProtocols)
+	}
+	if !reg.CredentialKindSupportsProtocol(testCredentialSSHPrivateKey, "ssh") {
+		t.Fatal("ssh private key should support ssh")
+	}
+	if reg.CredentialKindSupportsProtocol(testCredentialSSHPrivateKey, "postgres") {
+		t.Fatal("ssh private key should not support postgres")
+	}
+}
+
+func TestRegistryRejectsDuplicatePluginCredentialKind(t *testing.T) {
+	m, routes := sampleManifest()
+	reg := plugin.NewRegistry()
+	if err := reg.Register(&stubPlugin{manifest: m, routes: routes}); err != nil {
+		t.Fatalf("register first plugin: %v", err)
+	}
+	dup := m
+	dup.Name = "duplicate"
+	for i := range routes {
+		routes[i].ID = "duplicate." + routes[i].ID
+	}
+	if err := reg.Register(&stubPlugin{manifest: dup, routes: routes}); err == nil || !contains(err.Error(), "duplicate credential kind") {
+		t.Fatalf("duplicate credential kind error = %v", err)
 	}
 }
 

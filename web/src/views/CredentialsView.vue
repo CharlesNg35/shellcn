@@ -2,20 +2,26 @@
 import { computed, onMounted, ref } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
+import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import SkeletonList from "../components/SkeletonList.vue";
 import CredentialFormDialog from "../components/CredentialFormDialog.vue";
+import CredentialProtocolBadges from "../components/CredentialProtocolBadges.vue";
 import ShareDialog from "../components/ShareDialog.vue";
-import ConfirmDialog from "../components/ConfirmDialog.vue";
-import type { CredentialSummary } from "../types/projection";
+import { useConfirmAction } from "../composables/useConfirmAction";
+import type {
+  CredentialKindInfo,
+  CredentialSummary,
+} from "../types/projection";
 
 const auth = useAuthStore();
 const notify = useNotify();
 
 const items = ref<CredentialSummary[]>([]);
+const kinds = ref<CredentialKindInfo[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
@@ -23,31 +29,40 @@ const showForm = ref(false);
 const editing = ref<CredentialSummary | null>(null);
 const showShare = ref(false);
 const shareTarget = ref<CredentialSummary | null>(null);
-const showDelete = ref(false);
-const deleteTarget = ref<CredentialSummary | null>(null);
-const deleting = ref(false);
-
-const kindLabels: Record<string, string> = {
-  ssh_private_key: "SSH private key",
-  ssh_password: "SSH password",
-  tls_client_cert: "TLS client cert",
-  db_password: "Database password",
-  api_token: "API token",
-};
+const { confirmDanger } = useConfirmAction();
 
 function canManage(c: CredentialSummary): boolean {
   return auth.isAdmin || c.ownerId === auth.user?.id;
 }
 
+function kindInfo(kind: string): CredentialKindInfo | undefined {
+  return kinds.value.find((k) => k.kind === kind);
+}
+
 function kindLabel(kind: string): string {
-  return kindLabels[kind] ?? kind;
+  return kindInfo(kind)?.label ?? kind;
+}
+
+function identityLabel(c: CredentialSummary): string {
+  const label = kindInfo(c.kind)?.identityLabel;
+  if (!label || !c.identity) return "—";
+  return `${label}: ${c.identity}`;
+}
+
+function credentialProtocols(c: CredentialSummary): string[] {
+  return kindInfo(c.kind)?.compatibleProtocols ?? c.protocols ?? [];
 }
 
 async function load(): Promise<void> {
   loading.value = true;
   error.value = null;
   try {
-    items.value = await api.get<CredentialSummary[]>("/credentials");
+    const [nextItems, nextKinds] = await Promise.all([
+      api.get<CredentialSummary[]>("/credentials"),
+      api.get<CredentialKindInfo[]>("/credential-kinds"),
+    ]);
+    items.value = nextItems;
+    kinds.value = nextKinds;
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -69,17 +84,17 @@ function openShare(c: CredentialSummary): void {
   showShare.value = true;
 }
 function openDelete(c: CredentialSummary): void {
-  deleteTarget.value = c;
-  showDelete.value = true;
+  confirmDanger({
+    header: "Delete credential",
+    message: `Delete “${c.name}”? Connections that reference it must be updated first.`,
+    accept: () => onDelete(c),
+  });
 }
 
-async function onDelete(): Promise<void> {
-  if (!deleteTarget.value) return;
-  deleting.value = true;
+async function onDelete(c: CredentialSummary): Promise<void> {
   try {
-    await api.del(`/credentials/${deleteTarget.value.id}`);
-    notify.success("Credential deleted", deleteTarget.value.name);
-    showDelete.value = false;
+    await api.del(`/credentials/${c.id}`);
+    notify.success("Credential deleted", c.name);
     await load();
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) {
@@ -88,8 +103,6 @@ async function onDelete(): Promise<void> {
         "This credential is still referenced by a connection.",
       );
     }
-  } finally {
-    deleting.value = false;
   }
 }
 
@@ -104,14 +117,10 @@ const hasItems = computed(() => items.value.length > 0);
           Credentials
         </h1>
       </div>
-      <button
-        type="button"
-        class="flex items-center gap-1.5 rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
-        @click="openCreate"
-      >
+      <Button type="button" @click="openCreate">
         <AppIcon :icon="{ type: 'name', value: 'plus' }" :size="15" />
         New credential
-      </button>
+      </Button>
     </div>
 
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
@@ -127,13 +136,9 @@ const hasItems = computed(() => items.value.length > 0);
         class="text-surface-400"
       />
       <p class="text-surface-500">No credentials yet.</p>
-      <button
-        type="button"
-        class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700"
-        @click="openCreate"
-      >
+      <Button type="button" @click="openCreate">
         Create your first credential
-      </button>
+      </Button>
     </div>
 
     <DataTable v-else :value="items" scrollable scroll-height="flex">
@@ -143,16 +148,16 @@ const hasItems = computed(() => items.value.length > 0);
           {{ kindLabel((data as CredentialSummary).kind) }}
         </template>
       </Column>
-      <Column field="username" header="Username">
+      <Column header="Identity">
         <template #body="{ data }">
-          {{ (data as CredentialSummary).username || "—" }}
+          {{ identityLabel(data as CredentialSummary) }}
         </template>
       </Column>
       <Column header="Protocols">
         <template #body="{ data }">
-          <span class="text-surface-500">{{
-            (data as CredentialSummary).protocols?.join(", ") || "any"
-          }}</span>
+          <CredentialProtocolBadges
+            :protocols="credentialProtocols(data as CredentialSummary)"
+          />
         </template>
       </Column>
       <Column header="" :pt="{ bodyCell: 'text-right' }">
@@ -161,33 +166,39 @@ const hasItems = computed(() => items.value.length > 0);
             v-if="canManage(data as CredentialSummary)"
             class="flex items-center justify-end gap-1"
           >
-            <button
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+            <Button
+              text
+              rounded
+              severity="secondary"
+              size="small"
               title="Edit / rotate"
               :aria-label="`Edit ${(data as CredentialSummary).name}`"
               @click="openEdit(data as CredentialSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'pencil' }" :size="16" />
-            </button>
-            <button
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+            </Button>
+            <Button
+              text
+              rounded
+              severity="secondary"
+              size="small"
               title="Share"
               :aria-label="`Share ${(data as CredentialSummary).name}`"
               @click="openShare(data as CredentialSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'users' }" :size="16" />
-            </button>
-            <button
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+            </Button>
+            <Button
+              text
+              rounded
+              severity="danger"
+              size="small"
               title="Delete"
               :aria-label="`Delete ${(data as CredentialSummary).name}`"
               @click="openDelete(data as CredentialSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="16" />
-            </button>
+            </Button>
           </div>
           <span v-else class="text-xs text-surface-400">shared with you</span>
         </template>
@@ -206,15 +217,6 @@ const hasItems = computed(() => items.value.length > 0);
       resource="credentials"
       :resource-id="shareTarget.id"
       :resource-name="shareTarget.name"
-    />
-    <ConfirmDialog
-      v-model:visible="showDelete"
-      title="Delete credential"
-      :message="`Delete “${deleteTarget?.name}”? Connections that reference it must be updated first.`"
-      confirm-label="Delete"
-      danger
-      :busy="deleting"
-      @confirm="onDelete"
     />
   </div>
 </template>

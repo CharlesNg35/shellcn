@@ -21,8 +21,9 @@ add plugins.
   (`name`/`url`/`base64`/`emoji`/`svg`; inline `svg` is DOMPurify-sanitized), v2 §5.1.
 - **Lazy-load by default** — code-split heavy panels, fetch projections/data on
   demand, connect sessions lazily (v2 §12.1). First paint stays constant.
-- **Panel set grows** — `graph`/`trace`/`kv`/`http_client` land with their plugin
-  (v2 §6.2); until then those plugins degrade to `table`/`document`.
+- **Panel set grows in core** — specialized panels such as `graph`/`trace`/`kv`/
+  `http_client` are lazy-loaded core renderers (v2 §6.2); plugins still ship
+  only manifests, route handlers, and generic payloads.
 
 ## Status legend
 

@@ -7,6 +7,7 @@ import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
+import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import type { InviteResult } from "../types/projection";
 
 const props = defineProps<{ visible: boolean }>();
@@ -82,14 +83,14 @@ async function copyLink(): Promise<void> {
     modal
     header="Invite a user"
     :pt="{
-      root: 'w-full max-w-md rounded-lg bg-surface-0 shadow-xl dark:bg-surface-900',
+      root: dialogRoot(),
       content: 'p-5',
     }"
     @update:visible="emit('update:visible', $event)"
   >
     <!-- Step 1: choose who + what role -->
-    <div v-if="!result" class="flex flex-col gap-4">
-      <div class="flex flex-col gap-1.5">
+    <div v-if="!result" class="flex min-w-0 flex-col gap-4">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           for="invite-email"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -103,7 +104,7 @@ async function copyLink(): Promise<void> {
           @update:model-value="email = $event ?? ''"
         />
       </div>
-      <div class="flex flex-col gap-1.5">
+      <div class="flex min-w-0 flex-col gap-1.5">
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
@@ -121,7 +122,7 @@ async function copyLink(): Promise<void> {
     </div>
 
     <!-- Step 2: share the link -->
-    <div v-else class="flex flex-col gap-3">
+    <div v-else class="flex min-w-0 flex-col gap-3">
       <p class="text-sm text-surface-600 dark:text-surface-300">
         Invitation created for
         <span class="font-medium">{{ result.invitation.email }}</span
@@ -135,14 +136,16 @@ async function copyLink(): Promise<void> {
         <span class="min-w-0 flex-1 truncate font-mono text-xs">{{
           result.link
         }}</span>
-        <button
-          type="button"
-          class="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-primary-600 hover:bg-surface-100 dark:hover:bg-surface-800"
+        <Button
+          text
+          severity="secondary"
+          size="small"
+          class="shrink-0"
           @click="copyLink"
         >
           <AppIcon :icon="{ type: 'name', value: 'copy' }" :size="13" />
           {{ copied ? "Copied" : "Copy" }}
-        </button>
+        </Button>
       </div>
       <p class="text-xs text-surface-400">
         The link expires
@@ -156,9 +159,7 @@ async function copyLink(): Promise<void> {
           v-if="!result"
           type="button"
           :disabled="busy"
-          :pt="{
-            root: 'rounded-md px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 dark:text-surface-300 dark:hover:bg-surface-800',
-          }"
+          :pt="{ root: btnGhost }"
           @click="emit('update:visible', false)"
         >
           Cancel
@@ -167,9 +168,7 @@ async function copyLink(): Promise<void> {
           v-if="!result"
           type="button"
           :disabled="busy"
-          :pt="{
-            root: 'rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50',
-          }"
+          :pt="{ root: btnPrimary }"
           @click="invite"
         >
           {{ busy ? "Creating…" : "Create invitation" }}
@@ -177,9 +176,7 @@ async function copyLink(): Promise<void> {
         <Button
           v-else
           type="button"
-          :pt="{
-            root: 'rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-700',
-          }"
+          :pt="{ root: btnPrimary }"
           @click="emit('update:visible', false)"
         >
           Done

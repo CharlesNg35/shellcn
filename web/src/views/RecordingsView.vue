@@ -3,13 +3,14 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
+import Button from "primevue/button";
 import { ApiError } from "../api/client";
 import { recordingsApi } from "../api/recordings";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import SkeletonList from "../components/SkeletonList.vue";
-import ConfirmDialog from "../components/ConfirmDialog.vue";
+import { useConfirmAction } from "../composables/useConfirmAction";
 import RecordingPlayerDialog from "../components/recordings/RecordingPlayerDialog.vue";
 import type { RecordingFilters, RecordingSummary } from "../types/projection";
 
@@ -23,9 +24,7 @@ const error = ref<string | null>(null);
 
 const playing = ref<RecordingSummary | null>(null);
 const showPlayer = ref(false);
-const deleteTarget = ref<RecordingSummary | null>(null);
-const showDelete = ref(false);
-const deleting = ref(false);
+const { confirmDanger } = useConfirmAction();
 
 const filters = computed<RecordingFilters>(() => {
   const f: RecordingFilters = {};
@@ -73,22 +72,20 @@ function download(r: RecordingSummary): void {
 }
 
 function openDelete(r: RecordingSummary): void {
-  deleteTarget.value = r;
-  showDelete.value = true;
+  confirmDanger({
+    header: "Delete recording",
+    message: `Delete this recording? This cannot be undone.`,
+    accept: () => onDelete(r),
+  });
 }
 
-async function onDelete(): Promise<void> {
-  if (!deleteTarget.value) return;
-  deleting.value = true;
+async function onDelete(r: RecordingSummary): Promise<void> {
   try {
-    await recordingsApi.remove(deleteTarget.value.id);
+    await recordingsApi.remove(r.id);
     notify.success("Recording deleted");
-    showDelete.value = false;
     await load();
   } catch (e) {
     if (e instanceof ApiError) notify.error("Could not delete", e.message);
-  } finally {
-    deleting.value = false;
   }
 }
 
@@ -220,36 +217,42 @@ const playable = (r: RecordingSummary): boolean => r.status === "finalized";
       <Column header="" :pt="{ bodyCell: 'text-right' }">
         <template #body="{ data }">
           <div class="flex items-center justify-end gap-1">
-            <button
+            <Button
               v-if="playable(data as RecordingSummary)"
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-primary-600 dark:hover:bg-surface-800"
+              text
+              rounded
+              severity="secondary"
+              size="small"
               title="Play"
               :aria-label="`Play recording`"
               @click="play(data as RecordingSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'play' }" :size="16" />
-            </button>
-            <button
+            </Button>
+            <Button
               v-if="playable(data as RecordingSummary)"
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-surface-700 dark:hover:bg-surface-800"
+              text
+              rounded
+              severity="secondary"
+              size="small"
               title="Download"
               :aria-label="`Download recording`"
               @click="download(data as RecordingSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'download' }" :size="16" />
-            </button>
-            <button
+            </Button>
+            <Button
               v-if="canDelete(data as RecordingSummary)"
-              type="button"
-              class="rounded p-1.5 text-surface-500 hover:bg-surface-100 hover:text-red-500 dark:hover:bg-surface-800"
+              text
+              rounded
+              severity="danger"
+              size="small"
               title="Delete"
               :aria-label="`Delete recording`"
               @click="openDelete(data as RecordingSummary)"
             >
               <AppIcon :icon="{ type: 'name', value: 'trash' }" :size="16" />
-            </button>
+            </Button>
           </div>
         </template>
       </Column>
@@ -257,14 +260,5 @@ const playable = (r: RecordingSummary): boolean => r.status === "finalized";
     </DataTable>
 
     <RecordingPlayerDialog v-model:visible="showPlayer" :recording="playing" />
-    <ConfirmDialog
-      v-model:visible="showDelete"
-      title="Delete recording"
-      message="Delete this recording? The captured data cannot be recovered."
-      confirm-label="Delete"
-      danger
-      :busy="deleting"
-      @confirm="onDelete"
-    />
   </div>
 </template>

@@ -5,6 +5,7 @@ import {
   type ResolveContext,
 } from "../api/dataSource";
 import { useSessionsStore, type ChannelStatus } from "../stores/sessions";
+import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { DataSource } from "../types/projection";
 
 // Wires a panel to a store-owned channel. If the channel is already open (e.g.
@@ -19,31 +20,57 @@ export function useStream(
   onFrame?: (data: string) => void,
 ) {
   const store = useSessionsStore();
+  const live = useConnectionStatusStore();
   const key = ref<string | null>(null);
-  const error = ref<string | null>(null);
+  const localError = ref<string | null>(null);
+  // Prefer a setup failure (no ticket); otherwise surface the close reason so the
+  // status bar can explain *why* the stream dropped — from the channel, and
+  // falling back to the connection's last failure (the same source the sidebar
+  // dot uses) so a dial/handshake failure is always explained.
+  const error = computed(
+    () =>
+      localError.value ??
+      (key.value ? store.reason(key.value) : undefined) ??
+      live.get(connectionId)?.reason ??
+      null,
+  );
   let unsub: (() => void) | undefined;
 
   function attach(k: string): void {
+    unsub?.();
     key.value = k;
     if (onFrame) for (const frame of store.buffer(k)) onFrame(frame);
     unsub = store.subscribe(k, (d) => onFrame?.(d));
   }
 
-  onMounted(async () => {
+  async function connect(force = false): Promise<void> {
     if (!source) return;
     try {
+      localError.value = null;
       const existing = channelKey(connectionId, source, ctx);
+      if (force) {
+        unsub?.();
+        unsub = undefined;
+        store.close(existing);
+        key.value = null;
+      }
       if (store.has(existing)) {
-        attach(existing); // resume an already-open stream — no new ticket
-        return;
+        const current = store.status(existing);
+        if (current === "open" || current === "connecting") {
+          attach(existing); // resume an already-open stream — no new ticket
+          return;
+        }
+        store.close(existing);
       }
       const handle = await prepareStream(connectionId, source, ctx);
       store.ensure(handle.key, () => new WebSocket(handle.url) as never);
       attach(handle.key);
     } catch (e) {
-      error.value = (e as Error).message;
+      localError.value = (e as Error).message;
     }
-  });
+  }
+
+  onMounted(() => void connect());
 
   onUnmounted(() => unsub?.());
 
@@ -59,5 +86,9 @@ export function useStream(
     if (key.value) store.send(key.value, data);
   }
 
-  return { status, error, send };
+  function reconnect(): Promise<void> {
+    return connect(true);
+  }
+
+  return { status, error, send, reconnect };
 }
