@@ -14,6 +14,7 @@ import SkeletonList from "../../components/SkeletonList.vue";
 import type { PanelProps } from "../core/types";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
+import { inputClass } from "../../primevue/preset";
 
 interface HeaderRow {
   key: string;
@@ -168,23 +169,38 @@ async function send(): Promise<void> {
 <template>
   <div class="flex h-full min-h-0 flex-col">
     <div
-      class="flex items-center gap-2 border-b border-surface-200 p-3 dark:border-surface-800"
+      class="grid grid-cols-1 items-end gap-2 border-b border-surface-200 p-3 sm:grid-cols-[7.5rem_minmax(12rem,1fr)_auto] dark:border-surface-800"
     >
-      <Select
-        v-model="method"
-        :options="methods"
-        option-label="label"
-        option-value="value"
-        class="w-32"
-      />
-      <InputText
-        v-model="url"
-        placeholder="Path or URL"
-        aria-label="Request URL"
-        class="min-w-0 flex-1"
-        @keyup.enter="send"
-      />
-      <Button type="button" :disabled="loading" @click="send">
+      <label class="flex min-w-0 flex-col gap-1">
+        <span
+          class="text-xs font-medium text-surface-500 dark:text-surface-400"
+        >
+          Method
+        </span>
+        <Select
+          v-model="method"
+          :options="methods"
+          option-label="label"
+          option-value="value"
+          class="w-full"
+          aria-label="Request method"
+        />
+      </label>
+      <label class="flex min-w-0 flex-col gap-1">
+        <span
+          class="text-xs font-medium text-surface-500 dark:text-surface-400"
+        >
+          Request URL
+        </span>
+        <InputText
+          v-model="url"
+          placeholder="/api/health or https://example.com"
+          aria-label="Request URL"
+          :class="inputClass"
+          @keyup.enter="send"
+        />
+      </label>
+      <Button type="button" class="self-end" :disabled="loading" @click="send">
         <AppIcon
           :icon="{ type: 'lucide', value: 'send' }"
           :size="14"

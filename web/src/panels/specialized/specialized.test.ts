@@ -278,4 +278,19 @@ describe("specialized panels", () => {
     expect(w.text()).toContain("200");
     expect(w.findAll(".shellcn-codemirror-host")).toHaveLength(2);
   });
+
+  it("renders HTTP request controls with visible labels and input styling", () => {
+    const w = mount(HTTPClientPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "http.exec" },
+      },
+    });
+
+    expect(w.text()).toContain("Method");
+    expect(w.text()).toContain("Request URL");
+    const urlInput = w.get('input[aria-label="Request URL"]');
+    expect(urlInput.classes()).toContain("border");
+    expect(urlInput.classes()).toContain("text-surface-800");
+  });
 });
