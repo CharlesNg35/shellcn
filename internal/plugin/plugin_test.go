@@ -69,6 +69,86 @@ func TestRegistrySummariesSortByCategory(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsAllLayouts(t *testing.T) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	for _, layout := range []plugin.Layout{plugin.LayoutTabs, plugin.LayoutSidebarTree, plugin.LayoutDashboard} {
+		m := plugin.Manifest{
+			APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
+			Category: plugin.CategoryOther, Layout: layout,
+			SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		}
+		routes := []plugin.Route{{ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop}}
+		if err := plugin.Validate(m, routes); err != nil {
+			t.Fatalf("layout %q should be valid: %v", layout, err)
+		}
+	}
+}
+
+func TestDashboardConfigMapAndPanelValidate(t *testing.T) {
+	cfg := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
+		{Key: "a", Label: "A", Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "x.overview"}, Span: 2},
+		{Key: "b", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}},
+	}}.Map()
+	cells, ok := cfg["cells"].([]plugin.DashboardCell)
+	if !ok || len(cells) != 2 || cells[0].Span != 2 {
+		t.Fatalf("DashboardConfig.Map cells = %#v", cfg["cells"])
+	}
+	if (plugin.DashboardConfig{}).Map()["cells"] != nil {
+		t.Fatal("empty DashboardConfig should omit cells")
+	}
+
+	// A dashboard-panel tab carries its cells in config and needs no tab source.
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
+		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		Tabs:                []plugin.Tab{{Key: "overview", Label: "Overview", Panel: plugin.PanelDashboard, Config: cfg}},
+	}
+	routes := []plugin.Route{{ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop}}
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("dashboard-panel tab should validate: %v", err)
+	}
+}
+
+func TestMetricsConfigMap(t *testing.T) {
+	full := plugin.MetricsConfig{
+		Stats:   []plugin.MetricStat{{Key: "conns", Label: "Connections"}},
+		Gauges:  []plugin.MetricGauge{{Key: "cpu", Label: "CPU", Unit: "%", Max: 100}},
+		Series:  []plugin.MetricSeries{{Key: "cpu", Label: "CPU"}},
+		History: 120,
+	}.Map()
+	if full["stats"] == nil || full["gauges"] == nil || full["series"] == nil || full["history"] != 120 {
+		t.Fatalf("MetricsConfig.Map = %#v", full)
+	}
+	if len((plugin.MetricsConfig{}).Map()) != 0 {
+		t.Fatal("empty MetricsConfig should serialize to an empty map")
+	}
+}
+
+func TestDockActionRequiresPanel(t *testing.T) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	routes := []plugin.Route{{ID: "x.logs", Method: plugin.MethodWS, Permission: "x.read", Risk: plugin.RiskSafe, Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil }}, {ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop}}
+	base := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
+		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+	}
+	bad := base
+	bad.Actions = []plugin.Action{{ID: "a", Label: "Logs", RouteID: "x.logs", Open: plugin.OpenDock}}
+	if err := plugin.Validate(bad, routes); err == nil {
+		t.Fatal("dock action without a panel should be rejected")
+	}
+	ok := base
+	ok.Actions = []plugin.Action{
+		{ID: "a", Label: "Logs", RouteID: "x.logs", Open: plugin.OpenDock, Panel: plugin.PanelLogStream},
+		{ID: "b", Label: "Peek", RouteID: "x.logs", Open: plugin.OpenDialog, Panel: plugin.PanelLogStream},
+	}
+	if err := plugin.Validate(ok, routes); err != nil {
+		t.Fatalf("dock/dialog actions with a panel should validate: %v", err)
+	}
+}
+
 func TestValidateRejectsBadManifests(t *testing.T) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
@@ -229,10 +309,10 @@ func TestValidateAcceptsRemoteDesktopConfig(t *testing.T) {
 
 func TestSpecializedPanelConfigMaps(t *testing.T) {
 	kv := plugin.KVConfig{
-		ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write",
+		CreateRouteID: "redis.key.create", ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write",
 		DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,
 	}.Map()
-	if kv["readRouteId"] != "redis.key.read" || kv["writable"] != true {
+	if kv["createRouteId"] != "redis.key.create" || kv["readRouteId"] != "redis.key.read" || kv["writable"] != true {
 		t.Fatalf("kv config map unexpected: %#v", kv)
 	}
 
@@ -262,6 +342,14 @@ func TestSpecializedPanelConfigMaps(t *testing.T) {
 	}.Map()
 	if desktop["engine"] != nil || desktop["resize"] != true || desktop["repeaterID"] != "console-1" {
 		t.Fatalf("remote desktop config map unexpected: %#v", desktop)
+	}
+
+	if off := (plugin.TerminalConfig{}).Map(); len(off) != 0 {
+		t.Fatalf("terminal config map should omit disabled controls: %#v", off)
+	}
+	term := plugin.TerminalConfig{Zoom: true, Search: true}.Map()
+	if term["zoom"] != true || term["search"] != true {
+		t.Fatalf("terminal config map unexpected: %#v", term)
 	}
 }
 

@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
+import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import { useToast } from "primevue/usetoast";
@@ -11,6 +12,9 @@ import type { KVPanelConfig, Page } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
+import AppIcon from "../../components/AppIcon.vue";
+import { dialogRoot } from "../../primevue/preset";
 
 interface KVEntry {
   key: string;
@@ -37,12 +41,17 @@ const loading = ref(false);
 const loadingDetail = ref(false);
 const saving = ref(false);
 const error = ref<string | null>(null);
+const createOpen = ref(false);
+const createKeyName = ref("");
+const createType = ref("string");
+const createValue = ref("");
 const config = computed(() => props.config as KVPanelConfig | undefined);
 const keyParam = computed(() => config.value?.keyParam ?? "key");
 const writable = computed(() => config.value?.writable === true);
-const typeOptions = ["string", "hash", "list", "set", "zset", "json"].map(
-  (value) => ({ label: value, value }),
+const typeOptions = computed(() =>
+  (config.value?.valueTypes ?? []).map((value) => ({ label: value, value })),
 );
+const hasTypes = computed(() => typeOptions.value.length > 0);
 const editorLanguage = computed(() =>
   type.value === "json" ||
   editor.value.trim().startsWith("{") ||
@@ -153,6 +162,39 @@ async function save(): Promise<void> {
   }
 }
 
+async function createKey(): Promise<void> {
+  if (!config.value?.createRouteId) return;
+  const key = createKeyName.value.trim();
+  if (!key) return;
+  saving.value = true;
+  try {
+    await runFormAction(
+      props.connectionId,
+      config.value.createRouteId,
+      { resource: props.resource },
+      { key, type: createType.value, value: createValue.value },
+      { [keyParam.value]: key },
+      "PUT",
+    );
+    toast.add({ severity: "success", summary: "Key created", life: 2200 });
+    createOpen.value = false;
+    createKeyName.value = "";
+    createValue.value = "";
+    await load();
+    const created = entries.value.find((entry) => entry.key === key);
+    if (created) await loadDetail(created);
+  } catch (e) {
+    toast.add({
+      severity: "error",
+      summary: "Create failed",
+      detail: (e as Error).message,
+      life: 4000,
+    });
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function remove(): Promise<void> {
   if (!selected.value || !config.value?.deleteRouteId) return;
   saving.value = true;
@@ -206,10 +248,23 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           :disabled="loading"
           @click="load"
         >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'refresh-cw' }"
+            :size="14"
+            :loading="loading"
+          />
           Refresh
         </Button>
+        <Button
+          v-if="writable && config?.createRouteId"
+          type="button"
+          label="New"
+          :disabled="saving"
+          @click="createOpen = true"
+        />
       </div>
       <PanelError v-if="error" :message="error" retryable @retry="load" />
+      <SkeletonList v-else-if="loading && !entries.length" :rows="8" />
       <DataTable
         v-else
         :value="visibleEntries"
@@ -217,7 +272,6 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         scrollable
         scroll-height="flex"
         selection-mode="single"
-        :loading="loading"
         @row-click="loadDetail($event.data as KVEntry)"
       >
         <Column field="key" header="Key" />
@@ -243,21 +297,20 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           <Button
             v-if="config?.deleteRouteId"
             type="button"
+            label="Delete"
             severity="danger"
             outlined
             :disabled="saving"
             @click="remove"
-          >
-            Delete
-          </Button>
+          />
           <Button
             v-if="config?.writeRouteId"
             type="button"
+            label="Save"
+            :loading="saving"
             :disabled="saving"
             @click="save"
-          >
-            Save
-          </Button>
+          />
         </div>
       </div>
 
@@ -265,7 +318,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         Select a key to inspect its value.
       </div>
       <div v-else class="flex min-h-0 flex-1 flex-col gap-3 p-4">
-        <div class="w-40">
+        <div v-if="hasTypes" class="w-40">
           <label class="mb-1 block text-xs text-surface-400">Type</label>
           <Select
             v-model="type"
@@ -285,5 +338,64 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         />
       </div>
     </div>
+
+    <Dialog
+      v-model:visible="createOpen"
+      modal
+      header="Create key"
+      :pt="{ root: dialogRoot('max-w-2xl') }"
+    >
+      <div class="flex flex-col gap-4">
+        <div>
+          <label class="mb-1 block text-xs text-surface-400">Key</label>
+          <InputText
+            v-model="createKeyName"
+            class="w-full"
+            aria-label="New key"
+            autofocus
+          />
+        </div>
+        <div v-if="hasTypes" class="w-44">
+          <label class="mb-1 block text-xs text-surface-400">Type</label>
+          <Select
+            v-model="createType"
+            :options="typeOptions"
+            option-label="label"
+            option-value="value"
+          />
+        </div>
+        <div class="h-56">
+          <label class="mb-1 block text-xs text-surface-400">Value</label>
+          <CodeTextEditor
+            v-model:value="createValue"
+            class="h-full"
+            :language="
+              createType === 'json' ||
+              createValue.trim().startsWith('{') ||
+              createValue.trim().startsWith('[')
+                ? 'json'
+                : 'plaintext'
+            "
+            aria-label="New key value"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <Button
+          type="button"
+          severity="secondary"
+          outlined
+          label="Cancel"
+          @click="createOpen = false"
+        />
+        <Button
+          type="button"
+          label="Create"
+          :loading="saving"
+          :disabled="saving || !createKeyName.trim()"
+          @click="createKey"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>

@@ -38,7 +38,7 @@ const dotClass = computed(() => {
       return "bg-amber-400 animate-pulse";
     case "error":
     case "offline":
-      return "bg-red-500";
+      return "bg-rose-400";
     default:
       return "bg-surface-300 dark:bg-surface-600";
   }
@@ -68,7 +68,7 @@ function shareTitle(c: ConnectionSummary): string {
 
 <template>
   <div
-    class="flex min-h-10 w-full items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+    class="mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
     :data-connection-id="connection.id"
     :class="
       active

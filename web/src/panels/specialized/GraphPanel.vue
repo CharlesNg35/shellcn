@@ -139,6 +139,11 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         :disabled="loading"
         @click="load"
       >
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'refresh-cw' }"
+          :size="14"
+          :loading="loading"
+        />
         Refresh
       </Button>
     </div>

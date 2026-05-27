@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
 import TablePanel from "./TablePanel.vue";
 import type { Action, Column } from "../../types/projection";
@@ -14,6 +15,7 @@ function row(id: string, name: string, state = "running") {
 }
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   installFetch((url) => {
     const u = new URL(url, "http://h");
     const cursor = u.searchParams.get("cursor");
@@ -62,6 +64,36 @@ describe("TablePanel", () => {
     await flushPromises();
     expect(w.findAll("tbody tr")).toHaveLength(1);
     expect(w.text()).toContain("gamma");
+  });
+
+  it("bounds and titles long cell values", async () => {
+    const longValue = "sha256:" + "a".repeat(96);
+    vi.unstubAllGlobals();
+    installFetch(() => ({
+      body: {
+        items: [row("long", longValue)],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "docker.container.list" },
+        config: {
+          columns: [{ key: "name", label: "Image", width: "12rem" }],
+        },
+      },
+    });
+    await flushPromises();
+
+    const cell = w.get('[data-test="table-cell-value"]');
+    expect(cell.classes()).toContain("truncate");
+    expect(cell.attributes("title")).toBe(longValue);
+    expect(cell.attributes("style")).toContain("max-width: 12rem");
+    expect(w.get("thead th").attributes("style")).toContain("width: 12rem");
+    expect(w.get("thead th").attributes("style")).toContain("min-width: 12rem");
   });
 
   it("filters server-side and resets the list", async () => {
@@ -162,6 +194,126 @@ describe("TablePanel", () => {
       run,
       { ok: true, output: "ran command" },
     ]);
+    w.unmount();
+  });
+});
+
+describe("TablePanel staged edits", () => {
+  type Call = { url: string; method: string; body: unknown };
+
+  const stagedConfig = {
+    columns,
+    editable: true,
+    stagedEdits: true,
+    rowKey: ["name"],
+    insert: { routeId: "db.row.insert", method: "POST" as const },
+    update: { routeId: "db.row.update", method: "POST" as const },
+    delete: { routeId: "db.row.delete", method: "POST" as const },
+  };
+
+  function mountStaged() {
+    const calls: Call[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      if (init?.method === "POST") {
+        calls.push({
+          url,
+          method: "POST",
+          body: init.body ? JSON.parse(init.body as string) : undefined,
+        });
+        return { body: { ok: true } };
+      }
+      return {
+        body: {
+          items: [row("a", "alpha"), row("b", "beta")],
+          nextCursor: "",
+          total: 2,
+        },
+      };
+    });
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: stagedConfig,
+      },
+    });
+    return { w, calls };
+  }
+
+  function editCell(
+    w: ReturnType<typeof mount>,
+    index: number,
+    field: string,
+    newValue: unknown,
+  ) {
+    const dt = w.findComponent({ name: "DataTable" });
+    const data = (dt.props("value") as Record<string, unknown>[])[index];
+    dt.vm.$emit("cell-edit-complete", {
+      data,
+      field,
+      value: data[field],
+      newValue,
+    });
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("buffers a cell edit and commits it through the update route", async () => {
+    const { w, calls } = mountStaged();
+    await flushPromises();
+
+    editCell(w, 0, "state", "stopped");
+    await flushPromises();
+    expect(calls).toHaveLength(0); // nothing sent yet
+    expect(w.text()).toContain("1 unsaved change");
+
+    bodyButton("Commit")!.click();
+    await flushPromises();
+
+    const update = calls.find((c) => c.url.includes("db.row.update"));
+    expect(update?.body).toEqual({
+      key: { name: "alpha" },
+      values: { state: "stopped" },
+    });
+    expect(w.text()).not.toContain("unsaved");
+    w.unmount();
+  });
+
+  it("discards buffered edits and restores the original value", async () => {
+    const { w, calls } = mountStaged();
+    await flushPromises();
+
+    editCell(w, 0, "state", "stopped");
+    await flushPromises();
+    expect(w.text()).toContain("stopped");
+
+    bodyButton("Discard")!.click();
+    await flushPromises();
+    expect(calls).toHaveLength(0);
+    expect(w.text()).not.toContain("unsaved");
+    expect(w.text()).toContain("running");
+    expect(w.text()).not.toContain("stopped");
+    w.unmount();
+  });
+
+  it("commits a staged delete through the delete route", async () => {
+    const { w, calls } = mountStaged();
+    await flushPromises();
+
+    const delBtn = [...document.body.querySelectorAll("button")].find((b) =>
+      b.getAttribute("aria-label")?.includes("Delete"),
+    ) as HTMLButtonElement;
+    delBtn.click();
+    await flushPromises();
+    expect(calls).toHaveLength(0);
+    expect(w.text()).toContain("1 unsaved change");
+
+    bodyButton("Commit")!.click();
+    await flushPromises();
+    const del = calls.find((c) => c.url.includes("db.row.delete"));
+    expect(del?.body).toEqual({ key: { name: "alpha" } });
     w.unmount();
   });
 });

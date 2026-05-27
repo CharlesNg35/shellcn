@@ -27,6 +27,7 @@ import FileEntryList from "./FileEntryList.vue";
 import FilePreview from "./FilePreview.vue";
 import FileToolbar from "./FileToolbar.vue";
 import { formatBytes, languageFor } from "./fileTypes";
+import { dialogRoot } from "../../primevue/preset";
 
 const props = defineProps<PanelProps>();
 const toast = useToast();
@@ -449,6 +450,7 @@ watch(
             <Button
               type="button"
               label="Save"
+              :loading="operation === 'save'"
               :disabled="!dirty || mutating"
               @click="saveFile"
             />
@@ -490,7 +492,8 @@ watch(
       modal
       :header="selected?.name ?? 'Preview'"
       :pt="{
-        root: 'w-full max-w-5xl overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl dark:border-surface-800 dark:bg-surface-900',
+        root: dialogRoot('max-w-5xl'),
+        content: 'min-h-0 overflow-hidden p-0',
       }"
     >
       <div class="h-[70vh] min-h-0">
@@ -501,6 +504,7 @@ watch(
             <Button
               type="button"
               label="Save"
+              :loading="operation === 'save'"
               :disabled="!dirty || mutating"
               @click="saveFile"
             />
@@ -541,7 +545,12 @@ watch(
             :disabled="mutating"
             @click="mkdirOpen = false"
           />
-          <Button type="submit" label="Create" :disabled="mutating" />
+          <Button
+            type="submit"
+            label="Create"
+            :loading="operation === 'mkdir'"
+            :disabled="mutating"
+          />
         </div>
       </form>
     </Dialog>
@@ -558,7 +567,12 @@ watch(
             :disabled="mutating"
             @click="renameOpen = false"
           />
-          <Button type="submit" label="Rename" :disabled="mutating" />
+          <Button
+            type="submit"
+            label="Rename"
+            :loading="operation === 'rename'"
+            :disabled="mutating"
+          />
         </div>
       </form>
     </Dialog>
@@ -580,6 +594,7 @@ watch(
           type="button"
           label="Delete"
           severity="danger"
+          :loading="operation === 'delete'"
           :disabled="mutating"
           @click="deleteEntry"
         />

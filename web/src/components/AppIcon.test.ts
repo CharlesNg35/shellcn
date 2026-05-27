@@ -132,4 +132,13 @@ describe("AppIcon", () => {
     expect(w.find("svg").exists()).toBe(true);
     expect(w.find("img").exists()).toBe(false);
   });
+
+  it("uses the shared loading glyph when loading", () => {
+    const w = mount(AppIcon, {
+      props: { icon: { type: "emoji", value: "🐳" }, loading: true },
+    });
+    expect(w.text()).not.toContain("🐳");
+    expect(w.find("svg").exists()).toBe(true);
+    expect(w.find("svg").classes()).toContain("animate-spin");
+  });
 });

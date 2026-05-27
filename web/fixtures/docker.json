@@ -24,92 +24,94 @@
   "config": {
     "groups": [
       {
-        "name": "Basic",
+        "name": "Endpoint",
         "fields": [
           {
-            "key": "host",
-            "label": "Docker host",
+            "key": "endpoint_type",
+            "label": "Endpoint",
+            "type": "select",
+            "required": true,
+            "default": "unix",
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "$transport",
+                  "op": "eq",
+                  "value": "direct"
+                }
+              ]
+            },
+            "options": [
+              { "label": "Unix socket", "value": "unix" },
+              { "label": "TCP host", "value": "tcp" }
+            ]
+          },
+          {
+            "key": "socket_path",
+            "label": "Socket path",
             "type": "text",
             "required": true,
-            "default": "unix:///var/run/docker.sock",
-            "placeholder": "tcp://10.0.0.1:2375"
-          },
-          {
-            "key": "tls",
-            "label": "Use TLS",
-            "type": "toggle",
-            "default": false
-          },
-          {
-            "key": "ca_cert",
-            "label": "CA certificate",
-            "type": "textarea",
+            "default": "/var/run/docker.sock",
             "visibleWhen": {
               "allOf": [
                 {
-                  "field": "tls",
+                  "field": "$transport",
                   "op": "eq",
-                  "value": true
-                }
-              ]
-            },
-            "help": "PEM-encoded CA certificate used to verify the Docker host."
-          },
-          {
-            "key": "credential_id",
-            "label": "TLS credential",
-            "type": "credential_ref",
-            "credential": {
-              "kinds": ["tls_client_cert"],
-              "protocols": ["docker"]
-            },
-            "visibleWhen": {
-              "allOf": [
-                {
-                  "field": "tls",
-                  "op": "eq",
-                  "value": true
-                }
-              ]
-            },
-            "help": "Reusable client certificate/key for TLS-protected Docker APIs."
-          },
-          {
-            "key": "client_cert",
-            "label": "Client certificate",
-            "type": "textarea",
-            "visibleWhen": {
-              "allOf": [
-                {
-                  "field": "tls",
-                  "op": "eq",
-                  "value": true
+                  "value": "direct"
                 },
                 {
-                  "field": "credential_id",
-                  "op": "empty"
+                  "field": "endpoint_type",
+                  "op": "eq",
+                  "value": "unix"
                 }
               ]
             }
           },
           {
-            "key": "client_key",
-            "label": "Client key",
-            "type": "textarea",
-            "secret": true,
+            "key": "host",
+            "label": "Host",
+            "type": "text",
+            "required": true,
+            "placeholder": "docker.example.internal",
             "visibleWhen": {
               "allOf": [
                 {
-                  "field": "tls",
+                  "field": "$transport",
                   "op": "eq",
-                  "value": true
+                  "value": "direct"
                 },
                 {
-                  "field": "credential_id",
-                  "op": "empty"
+                  "field": "endpoint_type",
+                  "op": "eq",
+                  "value": "tcp"
                 }
               ]
             }
+          },
+          {
+            "key": "port",
+            "label": "Port",
+            "type": "number",
+            "required": true,
+            "default": 2375,
+            "visibleWhen": {
+              "allOf": [
+                {
+                  "field": "$transport",
+                  "op": "eq",
+                  "value": "direct"
+                },
+                {
+                  "field": "endpoint_type",
+                  "op": "eq",
+                  "value": "tcp"
+                }
+              ]
+            },
+            "validators": [
+              { "type": "min", "value": 1 },
+              { "type": "max", "value": 65535 }
+            ]
           }
         ]
       }

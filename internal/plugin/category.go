@@ -15,6 +15,7 @@ const (
 	CategorySecurity       Category = "security"
 	CategoryDevOps         Category = "devops"
 	CategoryObservability  Category = "observability"
+	CategorySearch         Category = "search"
 	CategoryMessaging      Category = "messaging"
 	CategoryOther          Category = "other"
 )
@@ -39,7 +40,8 @@ var builtInPluginCategories = []CategoryInfo{
 	{Key: CategorySecurity, Label: "Security", Icon: Icon{Type: IconLucide, Value: "shield"}, Order: 100},
 	{Key: CategoryDevOps, Label: "DevOps & CI", Icon: Icon{Type: IconLucide, Value: "git-branch"}, Order: 110},
 	{Key: CategoryObservability, Label: "Observability", Icon: Icon{Type: IconLucide, Value: "activity"}, Order: 120},
-	{Key: CategoryMessaging, Label: "Messaging", Icon: Icon{Type: IconLucide, Value: "messages-square"}, Order: 130},
+	{Key: CategorySearch, Label: "Search", Icon: Icon{Type: IconLucide, Value: "search"}, Order: 130},
+	{Key: CategoryMessaging, Label: "Messaging", Icon: Icon{Type: IconLucide, Value: "messages-square"}, Order: 140},
 	{Key: CategoryOther, Label: "Other", Icon: Icon{Type: IconLucide, Value: "plug"}, Order: 1000},
 }
 

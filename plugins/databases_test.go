@@ -1,0 +1,198 @@
+package plugins
+
+import (
+	"testing"
+
+	"github.com/charlesng/shellcn/internal/plugin"
+)
+
+func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
+	reg := plugin.NewRegistry()
+	Register(reg)
+
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra", "neo4j"} {
+		m, ok := reg.Manifest(name)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", name)
+		}
+		field, ok := credentialField(m.Config, "credential_id")
+		if !ok {
+			t.Fatalf("%s should expose credential_id", name)
+		}
+		if !credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) {
+			t.Fatalf("%s auth credential selector should support database password: %+v", name, field.Credential.Kinds)
+		}
+		if credentialKindsContain(field.Credential.Kinds, plugin.CredentialTLSClientCert) {
+			t.Fatalf("%s stored password selector should not advertise TLS client certificates: %+v", name, field.Credential.Kinds)
+		}
+	}
+
+	for _, name := range []string{"postgresql", "mongodb", "cockroachdb", "clickhouse", "oracle"} {
+		m, _ := reg.Manifest(name)
+		field, ok := credentialField(m.Config, "auth_client_cert_id")
+		if !ok {
+			t.Fatalf("%s should expose auth_client_cert_id for certificate authentication", name)
+		}
+		if !credentialKindsContain(field.Credential.Kinds, plugin.CredentialTLSClientCert) || credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) {
+			t.Fatalf("%s certificate auth selector should only advertise TLS client certificates: %+v", name, field.Credential.Kinds)
+		}
+	}
+
+	for _, name := range []string{"mysql", "redis", "mssql", "cassandra"} {
+		m, _ := reg.Manifest(name)
+		if _, ok := credentialField(m.Config, "auth_client_cert_id"); ok {
+			t.Fatalf("%s should not expose certificate authentication", name)
+		}
+	}
+
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra"} {
+		m, _ := reg.Manifest(name)
+		tlsField, ok := credentialField(m.Config, "client_cert_id")
+		if !ok {
+			t.Fatalf("%s should expose client_cert_id in TLS settings", name)
+		}
+		if !credentialKindsContain(tlsField.Credential.Kinds, plugin.CredentialTLSClientCert) {
+			t.Fatalf("%s TLS client certificate field should support TLS client certificates: %+v", name, tlsField.Credential.Kinds)
+		}
+	}
+
+	m, ok := reg.Manifest("dynamodb")
+	if !ok {
+		t.Fatal("dynamodb should be registered")
+	}
+	field, ok := credentialField(m.Config, "credential_id")
+	if !ok {
+		t.Fatal("dynamodb should expose credential_id")
+	}
+	if !credentialKindsContain(field.Credential.Kinds, plugin.CredentialCloudAccessKey) {
+		t.Fatalf("dynamodb credential selector should support cloud access keys: %+v", field.Credential.Kinds)
+	}
+	if credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) || credentialKindsContain(field.Credential.Kinds, plugin.CredentialTLSClientCert) {
+		t.Fatalf("dynamodb credential selector should not advertise database passwords or TLS client certificates: %+v", field.Credential.Kinds)
+	}
+
+	m, ok = reg.Manifest("neo4j")
+	if !ok {
+		t.Fatal("neo4j should be registered")
+	}
+	field, ok = credentialField(m.Config, "bearer_credential_id")
+	if !ok {
+		t.Fatal("neo4j should expose bearer_credential_id")
+	}
+	if !credentialKindsContain(field.Credential.Kinds, plugin.CredentialBearerToken) || credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) {
+		t.Fatalf("neo4j bearer selector should only advertise bearer tokens: %+v", field.Credential.Kinds)
+	}
+}
+
+func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
+	reg := plugin.NewRegistry()
+	Register(reg)
+
+	for _, name := range []string{"postgresql", "mysql", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle"} {
+		m, ok := reg.Manifest(name)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", name)
+		}
+		visible := visibleDatabaseFields(m.Config, map[string]any{"auth": "password", "tls_mode": "disable", "encrypt": "disable"})
+		requireVisible(t, name, visible, "username", "password")
+		requireHidden(t, name, visible, "credential_id", "auth_client_cert_id")
+	}
+
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra", "neo4j"} {
+		m, ok := reg.Manifest(name)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", name)
+		}
+		visible := visibleDatabaseFields(m.Config, map[string]any{"auth": "credential", "tls_mode": "disable", "encrypt": "disable"})
+		requireVisible(t, name, visible, "credential_id")
+		requireHidden(t, name, visible, "username", "password", "auth_client_cert_id")
+	}
+
+	for _, name := range []string{"redis", "cassandra"} {
+		m, ok := reg.Manifest(name)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", name)
+		}
+		visible := visibleDatabaseFields(m.Config, map[string]any{"auth": "none", "tls_mode": "disable"})
+		requireHidden(t, name, visible, "username", "password", "credential_id", "auth_client_cert_id")
+	}
+
+	for _, name := range []string{"postgresql", "mongodb", "cockroachdb", "clickhouse", "oracle"} {
+		m, ok := reg.Manifest(name)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", name)
+		}
+		visible := visibleDatabaseFields(m.Config, map[string]any{"auth": "client_certificate", "tls_mode": "disable"})
+		requireVisible(t, name, visible, "auth_client_cert_id")
+		requireHidden(t, name, visible, "password", "credential_id", "client_cert_id")
+	}
+}
+
+func credentialField(schema plugin.Schema, key string) (plugin.Field, bool) {
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			if field.Key == key && field.Type == plugin.FieldCredentialRef && field.Credential != nil {
+				return field, true
+			}
+		}
+	}
+	return plugin.Field{}, false
+}
+
+func credentialKindsContain(kinds []plugin.CredentialKind, want plugin.CredentialKind) bool {
+	for _, kind := range kinds {
+		if kind == want {
+			return true
+		}
+	}
+	return false
+}
+
+func visibleDatabaseFields(schema plugin.Schema, overrides map[string]any) map[string]bool {
+	values := schema.Defaults()
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			if _, ok := values[field.Key]; !ok {
+				values[field.Key] = blankDatabaseFieldValue(field.Type)
+			}
+		}
+	}
+	for key, value := range overrides {
+		values[key] = value
+	}
+	visible := schema.VisibleValues(values, nil)
+	out := map[string]bool{}
+	for key := range visible {
+		out[key] = true
+	}
+	return out
+}
+
+func blankDatabaseFieldValue(t plugin.FieldType) any {
+	switch t {
+	case plugin.FieldToggle:
+		return false
+	case plugin.FieldMultiSelect:
+		return []any{}
+	default:
+		return ""
+	}
+}
+
+func requireVisible(t *testing.T, pluginName string, visible map[string]bool, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if !visible[key] {
+			t.Fatalf("%s should show %q for this auth mode; visible=%v", pluginName, key, visible)
+		}
+	}
+}
+
+func requireHidden(t *testing.T, pluginName string, visible map[string]bool, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if visible[key] {
+			t.Fatalf("%s should hide %q for this auth mode; visible=%v", pluginName, key, visible)
+		}
+	}
+}

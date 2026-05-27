@@ -26,7 +26,7 @@ const agentTone = computed(() => {
     case "pending":
       return "bg-amber-400 animate-pulse";
     default:
-      return "bg-red-500";
+      return "bg-rose-400";
   }
 });
 const agentLabel = computed(() => {

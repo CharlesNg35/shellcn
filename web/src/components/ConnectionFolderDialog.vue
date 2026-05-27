@@ -159,12 +159,12 @@ async function save(): Promise<void> {
         </Button>
         <Button
           type="button"
+          :label="isEdit ? 'Save changes' : 'Create folder'"
+          :loading="busy"
           :disabled="busy"
           :pt="{ root: btnPrimary }"
           @click="save"
-        >
-          {{ busy ? "Saving..." : isEdit ? "Save changes" : "Create folder" }}
-        </Button>
+        />
       </div>
     </template>
   </Dialog>

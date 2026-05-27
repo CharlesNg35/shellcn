@@ -7,7 +7,7 @@ const tone: Record<string, string> = {
   success:
     "border-emerald-500/40 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-200",
   error:
-    "border-red-500/40 bg-red-50 text-red-800 dark:bg-red-950/70 dark:text-red-200",
+    "border-rose-500/30 bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200",
   info: "border-surface-300 bg-surface-0 text-surface-700 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-200",
 };
 </script>

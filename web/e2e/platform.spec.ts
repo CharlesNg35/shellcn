@@ -99,7 +99,7 @@ test("create a credential and select it from a connection credential_ref", async
   await page.getByRole("combobox", { name: "Password" }).click();
   await page.getByText("Stored credential", { exact: true }).click();
   await page.getByText("Select a credential").click();
-  await page.getByText("e2e-selectable-cred · ssh_private_key").click();
+  await page.getByText("e2e-selectable-cred · SSH private key").click();
   await page.getByRole("button", { name: /Create connection/ }).click();
 
   await expect(page.locator("aside")).toContainText("e2e-credential-conn");

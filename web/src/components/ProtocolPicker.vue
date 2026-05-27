@@ -75,7 +75,7 @@ const groups = computed<PluginGroup[]>(() => {
     <div
       role="radiogroup"
       aria-label="Protocol"
-      class="max-h-72 overflow-auto pr-3"
+      class="max-h-72 overflow-auto pr-2 pb-2"
     >
       <section
         v-for="group in groups"
@@ -110,8 +110,8 @@ const groups = computed<PluginGroup[]>(() => {
               class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md transition-colors"
               :class="
                 modelValue === p.name
-                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/50 dark:text-primary-300'
-                  : 'bg-surface-100 text-surface-500 group-hover:bg-primary-50 group-hover:text-primary-600 dark:bg-surface-800 dark:text-surface-400'
+                  ? 'bg-primary-100 text-primary-700 dark:bg-primary-100 dark:text-primary-700'
+                  : 'bg-surface-100 text-surface-500 group-hover:bg-primary-50 group-hover:text-primary-600 dark:bg-surface-100 dark:text-surface-700 dark:group-hover:bg-primary-50 dark:group-hover:text-primary-700'
               "
             >
               <AppIcon :icon="p.icon" :size="18" />

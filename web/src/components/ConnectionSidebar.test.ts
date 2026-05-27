@@ -91,6 +91,9 @@ describe("ConnectionSidebar", () => {
     expect(
       wrapper.get('[data-connection-id="c-prod"] button span').classes(),
     ).toEqual(expect.arrayContaining(["block", "max-w-full", "truncate"]));
+    expect(wrapper.get('[data-connection-id="c-prod"]').classes()).toEqual(
+      expect.arrayContaining(["mx-1", "w-[calc(100%-0.5rem)]"]),
+    );
 
     const folderButton = wrapper.get('[data-folder-id="f1"] > div button');
     expect(folderButton.attributes("title")).toBe("Production");
@@ -103,6 +106,31 @@ describe("ConnectionSidebar", () => {
       f1: true,
       f2: true,
     });
+  });
+
+  it("reveals a top shadow after the connection list scrolls", async () => {
+    installFetch(() => ({ body: { ok: true } }));
+    const conns = useConnectionsStore();
+    conns.loaded = true;
+    conns.connections = connections;
+
+    const wrapper = mount(ConnectionSidebar, {
+      props: { activeId: null, query: "" },
+      global: { plugins: [router()] },
+    });
+    await flushPromises();
+
+    const shadow = wrapper.get("[data-sidebar-scroll-shadow]");
+    const scroller = wrapper.get("[data-sidebar-scroll-region]");
+    expect(shadow.classes()).toContain("opacity-0");
+
+    Object.defineProperty(scroller.element, "scrollTop", {
+      value: 24,
+      configurable: true,
+    });
+    await scroller.trigger("scroll");
+
+    expect(shadow.classes()).toContain("opacity-100");
   });
 
   it("persists connection order and folder placement", async () => {

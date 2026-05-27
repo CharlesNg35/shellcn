@@ -28,6 +28,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Tabs: []plugin.Tab{{
 			Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
 			Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "telnet.shell", Method: plugin.MethodWS, Params: map[string]string{"cols": "80", "rows": "24"}},
+			Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map(),
 		}},
 		Streams: []plugin.Stream{{ID: "telnet.shell", Kind: plugin.StreamTerminal, RouteID: "telnet.shell"}},
 		Recording: []plugin.RecordingCapability{{

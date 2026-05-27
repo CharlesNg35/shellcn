@@ -53,6 +53,7 @@ func (testPlugin) Manifest() plugin.Manifest {
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Config: plugin.Schema{Groups: []plugin.Group{{Name: "Basic", Fields: []plugin.Field{
 			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, VisibleWhen: &directOnly},
+			{Key: "read_only", Label: "Read-only", Type: plugin.FieldToggle, Default: true},
 			{Key: "direct_secret", Label: "Direct secret", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &directOnly},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true},
 			{
@@ -233,10 +234,11 @@ func (boomPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session
 // --- harness ----------------------------------------------------------------
 
 type harness struct {
-	ts         *httptest.Server
-	store      *store.Store
-	sessionMgr *auth.SessionManager
-	sessions   map[string]auth.Session // userID → platform session
+	ts             *httptest.Server
+	store          *store.Store
+	pluginSessions *session.Manager
+	sessionMgr     *auth.SessionManager
+	sessions       map[string]auth.Session // userID → platform session
 }
 
 func newHarness(t *testing.T) *harness {
@@ -286,7 +288,7 @@ func newHarness(t *testing.T) *harness {
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
-	h := &harness{ts: ts, store: st, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
+	h := &harness{ts: ts, store: st, pluginSessions: sessMgr, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
 
 	ctx := context.Background()
 	for _, u := range []struct {
@@ -410,8 +412,8 @@ func TestParamResolution(t *testing.T) {
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam", "op", nil); resp.Status != http.StatusBadRequest {
 		t.Fatalf("missing declared param: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam?p.name=x&p.extra=y", "op", nil); resp.Status != http.StatusBadRequest {
-		t.Fatalf("unknown declared param: want 400, got %d (%s)", resp.Status, resp.Body)
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam?p.name=x&p.extra=y", "op", nil); resp.Status != http.StatusOK {
+		t.Fatalf("scoped extra param: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 

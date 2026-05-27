@@ -20,6 +20,7 @@ describe("panel registry", () => {
       "trace",
       "kv",
       "http_client",
+      "dashboard",
     ];
     for (const t of types) {
       expect(resolvePanel(t), `panel ${t}`).toBeTruthy();

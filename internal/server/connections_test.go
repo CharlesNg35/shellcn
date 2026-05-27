@@ -124,6 +124,37 @@ func TestConnectionConfigVisibilityFollowsTransport(t *testing.T) {
 	}
 }
 
+func TestConnectionConfigAppliesManifestDefaults(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+
+	resp := h.do(t, http.MethodPost, "/api/connections", "op",
+		strings.NewReader(`{"name":"defaults","protocol":"tester","config":{"host":"h"}}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	id := createConnID(t, resp)
+	conn, _ := h.store.Connections.Get(ctx, id)
+	if conn.Config["read_only"] != true {
+		t.Fatalf("default toggle not stored on create: %#v", conn.Config)
+	}
+
+	resp = h.do(t, http.MethodGet, "/api/connections/"+id, "op", nil)
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"read_only":true`) {
+		t.Fatalf("detail missing default toggle: status=%d body=%s", resp.Status, resp.Body)
+	}
+
+	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "op",
+		strings.NewReader(`{"name":"defaults","config":{"host":"h","read_only":false}}`))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("update: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	conn, _ = h.store.Connections.Get(ctx, id)
+	if conn.Config["read_only"] != false {
+		t.Fatalf("explicit false toggle was not preserved: %#v", conn.Config)
+	}
+}
+
 func TestConnectionRecordingPolicy(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
@@ -228,6 +259,45 @@ func TestConnectionUpdateAuthz(t *testing.T) {
 		strings.NewReader(`{"name":"admin-edit","config":{"host":"h"}}`))
 	if resp.Status != http.StatusOK {
 		t.Errorf("admin update: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+}
+
+func TestDisconnectConnectionSessionClosesOnlyCurrentUserSession(t *testing.T) {
+	h := newHarness(t)
+
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil); resp.Status != http.StatusOK {
+		t.Fatalf("open op session: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "admin", nil); resp.Status != http.StatusOK {
+		t.Fatalf("open admin session: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if got := h.pluginSessions.Stats().Sessions; got != 2 {
+		t.Fatalf("sessions before disconnect = %d, want 2", got)
+	}
+
+	resp := h.do(t, http.MethodDelete, "/api/connections/c-op/session", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("disconnect session: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if got := h.pluginSessions.Stats().Sessions; got != 1 {
+		t.Fatalf("sessions after disconnect = %d, want 1", got)
+	}
+}
+
+func TestDisconnectConnectionSessionHonorsConnectionAccess(t *testing.T) {
+	h := newHarness(t)
+
+	if resp := h.do(t, http.MethodDelete, "/api/connections/c-op/session", "viewer", nil); resp.Status != http.StatusForbidden {
+		t.Fatalf("viewer without grant: want 403, got %d (%s)", resp.Status, resp.Body)
+	}
+
+	if err := h.store.Grants.Create(context.Background(), &models.Grant{
+		ID: "g-use-c-op", ConnectionID: "c-op", SubjectID: "viewer", Access: models.AccessUse,
+	}); err != nil {
+		t.Fatalf("create grant: %v", err)
+	}
+	if resp := h.do(t, http.MethodDelete, "/api/connections/c-op/session", "viewer", nil); resp.Status != http.StatusOK {
+		t.Fatalf("viewer with grant: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 

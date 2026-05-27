@@ -14,12 +14,23 @@ vi.mock("@xterm/xterm", () => ({
     loadAddon() {}
     focus() {}
     dispose() {}
+    attachCustomKeyEventHandler() {}
   },
 }));
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class {
     fit() {}
+  },
+}));
+vi.mock("@xterm/addon-search", () => ({
+  SearchAddon: class {
+    findNext() {}
+    findPrevious() {}
+    clearDecorations() {}
+    onDidChangeResults() {
+      return { dispose() {} };
+    }
   },
 }));
 vi.mock("@xterm/addon-web-links", () => ({ WebLinksAddon: class {} }));
@@ -164,6 +175,25 @@ describe("streaming stub panels", () => {
 
     expect(FakeWS.instances).toHaveLength(2);
     expect(FakeWS.instances[0].closed).toBe(true);
+    w.unmount();
+  });
+
+  it("shows zoom and search controls only when the manifest enables them", async () => {
+    const plain = mount(TerminalPanel, { props });
+    await flushPromises();
+    expect(plain.find('[aria-label="Search terminal"]').exists()).toBe(false);
+    expect(plain.find('[aria-label="Zoom in"]').exists()).toBe(false);
+    plain.unmount();
+
+    const w = mount(TerminalPanel, {
+      props: { ...props, config: { zoom: true, search: true } },
+    });
+    await flushPromises();
+    expect(w.find('[aria-label="Zoom in"]').exists()).toBe(true);
+    expect(w.find('[aria-label="Search terminal"]').exists()).toBe(true);
+
+    await w.find('[aria-label="Search terminal"]').trigger("click");
+    expect(w.find('[aria-label="Find in terminal"]').exists()).toBe(true);
     w.unmount();
   });
 

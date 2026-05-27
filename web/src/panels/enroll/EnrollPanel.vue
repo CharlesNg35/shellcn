@@ -30,7 +30,7 @@ const statusTone = computed(() => {
       return "bg-emerald-400";
     case "offline":
     case "error":
-      return "bg-red-500";
+      return "bg-rose-400";
     default:
       return "animate-pulse bg-amber-400";
   }

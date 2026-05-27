@@ -130,10 +130,11 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 		return models.Connection{}, fmt.Errorf("%w: name is required", plugin.ErrInvalidInput)
 	}
 	context := connectionSchemaContext(in.Protocol, transport)
-	if err := m.Config.ValidateValuesWithContext(in.Config, nil, context); err != nil {
+	configWithDefaults := m.Config.ValuesWithDefaults(in.Config)
+	if err := m.Config.ValidateValuesWithContext(configWithDefaults, nil, context); err != nil {
 		return models.Connection{}, err
 	}
-	visibleConfig := m.Config.VisibleValues(in.Config, context)
+	visibleConfig := m.Config.VisibleValues(configWithDefaults, context)
 	actorID := in.ActorID
 	if actorID == "" {
 		actorID = ownerID
@@ -192,6 +193,7 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	if err != nil {
 		return models.Connection{}, err
 	}
+	mergedConfig = m.Config.ValuesWithDefaults(mergedConfig)
 	// Validate against a view where retained secrets count as present.
 	validateView := map[string]any{}
 	maps.Copy(validateView, mergedConfig)
@@ -384,7 +386,10 @@ func (s *ConnectionService) ReferencesCredential(ctx context.Context, credential
 	}
 	for _, c := range conns {
 		if m, ok := s.plugins.Manifest(c.Protocol); ok {
-			config := m.Config.VisibleValues(c.Config, connectionSchemaContext(c.Protocol, c.Transport))
+			config := m.Config.VisibleValues(
+				m.Config.ValuesWithDefaults(c.Config),
+				connectionSchemaContext(c.Protocol, c.Transport),
+			)
 			for _, key := range credentialRefKeys(m.Config) {
 				if id, _ := config[key].(string); id == credentialID {
 					return true, nil
@@ -405,11 +410,12 @@ func (s *ConnectionService) Detail(ctx context.Context, userID string, conn mode
 	m, _ := s.plugins.Manifest(conn.Protocol)
 	state := map[string]string{}
 	context := connectionSchemaContext(conn.Protocol, conn.Transport)
-	for _, key := range m.Config.VisibleSecretKeys(conn.Config, context) {
+	configWithDefaults := m.Config.ValuesWithDefaults(conn.Config)
+	for _, key := range m.Config.VisibleSecretKeys(configWithDefaults, context) {
 		state[key] = secrets.State(len(conn.Secrets[key]) > 0)
 	}
 	config := map[string]any{}
-	maps.Copy(config, m.Config.VisibleValues(conn.Config, context))
+	maps.Copy(config, m.Config.VisibleValues(configWithDefaults, context))
 	credentialStates := s.credentialRefStates(ctx, userID, m.Config, config)
 	recording := conn.Recording
 	if recording == nil {

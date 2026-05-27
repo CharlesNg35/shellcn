@@ -256,6 +256,15 @@
             ]
           }
         ]
+      },
+      "enabledWhen": {
+        "allOf": [
+          {
+            "field": "state",
+            "op": "eq",
+            "value": "stopped"
+          }
+        ]
       }
     }
   ],

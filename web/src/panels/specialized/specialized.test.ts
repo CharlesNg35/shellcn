@@ -2,6 +2,7 @@
 import { defineComponent } from "vue";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import Button from "primevue/button";
 import { installFetch } from "../../test/fetchMock";
 import GraphPanel from "./GraphPanel.vue";
 import TracePanel from "./TracePanel.vue";
@@ -94,6 +95,9 @@ beforeEach(() => {
         },
       };
     }
+    if (url.includes("kv.write") && init?.method === "PUT") {
+      return { body: { ok: true } };
+    }
     if (url.includes("http.exec") && init?.method === "POST") {
       return {
         body: {
@@ -152,6 +156,110 @@ describe("specialized panels", () => {
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
   });
 
+  it("keeps KV refresh loading state on the refresh button", async () => {
+    let listCalls = 0;
+    let resolveRefresh: (() => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("kv.read")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                key: "session:1",
+                type: "json",
+                value: { user: "ada" },
+              }),
+              { headers: { "Content-Type": "application/json" } },
+            ),
+          );
+        }
+        if (url.includes("kv.list")) {
+          listCalls += 1;
+          if (listCalls === 1) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  items: [{ key: "session:1", type: "json" }],
+                  nextCursor: "",
+                }),
+                { headers: { "Content-Type": "application/json" } },
+              ),
+            );
+          }
+          return new Promise((resolve) => {
+            resolveRefresh = () =>
+              resolve(
+                new Response(
+                  JSON.stringify({
+                    items: [{ key: "session:1", type: "json" }],
+                    nextCursor: "",
+                  }),
+                  { headers: { "Content-Type": "application/json" } },
+                ),
+              );
+          });
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({}), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+    );
+    const w = mount(KVPanel, {
+      props: { connectionId: "c1", source: { routeId: "kv.list" } },
+    });
+    await flushPromises();
+
+    const refresh = () =>
+      w
+        .findAllComponents(Button)
+        .find((button) => button.text().includes("Refresh"))!;
+    await refresh().trigger("click");
+
+    expect(refresh().find(".animate-spin").exists()).toBe(true);
+    resolveRefresh?.();
+    await flushPromises();
+    expect(refresh().find(".animate-spin").exists()).toBe(false);
+  });
+
+  it("shows key creation only when the generic kv create route is declared", async () => {
+    const readOnlyCreate = mount(KVPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kv.list" },
+        config: {
+          readRouteId: "kv.read",
+          writeRouteId: "kv.write",
+          keyParam: "key",
+          writable: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(readOnlyCreate.text()).not.toContain("New");
+
+    const w = mount(KVPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kv.list" },
+        config: {
+          createRouteId: "kv.write",
+          readRouteId: "kv.read",
+          writeRouteId: "kv.write",
+          keyParam: "key",
+          writable: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.text()).toContain("New");
+  });
+
   it("executes a declarative HTTP request", async () => {
     const w = mount(HTTPClientPanel, {
       props: {
@@ -169,5 +277,20 @@ describe("specialized panels", () => {
 
     expect(w.text()).toContain("200");
     expect(w.findAll(".shellcn-codemirror-host")).toHaveLength(2);
+  });
+
+  it("renders HTTP request controls with visible labels and input styling", () => {
+    const w = mount(HTTPClientPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "http.exec" },
+      },
+    });
+
+    expect(w.text()).toContain("Method");
+    expect(w.text()).toContain("Request URL");
+    const urlInput = w.get('input[aria-label="Request URL"]');
+    expect(urlInput.classes()).toContain("border");
+    expect(urlInput.classes()).toContain("text-surface-800");
   });
 });

@@ -135,7 +135,13 @@ onUnmounted(() => {
           saveError
         }}</span>
         <span v-else-if="saved" class="text-xs text-emerald-500">Saved</span>
-        <Button type="button" label="Save" :disabled="saving" @click="save" />
+        <Button
+          type="button"
+          label="Save"
+          :loading="saving"
+          :disabled="saving"
+          @click="save"
+        />
       </div>
     </div>
     <SkeletonList v-if="loading" />

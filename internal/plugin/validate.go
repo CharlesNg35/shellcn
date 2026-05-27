@@ -62,7 +62,7 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 		add("Category %q is not a built-in category", m.Category)
 	}
 	switch m.Layout {
-	case LayoutTabs, LayoutSidebarTree:
+	case LayoutTabs, LayoutSidebarTree, LayoutDashboard:
 	default:
 		add("Layout %q is not a valid layout", m.Layout)
 	}
@@ -169,6 +169,9 @@ func validateActions(m Manifest, routes map[string]Route, tabs map[string]bool, 
 		}
 		if a.OnSuccess != nil && a.OnSuccess.SelectTab != "" && !tabs[a.OnSuccess.SelectTab] {
 			add("action %q onSuccess.selectTab references unknown tab %q", a.ID, a.OnSuccess.SelectTab)
+		}
+		if (a.Open == OpenDock || a.Open == OpenDialog) && a.Panel == "" {
+			add("action %q opens a panel (%s) but declares no panel type", a.ID, a.Open)
 		}
 	}
 	return ids
@@ -445,6 +448,7 @@ func checkPanelConfigRoutes(
 		checkWriteRouteID(ctx+" cancelRouteId", route("cancelRouteId"))
 		checkRouteID(ctx+" completionRouteId", route("completionRouteId"))
 	case PanelKV:
+		checkWriteRouteID(ctx+" createRouteId", route("createRouteId"))
 		checkRouteID(ctx+" readRouteId", route("readRouteId"))
 		checkWriteRouteID(ctx+" writeRouteId", route("writeRouteId"))
 		checkWriteRouteID(ctx+" deleteRouteId", route("deleteRouteId"))

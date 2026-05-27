@@ -193,12 +193,12 @@ onUnmounted(() => {
     >
       <span
         v-if="recorder.recording.value"
-        class="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2 py-0.5 font-medium text-red-400"
+        class="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2 py-0.5 font-medium text-rose-300"
         role="status"
         aria-label="Recording this desktop session"
       >
         <span
-          class="h-2 w-2 animate-pulse rounded-full bg-red-500"
+          class="h-2 w-2 animate-pulse rounded-full bg-rose-400"
           aria-hidden="true"
         />
         REC
@@ -207,10 +207,10 @@ onUnmounted(() => {
         v-if="!forced && !recorder.recording.value"
         type="button"
         :disabled="unsupported || !loaded"
-        class="inline-flex items-center gap-1.5 rounded-md border border-surface-600 px-2 py-1 text-surface-300 hover:border-red-400 hover:text-red-400 disabled:opacity-50"
+        class="inline-flex items-center gap-1.5 rounded-md border border-surface-600 px-2 py-1 text-surface-300 hover:border-rose-300 hover:text-rose-300 disabled:opacity-50"
         @click="startDesiredRecording"
       >
-        <span class="h-2 w-2 rounded-full bg-red-500" />
+        <span class="h-2 w-2 rounded-full bg-rose-400" />
         Record
       </button>
       <button
@@ -252,7 +252,7 @@ onUnmounted(() => {
       </p>
       <p
         v-else-if="status === 'auth-failed'"
-        class="p-4 text-sm text-red-400"
+        class="p-4 text-sm text-rose-300"
         role="alert"
       >
         Authentication with the remote desktop failed.
@@ -266,7 +266,7 @@ onUnmounted(() => {
       </p>
       <p
         v-else-if="status === 'connection-lost'"
-        class="p-4 text-sm text-red-400"
+        class="p-4 text-sm text-rose-300"
         role="alert"
       >
         Connection to the remote desktop was lost.

@@ -61,7 +61,7 @@ function tone(status: string): string {
   if (status === "connecting") {
     return "bg-amber-400";
   }
-  return "bg-red-500";
+  return "bg-rose-400";
 }
 
 function reconnectable(status: string): boolean {

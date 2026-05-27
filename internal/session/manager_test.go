@@ -202,3 +202,33 @@ func TestShutdownClosesAll(t *testing.T) {
 		t.Errorf("after shutdown: want 0 sessions, got %d", s.Sessions)
 	}
 }
+
+func TestCloseConnectionClosesAllOwnerScopes(t *testing.T) {
+	m := session.New(session.Options{})
+	defer m.Shutdown()
+
+	c1u1 := &fakeSession{}
+	c1u2 := &fakeSession{}
+	c2u1 := &fakeSession{}
+	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c1", OwnerScope: "u1"}, "u1", connector(c1u1, nil)); err != nil {
+		t.Fatalf("acquire c1 u1: %v", err)
+	}
+	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c1", OwnerScope: "u2"}, "u2", connector(c1u2, nil)); err != nil {
+		t.Fatalf("acquire c1 u2: %v", err)
+	}
+	if _, err := m.Acquire(context.Background(), session.Key{ConnectionID: "c2", OwnerScope: "u1"}, "u1", connector(c2u1, nil)); err != nil {
+		t.Fatalf("acquire c2 u1: %v", err)
+	}
+
+	m.CloseConnection("c1")
+
+	if !c1u1.isClosed() || !c1u2.isClosed() {
+		t.Fatal("all sessions for c1 should be closed")
+	}
+	if c2u1.isClosed() {
+		t.Fatal("session for another connection should stay open")
+	}
+	if s := m.Stats(); s.Sessions != 1 {
+		t.Fatalf("remaining sessions = %d, want 1", s.Sessions)
+	}
+}

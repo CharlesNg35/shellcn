@@ -145,7 +145,7 @@ function dragAdd(event: unknown): void {
 
         <section v-else class="min-w-0" :data-folder-id="item.id">
           <div
-            class="group flex min-h-10 w-full items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+            class="group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
           >
             <span
               class="folder-drag-handle shrink-0 cursor-grab touch-none rounded p-0.5 active:cursor-grabbing"
@@ -186,7 +186,7 @@ function dragAdd(event: unknown): void {
               rounded
               severity="secondary"
               size="small"
-              class="m-0 h-7 w-7 shrink-0 justify-center p-0 opacity-70 transition-opacity group-hover:opacity-100"
+              class="m-0 -mr-2.25 h-7 w-7 shrink-0 justify-center p-0 opacity-70 transition-opacity group-hover:opacity-100"
               title="Folder actions"
               aria-label="Folder actions"
               aria-haspopup="true"

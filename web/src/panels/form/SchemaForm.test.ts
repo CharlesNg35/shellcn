@@ -118,6 +118,60 @@ describe("SchemaForm", () => {
     expect(w.find('input[placeholder="30s, 5m, 1h"]').exists()).toBe(true);
   });
 
+  it("renders number fields without locale digit grouping", async () => {
+    const w = mount(SchemaForm, {
+      props: {
+        schema: {
+          groups: [
+            {
+              name: "Basic",
+              fields: [{ key: "port", label: "Port", type: "number" }],
+            },
+          ],
+        },
+        modelValue: { port: 6379 },
+      },
+    });
+    await flushPromises();
+    expect(w.findComponent({ name: "InputNumber" }).props("useGrouping")).toBe(
+      false,
+    );
+  });
+
+  it("applies manifest defaults to toggle fields", async () => {
+    const w = mount(SchemaForm, {
+      props: {
+        schema: {
+          groups: [
+            {
+              name: "Safety",
+              fields: [
+                {
+                  key: "read_only",
+                  label: "Read-only mode",
+                  type: "toggle",
+                  default: true,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.findComponent({ name: "ToggleSwitch" }).props("modelValue")).toBe(
+      true,
+    );
+    expect(w.find('input[role="switch"]').attributes("checked")).toBeDefined();
+    expect(w.find('[data-pc-section="slider"]').classes()).toContain(
+      "data-[p~=checked]:bg-primary-500",
+    );
+    expect(w.emitted("update:modelValue")?.at(-1)?.[0]).toMatchObject({
+      read_only: true,
+    });
+  });
+
   it("omits hidden conditional fields from submit payloads", async () => {
     const w = mount(SchemaForm, {
       props: {

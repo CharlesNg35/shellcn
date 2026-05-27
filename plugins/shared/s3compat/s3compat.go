@@ -149,6 +149,7 @@ func normalizeOptions(cfg plugin.ConnectConfig, opts *Options) error {
 }
 
 func AuthFields(protocol string) []plugin.Field {
+	staticCredentials := &plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "access_key"}, {Field: "auth", Op: plugin.OpEq, Value: "credential"}}}
 	return []plugin.Field{
 		{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "access_key", Options: []plugin.Option{
 			{Label: "Access key", Value: "access_key"},
@@ -156,7 +157,7 @@ func AuthFields(protocol string) []plugin.Field {
 		}},
 		{Key: "access_key_id", Label: "Access key ID", Type: plugin.FieldText, Required: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "access_key"}}}},
 		{Key: "secret_access_key", Label: "Secret access key", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "access_key"}}}},
-		{Key: "session_token", Label: "Session token", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "access_key"}}}},
+		{Key: "session_token", Label: "Session token", Type: plugin.FieldPassword, Secret: true, VisibleWhen: staticCredentials},
 		{Key: "credential_id", Label: "Access key credential", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
 			Kinds: []plugin.CredentialKind{plugin.CredentialCloudAccessKey}, Protocols: []string{protocol}, Required: true,
 		}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},

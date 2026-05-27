@@ -26,13 +26,12 @@ const (
 type CredentialKind string
 
 const (
-	CredentialTLSClientCert      CredentialKind = "tls_client_cert"
-	CredentialDBPassword         CredentialKind = "db_password"
-	CredentialAPIToken           CredentialKind = "api_token"
-	CredentialCloudAccessKey     CredentialKind = "cloud_access_key"
-	CredentialServiceAccountJSON CredentialKind = "service_account_json"
-	CredentialBasicAuth          CredentialKind = "basic_auth"
-	CredentialBearerToken        CredentialKind = "bearer_token"
+	CredentialTLSClientCert  CredentialKind = "tls_client_cert"
+	CredentialDBPassword     CredentialKind = "db_password"
+	CredentialAPIToken       CredentialKind = "api_token"
+	CredentialCloudAccessKey CredentialKind = "cloud_access_key"
+	CredentialBasicAuth      CredentialKind = "basic_auth"
+	CredentialBearerToken    CredentialKind = "bearer_token"
 )
 
 // Operator is the comparison used by a structured visibility Rule.
@@ -111,6 +110,29 @@ type Group struct {
 // Schema is the connection config form: ordered groups of typed fields.
 type Schema struct {
 	Groups []Group `json:"groups"`
+}
+
+// Defaults returns the manifest-declared default values keyed by field.
+func (s Schema) Defaults() map[string]any {
+	out := map[string]any{}
+	for _, group := range s.Groups {
+		for _, field := range group.Fields {
+			if field.Default != nil {
+				out[field.Key] = field.Default
+			}
+		}
+	}
+	return out
+}
+
+// ValuesWithDefaults returns a copy of values with missing schema defaults
+// filled in. Explicit false/zero/empty values are preserved.
+func (s Schema) ValuesWithDefaults(values map[string]any) map[string]any {
+	out := s.Defaults()
+	for key, value := range values {
+		out[key] = value
+	}
+	return out
 }
 
 // HasFileField reports whether the schema can submit browser File values and

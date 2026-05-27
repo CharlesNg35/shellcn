@@ -1,16 +1,26 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { ITheme, Terminal } from "@xterm/xterm";
 import type { FitAddon } from "@xterm/addon-fit";
+import type { SearchAddon } from "@xterm/addon-search";
+import Button from "primevue/button";
+import InputText from "primevue/inputtext";
 import { useStream } from "../../composables/useStream";
 import { useTheme } from "../../composables/useTheme";
+import AppIcon from "../../components/AppIcon.vue";
 import RecordingControls from "../../components/recordings/RecordingControls.vue";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import type { PanelProps } from "../core/types";
+import type { TerminalPanelConfig } from "../../types/projection";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
 const { isDark } = useTheme();
+
+const cfg = computed(() => props.config as TerminalPanelConfig | undefined);
+const zoomEnabled = computed(() => cfg.value?.zoom === true);
+const searchEnabled = computed(() => cfg.value?.search === true);
+const hasControls = computed(() => zoomEnabled.value || searchEnabled.value);
 
 const darkTerminalTheme: ITheme = {
   background: "#020617",
@@ -91,6 +101,77 @@ function write(data: string): void {
   else pending.push(data);
 }
 
+// --- zoom ---------------------------------------------------------------
+const MIN_FONT = 8;
+const MAX_FONT = 28;
+const DEFAULT_FONT = 13;
+const fontSize = ref(DEFAULT_FONT);
+
+function applyFontSize(): void {
+  if (!term) return;
+  term.options.fontSize = fontSize.value;
+  applyFit();
+}
+function zoomBy(delta: number): void {
+  fontSize.value = Math.max(
+    MIN_FONT,
+    Math.min(MAX_FONT, fontSize.value + delta),
+  );
+  applyFontSize();
+}
+function resetZoom(): void {
+  fontSize.value = DEFAULT_FONT;
+  applyFontSize();
+}
+
+// --- search -------------------------------------------------------------
+let searchAddon: SearchAddon | null = null;
+let searchDisposable: { dispose(): void } | null = null;
+const searchOpen = ref(false);
+const searchTerm = ref("");
+const searchInput = ref<{ $el: HTMLElement } | null>(null);
+const matches = ref({ current: 0, total: 0 });
+
+const searchDecorations = computed(() => ({
+  matchOverviewRuler: "#3b82f6",
+  activeMatchColorOverviewRuler: "#f59e0b",
+  matchBackground: isDark.value ? "#1d4ed8" : "#bfdbfe",
+  activeMatchBackground: "#f59e0b",
+}));
+
+function runFind(forward: boolean, incremental = false): void {
+  if (!searchAddon) return;
+  if (!searchTerm.value) {
+    searchAddon.clearDecorations();
+    matches.value = { current: 0, total: 0 };
+    return;
+  }
+  const options = { decorations: searchDecorations.value, incremental };
+  if (forward) searchAddon.findNext(searchTerm.value, options);
+  else searchAddon.findPrevious(searchTerm.value, options);
+}
+
+async function openSearch(): Promise<void> {
+  if (!searchEnabled.value) return;
+  searchOpen.value = true;
+  await nextTick();
+  const el = searchInput.value?.$el as HTMLElement | undefined;
+  const input =
+    el instanceof HTMLInputElement ? el : (el?.querySelector("input") ?? null);
+  input?.focus();
+}
+function closeSearch(): void {
+  searchOpen.value = false;
+  searchTerm.value = "";
+  searchAddon?.clearDecorations();
+  matches.value = { current: 0, total: 0 };
+  term?.focus();
+}
+
+watch(searchTerm, () => {
+  if (searchOpen.value) runFind(true, true);
+});
+
 const { status, error, send, reconnect } = useStream(
   props.connectionId,
   props.source,
@@ -148,7 +229,7 @@ async function mountTerminal(): Promise<void> {
     term = new Terminal({
       convertEol: true,
       cursorBlink: true,
-      fontSize: 13,
+      fontSize: fontSize.value,
       scrollback: 5000,
       // Render an offscreen line for assistive tech (terminals are otherwise opaque).
       screenReaderMode: true,
@@ -158,6 +239,45 @@ async function mountTerminal(): Promise<void> {
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon());
     term.open(container.value);
+
+    if (searchEnabled.value) {
+      const { SearchAddon } = await import("@xterm/addon-search");
+      searchAddon = new SearchAddon();
+      term.loadAddon(searchAddon);
+      searchDisposable = searchAddon.onDidChangeResults(
+        ({ resultIndex, resultCount }) => {
+          matches.value = {
+            current: resultIndex >= 0 ? resultIndex + 1 : 0,
+            total: resultCount,
+          };
+        },
+      );
+    }
+
+    // Intercept zoom/search shortcuts before the PTY so they don't reach the
+    // shell. Only active when the plugin enabled the matching control.
+    if (hasControls.value) {
+      term.attachCustomKeyEventHandler((e) => {
+        if (e.type !== "keydown" || !(e.ctrlKey || e.metaKey)) return true;
+        if (searchEnabled.value && (e.key === "f" || e.key === "F")) {
+          void openSearch();
+          return false;
+        }
+        if (zoomEnabled.value && (e.key === "=" || e.key === "+")) {
+          zoomBy(1);
+          return false;
+        }
+        if (zoomEnabled.value && e.key === "-") {
+          zoomBy(-1);
+          return false;
+        }
+        if (zoomEnabled.value && e.key === "0") {
+          resetZoom();
+          return false;
+        }
+        return true;
+      });
+    }
 
     // WebGL renderer for fast large-output scrolling; fall back to the DOM
     // renderer (and never throw) if the GPU context is lost or unavailable.
@@ -190,6 +310,8 @@ onUnmounted(() => {
   clearTimeout(resizeTimer);
   resizeObserver?.disconnect();
   resizeObserver = null;
+  searchDisposable?.dispose();
+  searchDisposable = null;
   try {
     term?.dispose();
   } catch {
@@ -197,6 +319,7 @@ onUnmounted(() => {
   }
   term = null;
   fit = null;
+  searchAddon = null;
 });
 </script>
 
@@ -224,11 +347,148 @@ onUnmounted(() => {
     <p v-if="failed" class="p-4 text-sm text-surface-400" role="alert">
       Terminal preview unavailable in this environment.
     </p>
-    <div
-      ref="container"
-      role="application"
-      aria-label="Terminal session"
-      class="min-h-0 flex-1 overflow-hidden p-2"
-    />
+    <div class="relative min-h-0 flex-1">
+      <div
+        ref="container"
+        role="application"
+        aria-label="Terminal session"
+        class="absolute inset-0 overflow-hidden"
+      />
+
+      <!-- Floating controls: zero permanent space, dim until hover/focus. -->
+      <div
+        v-if="hasControls"
+        class="absolute top-2 right-2 z-10 opacity-60 transition-opacity focus-within:opacity-100 hover:opacity-100"
+      >
+        <div
+          v-if="!searchOpen"
+          class="flex items-center gap-0.5 rounded-md border border-surface-200 bg-surface-0/90 p-0.5 shadow-sm backdrop-blur dark:border-surface-700 dark:bg-surface-900/90"
+        >
+          <template v-if="zoomEnabled">
+            <Button
+              type="button"
+              text
+              rounded
+              severity="secondary"
+              size="small"
+              title="Zoom out (Ctrl/⌘ -)"
+              aria-label="Zoom out"
+              :pt="{ root: 'h-6 w-6 p-0' }"
+              @click="zoomBy(-1)"
+            >
+              <AppIcon :icon="{ type: 'lucide', value: 'minus' }" :size="13" />
+            </Button>
+            <Button
+              type="button"
+              text
+              severity="secondary"
+              size="small"
+              title="Reset zoom (Ctrl/⌘ 0)"
+              aria-label="Reset zoom"
+              :pt="{
+                root: 'h-6 min-w-7 px-1',
+                label:
+                  'text-[10px] tabular-nums text-surface-600 dark:text-surface-300',
+              }"
+              :label="`${fontSize}px`"
+              @click="resetZoom"
+            />
+            <Button
+              type="button"
+              text
+              rounded
+              severity="secondary"
+              size="small"
+              title="Zoom in (Ctrl/⌘ +)"
+              aria-label="Zoom in"
+              :pt="{ root: 'h-6 w-6 p-0' }"
+              @click="zoomBy(1)"
+            >
+              <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="13" />
+            </Button>
+          </template>
+          <Button
+            v-if="searchEnabled"
+            type="button"
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            title="Search (Ctrl/⌘ F)"
+            aria-label="Search terminal"
+            :pt="{ root: 'h-6 w-6 p-0' }"
+            @click="openSearch"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'search' }" :size="13" />
+          </Button>
+        </div>
+
+        <div
+          v-else
+          class="flex items-center gap-1 rounded-md border border-surface-200 bg-surface-0/95 px-1.5 py-1 shadow-sm backdrop-blur dark:border-surface-700 dark:bg-surface-900/95"
+        >
+          <InputText
+            ref="searchInput"
+            v-model="searchTerm"
+            placeholder="Find"
+            aria-label="Find in terminal"
+            :pt="{ root: 'h-7 w-40 text-xs' }"
+            @keydown.enter.exact.prevent="runFind(true)"
+            @keydown.shift.enter.prevent="runFind(false)"
+            @keydown.esc.prevent="closeSearch"
+          />
+          <span
+            class="min-w-9 text-center text-[10px] text-surface-400 tabular-nums"
+          >
+            {{ matches.total ? `${matches.current}/${matches.total}` : "0/0" }}
+          </span>
+          <Button
+            type="button"
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            title="Previous (Shift+Enter)"
+            aria-label="Previous match"
+            :pt="{ root: 'h-6 w-6 p-0' }"
+            @click="runFind(false)"
+          >
+            <AppIcon
+              :icon="{ type: 'lucide', value: 'chevron-up' }"
+              :size="14"
+            />
+          </Button>
+          <Button
+            type="button"
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            title="Next (Enter)"
+            aria-label="Next match"
+            :pt="{ root: 'h-6 w-6 p-0' }"
+            @click="runFind(true)"
+          >
+            <AppIcon
+              :icon="{ type: 'lucide', value: 'chevron-down' }"
+              :size="14"
+            />
+          </Button>
+          <Button
+            type="button"
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            title="Close (Esc)"
+            aria-label="Close search"
+            :pt="{ root: 'h-6 w-6 p-0' }"
+            @click="closeSearch"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
+          </Button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

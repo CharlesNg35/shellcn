@@ -91,6 +91,7 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
           :connection-id="connectionId"
           :actions="headerActions"
           :resource="resource"
+          :record="row"
           @done="onActionDone"
         />
       </div>

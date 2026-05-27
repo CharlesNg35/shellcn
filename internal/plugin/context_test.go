@@ -50,6 +50,21 @@ func TestValidateSchemaAcceptsValidJSON(t *testing.T) {
 	}
 }
 
+func TestSchemaValuesWithDefaultsPreservesExplicitValues(t *testing.T) {
+	schema := plugin.Schema{Groups: []plugin.Group{{Name: "Safety", Fields: []plugin.Field{
+		{Key: "read_only", Label: "Read-only", Type: plugin.FieldToggle, Default: true},
+		{Key: "port", Label: "Port", Type: plugin.FieldNumber, Default: 6379},
+	}}}}
+
+	defaults := schema.ValuesWithDefaults(map[string]any{"read_only": false})
+	if defaults["read_only"] != false {
+		t.Fatalf("explicit false was not preserved: %#v", defaults["read_only"])
+	}
+	if defaults["port"] != 6379 {
+		t.Fatalf("missing number default was not applied: %#v", defaults["port"])
+	}
+}
+
 func TestValidateSchemaRejectsMissingVisibleRequiredField(t *testing.T) {
 	rc := plugin.NewRequestContext(context.Background(), testUser(), nil, nil, nil, []byte(`{"name":"alpha","advanced":true}`))
 	if err := rc.ValidateSchema(testSchema()); err == nil || !strings.Contains(err.Error(), "token") {

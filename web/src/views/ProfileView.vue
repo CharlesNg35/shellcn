@@ -125,12 +125,12 @@ async function savePassword(): Promise<void> {
       <div class="flex justify-end">
         <Button
           type="button"
+          label="Save profile"
+          :loading="savingProfile"
           :disabled="savingProfile"
           :pt="{ root: btnPrimary }"
           @click="saveProfile"
-        >
-          {{ savingProfile ? "Saving…" : "Save profile" }}
-        </Button>
+        />
       </div>
     </section>
 
@@ -193,12 +193,12 @@ async function savePassword(): Promise<void> {
       <div class="flex justify-end">
         <Button
           type="button"
+          label="Update password"
+          :loading="savingPassword"
           :disabled="savingPassword || !currentPassword || !newPassword"
           :pt="{ root: btnPrimary }"
           @click="savePassword"
-        >
-          {{ savingPassword ? "Updating…" : "Update password" }}
-        </Button>
+        />
       </div>
     </section>
   </div>

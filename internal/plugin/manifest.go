@@ -27,8 +27,9 @@ type Capability string
 type Layout string
 
 const (
-	LayoutTabs        Layout = "tabs"
-	LayoutSidebarTree Layout = "sidebar_tree"
+	LayoutTabs        Layout = "tabs"         // flat top tab bar, one panel at a time
+	LayoutSidebarTree Layout = "sidebar_tree" // left resource tree + detail pane
+	LayoutDashboard   Layout = "dashboard"    // grid of panels (from Tabs) shown at once
 )
 
 // Transport is how a session reaches its target (orthogonal to protocol).

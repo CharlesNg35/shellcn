@@ -97,7 +97,7 @@ onUnmounted(clearCopiedTimer);
     header="Invite a user"
     :pt="{
       root: dialogRoot(),
-      content: 'p-5',
+      content: 'min-h-0 overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"
   >
@@ -180,12 +180,12 @@ onUnmounted(clearCopiedTimer);
         <Button
           v-if="!result"
           type="button"
+          label="Create invitation"
+          :loading="busy"
           :disabled="busy"
           :pt="{ root: btnPrimary }"
           @click="invite"
-        >
-          {{ busy ? "Creating…" : "Create invitation" }}
-        </Button>
+        />
         <Button
           v-else
           type="button"

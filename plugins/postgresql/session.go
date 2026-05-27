@@ -3,6 +3,7 @@ package postgresql
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -10,11 +11,16 @@ import (
 	"github.com/charlesng/shellcn/internal/plugin"
 )
 
+// Session brokers a PostgreSQL connection. A connection can browse every
+// database in the cluster, so pools are opened lazily per database (keyed by
+// name) and reused; the configured database is the default when none is named.
 type Session struct {
-	pool *pgxpool.Pool
-	opts options
+	opts   options
+	net    plugin.NetTransport
+	baseDB string
 
 	mu      sync.Mutex
+	pools   map[string]*pgxpool.Pool
 	running map[string]context.CancelFunc
 }
 
@@ -23,17 +29,14 @@ func connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, err
 	if err != nil {
 		return nil, err
 	}
-	pc, err := poolConfig(opts, cfg.Net)
-	if err != nil {
-		return nil, err
+	s := &Session{
+		opts:    opts,
+		net:     cfg.Net,
+		baseDB:  opts.Database,
+		pools:   map[string]*pgxpool.Pool{},
+		running: map[string]context.CancelFunc{},
 	}
-	pool, err := pgxpool.NewWithConfig(ctx, pc)
-	if err != nil {
-		return nil, fmt.Errorf("%w: open PostgreSQL pool: %v", plugin.ErrUnavailable, err)
-	}
-	s := &Session{pool: pool, opts: opts, running: map[string]context.CancelFunc{}}
-	if err := s.HealthCheck(ctx); err != nil {
-		_ = s.Close()
+	if _, err := s.poolFor(ctx, opts.Database); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -54,8 +57,67 @@ func unwrap(sess plugin.Session) (*Session, error) {
 	return nil, fmt.Errorf("%w: PostgreSQL session unavailable", plugin.ErrUnavailable)
 }
 
+// poolFor returns the pool for the named database, opening and caching it on
+// first use. An empty name resolves to the connection's configured database.
+func (s *Session) poolFor(ctx context.Context, database string) (*pgxpool.Pool, error) {
+	database = strings.TrimSpace(database)
+	if database == "" {
+		database = s.baseDB
+	}
+	s.mu.Lock()
+	if pool := s.pools[database]; pool != nil {
+		s.mu.Unlock()
+		return pool, nil
+	}
+	s.mu.Unlock()
+
+	pc, err := poolConfig(s.opts, s.net)
+	if err != nil {
+		return nil, err
+	}
+	pc.ConnConfig.Database = database
+	pool, err := pgxpool.NewWithConfig(ctx, pc)
+	if err != nil {
+		return nil, fmt.Errorf("%w: open PostgreSQL pool: %v", plugin.ErrUnavailable, err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("%w: PostgreSQL ping %q: %v", plugin.ErrUnavailable, database, err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing := s.pools[database]; existing != nil {
+		pool.Close()
+		return existing, nil
+	}
+	s.pools[database] = pool
+	return pool, nil
+}
+
+// closePool closes and forgets the cached pool for a database (e.g. before
+// dropping it, since an open connection blocks DROP DATABASE). The base pool is
+// never closed this way.
+func (s *Session) closePool(database string) {
+	database = strings.TrimSpace(database)
+	if database == "" || database == s.baseDB {
+		return
+	}
+	s.mu.Lock()
+	pool := s.pools[database]
+	delete(s.pools, database)
+	s.mu.Unlock()
+	if pool != nil {
+		pool.Close()
+	}
+}
+
 func (s *Session) HealthCheck(ctx context.Context) error {
-	if err := s.pool.Ping(ctx); err != nil {
+	pool, err := s.poolFor(ctx, s.baseDB)
+	if err != nil {
+		return err
+	}
+	if err := pool.Ping(ctx); err != nil {
 		return fmt.Errorf("%w: PostgreSQL ping: %v", plugin.ErrUnavailable, err)
 	}
 	return nil
@@ -67,8 +129,12 @@ func (s *Session) Close() error {
 		cancel()
 		delete(s.running, id)
 	}
+	pools := s.pools
+	s.pools = map[string]*pgxpool.Pool{}
 	s.mu.Unlock()
-	s.pool.Close()
+	for _, pool := range pools {
+		pool.Close()
+	}
 	return nil
 }
 

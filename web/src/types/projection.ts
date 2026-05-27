@@ -22,7 +22,10 @@ export type RiskLevel = "safe" | "write" | "destructive" | "privileged";
 
 export type Transport = "direct" | "agent";
 
-export type Layout = "tabs" | "sidebar_tree";
+export const TRANSPORT_DIRECT: Transport = "direct";
+export const TRANSPORT_AGENT: Transport = "agent";
+
+export type Layout = "tabs" | "sidebar_tree" | "dashboard";
 
 export type KnownPanelType =
   | "terminal"
@@ -39,7 +42,8 @@ export type KnownPanelType =
   | "graph"
   | "trace"
   | "kv"
-  | "http_client";
+  | "http_client"
+  | "dashboard";
 
 // Open union: the renderer must handle a type it does not recognize.
 export type PanelType = KnownPanelType | (string & {});
@@ -210,6 +214,23 @@ export interface TablePanelConfig {
   watch?: DataSource;
   actionIds?: string[];
   rowActionIds?: string[];
+  // Inline data-grid editing (plugin-agnostic). When `editable` is set and
+  // `rowKey` names the identifying columns, the grid offers cell editing,
+  // add-row, and delete-row wired to these mutation routes. Bodies are uniform:
+  // insert {values}, update {key, values}, delete {key}.
+  editable?: boolean;
+  rowKey?: string[];
+  insert?: DataSource;
+  update?: DataSource;
+  delete?: DataSource;
+  emptyText?: string;
+  // Opt-in: buffer edits/inserts/deletes locally for review and commit or
+  // discard them as a batch instead of applying each change immediately.
+  stagedEdits?: boolean;
+  // Row field keys to omit when the grid derives columns from the data.
+  hiddenColumns?: string[];
+  // Opt-in: show the generic CSV/JSON export control for loaded rows.
+  exportable?: boolean;
 }
 
 export interface FormPanelConfig {
@@ -238,6 +259,8 @@ export interface QueryEditorConfig {
   cancelParams?: Record<string, string>;
   completionRouteId?: string;
   completionParams?: Record<string, string>;
+  // Opt-in: show the CSV/JSON export control for query results.
+  exportable?: boolean;
 }
 
 export interface GraphPanelConfig {
@@ -249,12 +272,45 @@ export interface TracePanelConfig {
   serviceField?: string;
 }
 
+export interface MetricStat {
+  key: string;
+  label?: string;
+  unit?: string;
+}
+
+export interface MetricGauge {
+  key: string;
+  label?: string;
+  unit?: string;
+  max?: number;
+}
+
+export interface MetricSeries {
+  key: string;
+  label?: string;
+  unit?: string;
+}
+
+export interface MetricsPanelConfig {
+  stats?: MetricStat[];
+  gauges?: MetricGauge[];
+  series?: MetricSeries[];
+  history?: number;
+}
+
+export interface TerminalPanelConfig {
+  zoom?: boolean;
+  search?: boolean;
+}
+
 export interface KVPanelConfig {
+  createRouteId?: string;
   readRouteId?: string;
   writeRouteId?: string;
   deleteRouteId?: string;
   keyParam?: string;
   writable?: boolean;
+  valueTypes?: string[];
 }
 
 export interface HTTPClientConfig {
@@ -279,7 +335,8 @@ export type ColumnType =
   | "bytes"
   | "datetime"
   | "number"
-  | "bool";
+  | "bool"
+  | "json";
 
 export interface Column {
   key: string;
@@ -287,6 +344,10 @@ export interface Column {
   sortable?: boolean;
   type?: ColumnType;
   width?: string;
+  // readOnly keeps a column non-editable even when its table is editable.
+  // nullable lets the inline editor clear the cell to an empty/null value.
+  readOnly?: boolean;
+  nullable?: boolean;
 }
 
 export type Severity = "info" | "success" | "warn" | "danger" | "secondary";
@@ -301,6 +362,9 @@ export interface Badge {
 
 export interface ResourceRef {
   kind: string;
+  // Optional outer container (e.g. database/cluster) for hierarchies deeper than
+  // namespace/name. Interpolates as ${resource.scope}.
+  scope?: string;
   namespace?: string;
   name: string;
   uid: string;
@@ -322,6 +386,11 @@ export interface Action {
   confirmText?: string;
   input?: Schema;
   onSuccess?: ActionSuccess;
+  // open="dock"/"dialog" opens `panel` (sourced from this action's route) in the
+  // workspace dock or a modal instead of executing the route inline.
+  open?: "view" | "dock" | "dialog";
+  panel?: PanelType;
+  enabledWhen?: Condition; // gate on the active row's fields; false = disabled
 }
 
 export interface Stream {
@@ -337,6 +406,24 @@ export interface Tab {
   panel: PanelType;
   source?: DataSource;
   config?: Record<string, unknown>;
+  // Dashboard-layout sizing hint: >= 2 fills the row, otherwise one column.
+  span?: number;
+}
+
+// One panel inside a `dashboard` panel grid (mirrors a Tab minus tab-bar
+// semantics). Generic — any plugin composes an at-a-glance view from its panels.
+export interface DashboardCell {
+  key: string;
+  label?: string;
+  icon?: Icon;
+  panel: PanelType;
+  source?: DataSource;
+  config?: Record<string, unknown>;
+  span?: number;
+}
+
+export interface DashboardPanelConfig {
+  cells: DashboardCell[];
 }
 
 export interface TreeGroup {
@@ -356,6 +443,11 @@ export interface TreeNode {
   leaf?: boolean;
   childrenSource?: DataSource;
   badge?: Badge;
+  // Opens the resource type's list view (like a top-level group) instead of a
+  // single-resource detail; listParams scope that list (e.g. a namespace).
+  resourceKind?: string;
+  listParams?: Record<string, string>;
+  data?: Record<string, unknown>; // row fields, so a tree-opened detail matches a table row
 }
 
 export interface HeaderSpec {
@@ -553,7 +645,17 @@ export interface Page<T> {
   total?: number;
 }
 
-export type Row = Record<string, unknown> & { ref?: ResourceRef };
+// A table row. Beyond display columns, a row may carry reserved framework keys
+// the generic grid understands (and never renders as columns):
+//   `ref`   — the row's own resource identity (row-click navigation).
+//   `_key`  — opaque key map identifying the row for inline edit/delete.
+//   `_links`— map of column key -> related resource ref; the grid renders those
+//             cells as links that open the related resource.
+export type Row = Record<string, unknown> & {
+  ref?: ResourceRef;
+  _key?: Record<string, unknown>;
+  _links?: Record<string, ResourceRef>;
+};
 
 // One entry in a file_browser directory listing.
 export interface FileEntry {

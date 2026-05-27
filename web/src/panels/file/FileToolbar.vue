@@ -136,10 +136,16 @@ const statusText = computed(() => {
         type="button"
         severity="secondary"
         :disabled="loading || mutating"
-        label="Refresh"
         title="Refresh folder"
         @click="emit('refresh')"
-      />
+      >
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'refresh-cw' }"
+          :size="14"
+          :loading="loading"
+        />
+        Refresh
+      </Button>
     </div>
 
     <div

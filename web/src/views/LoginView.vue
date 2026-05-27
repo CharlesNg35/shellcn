@@ -87,7 +87,7 @@ async function onSubmit(): Promise<void> {
 
         <p
           v-if="error"
-          class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/50 dark:text-red-300"
+          class="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
           role="alert"
         >
           {{ error }}
@@ -95,13 +95,13 @@ async function onSubmit(): Promise<void> {
 
         <Button
           type="submit"
+          label="Sign in"
+          :loading="busy"
           :disabled="busy"
           :pt="{
-            root: 'flex w-full items-center justify-center rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50',
+            root: 'flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50',
           }"
-        >
-          {{ busy ? "Signing in…" : "Sign in" }}
-        </Button>
+        />
       </form>
     </div>
   </div>

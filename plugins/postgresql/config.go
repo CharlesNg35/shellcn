@@ -11,18 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng/shellcn/plugins/shared/sqldb"
 )
 
 const (
 	defaultPort       = 5432
-	defaultRowLimit   = 1000
+	defaultRowLimit   = 500
 	defaultTimeout    = 30 * time.Second
 	defaultMaxConns   = 4
 	protocolName      = "postgresql"
 	credentialIDField = "credential_id"
+	authCertField     = "auth_client_cert_id"
 	clientCertField   = "client_cert_id"
+	authPassword      = "password"
+	authCredential    = "credential"
+	authClientCert    = "client_certificate"
 )
 
 type options struct {
@@ -44,8 +48,10 @@ type options struct {
 }
 
 func configSchema() plugin.Schema {
-	needsInlinePassword := plugin.Condition{AllOf: []plugin.Rule{{Field: credentialIDField, Op: plugin.OpEmpty}}}
-	tlsEnabled := plugin.Condition{AllOf: []plugin.Rule{{Field: "tls_mode", Op: plugin.OpNeq, Value: "disable"}}}
+	passwordAuth := plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}, {Field: authCertField, Op: plugin.OpEmpty}}}
+	usernameAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: "auth", Op: plugin.OpEq, Value: authClientCert}, {Field: authCertField, Op: plugin.OpNotEmpty}}}
+	credentialAuth := plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authCredential}, {Field: credentialIDField, Op: plugin.OpNotEmpty}}}
+	optionalClientCertificate := plugin.Condition{AllOf: []plugin.Rule{{Field: "tls_mode", Op: plugin.OpNeq, Value: "disable"}, {Field: "auth", Op: plugin.OpNeq, Value: authClientCert}}}
 	verifyTLS := plugin.Condition{AnyOf: []plugin.Rule{
 		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-ca"},
 		{Field: "tls_mode", Op: plugin.OpEq, Value: "verify-full"},
@@ -57,11 +63,19 @@ func configSchema() plugin.Schema {
 			{Key: "database", Label: "Database", Type: plugin.FieldText, Required: true, Default: "postgres"},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
-			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "postgres"},
-			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
+			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{
+				{Label: "Password", Value: authPassword},
+				{Label: "Stored password", Value: authCredential},
+				{Label: "Client certificate", Value: authClientCert},
+			}},
+			{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true, Placeholder: "postgres", VisibleWhen: &usernameAuth},
+			{Key: credentialIDField, Label: "Stored password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialDBPassword}, Protocols: []string{protocolName},
-			}, Help: "Reusable database password. The credential identity can also supply the username."},
-			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &needsInlinePassword},
+			}, VisibleWhen: &credentialAuth, Help: "Reusable database password. The credential identity can also supply the username."},
+			{Key: authCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
+			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authClientCert}}}, Help: "Reusable client certificate and private key used for certificate authentication."},
+			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &passwordAuth},
 		}},
 		{Name: "TLS", Fields: []plugin.Field{
 			{Key: "tls_mode", Label: "TLS mode", Type: plugin.FieldSelect, Required: true, Default: "disable", Options: []plugin.Option{
@@ -73,7 +87,7 @@ func configSchema() plugin.Schema {
 			{Key: "ca_certificate", Label: "CA certificate", Type: plugin.FieldTextarea, Secret: true, VisibleWhen: &verifyTLS, Help: "PEM CA bundle used for verify-ca and verify-full."},
 			{Key: clientCertField, Label: "Client certificate", Type: plugin.FieldCredentialRef, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialTLSClientCert}, Protocols: []string{protocolName},
-			}, VisibleWhen: &tlsEnabled, Help: "Optional PEM containing the client certificate and private key."},
+			}, VisibleWhen: &optionalClientCertificate, Help: "Optional PEM containing the client certificate and private key for mTLS when password authentication is used."},
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
 			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks INSERT, UPDATE, DELETE, DDL, TRUNCATE, VACUUM, and other write statements."},
@@ -102,16 +116,22 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	if database == "" {
 		return options{}, fmt.Errorf("%w: database is required", plugin.ErrInvalidInput)
 	}
-	username := strings.TrimSpace(cfg.String("username"))
-	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
-		username = identity
+	tlsMode := stringDefault(cfg.String("tls_mode"), "disable")
+	auth := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
+	clientCertificate := dbcred.ResolvedSecret(cfg, clientCertField)
+	certAuthMode := cfg.String("auth") == authClientCert || dbcred.ResolvedSecret(cfg, authCertField) != ""
+	if certAuthMode {
+		certAuth := dbcred.ApplyClientCertificateCredential(cfg, authCertField, cfg.String("username"), tlsMode, "")
+		auth.Username = certAuth.Username
+		auth.Password = ""
+		tlsMode = certAuth.TLSMode
+		clientCertificate = certAuth.ClientCertificate
 	}
-	if username == "" {
+	if certAuthMode && clientCertificate == "" {
+		return options{}, fmt.Errorf("%w: client certificate is required", plugin.ErrInvalidInput)
+	}
+	if auth.Username == "" {
 		return options{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
-	}
-	password := cfg.String("password")
-	if secret := cfg.String(service.CredentialSecret); secret != "" {
-		password = secret
 	}
 
 	rowLimit, ok := cfg.Int("row_limit")
@@ -133,11 +153,11 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		Host:              host,
 		Port:              port,
 		Database:          database,
-		Username:          username,
-		Password:          password,
-		TLSMode:           stringDefault(cfg.String("tls_mode"), "disable"),
+		Username:          auth.Username,
+		Password:          auth.Password,
+		TLSMode:           tlsMode,
 		CACertificate:     cfg.String("ca_certificate"),
-		ClientCertificate: cfg.String("_" + clientCertField + "_secret"),
+		ClientCertificate: clientCertificate,
 		ReadOnly:          sqldb.BoolValue(cfg.Config["read_only"], true),
 		RequireConfirm:    sqldb.BoolValue(cfg.Config["require_destructive_confirmation"], true),
 		QueryTimeout:      timeout,

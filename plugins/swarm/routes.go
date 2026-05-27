@@ -1,0 +1,634 @@
+package swarm
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/moby/moby/api/pkg/stdcopy"
+	"github.com/moby/moby/api/types/events"
+	"github.com/moby/moby/api/types/swarm"
+	dockerclient "github.com/moby/moby/client"
+
+	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
+)
+
+const stackNamespaceLabel = "com.docker.stack.namespace"
+
+// Routes wires Swarm-namespaced route IDs to the orchestration handlers, reusing
+// the shared raw-API executor for the API panel.
+func Routes() []plugin.Route {
+	return []plugin.Route{
+		{ID: "swarm.services.tree", Method: plugin.MethodGet, Path: "/tree/services", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.services.tree", Handle: treeServices},
+		{ID: "swarm.stacks.tree", Method: plugin.MethodGet, Path: "/tree/stacks", Permission: "swarm.stacks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stacks.tree", Handle: treeStacks},
+		{ID: "swarm.nodes.tree", Method: plugin.MethodGet, Path: "/tree/nodes", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.nodes.tree", Handle: treeSwarmNodes},
+		{ID: "swarm.tasks.tree", Method: plugin.MethodGet, Path: "/tree/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.tasks.tree", Handle: treeTasks},
+		{ID: "swarm.services.list", Method: plugin.MethodGet, Path: "/services", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.services.list", Handle: listServices},
+		{ID: "swarm.stacks.list", Method: plugin.MethodGet, Path: "/stacks", Permission: "swarm.stacks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stacks.list", Handle: listStacks},
+		{ID: "swarm.nodes.list", Method: plugin.MethodGet, Path: "/nodes", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.nodes.list", Handle: listNodes},
+		{ID: "swarm.tasks.list", Method: plugin.MethodGet, Path: "/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.tasks.list", Handle: listTasks},
+		{ID: "swarm.service.overview", Method: plugin.MethodGet, Path: "/services/{id}/overview", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.overview", Handle: serviceOverview},
+		{ID: "swarm.service.inspect", Method: plugin.MethodGet, Path: "/services/{id}/inspect", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.inspect", Handle: inspectService},
+		{ID: "swarm.service.tasks", Method: plugin.MethodGet, Path: "/services/{id}/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.tasks", Handle: serviceTasks},
+		{ID: "swarm.node.overview", Method: plugin.MethodGet, Path: "/nodes/{id}/overview", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.node.overview", Handle: nodeOverview},
+		{ID: "swarm.node.inspect", Method: plugin.MethodGet, Path: "/nodes/{id}/inspect", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.node.inspect", Handle: inspectNode},
+		{ID: "swarm.node.tasks", Method: plugin.MethodGet, Path: "/nodes/{id}/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.node.tasks", Handle: nodeTasks},
+		{ID: "swarm.task.overview", Method: plugin.MethodGet, Path: "/tasks/{id}/overview", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.task.overview", Handle: taskOverview},
+		{ID: "swarm.task.inspect", Method: plugin.MethodGet, Path: "/tasks/{id}/inspect", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.task.inspect", Handle: inspectTask},
+		{ID: "swarm.stack.overview", Method: plugin.MethodGet, Path: "/stacks/{stack}/overview", Permission: "swarm.stacks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stack.overview", Handle: stackOverview},
+		{ID: "swarm.stack.services", Method: plugin.MethodGet, Path: "/stacks/{stack}/services", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stack.services", Handle: stackServices},
+		{ID: "swarm.service.remove", Method: plugin.MethodDelete, Path: "/services/{id}", Permission: "swarm.services.delete", Risk: plugin.RiskDestructive, AuditEvent: "swarm.service.remove", Handle: removeService},
+		{ID: "swarm.service.logs", Method: plugin.MethodWS, Path: "/services/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "swarm.services.logs", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.logs", Input: dockerengine.LogsSchema(), Stream: serviceLogsStream},
+		{ID: "swarm.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.watch", Stream: watchServiceEvents},
+		{ID: "swarm.api.execute", Method: plugin.MethodPost, Path: "/api/execute", Permission: "swarm.api.execute", Risk: plugin.RiskPrivileged, AuditEvent: "swarm.api.execute", Input: dockerengine.APISchema(), Handle: dockerengine.ExecuteAPI},
+	}
+}
+
+func client(rc *plugin.RequestContext) (*dockerclient.Client, error) {
+	s, err := dockerengine.Unwrap(rc.Session)
+	if err != nil {
+		return nil, err
+	}
+	return s.Client(), nil
+}
+
+func listServices(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{Status: true})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.PageRows(rc, serviceRows(res.Items))
+}
+
+func listNodes(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.NodeList(rc.Ctx, dockerclient.NodeListOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.PageRows(rc, nodeRows(res.Items))
+}
+
+func listTasks(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.TaskList(rc.Ctx, dockerclient.TaskListOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.PageRows(rc, taskRows(res.Items, serviceNames(rc)))
+}
+
+func listStacks(rc *plugin.RequestContext) (any, error) {
+	rows, err := stackRows(rc)
+	if err != nil {
+		return nil, err
+	}
+	return dockerengine.PageRows(rc, rows)
+}
+
+func treeServices(rc *plugin.RequestContext) (any, error) {
+	return buildTree(rc, "service", icon("workflow"), listServices)
+}
+
+func treeStacks(rc *plugin.RequestContext) (any, error) {
+	return buildTree(rc, "stack", icon("layers"), listStacks)
+}
+
+func treeSwarmNodes(rc *plugin.RequestContext) (any, error) {
+	return buildTree(rc, "node", icon("server"), listNodes)
+}
+
+func treeTasks(rc *plugin.RequestContext) (any, error) {
+	return buildTree(rc, "task", icon("list-checks"), listTasks)
+}
+
+func serviceOverview(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.ServiceInspect(rc.Ctx, rc.Param("id"), dockerclient.ServiceInspectOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	s := res.Service
+	mode, replicas := serviceMode(s)
+	out := dockerengine.Row{
+		"id":        s.ID,
+		"name":      s.Spec.Name,
+		"mode":      mode,
+		"replicas":  replicas,
+		"image":     cleanImage(specImage(s.Spec.TaskTemplate)),
+		"ports":     servicePorts(s.Endpoint.Ports),
+		"stack":     s.Spec.Labels[stackNamespaceLabel],
+		"createdAt": s.CreatedAt.UTC().Format(time.RFC3339),
+		"updatedAt": s.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+	if s.UpdateStatus != nil {
+		out["updateState"] = string(s.UpdateStatus.State)
+		out["updateMessage"] = s.UpdateStatus.Message
+	}
+	return out, nil
+}
+
+func inspectService(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.ServiceInspect(rc.Ctx, rc.Param("id"), dockerclient.ServiceInspectOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.RawOrValue(res.Raw, res.Service)
+}
+
+func serviceTasks(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.TaskList(rc.Ctx, dockerclient.TaskListOptions{Filters: make(dockerclient.Filters).Add("service", rc.Param("id"))})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.PageRows(rc, taskRows(res.Items, serviceNames(rc)))
+}
+
+func nodeOverview(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.NodeInspect(rc.Ctx, rc.Param("id"), dockerclient.NodeInspectOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	n := res.Node
+	leader := false
+	reachability := ""
+	if n.ManagerStatus != nil {
+		leader = n.ManagerStatus.Leader
+		reachability = string(n.ManagerStatus.Reachability)
+	}
+	return dockerengine.Row{
+		"id":           n.ID,
+		"name":         nodeName(n),
+		"role":         string(n.Spec.Role),
+		"availability": string(n.Spec.Availability),
+		"state":        string(n.Status.State),
+		"leader":       leader,
+		"reachability": reachability,
+		"address":      n.Status.Addr,
+		"engine":       n.Description.Engine.EngineVersion,
+		"os":           n.Description.Platform.OS,
+		"arch":         n.Description.Platform.Architecture,
+		"cpus":         n.Description.Resources.NanoCPUs / 1e9,
+		"memoryBytes":  n.Description.Resources.MemoryBytes,
+		"createdAt":    n.CreatedAt.UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func inspectNode(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.NodeInspect(rc.Ctx, rc.Param("id"), dockerclient.NodeInspectOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.RawOrValue(res.Raw, res.Node)
+}
+
+func nodeTasks(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.TaskList(rc.Ctx, dockerclient.TaskListOptions{Filters: make(dockerclient.Filters).Add("node", rc.Param("id"))})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.PageRows(rc, taskRows(res.Items, serviceNames(rc)))
+}
+
+func taskOverview(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.TaskInspect(rc.Ctx, rc.Param("id"), dockerclient.TaskInspectOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	t := res.Task
+	return dockerengine.Row{
+		"id":           t.ID,
+		"service":      t.ServiceID,
+		"node":         t.NodeID,
+		"slot":         t.Slot,
+		"desiredState": string(t.DesiredState),
+		"state":        string(t.Status.State),
+		"message":      t.Status.Message,
+		"error":        t.Status.Err,
+		"image":        cleanImage(specImage(t.Spec)),
+		"createdAt":    t.CreatedAt.UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func inspectTask(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.TaskInspect(rc.Ctx, rc.Param("id"), dockerclient.TaskInspectOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.RawOrValue(res.Raw, res.Task)
+}
+
+func stackOverview(rc *plugin.RequestContext) (any, error) {
+	rows, err := stackRows(rc)
+	if err != nil {
+		return nil, err
+	}
+	stack := rc.Param("stack")
+	for _, r := range rows {
+		if r["name"] == stack {
+			return r, nil
+		}
+	}
+	return nil, plugin.ErrNotFound
+}
+
+func stackServices(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{
+		Status:  true,
+		Filters: make(dockerclient.Filters).Add("label", stackNamespaceLabel+"="+rc.Param("stack")),
+	})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.PageRows(rc, serviceRows(res.Items))
+}
+
+func removeService(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	_, err = cli.ServiceRemove(rc.Ctx, rc.Param("id"), dockerclient.ServiceRemoveOptions{})
+	return dockerengine.ActionResult{OK: err == nil}, dockerengine.DockerErr(err)
+}
+
+func serviceLogsStream(rc *plugin.RequestContext, stream plugin.ClientStream) error {
+	cli, err := client(rc)
+	if err != nil {
+		return err
+	}
+	id := rc.Param("id")
+	// A TTY service emits a raw (un-multiplexed) log stream; a non-TTY service
+	// multiplexes stdout/stderr with stdcopy framing. Demuxing a raw stream
+	// would corrupt it, so branch on the service's TTY setting.
+	insp, err := cli.ServiceInspect(rc.Ctx, id, dockerclient.ServiceInspectOptions{})
+	if err != nil {
+		return dockerengine.DockerErr(err)
+	}
+	tty := insp.Service.Spec.TaskTemplate.ContainerSpec != nil && insp.Service.Spec.TaskTemplate.ContainerSpec.TTY
+	logs, err := cli.ServiceLogs(rc.Ctx, id, dockerclient.ServiceLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     boolParam(rc, "follow", true),
+		Timestamps: boolParam(rc, "timestamps", true),
+		Tail:       stringParam(rc, "tail", "200"),
+	})
+	if err != nil {
+		return dockerengine.DockerErr(err)
+	}
+	defer func() { _ = logs.Close() }()
+	done := make(chan error, 1)
+	go func() {
+		var copyErr error
+		if tty {
+			_, copyErr = io.Copy(stream, logs)
+		} else {
+			_, copyErr = stdcopy.StdCopy(stream, stream, logs)
+		}
+		done <- copyErr
+	}()
+	select {
+	case <-stream.Context().Done():
+		return nil
+	case err := <-done:
+		if err == io.EOF {
+			return nil
+		}
+		return err
+	}
+}
+
+func watchServiceEvents(rc *plugin.RequestContext, stream plugin.ClientStream) error {
+	cli, err := client(rc)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(rc.Ctx)
+	defer cancel()
+	result := cli.Events(ctx, dockerclient.EventsListOptions{
+		Filters: make(dockerclient.Filters).Add("type", string(events.ServiceEventType)),
+	})
+	enc := json.NewEncoder(stream)
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case err, ok := <-result.Err:
+			if !ok || err == nil || err == io.EOF || err == context.Canceled {
+				return nil
+			}
+			return dockerengine.DockerErr(err)
+		case msg, ok := <-result.Messages:
+			if !ok {
+				return nil
+			}
+			if ev := serviceEvent(msg); ev != nil {
+				if err := enc.Encode(ev); err != nil {
+					return err
+				}
+			}
+		}
+	}
+}
+
+func serviceEvent(msg events.Message) *plugin.ResourceEvent {
+	id := msg.Actor.ID
+	if id == "" {
+		return nil
+	}
+	var evType string
+	switch msg.Action {
+	case events.ActionCreate:
+		evType = "added"
+	case events.ActionRemove:
+		evType = "deleted"
+	case events.ActionUpdate:
+		evType = "updated"
+	default:
+		return nil
+	}
+	name := msg.Actor.Attributes["name"]
+	if name == "" {
+		name = dockerengine.ShortID(id)
+	}
+	ref := plugin.ResourceRef{Kind: "service", Name: name, UID: id}
+	return &plugin.ResourceEvent{Type: evType, Ref: ref, Resource: dockerengine.Row{"id": id, "name": name, "ref": ref}}
+}
+
+func serviceRows(items []swarm.Service) []dockerengine.Row {
+	rows := make([]dockerengine.Row, 0, len(items))
+	for _, s := range items {
+		mode, replicas := serviceMode(s)
+		rows = append(rows, dockerengine.Row{
+			"id":        s.ID,
+			"name":      s.Spec.Name,
+			"mode":      mode,
+			"replicas":  replicas,
+			"image":     cleanImage(specImage(s.Spec.TaskTemplate)),
+			"ports":     servicePorts(s.Endpoint.Ports),
+			"stack":     s.Spec.Labels[stackNamespaceLabel],
+			"createdAt": s.CreatedAt.UTC().Format(time.RFC3339),
+			"ref":       plugin.ResourceRef{Kind: "service", Name: s.Spec.Name, UID: s.ID},
+		})
+	}
+	return rows
+}
+
+func nodeRows(items []swarm.Node) []dockerengine.Row {
+	rows := make([]dockerengine.Row, 0, len(items))
+	for _, n := range items {
+		leader := false
+		if n.ManagerStatus != nil {
+			leader = n.ManagerStatus.Leader
+		}
+		name := nodeName(n)
+		rows = append(rows, dockerengine.Row{
+			"id":           n.ID,
+			"name":         name,
+			"role":         string(n.Spec.Role),
+			"availability": string(n.Spec.Availability),
+			"state":        string(n.Status.State),
+			"leader":       leader,
+			"engine":       n.Description.Engine.EngineVersion,
+			"address":      n.Status.Addr,
+			"ref":          plugin.ResourceRef{Kind: "node", Name: name, UID: n.ID},
+		})
+	}
+	return rows
+}
+
+func taskRows(items []swarm.Task, svcNames map[string]string) []dockerengine.Row {
+	rows := make([]dockerengine.Row, 0, len(items))
+	for _, t := range items {
+		name := taskName(t, svcNames)
+		rows = append(rows, dockerengine.Row{
+			"id":           t.ID,
+			"name":         name,
+			"service":      svcLabel(t.ServiceID, svcNames),
+			"node":         dockerengine.ShortID(t.NodeID),
+			"slot":         t.Slot,
+			"desiredState": string(t.DesiredState),
+			"state":        string(t.Status.State),
+			"image":        cleanImage(specImage(t.Spec)),
+			"error":        t.Status.Err,
+			"createdAt":    t.CreatedAt.UTC().Format(time.RFC3339),
+			"ref":          plugin.ResourceRef{Kind: "task", Name: name, UID: t.ID},
+		})
+	}
+	return rows
+}
+
+func stackRows(rc *plugin.RequestContext) ([]dockerengine.Row, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	stacks := map[string]dockerengine.Row{}
+	for _, s := range res.Items {
+		ns := s.Spec.Labels[stackNamespaceLabel]
+		if ns == "" {
+			continue
+		}
+		r, ok := stacks[ns]
+		if !ok {
+			r = dockerengine.Row{"name": ns, "services": 0, "ref": plugin.ResourceRef{Kind: "stack", Name: ns, UID: ns}}
+			stacks[ns] = r
+		}
+		r["services"] = r["services"].(int) + 1
+	}
+	rows := make([]dockerengine.Row, 0, len(stacks))
+	for _, r := range stacks {
+		rows = append(rows, r)
+	}
+	return rows, nil
+}
+
+// serviceNames maps service ID to its name for task display. Failures degrade to
+// an empty map (tasks then show short service IDs).
+func serviceNames(rc *plugin.RequestContext) map[string]string {
+	cli, err := client(rc)
+	if err != nil {
+		return nil
+	}
+	res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{})
+	if err != nil {
+		return nil
+	}
+	names := make(map[string]string, len(res.Items))
+	for _, s := range res.Items {
+		names[s.ID] = s.Spec.Name
+	}
+	return names
+}
+
+func buildTree(rc *plugin.RequestContext, kind string, ic plugin.Icon, list func(*plugin.RequestContext) (any, error)) (any, error) {
+	res, err := list(rc)
+	if err != nil {
+		return nil, err
+	}
+	page, ok := res.(plugin.Page[dockerengine.Row])
+	if !ok {
+		return nil, fmt.Errorf("%w: unexpected tree data", plugin.ErrUnavailable)
+	}
+	nodes := make([]plugin.TreeNode, 0, len(page.Items))
+	for _, r := range page.Items {
+		ref, ok := r["ref"].(plugin.ResourceRef)
+		if !ok {
+			continue
+		}
+		refCopy := ref
+		nodes = append(nodes, plugin.TreeNode{Key: kind + ":" + ref.UID, Label: ref.Name, Icon: ic, Ref: &refCopy, Leaf: true})
+	}
+	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
+}
+
+func serviceMode(s swarm.Service) (mode, replicas string) {
+	switch {
+	case s.Spec.Mode.Global != nil:
+		mode = "global"
+	case s.Spec.Mode.ReplicatedJob != nil:
+		mode = "replicated-job"
+	case s.Spec.Mode.GlobalJob != nil:
+		mode = "global-job"
+	case s.Spec.Mode.Replicated != nil:
+		mode = "replicated"
+	}
+	if s.ServiceStatus != nil {
+		return mode, fmt.Sprintf("%d/%d", s.ServiceStatus.RunningTasks, s.ServiceStatus.DesiredTasks)
+	}
+	if s.Spec.Mode.Replicated != nil && s.Spec.Mode.Replicated.Replicas != nil {
+		return mode, fmt.Sprintf("0/%d", *s.Spec.Mode.Replicated.Replicas)
+	}
+	return mode, ""
+}
+
+func servicePorts(ports []swarm.PortConfig) string {
+	out := make([]string, 0, len(ports))
+	for _, p := range ports {
+		if p.PublishedPort == 0 {
+			out = append(out, fmt.Sprintf("%d/%s", p.TargetPort, p.Protocol))
+			continue
+		}
+		out = append(out, fmt.Sprintf("%d->%d/%s", p.PublishedPort, p.TargetPort, p.Protocol))
+	}
+	return strings.Join(out, ", ")
+}
+
+func specImage(spec swarm.TaskSpec) string {
+	if spec.ContainerSpec == nil {
+		return ""
+	}
+	return spec.ContainerSpec.Image
+}
+
+func cleanImage(image string) string {
+	if i := strings.Index(image, "@"); i >= 0 {
+		return image[:i]
+	}
+	return image
+}
+
+func nodeName(n swarm.Node) string {
+	if n.Description.Hostname != "" {
+		return n.Description.Hostname
+	}
+	if n.Spec.Name != "" {
+		return n.Spec.Name
+	}
+	return dockerengine.ShortID(n.ID)
+}
+
+func taskName(t swarm.Task, svcNames map[string]string) string {
+	base := svcLabel(t.ServiceID, svcNames)
+	if t.Slot > 0 {
+		return fmt.Sprintf("%s.%d", base, t.Slot)
+	}
+	return fmt.Sprintf("%s.%s", base, dockerengine.ShortID(t.NodeID))
+}
+
+func svcLabel(serviceID string, svcNames map[string]string) string {
+	if name := svcNames[serviceID]; name != "" {
+		return name
+	}
+	return dockerengine.ShortID(serviceID)
+}
+
+func boolParam(rc *plugin.RequestContext, key string, fallback bool) bool {
+	raw := paramOrQuery(rc, key)
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return fallback
+	}
+	return v
+}
+
+func stringParam(rc *plugin.RequestContext, key, fallback string) string {
+	if raw := paramOrQuery(rc, key); raw != "" {
+		return raw
+	}
+	return fallback
+}
+
+func paramOrQuery(rc *plugin.RequestContext, key string) string {
+	if v := rc.Param(key); v != "" {
+		return v
+	}
+	return rc.Query().Get(key)
+}

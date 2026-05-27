@@ -18,6 +18,9 @@ category key so management UI can group protocols without hardcoded frontend
 protocol lists. Current groups are shell, files/storage, containers,
 virtualization, remote desktop, databases, orchestration, cloud, network,
 security, DevOps/CI, observability, messaging, and other.
+Search engines are a separate category from databases because products such as
+Elasticsearch/OpenSearch, Meilisearch, Typesense, and Solr expose different
+operational and query models even when they all manage searchable documents.
 
 ## Priority Legend
 
@@ -38,28 +41,37 @@ These plugins should prove the core architecture first.
 | `postgresql` | PostgreSQL access      | schema browser, query editor, table data, snippets, audit |
 
 > **`ssh` vs `sftp`:** an `ssh` connection exposes SFTP as its **Files** tab over
-> the *same* `ssh.Client` (no second connection / re-auth). The standalone `sftp`
+> the _same_ `ssh.Client` (no second connection / re-auth). The standalone `sftp`
 > plugin is for users who want **file access only** (no shell). Both
 > render the same `file_browser` panel and share the SFTP route handlers — the
 > only difference is the manifest each declares. The frontend special-cases
 > neither (v2 §12, §13).
 
-> **SQL plugins:** PostgreSQL, MySQL/MariaDB, SQLite, MSSQL, and later SQL
-> engines share only driver-neutral helpers from `plugins/shared/sqldb`
-> (query editor envelopes, identifier/DDL helpers, statement safety checks, and
-> TLS/config parsing). Dialect catalog queries, driver connection code, actions,
-> and manifests remain inside each plugin.
+> **SQL/CQL plugins:** PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB,
+> ClickHouse, Cassandra, SQLite, and later SQL/CQL engines share only driver-neutral helpers from `plugins/shared/sqldb`
+> (query editor envelopes, identifier/DDL helpers, statement safety checks,
+> audit metadata/result redaction, and TLS/config parsing). Dialect catalog
+> queries, driver connection code, actions, and manifests remain inside each
+> plugin. PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB, ClickHouse,
+> Redis, MongoDB, Cassandra, DynamoDB, and Neo4j are implemented as direct-only database/data-store plugins;
+> agent transport is reserved for private control-plane targets such as Docker
+> and Kubernetes.
 
 ## P1: Core Infrastructure
 
-| Plugin       | Purpose                       | Main Capabilities                                                                   |
-| ------------ | ----------------------------- | ----------------------------------------------------------------------------------- |
-| `proxmox`    | Proxmox VE management         | nodes, VMs, LXC, storage, network, snapshots, VNC console, tasks                    |
-| `kubernetes` | Kubernetes cluster management | workloads, pods, services, ingress, storage, config, RBAC, logs, exec, port-forward |
-| `mysql`      | MySQL/MariaDB access          | schema browser, query editor, table data, users, snippets                           |
-| `mongodb`    | MongoDB access                | databases, collections, document editor, query, indexes                             |
-| `redis`      | Redis access                  | key browser, strings, hashes, lists, sets, sorted sets, pub/sub                     |
-| `vnc`        | Remote desktop via VNC/RFB    | `remote_desktop` over an RFB stream, clipboard, keyboard/mouse                      |
+| Plugin        | Purpose                       | Main Capabilities                                                                   |
+| ------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| `proxmox`     | Proxmox VE management         | nodes, VMs, LXC, storage, network, snapshots, VNC console, tasks                    |
+| `kubernetes`  | Kubernetes cluster management | workloads, pods, services, ingress, storage, config, RBAC, logs, exec, port-forward |
+| `mysql`       | MySQL/MariaDB access          | schema browser, query editor, table data, users, DDL helpers, audit                 |
+| `mongodb`     | MongoDB access                | databases, collections, document editor, command console, indexes                   |
+| `redis`       | Redis access                  | key browser, strings, hashes, lists, sets, sorted sets, command console, pub/sub    |
+| `mssql`       | Microsoft SQL Server          | schema browser, T-SQL editor, table data, jobs, users, DDL helpers, audit           |
+| `oracle`      | Oracle Database               | schemas, SQL editor, PL/SQL objects, sessions, tablespaces, DDL helpers, audit      |
+| `cockroachdb` | CockroachDB access            | schemas, SQL editor, table data, ranges, jobs, sessions, DDL helpers, audit         |
+| `clickhouse`  | ClickHouse analytics DB       | databases, tables, views, dictionaries, mutations, merges, processes, SQL editor    |
+| `cassandra`   | Cassandra access              | keyspaces, tables, materialized views, types, functions, CQL query                  |
+| `vnc`         | Remote desktop via VNC/RFB    | `remote_desktop` over an RFB stream, clipboard, keyboard/mouse                      |
 
 ## P1: Filesystem And Storage Protocols
 
@@ -75,20 +87,29 @@ These plugins should prove the core architecture first.
 
 ## P2: Databases And Data Stores
 
-| Plugin          | Purpose                  | Main Capabilities                                       |
-| --------------- | ------------------------ | ------------------------------------------------------- |
-| `mariadb`       | MariaDB access           | schema browser, query editor, users, replication status |
-| `sqlite`        | SQLite database files    | schema browser, query editor, table data                |
-| `mssql`         | Microsoft SQL Server     | schema browser, query editor, jobs, users               |
-| `oracle`        | Oracle Database          | schema browser, query editor, sessions, tablespaces     |
-| `cockroachdb`   | CockroachDB access       | schema browser, query editor, cluster info              |
-| `clickhouse`    | ClickHouse analytics DB  | query editor, databases, tables, mutations              |
-| `cassandra`     | Cassandra access         | keyspaces, tables, CQL query                            |
-| `elasticsearch` | Elasticsearch/OpenSearch | indexes, documents, search, mappings, cluster health    |
-| `opensearch`    | OpenSearch               | indexes, documents, search, mappings, cluster health    |
-| `neo4j`         | Graph database           | Cypher query, graph/table results                       |
-| `influxdb`      | Time-series database     | buckets/databases, query, measurements                  |
-| `prometheus`    | Metrics query target     | PromQL query, targets, alerts, rules                    |
+DynamoDB is implemented as a direct-only data-store plugin using the AWS SDK for
+Go v2. It keeps a DynamoDB-specific schema: region, optional endpoint override
+for DynamoDB Local or compatible targets, optional table prefix filter, access
+key / stored cloud access key / AWS default provider chain auth, TLS server
+verification, request timeout, page limit, and write-safety gates. It does not
+reuse SQL database credentials or SQL host/database fields. The manifest exposes
+tables, indexes, items, TTL, tags, backups, item editing, guarded table/index/
+item/backup/TTL actions, and PartiQL query execution through generic panels.
+
+Neo4j is implemented as a direct-only graph database plugin using the official
+Neo4j Go driver v6. It keeps a Neo4j-specific schema: Bolt/routing scheme
+selection, host/port, default database, password/stored-password/bearer/stored-
+bearer/none auth, scheme-driven TLS with optional CA for verified TLS schemes,
+query/connect/retry/pool/fetch/page limits, and read-only/confirmation safety.
+It exposes databases, labels, relationship types, indexes, constraints, nodes,
+relationships, graph visualization, guarded node/relationship mutations, and a
+Cypher query console through generic renderer panels.
+
+| Plugin     | Purpose                 | Main Capabilities                                             |
+| ---------- | ----------------------- | ------------------------------------------------------------- |
+| `dynamodb` | Amazon DynamoDB         | tables, indexes, items, TTL, tags, backups, PartiQL           |
+| `sqlite`   | SQLite database files   | schema browser, query editor, table data                      |
+| `neo4j`    | Graph database          | Cypher query, graph visualization, labels, relationships      |
 
 ## P2: Container And Orchestration Platforms
 
@@ -104,14 +125,14 @@ These plugins should prove the core architecture first.
 
 ## P2: Virtualization And Remote Desktop
 
-| Plugin           | Purpose                     | Main Capabilities                                       |
-| ---------------- | --------------------------- | ------------------------------------------------------- |
+| Plugin           | Purpose                     | Main Capabilities                                               |
+| ---------------- | --------------------------- | --------------------------------------------------------------- |
 | `rdp`            | Windows/Linux RDP access    | `remote_desktop`; server-side RDP decoding bridged to noVNC/RFB |
-| `xenserver`      | XenServer/XCP-ng management | hosts, VMs, storage, networks, console                  |
-| `vmware-vsphere` | VMware vSphere              | datacenters, clusters, hosts, VMs, datastores, console  |
-| `libvirt`        | libvirt/KVM management      | domains, networks, storage pools, console               |
-| `incus`          | Incus/LXD management        | instances, images, profiles, networks, storage, console |
-| `lxd`            | LXD management              | containers, VMs, images, profiles, networks, storage    |
+| `xenserver`      | XenServer/XCP-ng management | hosts, VMs, storage, networks, console                          |
+| `vmware-vsphere` | VMware vSphere              | datacenters, clusters, hosts, VMs, datastores, console          |
+| `libvirt`        | libvirt/KVM management      | domains, networks, storage pools, console                       |
+| `incus`          | Incus/LXD management        | instances, images, profiles, networks, storage, console         |
+| `lxd`            | LXD management              | containers, VMs, images, profiles, networks, storage            |
 
 ## P2: Cloud Providers
 
@@ -157,36 +178,78 @@ These plugins should prove the core architecture first.
 
 ## P2: Observability And Logging
 
-| Plugin            | Purpose                   | Main Capabilities                   |
-| ----------------- | ------------------------- | ----------------------------------- |
-| `grafana`         | Grafana                   | dashboards, datasources, alerts     |
-| `loki`            | Loki logs                 | log query, labels, streams          |
-| `tempo`           | Tempo traces              | trace search and detail             |
-| `jaeger`          | Jaeger traces             | trace search and detail             |
-| `victoriametrics` | VictoriaMetrics           | MetricsQL query, targets            |
-| `zabbix`          | Zabbix                    | hosts, items, triggers, events      |
-| `graylog`         | Graylog                   | streams, searches, alerts           |
-| `kibana`          | Kibana/Elastic dashboards | saved objects, dashboards, searches |
+Prometheus and InfluxDB are implemented as direct-only observability plugins.
+Prometheus keeps a Prometheus-specific schema: endpoint,
+none/basic/bearer/stored auth, TLS, request timeout, live metrics poll interval,
+page limit, and explicit admin / lifecycle toggles for servers started with
+`--web.enable-admin-api` and `--web.enable-lifecycle`. It exposes targets,
+active alerts, rules, labels, metric metadata, series, status documents, PromQL
+instant/range query, live overview metrics, TSDB snapshot, delete-series,
+clean-tombstones, and config reload routes through generic panels. InfluxDB
+keeps a version-specific schema for v3/v2/v1 APIs, token/basic/stored auth where
+that version supports it, TLS, database/bucket browsing, measurements, schema,
+data preview, Flux/SQL/InfluxQL query execution, and line-protocol writes.
+
+| Plugin            | Purpose                   | Main Capabilities                                                          |
+| ----------------- | ------------------------- | -------------------------------------------------------------------------- |
+| `prometheus`      | Prometheus metrics        | PromQL query, targets, alerts, rules, labels, metadata, status, TSDB admin |
+| `influxdb`        | InfluxDB time series      | v3/v2/v1 APIs, buckets/databases, measurements, Flux/SQL/InfluxQL, writes  |
+| `grafana`         | Grafana                   | dashboards, datasources, alerts                                            |
+| `loki`            | Loki logs                 | log query, labels, streams                                                 |
+| `tempo`           | Tempo traces              | trace search and detail                                                    |
+| `jaeger`          | Jaeger traces             | trace search and detail                                                    |
+| `victoriametrics` | VictoriaMetrics           | MetricsQL query, targets                                                   |
+| `zabbix`          | Zabbix                    | hosts, items, triggers, events                                             |
+| `graylog`         | Graylog                   | streams, searches, alerts                                                  |
+| `kibana`          | Kibana/Elastic dashboards | saved objects, dashboards, searches                                        |
+
+## P2: Search Engines
+
+Elasticsearch, OpenSearch, Meilisearch, Typesense, and Solr are implemented as
+direct-only search plugins in the core `search` category. Elasticsearch and
+OpenSearch share `plugins/shared/escompat`, which is
+intentionally scoped to Elasticsearch-compatible REST APIs: indexes, mappings,
+settings, aliases, shards, JSON DSL search, and document CRUD. Meilisearch and
+Typesense use plugin-specific REST handlers because their APIs model tasks,
+keys, settings, collection schemas, synonym sets, and curation sets differently.
+Solr uses plugin-specific CoreAdmin, Collections API, Schema API, update, and
+select handlers so standalone cores, SolrCloud collections, managed schema
+fields, commits, optimizes, and query parameters keep Solr semantics.
+Future engines should use their own plugin-specific clients or a separate helper
+only where their APIs actually overlap.
+
+| Plugin          | Purpose       | Main Capabilities                                                                           |
+| --------------- | ------------- | ------------------------------------------------------------------------------------------- |
+| `elasticsearch` | Elasticsearch | indexes, documents, JSON DSL search, mappings, health                                       |
+| `opensearch`    | OpenSearch    | indexes, documents, JSON DSL search, mappings, health                                       |
+| `meilisearch`   | Meilisearch   | indexes, documents, search, settings, tasks, keys                                           |
+| `typesense`     | Typesense     | collections, documents, search, schemas, aliases, synonym sets, curation sets, keys         |
+| `solr`          | Apache Solr   | cores/collections, documents, search, managed schema fields, config, ping, commit, optimize |
 
 ## P3: Messaging And Queues
 
-| Plugin     | Purpose      | Main Capabilities                                |
-| ---------- | ------------ | ------------------------------------------------ |
-| `rabbitmq` | RabbitMQ     | queues, exchanges, bindings, consumers, messages |
-| `kafka`    | Apache Kafka | clusters, topics, consumer groups, offsets       |
-| `nats`     | NATS         | streams, consumers, messages, server info        |
-| `activemq` | ActiveMQ     | queues, topics, consumers                        |
-| `mqtt`     | MQTT brokers | topics, publish/subscribe, retained messages     |
+RabbitMQ, Kafka, and NATS are implemented as direct-only messaging plugins in
+the core `messaging` category. They share only small broker helper code for
+address parsing, pagination, and config value coercion; protocol manifests,
+actions, route handlers, and client/session behavior remain plugin-specific.
+
+| Plugin     | Purpose      | Main Capabilities                                    |
+| ---------- | ------------ | ---------------------------------------------------- |
+| `rabbitmq` | RabbitMQ     | queues, exchanges, bindings, consumers, messages     |
+| `kafka`    | Apache Kafka | clusters, topics, consumer groups, offsets, messages |
+| `nats`     | NATS         | streams, consumers, messages, server info            |
+| `activemq` | ActiveMQ     | queues, topics, consumers                            |
+| `mqtt`     | MQTT brokers | topics, publish/subscribe, retained messages         |
 
 ## P3: Identity And Directory
 
-| Plugin      | Purpose        | Main Capabilities                              |
-| ----------- | -------------- | ---------------------------------------------- |
-| `ldap`      | LDAP directory | users, groups, entries, search                 |
-| `freeipa`   | FreeIPA        | users, groups, hosts, HBAC, sudo rules         |
-| `authentik` | Authentik      | users, groups, applications, providers, events |
-| `keycloak`  | Keycloak       | realms, clients, users, groups, sessions       |
-| `zitadel`   | Zitadel        | projects, apps, users, orgs                    |
+| Plugin      | Purpose        | Main Capabilities                                                              |
+| ----------- | -------------- | ------------------------------------------------------------------------------ |
+| `ldap`      | LDAP directory | DIT tree, entry attributes (inline edit), add/rename/delete, subtree search ✅ |
+| `freeipa`   | FreeIPA        | users, groups, hosts, HBAC, sudo rules                                         |
+| `authentik` | Authentik      | users, groups, applications, providers, events                                 |
+| `keycloak`  | Keycloak       | realms, clients, users, groups, sessions                                       |
+| `zitadel`   | Zitadel        | projects, apps, users, orgs                                                    |
 
 ## P3: Backup And Storage Platforms
 
@@ -225,12 +288,14 @@ These plugins should prove the core architecture first.
 7. `mysql`
 8. `redis`
 9. `mongodb`
-10. `kubernetes`
-11. `s3`
-12. `webdav`
-13. `smb`
-14. `nfs`
-15. `rdp` as optional sidecar-based plugin
+10. `mssql`
+11. `oracle`
+12. `kubernetes`
+13. `s3`
+14. `webdav`
+15. `smb`
+16. `nfs`
+17. `rdp` as optional sidecar-based plugin
 
 Kubernetes should remain later than SSH/SFTP, Docker, Proxmox, and PostgreSQL
 because it exercises the largest surface area: resource trees, watches, logs,

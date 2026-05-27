@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { setActivePinia, createPinia } from "pinia";
+import Dialog from "primevue/dialog";
 import { installFetch } from "../../test/fetchMock";
+import { useDockStore } from "../../stores/dock";
 import ActionBar from "./ActionBar.vue";
 import type { Action } from "../../types/projection";
 
@@ -32,6 +35,7 @@ const snapshot: Action = {
 
 let posted: { url: string; body?: unknown }[] = [];
 beforeEach(() => {
+  setActivePinia(createPinia());
   posted = [];
   installFetch((url, init) => {
     posted.push({
@@ -50,6 +54,20 @@ function bodyButton(text: string): HTMLButtonElement | undefined {
 }
 
 describe("ActionBar", () => {
+  it("uses the bounded dialog root for action forms", () => {
+    const w = mount(ActionBar, {
+      props: {
+        connectionId: "c1",
+        actions: [snapshot],
+      },
+    });
+    const pt = w.findComponent(Dialog).props("pt") as { root: string };
+    expect(pt.root).toContain("max-w-2xl");
+    expect(pt.root).toContain("max-h-[calc(100vh-2rem)]");
+    expect(pt.root).toContain("flex-col");
+    w.unmount();
+  });
+
   it("gates a destructive action behind a confirm dialog", async () => {
     const w = mount(ActionBar, {
       attachTo: document.body,
@@ -96,6 +114,111 @@ describe("ActionBar", () => {
     expect(posted).toHaveLength(1);
     expect((posted[0].body as { name: string }).name).toBe("nightly");
     w.unmount();
+  });
+
+  it("routes an open=dock action into the dock store instead of running it", async () => {
+    const dockAction: Action = {
+      id: "logs",
+      label: "Logs in dock",
+      routeId: "docker.container.logs",
+      method: "WS",
+      risk: "safe",
+      requiresConfirm: false,
+      open: "dock",
+      panel: "log_stream",
+      params: { id: "${resource.uid}" },
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [dockAction],
+        resource: { kind: "container", name: "web", uid: "c-9" },
+      },
+    });
+    await w.find("button").trigger("click");
+    await flushPromises();
+    const dock = useDockStore();
+    const items = dock.state("c1").items;
+    expect(posted).toHaveLength(0); // the route is NOT executed
+    expect(items).toHaveLength(1);
+    expect(items[0].panel).toBe("log_stream");
+    expect(items[0].source.routeId).toBe("docker.container.logs");
+    w.unmount();
+  });
+
+  it("routes an open=dialog action into the dock dialog slot", async () => {
+    const dialogAction: Action = {
+      id: "peek",
+      label: "Peek logs",
+      routeId: "docker.container.logs",
+      method: "WS",
+      risk: "safe",
+      requiresConfirm: false,
+      open: "dialog",
+      panel: "log_stream",
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [dialogAction],
+        resource: { kind: "container", name: "web", uid: "c-9" },
+      },
+    });
+    await w.find("button").trigger("click");
+    await flushPromises();
+    const dock = useDockStore();
+    expect(posted).toHaveLength(0);
+    expect(dock.state("c1").dialog?.panel).toBe("log_stream");
+    w.unmount();
+  });
+
+  it("disables an action whose enabledWhen fails against the record (and runs it when it passes)", async () => {
+    const start: Action = {
+      id: "start",
+      label: "Start",
+      routeId: "docker.container.start",
+      method: "POST",
+      risk: "write",
+      requiresConfirm: false,
+      params: { id: "${resource.uid}" },
+      enabledWhen: { allOf: [{ field: "state", op: "eq", value: "exited" }] },
+    };
+    const resource = { kind: "container", name: "web", uid: "c-1" };
+
+    const running = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [start],
+        resource,
+        record: { state: "running" },
+      },
+    });
+    const btn = running.find("button").element as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    await running.find("button").trigger("click");
+    await flushPromises();
+    expect(posted).toHaveLength(0); // disabled — never executed
+    running.unmount();
+
+    const stopped = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [start],
+        resource,
+        record: { state: "exited" },
+      },
+    });
+    expect((stopped.find("button").element as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+    await stopped.find("button").trigger("click");
+    await flushPromises();
+    expect(posted).toHaveLength(1);
+    stopped.unmount();
   });
 
   it("uses declarative action params when provided", async () => {

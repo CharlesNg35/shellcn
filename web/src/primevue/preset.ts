@@ -24,7 +24,7 @@ export const searchInputClass = `w-full ${fieldSurface} py-1.5 pl-9 pr-3 text-sm
 // The dialog box surface — single source for every modal so width is the only
 // per-dialog difference (avoids repeating the box classes in each component).
 export const dialogRoot = (maxWidth = "max-w-md"): string =>
-  `w-full ${maxWidth} overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5`;
+  `flex max-h-[calc(100vh-2rem)] w-full ${maxWidth} flex-col overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5`;
 
 // Shared button looks, reused across dialogs/action bars instead of re-listing
 // the same utility chains.
@@ -48,7 +48,7 @@ const buttonSolid = {
   info: "bg-sky-600 text-white hover:bg-sky-700",
   warn: "bg-amber-600 text-white hover:bg-amber-700",
   help: "bg-violet-600 text-white hover:bg-violet-700",
-  danger: "bg-red-600 text-white hover:bg-red-700",
+  danger: "bg-rose-600 text-white hover:bg-rose-700",
   contrast:
     "bg-surface-900 text-white hover:bg-surface-800 dark:bg-surface-100 dark:text-surface-950 dark:hover:bg-surface-200",
 };
@@ -63,7 +63,7 @@ const buttonText = {
   warn: "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10",
   help: "text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-500/10",
   danger:
-    "text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10",
+    "text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10",
   contrast:
     "text-surface-900 hover:bg-surface-100 dark:text-surface-100 dark:hover:bg-surface-800",
 };
@@ -78,7 +78,7 @@ const buttonOutlined = {
   warn: "border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-500/10",
   help: "border border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-500/10",
   danger:
-    "border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-500/10",
+    "border border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-500/10",
   contrast:
     "border border-surface-600 text-surface-900 hover:bg-surface-100 dark:border-surface-400 dark:text-surface-100 dark:hover:bg-surface-800",
 };
@@ -148,11 +148,11 @@ const overlayTransition = {
 const dialogMask =
   "fixed inset-0 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm";
 const dialogHeader =
-  "flex items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
+  "flex shrink-0 items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
 const dialogTitle =
   "text-base font-semibold tracking-tight text-surface-900 dark:text-surface-0";
 const dialogFooter =
-  "flex items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800";
+  "flex shrink-0 items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800";
 // Natural rise + fade + subtle scale on open/close; the global prefers-reduced-motion
 // rule neutralizes it.
 const dialogTransition = {
@@ -168,12 +168,79 @@ const dialogTransition = {
 const checkbox = {
   root: "relative inline-flex h-4 w-4 shrink-0",
   input: "absolute inset-0 cursor-pointer opacity-0",
-  box: "flex h-4 w-4 items-center justify-center rounded border border-surface-300 bg-surface-0 transition-colors dark:border-surface-600 dark:bg-surface-950 data-[p-checked=true]:border-primary-500 data-[p-checked=true]:bg-primary-500 data-[p-checked=true]:text-white",
+  box: "flex h-4 w-4 items-center justify-center rounded border border-surface-300 bg-surface-0 transition-colors dark:border-surface-600 dark:bg-surface-950 data-[p~=checked]:border-primary-500 data-[p~=checked]:bg-primary-500 data-[p~=checked]:text-white dark:data-[p~=checked]:border-primary-500 dark:data-[p~=checked]:bg-primary-500",
   icon: "h-3 w-3 text-white",
+};
+
+const radioButton = {
+  root: "relative inline-flex h-4 w-4 shrink-0",
+  input: "absolute inset-0 cursor-pointer opacity-0",
+  box: "flex h-4 w-4 items-center justify-center rounded-full border border-surface-300 bg-surface-0 transition-colors dark:border-surface-600 dark:bg-surface-950 data-[p~=checked]:border-primary-500 data-[p~=checked]:bg-primary-500 dark:data-[p~=checked]:border-primary-500 dark:data-[p~=checked]:bg-primary-500",
+  icon: "h-2 w-2 rounded-full bg-white",
+};
+
+type SeverityOptions = { props?: { severity?: string } };
+
+const severitySurface: Record<string, string> = {
+  success:
+    "border-emerald-500/30 bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200",
+  info: "border-sky-500/30 bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-200",
+  warn: "border-amber-500/30 bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
+  error:
+    "border-rose-500/30 bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200",
+  danger:
+    "border-rose-500/30 bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200",
+  secondary:
+    "border-surface-300 bg-surface-100 text-surface-700 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200",
+  contrast:
+    "border-surface-900 bg-surface-900 text-white dark:border-surface-100 dark:bg-surface-100 dark:text-surface-950",
+};
+
+function severitySurfaceClass(options: SeverityOptions): string {
+  return severitySurface[options.props?.severity ?? ""] ?? severitySurface.info;
+}
+
+function tagRoot(options: SeverityOptions): string {
+  return `inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${severitySurfaceClass(options)}`;
+}
+
+function messageRoot(options: SeverityOptions): string {
+  return `flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${severitySurfaceClass(options)}`;
+}
+
+const paginatorButton =
+  "inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-surface-600 transition-colors hover:bg-surface-100 disabled:pointer-events-none disabled:opacity-40 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
+const paginator = {
+  root: "flex flex-wrap items-center justify-end gap-2 border-t border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950",
+  content: "flex flex-wrap items-center gap-1",
+  pages: "flex items-center gap-1",
+  first: paginatorButton,
+  prev: paginatorButton,
+  next: paginatorButton,
+  last: paginatorButton,
+  page: paginatorButton,
+  firstIcon: "h-4 w-4",
+  prevIcon: "h-4 w-4",
+  nextIcon: "h-4 w-4",
+  lastIcon: "h-4 w-4",
+  current: "px-2 text-xs text-surface-500 dark:text-surface-400",
+  pcRowPerPageDropdown: {
+    root: `flex min-w-20 items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
+    label:
+      "min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
+    dropdown: "shrink-0 px-2 text-surface-400",
+    overlay,
+    transition: overlayTransition,
+    listContainer: "max-h-60 overflow-auto p-1",
+    option,
+  },
 };
 
 export const primeVuePassthrough = {
   inputtext: { root: inputBase },
+  // Chart (chart.js) renders a canvas; the pass-through only sizes its wrapper —
+  // colors come from theme-aware chart options, not classes.
+  chart: { root: "relative h-full w-full" },
   textarea: { root: `${inputBase} min-h-20 font-mono` },
   inputnumber: { root: "w-full", pcInputText: { root: inputBase } },
   password: {
@@ -202,6 +269,7 @@ export const primeVuePassthrough = {
 
   // Standalone Checkbox (also reused inside MultiSelect rows).
   checkbox,
+  radiobutton: radioButton,
   multiselect: {
     root: `flex w-full items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
     labelContainer: "min-w-0 flex-1 overflow-hidden",
@@ -253,21 +321,63 @@ export const primeVuePassthrough = {
 
   progressbar: {
     root: "relative overflow-hidden rounded-full bg-surface-200 dark:bg-surface-800",
-    value:
-      "h-full rounded-full bg-primary-500 transition-[width] duration-150 data-[p-progressbar-value=true]:bg-primary-500",
+    value: "h-full rounded-full bg-primary-500 transition-[width] duration-150",
     label: "hidden",
+  },
+
+  slider: {
+    root: "relative h-5 w-full",
+    range: "absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary-500",
+    handle:
+      "absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-primary-500 bg-surface-0 shadow-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:bg-surface-950",
   },
 
   toggleswitch: {
     root: "relative inline-flex h-5 w-9 cursor-pointer",
     input: "absolute inset-0 z-10 cursor-pointer opacity-0",
     slider:
-      "absolute inset-0 rounded-full bg-surface-300 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform data-[p-checked=true]:bg-primary-500 data-[p-checked=true]:before:translate-x-4 dark:bg-surface-700",
+      "absolute inset-0 rounded-full bg-surface-300 transition-colors before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform data-[p~=checked]:bg-primary-500 data-[p~=checked]:before:translate-x-4 dark:bg-surface-700 dark:data-[p~=checked]:bg-primary-500",
   },
 
   button: {
     root: buttonRoot,
+    icon: "h-4 w-4 shrink-0",
+    loadingIcon: "h-4 w-4 shrink-0 animate-spin",
     label: "truncate",
+  },
+
+  badge: {
+    root: tagRoot,
+  },
+
+  tag: {
+    root: tagRoot,
+    icon: "h-3.5 w-3.5",
+    label: "truncate",
+  },
+
+  message: {
+    root: messageRoot,
+    contentWrapper: "flex min-w-0 flex-1 items-start gap-2",
+    content: "flex min-w-0 flex-1 items-start gap-2",
+    icon: "mt-0.5 h-4 w-4 shrink-0",
+    text: "min-w-0 flex-1",
+    closeButton:
+      "ml-auto shrink-0 rounded p-0.5 text-current/60 transition-colors hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
+    closeIcon: "h-4 w-4",
+  },
+
+  toast: {
+    root: "fixed z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2",
+    message: messageRoot,
+    messageContent: "flex min-w-0 flex-1 items-start gap-2",
+    messageIcon: "mt-0.5 h-4 w-4 shrink-0",
+    messageText: "min-w-0 flex-1",
+    summary: "font-medium",
+    detail: "text-current/80",
+    closeButton:
+      "ml-auto shrink-0 rounded p-0.5 text-current/60 transition-colors hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
+    closeIcon: "h-4 w-4",
   },
 
   menu: {
@@ -293,7 +403,7 @@ export const primeVuePassthrough = {
     root: dialogRoot(),
     header: dialogHeader,
     title: dialogTitle,
-    content: "p-5",
+    content: "min-h-0 overflow-auto p-5",
     footer: dialogFooter,
     pcCloseButton: {
       root: "rounded-md p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200",
@@ -308,7 +418,7 @@ export const primeVuePassthrough = {
     root: dialogRoot("max-w-md"),
     header: dialogHeader,
     title: dialogTitle,
-    content: "px-5 py-5",
+    content: "min-h-0 overflow-auto px-5 py-5",
     footer: dialogFooter,
     transition: dialogTransition,
   },
@@ -317,6 +427,115 @@ export const primeVuePassthrough = {
     root: "z-50 mt-1.5 rounded-lg border border-surface-200 bg-surface-0 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5",
     content: "p-3",
     transition: overlayTransition,
+  },
+
+  card: {
+    root: "overflow-hidden rounded-lg border border-surface-200 bg-surface-0 text-surface-800 shadow-sm dark:border-surface-800 dark:bg-surface-950 dark:text-surface-100",
+    header: "border-b border-surface-200 dark:border-surface-800",
+    body: "p-4",
+    caption: "mb-3",
+    title: "text-base font-semibold text-surface-900 dark:text-surface-0",
+    subtitle: "mt-1 text-sm text-surface-500 dark:text-surface-400",
+    content: "text-sm",
+    footer: "mt-4 flex items-center justify-end gap-2",
+  },
+
+  panel: {
+    root: "rounded-lg border border-surface-200 bg-surface-0 text-surface-800 dark:border-surface-800 dark:bg-surface-950 dark:text-surface-100",
+    header:
+      "flex items-center justify-between gap-3 border-b border-surface-200 px-4 py-3 dark:border-surface-800",
+    title: "min-w-0 flex-1 truncate text-sm font-semibold",
+    headerActions: "flex shrink-0 items-center gap-1",
+    pcToggleButton: {
+      root: `${buttonBase} h-8 w-8 rounded-md ${buttonText.secondary}`,
+      icon: "h-4 w-4",
+    },
+    contentContainer: "overflow-hidden",
+    contentWrapper: "p-4",
+    content: "text-sm",
+    footer: "border-t border-surface-200 px-4 py-3 dark:border-surface-800",
+    transition: overlayTransition,
+  },
+
+  toolbar: {
+    root: "flex flex-wrap items-center justify-between gap-3 rounded-md border border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950",
+    start: "flex min-w-0 items-center gap-2",
+    center: "flex min-w-0 items-center gap-2",
+    end: "flex min-w-0 items-center justify-end gap-2",
+  },
+
+  divider: {
+    root: "my-3 flex items-center border-0 text-xs font-medium text-surface-400 before:h-px before:flex-1 before:bg-surface-200 after:h-px after:flex-1 after:bg-surface-200 dark:before:bg-surface-800 dark:after:bg-surface-800",
+    content:
+      "mx-3 inline-flex shrink-0 items-center gap-1 bg-surface-0 px-1 dark:bg-surface-950",
+  },
+
+  skeleton: {
+    root: "animate-pulse rounded-md bg-surface-100 dark:bg-surface-800",
+  },
+
+  datepicker: {
+    root: "relative block w-full",
+    pcInputText: { root: inputBase },
+    dropdown:
+      "absolute right-0 top-0 flex h-full items-center px-2 text-surface-400 transition-colors hover:text-surface-700 dark:hover:text-surface-200",
+    dropdownIcon: "h-4 w-4",
+    inputIconContainer:
+      "absolute right-3 top-1/2 -translate-y-1/2 text-surface-400",
+    inputIcon: "h-4 w-4",
+    clearIcon:
+      "absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 cursor-pointer text-surface-400 hover:text-surface-700 dark:hover:text-surface-200",
+    panel: overlay,
+    transition: overlayTransition,
+    calendarContainer: "p-2",
+    calendar: "min-w-64",
+    header:
+      "flex items-center justify-between gap-2 border-b border-surface-200 px-2 py-2 dark:border-surface-800",
+    title: "flex items-center gap-1 text-sm font-medium",
+    pcPrevButton: {
+      root: `${buttonBase} h-8 w-8 rounded-md ${buttonText.secondary}`,
+      icon: "h-4 w-4",
+    },
+    pcNextButton: {
+      root: `${buttonBase} h-8 w-8 rounded-md ${buttonText.secondary}`,
+      icon: "h-4 w-4",
+    },
+    selectMonth:
+      "rounded px-2 py-1 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800",
+    selectYear:
+      "rounded px-2 py-1 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800",
+    dayView: "w-full border-collapse",
+    weekDay: "text-xs font-medium text-surface-400",
+    dayCell: "p-0.5 text-center",
+    day: "mx-auto flex h-8 w-8 items-center justify-center rounded-md text-sm transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-500 data-[p-selected=true]:text-white data-[p-today=true]:font-semibold dark:hover:bg-surface-800",
+    monthView: "grid grid-cols-3 gap-1 p-2",
+    month:
+      "rounded-md px-3 py-2 text-center text-sm transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-500 data-[p-selected=true]:text-white dark:hover:bg-surface-800",
+    yearView: "grid grid-cols-3 gap-1 p-2",
+    year: "rounded-md px-3 py-2 text-center text-sm transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-500 data-[p-selected=true]:text-white dark:hover:bg-surface-800",
+    timePicker:
+      "flex items-center justify-center gap-2 border-t border-surface-200 p-2 dark:border-surface-800",
+    hourPicker: "flex flex-col items-center gap-1",
+    minutePicker: "flex flex-col items-center gap-1",
+    secondPicker: "flex flex-col items-center gap-1",
+    ampmPicker: "flex flex-col items-center gap-1",
+    separator: "text-sm",
+    buttonbar:
+      "flex items-center justify-between border-t border-surface-200 p-2 dark:border-surface-800",
+    pcIncrementButton: {
+      root: `${buttonBase} h-7 w-7 rounded-md ${buttonText.secondary}`,
+      icon: "h-3.5 w-3.5",
+    },
+    pcDecrementButton: {
+      root: `${buttonBase} h-7 w-7 rounded-md ${buttonText.secondary}`,
+      icon: "h-3.5 w-3.5",
+    },
+    pcTodayButton: {
+      root: `${buttonBase} ${buttonSize.small} ${buttonText.primary}`,
+    },
+    pcClearButton: {
+      root: `${buttonBase} ${buttonSize.small} ${buttonText.secondary}`,
+    },
   },
 
   tabs: { root: "flex min-h-0 flex-col" },
@@ -337,9 +556,12 @@ export const primeVuePassthrough = {
   tabpanel: { root: "h-full focus-visible:outline-none" },
 
   datatable: {
-    root: "flex h-full flex-col overflow-hidden rounded-md border border-surface-200 bg-surface-0 text-sm dark:border-surface-800 dark:bg-surface-950",
-    tableContainer: "min-h-0 flex-1 overflow-auto",
-    table: "w-full border-collapse",
+    root: "relative flex h-full flex-col overflow-hidden rounded-md border border-surface-200 bg-surface-0 text-sm dark:border-surface-800 dark:bg-surface-950",
+    mask: "absolute inset-0 z-20 flex items-center justify-center bg-surface-0/70 backdrop-blur-[1px] dark:bg-surface-950/70",
+    loadingIcon: "h-5 w-5 animate-spin text-primary-500",
+    pcPaginator: paginator,
+    tableContainer: "thin-scrollbar min-h-0 flex-1 overflow-auto",
+    table: "w-max min-w-full border-collapse",
     thead:
       "sticky top-0 z-10 bg-surface-50/95 backdrop-blur dark:bg-surface-900/95",
     column: {
@@ -348,12 +570,14 @@ export const primeVuePassthrough = {
       bodyCell:
         "border-b border-surface-100 px-4 py-2 text-surface-700 dark:border-surface-800/60 dark:text-surface-200",
       columnHeaderContent: "flex items-center gap-1",
-      sort: "text-surface-400",
+      sortIcon: "h-3.5 w-3.5 text-surface-400",
     },
     bodyRow:
       "cursor-pointer transition-colors hover:bg-surface-50 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:data-[p-selected=true]:bg-primary-500/10",
     emptyMessageCell: "px-4 py-6 text-center text-surface-400",
   },
+
+  paginator,
 
   tree: {
     root: "overflow-y-auto p-2 text-sm",
@@ -361,7 +585,7 @@ export const primeVuePassthrough = {
     nodeContent:
       "flex items-center gap-1.5 rounded-md px-2 py-1.5 transition-colors hover:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:text-primary-700 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/10 dark:data-[p-selected=true]:text-primary-200",
     nodeToggleButton:
-      "flex h-5 w-5 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 dark:hover:bg-surface-700 dark:hover:text-surface-100",
+      "flex h-5 w-5 shrink-0 items-center justify-center rounded text-surface-400 transition-colors hover:bg-surface-200 hover:text-surface-700 data-[p-leaf=true]:invisible dark:hover:bg-surface-700 dark:hover:text-surface-100",
     nodeLabel: "flex-1 truncate text-surface-700 dark:text-surface-200",
     nodeChildren: "pl-3",
   },

@@ -93,7 +93,7 @@ const statusSeverity: Record<string, string> = {
   finalized: "text-emerald-600 dark:text-emerald-400",
   active: "text-sky-600 dark:text-sky-400",
   pending: "text-amber-600 dark:text-amber-400",
-  failed: "text-red-600 dark:text-red-400",
+  failed: "text-rose-600 dark:text-rose-300",
   discarded: "text-surface-400",
 };
 

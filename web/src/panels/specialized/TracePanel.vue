@@ -9,6 +9,7 @@ import type { TracePanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
+import AppIcon from "../../components/AppIcon.vue";
 
 interface TraceSpan {
   id: string;
@@ -164,6 +165,11 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         :disabled="loading"
         @click="load"
       >
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'refresh-cw' }"
+          :size="14"
+          :loading="loading"
+        />
         Refresh
       </Button>
     </div>
@@ -213,7 +219,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
                 <div
                   class="absolute top-1 h-4 rounded bg-primary-500"
                   :class="
-                    (data as SpanRow).status === 'error' ? 'bg-red-500' : ''
+                    (data as SpanRow).status === 'error' ? 'bg-rose-400' : ''
                   "
                   :style="{
                     left: `${(data as SpanRow).offset}%`,

@@ -21,6 +21,20 @@ const credentialKinds = [
     identityLabel: "Username",
     compatibleProtocols: ["ssh", "sftp"],
   },
+  {
+    kind: "tls_client_cert",
+    label: "TLS client certificate",
+    secretLabel: "Certificate and private key",
+    secretMultiline: true,
+    compatibleProtocols: ["postgresql"],
+  },
+  {
+    kind: "db_password",
+    label: "Database password",
+    secretLabel: "Password",
+    identityLabel: "Database user",
+    compatibleProtocols: ["postgresql"],
+  },
 ];
 
 beforeEach(() => {
@@ -113,6 +127,54 @@ describe("CredentialSelect", () => {
       protocols: ["ssh"],
     });
     expect(dialog.props("protocol")).toBe("ssh");
+  });
+
+  it("labels mixed-kind credential choices with credential kind display names", async () => {
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("/credential-kinds")) return { body: credentialKinds };
+      if (url.includes("/credentials")) {
+        return {
+          body: [
+            {
+              id: "db-pw",
+              name: "database prod",
+              kind: "db_password",
+              identity: "app",
+            },
+            {
+              id: "db-cert",
+              name: "database cert",
+              kind: "tls_client_cert",
+            },
+          ],
+        };
+      }
+      return { body: {} };
+    });
+
+    const wrapper = mount(CredentialSelect, {
+      props: {
+        protocol: "postgresql",
+        selector: {
+          kinds: ["db_password", "tls_client_cert"],
+          protocols: ["postgresql"],
+        },
+      },
+    });
+    await flushPromises();
+
+    const select = wrapper.findComponent({ name: "Select" });
+    expect(select.props("options")).toEqual([
+      {
+        value: "db-pw",
+        label: "database prod · Database password (app)",
+      },
+      {
+        value: "db-cert",
+        label: "database cert · TLS client certificate",
+      },
+    ]);
   });
 
   it("shows an unreadable configured credential as replace-only", async () => {

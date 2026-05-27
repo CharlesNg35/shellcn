@@ -31,7 +31,7 @@ function validate(name: string, raw: unknown): PluginProjection {
   expect(typeof p.category.label).toBe("string");
   expect(iconTypes).toContain(p.category.icon.type);
   expect(typeof p.category.order).toBe("number");
-  expect(["tabs", "sidebar_tree"]).toContain(p.layout);
+  expect(["tabs", "sidebar_tree", "dashboard"]).toContain(p.layout);
   expect(Array.isArray(p.supportedTransports)).toBe(true);
   expect(Array.isArray(p.config.groups)).toBe(true);
 

@@ -148,6 +148,7 @@ func treeNodeChildren(rc *plugin.RequestContext) (any, error) {
 			Ref:   &plugin.ResourceRef{Kind: kind, Namespace: node, Name: name, UID: vmid},
 			Leaf:  true,
 			Badge: &plugin.Badge{Value: str(g["status"]), Severity: statusSeverity(str(g["status"]))},
+			Data:  g,
 		})
 	}
 	stores, err := s.list(rc.Ctx, "/nodes/"+node+"/storage")

@@ -56,6 +56,8 @@ const TablePanelStub = defineComponent({
   `,
 });
 
+let requests: Array<{ url: string; init?: RequestInit }>;
+
 function router() {
   return createRouter({
     history: createMemoryHistory(),
@@ -65,7 +67,9 @@ function router() {
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  installFetch((url) => {
+  requests = [];
+  installFetch((url, init) => {
+    requests.push({ url, init });
     if (url.endsWith("/api/connections")) {
       return {
         body: [
@@ -77,6 +81,9 @@ beforeEach(() => {
           },
         ],
       };
+    }
+    if (url.endsWith("/api/connections/c1/session")) {
+      return { body: { ok: true } };
     }
     if (url.endsWith("/api/connection-folders")) return { body: [] };
     if (url.endsWith("/api/plugins/docker")) return { body: projection };
@@ -90,10 +97,58 @@ afterEach(() => {
 });
 
 describe("ConnectionWorkspace", () => {
+  it("centers the workspace loading state", async () => {
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections")) {
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "docker",
+              protocol: "docker",
+              transport: "direct",
+            },
+          ],
+        };
+      }
+      if (url.endsWith("/api/plugins/docker")) return { body: projection };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          PanelHost: true,
+        },
+      },
+    });
+
+    const loading = wrapper.get('[role="status"]');
+    expect(loading.text()).toBe("Loading workspace…");
+    expect(loading.classes()).toEqual(
+      expect.arrayContaining([
+        "flex",
+        "h-full",
+        "items-center",
+        "justify-center",
+      ]),
+    );
+  });
+
   it("ignores selectable table refs that are not declared resources", async () => {
     const ws = useWorkspaceStore();
     ws.setConnected("c1", true);
-    ws.selectGroup("c1", "containers");
+    ws.openView("c1", {
+      id: "group:containers",
+      title: "Containers",
+      kind: "list",
+      groupKey: "containers",
+    });
 
     const wrapper = mount(ConnectionWorkspace, {
       props: { id: "c1" },
@@ -110,9 +165,135 @@ describe("ConnectionWorkspace", () => {
     await flushPromises();
 
     await wrapper.get('[data-test="unknown"]').trigger("click");
-    expect(ws.view("c1").selectedRef).toBeNull();
+    expect(ws.view("c1").views.some((v) => v.kind === "detail")).toBe(false);
 
     await wrapper.get('[data-test="known"]').trigger("click");
-    expect(ws.view("c1").selectedRef?.kind).toBe("container");
+    const opened = ws.view("c1").views.find((v) => v.kind === "detail");
+    expect(opened?.ref?.kind).toBe("container");
+  });
+
+  it("closes the backend plugin session when disconnecting", async () => {
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          DetailView: true,
+          ResourceTree: true,
+          TablePanel: TablePanelStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    const button = wrapper
+      .findAll("button")
+      .find((candidate) => candidate.text().includes("Disconnect"));
+    expect(button).toBeTruthy();
+    await button!.trigger("click");
+    await flushPromises();
+
+    expect(ws.isConnected("c1")).toBe(false);
+    expect(
+      requests.some(
+        (request) =>
+          request.url.endsWith("/api/connections/c1/session") &&
+          request.init?.method === "DELETE",
+      ),
+    ).toBe(true);
+  });
+
+  it("renders every panel as a card in the dashboard layout", async () => {
+    const dashboard: PluginProjection = {
+      ...projection,
+      layout: "dashboard",
+      tree: [],
+      resources: [],
+      tabs: [
+        {
+          key: "overview",
+          label: "Overview",
+          panel: "document",
+          source: { routeId: "x.overview" },
+        },
+        {
+          key: "logs",
+          label: "Logs",
+          panel: "log_stream",
+          source: { routeId: "x.logs" },
+          span: 2,
+        },
+      ],
+    };
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections")) {
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "docker",
+              protocol: "docker",
+              transport: "direct",
+            },
+          ],
+        };
+      }
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { ok: true } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) return { body: dashboard };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: { AppIcon: true, PanelHost: true },
+      },
+    });
+    await flushPromises();
+
+    const cards = wrapper.findAll("section");
+    expect(cards).toHaveLength(2);
+    expect(wrapper.text()).toContain("Overview");
+    expect(wrapper.text()).toContain("Logs");
+    // The span=2 panel fills the row.
+    expect(cards[1].classes()).toContain("lg:col-span-2");
+  });
+
+  it("asks the browser to confirm reload while connected", async () => {
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          DetailView: true,
+          ResourceTree: true,
+          TablePanel: TablePanelStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    const event = new Event("beforeunload", {
+      cancelable: true,
+    }) as BeforeUnloadEvent;
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
   });
 });

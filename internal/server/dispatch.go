@@ -31,7 +31,7 @@ const (
 	maxMultipartMemory = 32 << 20
 )
 
-// pParams extracts route/path params (the reserved `p.` prefix) from the query.
+// pParams extracts renderer-supplied route params and scoped context values.
 func pParams(r *http.Request) map[string]string {
 	out := map[string]string{}
 	for k, vs := range r.URL.Query() {
@@ -88,18 +88,16 @@ func resolveRouteParams(path string, got map[string]string) (map[string]string, 
 	if len(names) == 0 {
 		return got, nil
 	}
-	out := make(map[string]string, len(names))
+	out := make(map[string]string, len(got))
+	for name, value := range got {
+		out[name] = value
+	}
 	for name := range names {
 		v := got[name]
 		if v == "" {
 			return nil, fmt.Errorf("%w: missing route param %q", plugin.ErrInvalidInput, name)
 		}
 		out[name] = v
-	}
-	for name := range got {
-		if !names[name] {
-			return nil, fmt.Errorf("%w: unknown route param %q", plugin.ErrInvalidInput, name)
-		}
 	}
 	return out, nil
 }

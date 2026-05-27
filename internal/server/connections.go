@@ -11,16 +11,18 @@ import (
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng/shellcn/internal/session"
 )
 
 const (
-	connCreateEvent       = "connection.create"
-	connUpdateEvent       = "connection.update"
-	connDeleteEvent       = "connection.delete"
-	connFolderCreateEvent = "connection_folder.create"
-	connFolderUpdateEvent = "connection_folder.update"
-	connFolderDeleteEvent = "connection_folder.delete"
-	connLayoutUpdateEvent = "connection_layout.update"
+	connCreateEvent            = "connection.create"
+	connUpdateEvent            = "connection.update"
+	connDeleteEvent            = "connection.delete"
+	connSessionDisconnectEvent = "connection.session.disconnect"
+	connFolderCreateEvent      = "connection_folder.create"
+	connFolderUpdateEvent      = "connection_folder.update"
+	connFolderDeleteEvent      = "connection_folder.delete"
+	connLayoutUpdateEvent      = "connection_layout.update"
 )
 
 // Surfaced on a connection to drive the sidebar dot. The "connected" (green)
@@ -145,6 +147,7 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	s.deps.Sessions.CloseConnection(conn.ID)
 	s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
 	writeJSON(w, http.StatusOK, s.deps.Connections.Detail(ctx, user.ID, updated))
 }
@@ -175,11 +178,30 @@ func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+func (s *Server) handleDisconnectConnectionSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := userFrom(ctx)
+	conn, err := s.deps.Store.Connections.Get(ctx, chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	if !s.canAccessConnection(ctx, user, conn) {
+		s.auditConnEvent(ctx, user, conn.ID, connSessionDisconnectEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		return
+	}
+	s.deps.Sessions.Close(session.Key{ConnectionID: conn.ID, OwnerScope: user.ID})
+	s.auditConnEvent(ctx, user, conn.ID, connSessionDisconnectEvent, plugin.RiskWrite, models.AuditAllowed, nil)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // cleanupConnectionDependents removes the access-control state tied to a deleted
 // connection so it can never be inherited by a future record: it drops any live
 // agent tunnel, deletes sharing grants, and revokes outstanding enrollments.
 // Best-effort — the connection is already gone, so failures are logged not fatal.
 func (s *Server) cleanupConnectionDependents(ctx context.Context, connID string) {
+	s.deps.Sessions.CloseConnection(connID)
 	if s.deps.Tunnels != nil {
 		s.deps.Tunnels.Remove(connID)
 	}

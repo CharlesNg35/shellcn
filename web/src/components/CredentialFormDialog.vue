@@ -203,7 +203,7 @@ async function save(): Promise<void> {
     :closable="!busy"
     :pt="{
       root: dialogRoot(),
-      content: 'max-h-[70vh] overflow-auto p-5',
+      content: 'min-h-0 max-h-[70vh] overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"
   >
@@ -359,14 +359,12 @@ async function save(): Promise<void> {
           </Button>
           <Button
             type="button"
+            :label="isEdit ? 'Save changes' : 'Create credential'"
+            :loading="busy"
             :disabled="busy || catalogLoading || Boolean(catalogError)"
             :pt="{ root: btnPrimary }"
             @click="save"
-          >
-            {{
-              busy ? "Saving…" : isEdit ? "Save changes" : "Create credential"
-            }}
-          </Button>
+          />
         </div>
       </div>
     </template>

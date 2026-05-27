@@ -17,7 +17,15 @@ import (
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/transport"
+	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
 )
+
+func trimName(names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	return strings.TrimPrefix(names[0], "/")
+}
 
 func TestDockerPluginIntegrationLocalDaemon(t *testing.T) {
 	if os.Getenv("SHELLCN_DOCKER_INTEGRATION") != "1" {
@@ -45,15 +53,15 @@ func TestDockerPluginIntegrationLocalDaemon(t *testing.T) {
 		t.Fatalf("Connect: %v", err)
 	}
 	defer func() { _ = sess.Close() }()
-	ds := sess.(*Session)
+	ds := sess.(*dockerengine.Session)
 
-	list, err := ds.cli.ContainerList(ctx, dockerclient.ContainerListOptions{All: true})
+	list, err := ds.Client().ContainerList(ctx, dockerclient.ContainerListOptions{All: true})
 	if err != nil {
 		t.Fatalf("ContainerList: %v", err)
 	}
 	var id string
 	for _, c := range list.Items {
-		if firstName(c.Names, "") == name {
+		if trimName(c.Names) == name {
 			id = c.ID
 			break
 		}
@@ -111,7 +119,7 @@ func TestDockerPluginIntegrationAgentTransport(t *testing.T) {
 		t.Fatalf("Connect through agent transport: %v", err)
 	}
 	defer func() { _ = sess.Close() }()
-	if _, err := sess.(*Session).cli.ContainerList(ctx, dockerclient.ContainerListOptions{All: true, Limit: 1}); err != nil {
+	if _, err := sess.(*dockerengine.Session).Client().ContainerList(ctx, dockerclient.ContainerListOptions{All: true, Limit: 1}); err != nil {
 		t.Fatalf("ContainerList through agent transport: %v", err)
 	}
 }

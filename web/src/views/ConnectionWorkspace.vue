@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { API_BASE, api, ApiError, getCsrfToken } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useSessionsStore } from "../stores/sessions";
@@ -16,9 +16,11 @@ import PanelHost from "../panels/core/PanelHost.vue";
 import EnrollPanel from "../panels/enroll/EnrollPanel.vue";
 import ConnectPanel from "../panels/connect/ConnectPanel.vue";
 import PanelError from "../panels/shared/PanelError.vue";
-import ResourceTree from "../panels/tree/ResourceTree.vue";
-import TablePanel from "../panels/table/TablePanel.vue";
-import DetailView from "../panels/detail/DetailView.vue";
+import Dialog from "primevue/dialog";
+import TreeWorkspace from "../panels/tree/TreeWorkspace.vue";
+import DashboardWorkspace from "../panels/dashboard/DashboardWorkspace.vue";
+import DockPanel from "../panels/dock/DockPanel.vue";
+import { useDockStore } from "../stores/dock";
 import ConnectionFormDialog from "../components/ConnectionFormDialog.vue";
 import ShareDialog from "../components/ShareDialog.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
@@ -26,14 +28,15 @@ import { recordingForStream } from "../composables/useRecordingControl";
 import type {
   Action,
   PluginProjection,
-  ResourceType,
-  Row,
   Tab as TabDef,
 } from "../types/projection";
+import { dialogRoot } from "../primevue/preset";
 
 const props = defineProps<{ id: string }>();
 const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
+const dock = useDockStore();
+const dockState = computed(() => dock.state(props.id));
 const sessions = useSessionsStore();
 const liveStatus = useConnectionStatusStore();
 const router = useRouter();
@@ -111,6 +114,10 @@ watch(
 // survives in-app navigation, resetting only on a full reload).
 const connected = computed(() => ws.isConnected(props.id));
 const channelPrefix = computed(() => `${props.id}:`);
+const sessionPath = computed(
+  () => `/connections/${encodeURIComponent(props.id)}/session`,
+);
+const sessionURL = computed(() => `${API_BASE}${sessionPath.value}`);
 
 function connect(): void {
   showEnroll.value = false;
@@ -118,35 +125,47 @@ function connect(): void {
   liveStatus.connecting(props.id);
 }
 
-function disconnect(): void {
+async function closeBackendSession(): Promise<void> {
+  await api.del(sessionPath.value);
+}
+
+function closeBackendSessionOnPageHide(): void {
+  if (!connected.value) return;
+  const headers = new Headers();
+  const csrf = getCsrfToken();
+  if (csrf) headers.set("X-CSRF-Token", csrf);
+  void fetch(sessionURL.value, {
+    method: "DELETE",
+    headers,
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function confirmBeforePageUnload(event: BeforeUnloadEvent): void {
+  if (!connected.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+async function disconnect(): Promise<void> {
   sessions.closeWhere((key) => key.startsWith(channelPrefix.value));
   ws.setConnected(props.id, false);
   liveStatus.clear(props.id);
+  try {
+    await closeBackendSession();
+  } catch (e) {
+    notify.error("Could not close session", (e as Error).message);
+  }
 }
 
-const resourceByKind = computed(() => {
-  const map = new Map<string, ResourceType>();
-  for (const r of projection.value?.resources ?? []) map.set(r.kind, r);
-  return map;
+onMounted(() => {
+  window.addEventListener("beforeunload", confirmBeforePageUnload);
+  window.addEventListener("pagehide", closeBackendSessionOnPageHide);
 });
 
-// In a sidebar tree, the selected group maps to a resource list table by shared
-// route id (group label/key need not equal the resource kind); the selected
-// node maps to that resource's detail view by kind.
-const groupResource = computed(() => {
-  const key = view.value.selectedGroup;
-  if (!key) return undefined;
-  const group = projection.value?.tree?.find((g) => g.key === key);
-  if (!group) return undefined;
-  if (group.resourceKind) return resourceByKind.value.get(group.resourceKind);
-  return (projection.value?.resources ?? []).find(
-    (r) => r.list.routeId === group.source.routeId,
-  );
-});
-
-const detailResource = computed(() => {
-  const ref = view.value.selectedRef;
-  return ref ? resourceByKind.value.get(ref.kind) : undefined;
+onBeforeUnmount(() => {
+  window.removeEventListener("beforeunload", confirmBeforePageUnload);
+  window.removeEventListener("pagehide", closeBackendSessionOnPageHide);
 });
 
 const activeTab = computed(() =>
@@ -166,20 +185,6 @@ function tabConfig(tab: TabDef): Record<string, unknown> {
   return rec ? { ...base, _recording: rec } : base;
 }
 
-function onSelectGroup(key: string): void {
-  ws.selectGroup(props.id, key);
-}
-function isNavigableRow(row: Row): boolean {
-  return !row.ref || resourceByKind.value.has(row.ref.kind);
-}
-function onSelectNode(row: Row): void {
-  if (!isNavigableRow(row)) return;
-  ws.selectRow(props.id, row);
-}
-function onSelectRow(row: Row): void {
-  if (!isNavigableRow(row)) return;
-  ws.selectRow(props.id, row);
-}
 function onActionDone(action: Action): void {
   const tabKey = action.onSuccess?.selectTab;
   if (!tabKey || !projection.value?.tabs?.some((tab) => tab.key === tabKey)) {
@@ -257,7 +262,13 @@ function onActionDone(action: Action): void {
     </header>
 
     <div class="min-h-0 flex-1">
-      <p v-if="loading" class="p-6 text-surface-400">Loading workspace…</p>
+      <div
+        v-if="loading"
+        class="flex h-full items-center justify-center p-6 text-sm text-surface-400"
+        role="status"
+      >
+        Loading workspace…
+      </div>
       <PanelError v-else-if="error" :message="error" retryable @retry="load" />
 
       <EnrollPanel
@@ -274,87 +285,83 @@ function onActionDone(action: Action): void {
         @enroll="showEnroll = true"
       />
 
-      <template v-else-if="projection">
-        <!-- Flat tab layout. The tab bar is PrimeVue; content is rendered through
+      <div v-else-if="projection" class="flex h-full min-h-0 flex-col">
+        <div class="min-h-0 flex-1 overflow-hidden">
+          <!-- Flat tab layout. The tab bar is PrimeVue; content is rendered through
              KeepAlive (not PrimeVue's lazy TabPanels) so switching tabs HIDES a
              panel instead of destroying it — terminals/streams stay alive. -->
-        <div v-if="projection.layout === 'tabs'" class="flex h-full flex-col">
-          <Tabs
-            :value="view.activeTab ?? ''"
-            @update:value="ws.setActiveTab(id, String($event))"
-          >
-            <TabList>
-              <Tab v-for="t in projection.tabs" :key="t.key" :value="t.key">
-                <AppIcon :icon="t.icon" :size="15" />
-                {{ t.label }}
-              </Tab>
-            </TabList>
-          </Tabs>
-          <div class="min-h-0 flex-1 overflow-hidden">
-            <KeepAlive :max="10">
-              <PanelHost
-                v-if="activeTab"
-                :key="`${id}:${activeTab.key}`"
-                :panel="activeTab.panel"
-                :connection-id="id"
-                :source="activeTab.source"
-                :config="tabConfig(activeTab)"
-                :actions="projection.actions ?? []"
-                @action-done="onActionDone"
-              />
-            </KeepAlive>
-          </div>
-        </div>
-
-        <!-- Hierarchical sidebar-tree layout -->
-        <div v-else class="flex h-full">
-          <div
-            class="w-64 shrink-0 border-r border-surface-200 dark:border-surface-800"
-          >
-            <ResourceTree
-              :connection-id="id"
-              :groups="projection.tree ?? []"
-              :selected-group="view.selectedGroup"
-              :selected-uid="view.selectedRef?.uid"
-              @select-group="onSelectGroup"
-              @select-node="onSelectNode"
-            />
-          </div>
-          <div class="min-w-0 flex-1 overflow-hidden">
-            <DetailView
-              v-if="view.selectedRow && detailResource"
-              :connection-id="id"
-              :detail="detailResource.detail"
-              :row="view.selectedRow"
-              :actions="projection.actions ?? []"
-              @action-done="onActionDone"
-              @select="onSelectRow"
-            />
-            <TablePanel
-              v-else-if="groupResource"
-              :key="groupResource.kind"
-              :connection-id="id"
-              :source="groupResource.list"
-              :config="{
-                columns: groupResource.columns,
-                watch: groupResource.watch,
-                actionIds: groupResource.listActionIds ?? [],
-                rowActionIds:
-                  groupResource.rowActionIds ?? groupResource.actionIds,
-              }"
-              :actions="projection.actions ?? []"
-              @select="onSelectRow"
-              @action-done="onActionDone"
-            />
-            <div
-              v-else
-              class="flex h-full items-center justify-center text-sm text-surface-400"
+          <div v-if="projection.layout === 'tabs'" class="flex h-full flex-col">
+            <Tabs
+              :value="view.activeTab ?? ''"
+              @update:value="ws.setActiveTab(id, String($event))"
             >
-              Select an item from the tree.
+              <TabList>
+                <Tab v-for="t in projection.tabs" :key="t.key" :value="t.key">
+                  <AppIcon :icon="t.icon" :size="15" />
+                  {{ t.label }}
+                </Tab>
+              </TabList>
+            </Tabs>
+            <div class="min-h-0 flex-1 overflow-hidden">
+              <KeepAlive :max="10">
+                <PanelHost
+                  v-if="activeTab"
+                  :key="`${id}:${activeTab.key}`"
+                  :panel="activeTab.panel"
+                  :connection-id="id"
+                  :source="activeTab.source"
+                  :config="tabConfig(activeTab)"
+                  :actions="projection.actions ?? []"
+                  @action-done="onActionDone"
+                />
+              </KeepAlive>
             </div>
           </div>
+
+          <!-- Dashboard layout: every panel rendered at once in a grid. -->
+          <DashboardWorkspace
+            v-else-if="projection.layout === 'dashboard'"
+            :connection-id="id"
+            :tabs="projection.tabs ?? []"
+            :actions="projection.actions ?? []"
+            :resolve-config="tabConfig"
+            @action-done="onActionDone"
+          />
+
+          <!-- Hierarchical sidebar-tree layout (tree + workbench tabs). -->
+          <TreeWorkspace
+            v-else
+            :connection-id="id"
+            :tree="projection.tree ?? []"
+            :resources="projection.resources ?? []"
+            :actions="projection.actions ?? []"
+          />
         </div>
-      </template>
+
+        <DockPanel v-if="dockState.items.length" :connection-id="id" />
+
+        <Dialog
+          :visible="!!dockState.dialog"
+          modal
+          :header="dockState.dialog?.title"
+          :dismissable-mask="true"
+          :pt="{
+            root: dialogRoot('max-w-4xl'),
+            content: 'min-h-0 overflow-hidden p-0',
+          }"
+          @update:visible="(v) => !v && dock.closeDialog(id)"
+        >
+          <div class="h-[60vh]">
+            <PanelHost
+              v-if="dockState.dialog"
+              :panel="dockState.dialog.panel"
+              :connection-id="id"
+              :source="dockState.dialog.source"
+              :resource="dockState.dialog.resource"
+            />
+          </div>
+        </Dialog>
+      </div>
     </div>
 
     <ConnectionFormDialog v-model:visible="showEdit" :connection-id="id" />

@@ -30,7 +30,13 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Tabs: []plugin.Tab{
 			{
 				Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
-				Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "ssh.shell", Method: plugin.MethodWS, Params: map[string]string{"cols": "80", "rows": "24"}},
+				Panel: plugin.PanelTerminal,
+				Source: &plugin.DataSource{
+					RouteID: "ssh.shell",
+					Method:  plugin.MethodWS,
+					Params:  map[string]string{"cols": "80", "rows": "24"},
+				},
+				Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map(),
 			},
 			filesTab("ssh"),
 			snippetsTab(),
