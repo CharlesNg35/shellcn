@@ -158,6 +158,70 @@ describe("ConnectionWorkspace", () => {
     ).toBe(true);
   });
 
+  it("renders every panel as a card in the dashboard layout", async () => {
+    const dashboard: PluginProjection = {
+      ...projection,
+      layout: "dashboard",
+      tree: [],
+      resources: [],
+      tabs: [
+        {
+          key: "overview",
+          label: "Overview",
+          panel: "document",
+          source: { routeId: "x.overview" },
+        },
+        {
+          key: "logs",
+          label: "Logs",
+          panel: "log_stream",
+          source: { routeId: "x.logs" },
+          span: 2,
+        },
+      ],
+    };
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections")) {
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "docker",
+              protocol: "docker",
+              transport: "direct",
+            },
+          ],
+        };
+      }
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { ok: true } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) return { body: dashboard };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: { AppIcon: true, PanelHost: true },
+      },
+    });
+    await flushPromises();
+
+    const cards = wrapper.findAll("section");
+    expect(cards).toHaveLength(2);
+    expect(wrapper.text()).toContain("Overview");
+    expect(wrapper.text()).toContain("Logs");
+    // The span=2 panel fills the row.
+    expect(cards[1].classes()).toContain("lg:col-span-2");
+  });
+
   it("asks the browser to confirm reload while connected", async () => {
     const ws = useWorkspaceStore();
     ws.setConnected("c1", true);

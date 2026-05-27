@@ -19,6 +19,7 @@ import PanelError from "../panels/shared/PanelError.vue";
 import ResourceTree from "../panels/tree/ResourceTree.vue";
 import TablePanel from "../panels/table/TablePanel.vue";
 import DetailView from "../panels/detail/DetailView.vue";
+import DashboardWorkspace from "../panels/dashboard/DashboardWorkspace.vue";
 import ConnectionFormDialog from "../components/ConnectionFormDialog.vue";
 import ShareDialog from "../components/ShareDialog.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
@@ -346,6 +347,16 @@ function onActionDone(action: Action): void {
             </KeepAlive>
           </div>
         </div>
+
+        <!-- Dashboard layout: every panel rendered at once in a grid. -->
+        <DashboardWorkspace
+          v-else-if="projection.layout === 'dashboard'"
+          :connection-id="id"
+          :tabs="projection.tabs ?? []"
+          :actions="projection.actions ?? []"
+          :resolve-config="tabConfig"
+          @action-done="onActionDone"
+        />
 
         <!-- Hierarchical sidebar-tree layout -->
         <div v-else class="flex h-full">

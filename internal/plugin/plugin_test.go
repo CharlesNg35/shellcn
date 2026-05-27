@@ -69,6 +69,21 @@ func TestRegistrySummariesSortByCategory(t *testing.T) {
 	}
 }
 
+func TestValidateAcceptsAllLayouts(t *testing.T) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	for _, layout := range []plugin.Layout{plugin.LayoutTabs, plugin.LayoutSidebarTree, plugin.LayoutDashboard} {
+		m := plugin.Manifest{
+			APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
+			Category: plugin.CategoryOther, Layout: layout,
+			SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		}
+		routes := []plugin.Route{{ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop}}
+		if err := plugin.Validate(m, routes); err != nil {
+			t.Fatalf("layout %q should be valid: %v", layout, err)
+		}
+	}
+}
+
 func TestValidateRejectsBadManifests(t *testing.T) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }

@@ -149,6 +149,12 @@ Generic, manifest-driven; no per-plugin frontend.
       query-editor `exportable`; off by default). Enabled on the DB plugins'
       data grids + query/command editors (postgresql, mysql, cockroachdb, mssql,
       oracle, clickhouse, cassandra, mongodb) and Redis clients/channels tables.
+- [x] UX.11 Third workspace layout `dashboard` (`LayoutDashboard`) — renders every
+      connection-level `Tab` panel at once in a responsive grid via the focused
+      `DashboardWorkspace.vue` shell, with an optional per-`Tab` `Span` sizing hint
+      (>= 2 fills the row). Contract mirrored in Go + TS; validator accepts it;
+      covered by `ConnectionWorkspace.test.ts` and a Go layout-validation test.
+      Intended for multi-panel overviews (e.g. upcoming Kubernetes summaries).
 - [x] UX.10 Staged grid editing (commit/discard) — opt-in `TableConfig.StagedEdits`
       makes the generic grid buffer cell edits, added rows, and deletions locally
       (pending cells/rows highlighted, count + Commit/Discard bar) instead of

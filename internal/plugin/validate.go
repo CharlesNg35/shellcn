@@ -62,7 +62,7 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 		add("Category %q is not a built-in category", m.Category)
 	}
 	switch m.Layout {
-	case LayoutTabs, LayoutSidebarTree:
+	case LayoutTabs, LayoutSidebarTree, LayoutDashboard:
 	default:
 		add("Layout %q is not a valid layout", m.Layout)
 	}

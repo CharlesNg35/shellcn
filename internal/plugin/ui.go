@@ -319,6 +319,10 @@ type Tab struct {
 	Panel  PanelType      `json:"panel"`
 	Source *DataSource    `json:"source,omitempty"`
 	Config map[string]any `json:"config,omitempty"`
+	// Span is a sizing hint for the dashboard layout only: a value >= 2 makes
+	// the panel fill the row; otherwise it occupies one grid column. Other
+	// layouts ignore it.
+	Span int `json:"span,omitempty"`
 }
 
 // TreeGroup is a connection-level sidebar root, loaded lazily.

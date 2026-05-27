@@ -25,7 +25,7 @@ export type Transport = "direct" | "agent";
 export const TRANSPORT_DIRECT: Transport = "direct";
 export const TRANSPORT_AGENT: Transport = "agent";
 
-export type Layout = "tabs" | "sidebar_tree";
+export type Layout = "tabs" | "sidebar_tree" | "dashboard";
 
 export type KnownPanelType =
   | "terminal"
@@ -368,6 +368,8 @@ export interface Tab {
   panel: PanelType;
   source?: DataSource;
   config?: Record<string, unknown>;
+  // Dashboard-layout sizing hint: >= 2 fills the row, otherwise one column.
+  span?: number;
 }
 
 export interface TreeGroup {

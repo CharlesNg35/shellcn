@@ -46,11 +46,18 @@ func TestTypesensePluginIntegration(t *testing.T) {
 	})
 	call(ctx, t, routes["typesense.collection.create"], sess, nil, nil, createBody)
 	defer callNoFail(context.Background(), routes["typesense.collection.delete"], sess, map[string]string{"collection": collection})
+	clone := collection + "_clone"
+	cloneBody, _ := json.Marshal(map[string]any{"source": collection, "name": clone, "copy_documents": false})
+	call(ctx, t, routes["typesense.collection.clone"], sess, nil, nil, cloneBody)
+	defer callNoFail(context.Background(), routes["typesense.collection.delete"], sess, map[string]string{"collection": clone})
+	updateBody, _ := json.Marshal(map[string]any{"schema": map[string]any{"fields": []any{map[string]any{"name": "tag", "type": "string", "optional": true}}}})
+	call(ctx, t, routes["typesense.collection.update"], sess, map[string]string{"collection": collection}, nil, updateBody)
 
 	docBody, _ := json.Marshal(map[string]any{"document": map[string]any{"id": "ada", "name": "Ada Lovelace", "age": 37}, "action": "upsert"})
 	call(ctx, t, routes["typesense.document.upsert"], sess, map[string]string{"collection": collection}, nil, docBody)
 
 	call(ctx, t, routes["typesense.overview"], sess, nil, nil, nil)
+	call(ctx, t, routes["typesense.collections.tree"], sess, nil, nil, nil)
 	call(ctx, t, routes["typesense.collection.overview"], sess, map[string]string{"collection": collection}, nil, nil)
 	docs := call(ctx, t, routes["typesense.documents.list"], sess, map[string]string{"collection": collection}, url.Values{"limit": []string{"10"}}, nil)
 	if items := pageItems(docs); len(items) != 1 || items[0]["_id"] != "ada" {
@@ -60,12 +67,19 @@ func TestTypesensePluginIntegration(t *testing.T) {
 	if field(read, "name") != "Ada Lovelace" {
 		t.Fatalf("unexpected document: %#v", read)
 	}
+	docUpdateBody, _ := json.Marshal(map[string]any{"content": `{"tag":"math"}`})
+	call(ctx, t, routes["typesense.document.update"], sess, map[string]string{"collection": collection, "id": "ada"}, nil, docUpdateBody)
+	call(ctx, t, routes["typesense.completion"], sess, nil, nil, nil)
+	if result, err := executeSearch(ctx, sess.(*Session), collection, map[string]any{"q": "Ada", "query_by": "name", "per_page": 10}); err != nil || result.RowCount < 1 {
+		t.Fatalf("execute search: result=%#v err=%v", result, err)
+	}
 
 	alias := collection + "_alias"
 	aliasBody, _ := json.Marshal(map[string]any{"name": alias, "collection_name": collection})
 	call(ctx, t, routes["typesense.alias.upsert"], sess, nil, nil, aliasBody)
 	call(ctx, t, routes["typesense.alias.read"], sess, map[string]string{"alias": alias}, nil, nil)
 	call(ctx, t, routes["typesense.aliases.list"], sess, nil, nil, nil)
+	call(ctx, t, routes["typesense.aliases.tree"], sess, nil, nil, nil)
 
 	synBody, _ := json.Marshal(map[string]any{"id": "shellcn-synonyms", "synonym": map[string]any{"items": []any{map[string]any{"id": "ada", "synonyms": []any{"ada", "lovelace"}}}}})
 	call(ctx, t, routes["typesense.synonym.upsert"], sess, nil, nil, synBody)
@@ -86,6 +100,7 @@ func TestTypesensePluginIntegration(t *testing.T) {
 	keyID := strings.TrimSpace(toString(field(key, "id")))
 	if keyID != "" {
 		call(ctx, t, routes["typesense.key.read"], sess, map[string]string{"key": keyID}, nil, nil)
+		call(ctx, t, routes["typesense.keys.tree"], sess, nil, nil, nil)
 		call(ctx, t, routes["typesense.key.delete"], sess, map[string]string{"key": keyID}, nil, nil)
 	}
 

@@ -45,11 +45,14 @@ func TestMeilisearchPluginIntegration(t *testing.T) {
 
 	settingsBody, _ := json.Marshal(map[string]any{"settings": map[string]any{"filterableAttributes": []any{"age"}, "sortableAttributes": []any{"age"}}})
 	waitTask(ctx, t, routes, sess, field(call(ctx, t, routes["meilisearch.settings.update"], sess, map[string]string{"index": index}, nil, settingsBody), "taskUid"))
+	updateBody, _ := json.Marshal(map[string]any{"primaryKey": "id"})
+	waitTask(ctx, t, routes, sess, field(call(ctx, t, routes["meilisearch.index.update"], sess, map[string]string{"index": index}, nil, updateBody), "taskUid"))
 
 	docBody, _ := json.Marshal(map[string]any{"document": map[string]any{"id": "ada", "name": "Ada Lovelace", "age": 37}})
 	waitTask(ctx, t, routes, sess, field(call(ctx, t, routes["meilisearch.document.upsert"], sess, map[string]string{"index": index}, nil, docBody), "taskUid"))
 
 	call(ctx, t, routes["meilisearch.overview"], sess, nil, nil, nil)
+	call(ctx, t, routes["meilisearch.indexes.tree"], sess, nil, nil, nil)
 	call(ctx, t, routes["meilisearch.index.overview"], sess, map[string]string{"index": index}, nil, nil)
 	call(ctx, t, routes["meilisearch.index.stats"], sess, map[string]string{"index": index}, nil, nil)
 	call(ctx, t, routes["meilisearch.settings.read"], sess, map[string]string{"index": index}, nil, nil)
@@ -62,7 +65,15 @@ func TestMeilisearchPluginIntegration(t *testing.T) {
 		t.Fatalf("unexpected document: %#v", read)
 	}
 	call(ctx, t, routes["meilisearch.tasks.list"], sess, nil, url.Values{"limit": []string{"10"}}, nil)
+	call(ctx, t, routes["meilisearch.tasks.tree"], sess, nil, url.Values{"limit": []string{"10"}}, nil)
 	call(ctx, t, routes["meilisearch.keys.list"], sess, nil, url.Values{"limit": []string{"10"}}, nil)
+	call(ctx, t, routes["meilisearch.keys.tree"], sess, nil, url.Values{"limit": []string{"10"}}, nil)
+	call(ctx, t, routes["meilisearch.completion"], sess, nil, nil, nil)
+	if result, err := executeSearch(ctx, sess.(*Session), index, map[string]any{"q": "Ada", "limit": 10}); err != nil || result.RowCount < 1 {
+		t.Fatalf("execute search: result=%#v err=%v", result, err)
+	}
+	waitTask(ctx, t, routes, sess, field(call(ctx, t, routes["meilisearch.dump.create"], sess, nil, nil, nil), "taskUid"))
+	waitTask(ctx, t, routes, sess, field(call(ctx, t, routes["meilisearch.snapshot.create"], sess, nil, nil, nil), "taskUid"))
 	keyBody, _ := json.Marshal(map[string]any{"name": "shellcn-it", "description": "integration", "actions": []any{"search"}, "indexes": []any{index}, "expiresAt": nil})
 	key := call(ctx, t, routes["meilisearch.key.create"], sess, nil, nil, keyBody)
 	if uid := strings.TrimSpace(toString(field(key, "uid"))); uid != "" {
@@ -70,6 +81,9 @@ func TestMeilisearchPluginIntegration(t *testing.T) {
 		call(ctx, t, routes["meilisearch.key.delete"], sess, map[string]string{"key": uid}, nil, nil)
 	}
 	waitTask(ctx, t, routes, sess, field(call(ctx, t, routes["meilisearch.document.delete"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil), "taskUid"))
+	docBody, _ = json.Marshal(map[string]any{"document": map[string]any{"id": "temp", "name": "Temporary", "age": 1}})
+	waitTask(ctx, t, routes, sess, field(call(ctx, t, routes["meilisearch.document.upsert"], sess, map[string]string{"index": index}, nil, docBody), "taskUid"))
+	waitTask(ctx, t, routes, sess, field(call(ctx, t, routes["meilisearch.documents.delete_all"], sess, map[string]string{"index": index}, nil, nil), "taskUid"))
 }
 
 func meilisearchIntegrationConfig(ctx context.Context, t *testing.T) map[string]any {
