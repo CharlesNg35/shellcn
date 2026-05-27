@@ -40,9 +40,12 @@ vi.mock("@xterm/addon-webgl", () => ({
     dispose() {}
   },
 }));
+const mockCodeMirror = vi.hoisted(() => ({
+  value: "",
+}));
 vi.mock("../../codemirror", () => ({
   createCodeMirrorEditor: () => ({ view: { destroy() {} } }),
-  editorValue: () => "",
+  editorValue: () => mockCodeMirror.value,
   setEditorValue: () => {},
   setEditorCompletions: () => {},
   setEditorLanguage: () => {},
@@ -103,6 +106,7 @@ const props = {
 beforeEach(() => {
   setActivePinia(createPinia());
   FakeWS.instances = [];
+  mockCodeMirror.value = "";
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.stubGlobal("WebSocket", FakeWS);
   installFetch((url) => {
@@ -203,6 +207,26 @@ describe("streaming stub panels", () => {
 
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
     expect(w.find("textarea.resize-none").exists()).toBe(false);
+    w.unmount();
+  });
+
+  it("truncates long query history chips and keeps the full query as title", async () => {
+    const text =
+      "SELECT * FROM public.github_app_installation_repositories LIMIT 100;";
+    mockCodeMirror.value = text;
+    const w = mount(QueryEditorPanel, { props });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Execute"))!
+      .trigger("click");
+    await flushPromises();
+
+    const chip = w.get(`button[title="${text}"]`);
+    expect(chip.classes()).toContain("max-w-72");
+    expect(chip.classes()).toContain("overflow-hidden");
+    expect(chip.text()).toBe(text);
     w.unmount();
   });
 });

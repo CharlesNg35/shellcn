@@ -34,7 +34,7 @@ export const btnGhost =
   "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800";
 
 const buttonBase =
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-50";
 const buttonSize = {
   small: "px-2.5 py-1 text-xs",
   normal: "px-3 py-1.5",
@@ -343,7 +343,7 @@ export const primeVuePassthrough = {
     root: buttonRoot,
     icon: "h-4 w-4 shrink-0",
     loadingIcon: "h-4 w-4 shrink-0 animate-spin",
-    label: "truncate",
+    label: "min-w-0 truncate",
   },
 
   badge: {

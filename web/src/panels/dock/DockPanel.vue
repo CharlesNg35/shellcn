@@ -51,7 +51,8 @@ onBeforeUnmount(onResizeEnd);
         v-for="item in state.items"
         :key="item.id"
         type="button"
-        class="group flex max-w-48 items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
+        :title="item.title"
+        class="group flex max-w-48 shrink-0 items-center gap-1.5 overflow-hidden rounded px-2 py-1 text-xs transition-colors"
         :class="
           item.id === state.activeId
             ? 'bg-surface-0 text-surface-900 shadow-sm dark:bg-surface-800 dark:text-surface-0'
@@ -60,7 +61,7 @@ onBeforeUnmount(onResizeEnd);
         @click="dock.activate(connectionId, item.id)"
       >
         <AppIcon v-if="item.icon" :icon="item.icon" :size="13" />
-        <span class="truncate">{{ item.title }}</span>
+        <span class="min-w-0 flex-1 truncate">{{ item.title }}</span>
         <Button
           type="button"
           text

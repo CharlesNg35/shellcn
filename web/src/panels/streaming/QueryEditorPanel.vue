@@ -82,7 +82,7 @@ function onFrame(frame: string): void {
         payload.confirmMessage ??
         "This operation requires confirmation before it can run.";
     } else {
-      results.value = payload;
+      results.value = { ...payload, rows: payload.rows ?? [] };
       pendingConfirmation.value = false;
     }
     running.value = false;
@@ -272,11 +272,11 @@ onUnmounted(() => {
           size="small"
           severity="secondary"
           outlined
-          class="max-w-72"
+          :label="item"
+          :title="item"
+          class="max-w-72 overflow-hidden"
           @click="recall(item)"
-        >
-          {{ item }}
-        </Button>
+        />
       </div>
     </div>
 

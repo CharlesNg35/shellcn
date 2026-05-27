@@ -188,7 +188,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             type="button"
             :title="v.subtitle ? `${v.subtitle} / ${v.title}` : v.title"
             :data-active-tab="v.id === view.activeViewId ? 'true' : undefined"
-            class="group flex max-w-60 shrink-0 cursor-grab items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors active:cursor-grabbing"
+            class="group flex max-w-60 shrink-0 cursor-grab items-center gap-1.5 overflow-hidden rounded px-2 py-1 text-xs transition-colors active:cursor-grabbing"
             :class="
               v.id === view.activeViewId
                 ? 'bg-surface-0 text-surface-900 shadow-sm dark:bg-surface-800 dark:text-surface-0'
@@ -197,7 +197,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             @click="ws.activateView(connectionId, v.id)"
           >
             <AppIcon v-if="v.icon" :icon="v.icon" :size="13" />
-            <span class="flex min-w-0 items-baseline gap-1">
+            <span class="flex min-w-0 flex-1 items-baseline gap-1">
               <span class="truncate font-medium">{{ v.title }}</span>
               <span
                 v-if="v.subtitle"

@@ -78,4 +78,14 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.datatable.table).toContain("w-max");
     expect(primeVuePassthrough.datatable.table).toContain("min-w-full");
   });
+
+  it("allows constrained buttons to truncate their labels", () => {
+    const root = primeVuePassthrough.button.root({
+      props: {},
+    } as Parameters<typeof primeVuePassthrough.button.root>[0]);
+
+    expect(root).toContain("min-w-0");
+    expect(primeVuePassthrough.button.label).toContain("min-w-0");
+    expect(primeVuePassthrough.button.label).toContain("truncate");
+  });
 });

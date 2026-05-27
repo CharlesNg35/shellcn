@@ -134,7 +134,10 @@ export async function fetchPage<T = unknown>(
     routePath(connectionId, ds.routeId),
     queryParams(params, page),
   );
-  return track(connectionId, getJSON<Page<T>>(url));
+  const result = await track(connectionId, getJSON<Page<T>>(url));
+  // A nil Go slice marshals to null; guarantee items is always an array so every
+  // consumer can map/forEach without a guard.
+  return { ...result, items: result.items ?? [] };
 }
 
 export async function fetchDoc<T = unknown>(
