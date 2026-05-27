@@ -433,6 +433,9 @@ export interface TreeNode {
   leaf?: boolean;
   childrenSource?: DataSource;
   badge?: Badge;
+  // Opens the resource type's list view (like a top-level group) instead of a
+  // single-resource detail.
+  resourceKind?: string;
 }
 
 export interface HeaderSpec {

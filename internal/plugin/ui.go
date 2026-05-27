@@ -431,6 +431,10 @@ type TreeNode struct {
 	Leaf           bool         `json:"leaf,omitempty"`
 	ChildrenSource *DataSource  `json:"childrenSource,omitempty"`
 	Badge          *Badge       `json:"badge,omitempty"`
+	// ResourceKind makes the node open that resource type's list view (like a
+	// top-level tree group) instead of a single-resource detail — for nesting a
+	// category that drills into a kind list.
+	ResourceKind string `json:"resourceKind,omitempty"`
 }
 
 // Action is a UI affordance over a route. Permission/risk/input live on the

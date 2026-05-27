@@ -5,6 +5,7 @@ import type { ResourceRef, Row } from "../types/projection";
 interface ConnectionView {
   activeTab?: string;
   selectedGroup?: string;
+  selectedListKind?: string;
   selectedRef?: ResourceRef | null;
   selectedRow?: Row | null;
 }
@@ -46,6 +47,16 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   function selectGroup(id: string, group: string): void {
     const v = view(id);
     v.selectedGroup = group;
+    v.selectedListKind = undefined;
+    v.selectedRef = null;
+    v.selectedRow = null;
+  }
+
+  // selectList opens a kind's list view from a tree node (vs. a top-level group).
+  function selectList(id: string, kind: string): void {
+    const v = view(id);
+    v.selectedListKind = kind;
+    v.selectedGroup = undefined;
     v.selectedRef = null;
     v.selectedRow = null;
   }
@@ -54,12 +65,14 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     const v = view(id);
     v.selectedRef = ref;
     v.selectedRow = { ref };
+    v.selectedListKind = undefined;
   }
 
   function selectRow(id: string, row: Row): void {
     const v = view(id);
     v.selectedRow = row;
     v.selectedRef = row.ref ?? null;
+    v.selectedListKind = undefined;
   }
 
   function clearSelection(id: string): void {
@@ -67,6 +80,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     v.selectedRef = null;
     v.selectedRow = null;
     v.selectedGroup = undefined;
+    v.selectedListKind = undefined;
   }
 
   return {
@@ -80,6 +94,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     isConnected,
     setActiveTab,
     selectGroup,
+    selectList,
     selectRef,
     selectRow,
     clearSelection,

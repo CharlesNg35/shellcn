@@ -41,4 +41,17 @@ describe("workspace store", () => {
     expect(ws.view("a").selectedGroup).toBe("images");
     expect(ws.view("a").selectedRef).toBeNull();
   });
+
+  it("selecting a list-opening node sets the kind and clears group/detail", () => {
+    const ws = useWorkspaceStore();
+    ws.open("a");
+    ws.selectGroup("a", "workloads");
+    ws.selectList("a", "pod");
+    expect(ws.view("a").selectedListKind).toBe("pod");
+    expect(ws.view("a").selectedGroup).toBeUndefined();
+    expect(ws.view("a").selectedRow).toBeNull();
+    // Picking a resource afterwards clears the list selection.
+    ws.selectRow("a", { ref: { kind: "pod", name: "p", uid: "p1" } });
+    expect(ws.view("a").selectedListKind).toBeUndefined();
+  });
 });

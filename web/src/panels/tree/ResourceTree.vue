@@ -19,6 +19,7 @@ interface NodeData {
   ref?: ResourceRef;
   row?: Row;
   source?: DataSource;
+  resourceKind?: string;
 }
 
 const props = defineProps<{
@@ -30,6 +31,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "select-group": [key: string];
   "select-node": [row: Row];
+  "select-list": [kind: string];
 }>();
 
 const nodes = ref<PVNode[]>([]);
@@ -47,6 +49,7 @@ function toNode(n: TreeNode): PVNode {
       ref: n.ref,
       row: { ...n, ref: n.ref },
       source: n.childrenSource,
+      resourceKind: n.resourceKind,
     },
   };
 }
@@ -93,6 +96,7 @@ async function onNodeSelect(node: PVNode): Promise<void> {
   const data = node.data as NodeData;
   selectionKeys.value = { [String(node.key)]: true };
   if (data.isGroup) emit("select-group", String(node.key));
+  else if (data.resourceKind) emit("select-list", data.resourceKind);
   else if (data.row) emit("select-node", data.row);
   if (!node.leaf) {
     expandedKeys.value = { ...expandedKeys.value, [String(node.key)]: true };
@@ -103,8 +107,10 @@ async function onNodeSelect(node: PVNode): Promise<void> {
 watch(
   () => [props.selectedGroup, props.selectedUid] as const,
   ([group, uid]) => {
+    // Sync highlight to a group/detail selection; leave a click-driven
+    // selection (e.g. a list-opening node) untouched when neither matches.
     const selected = uid ? selectedNodeKey(uid) : group;
-    selectionKeys.value = selected ? { [selected]: true } : {};
+    if (selected) selectionKeys.value = { [selected]: true };
   },
   { immediate: true },
 );

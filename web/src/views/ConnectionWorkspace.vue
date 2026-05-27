@@ -186,6 +186,14 @@ const groupResource = computed(() => {
   );
 });
 
+// The list shown in the main area: a node-opened kind list takes precedence,
+// otherwise the selected top-level group's list.
+const activeList = computed(() => {
+  const kind = view.value.selectedListKind;
+  if (kind) return resourceByKind.value.get(kind);
+  return groupResource.value;
+});
+
 const detailResource = computed(() => {
   const ref = view.value.selectedRef;
   return ref ? resourceByKind.value.get(ref.kind) : undefined;
@@ -210,6 +218,9 @@ function tabConfig(tab: TabDef): Record<string, unknown> {
 
 function onSelectGroup(key: string): void {
   ws.selectGroup(props.id, key);
+}
+function onSelectList(kind: string): void {
+  if (resourceByKind.value.has(kind)) ws.selectList(props.id, kind);
 }
 function isNavigableRow(row: Row): boolean {
   return !row.ref || resourceByKind.value.has(row.ref.kind);
@@ -370,6 +381,7 @@ function onActionDone(action: Action): void {
               :selected-uid="view.selectedRef?.uid"
               @select-group="onSelectGroup"
               @select-node="onSelectNode"
+              @select-list="onSelectList"
             />
           </div>
           <div class="min-w-0 flex-1 overflow-hidden">
@@ -383,16 +395,15 @@ function onActionDone(action: Action): void {
               @select="onSelectRow"
             />
             <TablePanel
-              v-else-if="groupResource"
-              :key="groupResource.kind"
+              v-else-if="activeList"
+              :key="activeList.kind"
               :connection-id="id"
-              :source="groupResource.list"
+              :source="activeList.list"
               :config="{
-                columns: groupResource.columns,
-                watch: groupResource.watch,
-                actionIds: groupResource.listActionIds ?? [],
-                rowActionIds:
-                  groupResource.rowActionIds ?? groupResource.actionIds,
+                columns: activeList.columns,
+                watch: activeList.watch,
+                actionIds: activeList.listActionIds ?? [],
+                rowActionIds: activeList.rowActionIds ?? activeList.actionIds,
               }"
               :actions="projection.actions ?? []"
               @select="onSelectRow"

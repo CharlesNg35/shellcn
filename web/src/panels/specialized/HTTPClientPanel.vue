@@ -5,10 +5,12 @@ import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
+import Tag from "primevue/tag";
 import { useToast } from "primevue/usetoast";
 import { runFormAction } from "../../api/dataSource";
 import type { HTTPClientConfig } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
 import type { PanelProps } from "../core/types";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
@@ -78,6 +80,21 @@ const responseHeaders = computed<HeaderRow[]>(() => {
   return Object.entries(raw).map(([key, value]) => ({ key, value }));
 });
 
+const statusLabel = computed(() => {
+  const r = response.value;
+  if (!r || r.status == null) return "No response";
+  return r.statusText?.trim() || String(r.status);
+});
+
+// Map an HTTP status class to a preset Tag severity; neutral until a response.
+function statusSeverity(status?: number): string {
+  if (status == null) return "secondary";
+  if (status >= 400) return "danger";
+  if (status >= 300) return "warn";
+  if (status >= 200) return "success";
+  return "info";
+}
+
 function addHeader(): void {
   headers.value = [...headers.value, { key: "", value: "" }];
 }
@@ -119,6 +136,7 @@ async function send(): Promise<void> {
   }
   loading.value = true;
   error.value = null;
+  response.value = null;
   try {
     response.value = (await runFormAction(
       props.connectionId,
@@ -164,6 +182,7 @@ async function send(): Promise<void> {
         placeholder="Path or URL"
         aria-label="Request URL"
         class="min-w-0 flex-1"
+        @keyup.enter="send"
       />
       <Button type="button" :disabled="loading" @click="send">
         <AppIcon
@@ -234,36 +253,40 @@ async function send(): Promise<void> {
 
       <section class="flex min-h-0 flex-col" aria-label="Response">
         <div
-          class="flex items-center justify-between border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+          class="flex min-h-[2.75rem] items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+          aria-live="polite"
         >
-          <div class="flex items-center gap-2">
-            <span
-              class="rounded px-2 py-0.5 text-xs font-medium"
-              :class="
-                response?.status && response.status >= 400
-                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
-                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-              "
-            >
-              {{ response?.status ?? "No response" }}
-            </span>
-            <span
-              v-if="response?.durationMs != null"
-              class="text-xs text-surface-400"
-            >
-              {{ response.durationMs.toFixed(1) }} ms
-            </span>
-          </div>
-          <span v-if="error && response" class="text-xs text-red-500">{{
-            error
-          }}</span>
+          <Tag
+            :severity="statusSeverity(response?.status)"
+            :value="statusLabel"
+          />
+          <span
+            v-if="response?.durationMs != null"
+            class="text-xs text-surface-500 dark:text-surface-400"
+          >
+            {{ response.durationMs.toFixed(1) }} ms
+          </span>
         </div>
+        <SkeletonList v-if="loading" :rows="6" />
         <PanelError
-          v-if="error && !response"
+          v-else-if="error"
           :message="error"
           retryable
           @retry="send"
         />
+        <div
+          v-else-if="!response"
+          class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 py-10 text-center"
+        >
+          <span
+            class="flex h-11 w-11 items-center justify-center rounded-full bg-surface-100 text-surface-400 dark:bg-surface-800 dark:text-surface-500"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'send' }" :size="20" />
+          </span>
+          <p class="max-w-xs text-sm text-surface-500 dark:text-surface-400">
+            Send a request to see the response here.
+          </p>
+        </div>
         <template v-else>
           <DataTable
             v-if="responseHeaders.length"
