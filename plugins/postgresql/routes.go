@@ -77,6 +77,9 @@ func routes() []plugin.Route {
 		{ID: "postgresql.schema.drop", Method: plugin.MethodDelete, Path: "/schemas/{schema}", Permission: "postgresql.schemas.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.schema.drop", Handle: dropSchema},
 		{ID: "postgresql.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "postgresql.column.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "postgresql.column.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.column.drop", Input: columnDropSchema(), Handle: dropColumn},
+		{ID: "postgresql.index.create", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.index.create", Input: indexCreateSchema(), Handle: createIndex},
+		{ID: "postgresql.index.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.index.drop", Input: indexDropSchema(), Handle: dropIndex},
 		{ID: "postgresql.table.truncate", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/truncate", Permission: "postgresql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.table.truncate", Handle: truncateTable},
 		{ID: "postgresql.table.drop", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}", Permission: "postgresql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.table.drop", Handle: dropTable},
 
@@ -140,6 +143,26 @@ func columnAddSchema() *plugin.Schema {
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "text"},
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func columnDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "column", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "The column to drop. Its data is permanently removed."},
+	}}}}
+}
+
+func indexCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
+	}}}}
+}
+
+func indexDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 	}}}}
 }
 
@@ -949,6 +972,101 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := pool.Exec(rc.Ctx, "ALTER TABLE "+sqldb.Qualified(schema, table)+" ADD COLUMN "+column); err != nil {
+		return nil, pgErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropColumn(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Column string `json:"column" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	column, err := sqldb.SafeIdentifier(req.Column)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := pool.Exec(rc.Ctx, "ALTER TABLE "+sqldb.Qualified(schema, table)+" DROP COLUMN "+sqldb.QuoteIdent(column)); err != nil {
+		return nil, pgErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func createIndex(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name    string `json:"name" validate:"required"`
+		Columns string `json:"columns" validate:"required"`
+		Unique  bool   `json:"unique"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	cols, err := sqldb.IdentifierList(req.Columns, sqldb.QuoteIdent)
+	if err != nil {
+		return nil, err
+	}
+	unique := ""
+	if req.Unique {
+		unique = "UNIQUE "
+	}
+	stmt := "CREATE " + unique + "INDEX " + sqldb.QuoteIdent(name) + " ON " + sqldb.Qualified(schema, table) + " (" + strings.Join(cols, ", ") + ")"
+	if _, err := pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, pgErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropIndex(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, _, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := pool.Exec(rc.Ctx, "DROP INDEX "+sqldb.Qualified(schema, name)); err != nil {
 		return nil, pgErr(err)
 	}
 	return actionResult{OK: true}, nil

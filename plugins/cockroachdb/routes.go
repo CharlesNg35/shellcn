@@ -79,6 +79,9 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.table.row.delete", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.row.delete", Handle: deleteRow},
 		{ID: "cockroachdb.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "cockroachdb.column.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "cockroachdb.column.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/drop", Permission: "cockroachdb.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.column.drop", Input: columnDropSchema(), Handle: dropColumn},
+		{ID: "cockroachdb.index.create", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.index.create", Input: indexCreateSchema(), Handle: createIndex},
+		{ID: "cockroachdb.index.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes/drop", Permission: "cockroachdb.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.index.drop", Input: indexDropSchema(), Handle: dropIndex},
 		{ID: "cockroachdb.table.truncate", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/truncate", Permission: "cockroachdb.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.truncate", Handle: truncateTable},
 		{ID: "cockroachdb.table.drop", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}", Permission: "cockroachdb.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.drop", Handle: dropTable},
 		{ID: "cockroachdb.query", Method: plugin.MethodWS, Path: "/query", Permission: "cockroachdb.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "cockroachdb.query", Stream: queryStream},
@@ -124,6 +127,26 @@ func columnAddSchema() *plugin.Schema {
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "STRING"},
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func columnDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "column", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "The column to drop. Its data is permanently removed."},
+	}}}}
+}
+
+func indexCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
+	}}}}
+}
+
+func indexDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 	}}}}
 }
 
@@ -827,6 +850,102 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.pool.Exec(rc.Ctx, "ALTER TABLE "+sqldb.Qualified(schema, table)+" ADD COLUMN "+column); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Column string `json:"column" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	column, err := sqldb.SafeIdentifier(req.Column)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.pool.Exec(rc.Ctx, "ALTER TABLE "+sqldb.Qualified(schema, table)+" DROP COLUMN "+sqldb.QuoteIdent(column)); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func createIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name    string `json:"name" validate:"required"`
+		Columns string `json:"columns" validate:"required"`
+		Unique  bool   `json:"unique"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	cols, err := sqldb.IdentifierList(req.Columns, sqldb.QuoteIdent)
+	if err != nil {
+		return nil, err
+	}
+	unique := ""
+	if req.Unique {
+		unique = "UNIQUE "
+	}
+	stmt := "CREATE " + unique + "INDEX " + sqldb.QuoteIdent(name) + " ON " + sqldb.Qualified(schema, table) + " (" + strings.Join(cols, ", ") + ")"
+	if _, err := s.pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	// CockroachDB indexes are table-scoped: DROP INDEX <table>@<index>.
+	if _, err := s.pool.Exec(rc.Ctx, "DROP INDEX "+sqldb.Qualified(schema, table)+"@"+sqldb.QuoteIdent(name)); err != nil {
 		return nil, cockroachErr(err)
 	}
 	return actionResult{OK: true}, nil

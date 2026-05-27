@@ -74,6 +74,9 @@ func routes() []plugin.Route {
 		{ID: "oracle.table.row.delete", Method: plugin.MethodDelete, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.row.delete", Handle: deleteRow},
 		{ID: "oracle.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "oracle.column.add", Method: plugin.MethodPost, Path: "/objects/{id}/columns", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "oracle.column.drop", Method: plugin.MethodPost, Path: "/objects/{id}/columns/drop", Permission: "oracle.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "oracle.column.drop", Input: columnDropSchema(), Handle: dropColumn},
+		{ID: "oracle.index.create", Method: plugin.MethodPost, Path: "/objects/{id}/indexes", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.index.create", Input: indexCreateSchema(), Handle: createIndex},
+		{ID: "oracle.index.drop", Method: plugin.MethodPost, Path: "/objects/{id}/indexes/drop", Permission: "oracle.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "oracle.index.drop", Input: indexDropSchema(), Handle: dropIndex},
 		{ID: "oracle.table.truncate", Method: plugin.MethodPost, Path: "/objects/{id}/truncate", Permission: "oracle.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.truncate", Handle: truncateTable},
 		{ID: "oracle.table.drop", Method: plugin.MethodDelete, Path: "/objects/{id}", Permission: "oracle.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.drop", Handle: dropTable},
 		{ID: "oracle.query", Method: plugin.MethodWS, Path: "/query", Permission: "oracle.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "oracle.query", Stream: queryStream},
@@ -98,6 +101,26 @@ func columnAddSchema() *plugin.Schema {
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "VARCHAR2(255)"},
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func columnDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "column", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "The column to drop. Its data is permanently removed."},
+	}}}}
+}
+
+func indexCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
+	}}}}
+}
+
+func indexDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 	}}}}
 }
 
@@ -863,6 +886,101 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(owner, table)+" ADD "+column); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	owner, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Column string `json:"column" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	column, err := safeIdent(req.Column)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(owner, table)+" DROP COLUMN "+quoteIdent(column)); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func createIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	owner, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name    string `json:"name" validate:"required"`
+		Columns string `json:"columns" validate:"required"`
+		Unique  bool   `json:"unique"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	cols, err := sqldb.IdentifierList(req.Columns, quoteIdent)
+	if err != nil {
+		return nil, err
+	}
+	unique := ""
+	if req.Unique {
+		unique = "UNIQUE "
+	}
+	stmt := "CREATE " + unique + "INDEX " + qualified(owner, name) + " ON " + qualified(owner, table) + " (" + strings.Join(cols, ", ") + ")"
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	owner, _, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "DROP INDEX "+qualified(owner, name)); err != nil {
 		return nil, oracleErr(err)
 	}
 	return actionResult{OK: true}, nil

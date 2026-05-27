@@ -59,6 +59,9 @@ func routes() []plugin.Route {
 		{ID: "cassandra.keyspace.create", Method: plugin.MethodPost, Path: "/keyspaces", Permission: "cassandra.keyspaces.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.keyspace.create", Input: keyspaceCreateSchema(), Handle: createKeyspace},
 		{ID: "cassandra.table.create", Method: plugin.MethodPost, Path: "/keyspaces/{keyspace}/tables", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "cassandra.column.add", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/columns", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "cassandra.column.drop", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/columns/drop", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.column.drop", Input: columnDropSchema(), Handle: dropColumn},
+		{ID: "cassandra.index.create", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/indexes", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.index.create", Input: indexCreateSchema(), Handle: createIndex},
+		{ID: "cassandra.index.drop", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/indexes/drop", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.index.drop", Input: indexDropSchema(), Handle: dropIndex},
 		{ID: "cassandra.table.truncate", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/truncate", Permission: "cassandra.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.table.truncate", Handle: truncateTable},
 		{ID: "cassandra.table.drop", Method: plugin.MethodDelete, Path: "/tables/{keyspace}/{table}", Permission: "cassandra.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.table.drop", Handle: dropTable},
 		{ID: "cassandra.query", Method: plugin.MethodWS, Path: "/query", Permission: "cassandra.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "cassandra.query", Stream: queryStream},
@@ -96,6 +99,25 @@ func columnAddSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
 		{Key: "name", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "text"},
+	}}}}
+}
+
+func columnDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "column", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "The column to drop. Its data is permanently removed."},
+	}}}}
+}
+
+func indexCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "column", Label: "Column", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "Cassandra secondary indexes cover a single column."},
+	}}}}
+}
+
+func indexDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 	}}}}
 }
 
@@ -688,6 +710,95 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, fmt.Errorf("%w: unsafe column type", plugin.ErrInvalidInput)
 	}
 	if err := execCQL(rc.Ctx, s, "ALTER TABLE "+qualified(keyspace, table)+" ADD "+quoteIdent(column)+" "+strings.TrimSpace(req.Type)); err != nil {
+		return nil, err
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := cassandraSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	keyspace, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Column string `json:"column" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	column, err := safeIdent(req.Column)
+	if err != nil {
+		return nil, err
+	}
+	if err := execCQL(rc.Ctx, s, "ALTER TABLE "+qualified(keyspace, table)+" DROP "+quoteIdent(column)); err != nil {
+		return nil, err
+	}
+	return actionResult{OK: true}, nil
+}
+
+func createIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := cassandraSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	keyspace, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name   string `json:"name" validate:"required"`
+		Column string `json:"column" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	column, err := safeIdent(req.Column)
+	if err != nil {
+		return nil, err
+	}
+	if err := execCQL(rc.Ctx, s, "CREATE INDEX "+quoteIdent(name)+" ON "+qualified(keyspace, table)+" ("+quoteIdent(column)+")"); err != nil {
+		return nil, err
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := cassandraSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	keyspace, _, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if err := execCQL(rc.Ctx, s, "DROP INDEX "+qualified(keyspace, name)); err != nil {
 		return nil, err
 	}
 	return actionResult{OK: true}, nil

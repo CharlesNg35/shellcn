@@ -128,6 +128,20 @@ func TestCassandraPluginIntegration(t *testing.T) {
 			t.Fatalf("%s route: %v", name, err)
 		}
 	}
+
+	// Column/index management via declarative DDL actions (CQL).
+	ddlRC := func(body map[string]any) *plugin.RequestContext {
+		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, mustJSON(t, body))
+	}
+	if _, err := createIndex(ddlRC(map[string]any{"name": "ix_people_name", "column": "name"})); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	if _, err := dropIndex(ddlRC(map[string]any{"name": "ix_people_name"})); err != nil {
+		t.Fatalf("drop index: %v", err)
+	}
+	if _, err := dropColumn(ddlRC(map[string]any{"column": "access_token"})); err != nil {
+		t.Fatalf("drop column: %v", err)
+	}
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {

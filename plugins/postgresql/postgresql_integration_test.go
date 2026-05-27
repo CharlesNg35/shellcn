@@ -140,6 +140,25 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		}
 	}
 
+	// Column/index management via declarative DDL actions.
+	if _, err := createIndex(rowMutationRC(ctx, s, tableParams, map[string]any{"name": "ix_people_name", "columns": "name", "unique": false})); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	var idx int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND tablename='shellcn_people' AND indexname='ix_people_name'`).Scan(&idx); err != nil || idx != 1 {
+		t.Fatalf("expected created index, got %d err=%v", idx, err)
+	}
+	if _, err := dropIndex(rowMutationRC(ctx, s, tableParams, map[string]any{"name": "ix_people_name"})); err != nil {
+		t.Fatalf("drop index: %v", err)
+	}
+	if _, err := dropColumn(rowMutationRC(ctx, s, tableParams, map[string]any{"column": "password"})); err != nil {
+		t.Fatalf("drop column: %v", err)
+	}
+	var cols int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='shellcn_people' AND column_name='password'`).Scan(&cols); err != nil || cols != 0 {
+		t.Fatalf("expected password column dropped, got %d err=%v", cols, err)
+	}
+
 	// DROP DATABASE must succeed even after the connection has browsed (and
 	// cached a pool to) the target database.
 	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": "shellcn_droptest"})); err != nil {

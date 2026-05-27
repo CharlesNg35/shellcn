@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/url"
 	"os"
@@ -117,6 +118,26 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		if _, err := fn(rc); err != nil {
 			t.Fatalf("%s route: %v", name, err)
 		}
+	}
+
+	// Column/index management via declarative DDL actions.
+	db := cfg["database"].(string)
+	ddlRC := func(body map[string]any) *plugin.RequestContext {
+		raw, _ := json.Marshal(body)
+		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": db, "table": "shellcn_people"}, nil, raw)
+	}
+	if _, err := s.db.ExecContext(ctx, "ALTER TABLE shellcn_people ADD INDEX ix_name name TYPE set(0) GRANULARITY 1"); err != nil {
+		t.Fatalf("seed index: %v", err)
+	}
+	if _, err := dropIndex(ddlRC(map[string]any{"name": "ix_name"})); err != nil {
+		t.Fatalf("drop index: %v", err)
+	}
+	if _, err := dropColumn(ddlRC(map[string]any{"column": "access_token"})); err != nil {
+		t.Fatalf("drop column: %v", err)
+	}
+	var cols int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.columns WHERE database = ? AND table = 'shellcn_people' AND name = 'access_token'", db).Scan(&cols); err != nil || cols != 0 {
+		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
 	}
 }
 

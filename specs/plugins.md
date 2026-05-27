@@ -174,10 +174,15 @@ These plugins should prove the core architecture first.
 
 ## P3: Messaging And Queues
 
+RabbitMQ, Kafka, and NATS are implemented as direct-only messaging plugins in
+the core `messaging` category. They share only small broker helper code for
+address parsing, pagination, and config value coercion; protocol manifests,
+actions, route handlers, and client/session behavior remain plugin-specific.
+
 | Plugin     | Purpose      | Main Capabilities                                |
 | ---------- | ------------ | ------------------------------------------------ |
 | `rabbitmq` | RabbitMQ     | queues, exchanges, bindings, consumers, messages |
-| `kafka`    | Apache Kafka | clusters, topics, consumer groups, offsets       |
+| `kafka`    | Apache Kafka | clusters, topics, consumer groups, offsets, messages |
 | `nats`     | NATS         | streams, consumers, messages, server info        |
 | `activemq` | ActiveMQ     | queues, topics, consumers                        |
 | `mqtt`     | MQTT brokers | topics, publish/subscribe, retained messages     |

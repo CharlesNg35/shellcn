@@ -442,6 +442,30 @@ func ColonPlaceholder(n int) string { return ":" + strconv.Itoa(n) }
 // AtPlaceholder formats @p1, @p2, … (SQL Server).
 func AtPlaceholder(n int) string { return "@p" + strconv.Itoa(n) }
 
+// IdentifierList parses a comma/whitespace separated list of column identifiers,
+// validates each against the safe-identifier rule, and returns them quoted by
+// the supplied quoter (used to build index column lists across dialects).
+func IdentifierList(raw string, quote func(string) string) ([]string, error) {
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n' || r == '\r' || r == '\t' || r == ' '
+	})
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		id, err := SafeIdentifier(part)
+		if err != nil {
+			return nil, err
+		}
+		if quote != nil {
+			id = quote(id)
+		}
+		out = append(out, id)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%w: at least one column is required", plugin.ErrInvalidInput)
+	}
+	return out, nil
+}
+
 // ValidateRowKey ensures a client-supplied key is exactly the table's primary
 // key — same columns, no more, no fewer — so a row mutation can only ever target
 // one identified row and a caller cannot turn an arbitrary column into a WHERE

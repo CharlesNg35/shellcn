@@ -132,6 +132,21 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	if !leaf {
 		t.Fatalf("table leaf 'people' missing under dbo: %#v", relTree)
 	}
+
+	// Column/index management via declarative DDL actions.
+	if _, err := createIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name", "columns": "name", "unique": false})); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	if _, err := dropIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name"})); err != nil {
+		t.Fatalf("drop index: %v", err)
+	}
+	if _, err := dropColumn(rowMutationRC(ctx, s, params, map[string]any{"column": "access_token"})); err != nil {
+		t.Fatalf("drop column: %v", err)
+	}
+	var cols int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'people' AND COLUMN_NAME = 'access_token'`).Scan(&cols); err != nil || cols != 0 {
+		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
+	}
 }
 
 func hasBranch(tree any, label string) bool {

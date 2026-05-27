@@ -65,6 +65,9 @@ func routes() []plugin.Route {
 		{ID: "mssql.table.row.delete", Method: plugin.MethodDelete, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.table.row.delete", Handle: deleteRow},
 		{ID: "mssql.table.create", Method: plugin.MethodPost, Path: "/schemas/{database}/{schema}/tables", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "mssql.column.add", Method: plugin.MethodPost, Path: "/objects/{id}/columns", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "mssql.column.drop", Method: plugin.MethodPost, Path: "/objects/{id}/columns/drop", Permission: "mssql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mssql.column.drop", Input: columnDropSchema(), Handle: dropColumn},
+		{ID: "mssql.index.create", Method: plugin.MethodPost, Path: "/objects/{id}/indexes", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.index.create", Input: indexCreateSchema(), Handle: createIndex},
+		{ID: "mssql.index.drop", Method: plugin.MethodPost, Path: "/objects/{id}/indexes/drop", Permission: "mssql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mssql.index.drop", Input: indexDropSchema(), Handle: dropIndex},
 		{ID: "mssql.table.truncate", Method: plugin.MethodPost, Path: "/objects/{id}/truncate", Permission: "mssql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.table.truncate", Handle: truncateTable},
 		{ID: "mssql.table.drop", Method: plugin.MethodDelete, Path: "/objects/{id}", Permission: "mssql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.table.drop", Handle: dropTable},
 		{ID: "mssql.query", Method: plugin.MethodWS, Path: "/query", Permission: "mssql.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "mssql.query", Stream: queryStream},
@@ -89,6 +92,26 @@ func columnAddSchema() *plugin.Schema {
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "nvarchar(255)"},
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func columnDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "column", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "The column to drop. Its data is permanently removed."},
+	}}}}
+}
+
+func indexCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
+	}}}}
+}
+
+func indexDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 	}}}}
 }
 
@@ -705,6 +728,102 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, schema, table)+" ADD "+column); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, schema, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Column string `json:"column" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	column, err := safeIdent(req.Column)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, schema, table)+" DROP COLUMN "+quoteIdent(column)); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func createIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, schema, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name    string `json:"name" validate:"required"`
+		Columns string `json:"columns" validate:"required"`
+		Unique  bool   `json:"unique"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	cols, err := sqldb.IdentifierList(req.Columns, quoteIdent)
+	if err != nil {
+		return nil, err
+	}
+	unique := ""
+	if req.Unique {
+		unique = "UNIQUE "
+	}
+	stmt := "CREATE " + unique + "INDEX " + quoteIdent(name) + " ON " + qualified(database, schema, table) + " (" + strings.Join(cols, ", ") + ")"
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, schema, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	// SQL Server drops an index relative to its table: DROP INDEX name ON table.
+	if _, err := s.db.ExecContext(rc.Ctx, "DROP INDEX "+quoteIdent(name)+" ON "+qualified(database, schema, table)); err != nil {
 		return nil, mssqlErr(err)
 	}
 	return actionResult{OK: true}, nil

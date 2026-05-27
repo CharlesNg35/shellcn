@@ -103,6 +103,21 @@ func TestOraclePluginIntegration(t *testing.T) {
 	if _, err := updateRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"NAME": "alice"}, "values": map[string]any{"ACCESS_TOKEN": "x"}})); err == nil {
 		t.Fatal("update with a non-primary-key key must be rejected")
 	}
+
+	// Column/index management via declarative DDL actions.
+	if _, err := createIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "IX_PEOPLE_NAME", "columns": "NAME", "unique": false})); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	if _, err := dropIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "IX_PEOPLE_NAME"})); err != nil {
+		t.Fatalf("drop index: %v", err)
+	}
+	if _, err := dropColumn(rowMutationRC(ctx, s, params, map[string]any{"column": "ACCESS_TOKEN"})); err != nil {
+		t.Fatalf("drop column: %v", err)
+	}
+	var cols int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM all_tab_columns WHERE owner = 'SHELLCN_TEST' AND table_name = 'PEOPLE' AND column_name = 'ACCESS_TOKEN'`).Scan(&cols); err != nil || cols != 0 {
+		t.Fatalf("expected ACCESS_TOKEN column dropped, got %d err=%v", cols, err)
+	}
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {

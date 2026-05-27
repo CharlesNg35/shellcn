@@ -148,6 +148,25 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if !found {
 		t.Fatalf("table leaf not found under database branch: %#v", relTree)
 	}
+
+	// Column/index management via declarative DDL actions.
+	if _, err := createIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name", "columns": "name", "unique": false})); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	var idx int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = ? AND table_name = 'shellcn_people' AND index_name = 'ix_people_name'`, database).Scan(&idx); err != nil || idx == 0 {
+		t.Fatalf("expected created index, got %d err=%v", idx, err)
+	}
+	if _, err := dropIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name"})); err != nil {
+		t.Fatalf("drop index: %v", err)
+	}
+	if _, err := dropColumn(rowMutationRC(ctx, s, params, map[string]any{"column": "access_token"})); err != nil {
+		t.Fatalf("drop column: %v", err)
+	}
+	var cols int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = ? AND table_name = 'shellcn_people' AND column_name = 'access_token'`, database).Scan(&cols); err != nil || cols != 0 {
+		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
+	}
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {

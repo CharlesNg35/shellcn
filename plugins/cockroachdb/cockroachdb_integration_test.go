@@ -113,6 +113,22 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		t.Fatal("update with a non-primary-key key must be rejected")
 	}
 
+	// Column/index management via declarative DDL actions (create then drop the
+	// index proves both work; CockroachDB drops indexes with table@index).
+	if _, err := createIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name", "columns": "name", "unique": false})); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	if _, err := dropIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name"})); err != nil {
+		t.Fatalf("drop index: %v", err)
+	}
+	if _, err := dropColumn(rowMutationRC(ctx, s, params, map[string]any{"column": "access_token"})); err != nil {
+		t.Fatalf("drop column: %v", err)
+	}
+	var cols int
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='shellcn_people' AND column_name='access_token'`).Scan(&cols); err != nil || cols != 0 {
+		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
+	}
+
 	for name, fn := range map[string]func(*plugin.RequestContext) (any, error){
 		"databases": listDatabases,
 		"schemas":   listSchemas,

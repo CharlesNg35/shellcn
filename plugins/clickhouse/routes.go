@@ -64,6 +64,8 @@ func routes() []plugin.Route {
 		{ID: "clickhouse.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "clickhouse.databases.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.completion", Handle: completionRoute},
 		{ID: "clickhouse.table.create", Method: plugin.MethodPost, Path: "/databases/{database}/tables", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "clickhouse.column.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "clickhouse.column.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.column.drop", Input: columnDropSchema(), Handle: dropColumn},
+		{ID: "clickhouse.index.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.index.drop", Input: indexDropSchema(), Handle: dropIndex},
 		{ID: "clickhouse.table.truncate", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/truncate", Permission: "clickhouse.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.truncate", Handle: truncateTable},
 		{ID: "clickhouse.table.drop", Method: plugin.MethodDelete, Path: "/tables/{database}/{table}", Permission: "clickhouse.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.drop", Handle: dropTable},
 		{ID: "clickhouse.query", Method: plugin.MethodWS, Path: "/query", Permission: "clickhouse.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "clickhouse.query", Stream: queryStream},
@@ -91,6 +93,18 @@ func columnAddSchema() *plugin.Schema {
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "String"},
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: false},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func columnDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "column", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "The column to drop. Its data is permanently removed."},
+	}}}}
+}
+
+func indexDropSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "Drops a data-skipping index. Add new indexes from the SQL tab (ClickHouse indexes need a TYPE)."},
 	}}}}
 }
 
@@ -654,6 +668,63 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" ADD COLUMN "+column); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Column string `json:"column" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	column, err := sqldb.SafeIdentifier(req.Column)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" DROP COLUMN "+quoteIdent(column)); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	// ClickHouse data-skipping indexes are dropped via ALTER TABLE ... DROP INDEX.
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" DROP INDEX "+quoteIdent(name)); err != nil {
 		return nil, clickhouseErr(err)
 	}
 	return actionResult{OK: true}, nil

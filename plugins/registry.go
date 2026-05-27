@@ -8,14 +8,17 @@ import (
 	"github.com/charlesng/shellcn/plugins/docker"
 	"github.com/charlesng/shellcn/plugins/ftp"
 	"github.com/charlesng/shellcn/plugins/ftps"
+	"github.com/charlesng/shellcn/plugins/kafka"
 	"github.com/charlesng/shellcn/plugins/minio"
 	"github.com/charlesng/shellcn/plugins/mongodb"
 	"github.com/charlesng/shellcn/plugins/mssql"
 	"github.com/charlesng/shellcn/plugins/mysql"
+	"github.com/charlesng/shellcn/plugins/nats"
 	"github.com/charlesng/shellcn/plugins/nfs"
 	"github.com/charlesng/shellcn/plugins/oracle"
 	"github.com/charlesng/shellcn/plugins/postgresql"
 	"github.com/charlesng/shellcn/plugins/proxmox"
+	"github.com/charlesng/shellcn/plugins/rabbitmq"
 	"github.com/charlesng/shellcn/plugins/rdp"
 	"github.com/charlesng/shellcn/plugins/redis"
 	"github.com/charlesng/shellcn/plugins/s3"
@@ -61,5 +64,8 @@ func all() []plugin.Plugin {
 		cockroachdb.New(),
 		clickhouse.New(),
 		cassandra.New(),
+		rabbitmq.New(),
+		kafka.New(),
+		nats.New(),
 	}
 }
