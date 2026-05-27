@@ -16,6 +16,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/nats"
 	"github.com/charlesng/shellcn/plugins/nfs"
 	"github.com/charlesng/shellcn/plugins/oracle"
+	"github.com/charlesng/shellcn/plugins/podman"
 	"github.com/charlesng/shellcn/plugins/postgresql"
 	"github.com/charlesng/shellcn/plugins/proxmox"
 	"github.com/charlesng/shellcn/plugins/rabbitmq"
@@ -25,6 +26,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/sftp"
 	"github.com/charlesng/shellcn/plugins/smb"
 	"github.com/charlesng/shellcn/plugins/ssh"
+	"github.com/charlesng/shellcn/plugins/swarm"
 	"github.com/charlesng/shellcn/plugins/telnet"
 	"github.com/charlesng/shellcn/plugins/vnc"
 	"github.com/charlesng/shellcn/plugins/webdav"
@@ -52,6 +54,8 @@ func all() []plugin.Plugin {
 		s3.New(),
 		minio.New(),
 		docker.New(),
+		swarm.New(),
+		podman.New(),
 		vnc.New(),
 		rdp.New(),
 		proxmox.New(),

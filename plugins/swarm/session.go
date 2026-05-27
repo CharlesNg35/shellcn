@@ -1,4 +1,4 @@
-package docker
+package swarm
 
 import (
 	"context"
@@ -7,11 +7,10 @@ import (
 	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
 )
 
-// defaultSocket is the standard Docker Engine unix socket used when a direct
-// connection doesn't specify one.
+// defaultSocket is the Docker Engine socket on a Swarm manager node.
 const defaultSocket = "/var/run/docker.sock"
 
-// Connect dials the Docker daemon for this connection's transport.
+// Connect dials the Swarm manager's Docker daemon for this connection.
 func Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {
 	return dockerengine.Connect(ctx, cfg, defaultSocket)
 }
