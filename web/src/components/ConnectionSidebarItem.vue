@@ -38,7 +38,7 @@ const dotClass = computed(() => {
       return "bg-amber-400 animate-pulse";
     case "error":
     case "offline":
-      return "bg-red-500";
+      return "bg-rose-400";
     default:
       return "bg-surface-300 dark:bg-surface-600";
   }

@@ -65,7 +65,7 @@ onUnmounted(() => setApiErrorHandler(null));
         <AppIcon
           :icon="{ type: 'lucide', value: 'triangle-alert' }"
           :size="20"
-          class="mt-0.5 shrink-0 text-red-500"
+          class="mt-0.5 shrink-0 text-rose-500"
         />
         <p class="text-sm text-surface-600 dark:text-surface-300">
           {{ message.message }}

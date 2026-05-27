@@ -62,13 +62,13 @@ watch(
   <div class="flex items-center gap-2 text-xs">
     <span
       v-if="recording"
-      class="inline-flex items-center gap-1.5 rounded-full bg-red-500/10 px-2 py-0.5 font-medium text-red-600 dark:text-red-400"
+      class="inline-flex items-center gap-1.5 rounded-full bg-rose-500/10 px-2 py-0.5 font-medium text-rose-600 dark:text-rose-300"
       role="status"
       :aria-label="`Recording this ${typeLabel} session`"
       :title="`Recording this ${typeLabel} session`"
     >
       <span
-        class="h-2 w-2 animate-pulse rounded-full bg-red-500"
+        class="h-2 w-2 animate-pulse rounded-full bg-rose-400"
         aria-hidden="true"
       />
       REC
@@ -88,7 +88,7 @@ watch(
         :size="12"
         loading
       />
-      <span v-else class="h-2 w-2 rounded-full bg-red-500" />
+      <span v-else class="h-2 w-2 rounded-full bg-rose-400" />
       Record
     </Button>
 

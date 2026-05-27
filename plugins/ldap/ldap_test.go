@@ -175,10 +175,15 @@ func TestEnsureWritableBlocksReadOnly(t *testing.T) {
 
 func TestIconForEntry(t *testing.T) {
 	cases := map[string]string{
-		"organizationalUnit": "folder",
-		"inetOrgPerson":      "user",
-		"groupOfNames":       "users",
-		"widget":             "file",
+		"organizationalUnit":       "folder",
+		"inetOrgPerson":            "user",
+		"groupOfNames":             "users",
+		"widget":                   "file",
+		"computer":                 "monitor",
+		"group":                    "users",
+		"user":                     "user",
+		"domainDNS":                "folder",
+		"foreignSecurityPrincipal": "user",
 	}
 	for class, want := range cases {
 		if got := iconForEntry([]string{class}); got.Value != want {

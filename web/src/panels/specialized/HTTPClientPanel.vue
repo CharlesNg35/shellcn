@@ -241,7 +241,7 @@ async function send(): Promise<void> {
               class="rounded px-2 py-0.5 text-xs font-medium"
               :class="
                 response?.status && response.status >= 400
-                  ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
                   : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
               "
             >

@@ -25,7 +25,7 @@ const error = ref<string | null>(null);
 const riskClass: Record<RiskLevel, string> = {
   safe: "border border-surface-300 text-surface-700 hover:bg-surface-100 dark:border-surface-700 dark:text-surface-200 dark:hover:bg-surface-800",
   write: "bg-primary-600 text-white hover:bg-primary-700",
-  destructive: "bg-red-600 text-white hover:bg-red-700",
+  destructive: "bg-rose-600 text-white hover:bg-rose-700",
   privileged: "bg-amber-600 text-white hover:bg-amber-700",
 };
 
@@ -152,7 +152,7 @@ function onVisible(visible: boolean): void {
               :disabled="busy"
               autofocus
               :pt="{
-                root: `inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${pending.risk === 'destructive' ? 'bg-red-500' : 'bg-primary-500'}`,
+                root: `inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${pending.risk === 'destructive' ? 'bg-rose-600' : 'bg-primary-500'}`,
               }"
               @click="execute(pending)"
             />

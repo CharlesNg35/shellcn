@@ -219,7 +219,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
                 <div
                   class="absolute top-1 h-4 rounded bg-primary-500"
                   :class="
-                    (data as SpanRow).status === 'error' ? 'bg-red-500' : ''
+                    (data as SpanRow).status === 'error' ? 'bg-rose-400' : ''
                   "
                   :style="{
                     left: `${(data as SpanRow).offset}%`,

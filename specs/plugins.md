@@ -59,19 +59,19 @@ These plugins should prove the core architecture first.
 
 ## P1: Core Infrastructure
 
-| Plugin       | Purpose                       | Main Capabilities                                                                   |
-| ------------ | ----------------------------- | ----------------------------------------------------------------------------------- |
-| `proxmox`    | Proxmox VE management         | nodes, VMs, LXC, storage, network, snapshots, VNC console, tasks                    |
-| `kubernetes` | Kubernetes cluster management | workloads, pods, services, ingress, storage, config, RBAC, logs, exec, port-forward |
-| `mysql`      | MySQL/MariaDB access          | schema browser, query editor, table data, users, DDL helpers, audit                 |
-| `mongodb`    | MongoDB access                | databases, collections, document editor, command console, indexes                   |
-| `redis`      | Redis access                  | key browser, strings, hashes, lists, sets, sorted sets, command console, pub/sub    |
-| `mssql`      | Microsoft SQL Server          | schema browser, T-SQL editor, table data, jobs, users, DDL helpers, audit           |
-| `oracle`     | Oracle Database               | schemas, SQL editor, PL/SQL objects, sessions, tablespaces, DDL helpers, audit      |
+| Plugin        | Purpose                       | Main Capabilities                                                                   |
+| ------------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| `proxmox`     | Proxmox VE management         | nodes, VMs, LXC, storage, network, snapshots, VNC console, tasks                    |
+| `kubernetes`  | Kubernetes cluster management | workloads, pods, services, ingress, storage, config, RBAC, logs, exec, port-forward |
+| `mysql`       | MySQL/MariaDB access          | schema browser, query editor, table data, users, DDL helpers, audit                 |
+| `mongodb`     | MongoDB access                | databases, collections, document editor, command console, indexes                   |
+| `redis`       | Redis access                  | key browser, strings, hashes, lists, sets, sorted sets, command console, pub/sub    |
+| `mssql`       | Microsoft SQL Server          | schema browser, T-SQL editor, table data, jobs, users, DDL helpers, audit           |
+| `oracle`      | Oracle Database               | schemas, SQL editor, PL/SQL objects, sessions, tablespaces, DDL helpers, audit      |
 | `cockroachdb` | CockroachDB access            | schemas, SQL editor, table data, ranges, jobs, sessions, DDL helpers, audit         |
-| `clickhouse` | ClickHouse analytics DB       | databases, tables, views, dictionaries, mutations, merges, processes, SQL editor    |
-| `cassandra`  | Cassandra access              | keyspaces, tables, materialized views, types, functions, CQL query                  |
-| `vnc`        | Remote desktop via VNC/RFB    | `remote_desktop` over an RFB stream, clipboard, keyboard/mouse                      |
+| `clickhouse`  | ClickHouse analytics DB       | databases, tables, views, dictionaries, mutations, merges, processes, SQL editor    |
+| `cassandra`   | Cassandra access              | keyspaces, tables, materialized views, types, functions, CQL query                  |
+| `vnc`         | Remote desktop via VNC/RFB    | `remote_desktop` over an RFB stream, clipboard, keyboard/mouse                      |
 
 ## P1: Filesystem And Storage Protocols
 
@@ -87,13 +87,13 @@ These plugins should prove the core architecture first.
 
 ## P2: Databases And Data Stores
 
-| Plugin          | Purpose                  | Main Capabilities                                       |
-| --------------- | ------------------------ | ------------------------------------------------------- |
-| `mariadb`       | MariaDB access           | schema browser, query editor, users, replication status |
-| `sqlite`        | SQLite database files    | schema browser, query editor, table data                |
-| `neo4j`         | Graph database           | Cypher query, graph/table results                       |
-| `influxdb`      | Time-series database     | buckets/databases, query, measurements                  |
-| `prometheus`    | Metrics query target     | PromQL query, targets, alerts, rules                    |
+| Plugin       | Purpose               | Main Capabilities                                       |
+| ------------ | --------------------- | ------------------------------------------------------- |
+| `mariadb`    | MariaDB access        | schema browser, query editor, users, replication status |
+| `sqlite`     | SQLite database files | schema browser, query editor, table data                |
+| `neo4j`      | Graph database        | Cypher query, graph/table results                       |
+| `influxdb`   | Time-series database  | buckets/databases, query, measurements                  |
+| `prometheus` | Metrics query target  | PromQL query, targets, alerts, rules                    |
 
 ## P2: Container And Orchestration Platforms
 
@@ -175,19 +175,22 @@ These plugins should prove the core architecture first.
 
 ## P2: Search Engines
 
-Elasticsearch and OpenSearch are implemented as direct-only search plugins in
-the core `search` category. They share `plugins/shared/escompat`, which is
+Elasticsearch, OpenSearch, Meilisearch, and Typesense are implemented as
+direct-only search plugins in the core `search` category. Elasticsearch and
+OpenSearch share `plugins/shared/escompat`, which is
 intentionally scoped to Elasticsearch-compatible REST APIs: indexes, mappings,
-settings, aliases, shards, JSON DSL search, and document CRUD. Future engines
-such as Meilisearch and Typesense should use their own plugin-specific clients
-or a separate helper only where their APIs actually overlap.
+settings, aliases, shards, JSON DSL search, and document CRUD. Meilisearch and
+Typesense use plugin-specific REST handlers because their APIs model tasks,
+keys, settings, collection schemas, synonym sets, and curation sets differently.
+Future engines should use their own plugin-specific clients or a separate helper
+only where their APIs actually overlap.
 
-| Plugin          | Purpose       | Main Capabilities                                    |
-| --------------- | ------------- | ---------------------------------------------------- |
-| `elasticsearch` | Elasticsearch | indexes, documents, JSON DSL search, mappings, health |
-| `opensearch`    | OpenSearch    | indexes, documents, JSON DSL search, mappings, health |
-| `meilisearch`   | Meilisearch   | indexes, documents, search, ranking/settings, tasks  |
-| `typesense`     | Typesense     | collections, documents, search, schema, API keys     |
+| Plugin          | Purpose       | Main Capabilities                                                                   |
+| --------------- | ------------- | ----------------------------------------------------------------------------------- |
+| `elasticsearch` | Elasticsearch | indexes, documents, JSON DSL search, mappings, health                               |
+| `opensearch`    | OpenSearch    | indexes, documents, JSON DSL search, mappings, health                               |
+| `meilisearch`   | Meilisearch   | indexes, documents, search, settings, tasks, keys                                   |
+| `typesense`     | Typesense     | collections, documents, search, schemas, aliases, synonym sets, curation sets, keys |
 
 ## P3: Messaging And Queues
 
@@ -196,23 +199,23 @@ the core `messaging` category. They share only small broker helper code for
 address parsing, pagination, and config value coercion; protocol manifests,
 actions, route handlers, and client/session behavior remain plugin-specific.
 
-| Plugin     | Purpose      | Main Capabilities                                |
-| ---------- | ------------ | ------------------------------------------------ |
-| `rabbitmq` | RabbitMQ     | queues, exchanges, bindings, consumers, messages |
+| Plugin     | Purpose      | Main Capabilities                                    |
+| ---------- | ------------ | ---------------------------------------------------- |
+| `rabbitmq` | RabbitMQ     | queues, exchanges, bindings, consumers, messages     |
 | `kafka`    | Apache Kafka | clusters, topics, consumer groups, offsets, messages |
-| `nats`     | NATS         | streams, consumers, messages, server info        |
-| `activemq` | ActiveMQ     | queues, topics, consumers                        |
-| `mqtt`     | MQTT brokers | topics, publish/subscribe, retained messages     |
+| `nats`     | NATS         | streams, consumers, messages, server info            |
+| `activemq` | ActiveMQ     | queues, topics, consumers                            |
+| `mqtt`     | MQTT brokers | topics, publish/subscribe, retained messages         |
 
 ## P3: Identity And Directory
 
-| Plugin      | Purpose        | Main Capabilities                              |
-| ----------- | -------------- | ---------------------------------------------- |
+| Plugin      | Purpose        | Main Capabilities                                                              |
+| ----------- | -------------- | ------------------------------------------------------------------------------ |
 | `ldap`      | LDAP directory | DIT tree, entry attributes (inline edit), add/rename/delete, subtree search ✅ |
-| `freeipa`   | FreeIPA        | users, groups, hosts, HBAC, sudo rules         |
-| `authentik` | Authentik      | users, groups, applications, providers, events |
-| `keycloak`  | Keycloak       | realms, clients, users, groups, sessions       |
-| `zitadel`   | Zitadel        | projects, apps, users, orgs                    |
+| `freeipa`   | FreeIPA        | users, groups, hosts, HBAC, sudo rules                                         |
+| `authentik` | Authentik      | users, groups, applications, providers, events                                 |
+| `keycloak`  | Keycloak       | realms, clients, users, groups, sessions                                       |
+| `zitadel`   | Zitadel        | projects, apps, users, orgs                                                    |
 
 ## P3: Backup And Storage Platforms
 

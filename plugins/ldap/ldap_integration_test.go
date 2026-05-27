@@ -3,6 +3,7 @@ package ldap
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -166,7 +167,9 @@ func hasDN(t *testing.T, res any, err error, dn string) bool {
 		t.Fatalf("expected Page[row], got %T", res)
 	}
 	for _, r := range page.Items {
-		if r["dn"] == dn {
+		// LDAP DNs are case-insensitive; AD normalizes attribute-type casing
+		// (e.g. DC=, OU=), so compare without regard to case.
+		if strings.EqualFold(fmt.Sprint(r["dn"]), dn) {
 			return true
 		}
 	}

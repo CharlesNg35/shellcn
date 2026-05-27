@@ -11,6 +11,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/ftps"
 	"github.com/charlesng/shellcn/plugins/kafka"
 	"github.com/charlesng/shellcn/plugins/ldap"
+	"github.com/charlesng/shellcn/plugins/meilisearch"
 	"github.com/charlesng/shellcn/plugins/minio"
 	"github.com/charlesng/shellcn/plugins/mongodb"
 	"github.com/charlesng/shellcn/plugins/mssql"
@@ -31,6 +32,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/ssh"
 	"github.com/charlesng/shellcn/plugins/swarm"
 	"github.com/charlesng/shellcn/plugins/telnet"
+	"github.com/charlesng/shellcn/plugins/typesense"
 	"github.com/charlesng/shellcn/plugins/vnc"
 	"github.com/charlesng/shellcn/plugins/webdav"
 )
@@ -74,6 +76,8 @@ func all() []plugin.Plugin {
 		ldap.New(),
 		elasticsearch.New(),
 		opensearch.New(),
+		meilisearch.New(),
+		typesense.New(),
 		rabbitmq.New(),
 		kafka.New(),
 		nats.New(),

@@ -48,7 +48,7 @@ const buttonSolid = {
   info: "bg-sky-600 text-white hover:bg-sky-700",
   warn: "bg-amber-600 text-white hover:bg-amber-700",
   help: "bg-violet-600 text-white hover:bg-violet-700",
-  danger: "bg-red-600 text-white hover:bg-red-700",
+  danger: "bg-rose-600 text-white hover:bg-rose-700",
   contrast:
     "bg-surface-900 text-white hover:bg-surface-800 dark:bg-surface-100 dark:text-surface-950 dark:hover:bg-surface-200",
 };
@@ -63,7 +63,7 @@ const buttonText = {
   warn: "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/10",
   help: "text-violet-700 hover:bg-violet-50 dark:text-violet-300 dark:hover:bg-violet-500/10",
   danger:
-    "text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-500/10",
+    "text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10",
   contrast:
     "text-surface-900 hover:bg-surface-100 dark:text-surface-100 dark:hover:bg-surface-800",
 };
@@ -78,7 +78,7 @@ const buttonOutlined = {
   warn: "border border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300 dark:hover:bg-amber-500/10",
   help: "border border-violet-300 text-violet-700 hover:bg-violet-50 dark:border-violet-700 dark:text-violet-300 dark:hover:bg-violet-500/10",
   danger:
-    "border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-500/10",
+    "border border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-700 dark:text-rose-300 dark:hover:bg-rose-500/10",
   contrast:
     "border border-surface-600 text-surface-900 hover:bg-surface-100 dark:border-surface-400 dark:text-surface-100 dark:hover:bg-surface-800",
 };
@@ -187,9 +187,9 @@ const severitySurface: Record<string, string> = {
   info: "border-sky-500/30 bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-200",
   warn: "border-amber-500/30 bg-amber-50 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200",
   error:
-    "border-red-500/30 bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-200",
+    "border-rose-500/30 bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200",
   danger:
-    "border-red-500/30 bg-red-50 text-red-800 dark:bg-red-950/60 dark:text-red-200",
+    "border-rose-500/30 bg-rose-50 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200",
   secondary:
     "border-surface-300 bg-surface-100 text-surface-700 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-200",
   contrast:

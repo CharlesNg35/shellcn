@@ -87,7 +87,7 @@ async function onSubmit(): Promise<void> {
 
         <p
           v-if="error"
-          class="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/50 dark:text-red-300"
+          class="rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
           role="alert"
         >
           {{ error }}

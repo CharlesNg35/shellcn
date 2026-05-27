@@ -417,17 +417,69 @@ func deleteEntry(rc *plugin.RequestContext) (any, error) {
 // table rows without fetching every value of every entry.
 var structAttrs = []string{"objectClass", "hasSubordinates"}
 
+// search runs a paged LDAP search bounded by the connection's size limit. The
+// Simple Paged Results control lets it page past per-request server caps (e.g.
+// Active Directory's default MaxPageSize of 1000); the control is non-critical,
+// so directories that don't support it just return one bounded page. Paging
+// stops once the size limit is reached.
 func search(s *Session, base string, scope int, filter string, attrs []string) ([]*ldapv3.Entry, error) {
-	req := ldapv3.NewSearchRequest(base, scope, ldapv3.NeverDerefAliases, s.opts.SizeLimit, int(s.opts.Timeout.Seconds()), false, filter, attrs, nil)
-	res, err := s.conn.Search(req)
-	if err != nil {
-		// A size-limit cut-off still yields the entries gathered so far.
-		if res != nil && ldapv3.IsErrorWithCode(err, ldapv3.LDAPResultSizeLimitExceeded) {
-			return res.Entries, nil
-		}
-		return nil, ldapErr(err)
+	pageSize := s.opts.PageSize
+	if pageSize <= 0 || pageSize > s.opts.SizeLimit {
+		pageSize = s.opts.SizeLimit
 	}
-	return res.Entries, nil
+	timeout := int(s.opts.Timeout.Seconds())
+	paging := ldapv3.NewControlPaging(uint32(pageSize))
+	var entries []*ldapv3.Entry
+	for {
+		req := ldapv3.NewSearchRequest(base, scope, ldapv3.NeverDerefAliases, s.opts.SizeLimit, timeout, false, filter, attrs, []ldapv3.Control{paging})
+		res, err := s.conn.Search(req)
+		if res != nil {
+			entries = append(entries, res.Entries...)
+		}
+		if err != nil {
+			// A size-limit cut-off still yields the entries gathered so far.
+			if ldapv3.IsErrorWithCode(err, ldapv3.LDAPResultSizeLimitExceeded) {
+				break
+			}
+			return nil, ldapErr(err)
+		}
+		if len(entries) >= s.opts.SizeLimit {
+			abandonPaging(s, base, scope, filter, attrs, timeout, res)
+			break
+		}
+		cookie := pagingCookie(res)
+		if len(cookie) == 0 {
+			break
+		}
+		paging.SetCookie(cookie)
+	}
+	if len(entries) > s.opts.SizeLimit {
+		entries = entries[:s.opts.SizeLimit]
+	}
+	return entries, nil
+}
+
+func pagingCookie(res *ldapv3.SearchResult) []byte {
+	if res == nil {
+		return nil
+	}
+	if ctrl, ok := ldapv3.FindControl(res.Controls, ldapv3.ControlTypePaging).(*ldapv3.ControlPaging); ok && ctrl != nil {
+		return ctrl.Cookie
+	}
+	return nil
+}
+
+// abandonPaging best-effort releases a paged-search cursor we stopped consuming
+// early (a final request with page size 0), so the server doesn't keep it open.
+func abandonPaging(s *Session, base string, scope int, filter string, attrs []string, timeout int, res *ldapv3.SearchResult) {
+	cookie := pagingCookie(res)
+	if len(cookie) == 0 {
+		return
+	}
+	stop := ldapv3.NewControlPaging(0)
+	stop.SetCookie(cookie)
+	req := ldapv3.NewSearchRequest(base, scope, ldapv3.NeverDerefAliases, 1, timeout, false, filter, attrs, []ldapv3.Control{stop})
+	_, _ = s.conn.Search(req)
 }
 
 func lookupEntry(s *Session, dn string) (*ldapv3.Entry, error) {
@@ -475,12 +527,14 @@ func entryRef(dn string) *plugin.ResourceRef {
 func iconForEntry(classes []string) plugin.Icon {
 	for _, class := range classes {
 		switch strings.ToLower(class) {
-		case "organizationalunit", "organization", "domain", "dcobject", "container":
+		case "organizationalunit", "organization", "domain", "domaindns", "builtindomain", "dcobject", "container":
 			return icon("folder")
 		case "groupofnames", "groupofuniquenames", "posixgroup", "group":
 			return icon("users")
-		case "person", "inetorgperson", "organizationalperson", "user", "posixaccount":
+		case "person", "inetorgperson", "organizationalperson", "user", "posixaccount", "foreignsecurityprincipal":
 			return icon("user")
+		case "computer", "device":
+			return icon("monitor")
 		}
 	}
 	return icon("file")

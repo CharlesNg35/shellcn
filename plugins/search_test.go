@@ -10,7 +10,7 @@ func TestSearchPluginsValidateAndRegister(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
 
-	for _, name := range []string{"elasticsearch", "opensearch"} {
+	for _, name := range []string{"elasticsearch", "opensearch", "meilisearch", "typesense"} {
 		proj, ok := reg.Projection(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -44,6 +44,16 @@ func TestSearchCredentialCompatibility(t *testing.T) {
 			t.Fatalf("database password credentials should not support %s", name)
 		}
 	}
+	for _, name := range []string{"meilisearch", "typesense"} {
+		if !reg.CredentialKindSupportsProtocol(plugin.CredentialAPIToken, name) {
+			t.Fatalf("api token credential should support %s", name)
+		}
+		for _, kind := range []plugin.CredentialKind{plugin.CredentialBasicAuth, plugin.CredentialBearerToken, plugin.CredentialDBPassword} {
+			if reg.CredentialKindSupportsProtocol(kind, name) {
+				t.Fatalf("%s should not advertise %s credentials", name, kind)
+			}
+		}
+	}
 }
 
 func TestSearchSchemasAreProtocolSpecific(t *testing.T) {
@@ -64,6 +74,23 @@ func TestSearchSchemasAreProtocolSpecific(t *testing.T) {
 		for _, key := range []string{"host", "database", "brokers", "urls", "management_url", "keyspace"} {
 			if fields[key] {
 				t.Fatalf("%s should not expose non-search field %q", name, key)
+			}
+		}
+	}
+	for _, name := range []string{"meilisearch", "typesense"} {
+		manifest, ok := reg.Manifest(name)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", name)
+		}
+		fields := fieldMap(manifest.Config)
+		for _, key := range []string{"endpoint", "auth", "api_key", "credential_id", "tls_mode", "read_only", "page_limit"} {
+			if !fields[key] {
+				t.Fatalf("%s should expose search API field %q", name, key)
+			}
+		}
+		for _, key := range []string{"username", "password", "bearer_token", "database", "brokers", "urls", "management_url", "keyspace"} {
+			if fields[key] {
+				t.Fatalf("%s should not expose unrelated field %q", name, key)
 			}
 		}
 	}
