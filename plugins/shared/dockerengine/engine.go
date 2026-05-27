@@ -156,6 +156,7 @@ func TreeCompose(rc *plugin.RequestContext) (any, error) {
 			Ref:   &plugin.ResourceRef{Kind: "compose", Name: name, UID: name},
 			Leaf:  true,
 			Badge: &plugin.Badge{Value: r["containers"], Severity: plugin.SeverityInfo},
+			Data:  r,
 		})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
@@ -758,8 +759,7 @@ func (s *Session) openExec(ctx context.Context, params map[string]string) (plugi
 	return &execChannel{cli: s.cli, execID: created.ID, resp: resp.HijackedResponse}, nil
 }
 
-// WhenState gates an action on the resource row's "state" field, so the renderer
-// shows it disabled when the container isn't in one of the given states.
+// WhenState gates an action on the row's "state" field.
 func WhenState(states ...string) *plugin.Condition {
 	return &plugin.Condition{AllOf: []plugin.Rule{{Field: "state", Op: plugin.OpIn, Value: states}}}
 }
@@ -927,6 +927,7 @@ func TreeFromRows(rc *plugin.RequestContext, kind string, fn func(*plugin.Reques
 			Icon:  iconForKind(kind),
 			Ref:   &ref,
 			Leaf:  true,
+			Data:  r,
 		})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil

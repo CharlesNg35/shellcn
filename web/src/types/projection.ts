@@ -390,9 +390,7 @@ export interface Action {
   // workspace dock or a modal instead of executing the route inline.
   open?: "view" | "dock" | "dialog";
   panel?: PanelType;
-  // Gates the button against the active resource's row fields; when false the
-  // renderer shows the action disabled, not hidden. Absent = always enabled.
-  enabledWhen?: Condition;
+  enabledWhen?: Condition; // gate on the active row's fields; false = disabled
 }
 
 export interface Stream {
@@ -449,6 +447,7 @@ export interface TreeNode {
   // single-resource detail; listParams scope that list (e.g. a namespace).
   resourceKind?: string;
   listParams?: Record<string, string>;
+  data?: Record<string, unknown>; // row fields, so a tree-opened detail matches a table row
 }
 
 export interface HeaderSpec {

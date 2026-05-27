@@ -48,7 +48,7 @@ function toNode(n: TreeNode): PVNode {
     data: {
       icon: n.icon,
       ref: n.ref,
-      row: { ...n, ref: n.ref },
+      row: { ...n.data, ref: n.ref },
       source: n.childrenSource,
       resourceKind: n.resourceKind,
       listParams: n.listParams,

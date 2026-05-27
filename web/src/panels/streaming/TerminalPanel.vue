@@ -492,11 +492,3 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-/* Breathing room inside the scroll area; FitAddon subtracts this padding when
-   sizing the grid, so rows stay aligned. */
-:deep(.xterm) {
-  padding: 6px 8px;
-}
-</style>

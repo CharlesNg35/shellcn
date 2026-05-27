@@ -76,7 +76,7 @@ func treePods(rc *plugin.RequestContext) (any, error) {
 			continue
 		}
 		refCopy := ref
-		nodes = append(nodes, plugin.TreeNode{Key: "pod:" + ref.UID, Label: ref.Name, Icon: icon("boxes"), Ref: &refCopy, Leaf: true})
+		nodes = append(nodes, plugin.TreeNode{Key: "pod:" + ref.UID, Label: ref.Name, Icon: icon("boxes"), Ref: &refCopy, Leaf: true, Data: r})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
 }

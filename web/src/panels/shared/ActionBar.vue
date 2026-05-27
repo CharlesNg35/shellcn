@@ -22,13 +22,18 @@ const props = defineProps<{
   connectionId: string;
   actions: Action[];
   resource?: ResourceRef | null;
-  // The active resource's row, so actions can gate on its fields (e.g. state).
-  record?: Row | null;
+  record?: Row | null; // the active row, so actions can gate on its fields
 }>();
 
-// An action is enabled unless its declared condition fails against the row.
+// Enabled unless the condition fails; when the row lacks the fields it needs
+// (e.g. only a ref is known) we can't judge, so stay enabled rather than disable.
 function isEnabled(action: Action): boolean {
-  return isVisible(action.enabledWhen, props.record ?? {});
+  const cond = action.enabledWhen;
+  if (!cond) return true;
+  const record = (props.record ?? {}) as Record<string, unknown>;
+  const rules = [...(cond.allOf ?? []), ...(cond.anyOf ?? [])];
+  if (rules.some((r) => record[r.field] === undefined)) return true;
+  return isVisible(cond, record);
 }
 const emit = defineEmits<{
   done: [action: Action, result?: Record<string, unknown>];
