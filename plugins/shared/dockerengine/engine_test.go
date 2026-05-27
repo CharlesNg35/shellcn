@@ -12,10 +12,23 @@ import (
 	"testing"
 
 	"github.com/moby/moby/api/types/events"
+	dockerclient "github.com/moby/moby/client"
+	"github.com/moby/moby/client/pkg/versions"
 
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 )
+
+// podmanCompatAPIVersion is the Docker API version Podman's compatibility layer
+// advertises. The moby client must keep negotiating at or below it, or the
+// podman plugin can no longer connect.
+const podmanCompatAPIVersion = "1.41"
+
+func TestClientStillSupportsPodmanCompatAPIVersion(t *testing.T) {
+	if versions.LessThan(podmanCompatAPIVersion, dockerclient.MinAPIVersion) {
+		t.Fatalf("moby client MinAPIVersion=%q now exceeds Podman's Docker-compat API %q: the podman plugin will fail to negotiate. Pin a supported client API version (WithVersion) before upgrading.", dockerclient.MinAPIVersion, podmanCompatAPIVersion)
+	}
+}
 
 func TestSortRowsOrdersNumericColumnsByValue(t *testing.T) {
 	rows := []Row{{"name": "a", "size": int64(9)}, {"name": "b", "size": int64(1000)}, {"name": "c", "size": int64(200)}}

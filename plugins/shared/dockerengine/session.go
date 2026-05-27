@@ -121,7 +121,10 @@ func Unwrap(sess plugin.Session) (*Session, error) {
 }
 
 func (s *Session) HealthCheck(ctx context.Context) error {
-	if _, err := s.cli.Ping(ctx, dockerclient.PingOptions{}); err != nil {
+	// Negotiate the API version up front so a daemon below the client's minimum
+	// (notably Podman's older Docker-compat version) fails here with a clear
+	// error instead of lazily on the first request with a raw HTTP 400.
+	if _, err := s.cli.Ping(ctx, dockerclient.PingOptions{NegotiateAPIVersion: true}); err != nil {
 		return fmt.Errorf("%w: docker ping: %v", plugin.ErrUnavailable, err)
 	}
 	return nil

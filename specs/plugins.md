@@ -18,6 +18,9 @@ category key so management UI can group protocols without hardcoded frontend
 protocol lists. Current groups are shell, files/storage, containers,
 virtualization, remote desktop, databases, orchestration, cloud, network,
 security, DevOps/CI, observability, messaging, and other.
+Search engines are a separate category from databases because products such as
+Elasticsearch/OpenSearch, Meilisearch, and Typesense expose different operational
+and query models even when they all manage searchable documents.
 
 ## Priority Legend
 
@@ -88,8 +91,6 @@ These plugins should prove the core architecture first.
 | --------------- | ------------------------ | ------------------------------------------------------- |
 | `mariadb`       | MariaDB access           | schema browser, query editor, users, replication status |
 | `sqlite`        | SQLite database files    | schema browser, query editor, table data                |
-| `elasticsearch` | Elasticsearch/OpenSearch | indexes, documents, search, mappings, cluster health    |
-| `opensearch`    | OpenSearch               | indexes, documents, search, mappings, cluster health    |
 | `neo4j`         | Graph database           | Cypher query, graph/table results                       |
 | `influxdb`      | Time-series database     | buckets/databases, query, measurements                  |
 | `prometheus`    | Metrics query target     | PromQL query, targets, alerts, rules                    |
@@ -172,6 +173,22 @@ These plugins should prove the core architecture first.
 | `graylog`         | Graylog                   | streams, searches, alerts           |
 | `kibana`          | Kibana/Elastic dashboards | saved objects, dashboards, searches |
 
+## P2: Search Engines
+
+Elasticsearch and OpenSearch are implemented as direct-only search plugins in
+the core `search` category. They share `plugins/shared/escompat`, which is
+intentionally scoped to Elasticsearch-compatible REST APIs: indexes, mappings,
+settings, aliases, shards, JSON DSL search, and document CRUD. Future engines
+such as Meilisearch and Typesense should use their own plugin-specific clients
+or a separate helper only where their APIs actually overlap.
+
+| Plugin          | Purpose       | Main Capabilities                                    |
+| --------------- | ------------- | ---------------------------------------------------- |
+| `elasticsearch` | Elasticsearch | indexes, documents, JSON DSL search, mappings, health |
+| `opensearch`    | OpenSearch    | indexes, documents, JSON DSL search, mappings, health |
+| `meilisearch`   | Meilisearch   | indexes, documents, search, ranking/settings, tasks  |
+| `typesense`     | Typesense     | collections, documents, search, schema, API keys     |
+
 ## P3: Messaging And Queues
 
 RabbitMQ, Kafka, and NATS are implemented as direct-only messaging plugins in
@@ -191,7 +208,7 @@ actions, route handlers, and client/session behavior remain plugin-specific.
 
 | Plugin      | Purpose        | Main Capabilities                              |
 | ----------- | -------------- | ---------------------------------------------- |
-| `ldap`      | LDAP directory | users, groups, entries, search                 |
+| `ldap`      | LDAP directory | DIT tree, entry attributes (inline edit), add/rename/delete, subtree search ✅ |
 | `freeipa`   | FreeIPA        | users, groups, hosts, HBAC, sudo rules         |
 | `authentik` | Authentik      | users, groups, applications, providers, events |
 | `keycloak`  | Keycloak       | realms, clients, users, groups, sessions       |

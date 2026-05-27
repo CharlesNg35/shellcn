@@ -307,7 +307,16 @@ func serviceLogsStream(rc *plugin.RequestContext, stream plugin.ClientStream) er
 	if err != nil {
 		return err
 	}
-	logs, err := cli.ServiceLogs(rc.Ctx, rc.Param("id"), dockerclient.ServiceLogsOptions{
+	id := rc.Param("id")
+	// A TTY service emits a raw (un-multiplexed) log stream; a non-TTY service
+	// multiplexes stdout/stderr with stdcopy framing. Demuxing a raw stream
+	// would corrupt it, so branch on the service's TTY setting.
+	insp, err := cli.ServiceInspect(rc.Ctx, id, dockerclient.ServiceInspectOptions{})
+	if err != nil {
+		return dockerengine.DockerErr(err)
+	}
+	tty := insp.Service.Spec.TaskTemplate.ContainerSpec != nil && insp.Service.Spec.TaskTemplate.ContainerSpec.TTY
+	logs, err := cli.ServiceLogs(rc.Ctx, id, dockerclient.ServiceLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Follow:     boolParam(rc, "follow", true),
@@ -320,7 +329,12 @@ func serviceLogsStream(rc *plugin.RequestContext, stream plugin.ClientStream) er
 	defer func() { _ = logs.Close() }()
 	done := make(chan error, 1)
 	go func() {
-		_, copyErr := stdcopy.StdCopy(stream, stream, logs)
+		var copyErr error
+		if tty {
+			_, copyErr = io.Copy(stream, logs)
+		} else {
+			_, copyErr = stdcopy.StdCopy(stream, stream, logs)
+		}
 		done <- copyErr
 	}()
 	select {

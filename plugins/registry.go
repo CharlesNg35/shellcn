@@ -6,15 +6,18 @@ import (
 	"github.com/charlesng/shellcn/plugins/clickhouse"
 	"github.com/charlesng/shellcn/plugins/cockroachdb"
 	"github.com/charlesng/shellcn/plugins/docker"
+	"github.com/charlesng/shellcn/plugins/elasticsearch"
 	"github.com/charlesng/shellcn/plugins/ftp"
 	"github.com/charlesng/shellcn/plugins/ftps"
 	"github.com/charlesng/shellcn/plugins/kafka"
+	"github.com/charlesng/shellcn/plugins/ldap"
 	"github.com/charlesng/shellcn/plugins/minio"
 	"github.com/charlesng/shellcn/plugins/mongodb"
 	"github.com/charlesng/shellcn/plugins/mssql"
 	"github.com/charlesng/shellcn/plugins/mysql"
 	"github.com/charlesng/shellcn/plugins/nats"
 	"github.com/charlesng/shellcn/plugins/nfs"
+	"github.com/charlesng/shellcn/plugins/opensearch"
 	"github.com/charlesng/shellcn/plugins/oracle"
 	"github.com/charlesng/shellcn/plugins/podman"
 	"github.com/charlesng/shellcn/plugins/postgresql"
@@ -68,6 +71,9 @@ func all() []plugin.Plugin {
 		cockroachdb.New(),
 		clickhouse.New(),
 		cassandra.New(),
+		ldap.New(),
+		elasticsearch.New(),
+		opensearch.New(),
 		rabbitmq.New(),
 		kafka.New(),
 		nats.New(),
