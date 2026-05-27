@@ -51,10 +51,7 @@ async function savePassword(): Promise<void> {
   }
   savingPassword.value = true;
   try {
-    await api.post("/auth/me/password", {
-      currentPassword: currentPassword.value,
-      newPassword: newPassword.value,
-    });
+    await auth.changePassword(currentPassword.value, newPassword.value);
     currentPassword.value = "";
     newPassword.value = "";
     confirmPassword.value = "";

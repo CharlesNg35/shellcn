@@ -59,7 +59,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	sess := s.deps.SessionMgr.Create(user.ID)
+	sess := s.deps.SessionMgr.Create(user.ID, user.SessionVersion)
 	auth.SetSessionCookie(w, sess, isTLS(r))
 	writeJSON(w, http.StatusOK, sessionDTO{User: toUserDTO(user), CSRFToken: sess.CSRFToken})
 }
@@ -124,10 +124,6 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
-	if len(req.NewPassword) < 8 {
-		writeError(w, s.deps.Logger, fmt.Errorf("%w: password must be at least 8 characters", plugin.ErrInvalidInput))
-		return
-	}
 	err := s.deps.Users.ChangePassword(ctx, user.ID, req.CurrentPassword, req.NewPassword)
 	if errors.Is(err, service.ErrWrongPassword) {
 		s.auditAccountEvent(ctx, user, "account.password.change", models.AuditDenied, err)
@@ -139,6 +135,14 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	updated, err := s.deps.Users.Get(ctx, user.ID)
+	if err != nil {
+		s.auditAccountEvent(ctx, user, "account.password.change", models.AuditError, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	sess := s.deps.SessionMgr.Create(updated.ID, updated.SessionVersion)
+	auth.SetSessionCookie(w, sess, isTLS(r))
 	s.auditAccountEvent(ctx, user, "account.password.change", models.AuditAllowed, nil)
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, sessionDTO{User: toUserDTO(updated), CSRFToken: sess.CSRFToken})
 }

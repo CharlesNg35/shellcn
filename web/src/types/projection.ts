@@ -389,7 +389,7 @@ export interface Action {
   onSuccess?: ActionSuccess;
   // open="dock"/"dialog" opens `panel` (sourced from this action's route) in the
   // workspace dock or a modal instead of executing the route inline.
-  open?: "view" | "dock" | "dialog";
+  open?: "view" | "dock" | "dialog" | "url";
   panel?: PanelType;
   config?: Record<string, unknown>; // panel config for a dock/dialog-opened panel
   enabledWhen?: Condition; // gate on the active row's fields; false = disabled

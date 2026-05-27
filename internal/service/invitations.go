@@ -119,13 +119,6 @@ func (s *InvitationService) Accept(ctx context.Context, token, username, passwor
 		return models.User{}, err
 	}
 	now := s.now()
-	consumed, err := s.invites.Consume(ctx, inv.ID, now)
-	if err != nil {
-		return models.User{}, err
-	}
-	if !consumed {
-		return models.User{}, ErrInvitationInvalid
-	}
 	user, err := s.users.Create(ctx, NewUserInput{
 		Username: username,
 		Email:    inv.Email,
@@ -134,6 +127,15 @@ func (s *InvitationService) Accept(ctx context.Context, token, username, passwor
 	})
 	if err != nil {
 		return models.User{}, err
+	}
+	consumed, err := s.invites.Consume(ctx, inv.ID, now)
+	if err != nil {
+		_ = s.users.Delete(ctx, user.ID)
+		return models.User{}, err
+	}
+	if !consumed {
+		_ = s.users.Delete(ctx, user.ID)
+		return models.User{}, ErrInvitationInvalid
 	}
 	return user, nil
 }

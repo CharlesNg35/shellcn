@@ -21,6 +21,7 @@ import (
 type Config struct {
 	Server     ServerConfig     `mapstructure:"server"`
 	Auth       AuthConfig       `mapstructure:"auth"`
+	Bootstrap  BootstrapConfig  `mapstructure:"bootstrap"`
 	Database   DatabaseConfig   `mapstructure:"database"`
 	Secrets    SecretsConfig    `mapstructure:"secrets"`
 	Email      EmailConfig      `mapstructure:"email"`
@@ -35,6 +36,11 @@ type ServerConfig struct {
 type AuthConfig struct {
 	SessionTTL string `mapstructure:"session_ttl"`
 	JWTSecret  string `mapstructure:"jwt_secret"`
+}
+
+type BootstrapConfig struct {
+	AdminUsername string `mapstructure:"admin_username"`
+	AdminPassword string `mapstructure:"admin_password"`
 }
 
 // SessionTTLDuration parses SessionTTL, falling back to 24 hours.
@@ -119,7 +125,7 @@ func Load(paths ...string) (*Config, error) {
 	v.SetEnvPrefix("SHELLCN")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
-	// Keep the historical master-key variable names working.
+	// Match the canonical variable names used by the secret loader.
 	_ = v.BindEnv("secrets.master_key", secrets.EnvMasterKey)
 	_ = v.BindEnv("secrets.master_key_file", secrets.EnvMasterKeyFile)
 
@@ -142,6 +148,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.log_level", "info")
 	v.SetDefault("auth.session_ttl", "24h")
 	v.SetDefault("auth.jwt_secret", "")
+	v.SetDefault("bootstrap.admin_username", "admin")
+	v.SetDefault("bootstrap.admin_password", "")
 	v.SetDefault("database.driver", "sqlite")
 	v.SetDefault("database.dsn", "shellcn.db")
 	v.SetDefault("email.enabled", false)

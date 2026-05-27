@@ -24,8 +24,20 @@ func tree() []plugin.TreeGroup {
 		groups = append(groups, categoryGroup(key))
 	}
 	groups = append(groups,
+		plugin.TreeGroup{
+			Key:    "portforward",
+			Label:  "Port Forwarding",
+			Icon:   plugin.Icon{Type: plugin.IconLucide, Value: "arrow-left-right"},
+			Source: plugin.DataSource{RouteID: "kubernetes.tree.portforward"},
+		},
 		kindGroup("namespace", "Namespaces", "box"),
 		kindGroup("event", "Events", "bell"),
+		plugin.TreeGroup{
+			Key:    "helm",
+			Label:  "Helm",
+			Icon:   plugin.Icon{Type: plugin.IconLucide, Value: "ship-wheel"},
+			Source: plugin.DataSource{RouteID: "kubernetes.tree.helm"},
+		},
 		categoryGroup("access"),
 		plugin.TreeGroup{
 			Key:    "customresources",

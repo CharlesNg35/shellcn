@@ -474,6 +474,10 @@ const (
 	OpenView   OpenTarget = "view"
 	OpenDock   OpenTarget = "dock"
 	OpenDialog OpenTarget = "dialog"
+	// OpenURL runs the action's route, which returns {"url": "..."}, and opens
+	// that URL in a new browser tab — e.g. a generated connection-proxy link to a
+	// service's web UI. Generic: the route decides the URL.
+	OpenURL OpenTarget = "url"
 )
 
 // Action is a UI affordance over a route. Permission/risk/input live on the

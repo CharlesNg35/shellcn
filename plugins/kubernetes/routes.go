@@ -45,10 +45,32 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.node.metrics", Method: plugin.MethodWS, Path: "/nodes/metrics", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.node.metrics", Stream: NodeMetrics},
 		{ID: "kubernetes.node.pods", Method: plugin.MethodGet, Path: "/nodes/pods", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.node.pods", Handle: NodePods},
 		{ID: "kubernetes.workload.pods", Method: plugin.MethodGet, Path: "/resources/{kind}/pods", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.workload.pods", Handle: WorkloadPods},
+
+		{ID: "kubernetes.tree.helm", Method: plugin.MethodGet, Path: "/tree/helm", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.helm", Handle: TreeHelm},
+		{ID: "kubernetes.helm.releases", Method: plugin.MethodGet, Path: "/helm/releases", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.helm.releases", Handle: HelmReleases},
+		{ID: "kubernetes.helm.release", Method: plugin.MethodGet, Path: "/helm/release", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.helm.release", Handle: HelmRelease},
+
+		{ID: "kubernetes.service.open", Method: plugin.MethodGet, Path: "/services/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.service.open", Handle: ServiceProxyURL},
+
+		{ID: "kubernetes.tree.portforward", Method: plugin.MethodGet, Path: "/tree/portforward", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.portforward", Handle: TreePortForward},
+		{ID: "kubernetes.portforward.list", Method: plugin.MethodGet, Path: "/portforward", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.portforward.list", Handle: PortForwardList},
+		{ID: "kubernetes.proxy.execute", Method: plugin.MethodPost, Path: "/proxy/execute", Permission: "kubernetes.proxy.execute", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.proxy.execute", Input: proxySchema(), Handle: ProxyExecute},
 	}
 }
 
 func sess(rc *plugin.RequestContext) (*Session, error) { return Unwrap(rc.Session) }
+
+func proxySchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{
+		Name: "Request",
+		Fields: []plugin.Field{
+			{Key: "method", Label: "Method", Type: plugin.FieldText, Required: true},
+			{Key: "url", Label: "Path", Type: plugin.FieldText, Required: true},
+			{Key: "headers", Label: "Headers", Type: plugin.FieldJSON},
+			{Key: "body", Label: "Body", Type: plugin.FieldTextarea},
+		},
+	}}}
+}
 
 func applySchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{

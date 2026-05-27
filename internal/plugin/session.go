@@ -89,3 +89,14 @@ type Plugin interface {
 type HealthChecker interface {
 	HealthCheck(ctx context.Context) error
 }
+
+// HTTPProxy is an optional Session capability: it reverse-proxies a browser
+// request to an upstream the session can reach (e.g. a web service behind the
+// connection's network). The core authenticates + authorizes the user and
+// strips the connection-proxy route prefix; r.URL.Path is the remaining
+// plugin-defined target path. The session maps it to its upstream and streams
+// the response (supporting redirects, assets, and WebSocket upgrades). It enables
+// generated "open in browser" links without any protocol-specific core code.
+type HTTPProxy interface {
+	ServeHTTPProxy(w http.ResponseWriter, r *http.Request)
+}

@@ -3,6 +3,7 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -751,6 +752,12 @@ func TestAuthLoginFlow(t *testing.T) {
 	if !strings.Contains(string(body), `"csrfToken"`) || !strings.Contains(string(body), "loginuser") {
 		t.Errorf("login response missing csrf/user: %s", body)
 	}
+	var loginSession struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	if err := json.Unmarshal(body, &loginSession); err != nil || loginSession.CSRFToken == "" {
+		t.Fatalf("login csrf decode: csrf=%q err=%v body=%s", loginSession.CSRFToken, err, body)
+	}
 
 	// The cookie authorizes /api/auth/me.
 	meReq, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/auth/me", nil)
@@ -775,6 +782,118 @@ func TestAuthLoginFlow(t *testing.T) {
 	_ = logoutResp.Body.Close()
 	if logoutResp.StatusCode != http.StatusForbidden {
 		t.Errorf("logout without CSRF: want 403, got %d", logoutResp.StatusCode)
+	}
+
+	logoutReq, _ = http.NewRequest(http.MethodPost, h.ts.URL+"/api/auth/logout", nil)
+	logoutReq.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: cookieVal})
+	logoutReq.Header.Set(auth.CSRFHeader, loginSession.CSRFToken)
+	logoutResp, err = h.ts.Client().Do(logoutReq)
+	if err != nil {
+		t.Fatalf("logout with csrf: %v", err)
+	}
+	_ = logoutResp.Body.Close()
+	if logoutResp.StatusCode != http.StatusOK {
+		t.Errorf("logout with csrf: want 200, got %d", logoutResp.StatusCode)
+	}
+	meReq, _ = http.NewRequest(http.MethodGet, h.ts.URL+"/api/auth/me", nil)
+	meReq.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: cookieVal})
+	meResp, err = h.ts.Client().Do(meReq)
+	if err != nil {
+		t.Fatalf("me after logout: %v", err)
+	}
+	_ = meResp.Body.Close()
+	if meResp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("destroyed session after logout: want 401, got %d", meResp.StatusCode)
+	}
+}
+
+func TestPasswordChangeInvalidatesOldSessionAndReturnsNewSession(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	hash, _ := auth.HashPassword("old-secret")
+	if err := h.store.Users.Create(ctx, &models.User{ID: "pw-user", Username: "pwuser", Roles: []models.Role{models.RoleViewer}}, hash); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	req, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/auth/login", strings.NewReader(`{"username":"pwuser","password":"old-secret"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		t.Fatalf("login: want 200, got %d (%s)", resp.StatusCode, body)
+	}
+	var loginBody struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&loginBody); err != nil {
+		t.Fatalf("decode login: %v", err)
+	}
+	_ = resp.Body.Close()
+	var oldCookie *http.Cookie
+	for _, c := range resp.Cookies() {
+		if c.Name == auth.SessionCookieName {
+			copied := *c
+			oldCookie = &copied
+		}
+	}
+	if oldCookie == nil || loginBody.CSRFToken == "" {
+		t.Fatal("login missing session cookie or csrf token")
+	}
+
+	changeReq, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/auth/me/password", strings.NewReader(`{"currentPassword":"old-secret","newPassword":"new-secret"}`))
+	changeReq.AddCookie(oldCookie)
+	changeReq.Header.Set(auth.CSRFHeader, loginBody.CSRFToken)
+	changeResp, err := h.ts.Client().Do(changeReq)
+	if err != nil {
+		t.Fatalf("change password: %v", err)
+	}
+	if changeResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(changeResp.Body)
+		_ = changeResp.Body.Close()
+		t.Fatalf("change password: want 200, got %d (%s)", changeResp.StatusCode, body)
+	}
+	var changeBody struct {
+		CSRFToken string `json:"csrfToken"`
+	}
+	if err := json.NewDecoder(changeResp.Body).Decode(&changeBody); err != nil {
+		t.Fatalf("decode change: %v", err)
+	}
+	_ = changeResp.Body.Close()
+	var newCookie *http.Cookie
+	for _, c := range changeResp.Cookies() {
+		if c.Name == auth.SessionCookieName {
+			copied := *c
+			newCookie = &copied
+		}
+	}
+	if newCookie == nil || changeBody.CSRFToken == "" || changeBody.CSRFToken == loginBody.CSRFToken {
+		t.Fatalf("password change did not return a fresh session: cookie=%v oldCSRF=%q newCSRF=%q", newCookie, loginBody.CSRFToken, changeBody.CSRFToken)
+	}
+
+	oldMe, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/auth/me", nil)
+	oldMe.AddCookie(oldCookie)
+	oldMeResp, err := h.ts.Client().Do(oldMe)
+	if err != nil {
+		t.Fatalf("old me: %v", err)
+	}
+	_ = oldMeResp.Body.Close()
+	if oldMeResp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("old session after password change: want 401, got %d", oldMeResp.StatusCode)
+	}
+
+	newMe, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/auth/me", nil)
+	newMe.AddCookie(newCookie)
+	newMeResp, err := h.ts.Client().Do(newMe)
+	if err != nil {
+		t.Fatalf("new me: %v", err)
+	}
+	_ = newMeResp.Body.Close()
+	if newMeResp.StatusCode != http.StatusOK {
+		t.Fatalf("new session after password change: want 200, got %d", newMeResp.StatusCode)
 	}
 }
 

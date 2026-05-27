@@ -80,6 +80,10 @@ function trigger(action: Action): void {
     dock.openDialog(props.connectionId, dockItem(action));
     return;
   }
+  if (action.open === "url") {
+    void openURL(action);
+    return;
+  }
   if (
     action.requiresConfirm ||
     action.input ||
@@ -102,6 +106,30 @@ function actionParams(action: Action): Record<string, string> {
   if (ref.namespace) params.namespace = ref.namespace;
   if (ref.scope) params.scope = ref.scope;
   return params;
+}
+
+// open="url": run the route, then open the returned {url} in a new tab.
+async function openURL(action: Action): Promise<void> {
+  error.value = null;
+  try {
+    const result: unknown = await runFormAction(
+      props.connectionId,
+      action.routeId,
+      { resource: props.resource },
+      {},
+      actionParams(action),
+      action.method ?? "GET",
+    );
+    const raw =
+      result && typeof result === "object"
+        ? (result as Record<string, unknown>).url
+        : undefined;
+    if (typeof raw === "string" && raw) {
+      window.open(raw, "_blank", "noopener,noreferrer");
+    }
+  } catch (e) {
+    error.value = (e as Error).message;
+  }
 }
 
 async function execute(

@@ -181,17 +181,29 @@ func TestSessionAndCSRF(t *testing.T) {
 func TestJWTSessionSurvivesManagerRestart(t *testing.T) {
 	key := []byte("0123456789abcdef0123456789abcdef")
 	m1 := auth.NewSessionManagerWithKey(time.Hour, key)
-	s := m1.Create("u1")
+	s := m1.Create("u1", 7)
 
 	m2 := auth.NewSessionManagerWithKey(time.Hour, key)
 	got, ok := m2.Get(s.ID)
-	if !ok || got.UserID != "u1" || got.CSRFToken != s.CSRFToken {
+	if !ok || got.UserID != "u1" || got.CSRFToken != s.CSRFToken || got.SessionVersion != 7 {
 		t.Fatalf("session should validate after manager restart: ok=%v got=%+v", ok, got)
 	}
 
 	other := auth.NewSessionManagerWithKey(time.Hour, []byte("abcdef0123456789abcdef0123456789"))
 	if _, ok := other.Get(s.ID); ok {
 		t.Fatal("session should not validate with a different signing key")
+	}
+}
+
+func TestSessionDestroyRevokesToken(t *testing.T) {
+	m := auth.NewSessionManager(time.Hour)
+	s := m.Create("u1")
+	if _, ok := m.Get(s.ID); !ok {
+		t.Fatal("session should start valid")
+	}
+	m.Destroy(s.ID)
+	if _, ok := m.Get(s.ID); ok {
+		t.Fatal("destroyed session should be rejected")
 	}
 }
 

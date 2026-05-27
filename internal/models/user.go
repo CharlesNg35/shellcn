@@ -24,7 +24,10 @@ type User struct {
 	DisplayName  string
 	Roles        []Role `gorm:"serializer:json"`
 	PasswordHash string `gorm:"column:password_hash" json:"-"`
-	Disabled     bool
+	// SessionVersion invalidates existing browser sessions when sensitive
+	// account state changes.
+	SessionVersion int
+	Disabled       bool
 	// Protected marks the root admin, which can never be deleted.
 	Protected bool
 	CreatedAt time.Time

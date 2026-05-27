@@ -120,7 +120,7 @@ var kinds = []kind{
 		name: "service", title: "Services", category: "network", icon: "network", namespaced: true,
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "services"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("type", "Type", badge), col("clusterIP", "Cluster IP", notSort), col("ports", "Ports", notSort), ageCol()},
-		extra:   serviceRow, actionIDs: justDelete,
+		extra:   serviceRow, actionIDs: []string{"kubernetes.service.open", "kubernetes.resource.delete"},
 	},
 	{
 		name: "endpoints", title: "Endpoints", category: "network", icon: "network", namespaced: true,

@@ -62,8 +62,9 @@ func (s *Session) clusterFrame(ctx context.Context) map[string]any {
 		memCap += alloc.Memory().Value()
 		podCap += alloc.Pods().Value()
 	}
+	cpuCapCores := milliToCores(cpuCap)
 	frame["nodes"] = len(nodes.Items)
-	frame["cpuCapacity"] = milliToCores(cpuCap)
+	frame["cpuCapacity"] = cpuCapCores
 	frame["memCapacity"] = memCap
 	frame["podCapacity"] = podCap
 
@@ -71,21 +72,39 @@ func (s *Session) clusterFrame(ctx context.Context) map[string]any {
 		frame["pods"] = len(pods.Items)
 	}
 
-	nm, err := s.metrics.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
-	if err != nil {
+	// Capacity is read from the API above; usage comes from the configured source.
+	cpuCores, memBytes, ok := s.clusterUsage(ctx)
+	if !ok {
 		return frame
 	}
-	var cpuUse, memUse int64
-	for i := range nm.Items {
-		cpuUse += nm.Items[i].Usage.Cpu().MilliValue()
-		memUse += nm.Items[i].Usage.Memory().Value()
-	}
 	frame["metricsAvailable"] = true
-	frame["cpu"] = milliToCores(cpuUse)
-	frame["mem"] = memUse
-	frame["cpuPct"] = pct(cpuUse, cpuCap)
-	frame["memPct"] = pct(memUse, memCap)
+	frame["cpu"] = cpuCores
+	frame["mem"] = int64(memBytes)
+	frame["cpuPct"] = ratio(cpuCores, cpuCapCores)
+	frame["memPct"] = ratio(memBytes, float64(memCap))
 	return frame
+}
+
+// clusterUsage returns cluster CPU (cores) and memory (bytes) usage from the
+// configured metrics source, degrading to ok=false when unavailable.
+func (s *Session) clusterUsage(ctx context.Context) (cpuCores, memBytes float64, ok bool) {
+	switch s.metricsSrc {
+	case metricsNone:
+		return 0, 0, false
+	case metricsProm:
+		return s.promClusterUsage(ctx)
+	default:
+		nm, err := s.metrics.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return 0, 0, false
+		}
+		var cpu, mem int64
+		for i := range nm.Items {
+			cpu += nm.Items[i].Usage.Cpu().MilliValue()
+			mem += nm.Items[i].Usage.Memory().Value()
+		}
+		return milliToCores(cpu), float64(mem), true
+	}
 }
 
 func (s *Session) nodeFrame(ctx context.Context, node string) map[string]any {
@@ -120,6 +139,13 @@ func pct(used, capacity int64) float64 {
 		return 0
 	}
 	return float64(used) / float64(capacity) * 100
+}
+
+func ratio(used, capacity float64) float64 {
+	if capacity <= 0 {
+		return 0
+	}
+	return used / capacity * 100
 }
 
 // nodePodSelector limits a pod list to one node.

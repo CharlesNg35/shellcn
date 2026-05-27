@@ -31,6 +31,7 @@ type Session struct {
 	mapper    meta.RESTMapper
 	metrics   *metricsclient.Clientset
 
+	connID     string
 	defaultNS  string
 	metricsSrc string
 	promURL    string
@@ -80,6 +81,7 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, err
 		disco:      cached,
 		mapper:     restmapper.NewDeferredDiscoveryRESTMapper(cached),
 		metrics:    metricsClient,
+		connID:     cfg.ConnectionID,
 		defaultNS:  strings.TrimSpace(cfg.String("namespace")),
 		metricsSrc: metricsSourceOrDefault(cfg.String("metrics_source")),
 		promURL:    strings.TrimSpace(cfg.String("prometheus_url")),

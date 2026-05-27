@@ -209,6 +209,7 @@ func (s *Server) routes() chi.Router {
 				})
 			}
 			pr.HandleFunc("/connections/{id}/x/{routeID}", s.handleRoute)
+			pr.HandleFunc("/connections/{id}/proxy/*", s.handleConnectionProxy)
 		})
 	})
 

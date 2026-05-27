@@ -85,6 +85,9 @@ func (s *memUserStore) SetPasswordHash(_ context.Context, userID, hash string) e
 		return ErrNotFound
 	}
 	s.hashes[userID] = hash
+	u := s.users[userID]
+	u.SessionVersion++
+	s.users[userID] = u
 	return nil
 }
 
