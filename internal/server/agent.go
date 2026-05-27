@@ -179,8 +179,13 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := transport.AgentConnectResponse{
-		OK:    true,
-		Proxy: transport.AgentProxyTarget{Mode: string(proxy.Mode), Address: proxy.Address},
+		OK: true,
+		Proxy: transport.AgentProxyTarget{
+			Mode:      string(proxy.Mode),
+			Address:   proxy.Address,
+			TokenFile: proxy.TokenFile,
+			CAFile:    proxy.CAFile,
+		},
 	}
 	if err := wsjson.Write(handshakeCtx, c, resp); err != nil {
 		_ = c.Close(websocket.StatusInternalError, "handshake failed")

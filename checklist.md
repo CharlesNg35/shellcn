@@ -225,7 +225,7 @@ Generic, manifest-driven; no per-plugin frontend.
 ## Phase 7 — M6 · Kubernetes (Lens/OpenLens-grade, manifest-driven)
 
 - [x] 7.0 Workbench renderer extensions (**generic, cross-plugin**): bottom dock, dashboard-as-view, multiple open workbench tabs, metrics/stat panel, list-opening nav nodes (+ scoped params) — landed early & proven on Redis/Proxmox/Docker/DBs (see UX.11/UX.12). Only the optional create-resource template picker remains.
-- [ ] 7.1 Kubernetes session and L7 agent mode
+- [x] 7.1 Kubernetes session and L7 agent mode — client-go over a generic L7 (`http_proxy`) agent that injects the target's own credentials (token/CA files declared by the plugin, not the agent); `rest.Config` from kubeconfig (direct) or `cfg.Net.HTTP()` (agent); typed + dynamic + discovery + RESTMapper + metrics clients; `kubectl apply` install manifest (token in the manifest body). Lists namespaces over both transports. `make fmt/lint/test` green.
 - [ ] 7.2 Workloads and core resource trees (categorized nav → live kind lists → details; CRDs)
 - [ ] 7.3 Pod logs, exec, and port-forward (opened in the dock)
 - [ ] 7.4 YAML editor, Create Resource, and events

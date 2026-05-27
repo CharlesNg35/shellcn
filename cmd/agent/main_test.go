@@ -1,9 +1,13 @@
 package main
 
 import (
+	"encoding/pem"
 	"io"
 	"log/slog"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -58,6 +62,86 @@ func TestProxyStreamTCP(t *testing.T) {
 	}
 	if string(buf) != "echo" {
 		t.Fatalf("echo = %q", buf)
+	}
+}
+
+func TestTokenSourceReadsAndCaches(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "token")
+	if err := os.WriteFile(path, []byte("  tok-1\n"), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	ts := &tokenSource{path: path}
+	got, err := ts.token()
+	if err != nil || got != "tok-1" {
+		t.Fatalf("token() = %q, %v; want tok-1", got, err)
+	}
+	// A rewrite within the cache window keeps the old value.
+	if err := os.WriteFile(path, []byte("tok-2"), 0o600); err != nil {
+		t.Fatalf("rewrite: %v", err)
+	}
+	if got, _ := ts.token(); got != "tok-1" {
+		t.Fatalf("cached token() = %q; want tok-1", got)
+	}
+	// Expiring the cache picks up the rotated token.
+	ts.exp = time.Now().Add(-time.Second)
+	if got, _ := ts.token(); got != "tok-2" {
+		t.Fatalf("refreshed token() = %q; want tok-2", got)
+	}
+}
+
+func TestBuildAPIProxyInjectsCredentials(t *testing.T) {
+	var gotAuth, gotPath string
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"kind":"NamespaceList"}`)
+	}))
+	defer upstream.Close()
+
+	dir := t.TempDir()
+	caPath := filepath.Join(dir, "ca.crt")
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: upstream.Certificate().Raw})
+	if err := os.WriteFile(caPath, caPEM, 0o600); err != nil {
+		t.Fatalf("write ca: %v", err)
+	}
+	tokenPath := filepath.Join(dir, "token")
+	if err := os.WriteFile(tokenPath, []byte("sa-token-xyz"), 0o600); err != nil {
+		t.Fatalf("write token: %v", err)
+	}
+
+	proxy, err := buildHTTPProxy(slog.New(slog.NewTextHandler(io.Discard, nil)),
+		transport.AgentProxyTarget{Mode: transport.AgentModeHTTP, Address: upstream.URL, TokenFile: tokenPath, CAFile: caPath})
+	if err != nil {
+		t.Fatalf("buildHTTPProxy: %v", err)
+	}
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://shellcn-agent.internal/api/v1/namespaces", nil)
+	proxy.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body = %s", rec.Code, rec.Body.String())
+	}
+	if gotAuth != "Bearer sa-token-xyz" {
+		t.Errorf("upstream Authorization = %q; want injected bearer token", gotAuth)
+	}
+	if gotPath != "/api/v1/namespaces" {
+		t.Errorf("upstream path = %q; want /api/v1/namespaces", gotPath)
+	}
+}
+
+func TestBuildHTTPProxyRequiresAddress(t *testing.T) {
+	if _, err := buildHTTPProxy(slog.New(slog.NewTextHandler(io.Discard, nil)),
+		transport.AgentProxyTarget{Mode: transport.AgentModeHTTP}); err == nil {
+		t.Fatal("buildHTTPProxy must require an upstream address")
+	}
+}
+
+func TestBuildHTTPProxyRejectsBadCA(t *testing.T) {
+	if _, err := buildHTTPProxy(slog.New(slog.NewTextHandler(io.Discard, nil)),
+		transport.AgentProxyTarget{Mode: transport.AgentModeHTTP, Address: "https://example.internal:443", CAFile: filepath.Join(t.TempDir(), "missing-ca")}); err == nil {
+		t.Fatal("buildHTTPProxy must fail when the declared CA file is unreadable (no insecure fallback)")
 	}
 }
 

@@ -215,23 +215,55 @@ func (r *Registry) Dialer(connectionID string) (DialFunc, bool) {
 	return reg.dial, ok
 }
 
-// agentNet routes L4 through an agent tunnel dialer.
+// agentL7Host is the sentinel authority an L7 (http_proxy) agent client targets.
+// The agent ignores it and proxies to its declared upstream; the gateway-side
+// transport dials the tunnel regardless of this value.
+const agentL7Host = "shellcn-agent.internal"
+
+// agentNet routes traffic through an agent tunnel dialer. For L4 modes
+// (tcp/unix) it exposes DialContext; for the L7 http_proxy mode it additionally
+// exposes a base URL + RoundTripper so fat HTTP clients (client-go) can reach an
+// upstream the gateway cannot dial, with credential injection done agent-side.
 type agentNet struct {
 	dial DialFunc
+	mode plugin.AgentMode
 }
 
 func (a *agentNet) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	return a.dial(ctx, network, addr)
 }
 
-// HTTP reports ok=false: this transport provides L4 only. An L7 reverse-proxy
-// agent supplies a base URL + RoundTripper for fat HTTP clients separately.
+// HTTP returns an L7 base URL + RoundTripper when the agent runs in http_proxy
+// mode; otherwise ok=false (the plugin uses DialContext for L4 modes).
+//
+// Security: the "http" scheme is logical only — the RoundTripper never opens a
+// real socket. Its DialContext opens a yamux stream over the agent's existing
+// dial-back tunnel, which is itself a CA-validated, mutually-authenticated wss
+// connection, so the request is encrypted on the wire. The agent then
+// re-originates it to the upstream over https with the target's own credentials
+// (a bearer token + private CA the target environment provides). Both real
+// network hops are TLS; an inner
+// TLS layer would be TLS-in-TLS with no security gain, so the inner hop stays
+// plain HTTP/1.1 inside the encrypted tunnel.
 func (a *agentNet) HTTP() (string, http.RoundTripper, bool) {
-	return "", nil, false
+	if a.mode != plugin.AgentHTTP {
+		return "", nil, false
+	}
+	rt := &http.Transport{
+		DialContext:           func(ctx context.Context, network, addr string) (net.Conn, error) { return a.dial(ctx, network, addr) },
+		ForceAttemptHTTP2:     false,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		ResponseHeaderTimeout: 0,
+	}
+	return "http://" + agentL7Host, rt, true
 }
 
 // Build returns the NetTransport for a connection based on its transport mode.
-func Build(conn models.Connection, reg TunnelRegistry) (plugin.NetTransport, error) {
+// agentMode is the plugin's declared agent proxy mode; it selects whether an
+// agent-transport connection exposes an L7 HTTP() endpoint (http_proxy) or only
+// L4 DialContext (tcp/unix). It is ignored for direct transport.
+func Build(conn models.Connection, reg TunnelRegistry, agentMode plugin.AgentMode) (plugin.NetTransport, error) {
 	switch conn.Transport {
 	case "", string(plugin.TransportDirect):
 		return NewDirectForConnection(conn), nil
@@ -243,7 +275,7 @@ func Build(conn models.Connection, reg TunnelRegistry) (plugin.NetTransport, err
 		if !ok {
 			return nil, fmt.Errorf("%w: connection %q", ErrAgentUnavailable, conn.ID)
 		}
-		return &agentNet{dial: dial}, nil
+		return &agentNet{dial: dial, mode: agentMode}, nil
 	default:
 		return nil, fmt.Errorf("transport: unknown mode %q", conn.Transport)
 	}

@@ -12,6 +12,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/ftps"
 	"github.com/charlesng/shellcn/plugins/influxdb"
 	"github.com/charlesng/shellcn/plugins/kafka"
+	"github.com/charlesng/shellcn/plugins/kubernetes"
 	"github.com/charlesng/shellcn/plugins/ldap"
 	"github.com/charlesng/shellcn/plugins/meilisearch"
 	"github.com/charlesng/shellcn/plugins/minio"
@@ -69,6 +70,7 @@ func all() []plugin.Plugin {
 		vnc.New(),
 		rdp.New(),
 		proxmox.New(),
+		kubernetes.New(),
 		prometheus.New(),
 		influxdb.New(),
 		postgresql.New(),

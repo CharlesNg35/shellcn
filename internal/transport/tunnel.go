@@ -15,10 +15,23 @@ type AgentHello struct {
 	Token string `json:"token"`
 }
 
-// AgentProxyTarget tells the agent what local endpoint to expose back.
+// Agent proxy mode wire values, mirroring plugin.AgentMode. They live here so
+// the standalone agent binary depends only on this package, not internal/plugin.
+const (
+	AgentModeTCP  = "tcp"
+	AgentModeUnix = "unix"
+	AgentModeHTTP = "http_proxy"
+)
+
+// AgentProxyTarget tells the agent what local endpoint to expose back. The L7
+// (http_proxy) fields are generic credential-injection knobs: a token file to
+// turn into a bearer header and a CA file to verify the upstream — no protocol
+// vocabulary, so the agent stays plugin-agnostic.
 type AgentProxyTarget struct {
-	Mode    string `json:"mode"`
-	Address string `json:"address"`
+	Mode      string `json:"mode"`
+	Address   string `json:"address"`
+	TokenFile string `json:"tokenFile,omitempty"`
+	CAFile    string `json:"caFile,omitempty"`
 }
 
 // AgentConnectResponse is the gateway's reply to AgentHello. On OK the tunnel
