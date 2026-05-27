@@ -48,30 +48,30 @@ func TestElasticsearchPluginIntegration(t *testing.T) {
 			"age":  map[string]any{"type": "integer"},
 		}},
 	})
-	call(t, ctx, routes["elasticsearch.index.create"], sess, nil, nil, createBody)
+	call(ctx, t, routes["elasticsearch.index.create"], sess, nil, nil, createBody)
 	defer callNoFail(context.Background(), routes["elasticsearch.index.delete"], sess, map[string]string{"index": index})
 
 	docBody, _ := json.Marshal(map[string]any{"id": "ada", "document": map[string]any{"name": "ada", "age": 37}})
-	call(t, ctx, routes["elasticsearch.document.create"], sess, map[string]string{"index": index}, nil, docBody)
-	call(t, ctx, routes["elasticsearch.index.refresh"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["elasticsearch.index.overview"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["elasticsearch.mapping.read"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["elasticsearch.settings.read"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["elasticsearch.aliases.list"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["elasticsearch.shards.list"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["elasticsearch.document.create"], sess, map[string]string{"index": index}, nil, docBody)
+	call(ctx, t, routes["elasticsearch.index.refresh"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["elasticsearch.index.overview"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["elasticsearch.mapping.read"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["elasticsearch.settings.read"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["elasticsearch.aliases.list"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["elasticsearch.shards.list"], sess, map[string]string{"index": index}, nil, nil)
 
-	docs := call(t, ctx, routes["elasticsearch.documents.list"], sess, map[string]string{"index": index}, url.Values{"limit": []string{"10"}}, nil)
+	docs := call(ctx, t, routes["elasticsearch.documents.list"], sess, map[string]string{"index": index}, url.Values{"limit": []string{"10"}}, nil)
 	items := pageItems(docs)
 	if len(items) != 1 || items[0]["_id"] != "ada" {
 		t.Fatalf("expected indexed document, got %#v", items)
 	}
-	read := call(t, ctx, routes["elasticsearch.document.read"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil).(map[string]any)
+	read := call(ctx, t, routes["elasticsearch.document.read"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil).(map[string]any)
 	if read["_id"] != "ada" {
 		t.Fatalf("unexpected document read: %#v", read)
 	}
 	updateBody, _ := json.Marshal(map[string]any{"content": `{"name":"ada","age":38}`})
-	call(t, ctx, routes["elasticsearch.document.update"], sess, map[string]string{"index": index, "id": "ada"}, nil, updateBody)
-	call(t, ctx, routes["elasticsearch.document.delete"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil)
+	call(ctx, t, routes["elasticsearch.document.update"], sess, map[string]string{"index": index, "id": "ada"}, nil, updateBody)
+	call(ctx, t, routes["elasticsearch.document.delete"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil)
 }
 
 func elasticsearchIntegrationConfig(ctx context.Context, t *testing.T) map[string]any {
@@ -185,7 +185,7 @@ func routeMap(routes []plugin.Route) map[string]plugin.Route {
 	return out
 }
 
-func call(t *testing.T, ctx context.Context, route plugin.Route, sess plugin.Session, params map[string]string, query url.Values, body []byte) any {
+func call(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, params map[string]string, query url.Values, body []byte) any {
 	t.Helper()
 	out, err := route.Handle(plugin.NewRequestContext(ctx, models.User{}, sess, params, query, body))
 	if err != nil {

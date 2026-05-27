@@ -44,30 +44,30 @@ func TestOpenSearchPluginIntegration(t *testing.T) {
 			"age":  map[string]any{"type": "integer"},
 		}},
 	})
-	call(t, ctx, routes["opensearch.index.create"], sess, nil, nil, createBody)
+	call(ctx, t, routes["opensearch.index.create"], sess, nil, nil, createBody)
 	defer callNoFail(context.Background(), routes["opensearch.index.delete"], sess, map[string]string{"index": index})
 
 	docBody, _ := json.Marshal(map[string]any{"id": "ada", "document": map[string]any{"name": "ada", "age": 37}})
-	call(t, ctx, routes["opensearch.document.create"], sess, map[string]string{"index": index}, nil, docBody)
-	call(t, ctx, routes["opensearch.index.refresh"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["opensearch.index.overview"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["opensearch.mapping.read"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["opensearch.settings.read"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["opensearch.aliases.list"], sess, map[string]string{"index": index}, nil, nil)
-	call(t, ctx, routes["opensearch.shards.list"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["opensearch.document.create"], sess, map[string]string{"index": index}, nil, docBody)
+	call(ctx, t, routes["opensearch.index.refresh"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["opensearch.index.overview"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["opensearch.mapping.read"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["opensearch.settings.read"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["opensearch.aliases.list"], sess, map[string]string{"index": index}, nil, nil)
+	call(ctx, t, routes["opensearch.shards.list"], sess, map[string]string{"index": index}, nil, nil)
 
-	docs := call(t, ctx, routes["opensearch.documents.list"], sess, map[string]string{"index": index}, url.Values{"limit": []string{"10"}}, nil)
+	docs := call(ctx, t, routes["opensearch.documents.list"], sess, map[string]string{"index": index}, url.Values{"limit": []string{"10"}}, nil)
 	items := pageItems(docs)
 	if len(items) != 1 || items[0]["_id"] != "ada" {
 		t.Fatalf("expected indexed document, got %#v", items)
 	}
-	read := call(t, ctx, routes["opensearch.document.read"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil).(map[string]any)
+	read := call(ctx, t, routes["opensearch.document.read"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil).(map[string]any)
 	if read["_id"] != "ada" {
 		t.Fatalf("unexpected document read: %#v", read)
 	}
 	updateBody, _ := json.Marshal(map[string]any{"content": `{"name":"ada","age":38}`})
-	call(t, ctx, routes["opensearch.document.update"], sess, map[string]string{"index": index, "id": "ada"}, nil, updateBody)
-	call(t, ctx, routes["opensearch.document.delete"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil)
+	call(ctx, t, routes["opensearch.document.update"], sess, map[string]string{"index": index, "id": "ada"}, nil, updateBody)
+	call(ctx, t, routes["opensearch.document.delete"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil)
 }
 
 func openSearchIntegrationConfig(ctx context.Context, t *testing.T) map[string]any {
@@ -127,7 +127,7 @@ func routeMap(routes []plugin.Route) map[string]plugin.Route {
 	return out
 }
 
-func call(t *testing.T, ctx context.Context, route plugin.Route, sess plugin.Session, params map[string]string, query url.Values, body []byte) any {
+func call(ctx context.Context, t *testing.T, route plugin.Route, sess plugin.Session, params map[string]string, query url.Values, body []byte) any {
 	t.Helper()
 	out, err := route.Handle(plugin.NewRequestContext(ctx, models.User{}, sess, params, query, body))
 	if err != nil {

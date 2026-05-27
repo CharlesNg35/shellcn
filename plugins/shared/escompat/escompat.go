@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -84,12 +83,6 @@ type row map[string]any
 type actionResult struct {
 	OK bool `json:"ok"`
 }
-
-type confirmationError struct {
-	message string
-}
-
-func (e confirmationError) Error() string { return e.message }
 
 func (p *Plugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
@@ -302,7 +295,7 @@ func verifyProduct(root map[string]any, product Product) error {
 	if product == ProductElasticsearch && (strings.Contains(tagline, "opensearch") || distribution == "opensearch") {
 		return fmt.Errorf("%w: endpoint is OpenSearch; use the opensearch plugin", plugin.ErrInvalidInput)
 	}
-	if product == ProductOpenSearch && !(strings.Contains(tagline, "opensearch") || distribution == "opensearch") {
+	if product == ProductOpenSearch && !strings.Contains(tagline, "opensearch") && distribution != "opensearch" {
 		return fmt.Errorf("%w: endpoint is Elasticsearch; use the elasticsearch plugin", plugin.ErrInvalidInput)
 	}
 	return nil
@@ -365,18 +358,6 @@ func pathDoc(index, id string) string {
 	return "/" + url.PathEscape(index) + "/_doc/" + url.PathEscape(id)
 }
 
-func parseJSONText(raw, field string) (map[string]any, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return map[string]any{}, nil
-	}
-	var out map[string]any
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return nil, fmt.Errorf("%w: %s must be valid JSON object", plugin.ErrInvalidInput, field)
-	}
-	return out, nil
-}
-
 func numericString(v any) int64 {
 	switch t := v.(type) {
 	case int64:
@@ -391,24 +372,6 @@ func numericString(v any) int64 {
 	default:
 		return 0
 	}
-}
-
-func stringDefault(value, fallback string) string {
-	if strings.TrimSpace(value) == "" {
-		return fallback
-	}
-	return value
-}
-
-func decodeBase64IfNeeded(value, encoding string) ([]byte, error) {
-	if encoding != "base64" {
-		return []byte(value), nil
-	}
-	data, err := base64.StdEncoding.DecodeString(value)
-	if err != nil {
-		return nil, fmt.Errorf("%w: content is not valid base64", plugin.ErrInvalidInput)
-	}
-	return data, nil
 }
 
 func isMissing(err error) bool {
