@@ -261,7 +261,13 @@ function onActionDone(action: Action): void {
     </header>
 
     <div class="min-h-0 flex-1">
-      <p v-if="loading" class="p-6 text-surface-400">Loading workspace…</p>
+      <div
+        v-if="loading"
+        class="flex h-full items-center justify-center p-6 text-sm text-surface-400"
+        role="status"
+      >
+        Loading workspace…
+      </div>
       <PanelError v-else-if="error" :message="error" retryable @retry="load" />
 
       <EnrollPanel

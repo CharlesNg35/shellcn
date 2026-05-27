@@ -151,7 +151,8 @@ func NewMultipartRequestContext(ctx context.Context, user models.User, sess Sess
 	}
 }
 
-// Param returns a resolved path parameter (filled from the route template).
+// Param returns a resolved renderer-supplied parameter. Route handlers use it
+// for required path placeholders and optional scoped context values.
 func (rc *RequestContext) Param(name string) string {
 	if rc.params == nil {
 		return ""

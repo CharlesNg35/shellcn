@@ -2,6 +2,11 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { Icon, ResourceRef, Row } from "../types/projection";
 
+// Cap on open workbench tabs. Opening past it auto-closes the oldest non-active
+// tab. Kept in sync with the tree workspace's KeepAlive window so every open tab
+// stays warm (no surprise reload when switching back).
+export const MAX_WORKBENCH_TABS = 12;
+
 // An open view in the sidebar-tree workspace: either a resource detail or a
 // resource-kind list. Multiple stay open as a closable tab strip.
 export interface OpenView {
@@ -59,11 +64,17 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   }
 
   // openView adds a view (or re-activates an already-open one) and makes it
-  // active — the basis of the multi-open workbench tab strip.
+  // active — the basis of the multi-open workbench tab strip. Past the cap, the
+  // oldest non-active tab is auto-closed.
   function openView(id: string, v: OpenView): void {
     const c = view(id);
     if (!c.views.some((x) => x.id === v.id)) c.views.push(v);
     c.activeViewId = v.id;
+    while (c.views.length > MAX_WORKBENCH_TABS) {
+      const idx = c.views.findIndex((x) => x.id !== c.activeViewId);
+      if (idx < 0) break;
+      c.views.splice(idx, 1);
+    }
   }
 
   function closeView(id: string, viewId: string): void {

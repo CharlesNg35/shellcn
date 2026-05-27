@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Button from "primevue/button";
-import { useWorkspaceStore } from "../../stores/workspace";
+import { useWorkspaceStore, MAX_WORKBENCH_TABS } from "../../stores/workspace";
 import ResourceTree from "./ResourceTree.vue";
 import DetailView from "../detail/DetailView.vue";
 import TablePanel from "../table/TablePanel.vue";
@@ -163,7 +163,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
       </div>
 
       <div class="min-h-0 flex-1 overflow-hidden">
-        <KeepAlive :max="10">
+        <KeepAlive :max="MAX_WORKBENCH_TABS">
           <DetailView
             v-if="
               activeView?.kind === 'detail' &&

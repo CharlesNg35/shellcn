@@ -77,13 +77,6 @@ const builtInCredentialKinds: CredentialKindInfo[] = [
     identityLabel: "Access key ID",
   },
   {
-    kind: "service_account_json",
-    label: "Service account JSON",
-    secretLabel: "JSON key",
-    secretMultiline: true,
-    identityLabel: "Service account",
-  },
-  {
     kind: "basic_auth",
     label: "Basic auth",
     secretLabel: "Password",

@@ -26,13 +26,12 @@ const (
 type CredentialKind string
 
 const (
-	CredentialTLSClientCert      CredentialKind = "tls_client_cert"
-	CredentialDBPassword         CredentialKind = "db_password"
-	CredentialAPIToken           CredentialKind = "api_token"
-	CredentialCloudAccessKey     CredentialKind = "cloud_access_key"
-	CredentialServiceAccountJSON CredentialKind = "service_account_json"
-	CredentialBasicAuth          CredentialKind = "basic_auth"
-	CredentialBearerToken        CredentialKind = "bearer_token"
+	CredentialTLSClientCert  CredentialKind = "tls_client_cert"
+	CredentialDBPassword     CredentialKind = "db_password"
+	CredentialAPIToken       CredentialKind = "api_token"
+	CredentialCloudAccessKey CredentialKind = "cloud_access_key"
+	CredentialBasicAuth      CredentialKind = "basic_auth"
+	CredentialBearerToken    CredentialKind = "bearer_token"
 )
 
 // Operator is the comparison used by a structured visibility Rule.

@@ -94,6 +94,25 @@ afterEach(() => {
 });
 
 describe("App shell", () => {
+  it("shows a branded loader while the session bootstrap is pending", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const auth = useAuthStore();
+    auth.ready = false;
+
+    const router = testRouter();
+    router.push("/");
+    await router.isReady();
+    const wrapper = mount(App, {
+      global: { plugins: [pinia, router] },
+    });
+
+    expect(wrapper.get('[role="status"]').attributes("aria-label")).toBe(
+      "Loading ShellCN",
+    );
+    expect(wrapper.findComponent({ name: "AppLogo" }).exists()).toBe(false);
+  });
+
   it("renders the shell and the loaded connections", async () => {
     const pinia = createPinia();
     setActivePinia(pinia);

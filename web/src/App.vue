@@ -1,21 +1,44 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { RouterView, useRouter } from "vue-router";
 import { useToast } from "primevue/usetoast";
 import ConfirmDialog from "primevue/confirmdialog";
 import { setApiErrorHandler, type ApiError } from "./api/client";
 import { useAuthStore } from "./stores/auth";
-import AppLogo from "./components/AppLogo.vue";
 import AppToast from "./components/AppToast.vue";
 import AppIcon from "./components/AppIcon.vue";
+import AppRouteLoader from "./components/AppRouteLoader.vue";
 
 const toast = useToast();
 const router = useRouter();
 const auth = useAuthStore();
+const routeLoading = ref(false);
+let routeLoadingTimer: ReturnType<typeof window.setTimeout> | undefined;
+let removeBeforeGuard: (() => void) | undefined;
+let removeAfterGuard: (() => void) | undefined;
+let removeErrorGuard: (() => void) | undefined;
+
+function stopRouteLoading(): void {
+  if (routeLoadingTimer) {
+    window.clearTimeout(routeLoadingTimer);
+    routeLoadingTimer = undefined;
+  }
+  routeLoading.value = false;
+}
 
 // 401 → re-login; 403/network/server errors → toast. 400/404/409 pass through
 // to the caller for inline handling so feedback isn't duplicated.
 onMounted(() => {
+  removeBeforeGuard = router.beforeEach((to, from) => {
+    if (to.fullPath === from.fullPath) return;
+    stopRouteLoading();
+    routeLoadingTimer = window.setTimeout(() => {
+      routeLoading.value = true;
+    }, 120);
+  });
+  removeAfterGuard = router.afterEach(stopRouteLoading);
+  removeErrorGuard = router.onError(stopRouteLoading);
+
   setApiErrorHandler((err: ApiError) => {
     if (err.status === 401 && err.authRequired) {
       if (router.currentRoute.value.name !== "login") {
@@ -37,26 +60,34 @@ onMounted(() => {
     }
   });
 });
-onUnmounted(() => setApiErrorHandler(null));
+onUnmounted(() => {
+  setApiErrorHandler(null);
+  removeBeforeGuard?.();
+  removeAfterGuard?.();
+  removeErrorGuard?.();
+  stopRouteLoading();
+});
 </script>
 
 <template>
   <!-- Session bootstrap gate: a branded loader covers the brief window between
        mount and the first route resolving (auth /me), so there's no blank flash
        or premature login flicker. Hands off seamlessly from the index.html splash. -->
-  <div
-    v-if="!auth.ready"
-    class="flex h-full flex-col items-center justify-center gap-4.5 bg-surface-50 dark:bg-surface-950"
-  >
-    <AppLogo :size="44" class="text-primary-600" />
-    <span
-      class="h-5.5 w-5.5 animate-spin rounded-full border-[2.5px] border-surface-200 border-t-primary-500 dark:border-surface-800 dark:border-t-primary-500"
-      role="status"
-      aria-label="Loading"
-    />
-  </div>
+  <AppRouteLoader v-if="!auth.ready" label="Loading ShellCN" :fixed="false" />
   <template v-else>
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <component :is="Component" />
+    </RouterView>
+    <Transition
+      enter-active-class="transition-opacity duration-150"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition-opacity duration-150"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <AppRouteLoader v-if="routeLoading" label="Loading view" />
+    </Transition>
   </template>
   <AppToast />
   <ConfirmDialog>

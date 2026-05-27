@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useStorage } from "@vueuse/core";
 import Button from "primevue/button";
@@ -34,6 +34,8 @@ const { confirmDanger } = useConfirmAction();
 const rootItems = ref<ConnectionTreeItem[]>([]);
 const dragging = ref(false);
 const treeRenderKey = ref(0);
+const scrollEl = ref<HTMLElement | null>(null);
+const listScrolled = ref(false);
 const expanded = useStorage<Record<string, boolean>>(
   "shellcn:connection-folders:expanded",
   {},
@@ -54,6 +56,12 @@ watch(
   () => [conns.connections, conns.folders, props.query] as const,
   rebuildLists,
   { immediate: true, deep: true },
+);
+
+watch(
+  () => [rootItems.value, conns.loaded, props.query] as const,
+  () => void nextTick(updateScrollShadow),
+  { deep: true },
 );
 
 watch(
@@ -281,6 +289,12 @@ function afterDragEnd(preference?: ConnectionTreeDropPreference): void {
   }, 0);
 }
 
+function updateScrollShadow(): void {
+  listScrolled.value = (scrollEl.value?.scrollTop ?? 0) > 2;
+}
+
+onMounted(updateScrollShadow);
+
 onUnmounted(() => {
   if (dragEndTimer) window.clearTimeout(dragEndTimer);
 });
@@ -317,49 +331,62 @@ function go(connection: ConnectionSummary): void {
       </div>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto py-1">
-      <ConnectionFolderBranch
-        :key="treeRenderKey"
-        v-model="rootItems"
-        :active-id="activeId"
-        :expanded="expanded"
-        :disabled="Boolean(query.trim())"
-        @toggle-folder="toggleFolder"
-        @menu-action="handleFolderMenu"
-        @drag-start="onDragStart"
-        @drag-add="onDragAdd"
-        @drag-end="afterDragEnd"
-        @open="go"
-      />
-
-      <div v-if="!conns.loaded" class="space-y-1.5 px-1 pt-1">
-        <div
-          v-for="n in 5"
-          :key="n"
-          class="h-9 animate-pulse rounded-md bg-surface-200/60 dark:bg-surface-800/60"
-        />
-      </div>
-      <p
-        v-else-if="emptyFiltered"
-        class="px-2 py-6 text-center text-sm text-surface-400"
-      >
-        No connections match "{{ query }}".
-      </p>
+    <div class="relative min-h-0 flex-1">
       <div
-        v-else-if="conns.loaded && !conns.connections.length"
-        class="flex flex-col items-center gap-1.5 px-4 py-10 text-center"
+        data-sidebar-scroll-shadow
+        class="pointer-events-none absolute inset-x-0 top-0 z-10 h-3 bg-linear-to-b from-surface-950/5 to-transparent transition-opacity duration-150 dark:from-black/20"
+        :class="listScrolled ? 'opacity-100' : 'opacity-0'"
+        aria-hidden="true"
+      />
+      <div
+        ref="scrollEl"
+        data-sidebar-scroll-region
+        class="h-full overflow-y-auto py-1"
+        @scroll="updateScrollShadow"
       >
-        <span
-          class="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-surface-100 text-surface-400 dark:bg-surface-800"
+        <ConnectionFolderBranch
+          :key="treeRenderKey"
+          v-model="rootItems"
+          :active-id="activeId"
+          :expanded="expanded"
+          :disabled="Boolean(query.trim())"
+          @toggle-folder="toggleFolder"
+          @menu-action="handleFolderMenu"
+          @drag-start="onDragStart"
+          @drag-add="onDragAdd"
+          @drag-end="afterDragEnd"
+          @open="go"
+        />
+
+        <div v-if="!conns.loaded" class="space-y-1.5 px-1 pt-1">
+          <div
+            v-for="n in 5"
+            :key="n"
+            class="h-9 animate-pulse rounded-md bg-surface-200/60 dark:bg-surface-800/60"
+          />
+        </div>
+        <p
+          v-else-if="emptyFiltered"
+          class="px-2 py-6 text-center text-sm text-surface-400"
         >
-          <AppIcon :icon="{ type: 'lucide', value: 'server' }" :size="18" />
-        </span>
-        <p class="text-sm font-medium text-surface-600 dark:text-surface-300">
-          No connections yet
+          No connections match "{{ query }}".
         </p>
-        <p class="text-xs text-surface-400">
-          Use the + above to add your first one.
-        </p>
+        <div
+          v-else-if="conns.loaded && !conns.connections.length"
+          class="flex flex-col items-center gap-1.5 px-4 py-10 text-center"
+        >
+          <span
+            class="mb-1 flex h-10 w-10 items-center justify-center rounded-full bg-surface-100 text-surface-400 dark:bg-surface-800"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'server' }" :size="18" />
+          </span>
+          <p class="text-sm font-medium text-surface-600 dark:text-surface-300">
+            No connections yet
+          </p>
+          <p class="text-xs text-surface-400">
+            Use the + above to add your first one.
+          </p>
+        </div>
       </div>
     </div>
 

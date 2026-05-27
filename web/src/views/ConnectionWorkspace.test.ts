@@ -97,6 +97,49 @@ afterEach(() => {
 });
 
 describe("ConnectionWorkspace", () => {
+  it("centers the workspace loading state", async () => {
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections")) {
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "docker",
+              protocol: "docker",
+              transport: "direct",
+            },
+          ],
+        };
+      }
+      if (url.endsWith("/api/plugins/docker")) return { body: projection };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          PanelHost: true,
+        },
+      },
+    });
+
+    const loading = wrapper.get('[role="status"]');
+    expect(loading.text()).toBe("Loading workspace…");
+    expect(loading.classes()).toEqual(
+      expect.arrayContaining([
+        "flex",
+        "h-full",
+        "items-center",
+        "justify-center",
+      ]),
+    );
+  });
+
   it("ignores selectable table refs that are not declared resources", async () => {
     const ws = useWorkspaceStore();
     ws.setConnected("c1", true);

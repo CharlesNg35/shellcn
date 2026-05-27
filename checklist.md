@@ -157,8 +157,11 @@ Generic, manifest-driven; no per-plugin frontend.
       - Generic **metrics panel** (`MetricsConfig` stats/gauges/series via PrimeVue
         `Chart`/chart.js, theme-aware, lazy-loaded) — renderer hardcodes no field
         names. Showcase: Proxmox node/VM/LXC.
-      - **List-opening nav** (`TreeNode.ResourceKind`) — a tree node opens a kind's
-        list view (vs. detail); additive to existing group/detail nav.
+      - **List-opening nav** (`TreeNode.ResourceKind` + optional `ListParams` to
+        scope, e.g. a namespace) — a tree node opens a kind's list view (vs. detail).
+      - **Multi-open workbench tabs** — the sidebar-tree workspace keeps several
+        open views (details + lists) as a closable tab strip with `KeepAlive`
+        (extracted into `TreeWorkspace.vue`), instead of one selection at a time.
       - **Bottom dock** (`Action.Open` view/dock/dialog + `Action.Panel`) — a
         resizable, tabbed, `KeepAlive` dock (`DockPanel.vue` + per-connection dock
         store) hosting terminals/logs/editors from actions, or a modal. Showcase:
@@ -218,7 +221,7 @@ Generic, manifest-driven; no per-plugin frontend.
 
 ## Phase 7 — M6 · Kubernetes (Lens/OpenLens-grade, manifest-driven)
 
-- [ ] 7.0 Workbench renderer extensions (**generic, cross-plugin**): bottom dock, dashboard-as-view, multiple open workbench tabs, metrics/stat panel, list-opening nav nodes, create-from-content — landed UI-first on fixtures, usable by every plugin
+- [x] 7.0 Workbench renderer extensions (**generic, cross-plugin**): bottom dock, dashboard-as-view, multiple open workbench tabs, metrics/stat panel, list-opening nav nodes (+ scoped params) — landed early & proven on Redis/Proxmox/Docker/DBs (see UX.11/UX.12). Only the optional create-resource template picker remains.
 - [ ] 7.1 Kubernetes session and L7 agent mode
 - [ ] 7.2 Workloads and core resource trees (categorized nav → live kind lists → details; CRDs)
 - [ ] 7.3 Pod logs, exec, and port-forward (opened in the dock)

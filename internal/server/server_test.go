@@ -412,8 +412,8 @@ func TestParamResolution(t *testing.T) {
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam", "op", nil); resp.Status != http.StatusBadRequest {
 		t.Fatalf("missing declared param: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam?p.name=x&p.extra=y", "op", nil); resp.Status != http.StatusBadRequest {
-		t.Fatalf("unknown declared param: want 400, got %d (%s)", resp.Status, resp.Body)
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam?p.name=x&p.extra=y", "op", nil); resp.Status != http.StatusOK {
+		t.Fatalf("scoped extra param: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 

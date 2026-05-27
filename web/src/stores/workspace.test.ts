@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
-import { useWorkspaceStore } from "./workspace";
+import { useWorkspaceStore, MAX_WORKBENCH_TABS } from "./workspace";
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -54,6 +54,17 @@ describe("workspace store", () => {
     ws.closeView("a", "detail:x2");
     expect(ws.activeView("a")).toBeUndefined();
     expect(ws.view("a").views).toHaveLength(0);
+  });
+
+  it("caps open views and auto-closes the oldest non-active tab", () => {
+    const ws = useWorkspaceStore();
+    for (let i = 0; i < MAX_WORKBENCH_TABS + 3; i++)
+      ws.openView("a", detail(`x${i}`));
+    const c = ws.view("a");
+    expect(c.views).toHaveLength(MAX_WORKBENCH_TABS);
+    // The newest view stays open and active; the oldest were evicted.
+    expect(ws.activeView("a")?.id).toBe(`detail:x${MAX_WORKBENCH_TABS + 2}`);
+    expect(c.views.some((v) => v.id === "detail:x0")).toBe(false);
   });
 
   it("keeps a list view with its scoping params", () => {

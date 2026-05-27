@@ -43,10 +43,6 @@ var builtInCredentialKindCatalog = []CredentialKindInfo{
 		IdentityLabel: "Access key ID",
 	},
 	{
-		Kind: CredentialServiceAccountJSON, Label: "Service account JSON", SecretLabel: "JSON key",
-		SecretMultiline: true, IdentityLabel: "Service account",
-	},
-	{
 		Kind: CredentialBasicAuth, Label: "Basic auth", SecretLabel: "Password",
 		IdentityLabel: "Username",
 	},
