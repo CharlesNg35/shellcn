@@ -4,6 +4,7 @@ package broker
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -90,6 +91,7 @@ func PageRows[T any](rc *plugin.RequestContext, rows []T) (plugin.Page[T], error
 	if err != nil {
 		return plugin.Page[T]{}, err
 	}
+	rows = filterRows(rows, req.Filter["q"])
 	start := 0
 	if req.Cursor != "" {
 		i, err := strconv.Atoi(req.Cursor)
@@ -111,6 +113,32 @@ func PageRows[T any](rc *plugin.RequestContext, rows []T) (plugin.Page[T], error
 	}
 	total := len(rows)
 	return plugin.Page[T]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
+}
+
+// filterRows keeps rows whose string fields contain q (case-insensitive),
+// backing the table's filter box. It applies to map-shaped rows (the generic
+// field maps the table renders); any other row shape passes through unfiltered.
+func filterRows[T any](rows []T, q string) []T {
+	q = strings.ToLower(strings.TrimSpace(q))
+	if q == "" || len(rows) == 0 || reflect.TypeOf(rows[0]).Kind() != reflect.Map {
+		return rows
+	}
+	out := make([]T, 0, len(rows))
+	for _, r := range rows {
+		if rowMatches(reflect.ValueOf(r), q) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func rowMatches(rv reflect.Value, q string) bool {
+	for iter := rv.MapRange(); iter.Next(); {
+		if s, ok := iter.Value().Interface().(string); ok && strings.Contains(strings.ToLower(s), q) {
+			return true
+		}
+	}
+	return false
 }
 
 func hasPort(addr string) bool {

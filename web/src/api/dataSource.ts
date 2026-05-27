@@ -65,12 +65,24 @@ function lookup(expr: string, ctx: ResolveContext): string | undefined {
   return undefined;
 }
 
+const LONE_TOKEN = /^\$\{([^}]+)\}$/;
+
 export function resolveParams(
   params: Record<string, string> | undefined,
   ctx: ResolveContext,
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, template] of Object.entries(params ?? {})) {
+    // A param that is a single token is sourced entirely from one value; if that
+    // value is absent the param is simply omitted, and the route handler applies
+    // its own default/validation. A token embedded in a larger string must
+    // resolve — a blank there would corrupt the value — so interpolate throws.
+    const lone = template.match(LONE_TOKEN);
+    if (lone) {
+      const value = lookup(lone[1].trim(), ctx);
+      if (value) out[key] = value;
+      continue;
+    }
     out[key] = TOKEN.test(template) ? interpolate(template, ctx) : template;
     TOKEN.lastIndex = 0;
   }
