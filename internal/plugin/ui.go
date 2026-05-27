@@ -176,6 +176,57 @@ func (c DashboardConfig) Map() map[string]any {
 	return out
 }
 
+// MetricStat is one KPI number card in the metrics panel.
+type MetricStat struct {
+	Key   string `json:"key"`
+	Label string `json:"label,omitempty"`
+	Unit  string `json:"unit,omitempty"`
+}
+
+// MetricGauge is one radial/doughnut gauge (current value vs Max; Max 0 = 100,
+// i.e. a percentage).
+type MetricGauge struct {
+	Key   string  `json:"key"`
+	Label string  `json:"label,omitempty"`
+	Unit  string  `json:"unit,omitempty"`
+	Max   float64 `json:"max,omitempty"`
+}
+
+// MetricSeries is one line in the metrics time-series chart.
+type MetricSeries struct {
+	Key   string `json:"key"`
+	Label string `json:"label,omitempty"`
+	Unit  string `json:"unit,omitempty"`
+}
+
+// MetricsConfig drives the generic metrics panel — KPI stat cards, doughnut
+// gauges, and a multi-series time-series — all fed by the JSON frames the
+// metrics stream emits (each keyed by the configured field keys). Plugin-
+// agnostic: the renderer knows no field names; a plugin declares what to show.
+type MetricsConfig struct {
+	Stats   []MetricStat   `json:"stats,omitempty"`
+	Gauges  []MetricGauge  `json:"gauges,omitempty"`
+	Series  []MetricSeries `json:"series,omitempty"`
+	History int            `json:"history,omitempty"`
+}
+
+func (c MetricsConfig) Map() map[string]any {
+	out := map[string]any{}
+	if len(c.Stats) > 0 {
+		out["stats"] = c.Stats
+	}
+	if len(c.Gauges) > 0 {
+		out["gauges"] = c.Gauges
+	}
+	if len(c.Series) > 0 {
+		out["series"] = c.Series
+	}
+	if c.History > 0 {
+		out["history"] = c.History
+	}
+	return out
+}
+
 type GraphLayout string
 
 const (
@@ -218,6 +269,10 @@ type KVConfig struct {
 	DeleteRouteID string `json:"deleteRouteId,omitempty"`
 	KeyParam      string `json:"keyParam,omitempty"`
 	Writable      bool   `json:"writable,omitempty"`
+	// ValueTypes are the value kinds a plugin's store supports (e.g. Redis
+	// string/hash/list/set/zset). The renderer offers them in the type picker;
+	// when empty it shows a plain value editor with no type concept.
+	ValueTypes []string `json:"valueTypes,omitempty"`
 }
 
 func (c KVConfig) Map() map[string]any {
@@ -239,6 +294,9 @@ func (c KVConfig) Map() map[string]any {
 	}
 	if c.Writable {
 		out["writable"] = c.Writable
+	}
+	if len(c.ValueTypes) > 0 {
+		out["valueTypes"] = c.ValueTypes
 	}
 	return out
 }

@@ -46,11 +46,11 @@ onUnmounted(() => setApiErrorHandler(null));
        or premature login flicker. Hands off seamlessly from the index.html splash. -->
   <div
     v-if="!auth.ready"
-    class="flex h-full flex-col items-center justify-center gap-[18px] bg-surface-50 dark:bg-surface-950"
+    class="flex h-full flex-col items-center justify-center gap-4.5 bg-surface-50 dark:bg-surface-950"
   >
     <AppLogo :size="44" class="text-primary-600" />
     <span
-      class="h-[22px] w-[22px] animate-spin rounded-full border-[2.5px] border-surface-200 border-t-primary-500 dark:border-surface-800 dark:border-t-primary-500"
+      class="h-5.5 w-5.5 animate-spin rounded-full border-[2.5px] border-surface-200 border-t-primary-500 dark:border-surface-800 dark:border-t-primary-500"
       role="status"
       aria-label="Loading"
     />

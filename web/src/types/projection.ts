@@ -272,6 +272,32 @@ export interface TracePanelConfig {
   serviceField?: string;
 }
 
+export interface MetricStat {
+  key: string;
+  label?: string;
+  unit?: string;
+}
+
+export interface MetricGauge {
+  key: string;
+  label?: string;
+  unit?: string;
+  max?: number;
+}
+
+export interface MetricSeries {
+  key: string;
+  label?: string;
+  unit?: string;
+}
+
+export interface MetricsPanelConfig {
+  stats?: MetricStat[];
+  gauges?: MetricGauge[];
+  series?: MetricSeries[];
+  history?: number;
+}
+
 export interface KVPanelConfig {
   createRouteId?: string;
   readRouteId?: string;
@@ -279,6 +305,7 @@ export interface KVPanelConfig {
   deleteRouteId?: string;
   keyParam?: string;
   writable?: boolean;
+  valueTypes?: string[];
 }
 
 export interface HTTPClientConfig {

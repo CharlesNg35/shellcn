@@ -238,6 +238,9 @@ const paginator = {
 
 export const primeVuePassthrough = {
   inputtext: { root: inputBase },
+  // Chart (chart.js) renders a canvas; the pass-through only sizes its wrapper —
+  // colors come from theme-aware chart options, not classes.
+  chart: { root: "relative h-full w-full" },
   textarea: { root: `${inputBase} min-h-20 font-mono` },
   inputnumber: { root: "w-full", pcInputText: { root: inputBase } },
   password: {

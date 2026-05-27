@@ -89,7 +89,6 @@ These plugins should prove the core architecture first.
 
 | Plugin       | Purpose               | Main Capabilities                                       |
 | ------------ | --------------------- | ------------------------------------------------------- |
-| `mariadb`    | MariaDB access        | schema browser, query editor, users, replication status |
 | `sqlite`     | SQLite database files | schema browser, query editor, table data                |
 | `neo4j`      | Graph database        | Cypher query, graph/table results                       |
 | `influxdb`   | Time-series database  | buckets/databases, query, measurements                  |

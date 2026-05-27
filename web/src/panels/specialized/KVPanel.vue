@@ -47,9 +47,10 @@ const createValue = ref("");
 const config = computed(() => props.config as KVPanelConfig | undefined);
 const keyParam = computed(() => config.value?.keyParam ?? "key");
 const writable = computed(() => config.value?.writable === true);
-const typeOptions = ["string", "hash", "list", "set", "zset", "json"].map(
-  (value) => ({ label: value, value }),
+const typeOptions = computed(() =>
+  (config.value?.valueTypes ?? []).map((value) => ({ label: value, value })),
 );
+const hasTypes = computed(() => typeOptions.value.length > 0);
 const editorLanguage = computed(() =>
   type.value === "json" ||
   editor.value.trim().startsWith("{") ||
@@ -316,7 +317,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         Select a key to inspect its value.
       </div>
       <div v-else class="flex min-h-0 flex-1 flex-col gap-3 p-4">
-        <div class="w-40">
+        <div v-if="hasTypes" class="w-40">
           <label class="mb-1 block text-xs text-surface-400">Type</label>
           <Select
             v-model="type"
@@ -353,7 +354,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
             autofocus
           />
         </div>
-        <div class="w-44">
+        <div v-if="hasTypes" class="w-44">
           <label class="mb-1 block text-xs text-surface-400">Type</label>
           <Select
             v-model="createType"

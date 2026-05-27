@@ -111,6 +111,21 @@ func TestDashboardConfigMapAndPanelValidate(t *testing.T) {
 	}
 }
 
+func TestMetricsConfigMap(t *testing.T) {
+	full := plugin.MetricsConfig{
+		Stats:   []plugin.MetricStat{{Key: "conns", Label: "Connections"}},
+		Gauges:  []plugin.MetricGauge{{Key: "cpu", Label: "CPU", Unit: "%", Max: 100}},
+		Series:  []plugin.MetricSeries{{Key: "cpu", Label: "CPU"}},
+		History: 120,
+	}.Map()
+	if full["stats"] == nil || full["gauges"] == nil || full["series"] == nil || full["history"] != 120 {
+		t.Fatalf("MetricsConfig.Map = %#v", full)
+	}
+	if len((plugin.MetricsConfig{}).Map()) != 0 {
+		t.Fatal("empty MetricsConfig should serialize to an empty map")
+	}
+}
+
 func TestValidateRejectsBadManifests(t *testing.T) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
