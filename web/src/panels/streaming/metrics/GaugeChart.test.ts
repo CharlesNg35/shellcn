@@ -2,7 +2,13 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import GaugeChart from "./GaugeChart.vue";
 
-function mountGauge(props: Record<string, unknown>) {
+function mountGauge(props: {
+  label: string;
+  value: number | null;
+  max?: number;
+  unit?: string;
+  colorIndex?: number;
+}) {
   return mount(GaugeChart, { props, global: { stubs: { Chart: true } } });
 }
 

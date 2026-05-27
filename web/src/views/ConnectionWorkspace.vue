@@ -16,10 +16,8 @@ import PanelHost from "../panels/core/PanelHost.vue";
 import EnrollPanel from "../panels/enroll/EnrollPanel.vue";
 import ConnectPanel from "../panels/connect/ConnectPanel.vue";
 import PanelError from "../panels/shared/PanelError.vue";
-import ResourceTree from "../panels/tree/ResourceTree.vue";
-import TablePanel from "../panels/table/TablePanel.vue";
 import Dialog from "primevue/dialog";
-import DetailView from "../panels/detail/DetailView.vue";
+import TreeWorkspace from "../panels/tree/TreeWorkspace.vue";
 import DashboardWorkspace from "../panels/dashboard/DashboardWorkspace.vue";
 import DockPanel from "../panels/dock/DockPanel.vue";
 import { useDockStore } from "../stores/dock";
@@ -30,8 +28,6 @@ import { recordingForStream } from "../composables/useRecordingControl";
 import type {
   Action,
   PluginProjection,
-  ResourceType,
-  Row,
   Tab as TabDef,
 } from "../types/projection";
 
@@ -171,39 +167,6 @@ onBeforeUnmount(() => {
   window.removeEventListener("pagehide", closeBackendSessionOnPageHide);
 });
 
-const resourceByKind = computed(() => {
-  const map = new Map<string, ResourceType>();
-  for (const r of projection.value?.resources ?? []) map.set(r.kind, r);
-  return map;
-});
-
-// In a sidebar tree, the selected group maps to a resource list table by shared
-// route id (group label/key need not equal the resource kind); the selected
-// node maps to that resource's detail view by kind.
-const groupResource = computed(() => {
-  const key = view.value.selectedGroup;
-  if (!key) return undefined;
-  const group = projection.value?.tree?.find((g) => g.key === key);
-  if (!group) return undefined;
-  if (group.resourceKind) return resourceByKind.value.get(group.resourceKind);
-  return (projection.value?.resources ?? []).find(
-    (r) => r.list.routeId === group.source.routeId,
-  );
-});
-
-// The list shown in the main area: a node-opened kind list takes precedence,
-// otherwise the selected top-level group's list.
-const activeList = computed(() => {
-  const kind = view.value.selectedListKind;
-  if (kind) return resourceByKind.value.get(kind);
-  return groupResource.value;
-});
-
-const detailResource = computed(() => {
-  const ref = view.value.selectedRef;
-  return ref ? resourceByKind.value.get(ref.kind) : undefined;
-});
-
 const activeTab = computed(() =>
   projection.value?.tabs?.find((t) => t.key === view.value.activeTab),
 );
@@ -221,23 +184,6 @@ function tabConfig(tab: TabDef): Record<string, unknown> {
   return rec ? { ...base, _recording: rec } : base;
 }
 
-function onSelectGroup(key: string): void {
-  ws.selectGroup(props.id, key);
-}
-function onSelectList(kind: string): void {
-  if (resourceByKind.value.has(kind)) ws.selectList(props.id, kind);
-}
-function isNavigableRow(row: Row): boolean {
-  return !row.ref || resourceByKind.value.has(row.ref.kind);
-}
-function onSelectNode(row: Row): void {
-  if (!isNavigableRow(row)) return;
-  ws.selectRow(props.id, row);
-}
-function onSelectRow(row: Row): void {
-  if (!isNavigableRow(row)) return;
-  ws.selectRow(props.id, row);
-}
 function onActionDone(action: Action): void {
   const tabKey = action.onSuccess?.selectTab;
   if (!tabKey || !projection.value?.tabs?.some((tab) => tab.key === tabKey)) {
@@ -375,54 +321,14 @@ function onActionDone(action: Action): void {
             @action-done="onActionDone"
           />
 
-          <!-- Hierarchical sidebar-tree layout -->
-          <div v-else class="flex h-full">
-            <div
-              class="w-64 shrink-0 border-r border-surface-200 dark:border-surface-800"
-            >
-              <ResourceTree
-                :connection-id="id"
-                :groups="projection.tree ?? []"
-                :selected-group="view.selectedGroup"
-                :selected-uid="view.selectedRef?.uid"
-                @select-group="onSelectGroup"
-                @select-node="onSelectNode"
-                @select-list="onSelectList"
-              />
-            </div>
-            <div class="min-w-0 flex-1 overflow-hidden">
-              <DetailView
-                v-if="view.selectedRow && detailResource"
-                :connection-id="id"
-                :detail="detailResource.detail"
-                :row="view.selectedRow"
-                :actions="projection.actions ?? []"
-                @action-done="onActionDone"
-                @select="onSelectRow"
-              />
-              <TablePanel
-                v-else-if="activeList"
-                :key="activeList.kind"
-                :connection-id="id"
-                :source="activeList.list"
-                :config="{
-                  columns: activeList.columns,
-                  watch: activeList.watch,
-                  actionIds: activeList.listActionIds ?? [],
-                  rowActionIds: activeList.rowActionIds ?? activeList.actionIds,
-                }"
-                :actions="projection.actions ?? []"
-                @select="onSelectRow"
-                @action-done="onActionDone"
-              />
-              <div
-                v-else
-                class="flex h-full items-center justify-center text-sm text-surface-400"
-              >
-                Select an item from the tree.
-              </div>
-            </div>
-          </div>
+          <!-- Hierarchical sidebar-tree layout (tree + workbench tabs). -->
+          <TreeWorkspace
+            v-else
+            :connection-id="id"
+            :tree="projection.tree ?? []"
+            :resources="projection.resources ?? []"
+            :actions="projection.actions ?? []"
+          />
         </div>
 
         <DockPanel v-if="dockState.items.length" :connection-id="id" />

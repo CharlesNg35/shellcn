@@ -22,6 +22,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/oracle"
 	"github.com/charlesng/shellcn/plugins/podman"
 	"github.com/charlesng/shellcn/plugins/postgresql"
+	"github.com/charlesng/shellcn/plugins/prometheus"
 	"github.com/charlesng/shellcn/plugins/proxmox"
 	"github.com/charlesng/shellcn/plugins/rabbitmq"
 	"github.com/charlesng/shellcn/plugins/rdp"
@@ -65,6 +66,7 @@ func all() []plugin.Plugin {
 		vnc.New(),
 		rdp.New(),
 		proxmox.New(),
+		prometheus.New(),
 		postgresql.New(),
 		mysql.New(),
 		redis.New(),

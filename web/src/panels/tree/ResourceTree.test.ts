@@ -40,8 +40,23 @@ describe("ResourceTree", () => {
       data: { resourceKind: "pod" },
     });
     await w.vm.$nextTick();
-    expect(w.emitted("select-list")?.[0]).toEqual(["pod"]);
+    expect(w.emitted("select-list")?.[0]).toEqual(["pod", undefined]);
     expect(w.emitted("select-node")).toBeUndefined();
+  });
+
+  it("passes scoping params on a list node (e.g. a namespace)", async () => {
+    const w = mountTree();
+    const dt = w.findComponent({ name: "Tree" });
+    dt.vm.$emit("node-select", {
+      key: "ns:prod:pods",
+      leaf: true,
+      data: { resourceKind: "pod", listParams: { namespace: "prod" } },
+    });
+    await w.vm.$nextTick();
+    expect(w.emitted("select-list")?.[0]).toEqual([
+      "pod",
+      { namespace: "prod" },
+    ]);
   });
 
   it("emits select-node for a leaf with a ref (detail)", async () => {

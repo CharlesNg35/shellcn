@@ -438,8 +438,9 @@ export interface TreeNode {
   childrenSource?: DataSource;
   badge?: Badge;
   // Opens the resource type's list view (like a top-level group) instead of a
-  // single-resource detail.
+  // single-resource detail; listParams scope that list (e.g. a namespace).
   resourceKind?: string;
+  listParams?: Record<string, string>;
 }
 
 export interface HeaderSpec {

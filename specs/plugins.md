@@ -92,7 +92,6 @@ These plugins should prove the core architecture first.
 | `sqlite`     | SQLite database files | schema browser, query editor, table data                |
 | `neo4j`      | Graph database        | Cypher query, graph/table results                       |
 | `influxdb`   | Time-series database  | buckets/databases, query, measurements                  |
-| `prometheus` | Metrics query target  | PromQL query, targets, alerts, rules                    |
 
 ## P2: Container And Orchestration Platforms
 
@@ -161,16 +160,26 @@ These plugins should prove the core architecture first.
 
 ## P2: Observability And Logging
 
-| Plugin            | Purpose                   | Main Capabilities                   |
-| ----------------- | ------------------------- | ----------------------------------- |
-| `grafana`         | Grafana                   | dashboards, datasources, alerts     |
-| `loki`            | Loki logs                 | log query, labels, streams          |
-| `tempo`           | Tempo traces              | trace search and detail             |
-| `jaeger`          | Jaeger traces             | trace search and detail             |
-| `victoriametrics` | VictoriaMetrics           | MetricsQL query, targets            |
-| `zabbix`          | Zabbix                    | hosts, items, triggers, events      |
-| `graylog`         | Graylog                   | streams, searches, alerts           |
-| `kibana`          | Kibana/Elastic dashboards | saved objects, dashboards, searches |
+Prometheus is implemented as a direct-only observability plugin. It keeps a
+Prometheus-specific schema: endpoint, none/basic/bearer/stored auth, TLS,
+request timeout, live metrics poll interval, page limit, and explicit admin /
+lifecycle toggles for servers started with `--web.enable-admin-api` and
+`--web.enable-lifecycle`. It exposes targets, active alerts, rules, labels,
+metric metadata, series, status documents, PromQL instant/range query, live
+overview metrics, TSDB snapshot, delete-series, clean-tombstones, and config
+reload routes through generic panels.
+
+| Plugin            | Purpose                   | Main Capabilities                                                         |
+| ----------------- | ------------------------- | ------------------------------------------------------------------------- |
+| `prometheus`      | Prometheus metrics        | PromQL query, targets, alerts, rules, labels, metadata, status, TSDB admin |
+| `grafana`         | Grafana                   | dashboards, datasources, alerts                                           |
+| `loki`            | Loki logs                 | log query, labels, streams                                                |
+| `tempo`           | Tempo traces              | trace search and detail                                                   |
+| `jaeger`          | Jaeger traces             | trace search and detail                                                   |
+| `victoriametrics` | VictoriaMetrics           | MetricsQL query, targets                                                  |
+| `zabbix`          | Zabbix                    | hosts, items, triggers, events                                            |
+| `graylog`         | Graylog                   | streams, searches, alerts                                                 |
+| `kibana`          | Kibana/Elastic dashboards | saved objects, dashboards, searches                                       |
 
 ## P2: Search Engines
 

@@ -100,7 +100,12 @@ describe("ConnectionWorkspace", () => {
   it("ignores selectable table refs that are not declared resources", async () => {
     const ws = useWorkspaceStore();
     ws.setConnected("c1", true);
-    ws.selectGroup("c1", "containers");
+    ws.openView("c1", {
+      id: "group:containers",
+      title: "Containers",
+      kind: "list",
+      groupKey: "containers",
+    });
 
     const wrapper = mount(ConnectionWorkspace, {
       props: { id: "c1" },
@@ -117,10 +122,11 @@ describe("ConnectionWorkspace", () => {
     await flushPromises();
 
     await wrapper.get('[data-test="unknown"]').trigger("click");
-    expect(ws.view("c1").selectedRef).toBeNull();
+    expect(ws.view("c1").views.some((v) => v.kind === "detail")).toBe(false);
 
     await wrapper.get('[data-test="known"]').trigger("click");
-    expect(ws.view("c1").selectedRef?.kind).toBe("container");
+    const opened = ws.view("c1").views.find((v) => v.kind === "detail");
+    expect(opened?.ref?.kind).toBe("container");
   });
 
   it("closes the backend plugin session when disconnecting", async () => {

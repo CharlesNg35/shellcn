@@ -20,6 +20,7 @@ interface NodeData {
   row?: Row;
   source?: DataSource;
   resourceKind?: string;
+  listParams?: Record<string, string>;
 }
 
 const props = defineProps<{
@@ -31,7 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "select-group": [key: string];
   "select-node": [row: Row];
-  "select-list": [kind: string];
+  "select-list": [kind: string, params?: Record<string, string>];
 }>();
 
 const nodes = ref<PVNode[]>([]);
@@ -50,6 +51,7 @@ function toNode(n: TreeNode): PVNode {
       row: { ...n, ref: n.ref },
       source: n.childrenSource,
       resourceKind: n.resourceKind,
+      listParams: n.listParams,
     },
   };
 }
@@ -96,7 +98,8 @@ async function onNodeSelect(node: PVNode): Promise<void> {
   const data = node.data as NodeData;
   selectionKeys.value = { [String(node.key)]: true };
   if (data.isGroup) emit("select-group", String(node.key));
-  else if (data.resourceKind) emit("select-list", data.resourceKind);
+  else if (data.resourceKind)
+    emit("select-list", data.resourceKind, data.listParams);
   else if (data.row) emit("select-node", data.row);
   if (!node.leaf) {
     expandedKeys.value = { ...expandedKeys.value, [String(node.key)]: true };

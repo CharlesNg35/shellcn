@@ -1,17 +1,31 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { ResourceRef, Row } from "../types/projection";
+import type { Icon, ResourceRef, Row } from "../types/projection";
+
+// An open view in the sidebar-tree workspace: either a resource detail or a
+// resource-kind list. Multiple stay open as a closable tab strip.
+export interface OpenView {
+  id: string;
+  title: string;
+  icon?: Icon;
+  kind: "detail" | "list";
+  // detail
+  ref?: ResourceRef;
+  row?: Row;
+  // list
+  resourceKind?: string;
+  groupKey?: string;
+  params?: Record<string, string>;
+}
 
 interface ConnectionView {
   activeTab?: string;
-  selectedGroup?: string;
-  selectedListKind?: string;
-  selectedRef?: ResourceRef | null;
-  selectedRow?: Row | null;
+  views: OpenView[];
+  activeViewId?: string;
 }
 
 // Per-connection workspace state is kept here (not in components) so that
-// remounting a panel or switching connections never loses the active selection.
+// remounting a panel or switching connections never loses open views.
 export const useWorkspaceStore = defineStore("workspace", () => {
   const activeConnectionId = ref<string | null>(null);
   const recent = ref<string[]>([]);
@@ -21,7 +35,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   const connected = ref<Record<string, boolean>>({});
 
   function view(id: string): ConnectionView {
-    if (!views.value[id]) views.value[id] = {};
+    if (!views.value[id]) views.value[id] = { views: [] };
     return views.value[id];
   }
 
@@ -44,43 +58,38 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     view(id).activeTab = tab;
   }
 
-  function selectGroup(id: string, group: string): void {
-    const v = view(id);
-    v.selectedGroup = group;
-    v.selectedListKind = undefined;
-    v.selectedRef = null;
-    v.selectedRow = null;
+  // openView adds a view (or re-activates an already-open one) and makes it
+  // active — the basis of the multi-open workbench tab strip.
+  function openView(id: string, v: OpenView): void {
+    const c = view(id);
+    if (!c.views.some((x) => x.id === v.id)) c.views.push(v);
+    c.activeViewId = v.id;
   }
 
-  // selectList opens a kind's list view from a tree node (vs. a top-level group).
-  function selectList(id: string, kind: string): void {
-    const v = view(id);
-    v.selectedListKind = kind;
-    v.selectedGroup = undefined;
-    v.selectedRef = null;
-    v.selectedRow = null;
+  function closeView(id: string, viewId: string): void {
+    const c = view(id);
+    const idx = c.views.findIndex((v) => v.id === viewId);
+    if (idx < 0) return;
+    c.views.splice(idx, 1);
+    if (c.activeViewId === viewId) {
+      c.activeViewId = c.views[Math.min(idx, c.views.length - 1)]?.id;
+    }
   }
 
-  function selectRef(id: string, ref: ResourceRef): void {
-    const v = view(id);
-    v.selectedRef = ref;
-    v.selectedRow = { ref };
-    v.selectedListKind = undefined;
+  function activateView(id: string, viewId: string): void {
+    const c = view(id);
+    if (c.views.some((v) => v.id === viewId)) c.activeViewId = viewId;
   }
 
-  function selectRow(id: string, row: Row): void {
-    const v = view(id);
-    v.selectedRow = row;
-    v.selectedRef = row.ref ?? null;
-    v.selectedListKind = undefined;
+  function activeView(id: string): OpenView | undefined {
+    const c = view(id);
+    return c.views.find((v) => v.id === c.activeViewId);
   }
 
-  function clearSelection(id: string): void {
-    const v = view(id);
-    v.selectedRef = null;
-    v.selectedRow = null;
-    v.selectedGroup = undefined;
-    v.selectedListKind = undefined;
+  function clearViews(id: string): void {
+    const c = view(id);
+    c.views = [];
+    c.activeViewId = undefined;
   }
 
   return {
@@ -93,10 +102,10 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     setConnected,
     isConnected,
     setActiveTab,
-    selectGroup,
-    selectList,
-    selectRef,
-    selectRow,
-    clearSelection,
+    openView,
+    closeView,
+    activateView,
+    activeView,
+    clearViews,
   };
 });

@@ -435,6 +435,9 @@ type TreeNode struct {
 	// top-level tree group) instead of a single-resource detail — for nesting a
 	// category that drills into a kind list.
 	ResourceKind string `json:"resourceKind,omitempty"`
+	// ListParams scope that list (merged into the resource's list DataSource
+	// params), e.g. a namespace — so a nested node opens a filtered list.
+	ListParams map[string]string `json:"listParams,omitempty"`
 }
 
 // OpenTarget selects where an action's result surfaces. The default (view) runs
