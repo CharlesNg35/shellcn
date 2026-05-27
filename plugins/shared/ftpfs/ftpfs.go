@@ -19,7 +19,6 @@ import (
 	ftplib "github.com/jlaffaye/ftp"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
 )
 
@@ -145,10 +144,10 @@ func normalizeOptions(cfg plugin.ConnectConfig, opts *Options) error {
 	switch opts.Auth {
 	case "password":
 	case "credential":
-		if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
+		if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
 			opts.Username = identity
 		}
-		if secret := cfg.String(service.CredentialSecret); secret != "" {
+		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
 			opts.Password = secret
 		}
 	case "anonymous":

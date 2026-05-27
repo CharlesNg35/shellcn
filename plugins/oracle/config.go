@@ -64,7 +64,7 @@ func configSchema() plugin.Schema {
 			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "oracle.example.internal"},
 			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Required: true, Default: defaultPort, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
 			{Key: "service", Label: "Service name", Type: plugin.FieldText, Required: true, Default: "FREEPDB1"},
-			{Key: "sid", Label: "SID", Type: plugin.FieldText, Help: "Optional legacy SID. When set it is used instead of service name."},
+			{Key: "sid", Label: "SID", Type: plugin.FieldText, Help: "Optional SID. When set it is used instead of service name."},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authPassword, Options: []plugin.Option{

@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/plugins/shared/broker"
 	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
 )
@@ -156,15 +155,15 @@ func parseAuth(cfg plugin.ConnectConfig) (authHeader, error) {
 		}
 		return authHeader{Header: "Authorization", Value: "Bearer " + token}, nil
 	case "credential":
-		switch kind := plugin.CredentialKind(cfg.String(service.CredentialKind)); kind {
+		switch kind := cfg.CredentialKindFor(plugin.CredentialField); kind {
 		case plugin.CredentialBasicAuth:
-			username := strings.TrimSpace(cfg.String(service.CredentialIdentity))
+			username := cfg.CredentialIdentityFor(plugin.CredentialField)
 			if username == "" {
 				return authHeader{}, fmt.Errorf("%w: Prometheus basic credentials require a username", plugin.ErrInvalidInput)
 			}
-			return basicAuth(username, cfg.String(service.CredentialSecret)), nil
+			return basicAuth(username, cfg.CredentialSecretFor(plugin.CredentialField)), nil
 		case plugin.CredentialBearerToken:
-			token := dbcred.ResolvedSecret(cfg, service.CredentialField)
+			token := dbcred.ResolvedSecret(cfg, plugin.CredentialField)
 			if token == "" {
 				return authHeader{}, fmt.Errorf("%w: Prometheus bearer credentials require a token", plugin.ErrInvalidInput)
 			}

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 )
 
 type AuthMaterial struct {
@@ -17,23 +16,23 @@ type AuthMaterial struct {
 }
 
 func ResolvedSecret(cfg plugin.ConnectConfig, field string) string {
-	return cfg.String(resolvedKey(field, "secret"))
+	return cfg.CredentialSecretFor(field)
 }
 
 func ResolvedIdentity(cfg plugin.ConnectConfig, field string) string {
-	return strings.TrimSpace(cfg.String(resolvedKey(field, "identity")))
+	return cfg.CredentialIdentityFor(field)
 }
 
 func ResolvedKind(cfg plugin.ConnectConfig, field string) plugin.CredentialKind {
-	return plugin.CredentialKind(strings.TrimSpace(cfg.String(resolvedKey(field, "kind"))))
+	return cfg.CredentialKindFor(field)
 }
 
 func ApplyPasswordCredential(cfg plugin.ConnectConfig, username, password string) AuthMaterial {
 	username = strings.TrimSpace(username)
-	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
+	if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
 		username = identity
 	}
-	if secret := cfg.String(service.CredentialSecret); secret != "" {
+	if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
 		password = secret
 	}
 	return AuthMaterial{Username: username, Password: password}
@@ -57,18 +56,4 @@ func ApplyClientCertificateCredential(cfg plugin.ConnectConfig, field, username,
 		ClientCertificate:       clientCertificate,
 		UsedTLSClientCredential: clientCertificate != "",
 	}
-}
-
-func resolvedKey(field, suffix string) string {
-	if field == service.CredentialField {
-		switch suffix {
-		case "secret":
-			return service.CredentialSecret
-		case "identity":
-			return service.CredentialIdentity
-		case "kind":
-			return service.CredentialKind
-		}
-	}
-	return "_" + field + "_" + suffix
 }

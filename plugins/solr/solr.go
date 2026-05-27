@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/plugins/shared/broker"
 	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng35/shellcn/plugins/shared/searchrest"
@@ -156,17 +155,17 @@ func parseAuth(cfg plugin.ConnectConfig) (searchrest.Auth, error) {
 		}
 		return searchrest.Auth{Header: "Authorization", Value: "Bearer " + token}, nil
 	case "credential":
-		kind := plugin.CredentialKind(cfg.String(service.CredentialKind))
+		kind := cfg.CredentialKindFor(plugin.CredentialField)
 		switch kind {
 		case plugin.CredentialBasicAuth:
-			username := strings.TrimSpace(cfg.String(service.CredentialIdentity))
-			password := cfg.String(service.CredentialSecret)
+			username := cfg.CredentialIdentityFor(plugin.CredentialField)
+			password := cfg.CredentialSecretFor(plugin.CredentialField)
 			if username == "" {
 				return searchrest.Auth{}, fmt.Errorf("%w: Solr basic credentials require a username", plugin.ErrInvalidInput)
 			}
 			return basicAuth(username, password), nil
 		case plugin.CredentialBearerToken:
-			token := dbcred.ResolvedSecret(cfg, service.CredentialField)
+			token := dbcred.ResolvedSecret(cfg, plugin.CredentialField)
 			if token == "" {
 				return searchrest.Auth{}, fmt.Errorf("%w: Solr bearer credentials require a token", plugin.ErrInvalidInput)
 			}

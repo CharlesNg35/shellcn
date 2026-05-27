@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/plugins/shared/broker"
 	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
@@ -168,12 +167,11 @@ func ParseOptions(cfg plugin.ConnectConfig, provider Provider) (Options, error) 
 	case "none":
 	case "basic", "credential":
 		if auth == "credential" {
-			kind := cfg.String(service.CredentialKind)
-			switch plugin.CredentialKind(kind) {
+			switch cfg.CredentialKindFor(plugin.CredentialField) {
 			case plugin.CredentialAPIToken:
-				opts.Authorization = "ApiKey " + dbcred.ResolvedSecret(cfg, service.CredentialField)
+				opts.Authorization = "ApiKey " + dbcred.ResolvedSecret(cfg, plugin.CredentialField)
 			case plugin.CredentialBearerToken:
-				opts.Authorization = "Bearer " + dbcred.ResolvedSecret(cfg, service.CredentialField)
+				opts.Authorization = "Bearer " + dbcred.ResolvedSecret(cfg, plugin.CredentialField)
 			default:
 				material := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
 				opts.Username, opts.Password = material.Username, material.Password

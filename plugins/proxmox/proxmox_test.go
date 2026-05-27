@@ -10,7 +10,6 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 )
 
 func TestManifestValidates(t *testing.T) {
@@ -66,7 +65,7 @@ func TestParseConnectOptions(t *testing.T) {
 			name: "credential",
 			cfg: map[string]any{
 				"host": "pve", "auth": "credential",
-				service.CredentialIdentity: "root@pam!stored", service.CredentialSecret: "secret",
+				plugin.CredentialIdentity: "root@pam!stored", plugin.CredentialSecret: "secret",
 			},
 			check: func(o connectOptions) bool { return o.Method == authToken && o.TokenID == "root@pam!stored" },
 		},

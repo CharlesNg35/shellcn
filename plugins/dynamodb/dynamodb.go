@@ -16,7 +16,6 @@ import (
 	awsdynamodb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/plugins/shared/broker"
 	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
@@ -173,13 +172,7 @@ func parseOptions(cfg plugin.ConnectConfig) (Options, error) {
 			return Options{}, fmt.Errorf("%w: DynamoDB stored credentials must be cloud access keys", plugin.ErrInvalidInput)
 		}
 		opts.AccessKeyID = dbcred.ResolvedIdentity(cfg, credentialField)
-		if opts.AccessKeyID == "" {
-			opts.AccessKeyID = strings.TrimSpace(cfg.String(service.CredentialIdentity))
-		}
 		opts.SecretKey = dbcred.ResolvedSecret(cfg, credentialField)
-		if opts.SecretKey == "" {
-			opts.SecretKey = cfg.String(service.CredentialSecret)
-		}
 		opts.SessionToken = cfg.String("session_token")
 	case "default_chain":
 	default:

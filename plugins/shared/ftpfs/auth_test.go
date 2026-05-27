@@ -5,14 +5,13 @@ import (
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 )
 
 func TestNormalizeOptionsValidatesAuthFields(t *testing.T) {
 	for name, cfg := range map[string]map[string]any{
 		"password missing password": {"host": "ftp.example.com", "auth": "password", "username": "alice"},
 		"credential missing secret": {
-			"host": "ftp.example.com", "auth": "credential", service.CredentialIdentity: "alice",
+			"host": "ftp.example.com", "auth": "credential", plugin.CredentialIdentity: "alice",
 		},
 		"unsupported auth": {"host": "ftp.example.com", "auth": "token", "username": "alice", "password": "pw"},
 	} {
@@ -38,7 +37,7 @@ func TestNormalizeOptionsValidatesAuthFields(t *testing.T) {
 	t.Run("credential", func(t *testing.T) {
 		cfg := plugin.ConnectConfig{Config: map[string]any{
 			"host": "ftp.example.com", "auth": "credential",
-			service.CredentialIdentity: "alice", service.CredentialSecret: "pw",
+			plugin.CredentialIdentity: "alice", plugin.CredentialSecret: "pw",
 		}}
 		var opts Options
 		if err := normalizeOptions(cfg, &opts); err != nil {

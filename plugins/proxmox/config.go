@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 )
 
 const defaultPort = 8006
@@ -98,8 +97,8 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		opts.Password = cfg.String("password")
 	case "credential":
 		opts.Method = authToken
-		opts.TokenID = strings.TrimSpace(cfg.String(service.CredentialIdentity))
-		opts.TokenSecret = cfg.String(service.CredentialSecret)
+		opts.TokenID = cfg.CredentialIdentityFor(plugin.CredentialField)
+		opts.TokenSecret = cfg.CredentialSecretFor(plugin.CredentialField)
 	default:
 		return connectOptions{}, fmt.Errorf("%w: unsupported authentication method", plugin.ErrInvalidInput)
 	}

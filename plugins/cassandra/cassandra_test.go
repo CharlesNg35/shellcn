@@ -9,7 +9,6 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
@@ -48,12 +47,12 @@ func TestParseOptionsDefaultsToNoAuth(t *testing.T) {
 
 func TestParseOptionsUsesPasswordCredentialAndTLSCredential(t *testing.T) {
 	opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
-		"hosts":                    "db1, db2",
-		"auth":                     authCredential,
-		service.CredentialIdentity: "cassandra",
-		service.CredentialSecret:   "secret",
-		"tls_mode":                 "require",
-		"_client_cert_id_secret":   "pem-material",
+		"hosts":                   "db1, db2",
+		"auth":                    authCredential,
+		plugin.CredentialIdentity: "cassandra",
+		plugin.CredentialSecret:   "secret",
+		"tls_mode":                "require",
+		"_client_cert_id_secret":  "pem-material",
 	}})
 	if err != nil {
 		t.Fatalf("parse options: %v", err)

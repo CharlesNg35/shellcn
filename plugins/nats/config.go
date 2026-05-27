@@ -12,7 +12,6 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/plugins/shared/broker"
 	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
@@ -96,8 +95,8 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	case "token":
 		opts.Token = cfg.String("token")
 	case "credential":
-		if cfg.String(service.CredentialKind) == string(plugin.CredentialBearerToken) {
-			opts.Token = dbcred.ResolvedSecret(cfg, service.CredentialField)
+		if cfg.CredentialKindFor(plugin.CredentialField) == plugin.CredentialBearerToken {
+			opts.Token = dbcred.ResolvedSecret(cfg, plugin.CredentialField)
 		} else {
 			material := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
 			opts.Username, opts.Password = material.Username, material.Password

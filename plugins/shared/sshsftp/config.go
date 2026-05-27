@@ -12,7 +12,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 )
 
 const (
@@ -89,13 +88,13 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if opts.User == "" {
 		return connectOptions{}, fmt.Errorf("%w: user is required", plugin.ErrInvalidInput)
 	}
-	if secret := cfg.String(service.CredentialSecret); secret != "" {
+	if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
 		if opts.Auth == "credential" {
 			opts.Password = secret
 			opts.PrivateKey = secret
 		}
 	}
-	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); opts.Auth == "credential" && identity != "" {
+	if identity := cfg.CredentialIdentityFor(plugin.CredentialField); opts.Auth == "credential" && identity != "" {
 		opts.User = identity
 	}
 	return opts, nil

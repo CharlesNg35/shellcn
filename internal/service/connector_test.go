@@ -74,13 +74,13 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build config: %v", err)
 	}
-	if got := cfg.Config["_api_credential_secret"]; got != "secret-token" {
+	if got := cfg.Config[plugin.CredentialSecretKey("api_credential")]; got != "secret-token" {
 		t.Fatalf("resolved credential secret = %#v, want secret-token", got)
 	}
-	if got := cfg.Config["_api_credential_identity"]; got != "svc-api" {
+	if got := cfg.Config[plugin.CredentialIdentityKey("api_credential")]; got != "svc-api" {
 		t.Fatalf("resolved credential identity = %#v, want svc-api", got)
 	}
-	if got := cfg.Config["_api_credential_kind"]; got != "api_token" {
+	if got := cfg.Config[plugin.CredentialResolvedKindKey("api_credential")]; got != "api_token" {
 		t.Fatalf("resolved credential kind = %#v, want api_token", got)
 	}
 	if got := cfg.Config["api_credential"]; got != cred.ID {
@@ -121,7 +121,7 @@ func TestConnectorResolvesSharedConnectionCredentialAsConnectionOwner(t *testing
 	if err != nil {
 		t.Fatalf("shared connection should resolve owner credential: %v", err)
 	}
-	if got := cfg.Config["_api_credential_secret"]; got != "owner-secret" {
+	if got := cfg.Config[plugin.CredentialSecretKey("api_credential")]; got != "owner-secret" {
 		t.Fatalf("resolved credential secret = %#v, want owner-secret", got)
 	}
 }

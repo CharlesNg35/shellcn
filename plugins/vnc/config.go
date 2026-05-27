@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 )
 
 const defaultPort = 5900
@@ -68,7 +67,7 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 	if opts.Port < 1 || opts.Port > 65535 {
 		return connectOptions{}, fmt.Errorf("%w: port must be between 1 and 65535", plugin.ErrInvalidInput)
 	}
-	if secret := cfg.String(service.CredentialSecret); secret != "" && auth == "credential" {
+	if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" && auth == "credential" {
 		opts.Password = secret
 	}
 	if auth == "none" {

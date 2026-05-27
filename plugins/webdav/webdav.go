@@ -15,7 +15,6 @@ import (
 	"github.com/studio-b12/gowebdav"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
-	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
 )
 
@@ -129,10 +128,10 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	switch opts.Auth {
 	case "password":
 	case "credential":
-		if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
+		if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
 			opts.Username = identity
 		}
-		if secret := cfg.String(service.CredentialSecret); secret != "" {
+		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
 			opts.Password = secret
 		}
 	case "none":
