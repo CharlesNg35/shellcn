@@ -1,4 +1,4 @@
-.PHONY: help install build build-go build-web ensure-web-dist test test-web test-e2e test-cover lint lint-go lint-web fmt fmt-go fmt-web tidy run dev dev-web dev-api dev-server clean tools
+.PHONY: help install build build-go build-web ensure-web-dist test test-web test-e2e test-cover lint lint-go lint-web fmt format fmt-go fmt-web tidy run dev dev-web dev-api dev-server clean tools
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
@@ -16,6 +16,7 @@ help:
 	@echo "  test        Run frontend + Go tests"
 	@echo "  lint        Lint frontend + Go"
 	@echo "  fmt         Format frontend + Go"
+	@echo "  format      Alias for fmt"
 	@echo "  dev         Run API + web dev servers concurrently"
 	@echo "  dev-api     Run the Go API (--dev) with live reload"
 	@echo "  dev-web     Run the Vite dev server"
@@ -70,6 +71,8 @@ lint-web:
 	@cd $(WEB_DIR) && pnpm lint
 
 fmt: fmt-web fmt-go
+
+format: fmt
 
 fmt-go:
 	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint fmt $(PKG); else gofmt -w cmd internal plugins; fi
