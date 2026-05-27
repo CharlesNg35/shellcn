@@ -120,6 +120,22 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		t.Fatal("update with a non-primary-key key must be rejected")
 	}
 
+	// A foreign-key column's cells carry _links to the referenced table.
+	if _, err := pool.Exec(ctx, `CREATE TABLE public.shellcn_orders (id bigserial PRIMARY KEY, person_id bigint REFERENCES public.shellcn_people(id))`); err != nil {
+		t.Fatalf("create child table: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO public.shellcn_orders (person_id) VALUES (1)`); err != nil {
+		t.Fatalf("seed child row: %v", err)
+	}
+	orderRows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_orders"}, nil, nil))
+	if err != nil {
+		t.Fatalf("child table rows: %v", err)
+	}
+	links, ok := orderRows.(plugin.Page[row]).Items[0]["_links"].(map[string]plugin.ResourceRef)
+	if !ok || links["person_id"].Name != "shellcn_people" {
+		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
+	}
+
 	// Cover the table structure + catalog routes the UI drives.
 	structRoutes := map[string]func(*plugin.RequestContext) (any, error){
 		"columns": tableColumnsRoute, "indexes": tableIndexes,

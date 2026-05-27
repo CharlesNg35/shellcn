@@ -604,12 +604,48 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	attachRowKeys(rows, pk, s.opts.RedactPatterns)
+	fks, err := foreignKeys(rc.Ctx, s, owner, name)
+	if err != nil {
+		return nil, err
+	}
+	attachForeignKeys(rows, fks)
 	redactRows(rows, s.opts.RedactPatterns)
 	next := ""
 	if offset+len(rows) < total {
 		next = strconv.Itoa(offset + len(rows))
 	}
 	return plugin.Page[row]{Items: rows, NextCursor: next, Total: &total}, nil
+}
+
+// foreignKeys maps each FK column (real uppercase name, matching the grid's
+// columns) to the referenced table's ref, attached under the generic "_links"
+// field the grid renders as links.
+func foreignKeys(ctx context.Context, s *Session, owner, table string) (map[string]plugin.ResourceRef, error) {
+	rows, err := queryRows(ctx, s, `
+SELECT cc.column_name AS col, rc.owner AS ref_owner, rc.table_name AS ref_table
+FROM all_constraints c
+JOIN all_cons_columns cc ON cc.owner = c.owner AND cc.constraint_name = c.constraint_name
+JOIN all_constraints rc ON rc.owner = c.r_owner AND rc.constraint_name = c.r_constraint_name
+WHERE c.constraint_type = 'R' AND c.owner = :1 AND c.table_name = :2`, []any{owner, table})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]plugin.ResourceRef{}
+	for _, r := range rows {
+		normalizeRowKeys(r)
+		col, refOwner, refTable := fmt.Sprint(r["col"]), fmt.Sprint(r["ref_owner"]), fmt.Sprint(r["ref_table"])
+		out[col] = plugin.ResourceRef{Kind: "table", Namespace: refOwner, Name: qualified(refOwner, refTable), UID: objectID(refOwner, refTable)}
+	}
+	return out, nil
+}
+
+func attachForeignKeys(rows []row, fks map[string]plugin.ResourceRef) {
+	if len(fks) == 0 {
+		return
+	}
+	for _, r := range rows {
+		r["_links"] = fks
+	}
 }
 
 func tableColumnsRoute(rc *plugin.RequestContext) (any, error) {

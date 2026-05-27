@@ -167,6 +167,21 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = ? AND table_name = 'shellcn_people' AND column_name = 'access_token'`, database).Scan(&cols); err != nil || cols != 0 {
 		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
 	}
+
+	// Foreign-key cells carry generic _links to the referenced table.
+	if _, err := s.db.ExecContext(ctx, `CREATE TABLE shellcn_orders (id bigint unsigned AUTO_INCREMENT PRIMARY KEY, person_id bigint unsigned, FOREIGN KEY (person_id) REFERENCES shellcn_people(id))`); err != nil {
+		t.Fatalf("create child table: %v", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO shellcn_orders (person_id) VALUES (1)`); err != nil {
+		t.Fatalf("seed child row: %v", err)
+	}
+	orderRows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": database, "table": "shellcn_orders"}, nil, nil))
+	if err != nil {
+		t.Fatalf("child table rows: %v", err)
+	}
+	if links, ok := orderRows.(plugin.Page[row]).Items[0]["_links"].(map[string]plugin.ResourceRef); !ok || links["person_id"].Name != "shellcn_people" {
+		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
+	}
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {

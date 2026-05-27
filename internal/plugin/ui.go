@@ -61,8 +61,8 @@ type Column struct {
 	Type     ColumnType `json:"type,omitempty"`
 	Width    string     `json:"width,omitempty"`
 	// ReadOnly keeps a column non-editable even when its table is Editable
-	// (generated/identity/computed columns). Nullable lets the inline editor
-	// clear a cell to NULL rather than an empty string.
+	// (e.g. server-managed values). Nullable lets the inline editor clear a
+	// cell to an empty/null value rather than an empty string.
 	ReadOnly bool `json:"readOnly,omitempty"`
 	Nullable bool `json:"nullable,omitempty"`
 }
@@ -87,6 +87,11 @@ type TableConfig struct {
 	Update    *DataSource `json:"update,omitempty"`
 	Delete    *DataSource `json:"delete,omitempty"`
 	EmptyText string      `json:"emptyText,omitempty"`
+
+	// HiddenColumns lists row field keys to omit when the grid derives its
+	// columns from the data (no declared Columns). Lets a plugin keep helper
+	// fields out of the view without the renderer hard-coding any field names.
+	HiddenColumns []string `json:"hiddenColumns,omitempty"`
 
 	// Exportable opts the table into the generic CSV/JSON export of loaded rows.
 	// Off by default so a plugin must deliberately allow data to leave the grid.
@@ -124,6 +129,9 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if c.EmptyText != "" {
 		out["emptyText"] = c.EmptyText
+	}
+	if len(c.HiddenColumns) > 0 {
+		out["hiddenColumns"] = c.HiddenColumns
 	}
 	if c.Exportable {
 		out["exportable"] = true

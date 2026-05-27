@@ -147,6 +147,21 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'people' AND COLUMN_NAME = 'access_token'`).Scan(&cols); err != nil || cols != 0 {
 		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
 	}
+
+	// Foreign-key cells carry generic _links to the referenced table.
+	if _, err := s.db.ExecContext(ctx, `CREATE TABLE [shellcn].[dbo].[orders] (id bigint IDENTITY(1,1) PRIMARY KEY, person_id bigint REFERENCES [shellcn].[dbo].[people](id))`); err != nil {
+		t.Fatalf("create child table: %v", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO [shellcn].[dbo].[orders] (person_id) VALUES (1)`); err != nil {
+		t.Fatalf("seed child row: %v", err)
+	}
+	orderRows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": objectID("shellcn", "dbo", "orders")}, nil, nil))
+	if err != nil {
+		t.Fatalf("child table rows: %v", err)
+	}
+	if links, ok := orderRows.(plugin.Page[row]).Items[0]["_links"].(map[string]plugin.ResourceRef); !ok || links["person_id"].UID != objectID("shellcn", "dbo", "people") {
+		t.Fatalf("expected _links[person_id] -> people, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
+	}
 }
 
 func hasBranch(tree any, label string) bool {

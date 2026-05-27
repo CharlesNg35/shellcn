@@ -24,6 +24,7 @@ import type {
   Column as ColumnSpec,
   DataSource,
   ResourceEvent,
+  ResourceRef,
   Row,
   TablePanelConfig,
 } from "../../types/projection";
@@ -45,7 +46,9 @@ const emit = defineEmits<{
 const toast = useToast();
 const { confirmDanger } = useConfirmAction();
 
-const INTERNAL = new Set([
+// Framework-reserved row keys the grid never renders as data columns. Plugins
+// hide their own fields declaratively via config.hiddenColumns instead.
+const RESERVED = new Set([
   "key",
   "label",
   "leaf",
@@ -53,6 +56,7 @@ const INTERNAL = new Set([
   "childrenSource",
   "badge",
   "_key",
+  "_links",
 ]);
 
 const rows = ref<Row[]>([]);
@@ -172,7 +176,7 @@ async function onCellEditComplete(
     toast.add({
       severity: "warn",
       summary: "Read-only row",
-      detail: "This table has no primary key, so rows cannot be edited.",
+      detail: "This row has no key, so it cannot be edited.",
       life: 5000,
     });
     return;
@@ -225,9 +229,7 @@ const inserting = ref(false);
 
 function openInsert(): void {
   insertDraft.value = {};
-  for (const col of columns.value) {
-    if (!INTERNAL.has(col.key)) insertDraft.value[col.key] = "";
-  }
+  for (const col of columns.value) insertDraft.value[col.key] = "";
   showInsert.value = true;
 }
 
@@ -258,14 +260,31 @@ async function submitInsert(): Promise<void> {
 
 // -----------------------------------------------------------------------
 
+const hidden = computed(() => {
+  const set = new Set(RESERVED);
+  for (const key of tableConfig.value?.hiddenColumns ?? []) set.add(key);
+  return set;
+});
+
 const columns = computed<ColumnSpec[]>(() => {
   if (declaredColumns.value?.length) return declaredColumns.value;
   const sample = rows.value[0];
   if (!sample) return [];
   return Object.keys(sample)
-    .filter((k) => !INTERNAL.has(k))
+    .filter((k) => !hidden.value.has(k))
     .map((key) => ({ key, label: key }));
 });
+
+// Linked cells: a row's `_links` map (column -> related resource ref) makes
+// those cells navigation links that open the related resource. Generic — the
+// renderer has no notion of what the link means to the plugin.
+function linkRef(row: Row, col: ColumnSpec): ResourceRef | null {
+  const ref = row._links?.[col.key];
+  return ref && row[col.key] != null && row[col.key] !== "" ? ref : null;
+}
+function openLink(ref: ResourceRef): void {
+  emit("select", { ref } as Row);
+}
 
 function display(row: Row, col: ColumnSpec): string {
   const v = row[col.key];
@@ -511,8 +530,21 @@ onUnmounted(() => {
           :sortable="col.sortable"
         >
           <template #body="{ data }">
+            <button
+              v-if="linkRef(data as Row, col)"
+              type="button"
+              class="inline-flex items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
+              title="Open linked record"
+              @click.stop="openLink(linkRef(data as Row, col)!)"
+            >
+              {{ display(data as Row, col) }}
+              <AppIcon
+                :icon="{ type: 'lucide', value: 'arrow-up-right' }"
+                :size="12"
+              />
+            </button>
             <span
-              v-if="col.type === 'badge'"
+              v-else-if="col.type === 'badge'"
               class="rounded-full bg-surface-100 px-2 py-0.5 text-xs dark:bg-surface-800"
               >{{ display(data as Row, col) }}</span
             >
@@ -578,7 +610,7 @@ onUnmounted(() => {
     >
       <div class="flex max-h-[60vh] flex-col gap-3 overflow-auto p-1">
         <label
-          v-for="col in columns.filter((c) => !INTERNAL.has(c.key))"
+          v-for="col in columns"
           :key="col.key"
           class="flex flex-col gap-1 text-sm"
         >

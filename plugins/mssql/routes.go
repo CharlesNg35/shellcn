@@ -507,6 +507,11 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	attachRowKeys(rows, pk, s.opts.RedactPatterns)
+	fks, err := foreignKeys(rc.Ctx, s, database, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	attachForeignKeys(rows, fks)
 	total := int(total64)
 	redactRows(rows, s.opts.RedactPatterns)
 	next := ""
@@ -514,6 +519,38 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		next = strconv.Itoa(offset + len(rows))
 	}
 	return plugin.Page[row]{Items: rows, NextCursor: next, Total: &total}, nil
+}
+
+// foreignKeys maps each FK column to the referenced table's ref, attached under
+// the generic "_links" field the grid renders as links.
+func foreignKeys(ctx context.Context, s *Session, database, schema, table string) (map[string]plugin.ResourceRef, error) {
+	rows, err := queryRows(ctx, s, fmt.Sprintf(`
+SELECT pc.name AS col, SCHEMA_NAME(rt.schema_id) AS ref_schema, rt.name AS ref_table
+FROM %s.sys.foreign_keys fk
+JOIN %s.sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+JOIN %s.sys.objects o ON o.object_id = fk.parent_object_id
+JOIN %s.sys.schemas sc ON sc.schema_id = o.schema_id
+JOIN %s.sys.columns pc ON pc.object_id = fk.parent_object_id AND pc.column_id = fkc.parent_column_id
+JOIN %s.sys.objects rt ON rt.object_id = fk.referenced_object_id
+WHERE sc.name = @p1 AND o.name = @p2`, quoteIdent(database), quoteIdent(database), quoteIdent(database), quoteIdent(database), quoteIdent(database), quoteIdent(database)), []any{schema, table})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]plugin.ResourceRef{}
+	for _, r := range rows {
+		col, refSchema, refTable := fmt.Sprint(r["col"]), fmt.Sprint(r["ref_schema"]), fmt.Sprint(r["ref_table"])
+		out[col] = plugin.ResourceRef{Kind: "table", Namespace: database, Name: quoteIdent(refSchema) + "." + quoteIdent(refTable), UID: objectID(database, refSchema, refTable)}
+	}
+	return out, nil
+}
+
+func attachForeignKeys(rows []row, fks map[string]plugin.ResourceRef) {
+	if len(fks) == 0 {
+		return
+	}
+	for _, r := range rows {
+		r["_links"] = fks
+	}
 }
 
 func tableColumnsRoute(rc *plugin.RequestContext) (any, error) {

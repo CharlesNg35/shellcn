@@ -223,6 +223,8 @@ export interface TablePanelConfig {
   update?: DataSource;
   delete?: DataSource;
   emptyText?: string;
+  // Row field keys to omit when the grid derives columns from the data.
+  hiddenColumns?: string[];
   // Opt-in: show the generic CSV/JSON export control for loaded rows.
   exportable?: boolean;
 }
@@ -306,8 +308,8 @@ export interface Column {
   sortable?: boolean;
   type?: ColumnType;
   width?: string;
-  // ReadOnly keeps a column non-editable even when its table is editable.
-  // Nullable lets the inline editor clear the cell to NULL.
+  // readOnly keeps a column non-editable even when its table is editable.
+  // nullable lets the inline editor clear the cell to an empty/null value.
   readOnly?: boolean;
   nullable?: boolean;
 }
@@ -579,7 +581,17 @@ export interface Page<T> {
   total?: number;
 }
 
-export type Row = Record<string, unknown> & { ref?: ResourceRef };
+// A table row. Beyond display columns, a row may carry reserved framework keys
+// the generic grid understands (and never renders as columns):
+//   `ref`   — the row's own resource identity (row-click navigation).
+//   `_key`  — opaque key map identifying the row for inline edit/delete.
+//   `_links`— map of column key -> related resource ref; the grid renders those
+//             cells as links that open the related resource.
+export type Row = Record<string, unknown> & {
+  ref?: ResourceRef;
+  _key?: Record<string, unknown>;
+  _links?: Record<string, ResourceRef>;
+};
 
 // One entry in a file_browser directory listing.
 export interface FileEntry {

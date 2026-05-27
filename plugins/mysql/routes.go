@@ -387,12 +387,44 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	attachRowKeys(rows, pk, s.opts.RedactPatterns)
+	fks, err := foreignKeys(rc.Ctx, s, database, table)
+	if err != nil {
+		return nil, err
+	}
+	attachForeignKeys(rows, fks)
 	redactRows(rows, s.opts.RedactPatterns)
 	next := ""
 	if offset+len(rows) < total {
 		next = strconv.Itoa(offset + len(rows))
 	}
 	return plugin.Page[row]{Items: rows, NextCursor: next, Total: &total}, nil
+}
+
+// foreignKeys maps each FK column to the referenced table's ref, attached under
+// the generic "_links" field the grid renders as links.
+func foreignKeys(ctx context.Context, s *Session, database, table string) (map[string]plugin.ResourceRef, error) {
+	rows, err := queryRows(ctx, s, `
+SELECT COLUMN_NAME AS col, REFERENCED_TABLE_SCHEMA AS ref_schema, REFERENCED_TABLE_NAME AS ref_table
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL`, []any{database, table})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]plugin.ResourceRef{}
+	for _, r := range rows {
+		col, refSchema, refTable := fmt.Sprint(r["col"]), fmt.Sprint(r["ref_schema"]), fmt.Sprint(r["ref_table"])
+		out[col] = plugin.ResourceRef{Kind: "table", Namespace: refSchema, Name: refTable, UID: refSchema + "." + refTable}
+	}
+	return out, nil
+}
+
+func attachForeignKeys(rows []row, fks map[string]plugin.ResourceRef) {
+	if len(fks) == 0 {
+		return
+	}
+	for _, r := range rows {
+		r["_links"] = fks
+	}
 }
 
 func tableColumnsRoute(rc *plugin.RequestContext) (any, error) {

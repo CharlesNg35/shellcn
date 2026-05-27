@@ -488,12 +488,50 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	attachRowKeys(rows, pk, s.opts.RedactPatterns)
+	fks, err := foreignKeys(rc.Ctx, pool, s.opts.QueryTimeout, paramOf(rc, "database"), schema, table)
+	if err != nil {
+		return nil, err
+	}
+	attachForeignKeys(rows, fks)
 	redactRows(rows, s.opts.RedactPatterns)
 	next := ""
 	if offset+len(rows) < total {
 		next = strconv.Itoa(offset + len(rows))
 	}
 	return plugin.Page[row]{Items: rows, NextCursor: next, Total: &total}, nil
+}
+
+// foreignKeys maps each FK column of a table to the ResourceRef of the table it
+// references, so the grid can turn those cells into navigation links.
+func foreignKeys(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, database, schema, table string) (map[string]plugin.ResourceRef, error) {
+	rows, err := queryRows(ctx, pool, timeout, `
+SELECT kcu.column_name AS col, ccu.table_schema AS ref_schema, ccu.table_name AS ref_table
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu
+  ON kcu.constraint_name = tc.constraint_name AND kcu.constraint_schema = tc.constraint_schema
+JOIN information_schema.constraint_column_usage ccu
+  ON ccu.constraint_name = tc.constraint_name AND ccu.constraint_schema = tc.constraint_schema
+WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = $1 AND tc.table_name = $2`, []any{schema, table})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]plugin.ResourceRef{}
+	for _, r := range rows {
+		col, refSchema, refTable := fmt.Sprint(r["col"]), fmt.Sprint(r["ref_schema"]), fmt.Sprint(r["ref_table"])
+		out[col] = plugin.ResourceRef{Kind: "table", Scope: database, Namespace: refSchema, Name: refTable, UID: database + "." + refSchema + "." + refTable}
+	}
+	return out, nil
+}
+
+// attachForeignKeys tags rows with the table-level link map (column -> referenced
+// table ref) under the generic "_links" field the grid renders as links.
+func attachForeignKeys(rows []row, fks map[string]plugin.ResourceRef) {
+	if len(fks) == 0 {
+		return
+	}
+	for _, r := range rows {
+		r["_links"] = fks
+	}
 }
 
 // attachRowKeys tags each row with the primary-key/value map the editable grid
