@@ -117,6 +117,9 @@ func HTTPError(status int, data []byte) error {
 			}
 		}
 		if errObj, ok := body["error"].(map[string]any); ok {
+			if msg := strings.TrimSpace(fmt.Sprint(errObj["msg"])); msg != "" && msg != "<nil>" {
+				message = msg
+			}
 			if reason := strings.TrimSpace(fmt.Sprint(errObj["reason"])); reason != "" {
 				message = reason
 			}

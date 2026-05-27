@@ -10,7 +10,7 @@ func TestSearchPluginsValidateAndRegister(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
 
-	for _, name := range []string{"elasticsearch", "opensearch", "meilisearch", "typesense"} {
+	for _, name := range []string{"elasticsearch", "opensearch", "meilisearch", "typesense", "solr"} {
 		proj, ok := reg.Projection(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -54,6 +54,16 @@ func TestSearchCredentialCompatibility(t *testing.T) {
 			}
 		}
 	}
+	for _, kind := range []plugin.CredentialKind{plugin.CredentialBasicAuth, plugin.CredentialBearerToken} {
+		if !reg.CredentialKindSupportsProtocol(kind, "solr") {
+			t.Fatalf("%s credential should support solr", kind)
+		}
+	}
+	for _, kind := range []plugin.CredentialKind{plugin.CredentialAPIToken, plugin.CredentialDBPassword} {
+		if reg.CredentialKindSupportsProtocol(kind, "solr") {
+			t.Fatalf("solr should not advertise %s credentials", kind)
+		}
+	}
 }
 
 func TestSearchSchemasAreProtocolSpecific(t *testing.T) {
@@ -71,7 +81,7 @@ func TestSearchSchemasAreProtocolSpecific(t *testing.T) {
 				t.Fatalf("%s should expose search API field %q", name, key)
 			}
 		}
-		for _, key := range []string{"host", "database", "brokers", "urls", "management_url", "keyspace"} {
+		for _, key := range []string{"confirm_writes", "host", "database", "brokers", "urls", "management_url", "keyspace"} {
 			if fields[key] {
 				t.Fatalf("%s should not expose non-search field %q", name, key)
 			}
@@ -88,10 +98,25 @@ func TestSearchSchemasAreProtocolSpecific(t *testing.T) {
 				t.Fatalf("%s should expose search API field %q", name, key)
 			}
 		}
-		for _, key := range []string{"username", "password", "bearer_token", "database", "brokers", "urls", "management_url", "keyspace"} {
+		for _, key := range []string{"confirm_writes", "username", "password", "bearer_token", "database", "brokers", "urls", "management_url", "keyspace"} {
 			if fields[key] {
 				t.Fatalf("%s should not expose unrelated field %q", name, key)
 			}
+		}
+	}
+	manifest, ok := reg.Manifest("solr")
+	if !ok {
+		t.Fatalf("plugin %q was not registered", "solr")
+	}
+	fields := fieldMap(manifest.Config)
+	for _, key := range []string{"endpoint", "auth", "username", "password", "bearer_token", "credential_id", "tls_mode", "read_only", "page_limit"} {
+		if !fields[key] {
+			t.Fatalf("solr should expose search API field %q", key)
+		}
+	}
+	for _, key := range []string{"confirm_writes", "api_key", "database", "brokers", "urls", "management_url", "keyspace"} {
+		if fields[key] {
+			t.Fatalf("solr should not expose unrelated field %q", key)
 		}
 	}
 }

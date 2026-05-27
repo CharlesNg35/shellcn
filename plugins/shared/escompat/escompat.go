@@ -61,7 +61,6 @@ type Options struct {
 	Timeout       time.Duration
 	PageLimit     int
 	ReadOnly      bool
-	ConfirmWrites bool
 	Product       Product
 }
 
@@ -159,12 +158,11 @@ func ParseOptions(cfg plugin.ConnectConfig, provider Provider) (Options, error) 
 		return Options{}, fmt.Errorf("%w: endpoint must be an absolute URL", plugin.ErrInvalidInput)
 	}
 	opts := Options{
-		Endpoint:      strings.TrimRight(u.String(), "/"),
-		Timeout:       broker.DurationValue(cfg.Config, "timeout", defaultTimeout),
-		PageLimit:     broker.IntValue(cfg.Config, "page_limit", defaultPageLimit, 1, plugin.MaxPageLimit),
-		ReadOnly:      broker.BoolValue(cfg.Config, "read_only", true),
-		ConfirmWrites: broker.BoolValue(cfg.Config, "confirm_writes", true),
-		Product:       provider.Product,
+		Endpoint:  strings.TrimRight(u.String(), "/"),
+		Timeout:   broker.DurationValue(cfg.Config, "timeout", defaultTimeout),
+		PageLimit: broker.IntValue(cfg.Config, "page_limit", defaultPageLimit, 1, plugin.MaxPageLimit),
+		ReadOnly:  broker.BoolValue(cfg.Config, "read_only", true),
+		Product:   provider.Product,
 	}
 	switch auth := broker.StringValue(cfg.Config, "auth", "none"); auth {
 	case "none":
@@ -281,7 +279,6 @@ func configSchema(provider Provider) plugin.Schema {
 		}},
 		{Name: "Safety", Fields: []plugin.Field{
 			{Key: "read_only", Label: "Read-only mode", Type: plugin.FieldToggle, Default: true, Help: "Blocks document writes, index creation, close/open, reindex, and deletes."},
-			{Key: "confirm_writes", Label: "Confirm write operations", Type: plugin.FieldToggle, Default: true},
 			{Key: "timeout", Label: "Request timeout", Type: plugin.FieldDuration, Default: "10s"},
 			{Key: "page_limit", Label: "Page limit", Type: plugin.FieldNumber, Default: defaultPageLimit, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: plugin.MaxPageLimit}}},
 		}},

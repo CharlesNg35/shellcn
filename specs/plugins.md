@@ -19,8 +19,8 @@ protocol lists. Current groups are shell, files/storage, containers,
 virtualization, remote desktop, databases, orchestration, cloud, network,
 security, DevOps/CI, observability, messaging, and other.
 Search engines are a separate category from databases because products such as
-Elasticsearch/OpenSearch, Meilisearch, and Typesense expose different operational
-and query models even when they all manage searchable documents.
+Elasticsearch/OpenSearch, Meilisearch, Typesense, and Solr expose different
+operational and query models even when they all manage searchable documents.
 
 ## Priority Legend
 
@@ -175,13 +175,16 @@ These plugins should prove the core architecture first.
 
 ## P2: Search Engines
 
-Elasticsearch, OpenSearch, Meilisearch, and Typesense are implemented as
+Elasticsearch, OpenSearch, Meilisearch, Typesense, and Solr are implemented as
 direct-only search plugins in the core `search` category. Elasticsearch and
 OpenSearch share `plugins/shared/escompat`, which is
 intentionally scoped to Elasticsearch-compatible REST APIs: indexes, mappings,
 settings, aliases, shards, JSON DSL search, and document CRUD. Meilisearch and
 Typesense use plugin-specific REST handlers because their APIs model tasks,
 keys, settings, collection schemas, synonym sets, and curation sets differently.
+Solr uses plugin-specific CoreAdmin, Collections API, Schema API, update, and
+select handlers so standalone cores, SolrCloud collections, managed schema
+fields, commits, optimizes, and query parameters keep Solr semantics.
 Future engines should use their own plugin-specific clients or a separate helper
 only where their APIs actually overlap.
 
@@ -191,6 +194,7 @@ only where their APIs actually overlap.
 | `opensearch`    | OpenSearch    | indexes, documents, JSON DSL search, mappings, health                               |
 | `meilisearch`   | Meilisearch   | indexes, documents, search, settings, tasks, keys                                   |
 | `typesense`     | Typesense     | collections, documents, search, schemas, aliases, synonym sets, curation sets, keys |
+| `solr`          | Apache Solr   | cores/collections, documents, search, managed schema fields, config, ping, commit, optimize |
 
 ## P3: Messaging And Queues
 

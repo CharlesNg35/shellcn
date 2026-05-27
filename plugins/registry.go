@@ -29,6 +29,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/s3"
 	"github.com/charlesng/shellcn/plugins/sftp"
 	"github.com/charlesng/shellcn/plugins/smb"
+	"github.com/charlesng/shellcn/plugins/solr"
 	"github.com/charlesng/shellcn/plugins/ssh"
 	"github.com/charlesng/shellcn/plugins/swarm"
 	"github.com/charlesng/shellcn/plugins/telnet"
@@ -78,6 +79,7 @@ func all() []plugin.Plugin {
 		opensearch.New(),
 		meilisearch.New(),
 		typesense.New(),
+		solr.New(),
 		rabbitmq.New(),
 		kafka.New(),
 		nats.New(),
