@@ -181,7 +181,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	if len(req.Aliases) > 0 {
 		body["aliases"] = req.Aliases
 	}
-	err = s.client.Do(rc.Ctx, http.MethodPut, pathIndex(req.Name), nil, body, nil)
+	err = s.client.Do(rc.Ctx, http.MethodPut, pathIndex(req.Name), url.Values{"wait_for_active_shards": []string{"1"}}, body, nil)
 	return actionResult{OK: err == nil}, err
 }
 

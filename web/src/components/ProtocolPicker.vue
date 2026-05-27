@@ -75,7 +75,7 @@ const groups = computed<PluginGroup[]>(() => {
     <div
       role="radiogroup"
       aria-label="Protocol"
-      class="max-h-72 overflow-auto pr-3"
+      class="max-h-72 overflow-auto pr-2 pb-2"
     >
       <section
         v-for="group in groups"

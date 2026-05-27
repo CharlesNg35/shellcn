@@ -92,14 +92,13 @@ func startElasticsearchContainer(ctx context.Context, t *testing.T) string {
 	run(ctx, t, "docker", "run", "-d", "--rm", "--name", name,
 		"-e", "discovery.type=single-node",
 		"-e", "xpack.security.enabled=false",
-		"-e", "xpack.security.http.ssl.enabled=false",
-		"-e", "xpack.security.autoconfiguration.enabled=false",
 		"-e", "xpack.ml.enabled=false",
 		"-e", "xpack.watcher.enabled=false",
 		"-e", "ingest.geoip.downloader.enabled=false",
-		"-e", "ES_JAVA_OPTS=-Xms512m -Xmx512m",
+		"-e", "cluster.routing.allocation.disk.threshold_enabled=false",
+		"-e", "ES_JAVA_OPTS=-Xms1g -Xmx1g",
 		"-p", "127.0.0.1::9200",
-		"docker.elastic.co/elasticsearch/elasticsearch:8.15.5")
+		"docker.elastic.co/elasticsearch/elasticsearch:9.4.1")
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -117,13 +116,20 @@ func startElasticsearchContainer(ctx context.Context, t *testing.T) string {
 		sess, err := escompat.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})}, escompat.Provider{Protocol: "elasticsearch", DefaultURL: endpoint, Product: escompat.ProductElasticsearch})
 		if err == nil {
 			_ = sess.Close()
-			readyCtx, cancel := context.WithTimeout(ctx, 75*time.Second)
-			readyErr := elasticsearchReady(readyCtx, endpoint, ".shellcn-ready-"+time.Now().UTC().Format("20060102150405.000000000"))
+			healthCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+			healthErr := elasticsearchRaw(healthCtx, http.MethodGet, endpoint+"/_cluster/health?wait_for_status=yellow&timeout=120s", nil)
 			cancel()
-			if readyErr == nil {
-				return endpoint
+			if healthErr == nil {
+				readyCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+				readyErr := elasticsearchReady(readyCtx, endpoint, ".shellcn-ready-"+time.Now().UTC().Format("20060102150405.000000000"))
+				cancel()
+				if readyErr == nil {
+					return endpoint
+				}
+				err = readyErr
+			} else {
+				err = healthErr
 			}
-			err = readyErr
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("Elasticsearch container did not become ready: %v", err)
@@ -134,7 +140,10 @@ func startElasticsearchContainer(ctx context.Context, t *testing.T) string {
 
 func elasticsearchReady(ctx context.Context, endpoint, index string) error {
 	body := []byte(`{"settings":{"number_of_replicas":0}}`)
-	if err := elasticsearchRaw(ctx, http.MethodPut, endpoint+"/"+index, body); err != nil {
+	if err := elasticsearchRaw(ctx, http.MethodPut, endpoint+"/"+index+"?wait_for_active_shards=1", body); err != nil {
+		return err
+	}
+	if err := elasticsearchRaw(ctx, http.MethodGet, endpoint+"/_cluster/health/"+index+"?wait_for_status=yellow&timeout=120s", nil); err != nil {
 		return err
 	}
 	deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

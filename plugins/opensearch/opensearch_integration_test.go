@@ -21,7 +21,7 @@ func TestOpenSearchPluginIntegration(t *testing.T) {
 	if os.Getenv("SHELLCN_OPENSEARCH_INTEGRATION") != "1" {
 		t.Skip("set SHELLCN_OPENSEARCH_INTEGRATION=1 to run against OpenSearch")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
 
 	cfg := openSearchIntegrationConfig(ctx, t)
@@ -36,6 +36,9 @@ func TestOpenSearchPluginIntegration(t *testing.T) {
 	index := "shellcn-it-" + time.Now().UTC().Format("20060102150405")
 	createBody, _ := json.Marshal(map[string]any{
 		"name": index,
+		"settings": map[string]any{
+			"number_of_replicas": 0,
+		},
 		"mappings": map[string]any{"properties": map[string]any{
 			"name": map[string]any{"type": "keyword"},
 			"age":  map[string]any{"type": "integer"},
@@ -73,7 +76,7 @@ func openSearchIntegrationConfig(ctx context.Context, t *testing.T) map[string]a
 	if endpoint == "" {
 		endpoint = startOpenSearchContainer(ctx, t)
 	}
-	return map[string]any{"endpoint": endpoint, "auth": "none", "tls_mode": "disable", "read_only": false, "page_limit": 100, "timeout": "10s"}
+	return map[string]any{"endpoint": endpoint, "auth": "none", "tls_mode": "disable", "read_only": false, "page_limit": 100, "timeout": "60s"}
 }
 
 func startOpenSearchContainer(ctx context.Context, t *testing.T) string {
@@ -87,9 +90,9 @@ func startOpenSearchContainer(ctx context.Context, t *testing.T) string {
 		"-e", "plugins.security.disabled=true",
 		"-e", "DISABLE_INSTALL_DEMO_CONFIG=true",
 		"-e", "OPENSEARCH_INITIAL_ADMIN_PASSWORD=ShellcnAdmin1!",
-		"-e", "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m",
+		"-e", "OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g",
 		"-p", "127.0.0.1::9200",
-		"opensearchproject/opensearch:2.17.1")
+		"opensearchproject/opensearch:3.6.0")
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -101,8 +104,8 @@ func startOpenSearchContainer(ctx context.Context, t *testing.T) string {
 		t.Fatalf("unexpected docker port output: %q", out)
 	}
 	endpoint := "http://" + net.JoinHostPort(host, port)
-	cfg := map[string]any{"endpoint": endpoint, "auth": "none", "tls_mode": "disable", "read_only": false, "page_limit": 100, "timeout": "10s"}
-	deadline := time.Now().Add(75 * time.Second)
+	cfg := map[string]any{"endpoint": endpoint, "auth": "none", "tls_mode": "disable", "read_only": false, "page_limit": 100, "timeout": "60s"}
+	deadline := time.Now().Add(150 * time.Second)
 	for {
 		sess, err := escompat.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})}, escompat.Provider{Protocol: "opensearch", DefaultURL: endpoint, Product: escompat.ProductOpenSearch})
 		if err == nil {
