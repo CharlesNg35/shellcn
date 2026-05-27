@@ -48,8 +48,6 @@ func icon(name string) plugin.Icon {
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "clickhouse.databases.tree"}, ResourceKind: "database"},
-		{Key: "tables", Label: "Tables", Icon: icon("table-2"), Source: plugin.DataSource{RouteID: "clickhouse.tables.tree"}, ResourceKind: "table"},
-		{Key: "views", Label: "Views", Icon: icon("panel-top"), Source: plugin.DataSource{RouteID: "clickhouse.views.tree"}, ResourceKind: "view"},
 		{Key: "dictionaries", Label: "Dictionaries", Icon: icon("book-open"), Source: plugin.DataSource{RouteID: "clickhouse.dictionaries.tree"}, ResourceKind: "dictionary"},
 		{Key: "mutations", Label: "Mutations", Icon: icon("git-compare-arrows"), Source: plugin.DataSource{RouteID: "clickhouse.mutations.tree"}, ResourceKind: "mutation"},
 		{Key: "merges", Label: "Merges", Icon: icon("merge"), Source: plugin.DataSource{RouteID: "clickhouse.merges.tree"}, ResourceKind: "merge"},

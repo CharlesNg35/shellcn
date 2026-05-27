@@ -48,9 +48,6 @@ func icon(name string) plugin.Icon {
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mysql.databases.tree"}, ResourceKind: "database"},
-		{Key: "tables", Label: "Tables", Icon: icon("table-2"), Source: plugin.DataSource{RouteID: "mysql.tables.tree"}, ResourceKind: "table"},
-		{Key: "views", Label: "Views", Icon: icon("panel-top"), Source: plugin.DataSource{RouteID: "mysql.views.tree"}, ResourceKind: "view"},
-		{Key: "routines", Label: "Routines", Icon: icon("function-square"), Source: plugin.DataSource{RouteID: "mysql.routines.tree"}, ResourceKind: "routine"},
 		{Key: "users", Label: "Users", Icon: icon("users"), Source: plugin.DataSource{RouteID: "mysql.users.tree"}, ResourceKind: "user"},
 	}
 }

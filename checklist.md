@@ -128,6 +128,16 @@ Generic, manifest-driven; no per-plugin frontend.
       round-trips)
 - [x] UX.4b Cassandra integration test (docker-based, skipped without
       `SHELLCN_CASSANDRA_INTEGRATION=1`)
+- [x] UX.6 Navigation parity — hierarchical drill-down tree (single rooted
+      group → lazy children → leaves, via `ResourceRef.Scope` + `ChildrenSource`,
+      no contract change) across **all** DB plugins: mysql/clickhouse/cassandra
+      (database/keyspace → tables/views), mongodb (database → collections),
+      oracle/cockroachdb (schema → tables/views), mssql (database → schema →
+      table/view, 3-level). Validated with docker for mysql + mssql (tree
+      assertions) and regression-checked for the rest.
+- [x] UX.7 SQL autocomplete is now context-aware via `@codemirror/lang-sql`
+      schema completion (tables after FROM/JOIN, columns after `table.`), built
+      from the catalog with a flat keyword/function fallback (unit-tested).
 - [x] UX.5 Generic CSV/JSON export of loaded rows in the table grid + query
       editor, **opt-in per plugin** via manifest (`TableConfig.Exportable` /
       query-editor `exportable`; off by default). Enabled on the DB plugins'

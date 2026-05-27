@@ -36,9 +36,8 @@ func routes() []plugin.Route {
 		{ID: "clickhouse.databases.tree", Method: plugin.MethodGet, Path: "/tree/databases", Permission: "clickhouse.databases.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.databases.tree", Handle: treeDatabases},
 		{ID: "clickhouse.databases.list", Method: plugin.MethodGet, Path: "/databases", Permission: "clickhouse.databases.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.databases.list", Handle: listDatabases},
 		{ID: "clickhouse.database.overview", Method: plugin.MethodGet, Path: "/databases/{database}/overview", Permission: "clickhouse.databases.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.database.overview", Handle: databaseOverview},
-		{ID: "clickhouse.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "clickhouse.tables.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.tables.tree", Handle: treeTables},
+		{ID: "clickhouse.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "clickhouse.tables.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.relations.tree", Handle: treeRelations},
 		{ID: "clickhouse.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "clickhouse.tables.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.tables.list", Handle: listTables},
-		{ID: "clickhouse.views.tree", Method: plugin.MethodGet, Path: "/tree/views", Permission: "clickhouse.views.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.views.tree", Handle: treeViews},
 		{ID: "clickhouse.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "clickhouse.views.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.views.list", Handle: listViews},
 		{ID: "clickhouse.dictionaries.tree", Method: plugin.MethodGet, Path: "/tree/dictionaries", Permission: "clickhouse.dictionaries.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.dictionaries.tree", Handle: treeDictionaries},
 		{ID: "clickhouse.dictionaries.list", Method: plugin.MethodGet, Path: "/dictionaries", Permission: "clickhouse.dictionaries.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.dictionaries.list", Handle: listDictionaries},
@@ -95,16 +94,53 @@ func columnAddSchema() *plugin.Schema {
 	}}}}
 }
 
+// treeDatabases lists databases as expandable branches that drill into their
+// tables/views (hierarchical, TablePlus-style).
 func treeDatabases(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "database", "database", "name", listDatabases)
+	res, err := listDatabases(rc)
+	if err != nil {
+		return nil, err
+	}
+	page := res.(plugin.Page[row])
+	nodes := make([]plugin.TreeNode, 0, len(page.Items))
+	for _, r := range page.Items {
+		name := fmt.Sprint(r["name"])
+		nodes = append(nodes, plugin.TreeNode{
+			Key:            "db:" + name,
+			Label:          name,
+			Icon:           icon("database"),
+			Ref:            &plugin.ResourceRef{Kind: "database", Name: name, UID: name},
+			ChildrenSource: &plugin.DataSource{RouteID: "clickhouse.relations.tree", Params: map[string]string{"database": name}},
+		})
+	}
+	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
 }
 
-func treeTables(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "table", "table-2", "name", listTables)
-}
-
-func treeViews(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "view", "panel-top", "name", listViews)
+// treeRelations lists a database's tables and views as leaves (scoped by the
+// p.database param the parent node supplies).
+func treeRelations(rc *plugin.RequestContext) (any, error) {
+	tables, err := listTables(rc)
+	if err != nil {
+		return nil, err
+	}
+	views, err := listViews(rc)
+	if err != nil {
+		return nil, err
+	}
+	nodes := []plugin.TreeNode{}
+	add := func(res any, iconName string) {
+		for _, r := range res.(plugin.Page[row]).Items {
+			ref, ok := r["ref"].(plugin.ResourceRef)
+			if !ok || ref.Kind == "" {
+				continue
+			}
+			nodes = append(nodes, plugin.TreeNode{Key: ref.Kind + ":" + ref.UID, Label: fmt.Sprint(r["name"]), Icon: icon(iconName), Ref: &ref, Leaf: true})
+		}
+	}
+	add(tables, "table-2")
+	add(views, "panel-top")
+	total := len(nodes)
+	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: &total}, nil
 }
 
 func treeDictionaries(rc *plugin.RequestContext) (any, error) {

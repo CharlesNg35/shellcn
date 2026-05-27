@@ -4,9 +4,14 @@ import {
   type Completion,
   type CompletionContext,
   type CompletionResult,
+  type CompletionSource,
 } from "@codemirror/autocomplete";
 import { json } from "@codemirror/lang-json";
-import { sql } from "@codemirror/lang-sql";
+import {
+  schemaCompletionSource,
+  sql,
+  type SQLNamespace,
+} from "@codemirror/lang-sql";
 import { yaml } from "@codemirror/lang-yaml";
 import {
   bracketMatching,
@@ -218,13 +223,15 @@ function editorTheme(c: EditorPalette, dark: boolean): Extension {
       },
       ".cm-tooltip.cm-tooltip-autocomplete > ul": {
         fontFamily: monoFont,
-        maxHeight: "16em",
+        fontSize: "12px",
+        maxHeight: "14em",
+        minWidth: "14em",
         padding: "4px",
       },
       ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
-        padding: "5px 10px",
+        padding: "2px 8px",
         lineHeight: "1.5",
-        borderRadius: "6px",
+        borderRadius: "4px",
       },
       ".cm-tooltip-autocomplete ul li[aria-selected]": {
         backgroundColor: c.completionSelected,
@@ -380,16 +387,81 @@ export function readOnlyExtension(readOnly: boolean): Extension {
   ];
 }
 
-function completionExtension(items?: CodeMirrorCompletion[]): Extension {
-  if (!items?.length) return [];
-  const options: Completion[] = items.map((item) => ({
+const SQL_LANGUAGES = new Set([
+  "sql",
+  "postgres",
+  "postgresql",
+  "mysql",
+  "mariadb",
+  "sqlite",
+  "mssql",
+  "oracle",
+  "cql",
+]);
+
+function toCompletion(item: CodeMirrorCompletion): Completion {
+  return {
     label: item.label,
     type: item.type,
     detail: item.detail,
     apply: item.apply,
-  }));
+  };
+}
+
+// buildSqlSchema turns the flat completion catalog into a lang-sql namespace
+// (table -> columns, plus schema -> table -> columns), enabling context-aware
+// completion: tables after FROM/JOIN and columns after `table.`/`schema.table.`.
+export function buildSqlSchema(
+  items: CodeMirrorCompletion[],
+): Record<string, SQLNamespace> {
+  const tables: Record<string, Set<string>> = {};
+  const schemas: Record<string, Record<string, Set<string>>> = {};
+  const ensure = (rec: Record<string, Set<string>>, key: string) =>
+    (rec[key] ??= new Set<string>());
+  for (const item of items) {
+    if ((item.type === "table" || item.type === "view") && item.detail) {
+      ensure(tables, item.label);
+      (schemas[item.detail] ??= {})[item.label] ??= new Set();
+    } else if (item.type === "property" && item.detail) {
+      const dot = item.detail.indexOf(".");
+      const schema = dot >= 0 ? item.detail.slice(0, dot) : "";
+      const relation = dot >= 0 ? item.detail.slice(dot + 1) : item.detail;
+      ensure(tables, relation).add(item.label);
+      if (schema) ensure((schemas[schema] ??= {}), relation).add(item.label);
+    }
+  }
+  const out: Record<string, SQLNamespace> = {};
+  for (const [table, cols] of Object.entries(tables)) out[table] = [...cols];
+  for (const [schema, rels] of Object.entries(schemas)) {
+    out[schema] = Object.fromEntries(
+      Object.entries(rels).map(([rel, cols]) => [rel, [...cols]]),
+    );
+  }
+  return out;
+}
+
+function completionExtension(
+  items?: CodeMirrorCompletion[],
+  language?: string,
+): Extension {
+  if (!items?.length) return [];
+  const sources: CompletionSource[] = [];
+  if (language && SQL_LANGUAGES.has(language)) {
+    const schema = buildSqlSchema(items);
+    if (Object.keys(schema).length) {
+      sources.push(schemaCompletionSource({ schema }));
+    }
+    // Keep keywords/functions (and a flat fallback) from the catalog; the schema
+    // source already owns tables/columns, so drop those to avoid duplicates.
+    const extras = items.filter(
+      (i) => i.type !== "table" && i.type !== "view" && i.type !== "property",
+    );
+    if (extras.length) sources.push(completionSource(extras.map(toCompletion)));
+  } else {
+    sources.push(completionSource(items.map(toCompletion)));
+  }
   return autocompletion({
-    override: [completionSource(options)],
+    override: sources,
     activateOnTyping: true,
     activateOnTypingDelay: 150,
     maxRenderedOptions: 80,
@@ -430,7 +502,9 @@ export function createCodeMirrorEditor(
       language.of(languageExtension(options.language)),
       readOnly.of(readOnlyExtension(options.readOnly === true)),
       theme.of(currentCodeMirrorTheme()),
-      completions.of(completionExtension(options.completions)),
+      completions.of(
+        completionExtension(options.completions, options.language),
+      ),
     ],
   });
   return {
@@ -483,8 +557,11 @@ export function syncCodeMirrorTheme(editor: CodeMirrorEditor | null): void {
 export function setEditorCompletions(
   editor: CodeMirrorEditor | null,
   completions: CodeMirrorCompletion[],
+  language?: string,
 ): void {
   editor?.view.dispatch({
-    effects: editor.completions.reconfigure(completionExtension(completions)),
+    effects: editor.completions.reconfigure(
+      completionExtension(completions, language),
+    ),
   });
 }

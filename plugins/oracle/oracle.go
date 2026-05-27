@@ -48,11 +48,6 @@ func icon(name string) plugin.Icon {
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Source: plugin.DataSource{RouteID: "oracle.schemas.tree"}, ResourceKind: "schema"},
-		{Key: "tables", Label: "Tables", Icon: icon("table-2"), Source: plugin.DataSource{RouteID: "oracle.tables.tree"}, ResourceKind: "table"},
-		{Key: "views", Label: "Views", Icon: icon("panel-top"), Source: plugin.DataSource{RouteID: "oracle.views.tree"}, ResourceKind: "view"},
-		{Key: "procedures", Label: "Procedures", Icon: icon("function-square"), Source: plugin.DataSource{RouteID: "oracle.procedures.tree"}, ResourceKind: "procedure"},
-		{Key: "packages", Label: "Packages", Icon: icon("package"), Source: plugin.DataSource{RouteID: "oracle.packages.tree"}, ResourceKind: "package"},
-		{Key: "sequences", Label: "Sequences", Icon: icon("list-ordered"), Source: plugin.DataSource{RouteID: "oracle.sequences.tree"}, ResourceKind: "sequence"},
 		{Key: "users", Label: "Users", Icon: icon("users"), Source: plugin.DataSource{RouteID: "oracle.users.tree"}, ResourceKind: "user"},
 		{Key: "tablespaces", Label: "Tablespaces", Icon: icon("hard-drive"), Source: plugin.DataSource{RouteID: "oracle.tablespaces.tree"}, ResourceKind: "tablespace"},
 		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), Source: plugin.DataSource{RouteID: "oracle.sessions.tree"}, ResourceKind: "session"},

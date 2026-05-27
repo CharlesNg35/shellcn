@@ -82,7 +82,13 @@ func treeDatabases(rc *plugin.RequestContext) (any, error) {
 	for _, item := range page.Items {
 		name := fmt.Sprint(item["name"])
 		ref := plugin.ResourceRef{Kind: "database", Name: name, UID: name}
-		nodes = append(nodes, plugin.TreeNode{Key: "database:" + name, Label: name, Icon: icon("database"), Ref: &ref, Leaf: true})
+		nodes = append(nodes, plugin.TreeNode{
+			Key:            "database:" + name,
+			Label:          name,
+			Icon:           icon("database"),
+			Ref:            &ref,
+			ChildrenSource: &plugin.DataSource{RouteID: "mongodb.collections.tree", Params: map[string]string{"database": name}},
+		})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
 }
@@ -97,7 +103,7 @@ func treeCollections(rc *plugin.RequestContext) (any, error) {
 	for _, item := range page.Items {
 		name, database := fmt.Sprint(item["name"]), fmt.Sprint(item["database"])
 		ref := plugin.ResourceRef{Kind: "collection", Namespace: database, Name: name, UID: database + "." + name}
-		nodes = append(nodes, plugin.TreeNode{Key: "collection:" + ref.UID, Label: database + "." + name, Icon: icon("folder"), Ref: &ref, Leaf: true})
+		nodes = append(nodes, plugin.TreeNode{Key: "collection:" + ref.UID, Label: name, Icon: icon("folder"), Ref: &ref, Leaf: true})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
 }

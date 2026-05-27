@@ -120,6 +120,34 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if _, err := updateRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"name": "alice"}, "values": map[string]any{"access_token": "x"}})); err == nil {
 		t.Fatal("update with a non-primary-key key must be rejected")
 	}
+
+	// Hierarchical tree: databases are expandable branches, drilling into tables.
+	dbTree, err := treeDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("tree databases: %v", err)
+	}
+	var branch *plugin.TreeNode
+	for i, n := range dbTree.(plugin.Page[plugin.TreeNode]).Items {
+		if n.Label == database {
+			branch = &dbTree.(plugin.Page[plugin.TreeNode]).Items[i]
+		}
+	}
+	if branch == nil || branch.ChildrenSource == nil || branch.Leaf {
+		t.Fatalf("database node must be an expandable branch: %#v", branch)
+	}
+	relTree, err := treeRelations(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {database}}, nil))
+	if err != nil {
+		t.Fatalf("tree relations: %v", err)
+	}
+	found := false
+	for _, n := range relTree.(plugin.Page[plugin.TreeNode]).Items {
+		if n.Label == "shellcn_people" && n.Leaf {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("table leaf not found under database branch: %#v", relTree)
+	}
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {

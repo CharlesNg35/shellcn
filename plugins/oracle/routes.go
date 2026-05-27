@@ -36,6 +36,7 @@ var dialect = sqldb.Dialect{QuoteIdent: quoteIdent, Placeholder: sqldb.ColonPlac
 func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "oracle.schemas.tree", Method: plugin.MethodGet, Path: "/tree/schemas", Permission: "oracle.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.schemas.tree", Handle: treeSchemas},
+		{ID: "oracle.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.relations.tree", Handle: treeRelations},
 		{ID: "oracle.schemas.list", Method: plugin.MethodGet, Path: "/schemas", Permission: "oracle.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.schemas.list", Handle: listSchemas},
 		{ID: "oracle.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{schema}/overview", Permission: "oracle.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.schema.overview", Handle: schemaOverview},
 		{ID: "oracle.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.tables.tree", Handle: treeTables},
@@ -100,8 +101,52 @@ func columnAddSchema() *plugin.Schema {
 	}}}}
 }
 
+// treeSchemas lists schemas as expandable branches that drill into their
+// tables/views (hierarchical, TablePlus-style).
 func treeSchemas(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "schema", "folder-tree", "name", listSchemas)
+	res, err := listSchemas(rc)
+	if err != nil {
+		return nil, err
+	}
+	page := res.(plugin.Page[row])
+	nodes := make([]plugin.TreeNode, 0, len(page.Items))
+	for _, r := range page.Items {
+		name := fmt.Sprint(r["name"])
+		nodes = append(nodes, plugin.TreeNode{
+			Key:            "schema:" + name,
+			Label:          name,
+			Icon:           icon("folder-tree"),
+			Ref:            &plugin.ResourceRef{Kind: "schema", Name: name, UID: name},
+			ChildrenSource: &plugin.DataSource{RouteID: "oracle.relations.tree", Params: map[string]string{"schema": name}},
+		})
+	}
+	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
+}
+
+// treeRelations lists a schema's tables and views as leaves (scoped by p.schema).
+func treeRelations(rc *plugin.RequestContext) (any, error) {
+	tables, err := listTables(rc)
+	if err != nil {
+		return nil, err
+	}
+	views, err := listViews(rc)
+	if err != nil {
+		return nil, err
+	}
+	nodes := []plugin.TreeNode{}
+	add := func(res any, iconName string) {
+		for _, r := range res.(plugin.Page[row]).Items {
+			ref, ok := r["ref"].(plugin.ResourceRef)
+			if !ok || ref.Kind == "" {
+				continue
+			}
+			nodes = append(nodes, plugin.TreeNode{Key: ref.Kind + ":" + ref.UID, Label: fmt.Sprint(r["name"]), Icon: icon(iconName), Ref: &ref, Leaf: true})
+		}
+	}
+	add(tables, "table-2")
+	add(views, "panel-top")
+	total := len(nodes)
+	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: &total}, nil
 }
 
 func treeTables(rc *plugin.RequestContext) (any, error) {

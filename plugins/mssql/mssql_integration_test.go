@@ -103,6 +103,44 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	if _, err := updateRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"name": "alice"}, "values": map[string]any{"access_token": "x"}})); err == nil {
 		t.Fatal("update with a non-primary-key key must be rejected")
 	}
+
+	// Hierarchical tree: database -> schema -> table (3-level drill-down).
+	dbTree, err := treeDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("tree databases: %v", err)
+	}
+	if !hasBranch(dbTree, "shellcn") {
+		t.Fatalf("database branch missing: %#v", dbTree)
+	}
+	schemaTree, err := treeSchemas(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {"shellcn"}}, nil))
+	if err != nil {
+		t.Fatalf("tree schemas: %v", err)
+	}
+	if !hasBranch(schemaTree, "dbo") {
+		t.Fatalf("schema branch dbo missing: %#v", schemaTree)
+	}
+	relTree, err := treeRelations(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {"shellcn"}, "p.schema": {"dbo"}}, nil))
+	if err != nil {
+		t.Fatalf("tree relations: %v", err)
+	}
+	leaf := false
+	for _, n := range relTree.(plugin.Page[plugin.TreeNode]).Items {
+		if n.Label == "people" && n.Leaf {
+			leaf = true
+		}
+	}
+	if !leaf {
+		t.Fatalf("table leaf 'people' missing under dbo: %#v", relTree)
+	}
+}
+
+func hasBranch(tree any, label string) bool {
+	for _, n := range tree.(plugin.Page[plugin.TreeNode]).Items {
+		if n.Label == label && n.ChildrenSource != nil && !n.Leaf {
+			return true
+		}
+	}
+	return false
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {

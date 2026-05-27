@@ -48,7 +48,6 @@ func icon(name string) plugin.Icon {
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mongodb.databases.tree"}, ResourceKind: "database"},
-		{Key: "collections", Label: "Collections", Icon: icon("folders"), Source: plugin.DataSource{RouteID: "mongodb.collections.tree"}, ResourceKind: "collection"},
 	}
 }
 

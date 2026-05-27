@@ -37,13 +37,11 @@ var dialect = sqldb.Dialect{QuoteIdent: quoteIdent, Placeholder: sqldb.QuestionP
 func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "mysql.databases.tree", Method: plugin.MethodGet, Path: "/tree/databases", Permission: "mysql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.databases.tree", Handle: treeDatabases},
+		{ID: "mysql.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.relations.tree", Handle: treeRelations},
 		{ID: "mysql.databases.list", Method: plugin.MethodGet, Path: "/databases", Permission: "mysql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.databases.list", Handle: listDatabases},
 		{ID: "mysql.database.overview", Method: plugin.MethodGet, Path: "/databases/{database}/overview", Permission: "mysql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.database.overview", Handle: databaseOverview},
-		{ID: "mysql.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.tables.tree", Handle: treeTables},
 		{ID: "mysql.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.tables.list", Handle: listTables},
-		{ID: "mysql.views.tree", Method: plugin.MethodGet, Path: "/tree/views", Permission: "mysql.views.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.views.tree", Handle: treeViews},
 		{ID: "mysql.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "mysql.views.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.views.list", Handle: listViews},
-		{ID: "mysql.routines.tree", Method: plugin.MethodGet, Path: "/tree/routines", Permission: "mysql.routines.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.routines.tree", Handle: treeRoutines},
 		{ID: "mysql.routines.list", Method: plugin.MethodGet, Path: "/routines", Permission: "mysql.routines.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.routines.list", Handle: listRoutines},
 		{ID: "mysql.users.tree", Method: plugin.MethodGet, Path: "/tree/users", Permission: "mysql.users.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.users.tree", Handle: treeUsers},
 		{ID: "mysql.users.list", Method: plugin.MethodGet, Path: "/users", Permission: "mysql.users.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.users.list", Handle: listUsers},
@@ -90,20 +88,53 @@ func columnAddSchema() *plugin.Schema {
 	}}}}
 }
 
+// treeDatabases lists databases as expandable branches; each drills into its
+// tables/views via mysql.relations.tree (hierarchical, TablePlus-style).
 func treeDatabases(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "database", "database", "name", listDatabases)
+	res, err := listDatabases(rc)
+	if err != nil {
+		return nil, err
+	}
+	page := res.(plugin.Page[row])
+	nodes := make([]plugin.TreeNode, 0, len(page.Items))
+	for _, r := range page.Items {
+		name := fmt.Sprint(r["name"])
+		nodes = append(nodes, plugin.TreeNode{
+			Key:            "db:" + name,
+			Label:          name,
+			Icon:           icon("database"),
+			Ref:            &plugin.ResourceRef{Kind: "database", Name: name, UID: name},
+			ChildrenSource: &plugin.DataSource{RouteID: "mysql.relations.tree", Params: map[string]string{"database": name}},
+		})
+	}
+	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
 }
 
-func treeTables(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "table", "table-2", "name", listTables)
-}
-
-func treeViews(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "view", "panel-top", "name", listViews)
-}
-
-func treeRoutines(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "routine", "function-square", "name", listRoutines)
+// treeRelations lists a database's tables and views as leaves (scoped by the
+// p.database param the parent node supplies).
+func treeRelations(rc *plugin.RequestContext) (any, error) {
+	tables, err := listTables(rc)
+	if err != nil {
+		return nil, err
+	}
+	views, err := listViews(rc)
+	if err != nil {
+		return nil, err
+	}
+	nodes := []plugin.TreeNode{}
+	add := func(res any, iconName string) {
+		for _, r := range res.(plugin.Page[row]).Items {
+			ref, ok := r["ref"].(plugin.ResourceRef)
+			if !ok || ref.Kind == "" {
+				continue
+			}
+			nodes = append(nodes, plugin.TreeNode{Key: ref.Kind + ":" + ref.UID, Label: fmt.Sprint(r["name"]), Icon: icon(iconName), Ref: &ref, Leaf: true})
+		}
+	}
+	add(tables, "table-2")
+	add(views, "panel-top")
+	total := len(nodes)
+	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: &total}, nil
 }
 
 func treeUsers(rc *plugin.RequestContext) (any, error) {

@@ -38,9 +38,8 @@ func routes() []plugin.Route {
 		{ID: "cassandra.keyspaces.tree", Method: plugin.MethodGet, Path: "/tree/keyspaces", Permission: "cassandra.keyspaces.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.keyspaces.tree", Handle: treeKeyspaces},
 		{ID: "cassandra.keyspaces.list", Method: plugin.MethodGet, Path: "/keyspaces", Permission: "cassandra.keyspaces.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.keyspaces.list", Handle: listKeyspaces},
 		{ID: "cassandra.keyspace.overview", Method: plugin.MethodGet, Path: "/keyspaces/{keyspace}/overview", Permission: "cassandra.keyspaces.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.keyspace.overview", Handle: keyspaceOverview},
-		{ID: "cassandra.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "cassandra.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.tables.tree", Handle: treeTables},
+		{ID: "cassandra.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "cassandra.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.relations.tree", Handle: treeRelations},
 		{ID: "cassandra.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "cassandra.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.tables.list", Handle: listTables},
-		{ID: "cassandra.views.tree", Method: plugin.MethodGet, Path: "/tree/views", Permission: "cassandra.views.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.views.tree", Handle: treeViews},
 		{ID: "cassandra.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "cassandra.views.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.views.list", Handle: listViews},
 		{ID: "cassandra.types.tree", Method: plugin.MethodGet, Path: "/tree/types", Permission: "cassandra.types.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.types.tree", Handle: treeTypes},
 		{ID: "cassandra.types.list", Method: plugin.MethodGet, Path: "/types", Permission: "cassandra.types.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.types.list", Handle: listTypes},
@@ -100,16 +99,53 @@ func columnAddSchema() *plugin.Schema {
 	}}}}
 }
 
+// treeKeyspaces lists keyspaces as expandable branches that drill into their
+// tables/materialized views (hierarchical, TablePlus-style).
 func treeKeyspaces(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "keyspace", "database", "name", listKeyspaces)
+	res, err := listKeyspaces(rc)
+	if err != nil {
+		return nil, err
+	}
+	page := res.(plugin.Page[row])
+	nodes := make([]plugin.TreeNode, 0, len(page.Items))
+	for _, r := range page.Items {
+		name := fmt.Sprint(r["name"])
+		nodes = append(nodes, plugin.TreeNode{
+			Key:            "ks:" + name,
+			Label:          name,
+			Icon:           icon("database"),
+			Ref:            &plugin.ResourceRef{Kind: "keyspace", Name: name, UID: name},
+			ChildrenSource: &plugin.DataSource{RouteID: "cassandra.relations.tree", Params: map[string]string{"keyspace": name}},
+		})
+	}
+	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: page.NextCursor, Total: page.Total}, nil
 }
 
-func treeTables(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "table", "table-2", "name", listTables)
-}
-
-func treeViews(rc *plugin.RequestContext) (any, error) {
-	return treeFromPage(rc, "view", "panel-top", "name", listViews)
+// treeRelations lists a keyspace's tables and materialized views as leaves
+// (scoped by the p.keyspace param the parent node supplies).
+func treeRelations(rc *plugin.RequestContext) (any, error) {
+	tables, err := listTables(rc)
+	if err != nil {
+		return nil, err
+	}
+	views, err := listViews(rc)
+	if err != nil {
+		return nil, err
+	}
+	nodes := []plugin.TreeNode{}
+	add := func(res any, iconName string) {
+		for _, r := range res.(plugin.Page[row]).Items {
+			ref, ok := r["ref"].(plugin.ResourceRef)
+			if !ok || ref.Kind == "" {
+				continue
+			}
+			nodes = append(nodes, plugin.TreeNode{Key: ref.Kind + ":" + ref.UID, Label: fmt.Sprint(r["name"]), Icon: icon(iconName), Ref: &ref, Leaf: true})
+		}
+	}
+	add(tables, "table-2")
+	add(views, "panel-top")
+	total := len(nodes)
+	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: &total}, nil
 }
 
 func treeTypes(rc *plugin.RequestContext) (any, error) {

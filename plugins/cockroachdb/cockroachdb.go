@@ -54,8 +54,6 @@ func tree() []plugin.TreeGroup {
 		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), Source: plugin.DataSource{RouteID: "cockroachdb.sessions.tree"}, ResourceKind: "session"},
 		{Key: "queries", Label: "Queries", Icon: icon("search-code"), Source: plugin.DataSource{RouteID: "cockroachdb.queries.tree"}, ResourceKind: "query"},
 		{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Source: plugin.DataSource{RouteID: "cockroachdb.schemas.tree"}, ResourceKind: "schema"},
-		{Key: "tables", Label: "Tables", Icon: icon("table-2"), Source: plugin.DataSource{RouteID: "cockroachdb.tables.tree"}, ResourceKind: "table"},
-		{Key: "views", Label: "Views", Icon: icon("panel-top"), Source: plugin.DataSource{RouteID: "cockroachdb.views.tree"}, ResourceKind: "view"},
 		{Key: "functions", Label: "Functions", Icon: icon("function-square"), Source: plugin.DataSource{RouteID: "cockroachdb.functions.tree"}, ResourceKind: "function"},
 	}
 }
