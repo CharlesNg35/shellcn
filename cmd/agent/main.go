@@ -181,12 +181,9 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, i
 	}
 }
 
-// serveHTTPProxy runs the generic L7 (http_proxy) mode: it serves a reverse
-// proxy over the multiplexed tunnel, re-originating every request to the
-// declared upstream with credentials read from the target's own files. The
-// gateway speaks plain HTTP/1.1 inside the already-encrypted tunnel; this hop
-// adds TLS + an optional bearer token, so the target's credentials never leave
-// the target environment. Nothing here is protocol-specific.
+// serveHTTPProxy serves the generic L7 mode: a credential-injecting reverse
+// proxy over the tunnel, one request per accepted stream. Nothing here is
+// protocol-specific.
 func serveHTTPProxy(ctx context.Context, logger *slog.Logger, sess *yamux.Session, target transport.AgentProxyTarget) error {
 	proxy, err := buildHTTPProxy(logger, target)
 	if err != nil {
@@ -204,11 +201,9 @@ func serveHTTPProxy(ctx context.Context, logger *slog.Logger, sess *yamux.Sessio
 	return nil
 }
 
-// buildHTTPProxy assembles a credential-injecting reverse proxy to target.Address.
-// It is fully generic: an optional bearer token is read from target.TokenFile
-// (re-read so rotated tokens are picked up) and the upstream's TLS is verified
-// with target.CAFile when set, otherwise the system root pool. No insecure
-// fallback. The agent never interprets these values as anything domain-specific.
+// buildHTTPProxy builds a reverse proxy to target.Address, injecting an optional
+// bearer token from target.TokenFile and verifying TLS with target.CAFile (else
+// system roots; no insecure fallback). Fully generic — no domain knowledge.
 func buildHTTPProxy(logger *slog.Logger, target transport.AgentProxyTarget) (*httputil.ReverseProxy, error) {
 	base := strings.TrimSpace(target.Address)
 	if base == "" {

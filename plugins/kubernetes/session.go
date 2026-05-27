@@ -3,6 +3,7 @@ package kubernetes
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 
@@ -34,9 +35,13 @@ type Session struct {
 	metricsSrc string
 	promURL    string
 
+	transport plugin.Transport
+	net       plugin.NetTransport
+
 	mu      sync.Mutex
 	stopCh  chan struct{}
 	stopped bool
+	bridge  *loopbackBridge // lazy, agent transport only
 }
 
 // Connect builds the REST config for the connection's transport and wires the
@@ -78,6 +83,8 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, err
 		defaultNS:  strings.TrimSpace(cfg.String("namespace")),
 		metricsSrc: metricsSourceOrDefault(cfg.String("metrics_source")),
 		promURL:    strings.TrimSpace(cfg.String("prometheus_url")),
+		transport:  cfg.Transport,
+		net:        cfg.Net,
 		stopCh:     make(chan struct{}),
 	}
 	if err := s.HealthCheck(ctx); err != nil {
@@ -149,7 +156,7 @@ func (s *Session) OpenChannel(_ context.Context, _ plugin.ChannelRequest) (plugi
 	return nil, plugin.ErrNotSupported
 }
 
-// Close stops any lazily-started informers.
+// Close stops lazily-started machinery (watches, the upgrade bridge).
 func (s *Session) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -157,8 +164,41 @@ func (s *Session) Close() error {
 		s.stopped = true
 		close(s.stopCh)
 	}
+	if s.bridge != nil {
+		_ = s.bridge.Close()
+		s.bridge = nil
+	}
 	return nil
 }
+
+// upgradeConfig returns a rest.Config usable for SPDY/WebSocket upgrades
+// (exec, attach, port-forward). For direct transport that is the kubeconfig
+// config itself. For agent transport, client-go upgraders ignore a custom
+// dialer, so we front the tunnel with a lazily-started loopback bridge and point
+// the config at it.
+func (s *Session) upgradeConfig() (*rest.Config, error) {
+	if s.transport != plugin.TransportAgent {
+		return rest.CopyConfig(s.rest), nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.stopped {
+		return nil, fmt.Errorf("%w: session closed", plugin.ErrUnavailable)
+	}
+	if s.bridge == nil {
+		b, err := newLoopbackBridge(func(ctx context.Context) (net.Conn, error) {
+			return s.net.DialContext(ctx, "tcp", agentUpgradeAddr)
+		})
+		if err != nil {
+			return nil, fmt.Errorf("%w: upgrade bridge: %v", plugin.ErrUnavailable, err)
+		}
+		s.bridge = b
+	}
+	return &rest.Config{Host: s.bridge.host()}, nil
+}
+
+// agentUpgradeAddr is a placeholder address the agent tunnel dialer ignores.
+const agentUpgradeAddr = "shellcn-agent.internal:443"
 
 // Clientset exposes the typed client for built-in API groups.
 func (s *Session) Clientset() *kubeclient.Clientset { return s.clientset }

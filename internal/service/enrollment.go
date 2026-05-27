@@ -76,9 +76,14 @@ func hashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// Create issues a token for connectionID and renders the plugin's install
-// artifacts (with the raw token + the gateway connect URL interpolated).
-func (s *EnrollmentService) Create(ctx context.Context, connectionID, connectURL string) (Enrollment, error) {
+// ArtifactURLFunc mints a single-use signed fetch URL for a URL-delivered
+// artifact (supplied by the server, which owns ticket minting and the host).
+type ArtifactURLFunc func(enrollmentID, kind string) (string, error)
+
+// Create issues an enrollment and renders the plugin's install artifacts. URL
+// artifacts defer token minting to the fetch (the record gets a non-redeemable
+// placeholder hash) so the token only ever lands in the fetched body.
+func (s *EnrollmentService) Create(ctx context.Context, connectionID, connectURL string, artifactURL ArtifactURLFunc) (Enrollment, error) {
 	conn, err := s.conns.Get(ctx, connectionID)
 	if err != nil {
 		return Enrollment{}, err
@@ -87,55 +92,155 @@ func (s *EnrollmentService) Create(ctx context.Context, connectionID, connectURL
 	if !ok || m.Agent == nil || !m.SupportsTransport(plugin.TransportAgent) {
 		return Enrollment{}, ErrNoAgentSupport
 	}
-
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
+	urlMode, err := deliveryMode(m.Agent.Install)
+	if err != nil {
 		return Enrollment{}, err
 	}
-	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
 
 	now := s.now()
 	enr := &models.AgentEnrollment{
 		ID:           uuid.NewString(),
 		ConnectionID: connectionID,
-		TokenHash:    hashToken(token),
 		Status:       models.EnrollmentPending,
 		ExpiresAt:    now.Add(s.ttl),
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
+	var token string
+	if urlMode {
+		// No real token yet — store a unique, non-redeemable placeholder so the
+		// unique index holds; the real token is minted when the body is fetched.
+		placeholder, err := randomToken()
+		if err != nil {
+			return Enrollment{}, err
+		}
+		enr.TokenHash = hashToken("placeholder:" + placeholder)
+	} else {
+		if token, err = randomToken(); err != nil {
+			return Enrollment{}, err
+		}
+		enr.TokenHash = hashToken(token)
+	}
 	if err := s.store.Create(ctx, enr); err != nil {
 		return Enrollment{}, err
 	}
 
-	artifacts, err := renderArtifacts(m.Agent.Install, connectURL, token)
+	artifacts, err := s.renderArtifacts(m.Agent.Install, connectURL, token, enr.ID, artifactURL)
 	if err != nil {
 		return Enrollment{}, err
 	}
 	return Enrollment{EnrollmentID: enr.ID, ExpiresAt: enr.ExpiresAt, Artifacts: artifacts}, nil
 }
 
-func renderArtifacts(specs []plugin.InstallArtifact, connectURL, token string) ([]InstallArtifact, error) {
+func randomToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// deliveryMode reports whether the artifact set is URL-delivered. Mixing inline
+// and URL delivery in one enrollment is unsupported: a URL set mints its token
+// lazily and so has no token to inline.
+func deliveryMode(specs []plugin.InstallArtifact) (urlMode bool, err error) {
+	var sawURL, sawInline bool
+	for _, a := range specs {
+		if a.Delivery == plugin.DeliveryURL {
+			sawURL = true
+		} else {
+			sawInline = true
+		}
+	}
+	if sawURL && sawInline {
+		return false, fmt.Errorf("%w: install artifacts mix inline and url delivery", ErrNoAgentSupport)
+	}
+	return sawURL, nil
+}
+
+func (s *EnrollmentService) renderArtifacts(specs []plugin.InstallArtifact, connectURL, token, enrollmentID string, artifactURL ArtifactURLFunc) ([]InstallArtifact, error) {
 	out := make([]InstallArtifact, 0, len(specs))
 	for _, spec := range specs {
-		tmpl, err := template.New(spec.Kind).Funcs(template.FuncMap{
-			"shellquote": shellQuote,
-		}).Parse(spec.Template)
+		data := artifactRenderData(connectURL, token, spec.ConnectURL)
+		if spec.Delivery == plugin.DeliveryURL {
+			if artifactURL == nil {
+				return nil, fmt.Errorf("%w: url artifact %q has no URL minter", ErrNoAgentSupport, spec.Kind)
+			}
+			u, err := artifactURL(enrollmentID, spec.Kind)
+			if err != nil {
+				return nil, err
+			}
+			data.ArtifactURL = u
+			cmd, err := renderTemplate(spec.Kind, spec.Template, data)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, InstallArtifact{Label: spec.Label, Kind: spec.Kind, Command: cmd, URL: u})
+			continue
+		}
+		cmd, err := renderTemplate(spec.Kind, spec.Template, data)
 		if err != nil {
-			return nil, fmt.Errorf("render artifact %q: %w", spec.Kind, err)
+			return nil, err
 		}
-		var sb strings.Builder
-		if err := tmpl.Execute(&sb, artifactRenderData(connectURL, token, spec.ConnectURL)); err != nil {
-			return nil, fmt.Errorf("render artifact %q: %w", spec.Kind, err)
-		}
-		out = append(out, InstallArtifact{Label: spec.Label, Kind: spec.Kind, Command: sb.String()})
+		out = append(out, InstallArtifact{Label: spec.Label, Kind: spec.Kind, Command: cmd})
 	}
 	return out, nil
+}
+
+func renderTemplate(name, tmpl string, data artifactData) (string, error) {
+	t, err := template.New(name).Funcs(template.FuncMap{"shellquote": shellQuote}).Parse(tmpl)
+	if err != nil {
+		return "", fmt.Errorf("render artifact %q: %w", name, err)
+	}
+	var sb strings.Builder
+	if err := t.Execute(&sb, data); err != nil {
+		return "", fmt.Errorf("render artifact %q: %w", name, err)
+	}
+	return sb.String(), nil
+}
+
+// RenderArtifactContent mints the real enrollment token and renders a
+// URL-delivered artifact's body. The caller's single-use ticket bounds it to one
+// fetch per enrollment.
+func (s *EnrollmentService) RenderArtifactContent(ctx context.Context, connectionID, enrollmentID, kind, connectURL string) (string, error) {
+	enr, err := s.store.Get(ctx, enrollmentID)
+	if err != nil || enr.ConnectionID != connectionID {
+		return "", ErrEnrollmentInvalid
+	}
+	conn, err := s.conns.Get(ctx, enr.ConnectionID)
+	if err != nil {
+		return "", ErrEnrollmentInvalid
+	}
+	m, ok := s.plugins.Manifest(conn.Protocol)
+	if !ok || m.Agent == nil {
+		return "", ErrNoAgentSupport
+	}
+	var spec *plugin.InstallArtifact
+	for i := range m.Agent.Install {
+		if m.Agent.Install[i].Kind == kind && m.Agent.Install[i].Delivery == plugin.DeliveryURL {
+			spec = &m.Agent.Install[i]
+			break
+		}
+	}
+	if spec == nil {
+		return "", fmt.Errorf("%w: no url artifact %q", ErrEnrollmentInvalid, kind)
+	}
+	token, err := randomToken()
+	if err != nil {
+		return "", err
+	}
+	now := s.now()
+	if err := s.store.UpdateToken(ctx, enr.ID, hashToken(token), now.Add(s.ttl)); err != nil {
+		return "", err
+	}
+	data := artifactRenderData(connectURL, token, spec.ConnectURL)
+	return renderTemplate(spec.Kind, spec.Content, data)
 }
 
 type artifactData struct {
 	GatewayConnectURL     string
 	ConnectURL            string
+	ArtifactURL           string
 	Token                 string
 	Image                 string
 	Insecure              bool

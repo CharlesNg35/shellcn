@@ -102,6 +102,7 @@ onBeforeUnmount(onResizeEnd);
           :panel="active.panel"
           :connection-id="connectionId"
           :source="active.source"
+          :config="active.config"
           :resource="active.resource"
         />
       </KeepAlive>

@@ -65,6 +65,7 @@ function dockItem(action: Action): DockItem {
       method: action.method,
       params: actionParams(action),
     },
+    config: action.config,
     resource: props.resource,
   };
 }

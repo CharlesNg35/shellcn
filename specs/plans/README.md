@@ -43,7 +43,7 @@ add plugins.
 | 4     | M3                 | Docker + agent transport validation/hardening (L4) |
 | 5     | M4                 | Proxmox (VNC)                         |
 | 6     | M5                 | PostgreSQL                            |
-| 7     | M6                 | Kubernetes (L7 agent)                 |
+| 7     | M6                 | Kubernetes (L7 agent) — ✅ done        |
 
 ## Progress
 

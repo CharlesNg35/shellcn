@@ -80,10 +80,10 @@ users:
 
 func listNamespaces(t *testing.T, sess plugin.Session) []Row {
 	t.Helper()
-	rc := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, sess, nil, url.Values{}, nil)
-	out, err := ListNamespaces(rc)
+	rc := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, sess, map[string]string{"kind": "namespace"}, url.Values{}, nil)
+	out, err := ListResource(rc)
 	if err != nil {
-		t.Fatalf("ListNamespaces: %v", err)
+		t.Fatalf("ListResource: %v", err)
 	}
 	page, ok := out.(plugin.Page[Row])
 	if !ok {

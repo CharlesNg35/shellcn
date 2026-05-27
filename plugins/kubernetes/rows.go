@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strconv"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/charlesng/shellcn/internal/plugin"
 )
 
@@ -43,19 +41,4 @@ func pageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 		next = strconv.Itoa(end)
 	}
 	return plugin.Page[Row]{Items: rows[start:end], NextCursor: next, Total: &total}, nil
-}
-
-// namespaceRows maps namespaces to grid rows.
-func namespaceRows(items []corev1.Namespace) []Row {
-	rows := make([]Row, 0, len(items))
-	for i := range items {
-		ns := &items[i]
-		rows = append(rows, Row{
-			"name":      ns.Name,
-			"status":    string(ns.Status.Phase),
-			"labels":    ns.Labels,
-			"createdAt": ns.CreationTimestamp.UTC().Format("2006-01-02T15:04:05Z07:00"),
-		})
-	}
-	return rows
 }

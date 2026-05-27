@@ -557,6 +557,12 @@ func (s *gormEnrollmentStore) UpdateStatus(ctx context.Context, id string, statu
 	return rowsOrNotFound(res)
 }
 
+func (s *gormEnrollmentStore) UpdateToken(ctx context.Context, id, tokenHash string, expiresAt time.Time) error {
+	res := s.db.WithContext(ctx).Model(&models.AgentEnrollment{}).Where("id = ?", id).
+		Updates(map[string]any{"token_hash": tokenHash, "expires_at": expiresAt, "updated_at": time.Now()})
+	return rowsOrNotFound(res)
+}
+
 func (s *gormEnrollmentStore) Consume(ctx context.Context, id string, now time.Time) (bool, error) {
 	res := s.db.WithContext(ctx).Model(&models.AgentEnrollment{}).
 		Where("id = ? AND (status IN ? OR (status = ? AND expires_at > ?))",

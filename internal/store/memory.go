@@ -779,6 +779,20 @@ func (s *memEnrollmentStore) UpdateStatus(_ context.Context, id string, status m
 	return nil
 }
 
+func (s *memEnrollmentStore) UpdateToken(_ context.Context, id, tokenHash string, expiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.m[id]
+	if !ok {
+		return ErrNotFound
+	}
+	e.TokenHash = tokenHash
+	e.ExpiresAt = expiresAt
+	e.UpdatedAt = time.Now()
+	s.m[id] = e
+	return nil
+}
+
 func (s *memEnrollmentStore) Consume(_ context.Context, id string, now time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

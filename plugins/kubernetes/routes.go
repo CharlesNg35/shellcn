@@ -1,77 +1,67 @@
 package kubernetes
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import "github.com/charlesng/shellcn/internal/plugin"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+const (
+	permRead   = "kubernetes.resources.read"
+	permWrite  = "kubernetes.resources.write"
+	permDelete = "kubernetes.resources.delete"
 )
 
-// Routes wires the Kubernetes route handlers. Step 1 establishes connectivity
-// (list namespaces over both transports); later steps add the generic resource,
-// stream, apply, and metrics routes.
+// Routes wires the generic, catalog-driven Kubernetes routes. One set of routes
+// (parameterized by {kind}) serves every built-in kind and every CRD.
 func Routes() []plugin.Route {
 	return []plugin.Route{
-		{ID: "kubernetes.namespaces.tree", Method: plugin.MethodGet, Path: "/tree/namespaces", Permission: "kubernetes.namespaces.read", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.namespaces.tree", Handle: TreeNamespaces},
-		{ID: "kubernetes.namespaces.list", Method: plugin.MethodGet, Path: "/namespaces", Permission: "kubernetes.namespaces.read", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.namespaces.list", Handle: ListNamespaces},
-		{ID: "kubernetes.namespace.get", Method: plugin.MethodGet, Path: "/namespaces/{name}", Permission: "kubernetes.namespaces.read", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.namespace.get", Handle: GetNamespace},
+		{ID: "kubernetes.tree.category", Method: plugin.MethodGet, Path: "/tree/category/{category}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.category", Handle: TreeCategory},
+		{ID: "kubernetes.tree.kind", Method: plugin.MethodGet, Path: "/tree/kind/{kind}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.kind", Handle: TreeKindInstances},
+		{ID: "kubernetes.tree.crds", Method: plugin.MethodGet, Path: "/tree/crds", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.crds", Handle: TreeCRDs},
+
+		{ID: "kubernetes.resource.list", Method: plugin.MethodGet, Path: "/resources/{kind}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.list", Handle: ListResource},
+		{ID: "kubernetes.resource.get", Method: plugin.MethodGet, Path: "/resources/{kind}/get", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.get", Handle: GetResource},
+		{ID: "kubernetes.resource.watch", Method: plugin.MethodWS, Path: "/resources/{kind}/watch", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.watch", Stream: WatchResource},
+
+		{ID: "kubernetes.resource.delete", Method: plugin.MethodDelete, Path: "/resources/{kind}/delete", Permission: permDelete, Risk: plugin.RiskDestructive, AuditEvent: "kubernetes.resource.delete", Handle: DeleteResource},
+		{ID: "kubernetes.resource.scale", Method: plugin.MethodPost, Path: "/resources/{kind}/scale", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.resource.scale", Input: scaleSchema(), Handle: ScaleResource},
+		{ID: "kubernetes.resource.restart", Method: plugin.MethodPost, Path: "/resources/{kind}/restart", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.resource.restart", Handle: RestartResource},
+
+		{ID: "kubernetes.node.cordon", Method: plugin.MethodPost, Path: "/nodes/cordon", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.node.cordon", Handle: CordonNode},
+		{ID: "kubernetes.node.uncordon", Method: plugin.MethodPost, Path: "/nodes/uncordon", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.node.uncordon", Handle: UncordonNode},
+
+		{ID: "kubernetes.resource.yaml", Method: plugin.MethodGet, Path: "/resources/{kind}/yaml", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.yaml", Handle: GetYAML},
+		{ID: "kubernetes.resource.template", Method: plugin.MethodGet, Path: "/resources/{kind}/template", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.template", Handle: TemplateYAML},
+		{ID: "kubernetes.resource.apply", Method: plugin.MethodPost, Path: "/apply", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.resource.apply", Input: applySchema(), Handle: ApplyYAML},
+		{ID: "kubernetes.resource.events", Method: plugin.MethodGet, Path: "/resources/{kind}/events", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.events", Handle: ResourceEvents},
+
+		{ID: "kubernetes.pod.logs", Method: plugin.MethodWS, Path: "/pods/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.logs", Stream: LogsStream},
+		{ID: "kubernetes.pod.exec", Method: plugin.MethodWS, Path: "/pods/exec", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.exec", Stream: ExecStream},
+		{ID: "kubernetes.pod.portforward", Method: plugin.MethodWS, Path: "/pods/portforward", Permission: "kubernetes.pods.portforward", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.portforward", Stream: PortForwardStream},
+
+		{ID: "kubernetes.cluster.tree", Method: plugin.MethodGet, Path: "/tree/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.tree", Handle: ClusterTree},
+		{ID: "kubernetes.cluster.list", Method: plugin.MethodGet, Path: "/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.list", Handle: ClusterList},
+		{ID: "kubernetes.cluster.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.metrics", Stream: ClusterMetrics},
+		{ID: "kubernetes.node.metrics", Method: plugin.MethodWS, Path: "/nodes/metrics", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.node.metrics", Stream: NodeMetrics},
+		{ID: "kubernetes.node.pods", Method: plugin.MethodGet, Path: "/nodes/pods", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.node.pods", Handle: NodePods},
+		{ID: "kubernetes.workload.pods", Method: plugin.MethodGet, Path: "/resources/{kind}/pods", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.workload.pods", Handle: WorkloadPods},
 	}
 }
 
 func sess(rc *plugin.RequestContext) (*Session, error) { return Unwrap(rc.Session) }
 
-// ListNamespaces returns the cluster's namespaces as grid rows. This is the
-// Step 1 connectivity proof: it succeeds identically over direct (kubeconfig)
-// and agent (in-cluster ServiceAccount) transport.
-func ListNamespaces(rc *plugin.RequestContext) (any, error) {
-	s, err := sess(rc)
-	if err != nil {
-		return nil, err
-	}
-	list, err := s.Clientset().CoreV1().Namespaces().List(rc.Ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, apiErr(err)
-	}
-	return pageRows(rc, namespaceRows(list.Items))
+func applySchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{
+		Name: "Apply",
+		Fields: []plugin.Field{
+			{Key: "content", Label: "Manifest", Type: plugin.FieldTextarea, Required: true},
+			{Key: "dryRun", Label: "Dry run", Type: plugin.FieldToggle},
+		},
+	}}}
 }
 
-// GetNamespace returns one namespace object for the detail document view.
-func GetNamespace(rc *plugin.RequestContext) (any, error) {
-	s, err := sess(rc)
-	if err != nil {
-		return nil, err
-	}
-	ns, err := s.Clientset().CoreV1().Namespaces().Get(rc.Ctx, rc.Param("name"), metav1.GetOptions{})
-	if err != nil {
-		return nil, apiErr(err)
-	}
-	ns.ManagedFields = nil
-	return ns, nil
-}
-
-// TreeNamespaces lists namespaces as selectable sidebar nodes.
-func TreeNamespaces(rc *plugin.RequestContext) (any, error) {
-	s, err := sess(rc)
-	if err != nil {
-		return nil, err
-	}
-	list, err := s.Clientset().CoreV1().Namespaces().List(rc.Ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, apiErr(err)
-	}
-	nodes := make([]plugin.TreeNode, 0, len(list.Items))
-	for i := range list.Items {
-		ns := &list.Items[i]
-		nodes = append(nodes, plugin.TreeNode{
-			Key:   "namespace:" + ns.Name,
-			Label: ns.Name,
-			Icon:  plugin.Icon{Type: plugin.IconLucide, Value: "box"},
-			Ref:   &plugin.ResourceRef{Kind: "namespace", Name: ns.Name, UID: ns.Name},
-			Leaf:  true,
-			Data: Row{
-				"name":   ns.Name,
-				"status": string(ns.Status.Phase),
-			},
-		})
-	}
-	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
+func scaleSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{
+		Name: "Scale",
+		Fields: []plugin.Field{
+			{Key: "replicas", Label: "Replicas", Type: plugin.FieldNumber, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
+		},
+	}}}
 }

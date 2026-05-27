@@ -492,6 +492,9 @@ type Action struct {
 	// sourced from the action's route — instead of executing the route inline.
 	Open  OpenTarget `json:"open,omitempty"`
 	Panel PanelType  `json:"panel,omitempty"`
+	// Config is the panel config for a dock/dialog-opened Panel (e.g. a
+	// code_editor's saveRouteId), so an action can open an editable panel.
+	Config map[string]any `json:"config,omitempty"`
 	// EnabledWhen gates the button on the active row's fields (e.g. state ==
 	// "running"); false shows it disabled, not hidden. Empty = always enabled.
 	EnabledWhen *Condition `json:"enabledWhen,omitempty"`

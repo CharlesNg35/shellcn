@@ -50,15 +50,9 @@ const (
 )
 
 // ProxyTarget describes the single endpoint an agent exposes back to the gateway.
-//
-// For the L7 http_proxy mode the agent runs a credential-injecting reverse proxy
-// to Address. TokenFile and CAFile keep that injection generic — they are paths
-// inside the target environment, declared by the plugin, never interpreted by
-// the agent as anything protocol-specific: the agent injects the bearer token
-// read from TokenFile (re-read so rotation is honored) and verifies the
-// upstream's TLS with the PEM bundle in CAFile. Empty TokenFile means no auth
-// header is added; empty CAFile means the system root pool is used. They carry
-// no protocol vocabulary, so any private-HTTP-API plugin can reuse this mode.
+// For http_proxy mode, TokenFile/CAFile are generic target-side paths the agent
+// uses to inject a bearer token (empty = none) and verify TLS (empty = system
+// roots) — no protocol vocabulary, so any private-HTTP-API plugin can reuse it.
 type ProxyTarget struct {
 	Mode      AgentMode
 	Address   string
@@ -67,11 +61,25 @@ type ProxyTarget struct {
 	CAFile    string
 }
 
+// ArtifactDelivery selects how an install artifact reaches the target.
+type ArtifactDelivery string
+
+const (
+	// DeliveryInline injects the token directly into Template (the default).
+	DeliveryInline ArtifactDelivery = ""
+	// DeliveryURL serves Content from a single-use signed-ticket URL; Template
+	// becomes the fetch command ({{.ArtifactURL}}), so the token appears only in
+	// the fetched body. Generic — any plugin may use it.
+	DeliveryURL ArtifactDelivery = "url"
+)
+
 // InstallArtifact is a launch recipe shown to the user to start an agent.
 type InstallArtifact struct {
 	Label      string
 	Kind       string
 	Template   string
+	Content    string
+	Delivery   ArtifactDelivery
 	ConnectURL ArtifactConnectURL
 }
 

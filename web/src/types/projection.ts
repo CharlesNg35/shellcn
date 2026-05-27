@@ -391,6 +391,7 @@ export interface Action {
   // workspace dock or a modal instead of executing the route inline.
   open?: "view" | "dock" | "dialog";
   panel?: PanelType;
+  config?: Record<string, unknown>; // panel config for a dock/dialog-opened panel
   enabledWhen?: Condition; // gate on the active row's fields; false = disabled
 }
 

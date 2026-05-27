@@ -13,6 +13,7 @@ export interface DockItem {
   icon?: Icon;
   panel: PanelType;
   source: DataSource;
+  config?: Record<string, unknown>;
   resource?: ResourceRef | null;
 }
 

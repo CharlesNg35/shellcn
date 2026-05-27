@@ -232,6 +232,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		Auth:              auth.NewLocalAuthenticator(st.Users),
 		SessionMgr:        auth.NewSessionManagerWithKey(cfg.Auth.SessionTTLDuration(), cfg.Auth.JWTSigningKey(masterKey)),
 		Tickets:           auth.NewTicketStore(0),
+		ArtifactTickets:   auth.NewTicketStore(service.DefaultEnrollmentTTL),
 		Policy:            pol,
 		Connector:         connector,
 		Connections:       connections,

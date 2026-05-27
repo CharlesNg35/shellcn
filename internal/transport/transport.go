@@ -233,18 +233,10 @@ func (a *agentNet) DialContext(ctx context.Context, network, addr string) (net.C
 	return a.dial(ctx, network, addr)
 }
 
-// HTTP returns an L7 base URL + RoundTripper when the agent runs in http_proxy
-// mode; otherwise ok=false (the plugin uses DialContext for L4 modes).
-//
-// Security: the "http" scheme is logical only — the RoundTripper never opens a
-// real socket. Its DialContext opens a yamux stream over the agent's existing
-// dial-back tunnel, which is itself a CA-validated, mutually-authenticated wss
-// connection, so the request is encrypted on the wire. The agent then
-// re-originates it to the upstream over https with the target's own credentials
-// (a bearer token + private CA the target environment provides). Both real
-// network hops are TLS; an inner
-// TLS layer would be TLS-in-TLS with no security gain, so the inner hop stays
-// plain HTTP/1.1 inside the encrypted tunnel.
+// HTTP returns an L7 base URL + RoundTripper for http_proxy mode (else ok=false).
+// The "http" scheme is logical: DialContext opens a yamux stream over the agent's
+// already-encrypted wss tunnel, which re-originates to the upstream over https —
+// so an inner TLS layer would only be TLS-in-TLS with no gain.
 func (a *agentNet) HTTP() (string, http.RoundTripper, bool) {
 	if a.mode != plugin.AgentHTTP {
 		return "", nil, false
