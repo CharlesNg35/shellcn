@@ -128,6 +128,109 @@ func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
 	}
 }
 
+func TestDatabaseCreateActionsAreDeclaredAtCollectionLevel(t *testing.T) {
+	reg := plugin.NewRegistry()
+	Register(reg)
+
+	for _, tc := range []struct {
+		protocol string
+		kind     string
+		actionID string
+		routeID  string
+	}{
+		{"postgresql", "database", "postgresql.database.create", "postgresql.database.create"},
+		{"mysql", "database", "mysql.database.create", "mysql.database.create"},
+		{"clickhouse", "database", "clickhouse.database.create", "clickhouse.database.create"},
+		{"cockroachdb", "database", "cockroachdb.database.create", "cockroachdb.database.create"},
+		{"mssql", "database", "mssql.database.create", "mssql.database.create"},
+	} {
+		m, ok := reg.Manifest(tc.protocol)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", tc.protocol)
+		}
+		res, ok := resourceByKind(m, tc.kind)
+		if !ok {
+			t.Fatalf("%s should expose resource %q", tc.protocol, tc.kind)
+		}
+		if !stringSliceContains(res.ListActionIDs, tc.actionID) {
+			t.Fatalf("%s %s list actions = %#v, want %s", tc.protocol, tc.kind, res.ListActionIDs, tc.actionID)
+		}
+		if !manifestHasAction(m, tc.actionID, tc.routeID) {
+			t.Fatalf("%s action %s should route to %s", tc.protocol, tc.actionID, tc.routeID)
+		}
+		if _, ok := reg.Route(tc.protocol, tc.routeID); !ok {
+			t.Fatalf("%s route %s was not registered", tc.protocol, tc.routeID)
+		}
+	}
+
+	m, ok := reg.Manifest("mongodb")
+	if !ok {
+		t.Fatal("mongodb was not registered")
+	}
+	database, ok := resourceByKind(m, "database")
+	if !ok {
+		t.Fatal("mongodb should expose database resources")
+	}
+	var collections plugin.Tab
+	for _, tab := range database.Detail.Tabs {
+		if tab.Key == "collections" {
+			collections = tab
+			break
+		}
+	}
+	if !stringSliceContains(stringConfigList(collections.Config, "actionIds"), "mongodb.collection.create") {
+		t.Fatalf("mongodb collections tab actions = %#v, want collection create", collections.Config)
+	}
+	if !manifestHasAction(m, "mongodb.collection.create", "mongodb.collection.create") {
+		t.Fatal("mongodb collection create action should route to mongodb.collection.create")
+	}
+	if _, ok := reg.Route("mongodb", "mongodb.collection.create"); !ok {
+		t.Fatal("mongodb collection create route was not registered")
+	}
+}
+
+func TestEditableDatabaseTablesDeclareColumnMetadataSource(t *testing.T) {
+	reg := plugin.NewRegistry()
+	Register(reg)
+
+	for _, tc := range []struct {
+		protocol string
+		routeID  string
+	}{
+		{"postgresql", "postgresql.table.columns"},
+		{"mysql", "mysql.table.columns"},
+		{"cockroachdb", "cockroachdb.table.columns"},
+		{"mssql", "mssql.table.columns"},
+		{"oracle", "oracle.table.columns"},
+	} {
+		m, ok := reg.Manifest(tc.protocol)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", tc.protocol)
+		}
+		res, ok := resourceByKind(m, "table")
+		if !ok {
+			t.Fatalf("%s should expose table resources", tc.protocol)
+		}
+		var data plugin.Tab
+		for _, tab := range res.Detail.Tabs {
+			if tab.Key == "data" {
+				data = tab
+				break
+			}
+		}
+		source, ok := data.Config["columnsSource"].(*plugin.DataSource)
+		if !ok {
+			t.Fatalf("%s data grid should declare columnsSource: %#v", tc.protocol, data.Config)
+		}
+		if source.RouteID != tc.routeID {
+			t.Fatalf("%s columnsSource = %q, want %q", tc.protocol, source.RouteID, tc.routeID)
+		}
+		if _, ok := reg.Route(tc.protocol, tc.routeID); !ok {
+			t.Fatalf("%s route %s was not registered", tc.protocol, tc.routeID)
+		}
+	}
+}
+
 func credentialField(schema plugin.Schema, key string) (plugin.Field, bool) {
 	for _, group := range schema.Groups {
 		for _, field := range group.Fields {
@@ -137,6 +240,38 @@ func credentialField(schema plugin.Schema, key string) (plugin.Field, bool) {
 		}
 	}
 	return plugin.Field{}, false
+}
+
+func resourceByKind(m plugin.Manifest, kind string) (plugin.ResourceType, bool) {
+	for _, res := range m.Resources {
+		if res.Kind == kind {
+			return res, true
+		}
+	}
+	return plugin.ResourceType{}, false
+}
+
+func manifestHasAction(m plugin.Manifest, actionID string, routeID string) bool {
+	for _, action := range m.Actions {
+		if action.ID == actionID && action.RouteID == routeID {
+			return true
+		}
+	}
+	return false
+}
+
+func stringConfigList(config map[string]any, key string) []string {
+	raw, _ := config[key].([]string)
+	return raw
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func credentialKindsContain(kinds []plugin.CredentialKind, want plugin.CredentialKind) bool {

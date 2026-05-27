@@ -77,10 +77,11 @@ type Column struct {
 // plugin: Insert sends {"values":{col:val}}, Update sends {"key":{col:val},
 // "values":{col:val}}, and Delete sends {"key":{col:val}}.
 type TableConfig struct {
-	Columns      []Column    `json:"columns,omitempty"`
-	Watch        *DataSource `json:"watch,omitempty"`
-	ActionIDs    []string    `json:"actionIds,omitempty"`
-	RowActionIDs []string    `json:"rowActionIds,omitempty"`
+	Columns       []Column    `json:"columns,omitempty"`
+	ColumnsSource *DataSource `json:"columnsSource,omitempty"`
+	Watch         *DataSource `json:"watch,omitempty"`
+	ActionIDs     []string    `json:"actionIds,omitempty"`
+	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
 
 	Editable  bool        `json:"editable,omitempty"`
 	RowKey    []string    `json:"rowKey,omitempty"`
@@ -108,6 +109,9 @@ func (c TableConfig) Map() map[string]any {
 	out := map[string]any{}
 	if len(c.Columns) > 0 {
 		out["columns"] = c.Columns
+	}
+	if c.ColumnsSource != nil {
+		out["columnsSource"] = c.ColumnsSource
 	}
 	if c.Watch != nil {
 		out["watch"] = c.Watch

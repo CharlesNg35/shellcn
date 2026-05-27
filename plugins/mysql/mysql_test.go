@@ -31,6 +31,31 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if !reg.CredentialKindSupportsProtocol(plugin.CredentialTLSClientCert, protocolName) {
 		t.Fatal("TLS client certificate credential should support MySQL")
 	}
+
+	routeIDs := map[string]bool{}
+	for _, route := range New().Routes() {
+		routeIDs[route.ID] = true
+	}
+	if !routeIDs["mysql.database.create"] {
+		t.Fatal("MySQL should expose a create database route")
+	}
+	actions := map[string]plugin.Action{}
+	for _, action := range m.Actions {
+		actions[action.ID] = action
+	}
+	if action := actions["mysql.database.create"]; action.RouteID != "mysql.database.create" {
+		t.Fatalf("create database action is not wired to its route: %#v", action)
+	}
+	var database plugin.ResourceType
+	for _, res := range m.Resources {
+		if res.Kind == "database" {
+			database = res
+			break
+		}
+	}
+	if !contains(database.ListActionIDs, "mysql.database.create") {
+		t.Fatalf("database list actions = %#v, want create database", database.ListActionIDs)
+	}
 }
 
 func TestQuerySafetyStopsBeforeDatabase(t *testing.T) {
@@ -119,4 +144,20 @@ func TestTableDataGridIsEditable(t *testing.T) {
 			t.Fatalf("Data tab %q points at missing route %q", key, ds.RouteID)
 		}
 	}
+	columnsSource, ok := data.Config["columnsSource"].(*plugin.DataSource)
+	if !ok {
+		t.Fatal("Data tab missing columnsSource for empty editable tables")
+	}
+	if columnsSource.RouteID != "mysql.table.columns" {
+		t.Fatalf("unexpected columnsSource route: %q", columnsSource.RouteID)
+	}
+}
+
+func contains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

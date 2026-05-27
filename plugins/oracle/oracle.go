@@ -73,7 +73,7 @@ func schemaResource() plugin.ResourceType {
 		Kind: "schema", Title: "Schemas",
 		List:    plugin.DataSource{RouteID: "oracle.schemas.list"},
 		Columns: schemaColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"oracle.table.create"}}, Tabs: []plugin.Tab{
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.schema.overview", Params: map[string]string{"schema": "${resource.name}"}}},
 			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.tables.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"oracle.table.create"}}.Map()},
 			{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.views.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns()}.Map()},
@@ -90,7 +90,7 @@ func tableResource() plugin.ResourceType {
 		List:         plugin.DataSource{RouteID: "oracle.tables.list"},
 		Columns:      tableColumns(),
 		RowActionIDs: []string{"oracle.column.add", "oracle.table.truncate", "oracle.table.drop"},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"oracle.column.add", "oracle.table.truncate", "oracle.table.drop"}}, Tabs: []plugin.Tab{
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"oracle.table.truncate", "oracle.table.drop"}}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.rows", Params: objectParams()}, Config: dataGridConfig()},
 			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"oracle.column.add", "oracle.column.drop"}}.Map()},
 			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"oracle.index.create", "oracle.index.drop"}}.Map()},
@@ -183,13 +183,14 @@ func objectParams() map[string]string {
 
 func dataGridConfig() map[string]any {
 	return plugin.TableConfig{
-		Editable:    true,
-		StagedEdits: true,
-		Exportable:  true,
-		EmptyText:   "No rows.",
-		Insert:      &plugin.DataSource{RouteID: "oracle.table.row.insert", Method: plugin.MethodPost, Params: objectParams()},
-		Update:      &plugin.DataSource{RouteID: "oracle.table.row.update", Method: plugin.MethodPatch, Params: objectParams()},
-		Delete:      &plugin.DataSource{RouteID: "oracle.table.row.delete", Method: plugin.MethodDelete, Params: objectParams()},
+		Editable:      true,
+		StagedEdits:   true,
+		Exportable:    true,
+		EmptyText:     "No rows.",
+		Insert:        &plugin.DataSource{RouteID: "oracle.table.row.insert", Method: plugin.MethodPost, Params: objectParams()},
+		Update:        &plugin.DataSource{RouteID: "oracle.table.row.update", Method: plugin.MethodPatch, Params: objectParams()},
+		Delete:        &plugin.DataSource{RouteID: "oracle.table.row.delete", Method: plugin.MethodDelete, Params: objectParams()},
+		ColumnsSource: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()},
 	}.Map()
 }
 

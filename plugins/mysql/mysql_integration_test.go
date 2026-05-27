@@ -42,6 +42,23 @@ func TestMySQLPluginIntegration(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 	s := sess.(*Session)
 
+	createdDatabase := "shellcn_it_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": createdDatabase, "if_not_exists": true})); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "DROP DATABASE IF EXISTS "+quoteIdent(createdDatabase))
+	})
+	databases, err := listDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list databases after create: %v", err)
+	}
+	if !pageHasName(databases.(plugin.Page[row]), createdDatabase) {
+		t.Fatalf("created database was not listed: %#v", databases)
+	}
+
 	seedStatements := []string{
 		`
 CREATE TABLE IF NOT EXISTS shellcn_people (

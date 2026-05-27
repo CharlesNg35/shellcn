@@ -68,7 +68,8 @@ func resources() []plugin.ResourceType {
 func databaseResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "database", Title: "Databases",
-		List: plugin.DataSource{RouteID: "mssql.databases.list"},
+		List:          plugin.DataSource{RouteID: "mssql.databases.list"},
+		ListActionIDs: []string{"mssql.database.create"},
 		Columns: []plugin.Column{
 			{Key: "name", Label: "Database", Sortable: true},
 			{Key: "state", Label: "State", Sortable: true},
@@ -89,7 +90,7 @@ func schemaResource() plugin.ResourceType {
 		Kind: "schema", Title: "Schemas",
 		List:    plugin.DataSource{RouteID: "mssql.schemas.list"},
 		Columns: schemaColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"mssql.table.create"}}, Tabs: []plugin.Tab{
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mssql.schema.overview", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}},
 			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.tables.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"mssql.table.create"}}.Map()},
 			{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.views.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns()}.Map()},
@@ -104,7 +105,7 @@ func tableResource() plugin.ResourceType {
 		List:         plugin.DataSource{RouteID: "mssql.tables.list"},
 		Columns:      tableColumns(),
 		RowActionIDs: []string{"mssql.column.add", "mssql.table.truncate", "mssql.table.drop"},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mssql.column.add", "mssql.table.truncate", "mssql.table.drop"}}, Tabs: []plugin.Tab{
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mssql.table.truncate", "mssql.table.drop"}}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.rows", Params: objectParams()}, Config: dataGridConfig()},
 			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"mssql.column.add", "mssql.column.drop"}}.Map()},
 			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mssql.index.create", "mssql.index.drop"}}.Map()},
@@ -168,13 +169,14 @@ func tableParams() map[string]string {
 
 func dataGridConfig() map[string]any {
 	return plugin.TableConfig{
-		Editable:    true,
-		StagedEdits: true,
-		Exportable:  true,
-		EmptyText:   "No rows.",
-		Insert:      &plugin.DataSource{RouteID: "mssql.table.row.insert", Method: plugin.MethodPost, Params: objectParams()},
-		Update:      &plugin.DataSource{RouteID: "mssql.table.row.update", Method: plugin.MethodPatch, Params: objectParams()},
-		Delete:      &plugin.DataSource{RouteID: "mssql.table.row.delete", Method: plugin.MethodDelete, Params: objectParams()},
+		Editable:      true,
+		StagedEdits:   true,
+		Exportable:    true,
+		EmptyText:     "No rows.",
+		Insert:        &plugin.DataSource{RouteID: "mssql.table.row.insert", Method: plugin.MethodPost, Params: objectParams()},
+		Update:        &plugin.DataSource{RouteID: "mssql.table.row.update", Method: plugin.MethodPatch, Params: objectParams()},
+		Delete:        &plugin.DataSource{RouteID: "mssql.table.row.delete", Method: plugin.MethodDelete, Params: objectParams()},
+		ColumnsSource: &plugin.DataSource{RouteID: "mssql.table.columns", Params: objectParams()},
 	}.Map()
 }
 
@@ -223,6 +225,7 @@ func constraintColumns() []plugin.Column {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
+		{ID: "mssql.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "mssql.database.create"},
 		{ID: "mssql.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "mssql.table.create", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
 		{ID: "mssql.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "mssql.column.add", Params: objectParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "mssql.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "mssql.column.drop", Params: objectParams(), Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},

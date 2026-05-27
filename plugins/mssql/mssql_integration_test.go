@@ -41,6 +41,23 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 	s := sess.(*Session)
 
+	createdDatabase := "shellcn_it_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": createdDatabase})); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "DROP DATABASE "+quoteIdent(createdDatabase))
+	})
+	databases, err := listDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list databases after create: %v", err)
+	}
+	if !pageHasName(databases.(plugin.Page[row]), createdDatabase) {
+		t.Fatalf("created database was not listed: %#v", databases)
+	}
+
 	seed(ctx, t, s)
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)

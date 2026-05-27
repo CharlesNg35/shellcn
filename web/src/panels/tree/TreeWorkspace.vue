@@ -188,7 +188,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             type="button"
             :title="v.subtitle ? `${v.subtitle} / ${v.title}` : v.title"
             :data-active-tab="v.id === view.activeViewId ? 'true' : undefined"
-            class="group flex max-w-60 shrink-0 cursor-grab items-center gap-1.5 overflow-hidden rounded px-2 py-1 text-xs transition-colors active:cursor-grabbing"
+            class="group flex max-w-60 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-2 py-1 text-xs transition-colors active:cursor-pointer"
             :class="
               v.id === view.activeViewId
                 ? 'bg-surface-0 text-surface-900 shadow-sm dark:bg-surface-800 dark:text-surface-0'

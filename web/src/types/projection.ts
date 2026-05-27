@@ -211,6 +211,7 @@ export interface FileBrowserConfig {
 
 export interface TablePanelConfig {
   columns?: Column[];
+  columnsSource?: DataSource;
   watch?: DataSource;
   actionIds?: string[];
   rowActionIds?: string[];

@@ -72,7 +72,8 @@ func resources() []plugin.ResourceType {
 func databaseResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "database", Title: "Databases",
-		List: plugin.DataSource{RouteID: "clickhouse.databases.list"},
+		List:          plugin.DataSource{RouteID: "clickhouse.databases.list"},
+		ListActionIDs: []string{"clickhouse.database.create"},
 		Columns: []plugin.Column{
 			{Key: "name", Label: "Database", Sortable: true},
 			{Key: "engine", Label: "Engine", Sortable: true},
@@ -82,7 +83,7 @@ func databaseResource() plugin.ResourceType {
 			{Key: "comment", Label: "Comment"},
 		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"clickhouse.table.create"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"clickhouse.table.create"}}.Map()},
@@ -102,7 +103,7 @@ func tableResource() plugin.ResourceType {
 		Columns:      tableColumns(),
 		RowActionIDs: []string{"clickhouse.column.add", "clickhouse.table.truncate", "clickhouse.table.drop"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"clickhouse.column.add", "clickhouse.table.truncate", "clickhouse.table.drop"}},
+			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"clickhouse.table.truncate", "clickhouse.table.drop"}},
 			Tabs: []plugin.Tab{
 				{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}.Map()},
 				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"clickhouse.column.add", "clickhouse.column.drop"}}.Map()},
@@ -244,6 +245,7 @@ func constraintColumns() []plugin.Column {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
+		{ID: "clickhouse.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "clickhouse.database.create"},
 		{ID: "clickhouse.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "clickhouse.table.create", Params: map[string]string{"database": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
 		{ID: "clickhouse.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "clickhouse.column.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "clickhouse.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "clickhouse.column.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},

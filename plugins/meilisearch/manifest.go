@@ -24,7 +24,7 @@ func resources() []plugin.ResourceType {
 			ListActionIDs: []string{rid("index.create"), rid("dump.create"), rid("snapshot.create")},
 			RowActionIDs:  []string{rid("index.delete")},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{
-				rid("document.upsert"), rid("settings.update"), rid("index.update"), rid("documents.delete_all"), rid("index.delete"),
+				rid("settings.update"), rid("index.update"), rid("documents.delete_all"), rid("index.delete"),
 			}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("index.overview"), Params: indexParams()}},
 				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("documents.list"), Params: indexParams()}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{rid("document.upsert")}, RowActionIDs: []string{rid("document.delete")}, Exportable: true}.Map()},

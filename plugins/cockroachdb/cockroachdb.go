@@ -77,7 +77,8 @@ func resources() []plugin.ResourceType {
 func databaseResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "database", Title: "Databases",
-		List: plugin.DataSource{RouteID: "cockroachdb.databases.list"},
+		List:          plugin.DataSource{RouteID: "cockroachdb.databases.list"},
+		ListActionIDs: []string{"cockroachdb.database.create"},
 		Columns: []plugin.Column{
 			{Key: "name", Label: "Database", Sortable: true},
 			{Key: "owner", Label: "Owner", Sortable: true},
@@ -160,7 +161,7 @@ func schemaResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "cockroachdb.schemas.list"},
 		Columns: schemaColumns(),
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"cockroachdb.table.create"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cockroachdb.schema.overview", Params: map[string]string{"schema": "${resource.uid}"}}},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.tables.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"cockroachdb.table.create"}}.Map()},
@@ -179,7 +180,7 @@ func tableResource() plugin.ResourceType {
 		Columns:      tableColumns(),
 		RowActionIDs: []string{"cockroachdb.column.add", "cockroachdb.table.truncate", "cockroachdb.table.drop"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"cockroachdb.column.add", "cockroachdb.table.truncate", "cockroachdb.table.drop"}},
+			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"cockroachdb.table.truncate", "cockroachdb.table.drop"}},
 			Tabs: []plugin.Tab{
 				{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.table.rows", Params: tableParams()}, Config: dataGridConfig()},
 				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"cockroachdb.column.add", "cockroachdb.column.drop"}}.Map()},
@@ -229,13 +230,14 @@ func tableParams() map[string]string {
 
 func dataGridConfig() map[string]any {
 	return plugin.TableConfig{
-		Editable:    true,
-		StagedEdits: true,
-		Exportable:  true,
-		EmptyText:   "No rows.",
-		Insert:      &plugin.DataSource{RouteID: "cockroachdb.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
-		Update:      &plugin.DataSource{RouteID: "cockroachdb.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
-		Delete:      &plugin.DataSource{RouteID: "cockroachdb.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		Editable:      true,
+		StagedEdits:   true,
+		Exportable:    true,
+		EmptyText:     "No rows.",
+		Insert:        &plugin.DataSource{RouteID: "cockroachdb.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
+		Update:        &plugin.DataSource{RouteID: "cockroachdb.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
+		Delete:        &plugin.DataSource{RouteID: "cockroachdb.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		ColumnsSource: &plugin.DataSource{RouteID: "cockroachdb.table.columns", Params: tableParams()},
 	}.Map()
 }
 
@@ -308,6 +310,7 @@ func constraintColumns() []plugin.Column {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
+		{ID: "cockroachdb.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "cockroachdb.database.create"},
 		{ID: "cockroachdb.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "cockroachdb.table.create", Params: map[string]string{"schema": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
 		{ID: "cockroachdb.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "cockroachdb.column.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "cockroachdb.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "cockroachdb.column.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},

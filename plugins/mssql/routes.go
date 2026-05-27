@@ -63,6 +63,7 @@ func routes() []plugin.Route {
 		{ID: "mssql.table.row.insert", Method: plugin.MethodPost, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.row.insert", Handle: insertRow},
 		{ID: "mssql.table.row.update", Method: plugin.MethodPatch, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.row.update", Handle: updateRow},
 		{ID: "mssql.table.row.delete", Method: plugin.MethodDelete, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.table.row.delete", Handle: deleteRow},
+		{ID: "mssql.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "mssql.databases.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
 		{ID: "mssql.table.create", Method: plugin.MethodPost, Path: "/schemas/{database}/{schema}/tables", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "mssql.column.add", Method: plugin.MethodPost, Path: "/objects/{id}/columns", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "mssql.column.drop", Method: plugin.MethodPost, Path: "/objects/{id}/columns/drop", Permission: "mssql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mssql.column.drop", Input: columnDropSchema(), Handle: dropColumn},
@@ -77,6 +78,12 @@ func routes() []plugin.Route {
 
 func mssqlSession(rc *plugin.RequestContext) (*Session, error) {
 	return unwrap(rc.Session)
+}
+
+func databaseCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Database", Fields: []plugin.Field{
+		{Key: "name", Label: "Database name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
 }
 
 func tableCreateSchema() *plugin.Schema {
@@ -700,6 +707,30 @@ ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION`, nil)
 		}
 	}
 	return items, nil
+}
+
+func createDatabase(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "CREATE DATABASE "+quoteIdent(name)); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
 }
 
 func createTable(rc *plugin.RequestContext) (any, error) {

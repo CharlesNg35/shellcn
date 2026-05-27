@@ -62,6 +62,7 @@ func routes() []plugin.Route {
 		{ID: "clickhouse.table.definition", Method: plugin.MethodGet, Path: "/tables/{database}/{table}/definition", Permission: "clickhouse.tables.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.table.definition", Handle: tableDefinition},
 		{ID: "clickhouse.view.definition", Method: plugin.MethodGet, Path: "/views/{database}/{table}/definition", Permission: "clickhouse.views.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.view.definition", Handle: tableDefinition},
 		{ID: "clickhouse.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "clickhouse.databases.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.completion", Handle: completionRoute},
+		{ID: "clickhouse.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "clickhouse.databases.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
 		{ID: "clickhouse.table.create", Method: plugin.MethodPost, Path: "/databases/{database}/tables", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "clickhouse.column.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "clickhouse.column.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.column.drop", Input: columnDropSchema(), Handle: dropColumn},
@@ -75,6 +76,13 @@ func routes() []plugin.Route {
 
 func clickhouseSession(rc *plugin.RequestContext) (*Session, error) {
 	return unwrap(rc.Session)
+}
+
+func databaseCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Database", Fields: []plugin.Field{
+		{Key: "name", Label: "Database name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
+	}}}}
 }
 
 func tableCreateSchema() *plugin.Schema {
@@ -585,6 +593,35 @@ LIMIT 2500`, nil)
 		}
 	}
 	return items, nil
+}
+
+func createDatabase(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        string `json:"name" validate:"required"`
+		IfNotExists bool   `json:"if_not_exists"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	prefix := "CREATE DATABASE "
+	if req.IfNotExists {
+		prefix += "IF NOT EXISTS "
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, prefix+quoteIdent(name)); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
 }
 
 func createTable(rc *plugin.RequestContext) (any, error) {
