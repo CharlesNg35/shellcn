@@ -3,7 +3,7 @@ package kubernetes
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // category is an expandable sidebar group that drills into its kinds, mirroring

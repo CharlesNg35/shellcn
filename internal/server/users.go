@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 type userSummary struct {

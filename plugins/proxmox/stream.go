@@ -6,8 +6,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/rfb"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/rfb"
 )
 
 const metricsInterval = 2 * time.Second

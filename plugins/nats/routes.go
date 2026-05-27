@@ -9,8 +9,8 @@ import (
 
 	natsclient "github.com/nats-io/nats.go"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/broker"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/broker"
 )
 
 type row map[string]any

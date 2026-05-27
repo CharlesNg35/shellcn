@@ -9,7 +9,7 @@ import (
 
 	"github.com/hashicorp/yamux"
 
-	"github.com/charlesng/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/internal/transport"
 )
 
 // TestTunnelEndToEnd wires a gateway yamux client to an agent yamux server over

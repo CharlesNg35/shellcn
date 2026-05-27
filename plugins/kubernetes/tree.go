@@ -3,7 +3,7 @@ package kubernetes
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // tree builds the Lens-style cluster menu: top-level Nodes, the expandable

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/session"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/session"
 )
 
 // fakeSession is a controllable plugin.Session for tests.

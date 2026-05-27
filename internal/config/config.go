@@ -15,7 +15,7 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/spf13/viper"
 
-	"github.com/charlesng/shellcn/internal/secrets"
+	"github.com/charlesng35/shellcn/internal/secrets"
 )
 
 type Config struct {

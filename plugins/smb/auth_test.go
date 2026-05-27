@@ -3,8 +3,8 @@ package smb
 import (
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/service"
 )
 
 func TestParseOptionsValidatesAuthFields(t *testing.T) {

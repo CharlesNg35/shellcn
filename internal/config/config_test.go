@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/config"
+	"github.com/charlesng35/shellcn/internal/config"
 )
 
 func TestLoadDefaults(t *testing.T) {

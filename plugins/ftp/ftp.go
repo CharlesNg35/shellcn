@@ -4,9 +4,9 @@ package ftp
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/filesystem"
-	"github.com/charlesng/shellcn/plugins/shared/ftpfs"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
+	"github.com/charlesng35/shellcn/plugins/shared/ftpfs"
 )
 
 const protocolName = "ftp"

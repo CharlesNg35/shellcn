@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 // ErrNotFound is returned when a record does not exist. Backends normalize their

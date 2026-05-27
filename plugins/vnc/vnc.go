@@ -6,7 +6,7 @@ package vnc
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // iconSVG is the Lucide "monitor" glyph, rendered via the sanitized inline-SVG

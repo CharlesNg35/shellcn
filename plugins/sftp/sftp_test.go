@@ -3,9 +3,9 @@ package sftp_test
 import (
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/sftp"
-	"github.com/charlesng/shellcn/plugins/ssh"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/sftp"
+	"github.com/charlesng35/shellcn/plugins/ssh"
 )
 
 func TestManifestValidates(t *testing.T) {

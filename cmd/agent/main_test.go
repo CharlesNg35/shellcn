@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/internal/transport"
 )
 
 func TestProxyStreamRefusesUnsupportedMode(t *testing.T) {

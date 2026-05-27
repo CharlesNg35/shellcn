@@ -14,9 +14,9 @@ import (
 
 	"github.com/studio-b12/gowebdav"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/plugins/shared/filesystem"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
 )
 
 const protocolName = "webdav"

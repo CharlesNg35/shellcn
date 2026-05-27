@@ -10,7 +10,7 @@ import (
 
 	gotelnet "github.com/reiver/go-telnet"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type telnetConn interface {

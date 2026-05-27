@@ -15,8 +15,8 @@ import (
 	dockerclient "github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/versions"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // podmanCompatAPIVersion is the Docker API version Podman's compatibility layer

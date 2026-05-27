@@ -7,7 +7,7 @@ import (
 
 	redisclient "github.com/redis/go-redis/v9"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type Session struct {

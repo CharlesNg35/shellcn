@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 func createCredID(t *testing.T, h *harness, userID, body string) string {

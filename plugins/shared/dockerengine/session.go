@@ -18,7 +18,7 @@ import (
 
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type endpoint struct {

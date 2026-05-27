@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 
-	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 // Pagination defaults applied when a request omits or over-asks for a limit.

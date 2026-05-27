@@ -6,7 +6,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/recording"
+	"github.com/charlesng35/shellcn/internal/recording"
 )
 
 func TestLocalBlobStoreRoundTrip(t *testing.T) {

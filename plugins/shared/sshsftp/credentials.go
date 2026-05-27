@@ -1,6 +1,6 @@
 package sshsftp
 
-import "github.com/charlesng/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/internal/plugin"
 
 const (
 	CredentialSSHPrivateKey plugin.CredentialKind = "ssh_private_key"

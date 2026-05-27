@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/secrets"
+	"github.com/charlesng35/shellcn/internal/secrets"
 )
 
 func newVault(t *testing.T) *secrets.Vault {

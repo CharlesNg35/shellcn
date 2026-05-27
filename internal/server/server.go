@@ -13,16 +13,16 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/time/rate"
 
-	"github.com/charlesng/shellcn/internal/audit"
-	"github.com/charlesng/shellcn/internal/auth"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/policy"
-	"github.com/charlesng/shellcn/internal/recording"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/internal/session"
-	"github.com/charlesng/shellcn/internal/store"
-	"github.com/charlesng/shellcn/internal/telemetry"
-	"github.com/charlesng/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/internal/audit"
+	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/policy"
+	"github.com/charlesng35/shellcn/internal/recording"
+	"github.com/charlesng35/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/internal/session"
+	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/telemetry"
+	"github.com/charlesng35/shellcn/internal/transport"
 )
 
 // Deps are the server's injected dependencies (wired once in cmd/server).

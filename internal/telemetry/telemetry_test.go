@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/telemetry"
+	"github.com/charlesng35/shellcn/internal/telemetry"
 )
 
 func TestMetricsExposed(t *testing.T) {

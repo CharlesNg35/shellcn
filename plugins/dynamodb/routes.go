@@ -15,10 +15,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	smithy "github.com/aws/smithy-go"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/broker"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/broker"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
 type confirmationError struct{ message string }

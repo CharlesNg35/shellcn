@@ -1,6 +1,6 @@
 package kubernetes
 
-import "github.com/charlesng/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/internal/plugin"
 
 // podRefParams are the resource identity params every pod stream needs.
 func podRefParams(extra map[string]string) map[string]string {

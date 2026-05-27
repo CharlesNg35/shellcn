@@ -8,7 +8,7 @@ package kubernetes
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // In-cluster API + ServiceAccount mount paths. Kubernetes-specific, so they live

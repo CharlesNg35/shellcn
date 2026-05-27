@@ -1,6 +1,6 @@
 package neo4j
 
-import "github.com/charlesng/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/internal/plugin"
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{

@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // Handle is a borrowed reference to a live session. It opens tracked channels

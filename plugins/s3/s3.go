@@ -4,9 +4,9 @@ package s3
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/filesystem"
-	"github.com/charlesng/shellcn/plugins/shared/s3compat"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
+	"github.com/charlesng35/shellcn/plugins/shared/s3compat"
 )
 
 const (

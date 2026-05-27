@@ -16,13 +16,13 @@ import (
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/charlesng/shellcn/internal/audit"
-	"github.com/charlesng/shellcn/internal/auth"
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/policy"
-	"github.com/charlesng/shellcn/internal/recording"
-	"github.com/charlesng/shellcn/internal/session"
+	"github.com/charlesng35/shellcn/internal/audit"
+	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/policy"
+	"github.com/charlesng35/shellcn/internal/recording"
+	"github.com/charlesng35/shellcn/internal/session"
 )
 
 const (

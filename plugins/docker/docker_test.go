@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 func TestManifestValidates(t *testing.T) {

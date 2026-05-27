@@ -12,9 +12,9 @@ import (
 
 	"github.com/hirochachacha/go-smb2"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/plugins/shared/filesystem"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
 )
 
 const (

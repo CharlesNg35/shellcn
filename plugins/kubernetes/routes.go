@@ -1,6 +1,6 @@
 package kubernetes
 
-import "github.com/charlesng/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/internal/plugin"
 
 const (
 	permRead   = "kubernetes.resources.read"

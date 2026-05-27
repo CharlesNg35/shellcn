@@ -4,7 +4,7 @@ package rabbitmq
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type Plugin struct{}

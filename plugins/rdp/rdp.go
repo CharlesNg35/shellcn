@@ -7,7 +7,7 @@ package rdp
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // iconSVG is the Lucide "app-window" glyph, rendered via the sanitized inline-SVG

@@ -28,7 +28,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/hashicorp/yamux"
 
-	"github.com/charlesng/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/internal/transport"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
