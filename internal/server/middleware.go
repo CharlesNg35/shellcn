@@ -58,6 +58,12 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
 			return
 		}
+		if sess.SessionVersion != user.SessionVersion {
+			s.deps.SessionMgr.Destroy(sess.ID)
+			auth.ClearSessionCookie(w)
+			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
+			return
+		}
 		ctx := context.WithValue(r.Context(), ctxUser, user)
 		ctx = context.WithValue(ctx, ctxSession, sess)
 		next.ServeHTTP(w, r.WithContext(ctx))

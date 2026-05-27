@@ -105,7 +105,7 @@ func TestDockerPluginIntegrationAgentTransport(t *testing.T) {
 	})
 	defer release()
 
-	nt, err := transport.Build(models.Connection{ID: "docker-agent", Transport: string(plugin.TransportAgent)}, reg)
+	nt, err := transport.Build(models.Connection{ID: "docker-agent", Transport: string(plugin.TransportAgent)}, reg, plugin.AgentUnix)
 	if err != nil {
 		t.Fatalf("agent transport build: %v", err)
 	}

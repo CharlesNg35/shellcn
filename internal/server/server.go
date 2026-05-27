@@ -27,12 +27,15 @@ import (
 
 // Deps are the server's injected dependencies (wired once in cmd/server).
 type Deps struct {
-	Plugins           *plugin.Registry
-	Store             *store.Store
-	Sessions          *session.Manager
-	Auth              auth.Authenticator
-	SessionMgr        *auth.SessionManager
-	Tickets           *auth.TicketStore
+	Plugins    *plugin.Registry
+	Store      *store.Store
+	Sessions   *session.Manager
+	Auth       auth.Authenticator
+	SessionMgr *auth.SessionManager
+	Tickets    *auth.TicketStore
+	// ArtifactTickets guards public install-artifact fetches. It has a longer TTL
+	// than Tickets (a human copies a URL and runs it) and never expires a WS.
+	ArtifactTickets   *auth.TicketStore
 	Policy            *policy.Enforcer
 	Connector         *service.Connector
 	Connections       *service.ConnectionService
@@ -107,6 +110,12 @@ func (s *Server) routes() chi.Router {
 		// session-guarded group.
 		if s.deps.Enrollments != nil && s.deps.Tunnels != nil {
 			api.Get("/agent/connect", s.handleAgentConnect)
+		}
+		// Install-artifact fetch is public: it is run by a tool with no browser
+		// session (e.g. kubectl/curl) and is authorized solely by a single-use,
+		// signed ticket. The credential lands only in the fetched body.
+		if s.deps.Enrollments != nil && s.deps.ArtifactTickets != nil {
+			api.Get("/connections/{id}/agent/enrollments/{enrollmentId}/artifacts/{kind}", s.handleFetchArtifact)
 		}
 
 		// Invitation acceptance is public (the invitee has no session yet).
@@ -200,6 +209,7 @@ func (s *Server) routes() chi.Router {
 				})
 			}
 			pr.HandleFunc("/connections/{id}/x/{routeID}", s.handleRoute)
+			pr.HandleFunc("/connections/{id}/proxy/*", s.handleConnectionProxy)
 		})
 	})
 

@@ -357,6 +357,7 @@ function onActionDone(action: Action): void {
               :panel="dockState.dialog.panel"
               :connection-id="id"
               :source="dockState.dialog.source"
+              :config="dockState.dialog.config"
               :resource="dockState.dialog.resource"
             />
           </div>

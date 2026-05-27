@@ -3,18 +3,31 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	"github.com/charlesng/shellcn/internal/auth"
 	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/store"
 )
 
 // ErrWrongPassword is returned when a self password change supplies the wrong
 // current password.
 var ErrWrongPassword = errors.New("service: current password is incorrect")
+
+const MinPasswordLength = 8
+
+func ValidatePassword(password string) error {
+	if strings.TrimSpace(password) == "" || utf8.RuneCountInString(password) < MinPasswordLength {
+		return fmt.Errorf("%w: password must be at least %d characters", plugin.ErrInvalidInput, MinPasswordLength)
+	}
+	return nil
+}
 
 // UserService manages platform accounts: it hashes passwords on write and never
 // returns hashes (the store clears them on read).
@@ -33,9 +46,17 @@ type NewUserInput struct {
 	DisplayName string
 	Roles       []models.Role
 	Password    string
+	Protected   bool
 }
 
 func (s *UserService) Create(ctx context.Context, in NewUserInput) (models.User, error) {
+	username := strings.TrimSpace(in.Username)
+	if username == "" {
+		return models.User{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
+	}
+	if err := ValidatePassword(in.Password); err != nil {
+		return models.User{}, err
+	}
 	hash, err := auth.HashPassword(in.Password)
 	if err != nil {
 		return models.User{}, err
@@ -43,10 +64,11 @@ func (s *UserService) Create(ctx context.Context, in NewUserInput) (models.User,
 	now := time.Now()
 	user := models.User{
 		ID:          uuid.NewString(),
-		Username:    in.Username,
-		Email:       in.Email,
-		DisplayName: in.DisplayName,
+		Username:    username,
+		Email:       strings.TrimSpace(in.Email),
+		DisplayName: strings.TrimSpace(in.DisplayName),
 		Roles:       in.Roles,
+		Protected:   in.Protected,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -110,6 +132,9 @@ func (s *UserService) UpdateProfile(ctx context.Context, id, email, displayName 
 
 // ChangePassword verifies the current password before setting a new one.
 func (s *UserService) ChangePassword(ctx context.Context, id, current, next string) error {
+	if err := ValidatePassword(next); err != nil {
+		return err
+	}
 	hash, err := s.users.GetPasswordHash(ctx, id)
 	if err != nil {
 		return err

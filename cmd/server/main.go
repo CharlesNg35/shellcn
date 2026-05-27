@@ -104,7 +104,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	}
 	defer func() { _ = st.Close() }()
 
-	if err := bootstrapAdmin(context.Background(), logger, st); err != nil {
+	if err := bootstrapAdmin(context.Background(), logger, st, cfg.Bootstrap); err != nil {
 		return err
 	}
 
@@ -232,6 +232,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		Auth:              auth.NewLocalAuthenticator(st.Users),
 		SessionMgr:        auth.NewSessionManagerWithKey(cfg.Auth.SessionTTLDuration(), cfg.Auth.JWTSigningKey(masterKey)),
 		Tickets:           auth.NewTicketStore(0),
+		ArtifactTickets:   auth.NewTicketStore(service.DefaultEnrollmentTTL),
 		Policy:            pol,
 		Connector:         connector,
 		Connections:       connections,
@@ -278,8 +279,8 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	return httpServer.Shutdown(ctx)
 }
 
-// bootstrapAdmin creates a default admin on first run and logs its credentials.
-func bootstrapAdmin(ctx context.Context, logger *slog.Logger, st *store.Store) error {
+// bootstrapAdmin creates a default admin on first run and logs generated credentials.
+func bootstrapAdmin(ctx context.Context, logger *slog.Logger, st *store.Store, cfg config.BootstrapConfig) error {
 	n, err := st.Users.Count(ctx)
 	if err != nil {
 		return fmt.Errorf("count users: %w", err)
@@ -288,29 +289,25 @@ func bootstrapAdmin(ctx context.Context, logger *slog.Logger, st *store.Store) e
 		return nil
 	}
 
-	password := os.Getenv("SHELLCN_ADMIN_PASSWORD")
+	password := cfg.AdminPassword
 	generated := password == ""
 	if generated {
 		password = uuid.NewString()
 	}
-	hash, err := auth.HashPassword(password)
-	if err != nil {
-		return err
-	}
-	admin := &models.User{
-		ID:          uuid.NewString(),
-		Username:    "admin",
+	admin, err := service.NewUserService(st.Users).Create(ctx, service.NewUserInput{
+		Username:    cfg.AdminUsername,
 		DisplayName: "Administrator",
 		Roles:       []models.Role{models.RoleAdmin},
+		Password:    password,
 		Protected:   true,
-	}
-	if err := st.Users.Create(ctx, admin, hash); err != nil {
+	})
+	if err != nil {
 		return fmt.Errorf("create admin: %w", err)
 	}
 	if generated {
-		logger.Warn("created initial admin account", "username", "admin", "password", password)
+		logger.Warn("created initial admin account", "username", admin.Username, "password", password)
 	} else {
-		logger.Info("created initial admin account", "username", "admin")
+		logger.Info("created initial admin account", "username", admin.Username)
 	}
 	return nil
 }

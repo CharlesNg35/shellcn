@@ -55,6 +55,19 @@ export const useAuthStore = defineStore("auth", () => {
     ready.value = true;
   }
 
+  async function changePassword(
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    apply(
+      await api.post<SessionDTO>("/auth/me/password", {
+        currentPassword,
+        newPassword,
+      }),
+    );
+    ready.value = true;
+  }
+
   async function logout(): Promise<void> {
     try {
       await api.post("/auth/logout");
@@ -71,6 +84,7 @@ export const useAuthStore = defineStore("auth", () => {
     ensureReady,
     bootstrap,
     login,
+    changePassword,
     logout,
     clear,
   };

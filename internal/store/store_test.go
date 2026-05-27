@@ -112,6 +112,10 @@ func testUsers(t *testing.T, s *store.Store) {
 	if h, _ := s.Users.GetPasswordHash(ctx, "u1"); h != "hash2" {
 		t.Errorf("password not rotated: %q", h)
 	}
+	reloaded, _ = s.Users.GetByID(ctx, "u1")
+	if reloaded.SessionVersion != 1 {
+		t.Errorf("session version after password rotation: want 1, got %d", reloaded.SessionVersion)
+	}
 
 	if err := s.Users.Delete(ctx, "u1"); err != nil {
 		t.Fatalf("delete: %v", err)

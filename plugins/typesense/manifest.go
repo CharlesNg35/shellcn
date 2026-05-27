@@ -22,7 +22,7 @@ func resources() []plugin.ResourceType {
 			ListActionIDs: []string{rid("collection.create"), rid("collection.clone")},
 			RowActionIDs:  []string{rid("collection.delete")},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{
-				rid("document.upsert"), rid("documents.import"), rid("collection.update"), rid("alias.upsert"), rid("synonym.upsert"), rid("override.upsert"), rid("collection.delete"),
+				rid("collection.update"), rid("alias.upsert"), rid("collection.delete"),
 			}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("collection.overview"), Params: collectionParams()}},
 				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("documents.list"), Params: collectionParams()}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{rid("document.upsert"), rid("documents.import")}, RowActionIDs: []string{rid("document.delete")}, Exportable: true}.Map()},

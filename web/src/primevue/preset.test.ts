@@ -78,4 +78,40 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.datatable.table).toContain("w-max");
     expect(primeVuePassthrough.datatable.table).toContain("min-w-full");
   });
+
+  it("allows constrained buttons to truncate their labels", () => {
+    const root = primeVuePassthrough.button.root({
+      props: {},
+    } as Parameters<typeof primeVuePassthrough.button.root>[0]);
+
+    expect(root).toContain("min-w-0");
+    expect(primeVuePassthrough.button.label).toContain("min-w-0");
+    expect(primeVuePassthrough.button.label).toContain("truncate");
+  });
+
+  it("merges conflicting button classes so size props take effect", () => {
+    const small = primeVuePassthrough.button.root({
+      props: { size: "small" },
+    } as Parameters<typeof primeVuePassthrough.button.root>[0]);
+    expect(small).toContain("text-xs");
+    expect(small).toContain("px-2.5");
+    expect(small).toContain("py-1");
+    expect(small).not.toContain("text-sm");
+    expect(small).not.toContain("px-3");
+    expect(small).not.toContain("py-1.5");
+
+    const large = primeVuePassthrough.button.root({
+      props: { size: "large" },
+    } as Parameters<typeof primeVuePassthrough.button.root>[0]);
+    expect(large).toContain("text-base");
+    expect(large).toContain("px-4");
+    expect(large).toContain("py-2");
+    expect(large).not.toContain("text-sm");
+
+    const rounded = primeVuePassthrough.button.root({
+      props: { rounded: true },
+    } as Parameters<typeof primeVuePassthrough.button.root>[0]);
+    expect(rounded).toContain("rounded-full");
+    expect(rounded).not.toContain("rounded-md");
+  });
 });

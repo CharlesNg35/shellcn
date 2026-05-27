@@ -77,10 +77,11 @@ type Column struct {
 // plugin: Insert sends {"values":{col:val}}, Update sends {"key":{col:val},
 // "values":{col:val}}, and Delete sends {"key":{col:val}}.
 type TableConfig struct {
-	Columns      []Column    `json:"columns,omitempty"`
-	Watch        *DataSource `json:"watch,omitempty"`
-	ActionIDs    []string    `json:"actionIds,omitempty"`
-	RowActionIDs []string    `json:"rowActionIds,omitempty"`
+	Columns       []Column    `json:"columns,omitempty"`
+	ColumnsSource *DataSource `json:"columnsSource,omitempty"`
+	Watch         *DataSource `json:"watch,omitempty"`
+	ActionIDs     []string    `json:"actionIds,omitempty"`
+	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
 
 	Editable  bool        `json:"editable,omitempty"`
 	RowKey    []string    `json:"rowKey,omitempty"`
@@ -108,6 +109,9 @@ func (c TableConfig) Map() map[string]any {
 	out := map[string]any{}
 	if len(c.Columns) > 0 {
 		out["columns"] = c.Columns
+	}
+	if c.ColumnsSource != nil {
+		out["columnsSource"] = c.ColumnsSource
 	}
 	if c.Watch != nil {
 		out["watch"] = c.Watch
@@ -470,6 +474,9 @@ const (
 	OpenView   OpenTarget = "view"
 	OpenDock   OpenTarget = "dock"
 	OpenDialog OpenTarget = "dialog"
+	// OpenURL runs the action's route, which returns {"url": "..."}, and opens
+	// that URL in a new browser tab. The route decides the URL.
+	OpenURL OpenTarget = "url"
 )
 
 // Action is a UI affordance over a route. Permission/risk/input live on the
@@ -488,6 +495,9 @@ type Action struct {
 	// sourced from the action's route — instead of executing the route inline.
 	Open  OpenTarget `json:"open,omitempty"`
 	Panel PanelType  `json:"panel,omitempty"`
+	// Config is the panel config for a dock/dialog-opened Panel (e.g. a
+	// code_editor's saveRouteId), so an action can open an editable panel.
+	Config map[string]any `json:"config,omitempty"`
 	// EnabledWhen gates the button on the active row's fields (e.g. state ==
 	// "running"); false shows it disabled, not hidden. Empty = always enabled.
 	EnabledWhen *Condition `json:"enabledWhen,omitempty"`
@@ -519,11 +529,17 @@ type DetailView struct {
 
 // ResourceType is a managed object type: columns, actions, detail.
 type ResourceType struct {
-	Kind          string      `json:"kind"`
-	Title         string      `json:"title"`
-	List          DataSource  `json:"list"`
-	Watch         *DataSource `json:"watch,omitempty"`
-	Columns       []Column    `json:"columns"`
+	Kind  string      `json:"kind"`
+	Title string      `json:"title"`
+	List  DataSource  `json:"list"`
+	Watch *DataSource `json:"watch,omitempty"`
+	// Columns are the static list columns. Leave empty and set ColumnsSource to
+	// derive columns at runtime (e.g. a CRD's own printer columns).
+	Columns []Column `json:"columns"`
+	// ColumnsSource is an optional route returning column definitions (rows with
+	// name/label) for lists whose columns are only known at runtime. The list's
+	// scoping params are merged in, so one generic type can serve many shapes.
+	ColumnsSource *DataSource `json:"columnsSource,omitempty"`
 	ActionIDs     []string    `json:"actionIds"`
 	ListActionIDs []string    `json:"listActionIds,omitempty"`
 	RowActionIDs  []string    `json:"rowActionIds,omitempty"`

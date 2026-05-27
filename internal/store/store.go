@@ -144,6 +144,10 @@ type EnrollmentStore interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (models.AgentEnrollment, error)
 	ListByConnection(ctx context.Context, connectionID string) ([]models.AgentEnrollment, error)
 	UpdateStatus(ctx context.Context, id string, status models.AgentEnrollmentStatus) error
+	// UpdateToken sets the redeemable token hash and resets the install window.
+	// Used by URL-delivered artifacts, which mint the real token only when the
+	// artifact body is fetched (the record is created with a placeholder hash).
+	UpdateToken(ctx context.Context, id, tokenHash string, expiresAt time.Time) error
 	// Consume atomically transitions an install token to online. Pending tokens
 	// must be unexpired; already enrolled offline/online tokens may reconnect.
 	Consume(ctx context.Context, id string, now time.Time) (bool, error)

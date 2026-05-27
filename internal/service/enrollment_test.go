@@ -61,7 +61,7 @@ func TestEnrollmentArtifactsAndRedeem(t *testing.T) {
 	}
 	svc := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 
-	enr, err := svc.Create(ctx, "agent-conn", "wss://shellcn.test/api/agent/connect")
+	enr, err := svc.Create(ctx, "agent-conn", "wss://shellcn.test/api/agent/connect", nil)
 	if err != nil {
 		t.Fatalf("create enrollment: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestEnrollmentLocalDevContainerCommand(t *testing.T) {
 	}
 	svc := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 
-	enr, err := svc.Create(ctx, "agent-conn", "ws://localhost:5173/api/agent/connect")
+	enr, err := svc.Create(ctx, "agent-conn", "ws://localhost:5173/api/agent/connect", nil)
 	if err != nil {
 		t.Fatalf("create enrollment: %v", err)
 	}
@@ -137,6 +137,118 @@ func TestEnrollmentLocalDevContainerCommand(t *testing.T) {
 	if strings.Contains(cmd, "ws://localhost:5173") {
 		t.Fatalf("container command should not point back at container-local localhost: %s", cmd)
 	}
+}
+
+type urlArtifactPlugin struct{}
+
+func (urlArtifactPlugin) Manifest() plugin.Manifest {
+	return plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion,
+		Name:       "urlagent",
+		Title:      "URL Agent",
+		Category:   plugin.CategoryOther,
+		Layout:     plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{
+			plugin.TransportDirect,
+			plugin.TransportAgent,
+		},
+		Agent: &plugin.AgentProfile{
+			Proxy: plugin.ProxyTarget{Mode: plugin.AgentHTTP, Address: "https://api.internal", Risk: plugin.RiskPrivileged, TokenFile: "/t", CAFile: "/ca"},
+			Install: []plugin.InstallArtifact{{
+				Label:    "Manifest",
+				Kind:     "manifest",
+				Delivery: plugin.DeliveryURL,
+				Template: `apply -f "{{.ArtifactURL}}"`,
+				Content:  "token={{.Token}}\nconnect={{.ConnectURL}}\n",
+			}},
+		},
+		Tabs: []plugin.Tab{{Key: "main", Label: "Main", Panel: plugin.PanelDocument}},
+	}
+}
+
+func (urlArtifactPlugin) Routes() []plugin.Route { return nil }
+func (urlArtifactPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session, error) {
+	return nil, plugin.ErrNotSupported
+}
+
+func TestURLDeliveredArtifactLazyMint(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	reg := plugin.NewRegistry()
+	reg.MustRegister(urlArtifactPlugin{})
+	if err := st.Connections.Create(ctx, &models.Connection{
+		ID: "url-conn", Name: "URL", Protocol: "urlagent", OwnerID: "owner",
+		Transport: string(plugin.TransportAgent),
+	}); err != nil {
+		t.Fatalf("create connection: %v", err)
+	}
+	svc := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
+
+	var gotKind string
+	minter := func(enrollmentID, kind string) (string, error) {
+		gotKind = kind
+		return "https://gw.test/api/connections/url-conn/agent/enrollments/" + enrollmentID + "/artifacts/" + kind + "?ticket=T", nil
+	}
+	enr, err := svc.Create(ctx, "url-conn", "wss://gw.test/api/agent/connect", minter)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if gotKind != "manifest" {
+		t.Fatalf("minter kind = %q", gotKind)
+	}
+	cmd := enr.Artifacts[0].Command
+	if !strings.Contains(cmd, "?ticket=T") || enr.Artifacts[0].URL == "" {
+		t.Fatalf("url artifact command should reference the fetch URL: %q (url=%q)", cmd, enr.Artifacts[0].URL)
+	}
+	if strings.Contains(cmd, "token=") {
+		t.Fatalf("url artifact command must not carry the token: %q", cmd)
+	}
+
+	// The body is rendered (and the real token minted) only at fetch time.
+	content, err := svc.RenderArtifactContent(ctx, "url-conn", enr.EnrollmentID, "manifest", "wss://gw.test/api/agent/connect")
+	if err != nil {
+		t.Fatalf("render content: %v", err)
+	}
+	if !strings.Contains(content, "connect=wss://gw.test/api/agent/connect") {
+		t.Fatalf("content missing connect URL: %q", content)
+	}
+	token := tokenFromContent(t, content)
+
+	// The minted token is now redeemable as the agent credential.
+	connID, proxy, err := svc.Redeem(ctx, token)
+	if err != nil || connID != "url-conn" || proxy.Mode != plugin.AgentHTTP {
+		t.Fatalf("redeem minted token: conn=%q proxy=%+v err=%v", connID, proxy, err)
+	}
+}
+
+func TestRenderArtifactContentRejectsWrongConnection(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	reg := plugin.NewRegistry()
+	reg.MustRegister(urlArtifactPlugin{})
+	_ = st.Connections.Create(ctx, &models.Connection{ID: "url-conn", Protocol: "urlagent", OwnerID: "o", Transport: string(plugin.TransportAgent)})
+	svc := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
+	enr, err := svc.Create(ctx, "url-conn", "wss://gw.test/api/agent/connect", func(_, _ string) (string, error) { return "https://x?ticket=T", nil })
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := svc.RenderArtifactContent(ctx, "other-conn", enr.EnrollmentID, "manifest", "wss://gw.test"); err == nil {
+		t.Fatal("render must reject a mismatched connection id")
+	}
+	if _, err := svc.RenderArtifactContent(ctx, "url-conn", enr.EnrollmentID, "unknown", "wss://gw.test"); err == nil {
+		t.Fatal("render must reject an unknown artifact kind")
+	}
+}
+
+func tokenFromContent(t *testing.T, content string) string {
+	t.Helper()
+	for _, line := range strings.Split(content, "\n") {
+		if rest, ok := strings.CutPrefix(line, "token="); ok {
+			return rest
+		}
+	}
+	t.Fatalf("no token in content: %q", content)
+	return ""
 }
 
 func extractToken(t *testing.T, cmd string) string {

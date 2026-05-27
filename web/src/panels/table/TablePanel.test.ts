@@ -196,6 +196,51 @@ describe("TablePanel", () => {
     ]);
     w.unmount();
   });
+
+  it("loads editable columns from a source when the table is empty", async () => {
+    const calls: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      calls.push(url);
+      if (url.includes("db.table.columns")) {
+        return {
+          body: {
+            items: [
+              { name: "id", nullable: false },
+              { name: "name", nullable: true },
+            ],
+            nextCursor: "",
+            total: 2,
+          },
+        };
+      }
+      return { body: { items: [], nextCursor: "", total: 0 } };
+    });
+
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: {
+          editable: true,
+          insert: { routeId: "db.row.insert", method: "POST" },
+          columnsSource: { routeId: "db.table.columns" },
+        },
+      },
+    });
+    await flushPromises();
+
+    const add = bodyButton("Add row")!;
+    expect(add.disabled).toBe(false);
+    expect(calls.some((url) => url.includes("db.table.columns"))).toBe(true);
+
+    add.click();
+    await flushPromises();
+    expect(document.body.textContent).toContain("id");
+    expect(document.body.textContent).toContain("name");
+    w.unmount();
+  });
 });
 
 describe("TablePanel staged edits", () => {

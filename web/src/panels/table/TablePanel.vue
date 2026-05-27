@@ -31,6 +31,7 @@ import type {
 import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
 import { dialogRoot, inputClass } from "../../primevue/preset";
+import { cn } from "../../utils/cn";
 import { useConfirmAction } from "../../composables/useConfirmAction";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
@@ -94,6 +95,9 @@ const declaredColumns = computed(
 const tableConfig = computed(
   () => props.config as TablePanelConfig | undefined,
 );
+const columnsSource = computed(() => tableConfig.value?.columnsSource);
+const dynamicColumns = ref<ColumnSpec[]>([]);
+const columnsLoading = ref(false);
 const actionIds = computed(() => tableConfig.value?.actionIds ?? []);
 const rowActionIds = computed(() => tableConfig.value?.rowActionIds ?? []);
 const globalActions = computed(() => resolveActions(actionIds.value));
@@ -143,6 +147,13 @@ const editable = computed(
     Boolean(insertSource.value || updateSource.value || deleteSource.value),
 );
 const editableCells = computed(() => editable.value && !!updateSource.value);
+const addRowLoading = computed(
+  () => columnsLoading.value || (loading.value && !columns.value.length),
+);
+const addRowTitle = computed(() => {
+  if (columns.value.length) return "Add a row";
+  return "No editable columns available";
+});
 
 // --- staged edits -------------------------------------------------------
 // Opt-in via the manifest: edits, added rows, and deletions are buffered
@@ -442,12 +453,50 @@ const hidden = computed(() => {
 
 const columns = computed<ColumnSpec[]>(() => {
   if (declaredColumns.value?.length) return declaredColumns.value;
+  if (dynamicColumns.value.length) return dynamicColumns.value;
   const sample = rows.value[0];
   if (!sample) return [];
   return Object.keys(sample)
     .filter((k) => !hidden.value.has(k))
     .map((key) => ({ key, label: key }));
 });
+
+function dynamicColumnKey(row: Row): string {
+  return String(row.name ?? row.column_name ?? row.column ?? row.key ?? "");
+}
+
+function dynamicColumnLabel(row: Row, key: string): string {
+  return String(row.label ?? row.name ?? row.column_name ?? row.column ?? key);
+}
+
+function dynamicColumn(row: Row): ColumnSpec | null {
+  const key = dynamicColumnKey(row);
+  if (!key || hidden.value.has(key)) return null;
+  return {
+    key,
+    label: dynamicColumnLabel(row, key),
+    nullable: row.nullable === true,
+  };
+}
+
+async function loadDynamicColumns(): Promise<void> {
+  dynamicColumns.value = [];
+  if (declaredColumns.value?.length || !columnsSource.value) return;
+  columnsLoading.value = true;
+  try {
+    const page = await fetchPage<Row>(
+      props.connectionId,
+      columnsSource.value,
+      { resource: props.resource },
+      { limit: 500 },
+    );
+    dynamicColumns.value = page.items
+      .map(dynamicColumn)
+      .filter((col): col is ColumnSpec => Boolean(col));
+  } finally {
+    columnsLoading.value = false;
+  }
+}
 
 // Linked cells: a row's `_links` map (column -> related resource ref) makes
 // those cells navigation links that open the related resource. Generic — the
@@ -488,7 +537,10 @@ function columnStyle(col: ColumnSpec): Record<string, string> {
 function cellClass(row: Row, col: ColumnSpec): string {
   const base = "block min-w-0 truncate";
   if (staged.value && isEdited(row, col.key)) {
-    return `${base} rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-100`;
+    return cn(
+      base,
+      "rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-100",
+    );
   }
   return base;
 }
@@ -515,6 +567,7 @@ async function load(targetFirst = first.value): Promise<void> {
     );
     page.items.forEach(assignRid);
     rows.value = page.items;
+    await loadDynamicColumns();
     total.value = page.total;
     first.value = targetFirst;
   } catch (e) {
@@ -642,18 +695,25 @@ onUnmounted(() => {
         v-if="editable && insertSource"
         type="button"
         severity="secondary"
-        :disabled="loading || !columns.length"
-        :title="columns.length ? 'Add a row' : 'Load or define columns first'"
+        :disabled="loading || addRowLoading || !columns.length"
+        :title="addRowTitle"
         @click="openInsert"
       >
-        <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="14" />
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'plus' }"
+          :size="14"
+          :loading="addRowLoading"
+        />
         Add row
       </Button>
+      <!-- List-level actions inherit the list's own params as their scope, so an
+           action declared on a list runs within that list's context for free. -->
       <ActionBar
         v-if="globalActions.length"
         :connection-id="connectionId"
         :actions="globalActions"
         :resource="resource"
+        :scope="source?.params"
         @done="onActionDone"
       />
       <ActionBar

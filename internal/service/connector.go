@@ -120,7 +120,11 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 
 	transportConn := conn
 	transportConn.Config = cfg
-	net, err := transport.Build(transportConn, c.tunnels)
+	var agentMode plugin.AgentMode
+	if hasManifest && manifest.Agent != nil {
+		agentMode = manifest.Agent.Proxy.Mode
+	}
+	net, err := transport.Build(transportConn, c.tunnels, agentMode)
 	if err != nil {
 		return plugin.ConnectConfig{}, nil, err
 	}

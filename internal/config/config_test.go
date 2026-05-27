@@ -25,13 +25,18 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Auth.SessionTTLDuration().String() != "24h0m0s" {
 		t.Errorf("auth session TTL default: got %s", cfg.Auth.SessionTTLDuration())
 	}
+	if cfg.Bootstrap.AdminUsername != "admin" || cfg.Bootstrap.AdminPassword != "" {
+		t.Errorf("bootstrap defaults: got %+v", cfg.Bootstrap)
+	}
 }
 
 func TestEnvOverride(t *testing.T) {
 	t.Setenv("SHELLCN_SERVER_ADDR", ":9999")
 	t.Setenv("SHELLCN_DATABASE_DRIVER", "postgres")
 	t.Setenv("SHELLCN_AUTH_SESSION_TTL", "2h")
-	t.Setenv("SHELLCN_MASTER_KEY", "deadbeef") // bound to the historical name
+	t.Setenv("SHELLCN_BOOTSTRAP_ADMIN_USERNAME", "root")
+	t.Setenv("SHELLCN_BOOTSTRAP_ADMIN_PASSWORD", "initial-secret")
+	t.Setenv("SHELLCN_MASTER_KEY", "deadbeef")
 
 	cfg, err := config.Load(t.TempDir())
 	if err != nil {
@@ -44,16 +49,19 @@ func TestEnvOverride(t *testing.T) {
 		t.Errorf("driver override: got %q", cfg.Database.Driver)
 	}
 	if cfg.Secrets.MasterKey != "deadbeef" {
-		t.Errorf("master key env (legacy name): got %q", cfg.Secrets.MasterKey)
+		t.Errorf("master key env: got %q", cfg.Secrets.MasterKey)
 	}
 	if cfg.Auth.SessionTTLDuration().String() != "2h0m0s" {
 		t.Errorf("auth ttl env: got %s", cfg.Auth.SessionTTLDuration())
+	}
+	if cfg.Bootstrap.AdminUsername != "root" || cfg.Bootstrap.AdminPassword != "initial-secret" {
+		t.Errorf("bootstrap env override: got %+v", cfg.Bootstrap)
 	}
 }
 
 func TestFileLoadWithEnvPrecedence(t *testing.T) {
 	dir := t.TempDir()
-	yaml := "server:\n  addr: \":7000\"\n  log_level: debug\ndatabase:\n  driver: mysql\n"
+	yaml := "server:\n  addr: \":7000\"\n  log_level: debug\nbootstrap:\n  admin_username: root\n  admin_password: file-secret\ndatabase:\n  driver: mysql\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(yaml), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +75,9 @@ func TestFileLoadWithEnvPrecedence(t *testing.T) {
 	}
 	if cfg.Database.Driver != "mysql" {
 		t.Errorf("file driver not applied: got %q", cfg.Database.Driver)
+	}
+	if cfg.Bootstrap.AdminUsername != "root" || cfg.Bootstrap.AdminPassword != "file-secret" {
+		t.Errorf("file bootstrap values not applied: %+v", cfg.Bootstrap)
 	}
 	if cfg.SlogLevel().String() != "DEBUG" {
 		t.Errorf("SlogLevel: got %s", cfg.SlogLevel())

@@ -387,6 +387,9 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		if rt.Watch != nil {
 			checkDS(fmt.Sprintf("resource %q watch", rt.Kind), *rt.Watch)
 		}
+		if rt.ColumnsSource != nil {
+			checkDS(fmt.Sprintf("resource %q columnsSource", rt.Kind), *rt.ColumnsSource)
+		}
 		checkActionIDs(fmt.Sprintf("resource %q", rt.Kind), rt.ActionIDs)
 		checkActionIDs(fmt.Sprintf("resource %q list", rt.Kind), rt.ListActionIDs)
 		checkActionIDs(fmt.Sprintf("resource %q row", rt.Kind), rt.RowActionIDs)

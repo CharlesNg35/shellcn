@@ -50,7 +50,7 @@ func labelResource() plugin.ResourceType {
 		Kind: "label", Title: "Labels",
 		List:    plugin.DataSource{RouteID: rid("labels.list")},
 		Columns: labelColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: ":${resource.name}", ActionIDs: []string{rid("node.create")}}, Tabs: []plugin.Tab{
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: ":${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("label.overview"), Params: map[string]string{"database": "${resource.namespace}", "label": "${resource.name}"}}},
 			{Key: "graph", Label: "Graph", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: rid("label.graph"), Params: map[string]string{"database": "${resource.namespace}", "label": "${resource.name}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}.Map()},
 			{Key: "nodes", Label: "Nodes", Icon: icon("circle-dot"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("nodes.list"), Params: map[string]string{"database": "${resource.namespace}", "label": "${resource.name}"}}, Config: plugin.TableConfig{Columns: nodeColumns(), ActionIDs: []string{rid("node.create")}, RowActionIDs: []string{rid("node.delete")}, Exportable: true}.Map()},
@@ -64,7 +64,7 @@ func relationshipTypeResource() plugin.ResourceType {
 		Kind: "relationship_type", Title: "Relationship Types",
 		List:    plugin.DataSource{RouteID: rid("relationship_types.list")},
 		Columns: relationshipTypeColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "[:${resource.name}]", ActionIDs: []string{rid("relationship.create")}}, Tabs: []plugin.Tab{
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "[:${resource.name}]"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("relationship_type.overview"), Params: map[string]string{"database": "${resource.namespace}", "type": "${resource.name}"}}},
 			{Key: "graph", Label: "Graph", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: rid("relationship_type.graph"), Params: map[string]string{"database": "${resource.namespace}", "type": "${resource.name}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}.Map()},
 			{Key: "relationships", Label: "Relationships", Icon: icon("git-branch"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("relationships.list"), Params: map[string]string{"database": "${resource.namespace}", "type": "${resource.name}"}}, Config: plugin.TableConfig{Columns: relationshipColumns(), ActionIDs: []string{rid("relationship.create")}, RowActionIDs: []string{rid("relationship.delete")}, Exportable: true}.Map()},

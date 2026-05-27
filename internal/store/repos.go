@@ -65,7 +65,10 @@ func (s *gormUserStore) GetPasswordHash(ctx context.Context, userID string) (str
 }
 
 func (s *gormUserStore) SetPasswordHash(ctx context.Context, userID, hash string) error {
-	res := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).Update("password_hash", hash)
+	res := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).Updates(map[string]any{
+		"password_hash":   hash,
+		"session_version": gorm.Expr("COALESCE(session_version, 0) + ?", 1),
+	})
 	return rowsOrNotFound(res)
 }
 
@@ -79,7 +82,7 @@ func (s *gormUserStore) List(ctx context.Context) ([]models.User, error) {
 
 func (s *gormUserStore) Update(ctx context.Context, u *models.User) error {
 	res := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", u.ID).
-		Select("username", "email", "display_name", "roles", "disabled").Updates(u)
+		Select("username", "email", "display_name", "roles", "disabled", "session_version").Updates(u)
 	return rowsOrNotFound(res)
 }
 
@@ -554,6 +557,12 @@ func (s *gormEnrollmentStore) ListByConnection(ctx context.Context, connectionID
 func (s *gormEnrollmentStore) UpdateStatus(ctx context.Context, id string, status models.AgentEnrollmentStatus) error {
 	res := s.db.WithContext(ctx).Model(&models.AgentEnrollment{}).Where("id = ?", id).
 		Update("status", string(status))
+	return rowsOrNotFound(res)
+}
+
+func (s *gormEnrollmentStore) UpdateToken(ctx context.Context, id, tokenHash string, expiresAt time.Time) error {
+	res := s.db.WithContext(ctx).Model(&models.AgentEnrollment{}).Where("id = ?", id).
+		Updates(map[string]any{"token_hash": tokenHash, "expires_at": expiresAt, "updated_at": time.Now()})
 	return rowsOrNotFound(res)
 }
 

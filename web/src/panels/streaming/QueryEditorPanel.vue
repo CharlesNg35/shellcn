@@ -82,7 +82,7 @@ function onFrame(frame: string): void {
         payload.confirmMessage ??
         "This operation requires confirmation before it can run.";
     } else {
-      results.value = payload;
+      results.value = { ...payload, rows: payload.rows ?? [] };
       pendingConfirmation.value = false;
     }
     running.value = false;
@@ -272,19 +272,33 @@ onUnmounted(() => {
           size="small"
           severity="secondary"
           outlined
-          class="max-w-72"
+          :label="item"
+          :title="item"
+          class="max-w-72 overflow-hidden"
           @click="recall(item)"
-        >
-          {{ item }}
-        </Button>
+        />
       </div>
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto">
       <div
         v-if="results"
+        data-test="query-result-toolbar"
         class="flex items-center gap-2 border-b border-surface-200 px-3 py-2 text-xs text-surface-500 dark:border-surface-800"
       >
+        <template v-if="canExport && results.rows.length">
+          <Button
+            type="button"
+            text
+            size="small"
+            label="Export"
+            title="Export results"
+            aria-haspopup="true"
+            data-test="query-export-button"
+            @click="exportMenu?.toggle($event)"
+          />
+          <Menu ref="exportMenu" :model="exportItems" popup />
+        </template>
         <span>
           {{
             results.commandTag ||
@@ -294,19 +308,6 @@ onUnmounted(() => {
             · {{ results.elapsedMs }} ms</span
           >
         </span>
-        <template v-if="canExport && results.rows.length">
-          <Button
-            type="button"
-            text
-            size="small"
-            label="Export"
-            class="ml-auto"
-            title="Export results"
-            aria-haspopup="true"
-            @click="exportMenu?.toggle($event)"
-          />
-          <Menu ref="exportMenu" :model="exportItems" popup />
-        </template>
       </div>
       <table v-if="results" class="w-full border-collapse text-xs">
         <thead class="sticky top-0 bg-surface-50 dark:bg-surface-900">

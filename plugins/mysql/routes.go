@@ -57,6 +57,7 @@ func routes() []plugin.Route {
 		{ID: "mysql.table.row.insert", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/rows", Permission: "mysql.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.table.row.insert", Handle: insertRow},
 		{ID: "mysql.table.row.update", Method: plugin.MethodPatch, Path: "/tables/{database}/{table}/rows", Permission: "mysql.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.table.row.update", Handle: updateRow},
 		{ID: "mysql.table.row.delete", Method: plugin.MethodDelete, Path: "/tables/{database}/{table}/rows", Permission: "mysql.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.table.row.delete", Handle: deleteRow},
+		{ID: "mysql.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "mysql.databases.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
 		{ID: "mysql.table.create", Method: plugin.MethodPost, Path: "/databases/{database}/tables", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "mysql.column.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "mysql.column.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/drop", Permission: "mysql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mysql.column.drop", Input: columnDropSchema(), Handle: dropColumn},
@@ -71,6 +72,15 @@ func routes() []plugin.Route {
 
 func mysqlSession(rc *plugin.RequestContext) (*Session, error) {
 	return unwrap(rc.Session)
+}
+
+func databaseCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Database", Fields: []plugin.Field{
+		{Key: "name", Label: "Database name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "charset", Label: "Charset", Type: plugin.FieldText, Default: "utf8mb4"},
+		{Key: "collation", Label: "Collation", Type: plugin.FieldText},
+		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
+	}}}}
 }
 
 func tableCreateSchema() *plugin.Schema {
@@ -588,6 +598,50 @@ LIMIT 2500`, nil)
 		}
 	}
 	return items, nil
+}
+
+func createDatabase(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        string `json:"name" validate:"required"`
+		Charset     string `json:"charset"`
+		Collation   string `json:"collation"`
+		IfNotExists bool   `json:"if_not_exists"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	prefix := "CREATE DATABASE "
+	if req.IfNotExists {
+		prefix += "IF NOT EXISTS "
+	}
+	stmt := prefix + quoteIdent(name)
+	if charset := strings.TrimSpace(req.Charset); charset != "" {
+		if _, err := sqldb.SafeIdentifier(charset); err != nil {
+			return nil, err
+		}
+		stmt += " CHARACTER SET " + charset
+	}
+	if collation := strings.TrimSpace(req.Collation); collation != "" {
+		if _, err := sqldb.SafeIdentifier(collation); err != nil {
+			return nil, err
+		}
+		stmt += " COLLATE " + collation
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mysqlErr(err)
+	}
+	return actionResult{OK: true}, nil
 }
 
 func createTable(rc *plugin.RequestContext) (any, error) {

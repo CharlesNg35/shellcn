@@ -87,7 +87,7 @@ func schemaResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "postgresql.schemas.list"},
 		Columns: schemaColumns(),
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"postgresql.table.create"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "postgresql.schema.overview", Params: schemaParams()}},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.tables.list", Params: schemaParams()}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"postgresql.table.create"}, RowActionIDs: []string{"postgresql.table.truncate", "postgresql.table.drop"}}.Map()},
@@ -107,7 +107,7 @@ func tableResource() plugin.ResourceType {
 		Columns:      tableColumns(),
 		RowActionIDs: []string{"postgresql.column.add", "postgresql.table.truncate", "postgresql.table.drop"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"postgresql.column.add", "postgresql.table.truncate", "postgresql.table.drop"}},
+			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"postgresql.table.truncate", "postgresql.table.drop"}},
 			Tabs: []plugin.Tab{
 				{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.table.rows", Params: tableParams()}, Config: dataGridConfig()},
 				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "postgresql.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"postgresql.column.add", "postgresql.column.drop"}}.Map()},
@@ -164,13 +164,14 @@ func schemaParams() map[string]string {
 
 func dataGridConfig() map[string]any {
 	return plugin.TableConfig{
-		Editable:    true,
-		StagedEdits: true,
-		Exportable:  true,
-		EmptyText:   "No rows.",
-		Insert:      &plugin.DataSource{RouteID: "postgresql.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
-		Update:      &plugin.DataSource{RouteID: "postgresql.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
-		Delete:      &plugin.DataSource{RouteID: "postgresql.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		Editable:      true,
+		StagedEdits:   true,
+		Exportable:    true,
+		EmptyText:     "No rows.",
+		Insert:        &plugin.DataSource{RouteID: "postgresql.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
+		Update:        &plugin.DataSource{RouteID: "postgresql.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
+		Delete:        &plugin.DataSource{RouteID: "postgresql.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		ColumnsSource: &plugin.DataSource{RouteID: "postgresql.table.columns", Params: tableParams()},
 	}.Map()
 }
 

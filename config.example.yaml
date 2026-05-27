@@ -12,6 +12,12 @@ auth:
   # from the master key
   jwt_secret: ""
 
+bootstrap:
+  # Used only when the user table is empty. Leave admin_password empty to print a
+  # generated one-time initial password on first startup.
+  admin_username: admin
+  admin_password: ""
+
 database:
   driver: sqlite
   dsn: shellcn.db

@@ -73,4 +73,27 @@ describe("TreeWorkspace", () => {
       behavior: "smooth",
     });
   });
+
+  it("bounds long workbench tab labels with a full title", async () => {
+    const wrapper = mountWorkspace();
+    const ws = useWorkspaceStore();
+    const title = "public.github_app_installation_repositories";
+
+    ws.openView("c1", {
+      id: "list:long",
+      title,
+      subtitle: "production / analytics",
+      kind: "list",
+      resourceKind: "missing",
+    });
+    await nextTick();
+    await flushPromises();
+
+    const tab = wrapper.get(
+      "button[title='production / analytics / public.github_app_installation_repositories']",
+    );
+    expect(tab.classes()).toContain("max-w-60");
+    expect(tab.classes()).toContain("overflow-hidden");
+    expect(tab.get("span").classes()).toContain("min-w-0");
+  });
 });

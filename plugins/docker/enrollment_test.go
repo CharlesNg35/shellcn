@@ -25,7 +25,7 @@ func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
 	}
 	svc := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 
-	enr, err := svc.Create(ctx, "docker-agent", "wss://shellcn.test/api/agent/connect")
+	enr, err := svc.Create(ctx, "docker-agent", "wss://shellcn.test/api/agent/connect", nil)
 	if err != nil {
 		t.Fatalf("create enrollment: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestEnrollmentCommandAdaptsLocalhostForContainer(t *testing.T) {
 	}
 	svc := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 
-	enr, err := svc.Create(ctx, "docker-agent", "ws://localhost:5173/api/agent/connect")
+	enr, err := svc.Create(ctx, "docker-agent", "ws://localhost:5173/api/agent/connect", nil)
 	if err != nil {
 		t.Fatalf("create enrollment: %v", err)
 	}

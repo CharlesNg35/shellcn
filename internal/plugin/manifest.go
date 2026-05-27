@@ -50,17 +50,36 @@ const (
 )
 
 // ProxyTarget describes the single endpoint an agent exposes back to the gateway.
+// For http_proxy mode, TokenFile/CAFile are generic target-side paths the agent
+// uses to inject a bearer token (empty = none) and verify TLS (empty = system
+// roots) — no protocol vocabulary, so any private-HTTP-API plugin can reuse it.
 type ProxyTarget struct {
-	Mode    AgentMode
-	Address string
-	Risk    RiskLevel
+	Mode      AgentMode
+	Address   string
+	Risk      RiskLevel
+	TokenFile string
+	CAFile    string
 }
+
+// ArtifactDelivery selects how an install artifact reaches the target.
+type ArtifactDelivery string
+
+const (
+	// DeliveryInline injects the token directly into Template (the default).
+	DeliveryInline ArtifactDelivery = ""
+	// DeliveryURL serves Content from a single-use signed-ticket URL; Template
+	// becomes the fetch command ({{.ArtifactURL}}), so the token appears only in
+	// the fetched body. Generic — any plugin may use it.
+	DeliveryURL ArtifactDelivery = "url"
+)
 
 // InstallArtifact is a launch recipe shown to the user to start an agent.
 type InstallArtifact struct {
 	Label      string
 	Kind       string
 	Template   string
+	Content    string
+	Delivery   ArtifactDelivery
 	ConnectURL ArtifactConnectURL
 }
 

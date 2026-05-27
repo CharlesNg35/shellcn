@@ -21,7 +21,17 @@ interface NodeData {
   source?: DataSource;
   resourceKind?: string;
   listParams?: Record<string, string>;
-  parentPath?: string[]; // ancestor labels (excl. root group) → tab qualifier
+  // Tab qualifier: the intermediate ancestor labels (db / schema), or the root
+  // group label when the node sits directly under it (Containers, Compose).
+  groupLabel?: string;
+  parentPath?: string[];
+}
+
+// Intermediate ancestors when present, else the category (root group) name.
+function nodeQualifier(data: NodeData): string {
+  return data.parentPath?.length
+    ? data.parentPath.join(" / ")
+    : (data.groupLabel ?? "");
 }
 
 const props = defineProps<{
@@ -41,7 +51,11 @@ const badges = reactive<Record<string, string | number>>({});
 const expandedKeys = ref<Record<string, boolean>>({});
 const selectionKeys = ref<Record<string, boolean>>({});
 
-function toNode(n: TreeNode, parentPath: string[] = []): PVNode {
+function toNode(
+  n: TreeNode,
+  parentPath: string[] = [],
+  groupLabel = "",
+): PVNode {
   return {
     key: n.key,
     label: n.label,
@@ -53,6 +67,7 @@ function toNode(n: TreeNode, parentPath: string[] = []): PVNode {
       source: n.childrenSource,
       resourceKind: n.resourceKind,
       listParams: n.listParams,
+      groupLabel,
       parentPath,
     },
   };
@@ -88,11 +103,14 @@ async function loadChildren(node: PVNode): Promise<void> {
   node.loading = true;
   try {
     const page = await fetchPage<TreeNode>(props.connectionId, data.source);
-    // Root group contributes no path; intermediate nodes add their label.
+    // The root group names the category; deeper nodes add their label to the path.
+    const groupLabel = data.isGroup
+      ? String(node.label ?? "")
+      : data.groupLabel;
     const childPath = data.isGroup
       ? []
       : [...(data.parentPath ?? []), String(node.label ?? "")];
-    node.children = page.items.map((n) => toNode(n, childPath));
+    node.children = page.items.map((n) => toNode(n, childPath, groupLabel));
   } finally {
     node.loading = false;
   }
@@ -106,8 +124,7 @@ async function onNodeSelect(node: PVNode): Promise<void> {
   if (data.isGroup) emit("select-group", String(node.key));
   else if (data.resourceKind)
     emit("select-list", data.resourceKind, data.listParams);
-  else if (data.row)
-    emit("select-node", data.row, (data.parentPath ?? []).join(" / "));
+  else if (data.row) emit("select-node", data.row, nodeQualifier(data));
   if (!node.leaf) {
     expandedKeys.value = { ...expandedKeys.value, [String(node.key)]: true };
     await loadChildren(node);

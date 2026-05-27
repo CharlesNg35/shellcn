@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -12,8 +14,10 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/charlesng/shellcn/internal/audit"
+	"github.com/charlesng/shellcn/internal/auth"
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/internal/service"
 	"github.com/charlesng/shellcn/internal/transport"
 )
 
@@ -21,6 +25,10 @@ const (
 	agentEnrollEvent     = "agent.enrollment.create"
 	agentConnectEvent    = "agent.connect"
 	agentDisconnectEvent = "agent.disconnect"
+	agentArtifactEvent   = "agent.artifact.fetch"
+	// artifactTicketRoute is the synthetic ticket scope for install-artifact
+	// fetches — generic, not tied to any plugin or artifact kind.
+	artifactTicketRoute = "agent.artifact"
 )
 
 // canManageConnection reports whether the user may enroll/operate an agent for a
@@ -119,7 +127,7 @@ func (s *Server) handleCreateEnrollment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
-	enr, err := s.deps.Enrollments.Create(ctx, conn.ID, s.agentConnectURL(r))
+	enr, err := s.deps.Enrollments.Create(ctx, conn.ID, s.agentConnectURL(r), s.artifactURLMinter(r, conn.ID))
 	if err != nil {
 		s.auditAgentEvent(ctx, user, conn.ID, agentEnrollEvent, models.AuditError, err)
 		writeError(w, s.deps.Logger, err)
@@ -148,6 +156,66 @@ func (s *Server) handleAgentState(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, state)
 }
+
+// artifactURLMinter mints a single-use signed ticket and builds the public fetch
+// URL for a URL-delivered artifact (nil when artifact delivery is not wired).
+func (s *Server) artifactURLMinter(r *http.Request, connID string) service.ArtifactURLFunc {
+	if s.deps.ArtifactTickets == nil {
+		return nil
+	}
+	return func(enrollmentID, kind string) (string, error) {
+		ticket, _ := s.deps.ArtifactTickets.Mint(auth.TicketScope{
+			ConnectionID: connID,
+			RouteID:      artifactTicketRoute,
+			Params:       map[string]string{"enrollmentId": enrollmentID, "kind": kind},
+		})
+		scheme := "http"
+		if isTLS(r) {
+			scheme = "https"
+		}
+		u := url.URL{
+			Scheme:   scheme,
+			Host:     gatewayConnectHost(r),
+			Path:     "/api/connections/" + url.PathEscape(connID) + "/agent/enrollments/" + url.PathEscape(enrollmentID) + "/artifacts/" + url.PathEscape(kind),
+			RawQuery: url.Values{"ticket": {ticket}}.Encode(),
+		}
+		return u.String(), nil
+	}
+}
+
+// handleFetchArtifact serves a URL-delivered artifact's body, authorized solely
+// by a single-use signed ticket (the token is minted into the body here).
+func (s *Server) handleFetchArtifact(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	connID := chi.URLParam(r, "id")
+	enrollmentID := chi.URLParam(r, "enrollmentId")
+	kind := chi.URLParam(r, "kind")
+
+	scope := auth.TicketScope{
+		ConnectionID: connID,
+		RouteID:      artifactTicketRoute,
+		Params:       map[string]string{"enrollmentId": enrollmentID, "kind": kind},
+	}
+	if err := s.deps.ArtifactTickets.Redeem(r.URL.Query().Get("ticket"), scope); err != nil {
+		writeError(w, s.deps.Logger, plugin.ErrUnauthorized)
+		return
+	}
+
+	content, err := s.deps.Enrollments.RenderArtifactContent(ctx, connID, enrollmentID, kind, s.agentConnectURL(r))
+	if err != nil {
+		s.auditAgentEvent(ctx, artifactFetchUser, connID, agentArtifactEvent, models.AuditError, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	s.auditAgentEvent(ctx, artifactFetchUser, connID, agentArtifactEvent, models.AuditAllowed, nil)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	_, _ = io.WriteString(w, content)
+}
+
+// artifactFetchUser labels the unauthenticated, ticket-authorized artifact fetch
+// in the audit log.
+var artifactFetchUser = models.User{ID: "agent", Username: "artifact-fetch"}
 
 // handleAgentConnect is the agent tunnel endpoint. The agent authenticates with
 // its enrollment token in the first message (not the URL); on success the gateway
@@ -179,8 +247,13 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := transport.AgentConnectResponse{
-		OK:    true,
-		Proxy: transport.AgentProxyTarget{Mode: string(proxy.Mode), Address: proxy.Address},
+		OK: true,
+		Proxy: transport.AgentProxyTarget{
+			Mode:      string(proxy.Mode),
+			Address:   proxy.Address,
+			TokenFile: proxy.TokenFile,
+			CAFile:    proxy.CAFile,
+		},
 	}
 	if err := wsjson.Write(handshakeCtx, c, resp); err != nil {
 		_ = c.Close(websocket.StatusInternalError, "handshake failed")

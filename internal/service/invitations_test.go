@@ -64,6 +64,45 @@ func TestInvitationCreateAndAccept(t *testing.T) {
 	}
 }
 
+func TestInvitationAcceptDoesNotConsumeOnUserCreateFailure(t *testing.T) {
+	ctx := context.Background()
+	inv, st, _ := newInvitationService(false)
+
+	if err := st.Users.Create(ctx, &models.User{ID: "existing", Username: "taken"}, "hash"); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	_, token, _, err := inv.Create(ctx, "retry@example.com", models.RoleViewer, "admin", "https://host/invite/")
+	if err != nil {
+		t.Fatalf("create invite: %v", err)
+	}
+	if _, err := inv.Accept(ctx, token, "taken", "s3cret-pw"); !errors.Is(err, models.ErrConflict) {
+		t.Fatalf("accept with taken username: want conflict, got %v", err)
+	}
+	user, err := inv.Accept(ctx, token, "retry", "s3cret-pw")
+	if err != nil {
+		t.Fatalf("accept retry should succeed: %v", err)
+	}
+	if user.Username != "retry" {
+		t.Fatalf("retry user = %q", user.Username)
+	}
+}
+
+func TestInvitationAcceptValidatesPasswordBeforeConsuming(t *testing.T) {
+	ctx := context.Background()
+	inv, _, _ := newInvitationService(false)
+
+	_, token, _, err := inv.Create(ctx, "weak@example.com", models.RoleViewer, "admin", "https://host/invite/")
+	if err != nil {
+		t.Fatalf("create invite: %v", err)
+	}
+	if _, err := inv.Accept(ctx, token, "weak", "short"); err == nil {
+		t.Fatal("weak password should be rejected")
+	}
+	if _, err := inv.Accept(ctx, token, "strong", "s3cret-pw"); err != nil {
+		t.Fatalf("accept after weak password retry should succeed: %v", err)
+	}
+}
+
 func TestInvitationRevoke(t *testing.T) {
 	ctx := context.Background()
 	inv, _, _ := newInvitationService(false)

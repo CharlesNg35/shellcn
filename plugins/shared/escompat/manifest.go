@@ -24,7 +24,6 @@ func resources(provider Provider) []plugin.ResourceType {
 			ListActionIDs: []string{routeID(provider, "index.create")},
 			RowActionIDs:  []string{routeID(provider, "index.refresh"), routeID(provider, "index.delete")},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "health", ActionIDs: []string{
-				routeID(provider, "document.create"),
 				routeID(provider, "mapping.update"),
 				routeID(provider, "index.refresh"),
 				routeID(provider, "index.flush"),

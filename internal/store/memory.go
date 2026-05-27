@@ -85,6 +85,9 @@ func (s *memUserStore) SetPasswordHash(_ context.Context, userID, hash string) e
 		return ErrNotFound
 	}
 	s.hashes[userID] = hash
+	u := s.users[userID]
+	u.SessionVersion++
+	s.users[userID] = u
 	return nil
 }
 
@@ -774,6 +777,20 @@ func (s *memEnrollmentStore) UpdateStatus(_ context.Context, id string, status m
 		return ErrNotFound
 	}
 	e.Status = status
+	e.UpdatedAt = time.Now()
+	s.m[id] = e
+	return nil
+}
+
+func (s *memEnrollmentStore) UpdateToken(_ context.Context, id, tokenHash string, expiresAt time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.m[id]
+	if !ok {
+		return ErrNotFound
+	}
+	e.TokenHash = tokenHash
+	e.ExpiresAt = expiresAt
 	e.UpdatedAt = time.Now()
 	s.m[id] = e
 	return nil

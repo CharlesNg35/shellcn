@@ -15,6 +15,7 @@ import SchemaForm from "../form/SchemaForm.vue";
 import { isVisible } from "../form/condition";
 import { useDockStore, type DockItem } from "../../stores/dock";
 import { dialogRoot } from "../../primevue/preset";
+import { cn } from "../../utils/cn";
 
 const dock = useDockStore();
 
@@ -23,6 +24,11 @@ const props = defineProps<{
   actions: Action[];
   resource?: ResourceRef | null;
   record?: Row | null; // the active row, so actions can gate on its fields
+  // Default params contributed by the surrounding context (e.g. the params of
+  // the list the action sits on). Actions without their own resource inherit
+  // these, so an action declared on a scoped view operates within that scope
+  // without restating it; an action's explicit params always take precedence.
+  scope?: Record<string, string> | null;
 }>();
 
 // Enabled unless the condition fails; when the row lacks the fields it needs
@@ -51,9 +57,23 @@ const riskClass: Record<RiskLevel, string> = {
   privileged: "bg-amber-600 text-white hover:bg-amber-700",
 };
 
+// Stable identity for the dock tab an action opens, so repeat clicks focus the
+// existing tab instead of stacking duplicates. An action tied to a resource
+// keys on that resource; otherwise it keys on its resolved params, so the same
+// action run against different scopes opens distinct tabs.
+function dockKey(action: Action): string {
+  if (props.resource?.uid) return props.resource.uid;
+  const params = actionParams(action);
+  const sig = Object.keys(params)
+    .sort()
+    .map((k) => `${k}=${params[k]}`)
+    .join("&");
+  return sig || "connection";
+}
+
 function dockItem(action: Action): DockItem {
   return {
-    id: `${action.id}:${props.resource?.uid ?? "connection"}`,
+    id: `${action.id}:${dockKey(action)}`,
     title: props.resource?.name
       ? `${props.resource.name} · ${action.label}`
       : action.label,
@@ -64,6 +84,7 @@ function dockItem(action: Action): DockItem {
       method: action.method,
       params: actionParams(action),
     },
+    config: action.config,
     resource: props.resource,
   };
 }
@@ -78,6 +99,10 @@ function trigger(action: Action): void {
     dock.openDialog(props.connectionId, dockItem(action));
     return;
   }
+  if (action.open === "url") {
+    void openURL(action);
+    return;
+  }
   if (
     action.requiresConfirm ||
     action.input ||
@@ -89,10 +114,12 @@ function trigger(action: Action): void {
 }
 
 function actionParams(action: Action): Record<string, string> {
-  if (action.params) return action.params;
+  const base = props.scope ? { ...props.scope } : {};
+  if (action.params) return { ...base, ...action.params };
   const ref = props.resource;
-  if (!ref) return {};
+  if (!ref) return base;
   const params: Record<string, string> = {
+    ...base,
     kind: ref.kind,
     name: ref.name,
     uid: ref.uid,
@@ -100,6 +127,30 @@ function actionParams(action: Action): Record<string, string> {
   if (ref.namespace) params.namespace = ref.namespace;
   if (ref.scope) params.scope = ref.scope;
   return params;
+}
+
+// open="url": run the route, then open the returned {url} in a new tab.
+async function openURL(action: Action): Promise<void> {
+  error.value = null;
+  try {
+    const result: unknown = await runFormAction(
+      props.connectionId,
+      action.routeId,
+      { resource: props.resource },
+      {},
+      actionParams(action),
+      action.method ?? "GET",
+    );
+    const raw =
+      result && typeof result === "object"
+        ? (result as Record<string, unknown>).url
+        : undefined;
+    if (typeof raw === "string" && raw) {
+      window.open(raw, "_blank", "noopener,noreferrer");
+    }
+  } catch (e) {
+    error.value = (e as Error).message;
+  }
 }
 
 async function execute(
@@ -153,8 +204,12 @@ function onVisible(visible: boolean): void {
       type="button"
       :disabled="!isEnabled(action)"
       :title="action.label"
+      size="small"
       :pt="{
-        root: `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${riskClass[action.risk]} disabled:pointer-events-none disabled:opacity-40`,
+        root: cn(
+          'inline-flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
+          riskClass[action.risk],
+        ),
       }"
       @click="isEnabled(action) && trigger(action)"
     >
@@ -202,7 +257,12 @@ function onVisible(visible: boolean): void {
               :disabled="busy"
               autofocus
               :pt="{
-                root: `inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${pending.risk === 'destructive' ? 'bg-rose-600' : 'bg-primary-500'}`,
+                root: cn(
+                  'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50',
+                  pending.risk === 'destructive'
+                    ? 'bg-rose-600'
+                    : 'bg-primary-500',
+                ),
               }"
               @click="execute(pending)"
             />

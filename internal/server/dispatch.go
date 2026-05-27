@@ -137,6 +137,45 @@ func (s *Server) authorize(ctx context.Context, user models.User, conn models.Co
 	return s.deps.Policy.Authorize(in)
 }
 
+// handleConnectionProxy reverse-proxies a browser request through a connection's
+// session (a plugin.HTTPProxy) to an upstream it exposes. The core does
+// authn/authz/audit + strips the prefix; the plugin maps the target and streams.
+func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := userFrom(ctx)
+	conn, err := s.deps.Store.Connections.Get(ctx, chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	// Proxying can reach internal services, so it is privileged.
+	route := plugin.Route{ID: "connection.proxy", Permission: "connection.proxy", Risk: plugin.RiskPrivileged, AuditEvent: "connection.proxy"}
+	res := resolved{user: user, conn: conn, route: route}
+	if err := s.authorize(ctx, user, conn, route); err != nil {
+		s.auditEvent(ctx, res, models.AuditDenied, err)
+		s.incAuthzFailure(err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	handle, err := s.acquireSession(ctx, res)
+	if err != nil {
+		s.auditEvent(ctx, res, models.AuditError, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	proxier, ok := handle.Session().(plugin.HTTPProxy)
+	if !ok {
+		writeError(w, s.deps.Logger, plugin.ErrNotSupported)
+		return
+	}
+	// The wildcard holds the plugin-defined target path; hand it over as the path.
+	rp := r.Clone(ctx)
+	rp.URL.Path = "/" + chi.URLParam(r, "*")
+	rp.URL.RawPath = ""
+	s.auditEvent(ctx, res, models.AuditAllowed, nil)
+	proxier.ServeHTTPProxy(w, rp)
+}
+
 func (s *Server) acquireSession(ctx context.Context, res resolved) (*session.Handle, error) {
 	key := session.Key{ConnectionID: res.conn.ID, OwnerScope: res.user.ID}
 	return s.deps.Sessions.Acquire(ctx, key, res.user.ID, func(ctx context.Context) (plugin.Session, error) {

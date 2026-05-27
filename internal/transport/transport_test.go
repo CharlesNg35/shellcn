@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"testing"
 
 	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng/shellcn/internal/plugin"
 	"github.com/charlesng/shellcn/internal/transport"
 )
 
@@ -36,7 +38,7 @@ func TestDirectDial(t *testing.T) {
 }
 
 func TestBuildDirect(t *testing.T) {
-	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "direct"}, transport.NewRegistry())
+	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "direct"}, transport.NewRegistry(), "")
 	if err != nil {
 		t.Fatalf("build direct: %v", err)
 	}
@@ -44,7 +46,7 @@ func TestBuildDirect(t *testing.T) {
 		t.Fatal("nil transport")
 	}
 	// Empty transport string defaults to direct.
-	if _, err := transport.Build(models.Connection{ID: "c2"}, transport.NewRegistry()); err != nil {
+	if _, err := transport.Build(models.Connection{ID: "c2"}, transport.NewRegistry(), ""); err != nil {
 		t.Errorf("empty transport should default to direct: %v", err)
 	}
 }
@@ -83,7 +85,7 @@ func TestDirectForConnectionOnlyDialsDeclaredTarget(t *testing.T) {
 }
 
 func TestBuildAgentUnavailableWithoutTunnel(t *testing.T) {
-	_, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, transport.NewRegistry())
+	_, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, transport.NewRegistry(), "")
 	if !errors.Is(err, transport.ErrAgentUnavailable) {
 		t.Errorf("agent with no tunnel: want ErrAgentUnavailable, got %v", err)
 	}
@@ -97,7 +99,7 @@ func TestRegistryRegisterResolveRemove(t *testing.T) {
 	reg.Register("c1", func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("via tunnel") })
 
 	// An agent-mode connection now resolves through the registered dialer.
-	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg)
+	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg, "")
 	if err != nil {
 		t.Fatalf("build agent with registered tunnel: %v", err)
 	}
@@ -106,7 +108,7 @@ func TestRegistryRegisterResolveRemove(t *testing.T) {
 	}
 
 	reg.Remove("c1")
-	if _, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg); !errors.Is(err, transport.ErrAgentUnavailable) {
+	if _, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg, ""); !errors.Is(err, transport.ErrAgentUnavailable) {
 		t.Errorf("after Remove: want ErrAgentUnavailable, got %v", err)
 	}
 }
@@ -115,7 +117,7 @@ func TestBuildAgentWithTunnel(t *testing.T) {
 	reg := stubRegistry{dial: func(context.Context, string, string) (net.Conn, error) {
 		return nil, errors.New("dialed")
 	}}
-	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg)
+	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg, "")
 	if err != nil {
 		t.Fatalf("build agent: %v", err)
 	}
@@ -124,8 +126,53 @@ func TestBuildAgentWithTunnel(t *testing.T) {
 	}
 }
 
+func TestBuildAgentL4ModesHaveNoHTTP(t *testing.T) {
+	reg := stubRegistry{dial: func(context.Context, string, string) (net.Conn, error) { return nil, errors.New("dialed") }}
+	for _, mode := range []plugin.AgentMode{plugin.AgentTCP, plugin.AgentUnix, ""} {
+		nt, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg, mode)
+		if err != nil {
+			t.Fatalf("build agent %q: %v", mode, err)
+		}
+		if _, _, ok := nt.HTTP(); ok {
+			t.Errorf("agent mode %q should report HTTP() ok=false", mode)
+		}
+	}
+}
+
+func TestBuildAgentHTTPProxyExposesL7(t *testing.T) {
+	dialed := make(chan struct{}, 1)
+	reg := stubRegistry{dial: func(context.Context, string, string) (net.Conn, error) {
+		select {
+		case dialed <- struct{}{}:
+		default:
+		}
+		return nil, errors.New("tunnel dialed")
+	}}
+	nt, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, reg, plugin.AgentHTTP)
+	if err != nil {
+		t.Fatalf("build agent http_proxy: %v", err)
+	}
+	baseURL, rt, ok := nt.HTTP()
+	if !ok || rt == nil {
+		t.Fatalf("http_proxy mode should expose an L7 transport, got ok=%v rt=%v", ok, rt)
+	}
+	if baseURL == "" {
+		t.Fatal("http_proxy base URL must be non-empty")
+	}
+	// The RoundTripper must dial the tunnel, not the network directly.
+	req, _ := http.NewRequest(http.MethodGet, baseURL+"/api/v1/namespaces", nil)
+	if resp, _ := rt.RoundTrip(req); resp != nil {
+		_ = resp.Body.Close()
+	}
+	select {
+	case <-dialed:
+	default:
+		t.Error("L7 RoundTripper did not route through the tunnel dialer")
+	}
+}
+
 func TestBuildUnknownMode(t *testing.T) {
-	if _, err := transport.Build(models.Connection{ID: "c1", Transport: "carrier-pigeon"}, nil); err == nil {
+	if _, err := transport.Build(models.Connection{ID: "c1", Transport: "carrier-pigeon"}, nil, ""); err == nil {
 		t.Error("unknown transport mode should error")
 	}
 }

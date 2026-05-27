@@ -68,7 +68,7 @@ describe("ResourceTree", () => {
     expect(w.emitted("select-node")?.[0]).toEqual([row, ""]);
   });
 
-  it("emits the tree ancestor path as the tab qualifier", async () => {
+  it("emits the intermediate ancestor path as the tab qualifier", async () => {
     const w = mountTree();
     const dt = w.findComponent({ name: "Tree" });
     const row = {
@@ -77,9 +77,22 @@ describe("ResourceTree", () => {
     dt.vm.$emit("node-select", {
       key: "t1",
       leaf: true,
-      data: { row, parentPath: ["app", "public"] },
+      data: { row, groupLabel: "Databases", parentPath: ["app", "public"] },
     });
     await w.vm.$nextTick();
     expect(w.emitted("select-node")?.[0]).toEqual([row, "app / public"]);
+  });
+
+  it("falls back to the root group name for a node directly under it", async () => {
+    const w = mountTree();
+    const dt = w.findComponent({ name: "Tree" });
+    const row = { ref: { kind: "container", name: "web", uid: "c1" } };
+    dt.vm.$emit("node-select", {
+      key: "c1",
+      leaf: true,
+      data: { row, groupLabel: "Containers", parentPath: [] },
+    });
+    await w.vm.$nextTick();
+    expect(w.emitted("select-node")?.[0]).toEqual([row, "Containers"]);
   });
 });

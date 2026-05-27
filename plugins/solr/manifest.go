@@ -20,7 +20,7 @@ func resources() []plugin.ResourceType {
 			ListActionIDs: []string{rid("core.create")},
 			RowActionIDs:  []string{rid("core.reload"), rid("core.delete")},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{
-				rid("document.upsert"), rid("documents.delete_query"), rid("schema.field.add"), rid("core.commit"), rid("core.optimize"), rid("core.reload"), rid("core.delete"),
+				rid("core.commit"), rid("core.optimize"), rid("core.reload"), rid("core.delete"),
 			}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("core.overview"), Params: coreParams()}},
 				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("documents.list"), Params: coreParams()}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{rid("document.upsert"), rid("documents.delete_query")}, RowActionIDs: []string{rid("document.delete")}, Exportable: true}.Map()},

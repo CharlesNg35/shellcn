@@ -41,6 +41,23 @@ func TestClickHousePluginIntegration(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 	s := sess.(*Session)
 
+	createdDatabase := "shellcn_it_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": createdDatabase, "if_not_exists": true})); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "DROP DATABASE IF EXISTS "+quoteIdent(createdDatabase))
+	})
+	databases, err := listDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list databases after create: %v", err)
+	}
+	if !pageHasName(databases.(plugin.Page[row]), createdDatabase) {
+		t.Fatalf("created database was not listed: %#v", databases)
+	}
+
 	seedStatements := []string{
 		`CREATE TABLE IF NOT EXISTS shellcn_people (
   id UInt64,
@@ -224,6 +241,11 @@ func configFromDSN(t *testing.T, raw string) map[string]any {
 		"tls_mode":  stringDefault(u.Query().Get("tls"), "disable"),
 		"read_only": false,
 	}
+}
+
+func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
+	raw, _ := json.Marshal(body)
+	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func run(ctx context.Context, t *testing.T, name string, args ...string) string {

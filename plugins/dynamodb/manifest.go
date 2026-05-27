@@ -26,7 +26,7 @@ func tableResource() plugin.ResourceType {
 		ActionIDs:    []string{rid("table.create")},
 		RowActionIDs: []string{rid("table.delete"), rid("backup.create")},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("item.put"), rid("backup.create"), rid("gsi.create"), rid("table.delete")}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("table.delete")}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("table.read"), Params: tableParams()}},
 				{Key: "items", Label: "Items", Icon: icon("braces"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("items.list"), Params: tableParams()}, Config: plugin.TableConfig{Exportable: true, ActionIDs: []string{rid("item.put")}, RowActionIDs: []string{rid("item.delete")}, EmptyText: "No items found."}.Map()},

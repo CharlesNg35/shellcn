@@ -77,6 +77,7 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.table.row.insert", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.row.insert", Handle: insertRow},
 		{ID: "cockroachdb.table.row.update", Method: plugin.MethodPatch, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.row.update", Handle: updateRow},
 		{ID: "cockroachdb.table.row.delete", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.row.delete", Handle: deleteRow},
+		{ID: "cockroachdb.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "cockroachdb.databases.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
 		{ID: "cockroachdb.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "cockroachdb.column.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "cockroachdb.column.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/drop", Permission: "cockroachdb.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.column.drop", Input: columnDropSchema(), Handle: dropColumn},
@@ -111,6 +112,13 @@ func treeSessions(rc *plugin.RequestContext) (any, error) {
 
 func treeQueries(rc *plugin.RequestContext) (any, error) {
 	return treeFromPage(rc, "query", "search-code", "query_id", listQueries)
+}
+
+func databaseCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Database", Fields: []plugin.Field{
+		{Key: "name", Label: "Database name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
+	}}}}
 }
 
 func tableCreateSchema() *plugin.Schema {
@@ -819,6 +827,35 @@ LIMIT 500`, nil)
 		add(sqldb.CompletionItem{Label: fmt.Sprint(r["name"]), Type: "function", Detail: fmt.Sprint(r["schema"])})
 	}
 	return items, nil
+}
+
+func createDatabase(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        string `json:"name" validate:"required"`
+		IfNotExists bool   `json:"if_not_exists"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	prefix := "CREATE DATABASE "
+	if req.IfNotExists {
+		prefix += "IF NOT EXISTS "
+	}
+	if _, err := s.pool.Exec(rc.Ctx, prefix+sqldb.QuoteIdent(name)); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
 }
 
 func createTable(rc *plugin.RequestContext) (any, error) {

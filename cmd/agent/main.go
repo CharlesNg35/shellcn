@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"flag"
 	"fmt"
@@ -14,9 +15,12 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -164,6 +168,10 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, i
 	}
 	defer func() { _ = sess.Close() }()
 
+	if target.Mode == string(transport.AgentModeHTTP) {
+		return serveHTTPProxy(ctx, logger, sess, target)
+	}
+
 	for {
 		stream, err := sess.Accept()
 		if err != nil {
@@ -173,15 +181,138 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, i
 	}
 }
 
+// serveHTTPProxy serves the generic L7 mode: a credential-injecting reverse
+// proxy over the tunnel, one request per accepted stream. Nothing here is
+// protocol-specific.
+func serveHTTPProxy(ctx context.Context, logger *slog.Logger, sess *yamux.Session, target transport.AgentProxyTarget) error {
+	proxy, err := buildHTTPProxy(logger, target)
+	if err != nil {
+		return fmt.Errorf("http_proxy: %w", err)
+	}
+	srv := &http.Server{Handler: proxy, ReadHeaderTimeout: 30 * time.Second}
+	go func() {
+		<-ctx.Done()
+		_ = srv.Close()
+	}()
+	logger.Info("http_proxy online", "upstream", target.Address)
+	if err := srv.Serve(yamuxListener{sess: sess}); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
+}
+
+// buildHTTPProxy builds a reverse proxy to target.Address, injecting an optional
+// bearer token from target.TokenFile and verifying TLS with target.CAFile (else
+// system roots; no insecure fallback). Fully generic — no domain knowledge.
+func buildHTTPProxy(logger *slog.Logger, target transport.AgentProxyTarget) (*httputil.ReverseProxy, error) {
+	base := strings.TrimSpace(target.Address)
+	if base == "" {
+		return nil, errors.New("http_proxy requires an upstream address")
+	}
+	upstream, err := url.Parse(base)
+	if err != nil || upstream.Host == "" {
+		return nil, fmt.Errorf("invalid upstream address %q", base)
+	}
+
+	// HTTP/1.1 only: connection upgrades (used by streaming endpoints) require
+	// HTTP/1.1; the reverse proxy forwards those upgrades transparently.
+	tlsConfig := &tls.Config{ServerName: upstream.Hostname(), MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1"}}
+	if caPath := strings.TrimSpace(target.CAFile); caPath != "" {
+		pool, err := loadCAPool(caPath)
+		if err != nil {
+			return nil, fmt.Errorf("load upstream CA: %w", err)
+		}
+		tlsConfig.RootCAs = pool
+	}
+
+	var tokens *tokenSource
+	if tokenPath := strings.TrimSpace(target.TokenFile); tokenPath != "" {
+		tokens = &tokenSource{path: tokenPath}
+	}
+
+	rp := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(upstream)
+			pr.Out.Host = upstream.Host
+			pr.Out.Header.Del("Authorization")
+			if tokens != nil {
+				if tok, err := tokens.token(); err == nil && tok != "" {
+					pr.Out.Header.Set("Authorization", "Bearer "+tok)
+				}
+			}
+		},
+		Transport: &http.Transport{
+			TLSClientConfig:       tlsConfig,
+			ForceAttemptHTTP2:     false,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: time.Second,
+		},
+		// Flush immediately so server-push streams (watches, logs) aren't buffered.
+		FlushInterval: -1,
+		ErrorLog:      slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+			logger.Warn("upstream proxy error", "err", err)
+			w.WriteHeader(http.StatusBadGateway)
+		},
+	}
+	return rp, nil
+}
+
+func loadCAPool(path string) (*x509.CertPool, error) {
+	pem, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("no certificates parsed from %s", path)
+	}
+	return pool, nil
+}
+
+// tokenSource reads a bearer-token file, caching it briefly so a rotated token
+// is picked up without a file read on every request.
+type tokenSource struct {
+	path string
+	mu   sync.Mutex
+	val  string
+	exp  time.Time
+}
+
+func (t *tokenSource) token() (string, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.val != "" && time.Now().Before(t.exp) {
+		return t.val, nil
+	}
+	b, err := os.ReadFile(t.path)
+	if err != nil {
+		return t.val, err
+	}
+	t.val = strings.TrimSpace(string(b))
+	t.exp = time.Now().Add(time.Minute)
+	return t.val, nil
+}
+
+// yamuxListener adapts a yamux session to net.Listener so an http.Server can
+// serve a request per accepted stream.
+type yamuxListener struct{ sess *yamux.Session }
+
+func (l yamuxListener) Accept() (net.Conn, error) { return l.sess.Accept() }
+func (l yamuxListener) Close() error              { return l.sess.Close() }
+func (l yamuxListener) Addr() net.Addr            { return l.sess.Addr() }
+
 // proxyStream pipes one gateway stream to the declared local target.
 func proxyStream(logger *slog.Logger, stream net.Conn, target transport.AgentProxyTarget) {
 	defer func() { _ = stream.Close() }()
 
 	var network string
 	switch target.Mode {
-	case "tcp":
+	case transport.AgentModeTCP:
 		network = "tcp"
-	case "unix":
+	case transport.AgentModeUnix:
 		network = "unix"
 	default:
 		logger.Warn("refusing unsupported proxy mode", "mode", target.Mode)

@@ -3,6 +3,7 @@
 // inherit these classes.
 
 import type { ButtonPassThroughMethodOptions } from "primevue/button";
+import { cn } from "../utils/cn";
 
 // Shared field building blocks — composed below and re-exported so hand-rolled
 // inputs (search boxes, etc.) reuse the exact same look instead of duplicating it.
@@ -13,28 +14,39 @@ const focusRing =
 const focusWithinRing =
   "focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/30";
 
-const inputBase = `w-full ${fieldSurface} px-2.5 py-1.5 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 ${focusRing} dark:text-surface-100`;
+const inputBase = cn(
+  "w-full px-2.5 py-1.5 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
+  fieldSurface,
+  focusRing,
+);
 
 // A standalone text input matching the PrimeVue inputs (for plain <input>s).
 export const inputClass = inputBase;
 
 // A search box with room for a leading icon — shared by the sidebar and pickers.
-export const searchInputClass = `w-full ${fieldSurface} py-1.5 pl-9 pr-3 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 ${focusRing} dark:text-surface-100`;
+export const searchInputClass = cn(
+  "w-full py-1.5 pl-9 pr-3 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
+  fieldSurface,
+  focusRing,
+);
 
 // The dialog box surface — single source for every modal so width is the only
 // per-dialog difference (avoids repeating the box classes in each component).
 export const dialogRoot = (maxWidth = "max-w-md"): string =>
-  `flex max-h-[calc(100vh-2rem)] w-full ${maxWidth} flex-col overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5`;
+  cn(
+    "flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5",
+    maxWidth,
+  );
 
 // Shared button looks, reused across dialogs/action bars instead of re-listing
 // the same utility chains.
 export const btnPrimary =
-  "inline-flex items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50";
+  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50";
 export const btnGhost =
-  "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800";
+  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800";
 
 const buttonBase =
-  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-50";
 const buttonSize = {
   small: "px-2.5 py-1 text-xs",
   normal: "px-3 py-1.5",
@@ -84,6 +96,7 @@ const buttonOutlined = {
 };
 
 type ButtonTone = keyof typeof buttonSolid;
+type ButtonProps = ButtonPassThroughMethodOptions<unknown>["props"];
 
 const buttonTones = [
   "secondary",
@@ -95,36 +108,49 @@ const buttonTones = [
   "contrast",
 ] as const;
 
-function buttonTone(
-  severity: ButtonPassThroughMethodOptions<unknown>["props"]["severity"],
-): ButtonTone {
+function buttonTone(severity: ButtonProps["severity"]): ButtonTone {
   return (buttonTones as readonly string[]).includes(severity ?? "")
     ? (severity as ButtonTone)
     : "primary";
 }
 
+function buttonSizeClass(size: ButtonProps["size"]): string {
+  switch (size) {
+    case "small":
+      return buttonSize.small;
+    case "large":
+      return buttonSize.large;
+    default:
+      return buttonSize.normal;
+  }
+}
+
+function buttonShapeClass(rounded: ButtonProps["rounded"]): string {
+  return rounded ? "rounded-full" : "rounded-md";
+}
+
 function buttonRoot(options: ButtonPassThroughMethodOptions<unknown>): string {
   const props = options.props;
   const tone = buttonTone(props.severity);
-  const size =
-    props.size === "small"
-      ? buttonSize.small
-      : props.size === "large"
-        ? buttonSize.large
-        : buttonSize.normal;
-  const shape = props.rounded ? "rounded-full" : "rounded-md";
-  const width = props.fluid ? "w-full" : "";
+  const size = buttonSizeClass(props.size);
+  const shape = buttonShapeClass(props.rounded);
+  const width = props.fluid && "w-full";
   const variant = props.variant;
   if (props.link || variant === "link") {
-    return `${buttonBase} ${shape} ${width} px-0 py-0 text-primary-700 hover:text-primary-800 hover:underline dark:text-primary-300 dark:hover:text-primary-200`;
+    return cn(
+      buttonBase,
+      shape,
+      width,
+      "px-0 py-0 text-primary-700 hover:text-primary-800 hover:underline dark:text-primary-300 dark:hover:text-primary-200",
+    );
   }
   if (props.text || variant === "text") {
-    return `${buttonBase} ${shape} ${width} ${size} ${buttonText[tone]}`;
+    return cn(buttonBase, shape, width, size, buttonText[tone]);
   }
   if (props.outlined || variant === "outlined") {
-    return `${buttonBase} ${shape} ${width} ${size} ${buttonOutlined[tone]}`;
+    return cn(buttonBase, shape, width, size, buttonOutlined[tone]);
   }
-  return `${buttonBase} ${shape} ${width} ${size} ${buttonSolid[tone]}`;
+  return cn(buttonBase, shape, width, size, buttonSolid[tone]);
 }
 
 const overlay =
@@ -201,11 +227,17 @@ function severitySurfaceClass(options: SeverityOptions): string {
 }
 
 function tagRoot(options: SeverityOptions): string {
-  return `inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${severitySurfaceClass(options)}`;
+  return cn(
+    "inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium",
+    severitySurfaceClass(options),
+  );
 }
 
 function messageRoot(options: SeverityOptions): string {
-  return `flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${severitySurfaceClass(options)}`;
+  return cn(
+    "flex items-start gap-2 rounded-md border px-3 py-2 text-sm",
+    severitySurfaceClass(options),
+  );
 }
 
 const paginatorButton =
@@ -225,7 +257,11 @@ const paginator = {
   lastIcon: "h-4 w-4",
   current: "px-2 text-xs text-surface-500 dark:text-surface-400",
   pcRowPerPageDropdown: {
-    root: `flex min-w-20 items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
+    root: cn(
+      "flex min-w-20 items-center justify-between text-sm transition duration-150",
+      fieldSurface,
+      focusWithinRing,
+    ),
     label:
       "min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
     dropdown: "shrink-0 px-2 text-surface-400",
@@ -241,12 +277,12 @@ export const primeVuePassthrough = {
   // Chart (chart.js) renders a canvas; the pass-through only sizes its wrapper —
   // colors come from theme-aware chart options, not classes.
   chart: { root: "relative h-full w-full" },
-  textarea: { root: `${inputBase} min-h-20 font-mono` },
+  textarea: { root: cn(inputBase, "min-h-20 font-mono") },
   inputnumber: { root: "w-full", pcInputText: { root: inputBase } },
   password: {
     root: "relative block w-full",
     // Leave room on the right for the absolutely-positioned show/hide toggle.
-    pcInputText: { root: `${inputBase} pr-9` },
+    pcInputText: { root: cn(inputBase, "pr-9") },
     maskIcon:
       "absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-surface-400 transition-colors hover:text-surface-600 dark:hover:text-surface-300",
     unmaskIcon:
@@ -256,7 +292,11 @@ export const primeVuePassthrough = {
   select: {
     // min-w-0 lets the flex-1 label actually shrink so `truncate` can ellipsize
     // a long selected value instead of overflowing/pushing the dropdown icon out.
-    root: `flex w-full min-w-0 items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
+    root: cn(
+      "flex w-full min-w-0 items-center justify-between text-sm transition duration-150",
+      fieldSurface,
+      focusWithinRing,
+    ),
     label:
       "min-w-0 flex-1 truncate px-2.5 py-1.5 text-left text-surface-800 dark:text-surface-100",
     dropdown: "shrink-0 px-2 text-surface-400",
@@ -271,7 +311,11 @@ export const primeVuePassthrough = {
   checkbox,
   radiobutton: radioButton,
   multiselect: {
-    root: `flex w-full items-center justify-between ${fieldSurface} text-sm transition duration-150 ${focusWithinRing}`,
+    root: cn(
+      "flex w-full items-center justify-between text-sm transition duration-150",
+      fieldSurface,
+      focusWithinRing,
+    ),
     labelContainer: "min-w-0 flex-1 overflow-hidden",
     label:
       "flex min-h-9 flex-wrap items-center gap-1.5 px-2 py-1.5 text-left text-surface-500 dark:text-surface-400",
@@ -315,7 +359,12 @@ export const primeVuePassthrough = {
     input: "sr-only",
     basicContent: "inline-flex items-center gap-2",
     pcChooseButton: {
-      root: `${buttonBase} ${buttonSize.normal} ${buttonSolid.secondary} cursor-pointer`,
+      root: cn(
+        buttonBase,
+        buttonSize.normal,
+        buttonSolid.secondary,
+        "cursor-pointer",
+      ),
     },
   },
 
@@ -343,7 +392,7 @@ export const primeVuePassthrough = {
     root: buttonRoot,
     icon: "h-4 w-4 shrink-0",
     loadingIcon: "h-4 w-4 shrink-0 animate-spin",
-    label: "truncate",
+    label: "min-w-0 truncate",
   },
 
   badge: {
@@ -399,7 +448,7 @@ export const primeVuePassthrough = {
   },
 
   dialog: {
-    mask: `${dialogMask} z-50`,
+    mask: cn(dialogMask, "z-50"),
     root: dialogRoot(),
     header: dialogHeader,
     title: dialogTitle,
@@ -414,7 +463,7 @@ export const primeVuePassthrough = {
   // Shares the dialog's chrome; mask sits above open dialogs (z-60) so a confirm
   // raised from within a dialog (e.g. revoke inside Share) is never occluded.
   confirmdialog: {
-    mask: `${dialogMask} z-[60]`,
+    mask: cn(dialogMask, "z-[60]"),
     root: dialogRoot("max-w-md"),
     header: dialogHeader,
     title: dialogTitle,
@@ -447,7 +496,7 @@ export const primeVuePassthrough = {
     title: "min-w-0 flex-1 truncate text-sm font-semibold",
     headerActions: "flex shrink-0 items-center gap-1",
     pcToggleButton: {
-      root: `${buttonBase} h-8 w-8 rounded-md ${buttonText.secondary}`,
+      root: cn(buttonBase, "h-8 w-8 rounded-md", buttonText.secondary),
       icon: "h-4 w-4",
     },
     contentContainer: "overflow-hidden",
@@ -493,11 +542,11 @@ export const primeVuePassthrough = {
       "flex items-center justify-between gap-2 border-b border-surface-200 px-2 py-2 dark:border-surface-800",
     title: "flex items-center gap-1 text-sm font-medium",
     pcPrevButton: {
-      root: `${buttonBase} h-8 w-8 rounded-md ${buttonText.secondary}`,
+      root: cn(buttonBase, "h-8 w-8 rounded-md", buttonText.secondary),
       icon: "h-4 w-4",
     },
     pcNextButton: {
-      root: `${buttonBase} h-8 w-8 rounded-md ${buttonText.secondary}`,
+      root: cn(buttonBase, "h-8 w-8 rounded-md", buttonText.secondary),
       icon: "h-4 w-4",
     },
     selectMonth:
@@ -523,18 +572,18 @@ export const primeVuePassthrough = {
     buttonbar:
       "flex items-center justify-between border-t border-surface-200 p-2 dark:border-surface-800",
     pcIncrementButton: {
-      root: `${buttonBase} h-7 w-7 rounded-md ${buttonText.secondary}`,
+      root: cn(buttonBase, "h-7 w-7 rounded-md", buttonText.secondary),
       icon: "h-3.5 w-3.5",
     },
     pcDecrementButton: {
-      root: `${buttonBase} h-7 w-7 rounded-md ${buttonText.secondary}`,
+      root: cn(buttonBase, "h-7 w-7 rounded-md", buttonText.secondary),
       icon: "h-3.5 w-3.5",
     },
     pcTodayButton: {
-      root: `${buttonBase} ${buttonSize.small} ${buttonText.primary}`,
+      root: cn(buttonBase, buttonSize.small, buttonText.primary),
     },
     pcClearButton: {
-      root: `${buttonBase} ${buttonSize.small} ${buttonText.secondary}`,
+      root: cn(buttonBase, buttonSize.small, buttonText.secondary),
     },
   },
 

@@ -31,6 +31,7 @@ type ProjectedAction struct {
 	OnSuccess       *ActionSuccess    `json:"onSuccess,omitempty"`
 	Open            OpenTarget        `json:"open,omitempty"`
 	Panel           PanelType         `json:"panel,omitempty"`
+	Config          map[string]any    `json:"config,omitempty"`
 	EnabledWhen     *Condition        `json:"enabledWhen,omitempty"`
 }
 
@@ -123,6 +124,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 				OnSuccess:       a.OnSuccess,
 				Open:            a.Open,
 				Panel:           a.Panel,
+				Config:          a.Config,
 				EnabledWhen:     a.EnabledWhen,
 			}
 			if rt, ok := routes[a.RouteID]; ok {
