@@ -30,6 +30,7 @@ import type {
   PluginProjection,
   Tab as TabDef,
 } from "../types/projection";
+import { dialogRoot } from "../primevue/preset";
 
 const props = defineProps<{ id: string }>();
 const conns = useConnectionsStore();
@@ -345,8 +346,8 @@ function onActionDone(action: Action): void {
           :header="dockState.dialog?.title"
           :dismissable-mask="true"
           :pt="{
-            root: 'w-full max-w-4xl overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl dark:border-surface-800 dark:bg-surface-900',
-            content: 'p-0',
+            root: dialogRoot('max-w-4xl'),
+            content: 'min-h-0 overflow-hidden p-0',
           }"
           @update:visible="(v) => !v && dock.closeDialog(id)"
         >

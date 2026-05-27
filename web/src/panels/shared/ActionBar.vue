@@ -8,6 +8,7 @@ import type { Action, ResourceRef, RiskLevel } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
 import SchemaForm from "../form/SchemaForm.vue";
 import { useDockStore, type DockItem } from "../../stores/dock";
+import { dialogRoot } from "../../primevue/preset";
 
 const dock = useDockStore();
 
@@ -144,6 +145,7 @@ function onVisible(visible: boolean): void {
       modal
       :header="pending?.label"
       :dismissable-mask="true"
+      :pt="{ root: dialogRoot('max-w-2xl') }"
       @update:visible="onVisible"
     >
       <template v-if="pending">

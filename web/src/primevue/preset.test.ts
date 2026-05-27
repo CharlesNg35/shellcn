@@ -53,4 +53,18 @@ describe("primeVuePassthrough", () => {
       expect(primeVuePassthrough).toHaveProperty(key);
     }
   });
+
+  it("keeps modal chrome bounded and scrollable", () => {
+    expect(primeVuePassthrough.dialog.root).toContain(
+      "max-h-[calc(100vh-2rem)]",
+    );
+    expect(primeVuePassthrough.dialog.root).toContain("flex-col");
+    expect(primeVuePassthrough.dialog.header).toContain("shrink-0");
+    expect(primeVuePassthrough.dialog.footer).toContain("shrink-0");
+    expect(primeVuePassthrough.dialog.content).toContain("min-h-0");
+    expect(primeVuePassthrough.dialog.content).toContain("overflow-auto");
+    expect(primeVuePassthrough.confirmdialog.content).toContain(
+      "overflow-auto",
+    );
+  });
 });

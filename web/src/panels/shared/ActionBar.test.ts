@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
+import Dialog from "primevue/dialog";
 import { installFetch } from "../../test/fetchMock";
 import { useDockStore } from "../../stores/dock";
 import ActionBar from "./ActionBar.vue";
@@ -53,6 +54,20 @@ function bodyButton(text: string): HTMLButtonElement | undefined {
 }
 
 describe("ActionBar", () => {
+  it("uses the bounded dialog root for action forms", () => {
+    const w = mount(ActionBar, {
+      props: {
+        connectionId: "c1",
+        actions: [snapshot],
+      },
+    });
+    const pt = w.findComponent(Dialog).props("pt") as { root: string };
+    expect(pt.root).toContain("max-w-2xl");
+    expect(pt.root).toContain("max-h-[calc(100vh-2rem)]");
+    expect(pt.root).toContain("flex-col");
+    w.unmount();
+  });
+
   it("gates a destructive action behind a confirm dialog", async () => {
     const w = mount(ActionBar, {
       attachTo: document.body,

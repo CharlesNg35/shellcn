@@ -343,6 +343,14 @@ func TestSpecializedPanelConfigMaps(t *testing.T) {
 	if desktop["engine"] != nil || desktop["resize"] != true || desktop["repeaterID"] != "console-1" {
 		t.Fatalf("remote desktop config map unexpected: %#v", desktop)
 	}
+
+	if off := (plugin.TerminalConfig{}).Map(); len(off) != 0 {
+		t.Fatalf("terminal config map should omit disabled controls: %#v", off)
+	}
+	term := plugin.TerminalConfig{Zoom: true, Search: true}.Map()
+	if term["zoom"] != true || term["search"] != true {
+		t.Fatalf("terminal config map unexpected: %#v", term)
+	}
 }
 
 func TestRegistryDerivesCredentialKindProtocolsFromSelectors(t *testing.T) {

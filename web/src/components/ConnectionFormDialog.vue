@@ -205,7 +205,7 @@ async function onConfig(
     :closable="!busy"
     :pt="{
       root: dialogRoot('max-w-lg'),
-      content: 'max-h-[70vh] overflow-auto p-5',
+      content: 'min-h-0 max-h-[70vh] overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"
   >

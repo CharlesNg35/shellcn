@@ -298,6 +298,11 @@ export interface MetricsPanelConfig {
   history?: number;
 }
 
+export interface TerminalPanelConfig {
+  zoom?: boolean;
+  search?: boolean;
+}
+
 export interface KVPanelConfig {
   createRouteId?: string;
   readRouteId?: string;

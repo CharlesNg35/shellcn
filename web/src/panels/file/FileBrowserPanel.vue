@@ -27,6 +27,7 @@ import FileEntryList from "./FileEntryList.vue";
 import FilePreview from "./FilePreview.vue";
 import FileToolbar from "./FileToolbar.vue";
 import { formatBytes, languageFor } from "./fileTypes";
+import { dialogRoot } from "../../primevue/preset";
 
 const props = defineProps<PanelProps>();
 const toast = useToast();
@@ -491,7 +492,8 @@ watch(
       modal
       :header="selected?.name ?? 'Preview'"
       :pt="{
-        root: 'w-full max-w-5xl overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl dark:border-surface-800 dark:bg-surface-900',
+        root: dialogRoot('max-w-5xl'),
+        content: 'min-h-0 overflow-hidden p-0',
       }"
     >
       <div class="h-[70vh] min-h-0">

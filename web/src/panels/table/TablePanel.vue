@@ -30,7 +30,7 @@ import type {
 } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
-import { inputClass } from "../../primevue/preset";
+import { dialogRoot, inputClass } from "../../primevue/preset";
 import { useConfirmAction } from "../../composables/useConfirmAction";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
@@ -822,7 +822,7 @@ onUnmounted(() => {
       header="Add row"
       :dismissable-mask="true"
       :pt="{
-        root: 'w-full max-w-lg overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl dark:border-surface-800 dark:bg-surface-900',
+        root: dialogRoot('max-w-lg'),
       }"
     >
       <div class="flex max-h-[60vh] flex-col gap-3 overflow-auto p-1">
@@ -862,7 +862,7 @@ onUnmounted(() => {
       :header="actionOutput?.title"
       :dismissable-mask="true"
       :pt="{
-        root: 'w-full max-w-3xl overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl dark:border-surface-800 dark:bg-surface-900',
+        root: dialogRoot('max-w-3xl'),
       }"
       @update:visible="(v) => !v && (actionOutput = null)"
     >

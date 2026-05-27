@@ -24,7 +24,7 @@ export const searchInputClass = `w-full ${fieldSurface} py-1.5 pl-9 pr-3 text-sm
 // The dialog box surface — single source for every modal so width is the only
 // per-dialog difference (avoids repeating the box classes in each component).
 export const dialogRoot = (maxWidth = "max-w-md"): string =>
-  `w-full ${maxWidth} overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5`;
+  `flex max-h-[calc(100vh-2rem)] w-full ${maxWidth} flex-col overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5`;
 
 // Shared button looks, reused across dialogs/action bars instead of re-listing
 // the same utility chains.
@@ -148,11 +148,11 @@ const overlayTransition = {
 const dialogMask =
   "fixed inset-0 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm";
 const dialogHeader =
-  "flex items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
+  "flex shrink-0 items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
 const dialogTitle =
   "text-base font-semibold tracking-tight text-surface-900 dark:text-surface-0";
 const dialogFooter =
-  "flex items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800";
+  "flex shrink-0 items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800";
 // Natural rise + fade + subtle scale on open/close; the global prefers-reduced-motion
 // rule neutralizes it.
 const dialogTransition = {
@@ -403,7 +403,7 @@ export const primeVuePassthrough = {
     root: dialogRoot(),
     header: dialogHeader,
     title: dialogTitle,
-    content: "p-5",
+    content: "min-h-0 overflow-auto p-5",
     footer: dialogFooter,
     pcCloseButton: {
       root: "rounded-md p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200",
@@ -418,7 +418,7 @@ export const primeVuePassthrough = {
     root: dialogRoot("max-w-md"),
     header: dialogHeader,
     title: dialogTitle,
-    content: "px-5 py-5",
+    content: "min-h-0 overflow-auto px-5 py-5",
     footer: dialogFooter,
     transition: dialogTransition,
   },

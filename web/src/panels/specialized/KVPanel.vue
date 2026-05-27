@@ -14,6 +14,7 @@ import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import AppIcon from "../../components/AppIcon.vue";
+import { dialogRoot } from "../../primevue/preset";
 
 interface KVEntry {
   key: string;
@@ -342,7 +343,7 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
       v-model:visible="createOpen"
       modal
       header="Create key"
-      class="w-[min(42rem,calc(100vw-2rem))]"
+      :pt="{ root: dialogRoot('max-w-2xl') }"
     >
       <div class="flex flex-col gap-4">
         <div>

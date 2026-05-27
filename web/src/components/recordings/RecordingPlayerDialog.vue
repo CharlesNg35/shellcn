@@ -30,7 +30,7 @@ const title = computed(
     :header="title"
     :pt="{
       root: dialogRoot('max-w-4xl'),
-      content: 'p-4',
+      content: 'min-h-0 overflow-auto p-4',
     }"
     @update:visible="$emit('update:visible', $event)"
   >

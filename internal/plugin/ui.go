@@ -301,6 +301,24 @@ func (c KVConfig) Map() map[string]any {
 	return out
 }
 
+// TerminalConfig opts a terminal panel into extra controls. Off by default so a
+// plugin enables only what its terminal needs.
+type TerminalConfig struct {
+	Zoom   bool `json:"zoom,omitempty"`   // font-size +/- controls and Ctrl/⌘ +/-/0
+	Search bool `json:"search,omitempty"` // scrollback find with match navigation
+}
+
+func (c TerminalConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.Zoom {
+		out["zoom"] = true
+	}
+	if c.Search {
+		out["search"] = true
+	}
+	return out
+}
+
 type HeaderDefault struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`

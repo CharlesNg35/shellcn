@@ -97,7 +97,7 @@ onUnmounted(clearCopiedTimer);
     header="Invite a user"
     :pt="{
       root: dialogRoot(),
-      content: 'p-5',
+      content: 'min-h-0 overflow-auto p-5',
     }"
     @update:visible="emit('update:visible', $event)"
   >
