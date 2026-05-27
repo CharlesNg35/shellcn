@@ -81,3 +81,13 @@ func refNS(o obj) string   { return str(o, "metadata", "namespace") }
 
 // joinStrings is a small helper for comma-joined column cells.
 func joinStrings(items []string) string { return strings.Join(items, ", ") }
+
+// scalar renders a nested field that may be an int or a string (e.g. an
+// IntOrString like minAvailable) as a display string.
+func scalar(o obj, fields ...string) string {
+	v, found, _ := unstructured.NestedFieldNoCopy(o, fields...)
+	if !found || v == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
+}

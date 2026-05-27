@@ -205,6 +205,59 @@ func eventRow(o obj) Row {
 	}
 }
 
+func replicationControllerRow(o obj) Row {
+	return Row{
+		"desired": i64(o, "spec", "replicas"),
+		"current": i64(o, "status", "replicas"),
+		"ready":   i64(o, "status", "readyReplicas"),
+	}
+}
+
+func pdbRow(o obj) Row {
+	return Row{
+		"minAvailable":   scalar(o, "spec", "minAvailable"),
+		"maxUnavailable": scalar(o, "spec", "maxUnavailable"),
+		"currentHealthy": i64(o, "status", "currentHealthy"),
+		"desiredHealthy": i64(o, "status", "desiredHealthy"),
+	}
+}
+
+func priorityClassRow(o obj) Row {
+	return Row{"value": i64(o, "value"), "globalDefault": boolField(o, "globalDefault")}
+}
+
+func runtimeClassRow(o obj) Row {
+	return Row{"handler": str(o, "handler")}
+}
+
+func leaseRow(o obj) Row {
+	return Row{"holder": str(o, "spec", "holderIdentity")}
+}
+
+func webhookConfigRow(o obj) Row {
+	return Row{"webhooks": int64(len(slice(o, "webhooks")))}
+}
+
+func ingressClassRow(o obj) Row {
+	return Row{"controller": str(o, "spec", "controller")}
+}
+
+func endpointSliceRow(o obj) Row {
+	return Row{
+		"addressType": str(o, "addressType"),
+		"endpoints":   int64(len(slice(o, "endpoints"))),
+		"ports":       int64(len(slice(o, "ports"))),
+	}
+}
+
+func crdDefRow(o obj) Row {
+	return Row{
+		"group": str(o, "spec", "group"),
+		"kind":  str(o, "spec", "names", "kind"),
+		"scope": str(o, "spec", "scope"),
+	}
+}
+
 func hpaRow(o obj) Row {
 	return Row{
 		"reference": str(o, "spec", "scaleTargetRef", "kind") + "/" + str(o, "spec", "scaleTargetRef", "name"),

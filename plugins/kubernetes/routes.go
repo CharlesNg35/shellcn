@@ -18,6 +18,7 @@ func Routes() []plugin.Route {
 
 		{ID: "kubernetes.resource.list", Method: plugin.MethodGet, Path: "/resources/{kind}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.list", Handle: ListResource},
 		{ID: "kubernetes.resource.get", Method: plugin.MethodGet, Path: "/resources/{kind}/get", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.get", Handle: GetResource},
+		{ID: "kubernetes.resource.columns", Method: plugin.MethodGet, Path: "/resources/{kind}/columns", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.columns", Handle: ColumnsForKind},
 		{ID: "kubernetes.resource.watch", Method: plugin.MethodWS, Path: "/resources/{kind}/watch", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.watch", Stream: WatchResource},
 
 		{ID: "kubernetes.resource.delete", Method: plugin.MethodDelete, Path: "/resources/{kind}/delete", Permission: permDelete, Risk: plugin.RiskDestructive, AuditEvent: "kubernetes.resource.delete", Handle: DeleteResource},

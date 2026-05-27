@@ -46,6 +46,7 @@ require (
 	github.com/x90skysn3k/grdp v1.0.2
 	go.mongodb.org/mongo-driver/v2 v2.6.0
 	golang.org/x/crypto v0.52.0
+	golang.org/x/text v0.37.0
 	golang.org/x/time v0.15.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
@@ -186,7 +187,6 @@ require (
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

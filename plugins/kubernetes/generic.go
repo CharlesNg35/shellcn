@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,9 +42,22 @@ func mapList(k kind, list *unstructured.UnstructuredList) []Row {
 				row[key] = val
 			}
 		}
+		row["ref"] = rowRef(k, o)
 		rows = append(rows, row)
 	}
 	return rows
+}
+
+// rowRef is the navigation/action identity the generic table reads from each
+// row. CRD rows resolve to the generic customresource type with the concrete
+// GVR carried in scope.
+func rowRef(k kind, o obj) plugin.ResourceRef {
+	ref := plugin.ResourceRef{Kind: k.name, Namespace: refNS(o), Name: refName(o), UID: str(o, "metadata", "uid")}
+	if strings.HasPrefix(k.name, crdParamPrefix) {
+		ref.Kind = customResourceKind
+		ref.Scope = k.name
+	}
+	return ref
 }
 
 // ListResource lists any kind via the dynamic client (built-in GVR or CRD).
@@ -55,6 +69,14 @@ func ListResource(rc *plugin.RequestContext) (any, error) {
 	k, err := resolveKind(s, rc.Param("kind"))
 	if err != nil {
 		return nil, err
+	}
+	// CRDs render their own server-side printer columns via the Table API.
+	if isCRD(k) {
+		_, rows, err := s.tableList(rc.Ctx, k, s.listNamespace(rc, k), 0)
+		if err != nil {
+			return nil, err
+		}
+		return pageRows(rc, rows)
 	}
 	ri := s.Dynamic().Resource(k.gvr)
 	var list *unstructured.UnstructuredList

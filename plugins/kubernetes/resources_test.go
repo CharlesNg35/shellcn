@@ -65,6 +65,11 @@ func TestListResourceNamespacedPods(t *testing.T) {
 	if r["name"] != "web-1" || r["status"] != "Running" || r["ready"] != "1/1" || r["node"] != "node-a" {
 		t.Fatalf("pod row = %+v", r)
 	}
+	// Every list row must carry a ref so the grid can open detail + row actions.
+	ref, ok := r["ref"].(plugin.ResourceRef)
+	if !ok || ref.Kind != "pod" || ref.Name != "web-1" || ref.Namespace != "default" {
+		t.Fatalf("pod row ref = %+v (ok=%v)", r["ref"], ok)
+	}
 }
 
 func TestDeleteResource(t *testing.T) {
@@ -103,6 +108,52 @@ func TestTreeCategoryListsKinds(t *testing.T) {
 	}
 	if !foundPod {
 		t.Fatal("workloads category should include Pods")
+	}
+}
+
+func TestCRDDynamicColumns(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/apis/example.com/v1", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"kind": "APIResourceList", "groupVersion": "example.com/v1",
+			"resources": []any{obj{"name": "widgets", "namespaced": true, "kind": "Widget"}},
+		})
+	})
+	mux.HandleFunc("/apis/example.com/v1/widgets", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"kind": "Table", "apiVersion": "meta.k8s.io/v1",
+			"columnDefinitions": []any{obj{"name": "Name", "type": "string"}, obj{"name": "Phase", "type": "string"}},
+			"rows": []any{obj{
+				"cells":  []any{"w1", "Ready"},
+				"object": obj{"kind": "PartialObjectMetadata", "metadata": obj{"name": "w1", "namespace": "default", "uid": "u-w1"}},
+			}},
+		})
+	})
+	sess := connectTo(t, mux)
+	crd := "crd:example.com/v1/widgets"
+
+	// Dynamic columns come from the server's Table definitions.
+	colsOut, err := ColumnsForKind(rc(sess, map[string]string{"kind": crd}))
+	if err != nil {
+		t.Fatalf("columns: %v", err)
+	}
+	cols := colsOut.(plugin.Page[Row]).Items
+	if len(cols) != 2 || cols[0]["name"] != "Name" || cols[1]["name"] != "Phase" {
+		t.Fatalf("crd columns = %+v", cols)
+	}
+
+	// Rows are keyed by those column names + carry a customresource ref.
+	listOut, err := ListResource(rc(sess, map[string]string{"kind": crd}))
+	if err != nil {
+		t.Fatalf("list crd: %v", err)
+	}
+	row := listOut.(plugin.Page[Row]).Items[0]
+	if row["Name"] != "w1" || row["Phase"] != "Ready" {
+		t.Fatalf("crd row cells = %+v", row)
+	}
+	ref, ok := row["ref"].(plugin.ResourceRef)
+	if !ok || ref.Kind != customResourceKind || ref.Scope != crd || ref.Name != "w1" {
+		t.Fatalf("crd row ref = %+v", row["ref"])
 	}
 }
 

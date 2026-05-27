@@ -469,6 +469,7 @@ export interface ResourceType {
   list: DataSource;
   watch?: DataSource;
   columns: Column[];
+  columnsSource?: DataSource; // runtime column defs when columns is empty (e.g. CRDs)
   actionIds: string[];
   listActionIds?: string[];
   rowActionIds?: string[];

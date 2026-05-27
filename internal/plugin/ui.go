@@ -526,11 +526,17 @@ type DetailView struct {
 
 // ResourceType is a managed object type: columns, actions, detail.
 type ResourceType struct {
-	Kind          string      `json:"kind"`
-	Title         string      `json:"title"`
-	List          DataSource  `json:"list"`
-	Watch         *DataSource `json:"watch,omitempty"`
-	Columns       []Column    `json:"columns"`
+	Kind  string      `json:"kind"`
+	Title string      `json:"title"`
+	List  DataSource  `json:"list"`
+	Watch *DataSource `json:"watch,omitempty"`
+	// Columns are the static list columns. Leave empty and set ColumnsSource to
+	// derive columns at runtime (e.g. a CRD's own printer columns).
+	Columns []Column `json:"columns"`
+	// ColumnsSource is an optional route returning column definitions (rows with
+	// name/label) for lists whose columns are only known at runtime. The list's
+	// scoping params are merged in, so one generic type can serve many shapes.
+	ColumnsSource *DataSource `json:"columnsSource,omitempty"`
 	ActionIDs     []string    `json:"actionIds"`
 	ListActionIDs []string    `json:"listActionIds,omitempty"`
 	RowActionIDs  []string    `json:"rowActionIds,omitempty"`

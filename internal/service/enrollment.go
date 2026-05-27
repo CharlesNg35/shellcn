@@ -13,8 +13,12 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
 
 	"github.com/google/uuid"
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
@@ -125,7 +129,7 @@ func (s *EnrollmentService) Create(ctx context.Context, connectionID, connectURL
 		return Enrollment{}, err
 	}
 
-	artifacts, err := s.renderArtifacts(m.Agent.Install, connectURL, token, enr.ID, artifactURL)
+	artifacts, err := s.renderArtifacts(m.Agent.Install, connectURL, token, connectionSlug(conn), enr.ID, artifactURL)
 	if err != nil {
 		return Enrollment{}, err
 	}
@@ -158,10 +162,10 @@ func deliveryMode(specs []plugin.InstallArtifact) (urlMode bool, err error) {
 	return sawURL, nil
 }
 
-func (s *EnrollmentService) renderArtifacts(specs []plugin.InstallArtifact, connectURL, token, enrollmentID string, artifactURL ArtifactURLFunc) ([]InstallArtifact, error) {
+func (s *EnrollmentService) renderArtifacts(specs []plugin.InstallArtifact, connectURL, token, slug, enrollmentID string, artifactURL ArtifactURLFunc) ([]InstallArtifact, error) {
 	out := make([]InstallArtifact, 0, len(specs))
 	for _, spec := range specs {
-		data := artifactRenderData(connectURL, token, spec.ConnectURL)
+		data := artifactRenderData(connectURL, token, slug, spec.ConnectURL)
 		if spec.Delivery == plugin.DeliveryURL {
 			if artifactURL == nil {
 				return nil, fmt.Errorf("%w: url artifact %q has no URL minter", ErrNoAgentSupport, spec.Kind)
@@ -233,27 +237,32 @@ func (s *EnrollmentService) RenderArtifactContent(ctx context.Context, connectio
 	if err := s.store.UpdateToken(ctx, enr.ID, hashToken(token), now.Add(s.ttl)); err != nil {
 		return "", err
 	}
-	data := artifactRenderData(connectURL, token, spec.ConnectURL)
+	data := artifactRenderData(connectURL, token, connectionSlug(conn), spec.ConnectURL)
 	return renderTemplate(spec.Kind, spec.Content, data)
 }
 
 type artifactData struct {
-	GatewayConnectURL     string
-	ConnectURL            string
-	ArtifactURL           string
-	Token                 string
+	GatewayConnectURL string
+	ConnectURL        string
+	ArtifactURL       string
+	Token             string
+	// Slug is a unique, DNS-1123-safe identifier for the connection (slugified
+	// name + short id), so a plugin can name per-connection target-side resources
+	// without two connections colliding.
+	Slug                  string
 	Image                 string
 	Insecure              bool
 	LocalhostHost         string
 	LocalhostHostRequired bool
 }
 
-func artifactRenderData(connectURL, token string, target plugin.ArtifactConnectURL) artifactData {
+func artifactRenderData(connectURL, token, slug string, target plugin.ArtifactConnectURL) artifactData {
 	renderedURL, localhostRequired := rewriteConnectURL(connectURL, target)
 	return artifactData{
 		GatewayConnectURL:     connectURL,
 		ConnectURL:            renderedURL,
 		Token:                 token,
+		Slug:                  slug,
 		Image:                 DefaultProxyImage,
 		Insecure:              insecureConnectURL(connectURL),
 		LocalhostHost:         target.LocalhostHost,
@@ -285,6 +294,52 @@ func rewriteConnectURL(raw string, target plugin.ArtifactConnectURL) (string, bo
 	default:
 		return raw, false
 	}
+}
+
+// connectionSlug is a unique, DNS-1123-safe identifier for a connection: the
+// slugified name plus a short id fragment. The id keeps it unique even when two
+// connections share a name, so per-connection target-side resources don't clash.
+func connectionSlug(conn models.Connection) string {
+	slug := slugify(conn.Name)
+	short := strings.ReplaceAll(conn.ID, "-", "")
+	if len(short) > 8 {
+		short = short[:8]
+	}
+	if slug == "" {
+		slug = "shellcn-agent"
+	}
+	if short != "" {
+		slug += "-" + short
+	}
+	if len(slug) > 63 {
+		slug = slug[:63]
+	}
+	return strings.Trim(slug, "-")
+}
+
+// slugify folds accents and lowercases s into a DNS-1123 label fragment
+// (a-z, 0-9, '-'), collapsing and trimming separators.
+func slugify(s string) string {
+	folded, _, err := transform.String(
+		transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC),
+		s,
+	)
+	if err != nil {
+		folded = s
+	}
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(folded) {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			dash = false
+		case !dash:
+			b.WriteByte('-')
+			dash = true
+		}
+	}
+	return strings.Trim(b.String(), "-")
 }
 
 func shellQuote(value string) string {

@@ -54,10 +54,11 @@ func resourceType(k kind) plugin.ResourceType {
 // in the list params (and per-row "scope"), so one type covers every custom kind.
 func customResourceType() plugin.ResourceType {
 	return plugin.ResourceType{
-		Kind:    customResourceKind,
-		Title:   "Custom Resource",
-		List:    plugin.DataSource{RouteID: "kubernetes.resource.list"},
-		Columns: []plugin.Column{nameCol(), nsCol(), ageCol()},
+		Kind:  customResourceKind,
+		Title: "Custom Resource",
+		List:  plugin.DataSource{RouteID: "kubernetes.resource.list"},
+		// No static columns: the CRD's own printer columns are fetched at runtime.
+		ColumnsSource: &plugin.DataSource{RouteID: "kubernetes.resource.columns"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{

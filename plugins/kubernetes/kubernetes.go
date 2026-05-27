@@ -70,24 +70,27 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 
 // k8sManifestContent is the agent install manifest served (URL-delivered) from a
 // single-use signed ticket and applied with `kubectl apply -f <url>`. It deploys
-// the agent with a ServiceAccount bound to cluster-admin (the cockpit acts on the
-// user's behalf — declared privileged). The enrollment token is minted into the
-// Secret body at fetch time, never placed in a URL or path.
+// the agent into a per-connection namespace ({{.Slug}}) — so multiple connections
+// targeting the same cluster get independent agents that never clobber each
+// other — with a ServiceAccount bound to cluster-admin (the cockpit acts on the
+// user's behalf — declared privileged). The cluster-scoped binding is uniquely
+// named per connection. The enrollment token is minted into the Secret body at
+// fetch time, never placed in a URL or path.
 const k8sManifestContent = `apiVersion: v1
 kind: Namespace
 metadata:
-  name: shellcn-agent
+  name: "{{.Slug}}"
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: shellcn-agent
-  namespace: shellcn-agent
+  namespace: "{{.Slug}}"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: shellcn-agent
+  name: "shellcn-agent-{{.Slug}}"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -95,13 +98,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: shellcn-agent
-    namespace: shellcn-agent
+    namespace: "{{.Slug}}"
 ---
 apiVersion: v1
 kind: Secret
 metadata:
   name: shellcn-agent
-  namespace: shellcn-agent
+  namespace: "{{.Slug}}"
 type: Opaque
 stringData:
   connect-url: "{{.ConnectURL}}"
@@ -111,7 +114,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: shellcn-agent
-  namespace: shellcn-agent
+  namespace: "{{.Slug}}"
   labels:
     app: shellcn-agent
 spec:

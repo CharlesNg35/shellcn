@@ -77,6 +77,20 @@ const activeListSource = computed(() => {
     : res.list;
 });
 
+// A runtime columns source, scoped by the same nav params as the list (so a CRD
+// list fetches the columns for its specific kind).
+const activeColumnsSource = computed(() => {
+  const res = activeListResource.value;
+  if (!res?.columnsSource) return undefined;
+  const params = activeView.value?.params;
+  return params
+    ? {
+        ...res.columnsSource,
+        params: { ...res.columnsSource.params, ...params },
+      }
+    : res.columnsSource;
+});
+
 const treeSelectedGroup = computed(() =>
   activeView.value?.kind === "list" ? activeView.value.groupKey : undefined,
 );
@@ -244,6 +258,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             :source="activeListSource"
             :config="{
               columns: activeListResource.columns,
+              columnsSource: activeColumnsSource,
               watch: activeListResource.watch,
               actionIds: activeListResource.listActionIds ?? [],
               rowActionIds:

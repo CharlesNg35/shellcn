@@ -107,10 +107,34 @@ var kinds = []kind{
 		extra:   cronJobRow, actionIDs: justDelete,
 	},
 	{
+		name: "replicationcontroller", title: "Replication Controllers", category: "workloads", icon: "layers", namespaced: true,
+		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "replicationcontrollers"},
+		columns: []plugin.Column{nameCol(), nsCol(), col("desired", "Desired", num), col("current", "Current", num), col("ready", "Ready", num), ageCol()},
+		extra:   replicationControllerRow, actionIDs: scalable,
+	},
+	{
 		name: "service", title: "Services", category: "network", icon: "network", namespaced: true,
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "services"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("type", "Type", badge), col("clusterIP", "Cluster IP", notSort), col("ports", "Ports", notSort), ageCol()},
 		extra:   serviceRow, actionIDs: justDelete,
+	},
+	{
+		name: "endpoints", title: "Endpoints", category: "network", icon: "network", namespaced: true,
+		gvr:       schema.GroupVersionResource{Version: "v1", Resource: "endpoints"},
+		columns:   []plugin.Column{nameCol(), nsCol(), ageCol()},
+		actionIDs: justDelete,
+	},
+	{
+		name: "endpointslice", title: "Endpoint Slices", category: "network", icon: "network", namespaced: true,
+		gvr:     schema.GroupVersionResource{Group: "discovery.k8s.io", Version: "v1", Resource: "endpointslices"},
+		columns: []plugin.Column{nameCol(), nsCol(), col("addressType", "Address type"), col("endpoints", "Endpoints", num), col("ports", "Ports", num), ageCol()},
+		extra:   endpointSliceRow, actionIDs: justDelete,
+	},
+	{
+		name: "ingressclass", title: "Ingress Classes", category: "network", icon: "globe",
+		gvr:     schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "ingressclasses"},
+		columns: []plugin.Column{nameCol(), col("controller", "Controller"), ageCol()},
+		extra:   ingressClassRow, actionIDs: justDelete,
 	},
 	{
 		name: "ingress", title: "Ingresses", category: "network", icon: "globe", namespaced: true,
@@ -173,6 +197,54 @@ var kinds = []kind{
 		extra:   hpaRow, actionIDs: justDelete,
 	},
 	{
+		name: "poddisruptionbudget", title: "Pod Disruption Budgets", category: "config", icon: "shield-alert", namespaced: true,
+		gvr:     schema.GroupVersionResource{Group: "policy", Version: "v1", Resource: "poddisruptionbudgets"},
+		columns: []plugin.Column{nameCol(), nsCol(), col("minAvailable", "Min available"), col("maxUnavailable", "Max unavailable"), col("currentHealthy", "Healthy", num), ageCol()},
+		extra:   pdbRow, actionIDs: justDelete,
+	},
+	{
+		name: "priorityclass", title: "Priority Classes", category: "config", icon: "arrow-up-narrow-wide",
+		gvr:     schema.GroupVersionResource{Group: "scheduling.k8s.io", Version: "v1", Resource: "priorityclasses"},
+		columns: []plugin.Column{nameCol(), col("value", "Value", num), col("globalDefault", "Global default"), ageCol()},
+		extra:   priorityClassRow, actionIDs: justDelete,
+	},
+	{
+		name: "runtimeclass", title: "Runtime Classes", category: "config", icon: "cpu",
+		gvr:     schema.GroupVersionResource{Group: "node.k8s.io", Version: "v1", Resource: "runtimeclasses"},
+		columns: []plugin.Column{nameCol(), col("handler", "Handler"), ageCol()},
+		extra:   runtimeClassRow, actionIDs: justDelete,
+	},
+	{
+		name: "lease", title: "Leases", category: "config", icon: "timer", namespaced: true,
+		gvr:     schema.GroupVersionResource{Group: "coordination.k8s.io", Version: "v1", Resource: "leases"},
+		columns: []plugin.Column{nameCol(), nsCol(), col("holder", "Holder"), ageCol()},
+		extra:   leaseRow, actionIDs: justDelete,
+	},
+	{
+		name: "mutatingwebhookconfiguration", title: "Mutating Webhook Configs", category: "config", icon: "webhook",
+		gvr:     schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "mutatingwebhookconfigurations"},
+		columns: []plugin.Column{nameCol(), col("webhooks", "Webhooks", num), ageCol()},
+		extra:   webhookConfigRow, actionIDs: justDelete,
+	},
+	{
+		name: "validatingwebhookconfiguration", title: "Validating Webhook Configs", category: "config", icon: "webhook",
+		gvr:     schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingwebhookconfigurations"},
+		columns: []plugin.Column{nameCol(), col("webhooks", "Webhooks", num), ageCol()},
+		extra:   webhookConfigRow, actionIDs: justDelete,
+	},
+	{
+		name: "validatingadmissionpolicy", title: "Validating Admission Policies", category: "config", icon: "shield-check",
+		gvr:       schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicies"},
+		columns:   []plugin.Column{nameCol(), ageCol()},
+		actionIDs: justDelete,
+	},
+	{
+		name: "validatingadmissionpolicybinding", title: "Validating Admission Policy Bindings", category: "config", icon: "shield-check",
+		gvr:       schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicybindings"},
+		columns:   []plugin.Column{nameCol(), ageCol()},
+		actionIDs: justDelete,
+	},
+	{
 		name: "serviceaccount", title: "Service Accounts", category: "access", icon: "user", namespaced: true,
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "serviceaccounts"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("secrets", "Secrets", num), ageCol()},
@@ -219,6 +291,13 @@ var kinds = []kind{
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "events"},
 		columns: []plugin.Column{col("type", "Type", badge), col("reason", "Reason"), col("object", "Object"), col("message", "Message", notSort), col("count", "Count", num), ageCol()},
 		extra:   eventRow,
+	},
+	{
+		// "Definitions" under Custom Resources: the CRDs themselves.
+		name: "customresourcedefinition", title: "Definitions", category: "custom", icon: "puzzle",
+		gvr:     schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"},
+		columns: []plugin.Column{nameCol(), col("group", "Group"), col("kind", "Kind"), col("scope", "Scope"), ageCol()},
+		extra:   crdDefRow, actionIDs: justDelete,
 	},
 }
 

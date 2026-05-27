@@ -62,7 +62,15 @@ func TreeCRDs(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, apiErr(err)
 	}
-	nodes := make([]plugin.TreeNode, 0, len(list.Items))
+	nodes := make([]plugin.TreeNode, 0, len(list.Items)+1)
+	// "Definitions" opens the list of CRDs themselves (Lens parity).
+	nodes = append(nodes, plugin.TreeNode{
+		Key:          "crd-definitions",
+		Label:        "Definitions",
+		Icon:         lucide("list"),
+		Leaf:         true,
+		ResourceKind: "customresourcedefinition",
+	})
 	for i := range list.Items {
 		o := list.Items[i].Object
 		group := str(o, "spec", "group")
