@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Button from "primevue/button";
-import { useWorkspaceStore, MAX_WORKBENCH_TABS } from "../../stores/workspace";
+import { VueDraggable } from "vue-draggable-plus";
+import {
+  useWorkspaceStore,
+  MAX_WORKBENCH_TABS,
+  type OpenView,
+} from "../../stores/workspace";
 import ResourceTree from "./ResourceTree.vue";
 import DetailView from "../detail/DetailView.vue";
 import TablePanel from "../table/TablePanel.vue";
@@ -102,6 +107,13 @@ function onSelectGroup(key: string): void {
   });
 }
 
+// Drag-to-reorder the workbench tabs, reusing the same vue-draggable-plus
+// mechanism as the connection sidebar. Order is session-only (workspace store).
+const tabs = computed<OpenView[]>({
+  get: () => view.value.views,
+  set: (next) => ws.setViews(props.connectionId, next),
+});
+
 function onSelectList(kind: string, params?: Record<string, string>): void {
   const res = resourceByKind.value.get(kind);
   if (!res) return;
@@ -138,16 +150,19 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
       />
     </div>
     <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <div
+      <VueDraggable
         v-if="view.views.length"
+        v-model="tabs"
+        :animation="150"
+        ghost-class="opacity-40"
         class="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-surface-200 bg-surface-50 px-2 py-1 dark:border-surface-800 dark:bg-surface-900"
       >
         <button
-          v-for="v in view.views"
+          v-for="v in tabs"
           :key="v.id"
           type="button"
           :title="v.subtitle ? `${v.subtitle} / ${v.title}` : v.title"
-          class="group flex max-w-60 items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
+          class="group flex max-w-60 cursor-grab items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors active:cursor-grabbing"
           :class="
             v.id === view.activeViewId
               ? 'bg-surface-0 text-surface-900 shadow-sm dark:bg-surface-800 dark:text-surface-0'
@@ -178,7 +193,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="12" />
           </Button>
         </button>
-      </div>
+      </VueDraggable>
 
       <div class="min-h-0 flex-1 overflow-hidden">
         <KeepAlive :max="MAX_WORKBENCH_TABS">

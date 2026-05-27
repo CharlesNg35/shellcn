@@ -67,6 +67,20 @@ describe("workspace store", () => {
     expect(c.views.some((v) => v.id === "detail:x0")).toBe(false);
   });
 
+  it("accepts a reordered view list (drag-to-reorder via v-model)", () => {
+    const ws = useWorkspaceStore();
+    ws.openView("a", detail("x1"));
+    ws.openView("a", detail("x2"));
+    ws.openView("a", detail("x3"));
+    const reordered = [...ws.view("a").views].reverse();
+    ws.setViews("a", reordered);
+    expect(ws.view("a").views.map((v) => v.id)).toEqual([
+      "detail:x3",
+      "detail:x2",
+      "detail:x1",
+    ]);
+  });
+
   it("keeps a list view with its scoping params", () => {
     const ws = useWorkspaceStore();
     ws.openView("a", {

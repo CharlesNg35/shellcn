@@ -95,6 +95,11 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     if (c.views.some((v) => v.id === viewId)) c.activeViewId = viewId;
   }
 
+  // Replace the open-views order (drag-to-reorder via the v-model binding).
+  function setViews(id: string, next: OpenView[]): void {
+    view(id).views = next;
+  }
+
   function activeView(id: string): OpenView | undefined {
     const c = view(id);
     return c.views.find((v) => v.id === c.activeViewId);
@@ -119,6 +124,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     openView,
     closeView,
     activateView,
+    setViews,
     activeView,
     clearViews,
   };
