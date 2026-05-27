@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
 import TablePanel from "./TablePanel.vue";
 import type { Action, Column } from "../../types/projection";
@@ -14,6 +15,7 @@ function row(id: string, name: string, state = "running") {
 }
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   installFetch((url) => {
     const u = new URL(url, "http://h");
     const cursor = u.searchParams.get("cursor");

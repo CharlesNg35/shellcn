@@ -170,6 +170,9 @@ func validateActions(m Manifest, routes map[string]Route, tabs map[string]bool, 
 		if a.OnSuccess != nil && a.OnSuccess.SelectTab != "" && !tabs[a.OnSuccess.SelectTab] {
 			add("action %q onSuccess.selectTab references unknown tab %q", a.ID, a.OnSuccess.SelectTab)
 		}
+		if (a.Open == OpenDock || a.Open == OpenDialog) && a.Panel == "" {
+			add("action %q opens a panel (%s) but declares no panel type", a.ID, a.Open)
+		}
 	}
 	return ids
 }

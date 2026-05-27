@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
+import { useDockStore } from "../../stores/dock";
 import ActionBar from "./ActionBar.vue";
 import type { Action } from "../../types/projection";
 
@@ -32,6 +34,7 @@ const snapshot: Action = {
 
 let posted: { url: string; body?: unknown }[] = [];
 beforeEach(() => {
+  setActivePinia(createPinia());
   posted = [];
   installFetch((url, init) => {
     posted.push({
@@ -95,6 +98,64 @@ describe("ActionBar", () => {
     await flushPromises();
     expect(posted).toHaveLength(1);
     expect((posted[0].body as { name: string }).name).toBe("nightly");
+    w.unmount();
+  });
+
+  it("routes an open=dock action into the dock store instead of running it", async () => {
+    const dockAction: Action = {
+      id: "logs",
+      label: "Logs in dock",
+      routeId: "docker.container.logs",
+      method: "WS",
+      risk: "safe",
+      requiresConfirm: false,
+      open: "dock",
+      panel: "log_stream",
+      params: { id: "${resource.uid}" },
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [dockAction],
+        resource: { kind: "container", name: "web", uid: "c-9" },
+      },
+    });
+    await w.find("button").trigger("click");
+    await flushPromises();
+    const dock = useDockStore();
+    const items = dock.state("c1").items;
+    expect(posted).toHaveLength(0); // the route is NOT executed
+    expect(items).toHaveLength(1);
+    expect(items[0].panel).toBe("log_stream");
+    expect(items[0].source.routeId).toBe("docker.container.logs");
+    w.unmount();
+  });
+
+  it("routes an open=dialog action into the dock dialog slot", async () => {
+    const dialogAction: Action = {
+      id: "peek",
+      label: "Peek logs",
+      routeId: "docker.container.logs",
+      method: "WS",
+      risk: "safe",
+      requiresConfirm: false,
+      open: "dialog",
+      panel: "log_stream",
+    };
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [dialogAction],
+        resource: { kind: "container", name: "web", uid: "c-9" },
+      },
+    });
+    await w.find("button").trigger("click");
+    await flushPromises();
+    const dock = useDockStore();
+    expect(posted).toHaveLength(0);
+    expect(dock.state("c1").dialog?.panel).toBe("log_stream");
     w.unmount();
   });
 

@@ -18,8 +18,11 @@ import ConnectPanel from "../panels/connect/ConnectPanel.vue";
 import PanelError from "../panels/shared/PanelError.vue";
 import ResourceTree from "../panels/tree/ResourceTree.vue";
 import TablePanel from "../panels/table/TablePanel.vue";
+import Dialog from "primevue/dialog";
 import DetailView from "../panels/detail/DetailView.vue";
 import DashboardWorkspace from "../panels/dashboard/DashboardWorkspace.vue";
+import DockPanel from "../panels/dock/DockPanel.vue";
+import { useDockStore } from "../stores/dock";
 import ConnectionFormDialog from "../components/ConnectionFormDialog.vue";
 import ShareDialog from "../components/ShareDialog.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
@@ -35,6 +38,8 @@ import type {
 const props = defineProps<{ id: string }>();
 const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
+const dock = useDockStore();
+const dockState = computed(() => dock.state(props.id));
 const sessions = useSessionsStore();
 const liveStatus = useConnectionStatusStore();
 const router = useRouter();
@@ -327,97 +332,123 @@ function onActionDone(action: Action): void {
         @enroll="showEnroll = true"
       />
 
-      <template v-else-if="projection">
-        <!-- Flat tab layout. The tab bar is PrimeVue; content is rendered through
+      <div v-else-if="projection" class="flex h-full min-h-0 flex-col">
+        <div class="min-h-0 flex-1 overflow-hidden">
+          <!-- Flat tab layout. The tab bar is PrimeVue; content is rendered through
              KeepAlive (not PrimeVue's lazy TabPanels) so switching tabs HIDES a
              panel instead of destroying it — terminals/streams stay alive. -->
-        <div v-if="projection.layout === 'tabs'" class="flex h-full flex-col">
-          <Tabs
-            :value="view.activeTab ?? ''"
-            @update:value="ws.setActiveTab(id, String($event))"
-          >
-            <TabList>
-              <Tab v-for="t in projection.tabs" :key="t.key" :value="t.key">
-                <AppIcon :icon="t.icon" :size="15" />
-                {{ t.label }}
-              </Tab>
-            </TabList>
-          </Tabs>
-          <div class="min-h-0 flex-1 overflow-hidden">
-            <KeepAlive :max="10">
-              <PanelHost
-                v-if="activeTab"
-                :key="`${id}:${activeTab.key}`"
-                :panel="activeTab.panel"
+          <div v-if="projection.layout === 'tabs'" class="flex h-full flex-col">
+            <Tabs
+              :value="view.activeTab ?? ''"
+              @update:value="ws.setActiveTab(id, String($event))"
+            >
+              <TabList>
+                <Tab v-for="t in projection.tabs" :key="t.key" :value="t.key">
+                  <AppIcon :icon="t.icon" :size="15" />
+                  {{ t.label }}
+                </Tab>
+              </TabList>
+            </Tabs>
+            <div class="min-h-0 flex-1 overflow-hidden">
+              <KeepAlive :max="10">
+                <PanelHost
+                  v-if="activeTab"
+                  :key="`${id}:${activeTab.key}`"
+                  :panel="activeTab.panel"
+                  :connection-id="id"
+                  :source="activeTab.source"
+                  :config="tabConfig(activeTab)"
+                  :actions="projection.actions ?? []"
+                  @action-done="onActionDone"
+                />
+              </KeepAlive>
+            </div>
+          </div>
+
+          <!-- Dashboard layout: every panel rendered at once in a grid. -->
+          <DashboardWorkspace
+            v-else-if="projection.layout === 'dashboard'"
+            :connection-id="id"
+            :tabs="projection.tabs ?? []"
+            :actions="projection.actions ?? []"
+            :resolve-config="tabConfig"
+            @action-done="onActionDone"
+          />
+
+          <!-- Hierarchical sidebar-tree layout -->
+          <div v-else class="flex h-full">
+            <div
+              class="w-64 shrink-0 border-r border-surface-200 dark:border-surface-800"
+            >
+              <ResourceTree
                 :connection-id="id"
-                :source="activeTab.source"
-                :config="tabConfig(activeTab)"
+                :groups="projection.tree ?? []"
+                :selected-group="view.selectedGroup"
+                :selected-uid="view.selectedRef?.uid"
+                @select-group="onSelectGroup"
+                @select-node="onSelectNode"
+                @select-list="onSelectList"
+              />
+            </div>
+            <div class="min-w-0 flex-1 overflow-hidden">
+              <DetailView
+                v-if="view.selectedRow && detailResource"
+                :connection-id="id"
+                :detail="detailResource.detail"
+                :row="view.selectedRow"
                 :actions="projection.actions ?? []"
                 @action-done="onActionDone"
+                @select="onSelectRow"
               />
-            </KeepAlive>
-          </div>
-        </div>
-
-        <!-- Dashboard layout: every panel rendered at once in a grid. -->
-        <DashboardWorkspace
-          v-else-if="projection.layout === 'dashboard'"
-          :connection-id="id"
-          :tabs="projection.tabs ?? []"
-          :actions="projection.actions ?? []"
-          :resolve-config="tabConfig"
-          @action-done="onActionDone"
-        />
-
-        <!-- Hierarchical sidebar-tree layout -->
-        <div v-else class="flex h-full">
-          <div
-            class="w-64 shrink-0 border-r border-surface-200 dark:border-surface-800"
-          >
-            <ResourceTree
-              :connection-id="id"
-              :groups="projection.tree ?? []"
-              :selected-group="view.selectedGroup"
-              :selected-uid="view.selectedRef?.uid"
-              @select-group="onSelectGroup"
-              @select-node="onSelectNode"
-              @select-list="onSelectList"
-            />
-          </div>
-          <div class="min-w-0 flex-1 overflow-hidden">
-            <DetailView
-              v-if="view.selectedRow && detailResource"
-              :connection-id="id"
-              :detail="detailResource.detail"
-              :row="view.selectedRow"
-              :actions="projection.actions ?? []"
-              @action-done="onActionDone"
-              @select="onSelectRow"
-            />
-            <TablePanel
-              v-else-if="activeList"
-              :key="activeList.kind"
-              :connection-id="id"
-              :source="activeList.list"
-              :config="{
-                columns: activeList.columns,
-                watch: activeList.watch,
-                actionIds: activeList.listActionIds ?? [],
-                rowActionIds: activeList.rowActionIds ?? activeList.actionIds,
-              }"
-              :actions="projection.actions ?? []"
-              @select="onSelectRow"
-              @action-done="onActionDone"
-            />
-            <div
-              v-else
-              class="flex h-full items-center justify-center text-sm text-surface-400"
-            >
-              Select an item from the tree.
+              <TablePanel
+                v-else-if="activeList"
+                :key="activeList.kind"
+                :connection-id="id"
+                :source="activeList.list"
+                :config="{
+                  columns: activeList.columns,
+                  watch: activeList.watch,
+                  actionIds: activeList.listActionIds ?? [],
+                  rowActionIds: activeList.rowActionIds ?? activeList.actionIds,
+                }"
+                :actions="projection.actions ?? []"
+                @select="onSelectRow"
+                @action-done="onActionDone"
+              />
+              <div
+                v-else
+                class="flex h-full items-center justify-center text-sm text-surface-400"
+              >
+                Select an item from the tree.
+              </div>
             </div>
           </div>
         </div>
-      </template>
+
+        <DockPanel v-if="dockState.items.length" :connection-id="id" />
+
+        <Dialog
+          :visible="!!dockState.dialog"
+          modal
+          :header="dockState.dialog?.title"
+          :dismissable-mask="true"
+          :pt="{
+            root: 'w-full max-w-4xl overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl dark:border-surface-800 dark:bg-surface-900',
+            content: 'p-0',
+          }"
+          @update:visible="(v) => !v && dock.closeDialog(id)"
+        >
+          <div class="h-[60vh]">
+            <PanelHost
+              v-if="dockState.dialog"
+              :panel="dockState.dialog.panel"
+              :connection-id="id"
+              :source="dockState.dialog.source"
+              :resource="dockState.dialog.resource"
+            />
+          </div>
+        </Dialog>
+      </div>
     </div>
 
     <ConnectionFormDialog v-model:visible="showEdit" :connection-id="id" />

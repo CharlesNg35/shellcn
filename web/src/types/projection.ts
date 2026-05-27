@@ -381,6 +381,10 @@ export interface Action {
   confirmText?: string;
   input?: Schema;
   onSuccess?: ActionSuccess;
+  // open="dock"/"dialog" opens `panel` (sourced from this action's route) in the
+  // workspace dock or a modal instead of executing the route inline.
+  open?: "view" | "dock" | "dialog";
+  panel?: PanelType;
 }
 
 export interface Stream {

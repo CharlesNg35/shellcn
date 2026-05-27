@@ -149,6 +149,23 @@ Generic, manifest-driven; no per-plugin frontend.
       query-editor `exportable`; off by default). Enabled on the DB plugins'
       data grids + query/command editors (postgresql, mysql, cockroachdb, mssql,
       oracle, clickhouse, cassandra, mongodb) and Redis clients/channels tables.
+- [x] UX.12 Workbench renderer primitives (Phase-7 step 0, landed early & generic —
+      proven on existing plugins, no k8s yet):
+      - `dashboard` **panel** (`PanelDashboard` + `DashboardConfig.Cells`) — a
+        multi-panel grid usable as any detail/connection tab, sharing
+        `DashboardGrid` with the dashboard layout. Showcase: Redis Overview.
+      - Generic **metrics panel** (`MetricsConfig` stats/gauges/series via PrimeVue
+        `Chart`/chart.js, theme-aware, lazy-loaded) — renderer hardcodes no field
+        names. Showcase: Proxmox node/VM/LXC.
+      - **List-opening nav** (`TreeNode.ResourceKind`) — a tree node opens a kind's
+        list view (vs. detail); additive to existing group/detail nav.
+      - **Bottom dock** (`Action.Open` view/dock/dialog + `Action.Panel`) — a
+        resizable, tabbed, `KeepAlive` dock (`DockPanel.vue` + per-connection dock
+        store) hosting terminals/logs/editors from actions, or a modal. Showcase:
+        Docker "Logs in dock".
+      - Also fixed two manifest-driven leaks found en route: the metrics panel
+        (`cpu/mem`) and KV panel value types are now config-driven.
+      All Go+TS contract-mirrored, validated, unit-tested; gates green.
 - [x] UX.11 Third workspace layout `dashboard` (`LayoutDashboard`) — renders every
       connection-level `Tab` panel at once in a responsive grid via the focused
       `DashboardWorkspace.vue` shell, with an optional per-`Tab` `Span` sizing hint

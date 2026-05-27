@@ -437,6 +437,17 @@ type TreeNode struct {
 	ResourceKind string `json:"resourceKind,omitempty"`
 }
 
+// OpenTarget selects where an action's result surfaces. The default (view) runs
+// the route (or its form/confirm); Dock opens a panel in the workspace dock;
+// Dialog opens a panel in a modal.
+type OpenTarget string
+
+const (
+	OpenView   OpenTarget = "view"
+	OpenDock   OpenTarget = "dock"
+	OpenDialog OpenTarget = "dialog"
+)
+
 // Action is a UI affordance over a route. Permission/risk/input live on the
 // route (single source of truth); this only references it plus UI metadata.
 type Action struct {
@@ -448,6 +459,11 @@ type Action struct {
 	Confirm     bool              `json:"confirm,omitempty"`
 	ConfirmText string            `json:"confirmText,omitempty"`
 	OnSuccess   *ActionSuccess    `json:"onSuccess,omitempty"`
+	// Open=OpenDock/OpenDialog makes the action open Panel (a generic panel type,
+	// e.g. terminal/log_stream/code_editor) in the workspace dock or a modal,
+	// sourced from the action's route — instead of executing the route inline.
+	Open  OpenTarget `json:"open,omitempty"`
+	Panel PanelType  `json:"panel,omitempty"`
 }
 
 type ActionSuccess struct {

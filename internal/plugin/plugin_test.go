@@ -126,6 +126,29 @@ func TestMetricsConfigMap(t *testing.T) {
 	}
 }
 
+func TestDockActionRequiresPanel(t *testing.T) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	routes := []plugin.Route{{ID: "x.logs", Method: plugin.MethodWS, Permission: "x.read", Risk: plugin.RiskSafe, Stream: func(*plugin.RequestContext, plugin.ClientStream) error { return nil }}, {ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop}}
+	base := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
+		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+	}
+	bad := base
+	bad.Actions = []plugin.Action{{ID: "a", Label: "Logs", RouteID: "x.logs", Open: plugin.OpenDock}}
+	if err := plugin.Validate(bad, routes); err == nil {
+		t.Fatal("dock action without a panel should be rejected")
+	}
+	ok := base
+	ok.Actions = []plugin.Action{
+		{ID: "a", Label: "Logs", RouteID: "x.logs", Open: plugin.OpenDock, Panel: plugin.PanelLogStream},
+		{ID: "b", Label: "Peek", RouteID: "x.logs", Open: plugin.OpenDialog, Panel: plugin.PanelLogStream},
+	}
+	if err := plugin.Validate(ok, routes); err != nil {
+		t.Fatalf("dock/dialog actions with a panel should validate: %v", err)
+	}
+}
+
 func TestValidateRejectsBadManifests(t *testing.T) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }

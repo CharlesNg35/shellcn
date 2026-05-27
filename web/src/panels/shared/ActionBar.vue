@@ -7,6 +7,9 @@ import { runFormAction } from "../../api/dataSource";
 import type { Action, ResourceRef, RiskLevel } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
 import SchemaForm from "../form/SchemaForm.vue";
+import { useDockStore, type DockItem } from "../../stores/dock";
+
+const dock = useDockStore();
 
 const props = defineProps<{
   connectionId: string;
@@ -29,8 +32,31 @@ const riskClass: Record<RiskLevel, string> = {
   privileged: "bg-amber-600 text-white hover:bg-amber-700",
 };
 
+function dockItem(action: Action): DockItem {
+  return {
+    id: `${action.id}:${props.resource?.uid ?? "connection"}`,
+    title: action.label,
+    icon: action.icon,
+    panel: action.panel as string,
+    source: {
+      routeId: action.routeId,
+      method: action.method,
+      params: actionParams(action),
+    },
+    resource: props.resource,
+  };
+}
+
 function trigger(action: Action): void {
   error.value = null;
+  if (action.panel && action.open === "dock") {
+    dock.open(props.connectionId, dockItem(action));
+    return;
+  }
+  if (action.panel && action.open === "dialog") {
+    dock.openDialog(props.connectionId, dockItem(action));
+    return;
+  }
   if (
     action.requiresConfirm ||
     action.input ||
