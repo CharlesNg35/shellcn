@@ -6,13 +6,14 @@ import TreeWorkspace from "./TreeWorkspace.vue";
 import { useWorkspaceStore } from "../../stores/workspace";
 
 describe("TreeWorkspace", () => {
-  let scrollIntoView: ReturnType<typeof vi.spyOn>;
+  let scrollIntoView: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     setActivePinia(createPinia());
-    scrollIntoView = vi
-      .spyOn(Element.prototype, "scrollIntoView")
-      .mockImplementation(() => {});
+    // jsdom doesn't implement scrollIntoView, so install a mock rather than spy.
+    scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView =
+      scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
   });
 
   afterEach(() => {
