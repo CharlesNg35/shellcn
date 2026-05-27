@@ -23,7 +23,7 @@ import (
 // `/{services|pods}/{ns}/{name}/{port}/{rest...}`. Responses are rewritten so the
 // app's own absolute paths, redirects, and fetches resolve back under the proxy.
 func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
-	apiPath, prefix, ok := s.proxyPaths(r.URL.Path)
+	apiPath, apiPrefix, prefix, ok := s.proxyPaths(r.URL.Path)
 	if !ok {
 		http.Error(w, "unsupported proxy target", http.StatusBadRequest)
 		return
@@ -50,22 +50,23 @@ func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		Transport:     rt,
 		FlushInterval: -1,
 		//nolint:bodyclose // body is read+closed in the HTML branch; otherwise the ReverseProxy owns it.
-		ModifyResponse: rewriteProxyResponse(prefix),
+		ModifyResponse: rewriteProxyResponse(apiPrefix, prefix),
 	}
 	proxy.ServeHTTP(w, r)
 }
 
-// proxyPaths maps the public sub-path to the API server proxy path and the
-// public prefix the app is served under (for response rewriting). The port
+// proxyPaths maps the public sub-path to the API server proxy path, the prefix
+// the API server itself prepends when rewriting the app's links (apiPrefix), and
+// the public prefix the app is served under (for response rewriting). The port
 // segment may carry an "https:" marker to proxy over TLS to the target.
-func (s *Session) proxyPaths(sub string) (apiPath, prefix string, ok bool) {
+func (s *Session) proxyPaths(sub string) (apiPath, apiPrefix, prefix string, ok bool) {
 	parts := strings.SplitN(strings.TrimPrefix(sub, "/"), "/", 5)
 	if len(parts) < 4 {
-		return "", "", false
+		return "", "", "", false
 	}
 	kind, ns, name, portSeg := parts[0], parts[1], parts[2], parts[3]
 	if kind != "services" && kind != "pods" {
-		return "", "", false
+		return "", "", "", false
 	}
 	rest := ""
 	if len(parts) == 5 {
@@ -76,20 +77,26 @@ func (s *Session) proxyPaths(sub string) (apiPath, prefix string, ok bool) {
 	if realPort, https := strings.CutPrefix(portSeg, "https:"); https {
 		target = "https:" + name + ":" + realPort
 	}
-	apiPath = fmt.Sprintf("/api/v1/namespaces/%s/%s/%s/proxy/%s", ns, kind, target, rest)
+	apiPrefix = fmt.Sprintf("/api/v1/namespaces/%s/%s/%s/proxy", ns, kind, target)
+	apiPath = apiPrefix + "/" + rest
 	prefix = fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/%s", s.connID, kind, ns, name, portSeg)
-	return apiPath, prefix, true
+	return apiPath, apiPrefix, prefix, true
 }
 
 var rootRelAttr = regexp.MustCompile(`(\s(?:href|src|action)=")(/[^"/][^"]*)"`)
 
-// rewriteProxyResponse adjusts an upstream response so it works under prefix:
-// rewrites redirect Location + Set-Cookie paths, drops framing/CSP restrictions,
-// and (for HTML) injects a <base> + a small fetch/XHR shim and rewrites
-// root-relative asset URLs.
-func rewriteProxyResponse(prefix string) func(*http.Response) error {
+// rewriteProxyResponse adjusts an upstream response so it works under prefix.
+// The API server's proxy subresource already absolutizes the app's root-relative
+// URLs to its own proxy path (apiPrefix); we map those back to our public prefix
+// rather than prepending again (which would double the path). It also rewrites
+// redirect Location + Set-Cookie paths, drops framing/CSP, and for HTML injects a
+// <base> + small fetch/XHR shim and prefixes any URLs the API server left bare.
+func rewriteProxyResponse(apiPrefix, prefix string) func(*http.Response) error {
 	return func(resp *http.Response) error {
-		if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, "//") && !strings.HasPrefix(loc, prefix) {
+		switch loc := resp.Header.Get("Location"); {
+		case strings.HasPrefix(loc, apiPrefix):
+			resp.Header.Set("Location", prefix+strings.TrimPrefix(loc, apiPrefix))
+		case strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, "//") && !strings.HasPrefix(loc, prefix):
 			resp.Header.Set("Location", prefix+loc)
 		}
 		rewriteCookiePaths(resp.Header, prefix)
@@ -105,9 +112,17 @@ func rewriteProxyResponse(prefix string) func(*http.Response) error {
 		if err != nil {
 			return err
 		}
-		// Rewrite the app's own root-relative URLs first, then inject our
-		// base+shim (so they aren't themselves re-prefixed).
-		html := rootRelAttr.ReplaceAllString(string(body), "${1}"+prefix+"$2\"")
+		// Map the API server's injected prefix back to ours, then prefix any
+		// root-relative URLs it left untouched (skipping ones already under our
+		// prefix), and finally inject our base+shim so they aren't re-prefixed.
+		html := strings.ReplaceAll(string(body), apiPrefix, prefix)
+		html = rootRelAttr.ReplaceAllStringFunc(html, func(m string) string {
+			g := rootRelAttr.FindStringSubmatch(m)
+			if strings.HasPrefix(g[2], prefix) {
+				return m
+			}
+			return g[1] + prefix + g[2] + `"`
+		})
 		html = injectProxyShim(html, prefix)
 		resp.Body = io.NopCloser(strings.NewReader(html))
 		resp.ContentLength = int64(len(html))

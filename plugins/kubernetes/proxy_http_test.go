@@ -12,19 +12,46 @@ import (
 
 func TestProxyPaths(t *testing.T) {
 	s := connectTo(t, http.NewServeMux()).(*Session)
-	cases := map[string][2]string{
-		"/services/default/web/80/":      {"/api/v1/namespaces/default/services/web:80/proxy/", "/api/connections/c1/proxy/services/default/web/80"},
-		"/pods/default/api/8080/healthz": {"/api/v1/namespaces/default/pods/api:8080/proxy/healthz", "/api/connections/c1/proxy/pods/default/api/8080"},
-		"/services/mon/graf/https:8443/": {"/api/v1/namespaces/mon/services/https:graf:8443/proxy/", "/api/connections/c1/proxy/services/mon/graf/https:8443"},
+	cases := map[string][3]string{
+		"/services/default/web/80/":      {"/api/v1/namespaces/default/services/web:80/proxy/", "/api/v1/namespaces/default/services/web:80/proxy", "/api/connections/c1/proxy/services/default/web/80"},
+		"/pods/default/api/8080/healthz": {"/api/v1/namespaces/default/pods/api:8080/proxy/healthz", "/api/v1/namespaces/default/pods/api:8080/proxy", "/api/connections/c1/proxy/pods/default/api/8080"},
+		"/services/mon/graf/https:8443/": {"/api/v1/namespaces/mon/services/https:graf:8443/proxy/", "/api/v1/namespaces/mon/services/https:graf:8443/proxy", "/api/connections/c1/proxy/services/mon/graf/https:8443"},
 	}
 	for in, want := range cases {
-		apiPath, prefix, ok := s.proxyPaths(in)
-		if !ok || apiPath != want[0] || prefix != want[1] {
-			t.Errorf("proxyPaths(%q) = %q,%q,%v; want %q,%q", in, apiPath, prefix, ok, want[0], want[1])
+		apiPath, apiPrefix, prefix, ok := s.proxyPaths(in)
+		if !ok || apiPath != want[0] || apiPrefix != want[1] || prefix != want[2] {
+			t.Errorf("proxyPaths(%q) = %q,%q,%q,%v; want %q,%q,%q", in, apiPath, apiPrefix, prefix, ok, want[0], want[1], want[2])
 		}
 	}
-	if _, _, ok := s.proxyPaths("/configmaps/default/cm"); ok {
+	if _, _, _, ok := s.proxyPaths("/configmaps/default/cm"); ok {
 		t.Error("non-proxyable kind should be rejected")
+	}
+}
+
+// The API server's proxy subresource rewrites the app's root-relative URLs to
+// its own proxy prefix; the gateway must map that back to the public prefix, not
+// prepend on top (which would double the path and 404 the assets).
+func TestServeHTTPProxyUndoesAPIServerPrefix(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/services/web:80/proxy/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		// As an API-server-proxied app would emit it (already prefixed).
+		_, _ = io.WriteString(w, `<html><head></head><body><script src="/api/v1/namespaces/default/services/web:80/proxy/_next/app.js"></script><a href="/page">p</a></body></html>`)
+	})
+	sess := connectTo(t, mux).(*Session)
+	rec := httptest.NewRecorder()
+	sess.ServeHTTPProxy(rec, httptest.NewRequest(http.MethodGet, "/services/default/web/80/", nil))
+
+	body := rec.Body.String()
+	prefix := "/api/connections/c1/proxy/services/default/web/80"
+	if !strings.Contains(body, `src="`+prefix+`/_next/app.js"`) {
+		t.Fatalf("api-server prefix not mapped to public prefix: %s", body)
+	}
+	if strings.Contains(body, "/proxy/api/v1/namespaces") {
+		t.Fatalf("double-prefixed asset URL leaked: %s", body)
+	}
+	if !strings.Contains(body, `href="`+prefix+`/page"`) {
+		t.Fatalf("bare root-relative link not prefixed: %s", body)
 	}
 }
 

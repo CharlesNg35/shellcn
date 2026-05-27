@@ -71,9 +71,13 @@ export async function apiFetch(
     headers.set("X-CSRF-Token", csrfToken);
   }
 
+  // fetch rejects a GET/HEAD request that carries a body; strip it so callers
+  // that pass one (e.g. an action invoked over GET) don't fail as a network error.
+  const body = method === "GET" || method === "HEAD" ? undefined : init.body;
+
   let res: Response;
   try {
-    res = await fetch(input, { ...init, method, headers });
+    res = await fetch(input, { ...init, method, headers, body });
   } catch {
     const err = new ApiError(0, "Network error — is the gateway reachable?");
     reportApiError(err);
