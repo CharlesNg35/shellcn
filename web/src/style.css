@@ -35,6 +35,14 @@
   --p-surface-800: #1e293b;
   --p-surface-900: #0f172a;
   --p-surface-950: #020617;
+
+  --shell-scrollbar-thumb: rgb(148 163 184 / 0.45);
+  --shell-scrollbar-thumb-hover: rgb(100 116 139 / 0.8);
+}
+
+.dark {
+  --shell-scrollbar-thumb: rgb(71 85 105 / 0.6);
+  --shell-scrollbar-thumb-hover: rgb(100 116 139 / 0.95);
 }
 
 html,
@@ -71,6 +79,69 @@ textarea:focus-visible,
 [data-pc-name="select"]:focus-visible,
 [data-pc-name="multiselect"]:focus-visible {
   outline: none;
+}
+
+:where(.thin-scrollbar, .overflow-auto, .overflow-y-auto, .overflow-x-auto) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--shell-scrollbar-thumb) transparent;
+}
+
+:where(
+  .thin-scrollbar,
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto
+):where(:hover, :focus-within) {
+  scrollbar-color: var(--shell-scrollbar-thumb-hover) transparent;
+}
+
+:where(
+  .thin-scrollbar,
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto
+)::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+:where(
+  .thin-scrollbar,
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto
+)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:where(
+  .thin-scrollbar,
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto
+)::-webkit-scrollbar-thumb {
+  background-color: var(--shell-scrollbar-thumb);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+:where(
+    .thin-scrollbar,
+    .overflow-auto,
+    .overflow-y-auto,
+    .overflow-x-auto
+  ):where(:hover, :focus-within)::-webkit-scrollbar-thumb {
+  background-color: var(--shell-scrollbar-thumb-hover);
+}
+
+:where(
+  .thin-scrollbar,
+  .overflow-auto,
+  .overflow-y-auto,
+  .overflow-x-auto
+)::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .shellcn-codemirror-host {

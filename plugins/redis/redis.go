@@ -27,13 +27,11 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
 		Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.overview"}},
+			{Key: "overview", Label: "Overview", Icon: icon("gauge"), Panel: plugin.PanelDashboard, Config: overviewDashboard()},
 			{Key: "keys", Label: "Keys", Icon: icon("key-round"), Panel: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "redis.keys.list"}, Config: plugin.KVConfig{
 				CreateRouteID: "redis.key.write", ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write", DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,
 			}.Map()},
 			{Key: "console", Label: "Console", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "redis.terminal", Method: plugin.MethodWS}},
-			{Key: "clients", Label: "Clients", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: plugin.TableConfig{Columns: clientColumns(), Exportable: true}.Map()},
-			{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: plugin.TableConfig{Columns: channelColumns(), Exportable: true}.Map()},
 			{Key: "info", Label: "Info", Icon: icon("file-text"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.info"}},
 		},
 		Streams: []plugin.Stream{
@@ -51,6 +49,16 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 
 func icon(name string) plugin.Icon {
 	return plugin.Icon{Type: plugin.IconLucide, Value: name}
+}
+
+// overviewDashboard composes the server summary, connected clients, and pub/sub
+// channels into a single at-a-glance grid using the generic dashboard panel.
+func overviewDashboard() map[string]any {
+	return plugin.DashboardConfig{Cells: []plugin.DashboardCell{
+		{Key: "server", Label: "Server", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.overview"}, Span: 2},
+		{Key: "clients", Label: "Clients", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: plugin.TableConfig{Columns: clientColumns(), Exportable: true}.Map()},
+		{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: plugin.TableConfig{Columns: channelColumns(), Exportable: true}.Map()},
+	}}.Map()
 }
 
 func clientColumns() []plugin.Column {

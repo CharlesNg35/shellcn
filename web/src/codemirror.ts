@@ -158,13 +158,15 @@ function editorTheme(c: EditorPalette, dark: boolean): Extension {
         scrollbarWidth: "thin",
         scrollbarColor: `${c.scrollbarThumb} transparent`,
       },
-      ".cm-scroller::-webkit-scrollbar": { width: "10px", height: "10px" },
+      ".cm-scroller::-webkit-scrollbar": { width: "8px", height: "8px" },
       ".cm-scroller::-webkit-scrollbar-thumb": {
         backgroundColor: c.scrollbarThumb,
-        borderRadius: "8px",
+        borderRadius: "999px",
         border: "2px solid transparent",
-        backgroundClip: "content-box",
+        backgroundClip: "padding-box",
       },
+      ".cm-scroller::-webkit-scrollbar-track": { background: "transparent" },
+      ".cm-scroller::-webkit-scrollbar-corner": { background: "transparent" },
       ".cm-scroller::-webkit-scrollbar-thumb:hover": {
         backgroundColor: c.scrollbarThumbHover,
       },

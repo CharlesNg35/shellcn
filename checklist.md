@@ -198,12 +198,14 @@ Generic, manifest-driven; no per-plugin frontend.
 - [x] Solr — direct search plugin for user-managed cores, SolrCloud collections, documents, select queries, managed schema fields, config, ping, commit, optimize, and delete-by-query
 - [x] LDAP — direct directory plugin (security category) using `go-ldap/v3` over `cfg.Net.DialContext` (plain / StartTLS / LDAPS, simple + anonymous + stored bind): sidebar DIT tree with lazy one-level expansion and `hasSubordinates` leaf detection, entry attributes rendered in the generic staged editable grid (Modify add/replace/delete), entry add/rename(modifyDN)/delete actions, subtree LDAP-filter search, read-only safety gate. Searches use the Simple Paged Results control (bounded by the size limit) so they work against Active Directory's per-request `MaxPageSize`; AD object-class icons included. Live coverage against both OpenLDAP and Samba AD-DC.
 
-## Phase 7 — M6 · Kubernetes
+## Phase 7 — M6 · Kubernetes (Lens/OpenLens-grade, manifest-driven)
 
+- [ ] 7.0 Workbench renderer extensions (**generic, cross-plugin**): bottom dock, dashboard-as-view, multiple open workbench tabs, metrics/stat panel, list-opening nav nodes, create-from-content — landed UI-first on fixtures, usable by every plugin
 - [ ] 7.1 Kubernetes session and L7 agent mode
-- [ ] 7.2 Workloads and core resource trees
-- [ ] 7.3 Pod logs, exec, and port-forward
-- [ ] 7.4 YAML editor and events
+- [ ] 7.2 Workloads and core resource trees (categorized nav → live kind lists → details; CRDs)
+- [ ] 7.3 Pod logs, exec, and port-forward (opened in the dock)
+- [ ] 7.4 YAML editor, Create Resource, and events
+- [ ] 7.5 Cluster, node, and workload overviews (metrics dashboards)
 
 ---
 

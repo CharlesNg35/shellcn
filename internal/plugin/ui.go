@@ -15,6 +15,7 @@ const (
 	PanelRemoteDesktop PanelType = "remote_desktop"
 	PanelForm          PanelType = "form"
 	PanelEnroll        PanelType = "enroll"
+	PanelDashboard     PanelType = "dashboard"
 
 	PanelGraph      PanelType = "graph"
 	PanelTrace      PanelType = "trace"
@@ -143,6 +144,34 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if c.Exportable {
 		out["exportable"] = true
+	}
+	return out
+}
+
+// DashboardCell is one panel inside a PanelDashboard grid. It mirrors a Tab
+// minus the tab-bar semantics: any panel type, its own source/config, and an
+// optional Span (>= 2 fills the row). Plugin-agnostic — any plugin can compose
+// an at-a-glance view from its existing panels and routes.
+type DashboardCell struct {
+	Key    string         `json:"key"`
+	Label  string         `json:"label,omitempty"`
+	Icon   Icon           `json:"icon,omitzero"`
+	Panel  PanelType      `json:"panel"`
+	Source *DataSource    `json:"source,omitempty"`
+	Config map[string]any `json:"config,omitempty"`
+	Span   int            `json:"span,omitempty"`
+}
+
+// DashboardConfig is the declarative config for a PanelDashboard: a responsive
+// grid that renders every cell at once. Usable as a detail/connection Tab panel.
+type DashboardConfig struct {
+	Cells []DashboardCell `json:"cells,omitempty"`
+}
+
+func (c DashboardConfig) Map() map[string]any {
+	out := map[string]any{}
+	if len(c.Cells) > 0 {
+		out["cells"] = c.Cells
 	}
 	return out
 }

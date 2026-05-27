@@ -84,6 +84,33 @@ func TestValidateAcceptsAllLayouts(t *testing.T) {
 	}
 }
 
+func TestDashboardConfigMapAndPanelValidate(t *testing.T) {
+	cfg := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
+		{Key: "a", Label: "A", Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "x.overview"}, Span: 2},
+		{Key: "b", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}},
+	}}.Map()
+	cells, ok := cfg["cells"].([]plugin.DashboardCell)
+	if !ok || len(cells) != 2 || cells[0].Span != 2 {
+		t.Fatalf("DashboardConfig.Map cells = %#v", cfg["cells"])
+	}
+	if (plugin.DashboardConfig{}).Map()["cells"] != nil {
+		t.Fatal("empty DashboardConfig should omit cells")
+	}
+
+	// A dashboard-panel tab carries its cells in config and needs no tab source.
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	m := plugin.Manifest{
+		APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
+		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
+		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		Tabs:                []plugin.Tab{{Key: "overview", Label: "Overview", Panel: plugin.PanelDashboard, Config: cfg}},
+	}
+	routes := []plugin.Route{{ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop}}
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("dashboard-panel tab should validate: %v", err)
+	}
+}
+
 func TestValidateRejectsBadManifests(t *testing.T) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
 	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }

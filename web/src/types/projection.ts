@@ -42,7 +42,8 @@ export type KnownPanelType =
   | "graph"
   | "trace"
   | "kv"
-  | "http_client";
+  | "http_client"
+  | "dashboard";
 
 // Open union: the renderer must handle a type it does not recognize.
 export type PanelType = KnownPanelType | (string & {});
@@ -370,6 +371,22 @@ export interface Tab {
   config?: Record<string, unknown>;
   // Dashboard-layout sizing hint: >= 2 fills the row, otherwise one column.
   span?: number;
+}
+
+// One panel inside a `dashboard` panel grid (mirrors a Tab minus tab-bar
+// semantics). Generic — any plugin composes an at-a-glance view from its panels.
+export interface DashboardCell {
+  key: string;
+  label?: string;
+  icon?: Icon;
+  panel: PanelType;
+  source?: DataSource;
+  config?: Record<string, unknown>;
+  span?: number;
+}
+
+export interface DashboardPanelConfig {
+  cells: DashboardCell[];
 }
 
 export interface TreeGroup {

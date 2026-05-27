@@ -10,6 +10,7 @@ import FormPanel from "../form/FormPanel.vue";
 import EnrollPanel from "../enroll/EnrollPanel.vue";
 import FileBrowserPanel from "../file/FileBrowserPanel.vue";
 import DocumentPanel from "../document/DocumentPanel.vue";
+import DashboardPanel from "../dashboard/DashboardPanel.vue";
 
 const lazy = (loader: AsyncComponentLoader): Component =>
   defineAsyncComponent({ loader, loadingComponent: LoadingPanel });
@@ -23,6 +24,7 @@ export const panelRegistry: Record<string, Component> = {
   enroll: EnrollPanel,
   file_browser: FileBrowserPanel,
   document: DocumentPanel,
+  dashboard: DashboardPanel,
   terminal: lazy(() => import("../streaming/TerminalPanel.vue")),
   log_stream: lazy(() => import("../streaming/LogStreamPanel.vue")),
   metrics: lazy(() => import("../streaming/MetricsPanel.vue")),
