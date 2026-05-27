@@ -545,10 +545,6 @@ func RemoveNetwork(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: err == nil}, DockerErr(err)
 }
 
-func PrepareExec(_ *plugin.RequestContext) (any, error) {
-	return ActionResult{OK: true}, nil
-}
-
 func LogsStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	ch, err := rc.Session.OpenChannel(rc.Ctx, plugin.ChannelRequest{Kind: plugin.StreamLogs, Params: streamParams(rc)})
 	if err != nil {

@@ -108,9 +108,9 @@ func containerResource() plugin.ResourceType {
 		Watch:         &plugin.DataSource{RouteID: "podman.events.watch", Method: plugin.MethodWS},
 		Columns:       containerColumns(),
 		ListActionIDs: []string{"podman.container.create"},
-		ActionIDs:     []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.exec", "podman.container.remove"},
+		ActionIDs:     []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", ActionIDs: []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.exec", "podman.container.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", ActionIDs: []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "terminal", Label: "Terminal", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "podman.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24", "command": "/bin/sh"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
@@ -216,7 +216,6 @@ func actions() []plugin.Action {
 		{ID: "podman.container.stop", Label: "Stop", Icon: icon("square"), RouteID: "podman.container.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this container?", EnabledWhen: dockerengine.WhenState("running", "paused")},
 		{ID: "podman.container.restart", Label: "Restart", Icon: icon("refresh-cw"), RouteID: "podman.container.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this container?", EnabledWhen: dockerengine.WhenState("running", "paused")},
 		{ID: "podman.container.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.container.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this container and anonymous volumes?"},
-		{ID: "podman.container.exec", Label: "Exec", Icon: icon("terminal"), RouteID: "podman.container.exec.prepare", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Open a shell inside this container?", OnSuccess: &plugin.ActionSuccess{SelectTab: "terminal"}, EnabledWhen: dockerengine.WhenState("running")},
 		{ID: "podman.image.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.image.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this image?"},
 		{ID: "podman.volume.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.volume.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this volume?"},
 		{ID: "podman.network.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.network.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this network?"},
