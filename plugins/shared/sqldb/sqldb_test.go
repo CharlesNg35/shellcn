@@ -1,6 +1,74 @@
 package sqldb
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
+
+func pgDialect() Dialect {
+	return Dialect{QuoteIdent: QuoteIdent, Placeholder: DollarPlaceholder}
+}
+
+func TestDialectInsertIsDeterministicAndParameterized(t *testing.T) {
+	stmt, args, err := pgDialect().Insert(`"public"."users"`, map[string]any{"email": "a@b.c", "age": float64(30)})
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	want := `INSERT INTO "public"."users" ("age", "email") VALUES ($1, $2)`
+	if stmt != want {
+		t.Fatalf("unexpected insert:\n got %q\nwant %q", stmt, want)
+	}
+	if !reflect.DeepEqual(args, []any{int64(30), "a@b.c"}) {
+		t.Fatalf("unexpected args (integral float must normalize to int64): %#v", args)
+	}
+}
+
+func TestDialectUpdateOrdersValuesThenKey(t *testing.T) {
+	stmt, args, err := pgDialect().Update(`"public"."users"`, map[string]any{"id": float64(7)}, map[string]any{"name": "x"})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	want := `UPDATE "public"."users" SET "name" = $1 WHERE "id" = $2`
+	if stmt != want {
+		t.Fatalf("unexpected update:\n got %q\nwant %q", stmt, want)
+	}
+	if !reflect.DeepEqual(args, []any{"x", int64(7)}) {
+		t.Fatalf("unexpected args: %#v", args)
+	}
+}
+
+func TestDialectDeleteRequiresKey(t *testing.T) {
+	if _, _, err := pgDialect().Delete(`"public"."users"`, nil); err == nil {
+		t.Fatal("delete without a key must be rejected so it can never wipe a table")
+	}
+	stmt, args, err := pgDialect().Delete(`"public"."users"`, map[string]any{"id": float64(7)})
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if stmt != `DELETE FROM "public"."users" WHERE "id" = $1` || !reflect.DeepEqual(args, []any{int64(7)}) {
+		t.Fatalf("unexpected delete: %q args=%#v", stmt, args)
+	}
+}
+
+func TestDialectRejectsUnsafeColumnNames(t *testing.T) {
+	if _, _, err := pgDialect().Insert(`"t"`, map[string]any{"id; drop table users": 1}); err == nil {
+		t.Fatal("unsafe column identifier accepted")
+	}
+}
+
+func TestDialectMatchesNullKeyWithoutBinding(t *testing.T) {
+	stmt, args, err := pgDialect().Delete(`"t"`, map[string]any{"a": nil, "b": float64(2)})
+	if err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	want := `DELETE FROM "t" WHERE "a" IS NULL AND "b" = $1`
+	if stmt != want {
+		t.Fatalf("unexpected null-key delete:\n got %q\nwant %q", stmt, want)
+	}
+	if !reflect.DeepEqual(args, []any{int64(2)}) {
+		t.Fatalf("unexpected args: %#v", args)
+	}
+}
 
 func TestStatementSafetyClassification(t *testing.T) {
 	readOnly := []string{

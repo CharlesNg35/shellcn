@@ -2,6 +2,7 @@ package oracle
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/url"
 	"os"
@@ -60,8 +61,13 @@ func TestOraclePluginIntegration(t *testing.T) {
 		t.Fatalf("table rows: %v", err)
 	}
 	page := rows.(plugin.Page[row])
-	if len(page.Items) != 1 || page.Items[0]["access_token"] != sqldb.RedactedValue {
+	// The editable Data grid keeps Oracle's real (uppercase) column names so its
+	// quoted UPDATE/DELETE identifiers match.
+	if len(page.Items) != 1 || page.Items[0]["ACCESS_TOKEN"] != sqldb.RedactedValue {
 		t.Fatalf("expected redacted table data, got %#v", page.Items)
+	}
+	if key, ok := page.Items[0]["_key"].(map[string]any); !ok || key["ID"] == nil {
+		t.Fatalf("table rows must carry a _key from the primary key: %#v", page.Items[0])
 	}
 
 	result, err := executeQueryRequest(ctx, s, "SHELLCN_TEST", sqldb.QueryRequest{Query: `SELECT NAME, ACCESS_TOKEN FROM PEOPLE`})
@@ -71,6 +77,37 @@ func TestOraclePluginIntegration(t *testing.T) {
 	if len(result.Rows) != 1 || result.Rows[0][1] != sqldb.RedactedValue {
 		t.Fatalf("expected redacted query result, got %#v", result.Rows)
 	}
+
+	params := map[string]string{"id": objectID("SHELLCN_TEST", "PEOPLE")}
+	if _, err := insertRow(rowMutationRC(ctx, s, params, map[string]any{"values": map[string]any{"NAME": "bob", "ACCESS_TOKEN": "tok"}})); err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+	var bobID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT ID FROM SHELLCN_TEST.PEOPLE WHERE NAME = 'bob'`).Scan(&bobID); err != nil {
+		t.Fatalf("read inserted row: %v", err)
+	}
+	if _, err := updateRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"ID": bobID}, "values": map[string]any{"NAME": "bob2"}})); err != nil {
+		t.Fatalf("update row: %v", err)
+	}
+	var name string
+	if err := s.db.QueryRowContext(ctx, `SELECT NAME FROM SHELLCN_TEST.PEOPLE WHERE ID = :1`, bobID).Scan(&name); err != nil || name != "bob2" {
+		t.Fatalf("expected updated name bob2, got %q err=%v", name, err)
+	}
+	if _, err := deleteRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"ID": bobID}})); err != nil {
+		t.Fatalf("delete row: %v", err)
+	}
+	var remaining int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM SHELLCN_TEST.PEOPLE`).Scan(&remaining); err != nil || remaining != 1 {
+		t.Fatalf("expected 1 row after delete, got %d err=%v", remaining, err)
+	}
+	if _, err := updateRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"NAME": "alice"}, "values": map[string]any{"ACCESS_TOKEN": "x"}})); err == nil {
+		t.Fatal("update with a non-primary-key key must be rejected")
+	}
+}
+
+func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
+	raw, _ := json.Marshal(body)
+	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {

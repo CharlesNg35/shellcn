@@ -51,6 +51,7 @@ function actionParams(action: Action): Record<string, string> {
     uid: ref.uid,
   };
   if (ref.namespace) params.namespace = ref.namespace;
+  if (ref.scope) params.scope = ref.scope;
   return params;
 }
 

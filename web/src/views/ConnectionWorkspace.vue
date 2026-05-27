@@ -138,6 +138,12 @@ function closeBackendSessionOnPageHide(): void {
   }).catch(() => {});
 }
 
+function confirmBeforePageUnload(event: BeforeUnloadEvent): void {
+  if (!connected.value) return;
+  event.preventDefault();
+  event.returnValue = "";
+}
+
 async function disconnect(): Promise<void> {
   sessions.closeWhere((key) => key.startsWith(channelPrefix.value));
   ws.setConnected(props.id, false);
@@ -150,10 +156,12 @@ async function disconnect(): Promise<void> {
 }
 
 onMounted(() => {
+  window.addEventListener("beforeunload", confirmBeforePageUnload);
   window.addEventListener("pagehide", closeBackendSessionOnPageHide);
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener("beforeunload", confirmBeforePageUnload);
   window.removeEventListener("pagehide", closeBackendSessionOnPageHide);
 });
 

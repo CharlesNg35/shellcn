@@ -2,6 +2,7 @@ package cockroachdb
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/url"
 	"os"
@@ -42,12 +43,12 @@ func TestCockroachDBPluginIntegration(t *testing.T) {
 
 	if _, err := s.pool.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS public.shellcn_people (
-  id INT8 PRIMARY KEY DEFAULT unique_rowid(),
+  id INT8 PRIMARY KEY,
   name STRING NOT NULL,
   access_token STRING NOT NULL
 );
 TRUNCATE public.shellcn_people;
-INSERT INTO public.shellcn_people (name, access_token) VALUES ('alice', 'secret-token')`); err != nil {
+INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', 'secret-token')`); err != nil {
 		t.Fatalf("seed database: %v", err)
 	}
 	t.Cleanup(func() {
@@ -80,6 +81,36 @@ INSERT INTO public.shellcn_people (name, access_token) VALUES ('alice', 'secret-
 	}
 	if len(result.Rows) != 1 || result.Rows[0][1] != sqldb.RedactedValue {
 		t.Fatalf("expected redacted query result, got %#v", result.Rows)
+	}
+
+	// Editable data grid: rows carry _key from the primary key.
+	if key, ok := page.Items[0]["_key"].(map[string]any); !ok || key["id"] == nil {
+		t.Fatalf("table rows must carry a _key from the primary key: %#v", page.Items[0])
+	}
+	params := map[string]string{"schema": "public", "table": "shellcn_people"}
+	if _, err := insertRow(rowMutationRC(ctx, s, params, map[string]any{"values": map[string]any{"id": 2, "name": "bob", "access_token": "tok"}})); err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+	var bobID int64
+	if err := s.pool.QueryRow(ctx, `SELECT id FROM public.shellcn_people WHERE name = 'bob'`).Scan(&bobID); err != nil {
+		t.Fatalf("read inserted row: %v", err)
+	}
+	if _, err := updateRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"id": bobID}, "values": map[string]any{"name": "bob2"}})); err != nil {
+		t.Fatalf("update row: %v", err)
+	}
+	var name string
+	if err := s.pool.QueryRow(ctx, `SELECT name FROM public.shellcn_people WHERE id = $1`, bobID).Scan(&name); err != nil || name != "bob2" {
+		t.Fatalf("expected updated name bob2, got %q err=%v", name, err)
+	}
+	if _, err := deleteRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"id": bobID}})); err != nil {
+		t.Fatalf("delete row: %v", err)
+	}
+	var remaining int
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM public.shellcn_people`).Scan(&remaining); err != nil || remaining != 1 {
+		t.Fatalf("expected 1 row after delete, got %d err=%v", remaining, err)
+	}
+	if _, err := updateRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"name": "alice"}, "values": map[string]any{"access_token": "x"}})); err == nil {
+		t.Fatal("update with a non-primary-key key must be rejected")
 	}
 
 	for name, fn := range map[string]func(*plugin.RequestContext) (any, error){
@@ -188,6 +219,11 @@ func configFromDSN(t *testing.T, raw string) map[string]any {
 		"tls_mode":  stringDefault(u.Query().Get("sslmode"), "disable"),
 		"read_only": false,
 	}
+}
+
+func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
+	raw, _ := json.Marshal(body)
+	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func run(ctx context.Context, t *testing.T, name string, args ...string) string {

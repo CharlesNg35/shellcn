@@ -157,4 +157,30 @@ describe("ConnectionWorkspace", () => {
       ),
     ).toBe(true);
   });
+
+  it("asks the browser to confirm reload while connected", async () => {
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          DetailView: true,
+          ResourceTree: true,
+          TablePanel: TablePanelStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    const event = new Event("beforeunload", {
+      cancelable: true,
+    }) as BeforeUnloadEvent;
+    window.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
 });

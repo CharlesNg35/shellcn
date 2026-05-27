@@ -213,6 +213,16 @@ export interface TablePanelConfig {
   watch?: DataSource;
   actionIds?: string[];
   rowActionIds?: string[];
+  // Inline data-grid editing (plugin-agnostic). When `editable` is set and
+  // `rowKey` names the identifying columns, the grid offers cell editing,
+  // add-row, and delete-row wired to these mutation routes. Bodies are uniform:
+  // insert {values}, update {key, values}, delete {key}.
+  editable?: boolean;
+  rowKey?: string[];
+  insert?: DataSource;
+  update?: DataSource;
+  delete?: DataSource;
+  emptyText?: string;
 }
 
 export interface FormPanelConfig {
@@ -283,7 +293,8 @@ export type ColumnType =
   | "bytes"
   | "datetime"
   | "number"
-  | "bool";
+  | "bool"
+  | "json";
 
 export interface Column {
   key: string;
@@ -291,6 +302,10 @@ export interface Column {
   sortable?: boolean;
   type?: ColumnType;
   width?: string;
+  // ReadOnly keeps a column non-editable even when its table is editable.
+  // Nullable lets the inline editor clear the cell to NULL.
+  readOnly?: boolean;
+  nullable?: boolean;
 }
 
 export type Severity = "info" | "success" | "warn" | "danger" | "secondary";
@@ -305,6 +320,9 @@ export interface Badge {
 
 export interface ResourceRef {
   kind: string;
+  // Optional outer container (e.g. database/cluster) for hierarchies deeper than
+  // namespace/name. Interpolates as ${resource.scope}.
+  scope?: string;
   namespace?: string;
   name: string;
   uid: string;

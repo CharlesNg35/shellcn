@@ -32,6 +32,8 @@ type confirmationError struct {
 
 func (e confirmationError) Error() string { return e.message }
 
+var dialect = sqldb.Dialect{QuoteIdent: sqldb.QuoteIdent, Placeholder: sqldb.DollarPlaceholder}
+
 func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "cockroachdb.databases.tree", Method: plugin.MethodGet, Path: "/tree/databases", Permission: "cockroachdb.databases.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.databases.tree", Handle: treeDatabases},
@@ -72,6 +74,9 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.function.definition", Method: plugin.MethodGet, Path: "/functions/{id}/definition", Permission: "cockroachdb.functions.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.function.definition", Handle: functionDefinition},
 		{ID: "cockroachdb.sequence.overview", Method: plugin.MethodGet, Path: "/sequences/{schema}/{table}/overview", Permission: "cockroachdb.sequences.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.sequence.overview", Handle: sequenceOverview},
 		{ID: "cockroachdb.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.completion", Handle: completionRoute},
+		{ID: "cockroachdb.table.row.insert", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.row.insert", Handle: insertRow},
+		{ID: "cockroachdb.table.row.update", Method: plugin.MethodPatch, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.row.update", Handle: updateRow},
+		{ID: "cockroachdb.table.row.delete", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.row.delete", Handle: deleteRow},
 		{ID: "cockroachdb.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "cockroachdb.column.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "cockroachdb.table.truncate", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/truncate", Permission: "cockroachdb.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.truncate", Handle: truncateTable},
@@ -538,6 +543,11 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	pk, err := primaryKeyColumns(rc.Ctx, s, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	attachRowKeys(rows, pk, s.opts.RedactPatterns)
 	redactRows(rows, s.opts.RedactPatterns)
 	next := ""
 	if offset+len(rows) < total {
@@ -822,6 +832,119 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+func insertRow(rc *plugin.RequestContext) (any, error) {
+	s, schema, table, m, err := rowMutationInput(rc)
+	if err != nil {
+		return nil, err
+	}
+	stmt, args, err := dialect.Insert(sqldb.Qualified(schema, table), m.Values)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.pool.Exec(rc.Ctx, stmt, args...); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func updateRow(rc *plugin.RequestContext) (any, error) {
+	return keyedRowMutation(rc, false)
+}
+
+func deleteRow(rc *plugin.RequestContext) (any, error) {
+	return keyedRowMutation(rc, true)
+}
+
+func rowMutationInput(rc *plugin.RequestContext) (*Session, string, string, sqldb.RowMutation, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	var m sqldb.RowMutation
+	if err := rc.Bind(&m); err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	return s, schema, table, m, nil
+}
+
+// keyedRowMutation runs an UPDATE or DELETE only after confirming the client's
+// key is exactly the table's primary key and that it affects a single row.
+func keyedRowMutation(rc *plugin.RequestContext, del bool) (any, error) {
+	s, schema, table, m, err := rowMutationInput(rc)
+	if err != nil {
+		return nil, err
+	}
+	pk, err := primaryKeyColumns(rc.Ctx, s, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	if err := sqldb.ValidateRowKey(pk, m.Key); err != nil {
+		return nil, err
+	}
+	qual := sqldb.Qualified(schema, table)
+	var stmt string
+	var args []any
+	if del {
+		stmt, args, err = dialect.Delete(qual, m.Key)
+	} else {
+		stmt, args, err = dialect.Update(qual, m.Key, m.Values)
+	}
+	if err != nil {
+		return nil, err
+	}
+	tag, err := s.pool.Exec(rc.Ctx, stmt, args...)
+	if err != nil {
+		return nil, cockroachErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, fmt.Errorf("%w: row no longer matches (it may have changed)", plugin.ErrNotFound)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func primaryKeyColumns(ctx context.Context, s *Session, schema, table string) ([]string, error) {
+	rows, err := queryRows(ctx, s, `
+SELECT a.attname AS name
+FROM pg_index i
+JOIN pg_class c ON c.oid = i.indrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+WHERE i.indisprimary AND n.nspname = $1 AND c.relname = $2
+ORDER BY array_position(i.indkey, a.attnum)`, []any{schema, table})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, fmt.Sprint(r["name"]))
+	}
+	return out, nil
+}
+
+// attachRowKeys tags each row with the primary-key map the editable grid echoes
+// back for UPDATE/DELETE. The grid stays read-only when the table has no primary
+// key or when a key column is itself sensitive (so a redacted value is never
+// shipped raw inside _key).
+func attachRowKeys(rows []row, pk, patterns []string) {
+	if len(pk) == 0 || sqldb.AnyColumnRedacted(pk, patterns) {
+		return
+	}
+	for _, r := range rows {
+		key := map[string]any{}
+		for _, col := range pk {
+			key[col] = r[col]
+		}
+		r["_key"] = key
+	}
+}
+
 func truncateTable(rc *plugin.RequestContext) (any, error) {
 	schema, table, err := tableIdent(rc)
 	if err != nil {
@@ -1048,6 +1171,9 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 func redactRows(rows []row, patterns []string) {
 	for _, r := range rows {
 		for key, value := range r {
+			if key == "_key" {
+				continue
+			}
 			if value != nil && sqldb.RedactColumn(key, patterns) {
 				r[key] = sqldb.RedactedValue
 			}
@@ -1253,7 +1379,10 @@ func filterRows(rows []row, q string) []row {
 	}
 	out := rows[:0]
 	for _, r := range rows {
-		for _, v := range r {
+		for k, v := range r {
+			if k == "_key" || k == "ref" {
+				continue
+			}
 			if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {
 				out = append(out, r)
 				break

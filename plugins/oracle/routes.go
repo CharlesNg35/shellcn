@@ -31,6 +31,8 @@ type confirmationError struct {
 
 func (e confirmationError) Error() string { return e.message }
 
+var dialect = sqldb.Dialect{QuoteIdent: quoteIdent, Placeholder: sqldb.ColonPlaceholder}
+
 func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "oracle.schemas.tree", Method: plugin.MethodGet, Path: "/tree/schemas", Permission: "oracle.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.schemas.tree", Handle: treeSchemas},
@@ -66,6 +68,9 @@ func routes() []plugin.Route {
 		{ID: "oracle.package.spec", Method: plugin.MethodGet, Path: "/objects/{id}/package-spec", Permission: "oracle.packages.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.package.spec", Handle: packageSpec},
 		{ID: "oracle.package.body", Method: plugin.MethodGet, Path: "/objects/{id}/package-body", Permission: "oracle.packages.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.package.body", Handle: packageBody},
 		{ID: "oracle.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "oracle.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.completion", Handle: completionRoute},
+		{ID: "oracle.table.row.insert", Method: plugin.MethodPost, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.table.row.insert", Handle: insertRow},
+		{ID: "oracle.table.row.update", Method: plugin.MethodPatch, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.table.row.update", Handle: updateRow},
+		{ID: "oracle.table.row.delete", Method: plugin.MethodDelete, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.row.delete", Handle: deleteRow},
 		{ID: "oracle.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "oracle.column.add", Method: plugin.MethodPost, Path: "/objects/{id}/columns", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "oracle.table.truncate", Method: plugin.MethodPost, Path: "/objects/{id}/truncate", Permission: "oracle.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.truncate", Handle: truncateTable},
@@ -524,7 +529,13 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	normalizeRows(rows)
+	// Keep Oracle's real (uppercase) column names here so the editable grid's
+	// quoted UPDATE/DELETE identifiers match; the primary key uses the same case.
+	pk, err := primaryKeyColumns(rc.Ctx, s, owner, name)
+	if err != nil {
+		return nil, err
+	}
+	attachRowKeys(rows, pk, s.opts.RedactPatterns)
 	redactRows(rows, s.opts.RedactPatterns)
 	next := ""
 	if offset+len(rows) < total {
@@ -810,6 +821,124 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, oracleErr(err)
 	}
 	return actionResult{OK: true}, nil
+}
+
+func insertRow(rc *plugin.RequestContext) (any, error) {
+	s, owner, table, m, err := rowMutationInput(rc)
+	if err != nil {
+		return nil, err
+	}
+	stmt, args, err := dialect.Insert(qualified(owner, table), m.Values)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt, args...); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func updateRow(rc *plugin.RequestContext) (any, error) {
+	return keyedRowMutation(rc, false)
+}
+
+func deleteRow(rc *plugin.RequestContext) (any, error) {
+	return keyedRowMutation(rc, true)
+}
+
+func rowMutationInput(rc *plugin.RequestContext) (*Session, string, string, sqldb.RowMutation, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	owner, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	var m sqldb.RowMutation
+	if err := rc.Bind(&m); err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	return s, owner, table, m, nil
+}
+
+// keyedRowMutation runs an UPDATE or DELETE only after confirming the client's
+// key is exactly the table's primary key and that it affects a single row.
+func keyedRowMutation(rc *plugin.RequestContext, del bool) (any, error) {
+	s, owner, table, m, err := rowMutationInput(rc)
+	if err != nil {
+		return nil, err
+	}
+	pk, err := primaryKeyColumns(rc.Ctx, s, owner, table)
+	if err != nil {
+		return nil, err
+	}
+	if err := sqldb.ValidateRowKey(pk, m.Key); err != nil {
+		return nil, err
+	}
+	qual := qualified(owner, table)
+	var stmt string
+	var args []any
+	if del {
+		stmt, args, err = dialect.Delete(qual, m.Key)
+	} else {
+		stmt, args, err = dialect.Update(qual, m.Key, m.Values)
+	}
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.db.ExecContext(rc.Ctx, stmt, args...)
+	if err != nil {
+		return nil, oracleErr(err)
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return nil, fmt.Errorf("%w: row no longer matches (it may have changed)", plugin.ErrNotFound)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// primaryKeyColumns returns the real (unquoted, Oracle-uppercase) primary-key
+// column names so the editable grid's UPDATE/DELETE match by quoted identifier.
+func primaryKeyColumns(ctx context.Context, s *Session, owner, table string) ([]string, error) {
+	rows, err := queryRows(ctx, s, `
+SELECT cc.column_name AS name
+FROM all_constraints c
+JOIN all_cons_columns cc ON cc.owner = c.owner AND cc.constraint_name = c.constraint_name
+WHERE c.constraint_type = 'P' AND c.owner = :1 AND c.table_name = :2
+ORDER BY cc.position`, []any{owner, table})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		// Oracle reports the AS-aliased key uppercased; normalize so r["name"]
+		// resolves. The value (the real column name) stays uppercase, matching
+		// the un-normalized data rows the grid edits.
+		normalizeRowKeys(r)
+		out = append(out, fmt.Sprint(r["name"]))
+	}
+	return out, nil
+}
+
+// attachRowKeys tags each row with the primary-key map the editable grid echoes
+// back for UPDATE/DELETE. The grid stays read-only when the table has no primary
+// key or when a key column is itself sensitive (so a redacted value is never
+// shipped raw inside _key).
+func attachRowKeys(rows []row, pk, patterns []string) {
+	if len(pk) == 0 || sqldb.AnyColumnRedacted(pk, patterns) {
+		return
+	}
+	for _, r := range rows {
+		key := map[string]any{}
+		for _, col := range pk {
+			key[col] = r[col]
+		}
+		r["_key"] = key
+	}
 }
 
 func truncateTable(rc *plugin.RequestContext) (any, error) {
@@ -1156,7 +1285,10 @@ func filterRows(rows []row, q string) []row {
 	}
 	out := rows[:0]
 	for _, r := range rows {
-		for _, v := range r {
+		for k, v := range r {
+			if k == "_key" || k == "ref" {
+				continue
+			}
 			if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {
 				out = append(out, r)
 				break
@@ -1183,6 +1315,9 @@ func sortRows(rows []row, keys []plugin.SortKey) {
 func redactRows(rows []row, patterns []string) {
 	for _, r := range rows {
 		for key, value := range r {
+			if key == "_key" {
+				continue
+			}
 			if value != nil && sqldb.RedactColumn(key, patterns) {
 				r[key] = sqldb.RedactedValue
 			}

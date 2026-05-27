@@ -79,9 +79,44 @@ func TestRoutineIDRoundTrip(t *testing.T) {
 }
 
 func TestRedactRowsMasksConfiguredColumns(t *testing.T) {
-	rows := []row{{"id": int64(1), "access_token": "plain", "name": "alice"}}
+	rows := []row{{"id": int64(1), "access_token": "plain", "name": "alice", "_key": map[string]any{"id": int64(1)}}}
 	redactRows(rows, sqldb.DefaultRedactColumnPatterns())
 	if rows[0]["access_token"] != sqldb.RedactedValue || rows[0]["name"] != "alice" {
 		t.Fatalf("unexpected row redaction: %#v", rows)
+	}
+	if _, ok := rows[0]["_key"].(map[string]any); !ok {
+		t.Fatalf("_key must survive redaction: %#v", rows[0])
+	}
+}
+
+func TestTableDataGridIsEditable(t *testing.T) {
+	p := New()
+	m := p.Manifest()
+	routeIDs := map[string]bool{}
+	for _, r := range p.Routes() {
+		routeIDs[r.ID] = true
+	}
+	var data plugin.Tab
+	for _, res := range m.Resources {
+		if res.Kind != "table" {
+			continue
+		}
+		for _, tab := range res.Detail.Tabs {
+			if tab.Key == "data" {
+				data = tab
+			}
+		}
+	}
+	if data.Key == "" || data.Config["editable"] != true {
+		t.Fatalf("table Data tab must be an editable grid: %#v", data.Config)
+	}
+	for _, key := range []string{"insert", "update", "delete"} {
+		ds, ok := data.Config[key].(*plugin.DataSource)
+		if !ok {
+			t.Fatalf("Data tab missing %q mutation source", key)
+		}
+		if !routeIDs[ds.RouteID] {
+			t.Fatalf("Data tab %q points at missing route %q", key, ds.RouteID)
+		}
 	}
 }

@@ -2,6 +2,7 @@ package mssql
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/url"
 	"os"
@@ -72,6 +73,41 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	if len(result.Rows) != 1 || result.Rows[0][1] != sqldb.RedactedValue {
 		t.Fatalf("expected redacted query result, got %#v", result.Rows)
 	}
+
+	// Editable data grid: rows carry _key from the primary key.
+	if key, ok := page.Items[0]["_key"].(map[string]any); !ok || key["id"] == nil {
+		t.Fatalf("table rows must carry a _key from the primary key: %#v", page.Items[0])
+	}
+	params := map[string]string{"id": objectID("shellcn", "dbo", "people")}
+	if _, err := insertRow(rowMutationRC(ctx, s, params, map[string]any{"values": map[string]any{"name": "bob", "access_token": "tok"}})); err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+	var bobID int64
+	if err := s.db.QueryRowContext(ctx, `SELECT id FROM [shellcn].[dbo].[people] WHERE name = N'bob'`).Scan(&bobID); err != nil {
+		t.Fatalf("read inserted row: %v", err)
+	}
+	if _, err := updateRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"id": bobID}, "values": map[string]any{"name": "bob2"}})); err != nil {
+		t.Fatalf("update row: %v", err)
+	}
+	var name string
+	if err := s.db.QueryRowContext(ctx, `SELECT name FROM [shellcn].[dbo].[people] WHERE id = @p1`, bobID).Scan(&name); err != nil || name != "bob2" {
+		t.Fatalf("expected updated name bob2, got %q err=%v", name, err)
+	}
+	if _, err := deleteRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"id": bobID}})); err != nil {
+		t.Fatalf("delete row: %v", err)
+	}
+	var remaining int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].[dbo].[people]`).Scan(&remaining); err != nil || remaining != 1 {
+		t.Fatalf("expected 1 row after delete, got %d err=%v", remaining, err)
+	}
+	if _, err := updateRow(rowMutationRC(ctx, s, params, map[string]any{"key": map[string]any{"name": "alice"}, "values": map[string]any{"access_token": "x"}})); err == nil {
+		t.Fatal("update with a non-primary-key key must be rejected")
+	}
+}
+
+func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
+	raw, _ := json.Marshal(body)
+	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {

@@ -2,6 +2,7 @@ package postgresql
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 	"os"
 	"os/exec"
@@ -38,8 +39,12 @@ func TestPostgreSQLPluginIntegration(t *testing.T) {
 	}
 	defer func() { _ = sess.Close() }()
 	s := sess.(*Session)
+	pool, err := s.poolFor(ctx, "")
+	if err != nil {
+		t.Fatalf("pool: %v", err)
+	}
 
-	if _, err := s.pool.Exec(ctx, `
+	if _, err := pool.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS public.shellcn_people (
   id bigserial PRIMARY KEY,
   name text NOT NULL,
@@ -52,7 +57,7 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()
-		_, _ = s.pool.Exec(cleanupCtx, `DROP TABLE IF EXISTS public.shellcn_people`)
+		_, _ = pool.Exec(cleanupCtx, `DROP TABLE IF EXISTS public.shellcn_people`)
 	})
 
 	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
@@ -73,13 +78,84 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		t.Fatalf("expected redacted table data, got %#v", page.Items)
 	}
 
-	result, err := executeQueryRequest(ctx, s, sqldb.QueryRequest{Query: `SELECT name, password FROM public.shellcn_people`})
+	result, err := executeQueryRequest(ctx, s, pool, sqldb.QueryRequest{Query: `SELECT name, password FROM public.shellcn_people`})
 	if err != nil {
 		t.Fatalf("query: %v", err)
 	}
 	if len(result.Rows) != 1 || result.Rows[0][1] != sqldb.RedactedValue {
 		t.Fatalf("expected redacted query result, got %#v", result.Rows)
 	}
+
+	// Editable data grid: rows carry _key from the primary key.
+	if key, ok := page.Items[0]["_key"].(map[string]any); !ok || key["id"] == nil {
+		t.Fatalf("table rows must carry a _key from the primary key: %#v", page.Items[0])
+	}
+
+	// Insert → update → delete a row through the grid's mutation routes.
+	tableParams := map[string]string{"schema": "public", "table": "shellcn_people"}
+	if _, err := insertRow(rowMutationRC(ctx, s, tableParams, map[string]any{"values": map[string]any{"name": "bob", "password": "pw"}})); err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+	var bobID int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM public.shellcn_people WHERE name = 'bob'`).Scan(&bobID); err != nil {
+		t.Fatalf("read inserted row: %v", err)
+	}
+	if _, err := updateRow(rowMutationRC(ctx, s, tableParams, map[string]any{"key": map[string]any{"id": bobID}, "values": map[string]any{"name": "bob2"}})); err != nil {
+		t.Fatalf("update row: %v", err)
+	}
+	var name string
+	if err := pool.QueryRow(ctx, `SELECT name FROM public.shellcn_people WHERE id = $1`, bobID).Scan(&name); err != nil || name != "bob2" {
+		t.Fatalf("expected updated name bob2, got %q err=%v", name, err)
+	}
+	if _, err := deleteRow(rowMutationRC(ctx, s, tableParams, map[string]any{"key": map[string]any{"id": bobID}})); err != nil {
+		t.Fatalf("delete row: %v", err)
+	}
+	var remaining int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM public.shellcn_people`).Scan(&remaining); err != nil || remaining != 1 {
+		t.Fatalf("expected 1 row after delete, got %d err=%v", remaining, err)
+	}
+
+	// A non-primary-key key must be refused server-side (no mass update).
+	if _, err := updateRow(rowMutationRC(ctx, s, tableParams, map[string]any{"key": map[string]any{"name": "alice"}, "values": map[string]any{"password": "x"}})); err == nil {
+		t.Fatal("update with a non-primary-key key must be rejected")
+	}
+
+	// Cover the table structure + catalog routes the UI drives.
+	structRoutes := map[string]func(*plugin.RequestContext) (any, error){
+		"columns": tableColumnsRoute, "indexes": tableIndexes,
+		"constraints": tableConstraints, "ddl": tableDDL,
+	}
+	for label, fn := range structRoutes {
+		if _, err := fn(plugin.NewRequestContext(ctx, models.User{}, s, tableParams, nil, nil)); err != nil {
+			t.Fatalf("%s route: %v", label, err)
+		}
+	}
+	catalogRoutes := map[string]func(*plugin.RequestContext) (any, error){
+		"databases": listDatabases, "schemas": listSchemas, "views": listViews,
+		"functions": listFunctions, "sequences": listSequences, "completion": completionRoute,
+	}
+	for label, fn := range catalogRoutes {
+		if _, err := fn(rc); err != nil {
+			t.Fatalf("%s route: %v", label, err)
+		}
+	}
+
+	// DROP DATABASE must succeed even after the connection has browsed (and
+	// cached a pool to) the target database.
+	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": "shellcn_droptest"})); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+	if _, err := listSchemas(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {"shellcn_droptest"}}, nil)); err != nil {
+		t.Fatalf("browse new database: %v", err)
+	}
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": "shellcn_droptest"}, nil, nil)); err != nil {
+		t.Fatalf("drop database after browsing: %v", err)
+	}
+}
+
+func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
+	raw, _ := json.Marshal(body)
+	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {

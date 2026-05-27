@@ -96,7 +96,7 @@ func tableResource() plugin.ResourceType {
 		Columns:      tableColumns(),
 		RowActionIDs: []string{"oracle.column.add", "oracle.table.truncate", "oracle.table.drop"},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"oracle.column.add", "oracle.table.truncate", "oracle.table.drop"}}, Tabs: []plugin.Tab{
-			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.rows", Params: objectParams()}},
+			{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.rows", Params: objectParams()}, Config: dataGridConfig()},
 			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"oracle.column.add"}}.Map()},
 			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns()}.Map()},
 			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.constraints", Params: objectParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}.Map()},
@@ -184,6 +184,16 @@ func sessionResource() plugin.ResourceType {
 
 func objectParams() map[string]string {
 	return map[string]string{"id": "${resource.uid}"}
+}
+
+func dataGridConfig() map[string]any {
+	return plugin.TableConfig{
+		Editable:  true,
+		EmptyText: "No rows.",
+		Insert:    &plugin.DataSource{RouteID: "oracle.table.row.insert", Method: plugin.MethodPost, Params: objectParams()},
+		Update:    &plugin.DataSource{RouteID: "oracle.table.row.update", Method: plugin.MethodPatch, Params: objectParams()},
+		Delete:    &plugin.DataSource{RouteID: "oracle.table.row.delete", Method: plugin.MethodDelete, Params: objectParams()},
+	}.Map()
 }
 
 func queryConfig(initial string) map[string]any {

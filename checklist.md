@@ -108,6 +108,43 @@ _Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP ses
 - [x] 6.2 Real query editor and results panel
 - [x] 6.3 Database safety controls
 
+## Database client UX upgrade (TablePlus/Beekeeper-class)
+
+Generic, manifest-driven; no per-plugin frontend.
+
+- [x] UX.1 Contract: editable `TableConfig` (insert/update/delete, rowKey, editable)
+      + `ResourceRef.Scope` for database/cluster hierarchies (`internal/plugin/ui.go`,
+      `web/src/types/projection.ts`, `specs/v2.md`)
+- [x] UX.2 Generic editable data grid in `TablePanel.vue` (inline cell edit,
+      add-row, delete-row) + driver-neutral row DML in `plugins/shared/sqldb`
+- [x] UX.3 PostgreSQL reference refactor: per-database pools (fixes cross-database
+      query scoping), hierarchical Databases→Schemas→Tables tree, editable Data
+      grid, full CRUD (create/drop database & schema, create/drop/truncate table,
+      add column, row insert/update/delete), DDL view
+- [x] UX.4a Editable grid + row CRUD via `sqldb.Dialect` (+ primary-key `_key`
+      tagging + tests) on **mysql** (`?`/backtick), **cockroachdb** (`$`/ANSI),
+      **mssql** (`@pN`/`[ ]`, PK via `sys.indexes`), **oracle** (`:N`/`"`, PK via
+      `all_constraints`; Data grid keeps real uppercase column names so quoted DML
+      round-trips)
+- [x] UX.4b Cassandra integration test (docker-based, skipped without
+      `SHELLCN_CASSANDRA_INTEGRATION=1`)
+- [x] UX.4d Hardening + verification (all docker integration tests run & green):
+      row mutations validate the client key is exactly the primary key
+      (`sqldb.ValidateRowKey`) and require one affected row; `_key` is withheld
+      when a PK column is itself redaction-sensitive (`sqldb.AnyColumnRedacted`);
+      Postgres closes the cached pool before `DROP DATABASE`; grid delete button
+      stops click propagation. Integration tests exercise row insert/update/
+      delete, non-PK-key rejection, drop-after-browse, and structure/catalog
+      routes across postgresql, mysql, cockroachdb, mssql, oracle.
+- [ ] UX.4c Deferred editable grids, with reasons:
+      - cassandra — gocql is strongly typed; JSON-decoded values won't bind back
+        into `uuid`/`int`/`timestamp` columns. Needs type-aware value coercion
+        from `system_schema.columns` before a grid is safe. `_key` must be the
+        full PARTITION+CLUSTERING key.
+      - clickhouse — no row UPDATE/DELETE (mutations are async `ALTER`); stays
+        read-only, optionally insert-only later.
+      - mongodb / redis — already mutable (document code-editor / writable KV).
+
 ## Additional first-party plugins
 
 - [x] Telnet — direct terminal plugin using the generic terminal panel and core terminal recording path

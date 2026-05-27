@@ -51,6 +51,7 @@ const (
 	ColumnDateTime ColumnType = "datetime"
 	ColumnNumber   ColumnType = "number"
 	ColumnBool     ColumnType = "bool"
+	ColumnJSON     ColumnType = "json"
 )
 
 type Column struct {
@@ -59,14 +60,33 @@ type Column struct {
 	Sortable bool       `json:"sortable,omitempty"`
 	Type     ColumnType `json:"type,omitempty"`
 	Width    string     `json:"width,omitempty"`
+	// ReadOnly keeps a column non-editable even when its table is Editable
+	// (generated/identity/computed columns). Nullable lets the inline editor
+	// clear a cell to NULL rather than an empty string.
+	ReadOnly bool `json:"readOnly,omitempty"`
+	Nullable bool `json:"nullable,omitempty"`
 }
 
 // TableConfig is the declarative config consumed by the generic table panel.
+//
+// The editing affordances are plugin-agnostic: when Editable is true and RowKey
+// names the columns that uniquely identify a row, the generic data grid offers
+// inline cell editing, add-row, and delete-row controls wired to the declared
+// Insert/Update/Delete routes. Mutation request bodies are uniform across every
+// plugin: Insert sends {"values":{col:val}}, Update sends {"key":{col:val},
+// "values":{col:val}}, and Delete sends {"key":{col:val}}.
 type TableConfig struct {
 	Columns      []Column    `json:"columns,omitempty"`
 	Watch        *DataSource `json:"watch,omitempty"`
 	ActionIDs    []string    `json:"actionIds,omitempty"`
 	RowActionIDs []string    `json:"rowActionIds,omitempty"`
+
+	Editable  bool        `json:"editable,omitempty"`
+	RowKey    []string    `json:"rowKey,omitempty"`
+	Insert    *DataSource `json:"insert,omitempty"`
+	Update    *DataSource `json:"update,omitempty"`
+	Delete    *DataSource `json:"delete,omitempty"`
+	EmptyText string      `json:"emptyText,omitempty"`
 }
 
 func (c TableConfig) Map() map[string]any {
@@ -82,6 +102,24 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if len(c.RowActionIDs) > 0 {
 		out["rowActionIds"] = c.RowActionIDs
+	}
+	if c.Editable {
+		out["editable"] = true
+	}
+	if len(c.RowKey) > 0 {
+		out["rowKey"] = c.RowKey
+	}
+	if c.Insert != nil {
+		out["insert"] = c.Insert
+	}
+	if c.Update != nil {
+		out["update"] = c.Update
+	}
+	if c.Delete != nil {
+		out["delete"] = c.Delete
+	}
+	if c.EmptyText != "" {
+		out["emptyText"] = c.EmptyText
 	}
 	return out
 }
@@ -231,9 +269,13 @@ type Badge struct {
 	Severity Severity    `json:"severity,omitempty"`
 }
 
-// ResourceRef is a managed object's stable identity vs display label.
+// ResourceRef is a managed object's stable identity vs display label. Scope is
+// an optional outer container the resource belongs to (e.g. a database or
+// cluster) for hierarchies deeper than namespace/name; it interpolates as
+// ${resource.scope} wherever ${resource.namespace} does.
 type ResourceRef struct {
 	Kind      string `json:"kind"`
+	Scope     string `json:"scope,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
 	Name      string `json:"name"`
 	UID       string `json:"uid"`

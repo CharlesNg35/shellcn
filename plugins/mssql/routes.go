@@ -31,6 +31,8 @@ type confirmationError struct {
 
 func (e confirmationError) Error() string { return e.message }
 
+var dialect = sqldb.Dialect{QuoteIdent: quoteIdent, Placeholder: sqldb.AtPlaceholder}
+
 func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "mssql.databases.tree", Method: plugin.MethodGet, Path: "/tree/databases", Permission: "mssql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.databases.tree", Handle: treeDatabases},
@@ -59,6 +61,9 @@ func routes() []plugin.Route {
 		{ID: "mssql.view.definition", Method: plugin.MethodGet, Path: "/objects/{id}/view-definition", Permission: "mssql.views.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.view.definition", Handle: objectDefinition},
 		{ID: "mssql.procedure.definition", Method: plugin.MethodGet, Path: "/objects/{id}/procedure-definition", Permission: "mssql.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.procedure.definition", Handle: objectDefinition},
 		{ID: "mssql.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "mssql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.completion", Handle: completionRoute},
+		{ID: "mssql.table.row.insert", Method: plugin.MethodPost, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.row.insert", Handle: insertRow},
+		{ID: "mssql.table.row.update", Method: plugin.MethodPatch, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.row.update", Handle: updateRow},
+		{ID: "mssql.table.row.delete", Method: plugin.MethodDelete, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.table.row.delete", Handle: deleteRow},
 		{ID: "mssql.table.create", Method: plugin.MethodPost, Path: "/schemas/{database}/{schema}/tables", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "mssql.column.add", Method: plugin.MethodPost, Path: "/objects/{id}/columns", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "mssql.table.truncate", Method: plugin.MethodPost, Path: "/objects/{id}/truncate", Permission: "mssql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.table.truncate", Handle: truncateTable},
@@ -420,6 +425,11 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	pk, err := primaryKeyColumns(rc.Ctx, s, database, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	attachRowKeys(rows, pk, s.opts.RedactPatterns)
 	total := int(total64)
 	redactRows(rows, s.opts.RedactPatterns)
 	next := ""
@@ -644,6 +654,121 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, mssqlErr(err)
 	}
 	return actionResult{OK: true}, nil
+}
+
+func insertRow(rc *plugin.RequestContext) (any, error) {
+	s, database, schema, table, m, err := rowMutationInput(rc)
+	if err != nil {
+		return nil, err
+	}
+	stmt, args, err := dialect.Insert(qualified(database, schema, table), m.Values)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt, args...); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func updateRow(rc *plugin.RequestContext) (any, error) {
+	return keyedRowMutation(rc, false)
+}
+
+func deleteRow(rc *plugin.RequestContext) (any, error) {
+	return keyedRowMutation(rc, true)
+}
+
+func rowMutationInput(rc *plugin.RequestContext) (*Session, string, string, string, sqldb.RowMutation, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, "", "", "", sqldb.RowMutation{}, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, "", "", "", sqldb.RowMutation{}, err
+	}
+	database, schema, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, "", "", "", sqldb.RowMutation{}, err
+	}
+	var m sqldb.RowMutation
+	if err := rc.Bind(&m); err != nil {
+		return nil, "", "", "", sqldb.RowMutation{}, err
+	}
+	return s, database, schema, table, m, nil
+}
+
+// keyedRowMutation runs an UPDATE or DELETE only after confirming the client's
+// key is exactly the table's primary key and that it affects a single row.
+func keyedRowMutation(rc *plugin.RequestContext, del bool) (any, error) {
+	s, database, schema, table, m, err := rowMutationInput(rc)
+	if err != nil {
+		return nil, err
+	}
+	pk, err := primaryKeyColumns(rc.Ctx, s, database, schema, table)
+	if err != nil {
+		return nil, err
+	}
+	if err := sqldb.ValidateRowKey(pk, m.Key); err != nil {
+		return nil, err
+	}
+	qual := qualified(database, schema, table)
+	var stmt string
+	var args []any
+	if del {
+		stmt, args, err = dialect.Delete(qual, m.Key)
+	} else {
+		stmt, args, err = dialect.Update(qual, m.Key, m.Values)
+	}
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.db.ExecContext(rc.Ctx, stmt, args...)
+	if err != nil {
+		return nil, mssqlErr(err)
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return nil, fmt.Errorf("%w: row no longer matches (it may have changed)", plugin.ErrNotFound)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func primaryKeyColumns(ctx context.Context, s *Session, database, schema, table string) ([]string, error) {
+	rows, err := queryRows(ctx, s, fmt.Sprintf(`
+SELECT c.name AS name
+FROM %s.sys.indexes i
+JOIN %s.sys.objects o ON o.object_id = i.object_id
+JOIN %s.sys.schemas sc ON sc.schema_id = o.schema_id
+JOIN %s.sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+JOIN %s.sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+WHERE i.is_primary_key = 1 AND sc.name = @p1 AND o.name = @p2
+ORDER BY ic.key_ordinal`, quoteIdent(database), quoteIdent(database), quoteIdent(database), quoteIdent(database), quoteIdent(database)), []any{schema, table})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, fmt.Sprint(r["name"]))
+	}
+	return out, nil
+}
+
+// attachRowKeys tags each row with the primary-key map the editable grid echoes
+// back for UPDATE/DELETE. The grid stays read-only when the table has no primary
+// key or when a key column is itself sensitive (so a redacted value is never
+// shipped raw inside _key).
+func attachRowKeys(rows []row, pk, patterns []string) {
+	if len(pk) == 0 || sqldb.AnyColumnRedacted(pk, patterns) {
+		return
+	}
+	for _, r := range rows {
+		key := map[string]any{}
+		for _, col := range pk {
+			key[col] = r[col]
+		}
+		r["_key"] = key
+	}
 }
 
 func truncateTable(rc *plugin.RequestContext) (any, error) {
@@ -989,7 +1114,10 @@ func filterRows(rows []row, q string) []row {
 	}
 	out := rows[:0]
 	for _, r := range rows {
-		for _, v := range r {
+		for k, v := range r {
+			if k == "_key" || k == "ref" {
+				continue
+			}
 			if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {
 				out = append(out, r)
 				break
@@ -1016,6 +1144,9 @@ func sortRows(rows []row, keys []plugin.SortKey) {
 func redactRows(rows []row, patterns []string) {
 	for _, r := range rows {
 		for key, value := range r {
+			if key == "_key" {
+				continue
+			}
 			if value != nil && sqldb.RedactColumn(key, patterns) {
 				r[key] = sqldb.RedactedValue
 			}

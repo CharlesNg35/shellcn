@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch as vueWatch } from "vue";
 import DataTable, {
+  type DataTableCellEditCompleteEvent,
   type DataTablePageEvent,
   type DataTableSortEvent,
   type DataTableRowClickEvent,
@@ -8,7 +9,14 @@ import DataTable, {
 import Column from "primevue/column";
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
-import { fetchPage, watch as watchResource } from "../../api/dataSource";
+import InputText from "primevue/inputtext";
+import Select from "primevue/select";
+import { useToast } from "primevue/usetoast";
+import {
+  fetchPage,
+  runAction,
+  watch as watchResource,
+} from "../../api/dataSource";
 import type {
   Action,
   Column as ColumnSpec,
@@ -20,6 +28,7 @@ import type {
 import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
 import { inputClass } from "../../primevue/preset";
+import { useConfirmAction } from "../../composables/useConfirmAction";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import PanelError from "../shared/PanelError.vue";
@@ -31,6 +40,9 @@ const emit = defineEmits<{
   actionDone: [action: Action, result?: Record<string, unknown>];
 }>();
 
+const toast = useToast();
+const { confirmDanger } = useConfirmAction();
+
 const INTERNAL = new Set([
   "key",
   "label",
@@ -38,6 +50,7 @@ const INTERNAL = new Set([
   "ref",
   "childrenSource",
   "badge",
+  "_key",
 ]);
 
 const rows = ref<Row[]>([]);
@@ -66,6 +79,164 @@ const actionIds = computed(() => tableConfig.value?.actionIds ?? []);
 const rowActionIds = computed(() => tableConfig.value?.rowActionIds ?? []);
 const globalActions = computed(() => resolveActions(actionIds.value));
 const rowActions = computed(() => resolveActions(rowActionIds.value));
+const emptyText = computed(() => tableConfig.value?.emptyText ?? "No rows.");
+
+// --- editable data grid -------------------------------------------------
+// Editing is driven entirely by the manifest: a table is editable when it
+// declares `editable` plus the mutation routes. Per-row update/delete need a
+// row key (a `_key` map on the row, or the configured `rowKey` columns); rows
+// without one stay read-only so we never mutate the wrong record.
+const insertSource = computed(() => tableConfig.value?.insert);
+const updateSource = computed(() => tableConfig.value?.update);
+const deleteSource = computed(() => tableConfig.value?.delete);
+const editable = computed(
+  () =>
+    Boolean(tableConfig.value?.editable) &&
+    Boolean(insertSource.value || updateSource.value || deleteSource.value),
+);
+const editableCells = computed(() => editable.value && !!updateSource.value);
+
+function keyFor(row: Row): Record<string, unknown> | null {
+  const explicit = row._key;
+  if (explicit && typeof explicit === "object") {
+    return explicit as Record<string, unknown>;
+  }
+  const cols = tableConfig.value?.rowKey;
+  if (cols?.length) {
+    const key: Record<string, unknown> = {};
+    for (const c of cols) key[c] = row[c];
+    return key;
+  }
+  return null;
+}
+
+function columnReadOnly(col: ColumnSpec): boolean {
+  return col.readOnly === true;
+}
+
+function coerce(prev: unknown, next: unknown): unknown {
+  if (typeof prev === "number") {
+    if (next === "" || next === null) return null;
+    const n = Number(next);
+    return Number.isNaN(n) ? next : n;
+  }
+  if (typeof prev === "boolean") return next === true || next === "true";
+  if (next === "") return null;
+  return next;
+}
+
+async function mutate(
+  src: DataSource,
+  body: Record<string, unknown>,
+): Promise<void> {
+  await runAction(
+    props.connectionId,
+    src.routeId,
+    { resource: props.resource },
+    body,
+    src.params ?? {},
+    src.method ?? "POST",
+  );
+}
+
+async function onCellEditComplete(
+  e: DataTableCellEditCompleteEvent,
+): Promise<void> {
+  const src = updateSource.value;
+  if (!src) return;
+  const data = e.data as Row;
+  const field = e.field;
+  const key = keyFor(data);
+  if (!key) {
+    data[field] = e.value;
+    toast.add({
+      severity: "warn",
+      summary: "Read-only row",
+      detail: "This table has no primary key, so rows cannot be edited.",
+      life: 5000,
+    });
+    return;
+  }
+  const value = coerce(e.value, e.newValue);
+  if (value === e.value) return;
+  data[field] = value;
+  try {
+    await mutate(src, { key, values: { [field]: value } });
+  } catch (err) {
+    data[field] = e.value;
+    toast.add({
+      severity: "error",
+      summary: "Update failed",
+      detail: (err as Error).message,
+      life: 6000,
+    });
+    return;
+  }
+  await load(first.value);
+}
+
+function askDeleteRow(row: Row): void {
+  const src = deleteSource.value;
+  const key = keyFor(row);
+  if (!src || !key) return;
+  confirmDanger({
+    header: "Delete row",
+    message: "Delete this row? This cannot be undone.",
+    accept: async () => {
+      try {
+        await mutate(src, { key });
+        toast.add({ severity: "success", summary: "Row deleted", life: 3000 });
+        await load(first.value);
+      } catch (err) {
+        toast.add({
+          severity: "error",
+          summary: "Delete failed",
+          detail: (err as Error).message,
+          life: 6000,
+        });
+      }
+    },
+  });
+}
+
+const showInsert = ref(false);
+const insertDraft = ref<Record<string, string>>({});
+const inserting = ref(false);
+
+function openInsert(): void {
+  insertDraft.value = {};
+  for (const col of columns.value) {
+    if (!INTERNAL.has(col.key)) insertDraft.value[col.key] = "";
+  }
+  showInsert.value = true;
+}
+
+async function submitInsert(): Promise<void> {
+  const src = insertSource.value;
+  if (!src) return;
+  const values: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(insertDraft.value)) {
+    if (v !== "") values[k] = v;
+  }
+  inserting.value = true;
+  try {
+    await mutate(src, { values });
+    showInsert.value = false;
+    toast.add({ severity: "success", summary: "Row added", life: 3000 });
+    await load(0);
+  } catch (err) {
+    toast.add({
+      severity: "error",
+      summary: "Insert failed",
+      detail: (err as Error).message,
+      life: 6000,
+    });
+  } finally {
+    inserting.value = false;
+  }
+}
+
+// -----------------------------------------------------------------------
 
 const columns = computed<ColumnSpec[]>(() => {
   if (declaredColumns.value?.length) return declaredColumns.value;
@@ -82,6 +253,7 @@ function display(row: Row, col: ColumnSpec): string {
   if (col.type === "bytes" && typeof v === "number") return formatBytes(v);
   if (col.type === "datetime" && typeof v === "string")
     return new Date(v).toLocaleString();
+  if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
 
@@ -224,6 +396,17 @@ onUnmounted(() => {
       <span v-if="total != null" class="text-xs text-surface-400"
         >{{ total }} total</span
       >
+      <Button
+        v-if="editable && insertSource"
+        type="button"
+        severity="secondary"
+        :disabled="loading || !columns.length"
+        :title="columns.length ? 'Add a row' : 'Load or define columns first'"
+        @click="openInsert"
+      >
+        <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="14" />
+        Add row
+      </Button>
       <ActionBar
         v-if="globalActions.length"
         :connection-id="connectionId"
@@ -265,7 +448,8 @@ onUnmounted(() => {
       <DataTable
         v-else
         :value="rows"
-        data-key="ref.uid"
+        :data-key="editable ? undefined : 'ref.uid'"
+        :edit-mode="editableCells ? 'cell' : undefined"
         lazy
         paginator
         :first="first"
@@ -283,6 +467,7 @@ onUnmounted(() => {
         @sort="onSort"
         @page="onPage"
         @row-click="onRowClick"
+        @cell-edit-complete="onCellEditComplete"
       >
         <Column
           v-for="col in columns"
@@ -299,10 +484,94 @@ onUnmounted(() => {
             >
             <template v-else>{{ display(data as Row, col) }}</template>
           </template>
+          <template
+            v-if="editableCells && !columnReadOnly(col)"
+            #editor="{ data, field }"
+          >
+            <Select
+              v-if="typeof data[field] === 'boolean'"
+              v-model="data[field]"
+              :options="[
+                { label: 'true', value: true },
+                { label: 'false', value: false },
+              ]"
+              option-label="label"
+              option-value="value"
+              class="w-full"
+            />
+            <InputText
+              v-else
+              v-model="data[field]"
+              :class="inputClass"
+              autofocus
+            />
+          </template>
         </Column>
-        <template #empty>No rows.</template>
+        <Column
+          v-if="editable && deleteSource"
+          :pt="{ bodyCell: 'w-12 text-right' }"
+        >
+          <template #body="{ data }">
+            <Button
+              v-if="keyFor(data as Row)"
+              type="button"
+              text
+              rounded
+              severity="danger"
+              title="Delete row"
+              aria-label="Delete row"
+              @click.stop="askDeleteRow(data as Row)"
+            >
+              <AppIcon
+                :icon="{ type: 'lucide', value: 'trash-2' }"
+                :size="15"
+              />
+            </Button>
+          </template>
+        </Column>
+        <template #empty>{{ emptyText }}</template>
       </DataTable>
     </div>
+
+    <Dialog
+      v-model:visible="showInsert"
+      modal
+      header="Add row"
+      :dismissable-mask="true"
+      :pt="{
+        root: 'w-full max-w-lg overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl dark:border-surface-800 dark:bg-surface-900',
+      }"
+    >
+      <div class="flex max-h-[60vh] flex-col gap-3 overflow-auto p-1">
+        <label
+          v-for="col in columns.filter((c) => !INTERNAL.has(c.key))"
+          :key="col.key"
+          class="flex flex-col gap-1 text-sm"
+        >
+          <span class="text-surface-500">{{ col.label }}</span>
+          <InputText
+            v-model="insertDraft[col.key]"
+            :class="inputClass"
+            placeholder="NULL"
+          />
+        </label>
+      </div>
+      <template #footer>
+        <Button
+          type="button"
+          label="Cancel"
+          severity="secondary"
+          @click="showInsert = false"
+        />
+        <Button
+          type="button"
+          label="Add row"
+          :loading="inserting"
+          :disabled="inserting"
+          @click="submitInsert"
+        />
+      </template>
+    </Dialog>
 
     <Dialog
       :visible="!!actionOutput"

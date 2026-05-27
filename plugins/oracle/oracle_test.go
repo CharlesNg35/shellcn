@@ -117,3 +117,35 @@ func TestRedactRowsMasksConfiguredColumns(t *testing.T) {
 		t.Fatalf("unexpected row redaction: %#v", rows)
 	}
 }
+
+func TestTableDataGridIsEditable(t *testing.T) {
+	p := New()
+	m := p.Manifest()
+	routeIDs := map[string]bool{}
+	for _, r := range p.Routes() {
+		routeIDs[r.ID] = true
+	}
+	var data plugin.Tab
+	for _, res := range m.Resources {
+		if res.Kind != "table" {
+			continue
+		}
+		for _, tab := range res.Detail.Tabs {
+			if tab.Key == "data" {
+				data = tab
+			}
+		}
+	}
+	if data.Key == "" || data.Config["editable"] != true {
+		t.Fatalf("table Data tab must be an editable grid: %#v", data.Config)
+	}
+	for _, key := range []string{"insert", "update", "delete"} {
+		ds, ok := data.Config[key].(*plugin.DataSource)
+		if !ok {
+			t.Fatalf("Data tab missing %q mutation source", key)
+		}
+		if !routeIDs[ds.RouteID] {
+			t.Fatalf("Data tab %q points at missing route %q", key, ds.RouteID)
+		}
+	}
+}
