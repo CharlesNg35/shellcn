@@ -6,12 +6,13 @@ import TreeWorkspace from "./TreeWorkspace.vue";
 import { useWorkspaceStore } from "../../stores/workspace";
 
 describe("TreeWorkspace", () => {
-  let scrollIntoView: ReturnType<typeof vi.fn>;
+  let scrollIntoView: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     setActivePinia(createPinia());
-    scrollIntoView = vi.fn();
-    Element.prototype.scrollIntoView = scrollIntoView;
+    scrollIntoView = vi
+      .spyOn(Element.prototype, "scrollIntoView")
+      .mockImplementation(() => {});
   });
 
   afterEach(() => {
