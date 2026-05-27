@@ -51,44 +51,75 @@ func crdNamespaced(s *Session, gvr schema.GroupVersionResource) bool {
 	return true
 }
 
-// TreeCRDs lists installed CustomResourceDefinitions as nodes that open each
-// custom kind's (dynamic) list view.
+// crdNode builds a tree node opening a CRD's (dynamic) instance list, or
+// reports ok=false if the CRD has no servable resource/version.
+func crdNode(o obj) (plugin.TreeNode, bool) {
+	resource := str(o, "spec", "names", "plural")
+	version := crdServedVersion(o)
+	if resource == "" || version == "" {
+		return plugin.TreeNode{}, false
+	}
+	param := fmt.Sprintf("%s%s/%s/%s", crdParamPrefix, str(o, "spec", "group"), version, resource)
+	return plugin.TreeNode{
+		Key:          "crd:" + str(o, "metadata", "name"),
+		Label:        str(o, "spec", "names", "kind"),
+		Icon:         lucide("puzzle"),
+		Leaf:         true,
+		ResourceKind: customResourceKind,
+		ListParams:   map[string]string{"kind": param},
+	}, true
+}
+
+// crdNodes lists CRDs as tree nodes, optionally filtered by API group.
+func (s *Session) crdNodes(rc *plugin.RequestContext, groupMatch func(string) bool) ([]plugin.TreeNode, error) {
+	list, err := s.Dynamic().Resource(crdGVR).List(rc.Ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, apiErr(err)
+	}
+	nodes := make([]plugin.TreeNode, 0, len(list.Items))
+	for i := range list.Items {
+		o := list.Items[i].Object
+		if groupMatch != nil && !groupMatch(str(o, "spec", "group")) {
+			continue
+		}
+		if n, ok := crdNode(o); ok {
+			nodes = append(nodes, n)
+		}
+	}
+	return nodes, nil
+}
+
+// TreeCRDs lists installed CRDs (plus a "Definitions" entry) under Custom Resources.
 func TreeCRDs(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
 		return nil, err
 	}
-	list, err := s.Dynamic().Resource(crdGVR).List(rc.Ctx, metav1.ListOptions{})
+	nodes, err := s.crdNodes(rc, nil)
 	if err != nil {
-		return nil, apiErr(err)
+		return nil, err
 	}
-	nodes := make([]plugin.TreeNode, 0, len(list.Items)+1)
-	// "Definitions" opens the list of CRDs themselves (Lens parity).
-	nodes = append(nodes, plugin.TreeNode{
+	nodes = append([]plugin.TreeNode{{
 		Key:          "crd-definitions",
 		Label:        "Definitions",
 		Icon:         lucide("list"),
 		Leaf:         true,
 		ResourceKind: "customresourcedefinition",
+	}}, nodes...)
+	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
+}
+
+// TreeGatewayAPI nests the Gateway API CRD kinds under Network.
+func TreeGatewayAPI(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := s.crdNodes(rc, func(group string) bool {
+		return strings.Contains(group, "gateway.networking.k8s.io")
 	})
-	for i := range list.Items {
-		o := list.Items[i].Object
-		group := str(o, "spec", "group")
-		resource := str(o, "spec", "names", "plural")
-		display := str(o, "spec", "names", "kind")
-		version := crdServedVersion(o)
-		if resource == "" || version == "" {
-			continue
-		}
-		param := fmt.Sprintf("%s%s/%s/%s", crdParamPrefix, group, version, resource)
-		nodes = append(nodes, plugin.TreeNode{
-			Key:          "crd:" + str(o, "metadata", "name"),
-			Label:        display,
-			Icon:         plugin.Icon{Type: plugin.IconLucide, Value: "puzzle"},
-			Leaf:         true,
-			ResourceKind: customResourceKind,
-			ListParams:   map[string]string{"kind": param},
-		})
+	if err != nil {
+		return nil, err
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
 }

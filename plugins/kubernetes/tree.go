@@ -63,21 +63,59 @@ func categoryGroup(key string) plugin.TreeGroup {
 	return plugin.TreeGroup{}
 }
 
-// TreeCategory returns a category's kinds as nodes that open each kind's list.
+func kindLeaf(k kind) plugin.TreeNode {
+	return plugin.TreeNode{
+		Key:          "kind:" + k.name,
+		Label:        k.title,
+		Icon:         plugin.Icon{Type: plugin.IconLucide, Value: k.icon},
+		Leaf:         true,
+		ResourceKind: k.name,
+	}
+}
+
+// TreeCategory returns a category's kinds as leaves plus any nested sub-groups
+// (e.g. Admission Policies under Config, Gateway API under Network).
 func TreeCategory(rc *plugin.RequestContext) (any, error) {
 	cat := rc.Param("category")
 	nodes := make([]plugin.TreeNode, 0)
+	seenSub := map[string]bool{}
 	for _, k := range kinds {
 		if k.category != cat {
 			continue
 		}
+		if k.subgroup != "" {
+			if !seenSub[k.subgroup] {
+				seenSub[k.subgroup] = true
+				nodes = append(nodes, plugin.TreeNode{
+					Key:            cat + ":" + k.subgroup,
+					Label:          subgroupLabels[k.subgroup],
+					Icon:           plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
+					ChildrenSource: &plugin.DataSource{RouteID: "kubernetes.tree.subgroup", Params: map[string]string{"subgroup": k.subgroup}},
+				})
+			}
+			continue
+		}
+		nodes = append(nodes, kindLeaf(k))
+	}
+	if cat == "network" {
 		nodes = append(nodes, plugin.TreeNode{
-			Key:          "kind:" + k.name,
-			Label:        k.title,
-			Icon:         plugin.Icon{Type: plugin.IconLucide, Value: k.icon},
-			Leaf:         true,
-			ResourceKind: k.name,
+			Key:            "network:gatewayapi",
+			Label:          "Gateway API",
+			Icon:           plugin.Icon{Type: plugin.IconLucide, Value: "globe"},
+			ChildrenSource: &plugin.DataSource{RouteID: "kubernetes.tree.gatewayapi"},
 		})
+	}
+	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
+}
+
+// TreeSubgroup returns the kinds belonging to a nested sub-group.
+func TreeSubgroup(rc *plugin.RequestContext) (any, error) {
+	sub := rc.Param("subgroup")
+	nodes := make([]plugin.TreeNode, 0)
+	for _, k := range kinds {
+		if k.subgroup == sub {
+			nodes = append(nodes, kindLeaf(k))
+		}
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
 }

@@ -157,6 +157,47 @@ func TestCRDDynamicColumns(t *testing.T) {
 	}
 }
 
+func TestTreeCategoryNestsSubgroups(t *testing.T) {
+	out, err := TreeCategory(rc(nil, map[string]string{"category": "config"}))
+	if err != nil {
+		t.Fatalf("tree config: %v", err)
+	}
+	var sub *plugin.TreeNode
+	for i, n := range out.(plugin.Page[plugin.TreeNode]).Items {
+		if n.Label == "Admission Policies" {
+			sub = &out.(plugin.Page[plugin.TreeNode]).Items[i]
+		}
+		if n.ResourceKind == "validatingadmissionpolicy" {
+			t.Fatal("admission policy kinds should be nested, not flat under Config")
+		}
+	}
+	if sub == nil || sub.ChildrenSource == nil || sub.ResourceKind != "" {
+		t.Fatalf("expected an expandable Admission Policies sub-group: %+v", sub)
+	}
+
+	// The sub-group expands to its kinds.
+	subOut, err := TreeSubgroup(rc(nil, map[string]string{"subgroup": "admissionpolicies"}))
+	if err != nil {
+		t.Fatalf("subgroup: %v", err)
+	}
+	kinds := subOut.(plugin.Page[plugin.TreeNode]).Items
+	if len(kinds) != 2 || kinds[0].ResourceKind == "" {
+		t.Fatalf("admission policies subgroup = %+v", kinds)
+	}
+
+	// Network exposes a Gateway API branch.
+	net, _ := TreeCategory(rc(nil, map[string]string{"category": "network"}))
+	hasGW := false
+	for _, n := range net.(plugin.Page[plugin.TreeNode]).Items {
+		if n.Label == "Gateway API" && n.ChildrenSource != nil {
+			hasGW = true
+		}
+	}
+	if !hasGW {
+		t.Fatal("network category should expose a Gateway API sub-group")
+	}
+}
+
 func TestResolveKindCRD(t *testing.T) {
 	mux := http.NewServeMux()
 	// Discovery for the CRD's group/version (used to learn scope).

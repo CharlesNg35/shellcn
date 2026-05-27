@@ -36,7 +36,11 @@ type kind struct {
 	extra      func(obj) Row // cells beyond commonRow
 	actionIDs  []string      // row + detail actions (Edit/Create added generically)
 	detailTabs []plugin.Tab  // extra detail tabs beyond Overview/YAML/Events
+	subgroup   string        // optional nested sub-group within the category
 }
+
+// subgroupLabels names the nested sub-groups a category can expand into.
+var subgroupLabels = map[string]string{"admissionpolicies": "Admission Policies"}
 
 func col(key, label string, opts ...func(*plugin.Column)) plugin.Column {
 	c := plugin.Column{Key: key, Label: label, Sortable: true}
@@ -236,13 +240,13 @@ var kinds = []kind{
 		name: "validatingadmissionpolicy", title: "Validating Admission Policies", category: "config", icon: "shield-check",
 		gvr:       schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicies"},
 		columns:   []plugin.Column{nameCol(), ageCol()},
-		actionIDs: justDelete,
+		actionIDs: justDelete, subgroup: "admissionpolicies",
 	},
 	{
 		name: "validatingadmissionpolicybinding", title: "Validating Admission Policy Bindings", category: "config", icon: "shield-check",
 		gvr:       schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingadmissionpolicybindings"},
 		columns:   []plugin.Column{nameCol(), ageCol()},
-		actionIDs: justDelete,
+		actionIDs: justDelete, subgroup: "admissionpolicies",
 	},
 	{
 		name: "serviceaccount", title: "Service Accounts", category: "access", icon: "user", namespaced: true,

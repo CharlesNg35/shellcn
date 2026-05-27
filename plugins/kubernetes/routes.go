@@ -15,6 +15,8 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.tree.category", Method: plugin.MethodGet, Path: "/tree/category/{category}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.category", Handle: TreeCategory},
 		{ID: "kubernetes.tree.kind", Method: plugin.MethodGet, Path: "/tree/kind/{kind}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.kind", Handle: TreeKindInstances},
 		{ID: "kubernetes.tree.crds", Method: plugin.MethodGet, Path: "/tree/crds", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.crds", Handle: TreeCRDs},
+		{ID: "kubernetes.tree.subgroup", Method: plugin.MethodGet, Path: "/tree/subgroup/{subgroup}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.subgroup", Handle: TreeSubgroup},
+		{ID: "kubernetes.tree.gatewayapi", Method: plugin.MethodGet, Path: "/tree/gatewayapi", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.gatewayapi", Handle: TreeGatewayAPI},
 
 		{ID: "kubernetes.resource.list", Method: plugin.MethodGet, Path: "/resources/{kind}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.list", Handle: ListResource},
 		{ID: "kubernetes.resource.get", Method: plugin.MethodGet, Path: "/resources/{kind}/get", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.get", Handle: GetResource},
