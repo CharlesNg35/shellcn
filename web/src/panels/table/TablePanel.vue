@@ -31,6 +31,7 @@ import type {
 import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
 import { dialogRoot, inputClass } from "../../primevue/preset";
+import { cn } from "../../utils/cn";
 import { useConfirmAction } from "../../composables/useConfirmAction";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
@@ -488,7 +489,10 @@ function columnStyle(col: ColumnSpec): Record<string, string> {
 function cellClass(row: Row, col: ColumnSpec): string {
   const base = "block min-w-0 truncate";
   if (staged.value && isEdited(row, col.key)) {
-    return `${base} rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-100`;
+    return cn(
+      base,
+      "rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-100",
+    );
   }
   return base;
 }

@@ -54,6 +54,23 @@ function bodyButton(text: string): HTMLButtonElement | undefined {
 }
 
 describe("ActionBar", () => {
+  it("keeps action buttons visually small when overriding risk classes", () => {
+    const w = mount(ActionBar, {
+      props: {
+        connectionId: "c1",
+        actions: [stop],
+      },
+    });
+
+    const button = w.get("button");
+    expect(button.classes()).toContain("text-xs");
+    expect(button.classes()).toContain("px-2.5");
+    expect(button.classes()).toContain("py-1");
+    expect(button.classes()).not.toContain("text-sm");
+    expect(button.classes()).not.toContain("px-3");
+    expect(button.classes()).not.toContain("py-1.5");
+  });
+
   it("uses the bounded dialog root for action forms", () => {
     const w = mount(ActionBar, {
       props: {

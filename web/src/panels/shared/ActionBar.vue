@@ -15,6 +15,7 @@ import SchemaForm from "../form/SchemaForm.vue";
 import { isVisible } from "../form/condition";
 import { useDockStore, type DockItem } from "../../stores/dock";
 import { dialogRoot } from "../../primevue/preset";
+import { cn } from "../../utils/cn";
 
 const dock = useDockStore();
 
@@ -153,8 +154,12 @@ function onVisible(visible: boolean): void {
       type="button"
       :disabled="!isEnabled(action)"
       :title="action.label"
+      size="small"
       :pt="{
-        root: `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${riskClass[action.risk]} disabled:pointer-events-none disabled:opacity-40`,
+        root: cn(
+          'inline-flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
+          riskClass[action.risk],
+        ),
       }"
       @click="isEnabled(action) && trigger(action)"
     >
@@ -202,7 +207,12 @@ function onVisible(visible: boolean): void {
               :disabled="busy"
               autofocus
               :pt="{
-                root: `inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50 ${pending.risk === 'destructive' ? 'bg-rose-600' : 'bg-primary-500'}`,
+                root: cn(
+                  'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50',
+                  pending.risk === 'destructive'
+                    ? 'bg-rose-600'
+                    : 'bg-primary-500',
+                ),
               }"
               @click="execute(pending)"
             />
