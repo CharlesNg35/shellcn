@@ -174,6 +174,53 @@ describe("ActionBar", () => {
     w.unmount();
   });
 
+  it("disables an action whose enabledWhen fails against the record (and runs it when it passes)", async () => {
+    const start: Action = {
+      id: "start",
+      label: "Start",
+      routeId: "docker.container.start",
+      method: "POST",
+      risk: "write",
+      requiresConfirm: false,
+      params: { id: "${resource.uid}" },
+      enabledWhen: { allOf: [{ field: "state", op: "eq", value: "exited" }] },
+    };
+    const resource = { kind: "container", name: "web", uid: "c-1" };
+
+    const running = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [start],
+        resource,
+        record: { state: "running" },
+      },
+    });
+    const btn = running.find("button").element as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    await running.find("button").trigger("click");
+    await flushPromises();
+    expect(posted).toHaveLength(0); // disabled — never executed
+    running.unmount();
+
+    const stopped = mount(ActionBar, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        actions: [start],
+        resource,
+        record: { state: "exited" },
+      },
+    });
+    expect((stopped.find("button").element as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+    await stopped.find("button").trigger("click");
+    await flushPromises();
+    expect(posted).toHaveLength(1);
+    stopped.unmount();
+  });
+
   it("uses declarative action params when provided", async () => {
     const action: Action = {
       ...snapshot,

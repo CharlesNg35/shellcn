@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
 )
 
 type Plugin struct{}
@@ -211,11 +212,11 @@ func networkResource() plugin.ResourceType {
 func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "podman.container.create", Label: "New container", Icon: icon("plus"), RouteID: "podman.container.create"},
-		{ID: "podman.container.start", Label: "Start", Icon: icon("play"), RouteID: "podman.container.start", Params: map[string]string{"id": "${resource.uid}"}},
-		{ID: "podman.container.stop", Label: "Stop", Icon: icon("square"), RouteID: "podman.container.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this container?"},
-		{ID: "podman.container.restart", Label: "Restart", Icon: icon("refresh-cw"), RouteID: "podman.container.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this container?"},
+		{ID: "podman.container.start", Label: "Start", Icon: icon("play"), RouteID: "podman.container.start", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("created", "configured", "exited", "stopped", "dead")},
+		{ID: "podman.container.stop", Label: "Stop", Icon: icon("square"), RouteID: "podman.container.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this container?", EnabledWhen: dockerengine.WhenState("running", "paused")},
+		{ID: "podman.container.restart", Label: "Restart", Icon: icon("refresh-cw"), RouteID: "podman.container.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this container?", EnabledWhen: dockerengine.WhenState("running", "paused")},
 		{ID: "podman.container.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.container.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this container and anonymous volumes?"},
-		{ID: "podman.container.exec", Label: "Exec", Icon: icon("terminal"), RouteID: "podman.container.exec.prepare", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Open a shell inside this container?", OnSuccess: &plugin.ActionSuccess{SelectTab: "terminal"}},
+		{ID: "podman.container.exec", Label: "Exec", Icon: icon("terminal"), RouteID: "podman.container.exec.prepare", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Open a shell inside this container?", OnSuccess: &plugin.ActionSuccess{SelectTab: "terminal"}, EnabledWhen: dockerengine.WhenState("running")},
 		{ID: "podman.image.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.image.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this image?"},
 		{ID: "podman.volume.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.volume.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this volume?"},
 		{ID: "podman.network.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.network.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this network?"},

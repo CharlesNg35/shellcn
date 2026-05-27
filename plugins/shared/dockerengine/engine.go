@@ -758,6 +758,12 @@ func (s *Session) openExec(ctx context.Context, params map[string]string) (plugi
 	return &execChannel{cli: s.cli, execID: created.ID, resp: resp.HijackedResponse}, nil
 }
 
+// WhenState gates an action on the resource row's "state" field, so the renderer
+// shows it disabled when the container isn't in one of the given states.
+func WhenState(states ...string) *plugin.Condition {
+	return &plugin.Condition{AllOf: []plugin.Rule{{Field: "state", Op: plugin.OpIn, Value: states}}}
+}
+
 func ContainerRows(items []container.Summary) []Row {
 	rows := make([]Row, 0, len(items))
 	for _, c := range items {

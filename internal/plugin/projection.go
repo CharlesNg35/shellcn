@@ -31,6 +31,7 @@ type ProjectedAction struct {
 	OnSuccess       *ActionSuccess    `json:"onSuccess,omitempty"`
 	Open            OpenTarget        `json:"open,omitempty"`
 	Panel           PanelType         `json:"panel,omitempty"`
+	EnabledWhen     *Condition        `json:"enabledWhen,omitempty"`
 }
 
 // ProjectedRecording tells the browser which recording options a plugin offers
@@ -122,6 +123,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 				OnSuccess:       a.OnSuccess,
 				Open:            a.Open,
 				Panel:           a.Panel,
+				EnabledWhen:     a.EnabledWhen,
 			}
 			if rt, ok := routes[a.RouteID]; ok {
 				pa.Method = rt.Method

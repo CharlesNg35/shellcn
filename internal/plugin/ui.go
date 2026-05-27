@@ -485,6 +485,10 @@ type Action struct {
 	// sourced from the action's route — instead of executing the route inline.
 	Open  OpenTarget `json:"open,omitempty"`
 	Panel PanelType  `json:"panel,omitempty"`
+	// EnabledWhen gates the action's button against the active resource's row
+	// fields (e.g. state == "running"). When the condition is false the renderer
+	// shows the action disabled, not hidden. Empty = always enabled.
+	EnabledWhen *Condition `json:"enabledWhen,omitempty"`
 }
 
 type ActionSuccess struct {

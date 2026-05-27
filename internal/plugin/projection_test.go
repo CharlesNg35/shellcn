@@ -96,6 +96,7 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		Actions: []plugin.Action{{
 			ID: "sample.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"},
 			RouteID: "sample.start", Confirm: true, ConfirmText: "Start it?",
+			EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "state", Op: plugin.OpEq, Value: "stopped"}}},
 		}},
 		Streams: []plugin.Stream{{ID: "sample.shell", Kind: plugin.StreamTerminal, RouteID: "sample.shell"}},
 		Recording: []plugin.RecordingCapability{{
@@ -200,6 +201,18 @@ func TestProjectionMatchesContract(t *testing.T) {
 	}
 	if _, ok := a["input"]; !ok {
 		t.Errorf("action input resolved from route route, missing")
+	}
+	ew, ok := a["enabledWhen"].(map[string]any)
+	if !ok {
+		t.Fatalf("action enabledWhen missing from projection: %v", a["enabledWhen"])
+	}
+	allOf, _ := ew["allOf"].([]any)
+	if len(allOf) != 1 {
+		t.Fatalf("enabledWhen.allOf: want 1 rule, got %v", ew["allOf"])
+	}
+	rule := allOf[0].(map[string]any)
+	if rule["field"] != "state" || rule["op"] != "eq" || rule["value"] != "stopped" {
+		t.Errorf("enabledWhen rule unexpected: %+v", rule)
 	}
 	// Server-only fields must NOT leak into the projection.
 	if _, leaked := a["permission"]; leaked {

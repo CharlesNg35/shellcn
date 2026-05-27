@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import Button from "primevue/button";
 import { VueDraggable } from "vue-draggable-plus";
 import {
@@ -38,6 +38,7 @@ const props = defineProps<{
 const ws = useWorkspaceStore();
 const view = computed(() => ws.view(props.connectionId));
 const activeView = computed(() => ws.activeView(props.connectionId));
+const tabStrip = ref<HTMLElement | null>(null);
 
 const resourceByKind = computed(() => {
   const map = new Map<string, ResourceType>();
@@ -114,6 +115,26 @@ const tabs = computed<OpenView[]>({
   set: (next) => ws.setViews(props.connectionId, next),
 });
 
+async function scrollActiveTabIntoView(): Promise<void> {
+  await nextTick();
+  const activeTab = tabStrip.value?.querySelector<HTMLElement>(
+    "[data-active-tab='true']",
+  );
+  if (!activeTab || typeof activeTab.scrollIntoView !== "function") return;
+  activeTab.scrollIntoView({
+    block: "nearest",
+    inline: "nearest",
+    behavior: "smooth",
+  });
+}
+
+watch(
+  () => [view.value.activeViewId, view.value.views.length] as const,
+  ([activeId]) => {
+    if (activeId) void scrollActiveTabIntoView();
+  },
+);
+
 function onSelectList(kind: string, params?: Record<string, string>): void {
   const res = resourceByKind.value.get(kind);
   if (!res) return;
@@ -150,50 +171,56 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
       />
     </div>
     <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
-      <VueDraggable
+      <div
         v-if="view.views.length"
-        v-model="tabs"
-        :animation="150"
-        ghost-class="opacity-40"
-        class="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-surface-200 bg-surface-50 px-2 py-1 dark:border-surface-800 dark:bg-surface-900"
+        ref="tabStrip"
+        class="shrink-0 overflow-x-auto border-b border-surface-200 bg-surface-50 dark:border-surface-800 dark:bg-surface-900"
       >
-        <button
-          v-for="v in tabs"
-          :key="v.id"
-          type="button"
-          :title="v.subtitle ? `${v.subtitle} / ${v.title}` : v.title"
-          class="group flex max-w-60 cursor-grab items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors active:cursor-grabbing"
-          :class="
-            v.id === view.activeViewId
-              ? 'bg-surface-0 text-surface-900 shadow-sm dark:bg-surface-800 dark:text-surface-0'
-              : 'text-surface-500 hover:text-surface-800 dark:hover:text-surface-200'
-          "
-          @click="ws.activateView(connectionId, v.id)"
+        <VueDraggable
+          v-model="tabs"
+          :animation="150"
+          ghost-class="opacity-40"
+          class="flex w-max min-w-full items-center gap-1 px-2 py-1"
         >
-          <AppIcon v-if="v.icon" :icon="v.icon" :size="13" />
-          <span class="flex min-w-0 items-baseline gap-1">
-            <span class="truncate font-medium">{{ v.title }}</span>
-            <span
-              v-if="v.subtitle"
-              class="truncate text-[10px] text-surface-400"
-            >
-              {{ v.subtitle }}
-            </span>
-          </span>
-          <Button
+          <button
+            v-for="v in tabs"
+            :key="v.id"
             type="button"
-            text
-            rounded
-            severity="secondary"
-            size="small"
-            :aria-label="`Close ${v.title}`"
-            :pt="{ root: 'h-4 w-4 p-0 opacity-60 hover:opacity-100' }"
-            @click.stop="ws.closeView(connectionId, v.id)"
+            :title="v.subtitle ? `${v.subtitle} / ${v.title}` : v.title"
+            :data-active-tab="v.id === view.activeViewId ? 'true' : undefined"
+            class="group flex max-w-60 shrink-0 cursor-grab items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors active:cursor-grabbing"
+            :class="
+              v.id === view.activeViewId
+                ? 'bg-surface-0 text-surface-900 shadow-sm dark:bg-surface-800 dark:text-surface-0'
+                : 'text-surface-500 hover:text-surface-800 dark:hover:text-surface-200'
+            "
+            @click="ws.activateView(connectionId, v.id)"
           >
-            <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="12" />
-          </Button>
-        </button>
-      </VueDraggable>
+            <AppIcon v-if="v.icon" :icon="v.icon" :size="13" />
+            <span class="flex min-w-0 items-baseline gap-1">
+              <span class="truncate font-medium">{{ v.title }}</span>
+              <span
+                v-if="v.subtitle"
+                class="truncate text-[10px] text-surface-400"
+              >
+                {{ v.subtitle }}
+              </span>
+            </span>
+            <Button
+              type="button"
+              text
+              rounded
+              severity="secondary"
+              size="small"
+              :aria-label="`Close ${v.title}`"
+              :pt="{ root: 'h-4 w-4 p-0 opacity-60 hover:opacity-100' }"
+              @click.stop="ws.closeView(connectionId, v.id)"
+            >
+              <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="12" />
+            </Button>
+          </button>
+        </VueDraggable>
+      </div>
 
       <div class="min-h-0 flex-1 overflow-hidden">
         <KeepAlive :max="MAX_WORKBENCH_TABS">

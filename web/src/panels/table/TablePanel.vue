@@ -627,6 +627,7 @@ onUnmounted(() => {
         :connection-id="connectionId"
         :actions="rowActions"
         :resource="selectedRow.ref"
+        :record="selectedRow"
         @done="onActionDone"
       />
       <div class="ml-auto flex items-center gap-2">

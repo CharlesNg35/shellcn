@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
 )
 
 type Plugin struct{}
@@ -248,11 +249,11 @@ func composeResource() plugin.ResourceType {
 func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "docker.container.create", Label: "New container", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"}, RouteID: "docker.container.create"},
-		{ID: "docker.container.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"}, RouteID: "docker.container.start", Params: map[string]string{"id": "${resource.uid}"}},
-		{ID: "docker.container.stop", Label: "Stop", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "square"}, RouteID: "docker.container.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this container?"},
-		{ID: "docker.container.restart", Label: "Restart", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "refresh-cw"}, RouteID: "docker.container.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this container?"},
+		{ID: "docker.container.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"}, RouteID: "docker.container.start", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("created", "exited", "dead")},
+		{ID: "docker.container.stop", Label: "Stop", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "square"}, RouteID: "docker.container.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this container?", EnabledWhen: dockerengine.WhenState("running", "paused", "restarting")},
+		{ID: "docker.container.restart", Label: "Restart", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "refresh-cw"}, RouteID: "docker.container.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this container?", EnabledWhen: dockerengine.WhenState("running", "paused")},
 		{ID: "docker.container.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.container.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this container and anonymous volumes?"},
-		{ID: "docker.container.exec", Label: "Exec", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, RouteID: "docker.container.exec.prepare", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Open a shell inside this container?", OnSuccess: &plugin.ActionSuccess{SelectTab: "terminal"}},
+		{ID: "docker.container.exec", Label: "Exec", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, RouteID: "docker.container.exec.prepare", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Open a shell inside this container?", OnSuccess: &plugin.ActionSuccess{SelectTab: "terminal"}, EnabledWhen: dockerengine.WhenState("running")},
 		{ID: "docker.container.logs.dock", Label: "Logs in dock", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "scroll-text"}, RouteID: "docker.container.logs", Open: plugin.OpenDock, Panel: plugin.PanelLogStream, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}},
 		{ID: "docker.image.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.image.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this image?"},
 		{ID: "docker.volume.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.volume.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this volume?"},

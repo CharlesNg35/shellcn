@@ -4,9 +4,15 @@ import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import { useToast } from "primevue/usetoast";
 import { runFormAction } from "../../api/dataSource";
-import type { Action, ResourceRef, RiskLevel } from "../../types/projection";
+import type {
+  Action,
+  ResourceRef,
+  RiskLevel,
+  Row,
+} from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
 import SchemaForm from "../form/SchemaForm.vue";
+import { isVisible } from "../form/condition";
 import { useDockStore, type DockItem } from "../../stores/dock";
 import { dialogRoot } from "../../primevue/preset";
 
@@ -16,7 +22,14 @@ const props = defineProps<{
   connectionId: string;
   actions: Action[];
   resource?: ResourceRef | null;
+  // The active resource's row, so actions can gate on its fields (e.g. state).
+  record?: Row | null;
 }>();
+
+// An action is enabled unless its declared condition fails against the row.
+function isEnabled(action: Action): boolean {
+  return isVisible(action.enabledWhen, props.record ?? {});
+}
 const emit = defineEmits<{
   done: [action: Action, result?: Record<string, unknown>];
 }>();
@@ -131,10 +144,12 @@ function onVisible(visible: boolean): void {
       v-for="action in actions"
       :key="action.id"
       type="button"
+      :disabled="!isEnabled(action)"
+      :title="action.label"
       :pt="{
-        root: `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${riskClass[action.risk]}`,
+        root: `inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${riskClass[action.risk]} disabled:pointer-events-none disabled:opacity-40`,
       }"
-      @click="trigger(action)"
+      @click="isEnabled(action) && trigger(action)"
     >
       <AppIcon :icon="action.icon" :size="15" />
       {{ action.label }}

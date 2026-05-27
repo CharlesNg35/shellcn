@@ -390,6 +390,9 @@ export interface Action {
   // workspace dock or a modal instead of executing the route inline.
   open?: "view" | "dock" | "dialog";
   panel?: PanelType;
+  // Gates the button against the active resource's row fields; when false the
+  // renderer shows the action disabled, not hidden. Absent = always enabled.
+  enabledWhen?: Condition;
 }
 
 export interface Stream {
