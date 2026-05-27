@@ -1,0 +1,104 @@
+package influxdb
+
+import "github.com/charlesng/shellcn/internal/plugin"
+
+func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
+
+func rid(suffix string) string { return protocolName + "." + suffix }
+
+func tree() []plugin.TreeGroup {
+	return []plugin.TreeGroup{
+		{Key: "status", Label: "Status", Icon: icon("activity"), Source: plugin.DataSource{RouteID: rid("status.tree")}, ResourceKind: "status"},
+		{Key: "namespaces", Label: "Databases / Buckets", Icon: icon("database"), Source: plugin.DataSource{RouteID: rid("namespaces.tree")}, ResourceKind: "namespace"},
+	}
+}
+
+func resources() []plugin.ResourceType {
+	return []plugin.ResourceType{
+		{
+			Kind: "status", Title: "Status", List: plugin.DataSource{RouteID: rid("status.list")},
+			Columns: statusColumns(),
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("status.read"), Params: statusParams()}},
+				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
+			}},
+		},
+		{
+			Kind: "namespace", Title: "Databases / Buckets", List: plugin.DataSource{RouteID: rid("namespaces.list")},
+			Columns: namespaceColumns(), RowActionIDs: []string{rid("write.namespace")},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("write.namespace")}}, Tabs: []plugin.Tab{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("namespace.read"), Params: namespaceParams()}},
+				{Key: "measurements", Label: "Measurements", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurements.list"), Params: namespaceParams()}, Config: plugin.TableConfig{Columns: measurementColumns(), Exportable: true}.Map()},
+				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: namespaceParams()}, Config: queryConfig()},
+			}},
+		},
+		{
+			Kind: "measurement", Title: "Measurements", List: plugin.DataSource{RouteID: rid("measurements.list")},
+			Columns: measurementColumns(), RowActionIDs: []string{rid("write.measurement")},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{rid("write.measurement")}}, Tabs: []plugin.Tab{
+				{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.rows"), Params: measurementParams()}, Config: plugin.TableConfig{Exportable: true, EmptyText: "No points in the selected range."}.Map()},
+				{Key: "fields", Label: "Fields", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.fields"), Params: measurementParams()}, Config: plugin.TableConfig{Columns: fieldColumns(), Exportable: true}.Map()},
+				{Key: "tags", Label: "Tags", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.tags"), Params: measurementParams()}, Config: plugin.TableConfig{Columns: tagColumns(), Exportable: true}.Map()},
+				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: namespaceParams()}, Config: measurementQueryConfig()},
+			}},
+		},
+	}
+}
+
+func actions() []plugin.Action {
+	return []plugin.Action{
+		{ID: rid("write.namespace"), Label: "Write line protocol", Icon: icon("send"), RouteID: rid("write"), Params: namespaceParams(), Confirm: true, ConfirmText: "Write line protocol to this InfluxDB container?"},
+		{ID: rid("write.measurement"), Label: "Write line protocol", Icon: icon("send"), RouteID: rid("write"), Params: map[string]string{"namespace": "${resource.namespace}"}, Confirm: true, ConfirmText: "Write line protocol to this InfluxDB container?"},
+	}
+}
+
+func queryConfig() map[string]any {
+	return map[string]any{
+		"language":          "plaintext",
+		"label":             "Query",
+		"executeLabel":      "Run",
+		"runningLabel":      "Running...",
+		"emptyText":         "Run a query to see results.",
+		"completionRouteId": rid("completion"),
+		"exportable":        true,
+	}
+}
+
+func measurementQueryConfig() map[string]any {
+	return queryConfig()
+}
+
+func statusParams() map[string]string    { return map[string]string{"status": "${resource.name}"} }
+func namespaceParams() map[string]string { return map[string]string{"namespace": "${resource.name}"} }
+func measurementParams() map[string]string {
+	return map[string]string{"namespace": "${resource.namespace}", "measurement": "${resource.name}"}
+}
+
+func statusColumns() []plugin.Column {
+	return []plugin.Column{{Key: "name", Label: "Status", Sortable: true}, {Key: "description", Label: "Description"}}
+}
+
+func namespaceColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "name", Label: "Name", Sortable: true},
+		{Key: "kind", Label: "Kind", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "retention", Label: "Retention"},
+		{Key: "created", Label: "Created", Type: plugin.ColumnDateTime, Sortable: true},
+	}
+}
+
+func measurementColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "name", Label: "Measurement / Table", Sortable: true},
+		{Key: "namespace", Label: "Database / Bucket", Sortable: true},
+		{Key: "type", Label: "Type", Type: plugin.ColumnBadge, Sortable: true},
+	}
+}
+
+func fieldColumns() []plugin.Column {
+	return []plugin.Column{{Key: "name", Label: "Field", Sortable: true}, {Key: "type", Label: "Type", Sortable: true}}
+}
+
+func tagColumns() []plugin.Column {
+	return []plugin.Column{{Key: "name", Label: "Tag", Sortable: true}, {Key: "type", Label: "Type", Sortable: true}}
+}

@@ -24,6 +24,10 @@ func ResolvedIdentity(cfg plugin.ConnectConfig, field string) string {
 	return strings.TrimSpace(cfg.String(resolvedKey(field, "identity")))
 }
 
+func ResolvedKind(cfg plugin.ConnectConfig, field string) plugin.CredentialKind {
+	return plugin.CredentialKind(strings.TrimSpace(cfg.String(resolvedKey(field, "kind"))))
+}
+
 func ApplyPasswordCredential(cfg plugin.ConnectConfig, username, password string) AuthMaterial {
 	username = strings.TrimSpace(username)
 	if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {

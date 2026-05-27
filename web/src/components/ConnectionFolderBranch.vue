@@ -186,7 +186,7 @@ function dragAdd(event: unknown): void {
               rounded
               severity="secondary"
               size="small"
-              class="m-0 -mr-2.5 h-7 w-7 shrink-0 justify-center p-0 opacity-70 transition-opacity group-hover:opacity-100"
+              class="m-0 -mr-2.25 h-7 w-7 shrink-0 justify-center p-0 opacity-70 transition-opacity group-hover:opacity-100"
               title="Folder actions"
               aria-label="Folder actions"
               aria-haspopup="true"

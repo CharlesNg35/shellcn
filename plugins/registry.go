@@ -9,6 +9,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/elasticsearch"
 	"github.com/charlesng/shellcn/plugins/ftp"
 	"github.com/charlesng/shellcn/plugins/ftps"
+	"github.com/charlesng/shellcn/plugins/influxdb"
 	"github.com/charlesng/shellcn/plugins/kafka"
 	"github.com/charlesng/shellcn/plugins/ldap"
 	"github.com/charlesng/shellcn/plugins/meilisearch"
@@ -67,6 +68,7 @@ func all() []plugin.Plugin {
 		rdp.New(),
 		proxmox.New(),
 		prometheus.New(),
+		influxdb.New(),
 		postgresql.New(),
 		mysql.New(),
 		redis.New(),

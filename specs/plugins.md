@@ -87,11 +87,10 @@ These plugins should prove the core architecture first.
 
 ## P2: Databases And Data Stores
 
-| Plugin       | Purpose               | Main Capabilities                                       |
-| ------------ | --------------------- | ------------------------------------------------------- |
-| `sqlite`     | SQLite database files | schema browser, query editor, table data                |
-| `neo4j`      | Graph database        | Cypher query, graph/table results                       |
-| `influxdb`   | Time-series database  | buckets/databases, query, measurements                  |
+| Plugin   | Purpose               | Main Capabilities                        |
+| -------- | --------------------- | ---------------------------------------- |
+| `sqlite` | SQLite database files | schema browser, query editor, table data |
+| `neo4j`  | Graph database        | Cypher query, graph/table results        |
 
 ## P2: Container And Orchestration Platforms
 
@@ -160,26 +159,30 @@ These plugins should prove the core architecture first.
 
 ## P2: Observability And Logging
 
-Prometheus is implemented as a direct-only observability plugin. It keeps a
-Prometheus-specific schema: endpoint, none/basic/bearer/stored auth, TLS,
-request timeout, live metrics poll interval, page limit, and explicit admin /
-lifecycle toggles for servers started with `--web.enable-admin-api` and
-`--web.enable-lifecycle`. It exposes targets, active alerts, rules, labels,
-metric metadata, series, status documents, PromQL instant/range query, live
-overview metrics, TSDB snapshot, delete-series, clean-tombstones, and config
-reload routes through generic panels.
+Prometheus and InfluxDB are implemented as direct-only observability plugins.
+Prometheus keeps a Prometheus-specific schema: endpoint,
+none/basic/bearer/stored auth, TLS, request timeout, live metrics poll interval,
+page limit, and explicit admin / lifecycle toggles for servers started with
+`--web.enable-admin-api` and `--web.enable-lifecycle`. It exposes targets,
+active alerts, rules, labels, metric metadata, series, status documents, PromQL
+instant/range query, live overview metrics, TSDB snapshot, delete-series,
+clean-tombstones, and config reload routes through generic panels. InfluxDB
+keeps a version-specific schema for v3/v2/v1 APIs, token/basic/stored auth where
+that version supports it, TLS, database/bucket browsing, measurements, schema,
+data preview, Flux/SQL/InfluxQL query execution, and line-protocol writes.
 
-| Plugin            | Purpose                   | Main Capabilities                                                         |
-| ----------------- | ------------------------- | ------------------------------------------------------------------------- |
+| Plugin            | Purpose                   | Main Capabilities                                                          |
+| ----------------- | ------------------------- | -------------------------------------------------------------------------- |
 | `prometheus`      | Prometheus metrics        | PromQL query, targets, alerts, rules, labels, metadata, status, TSDB admin |
-| `grafana`         | Grafana                   | dashboards, datasources, alerts                                           |
-| `loki`            | Loki logs                 | log query, labels, streams                                                |
-| `tempo`           | Tempo traces              | trace search and detail                                                   |
-| `jaeger`          | Jaeger traces             | trace search and detail                                                   |
-| `victoriametrics` | VictoriaMetrics           | MetricsQL query, targets                                                  |
-| `zabbix`          | Zabbix                    | hosts, items, triggers, events                                            |
-| `graylog`         | Graylog                   | streams, searches, alerts                                                 |
-| `kibana`          | Kibana/Elastic dashboards | saved objects, dashboards, searches                                       |
+| `influxdb`        | InfluxDB time series      | v3/v2/v1 APIs, buckets/databases, measurements, Flux/SQL/InfluxQL, writes  |
+| `grafana`         | Grafana                   | dashboards, datasources, alerts                                            |
+| `loki`            | Loki logs                 | log query, labels, streams                                                 |
+| `tempo`           | Tempo traces              | trace search and detail                                                    |
+| `jaeger`          | Jaeger traces             | trace search and detail                                                    |
+| `victoriametrics` | VictoriaMetrics           | MetricsQL query, targets                                                   |
+| `zabbix`          | Zabbix                    | hosts, items, triggers, events                                             |
+| `graylog`         | Graylog                   | streams, searches, alerts                                                  |
+| `kibana`          | Kibana/Elastic dashboards | saved objects, dashboards, searches                                        |
 
 ## P2: Search Engines
 
@@ -196,12 +199,12 @@ fields, commits, optimizes, and query parameters keep Solr semantics.
 Future engines should use their own plugin-specific clients or a separate helper
 only where their APIs actually overlap.
 
-| Plugin          | Purpose       | Main Capabilities                                                                   |
-| --------------- | ------------- | ----------------------------------------------------------------------------------- |
-| `elasticsearch` | Elasticsearch | indexes, documents, JSON DSL search, mappings, health                               |
-| `opensearch`    | OpenSearch    | indexes, documents, JSON DSL search, mappings, health                               |
-| `meilisearch`   | Meilisearch   | indexes, documents, search, settings, tasks, keys                                   |
-| `typesense`     | Typesense     | collections, documents, search, schemas, aliases, synonym sets, curation sets, keys |
+| Plugin          | Purpose       | Main Capabilities                                                                           |
+| --------------- | ------------- | ------------------------------------------------------------------------------------------- |
+| `elasticsearch` | Elasticsearch | indexes, documents, JSON DSL search, mappings, health                                       |
+| `opensearch`    | OpenSearch    | indexes, documents, JSON DSL search, mappings, health                                       |
+| `meilisearch`   | Meilisearch   | indexes, documents, search, settings, tasks, keys                                           |
+| `typesense`     | Typesense     | collections, documents, search, schemas, aliases, synonym sets, curation sets, keys         |
 | `solr`          | Apache Solr   | cores/collections, documents, search, managed schema fields, config, ping, commit, optimize |
 
 ## P3: Messaging And Queues

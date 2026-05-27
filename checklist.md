@@ -212,6 +212,7 @@ Generic, manifest-driven; no per-plugin frontend.
 - [x] Kafka — direct messaging plugin for topics, partitions, consumer groups, offsets, recent messages, and produce
 - [x] NATS — direct messaging plugin for server info, JetStream streams, consumers, messages, and publish
 - [x] Prometheus — direct observability plugin for PromQL instant/range query, targets, alerts, rules, labels, metadata, series, status, live metrics, and gated admin/lifecycle APIs
+- [x] InfluxDB — direct observability/time-series plugin for v3/v2/v1 APIs, mode-specific auth fields, database/bucket browsing, measurements, schema, data preview, Flux/SQL/InfluxQL queries, and line-protocol writes
 - [x] Elasticsearch — direct search plugin for indexes, mappings, settings, shards, JSON DSL search, and document CRUD
 - [x] OpenSearch — direct search plugin for indexes, mappings, settings, shards, JSON DSL search, and document CRUD
 - [x] Meilisearch — direct search plugin for indexes, documents, JSON search, settings, async tasks, API keys, dumps, and snapshots
