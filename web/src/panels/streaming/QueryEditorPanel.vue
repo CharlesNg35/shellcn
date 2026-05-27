@@ -283,8 +283,22 @@ onUnmounted(() => {
     <div class="min-h-0 flex-1 overflow-auto">
       <div
         v-if="results"
+        data-test="query-result-toolbar"
         class="flex items-center gap-2 border-b border-surface-200 px-3 py-2 text-xs text-surface-500 dark:border-surface-800"
       >
+        <template v-if="canExport && results.rows.length">
+          <Button
+            type="button"
+            text
+            size="small"
+            label="Export"
+            title="Export results"
+            aria-haspopup="true"
+            data-test="query-export-button"
+            @click="exportMenu?.toggle($event)"
+          />
+          <Menu ref="exportMenu" :model="exportItems" popup />
+        </template>
         <span>
           {{
             results.commandTag ||
@@ -294,19 +308,6 @@ onUnmounted(() => {
             · {{ results.elapsedMs }} ms</span
           >
         </span>
-        <template v-if="canExport && results.rows.length">
-          <Button
-            type="button"
-            text
-            size="small"
-            label="Export"
-            class="ml-auto"
-            title="Export results"
-            aria-haspopup="true"
-            @click="exportMenu?.toggle($event)"
-          />
-          <Menu ref="exportMenu" :model="exportItems" popup />
-        </template>
       </div>
       <table v-if="results" class="w-full border-collapse text-xs">
         <thead class="sticky top-0 bg-surface-50 dark:bg-surface-900">

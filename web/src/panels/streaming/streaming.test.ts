@@ -229,4 +229,28 @@ describe("streaming stub panels", () => {
     expect(chip.text()).toBe(text);
     w.unmount();
   });
+
+  it("keeps query result export at the beginning of the result toolbar", async () => {
+    const w = mount(QueryEditorPanel, {
+      props: { ...props, config: { exportable: true } },
+    });
+    await flushPromises();
+
+    FakeWS.instances[0].emit("open");
+    FakeWS.instances[0].emit("message", {
+      data: JSON.stringify({
+        columns: ["repository_with_a_long_column_name"],
+        rows: [["shellcn"]],
+        rowCount: 1,
+      }),
+    });
+    await flushPromises();
+
+    const toolbar = w.get('[data-test="query-result-toolbar"]');
+    expect(toolbar.element.firstElementChild?.textContent).toContain("Export");
+    expect(w.get('[data-test="query-export-button"]').classes()).not.toContain(
+      "ml-auto",
+    );
+    w.unmount();
+  });
 });
