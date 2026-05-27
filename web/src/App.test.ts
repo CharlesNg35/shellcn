@@ -81,6 +81,7 @@ function testRouter(): Router {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   installFetch((url) => {
     if (url.endsWith("/api/connections")) return { body: connections };
     if (url.endsWith("/api/connection-folders")) return { body: [] };
@@ -131,5 +132,60 @@ describe("App shell", () => {
 
     expect(wrapper.text()).toContain("ShellCN");
     expect(wrapper.text()).toContain("alpha-host");
+  });
+
+  it("collapses the sidebar utility menu so connections get more height", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const auth = useAuthStore();
+    auth.user = { id: "u", username: "op", roles: ["viewer"] };
+    auth.ready = true;
+
+    const router = testRouter();
+    router.push("/");
+    await router.isReady();
+    const wrapper = mount(App, {
+      global: { plugins: [pinia, router] },
+    });
+    await flushPromises();
+
+    const menu = wrapper.get("#sidebar-utility-menu");
+    const hide = wrapper.get('button[aria-label="Hide sidebar menu"]');
+    expect(menu.isVisible()).toBe(true);
+    expect(menu.attributes("aria-hidden")).toBe("false");
+    expect(wrapper.get('button[aria-label="Sign out"]').isVisible()).toBe(true);
+    expect(hide.attributes("aria-expanded")).toBe("true");
+
+    await hide.trigger("click");
+
+    expect(menu.attributes("aria-hidden")).toBe("true");
+    expect(wrapper.get('button[aria-label="Sign out"]').isVisible()).toBe(true);
+    expect(
+      wrapper
+        .get('button[aria-label="Show sidebar menu"]')
+        .attributes("aria-expanded"),
+    ).toBe("false");
+    expect(localStorage.getItem("shellcn:sidebar-menu:open")).toBe("false");
+
+    wrapper.unmount();
+    const nextPinia = createPinia();
+    setActivePinia(nextPinia);
+    const nextAuth = useAuthStore();
+    nextAuth.user = { id: "u", username: "op", roles: ["viewer"] };
+    nextAuth.ready = true;
+    const nextRouter = testRouter();
+    nextRouter.push("/");
+    await nextRouter.isReady();
+    const restored = mount(App, {
+      global: { plugins: [nextPinia, nextRouter] },
+    });
+    await flushPromises();
+
+    expect(
+      restored.get("#sidebar-utility-menu").attributes("aria-hidden"),
+    ).toBe("true");
+    expect(restored.get('button[aria-label="Sign out"]').isVisible()).toBe(
+      true,
+    );
   });
 });

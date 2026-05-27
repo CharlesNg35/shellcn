@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
-import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
+import { useDocumentVisibility, useIntervalFn, useStorage } from "@vueuse/core";
 import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
 import { useAuthStore } from "../stores/auth";
@@ -59,6 +59,7 @@ const activeId = computed(() =>
 );
 
 const showCreate = ref(false);
+const sidebarMenuOpen = useStorage("shellcn:sidebar-menu:open", true);
 
 function onConnectionSaved(payload: { id: string; created: boolean }): void {
   if (payload.created) {
@@ -133,63 +134,101 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
         </ConnectionSidebar>
       </nav>
 
-      <div class="border-t border-surface-200 dark:border-surface-800">
-        <RouterLink
-          v-if="auth.isAdmin"
-          :to="{ name: 'users' }"
-          class="mx-2 mt-2 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-          :class="
-            route.name === 'users'
-              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-              : ''
+      <div class="relative border-t border-surface-200 dark:border-surface-800">
+        <button
+          type="button"
+          class="absolute top-0 left-1/2 z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-surface-200 bg-surface-50 text-surface-400 shadow-sm transition hover:border-surface-300 hover:text-surface-600 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-500 dark:hover:border-surface-600 dark:hover:text-surface-300"
+          :title="sidebarMenuOpen ? 'Hide menu' : 'Show menu'"
+          :aria-label="
+            sidebarMenuOpen ? 'Hide sidebar menu' : 'Show sidebar menu'
           "
+          :aria-expanded="sidebarMenuOpen"
+          aria-controls="sidebar-utility-menu"
+          @click="sidebarMenuOpen = !sidebarMenuOpen"
         >
-          <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="16" />
-          Users
-        </RouterLink>
-        <RouterLink
-          :to="{ name: 'credentials' }"
-          class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-          :class="
-            route.name === 'credentials'
-              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-              : ''
-          "
+          <AppIcon
+            :icon="{
+              type: 'lucide',
+              value: sidebarMenuOpen ? 'chevron-down' : 'chevron-up',
+            }"
+            :size="12"
+          />
+        </button>
+
+        <Transition
+          enter-active-class="overflow-hidden transition-[max-height,opacity,transform] duration-150 ease-out"
+          enter-from-class="max-h-0 -translate-y-1 opacity-0"
+          enter-to-class="max-h-80 translate-y-0 opacity-100"
+          leave-active-class="overflow-hidden transition-[max-height,opacity,transform] duration-150 ease-in"
+          leave-from-class="max-h-80 translate-y-0 opacity-100"
+          leave-to-class="max-h-0 -translate-y-1 opacity-0"
         >
-          <AppIcon :icon="{ type: 'lucide', value: 'key' }" :size="16" />
-          Credentials
-        </RouterLink>
-        <RouterLink
-          :to="{ name: 'recordings' }"
-          class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-          :class="
-            route.name === 'recordings'
-              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-              : ''
-          "
-        >
-          <AppIcon :icon="{ type: 'lucide', value: 'video' }" :size="16" />
-          Recordings
-        </RouterLink>
-        <RouterLink
-          :to="{ name: 'settings' }"
-          class="mx-2 my-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-          :class="
-            route.name === 'settings'
-              ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-              : ''
-          "
-        >
-          <AppIcon :icon="{ type: 'lucide', value: 'settings' }" :size="16" />
-          Settings
-        </RouterLink>
+          <div
+            v-show="sidebarMenuOpen"
+            id="sidebar-utility-menu"
+            :aria-hidden="!sidebarMenuOpen"
+          >
+            <RouterLink
+              v-if="auth.isAdmin"
+              :to="{ name: 'users' }"
+              class="mx-2 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              :class="
+                route.name === 'users'
+                  ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
+                  : ''
+              "
+            >
+              <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="16" />
+              Users
+            </RouterLink>
+            <RouterLink
+              :to="{ name: 'credentials' }"
+              class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              :class="
+                route.name === 'credentials'
+                  ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
+                  : ''
+              "
+            >
+              <AppIcon :icon="{ type: 'lucide', value: 'key' }" :size="16" />
+              Credentials
+            </RouterLink>
+            <RouterLink
+              :to="{ name: 'recordings' }"
+              class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              :class="
+                route.name === 'recordings'
+                  ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
+                  : ''
+              "
+            >
+              <AppIcon :icon="{ type: 'lucide', value: 'video' }" :size="16" />
+              Recordings
+            </RouterLink>
+            <RouterLink
+              :to="{ name: 'settings' }"
+              class="mx-2 my-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              :class="
+                route.name === 'settings'
+                  ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
+                  : ''
+              "
+            >
+              <AppIcon
+                :icon="{ type: 'lucide', value: 'settings' }"
+                :size="16"
+              />
+              Settings
+            </RouterLink>
+          </div>
+        </Transition>
 
         <div
           class="flex items-center gap-1 border-t border-surface-200 px-2 py-2 dark:border-surface-800"
         >
           <RouterLink
             :to="{ name: 'profile' }"
-            class="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-surface-200 dark:hover:bg-surface-800"
+            class="my-1 flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-surface-200 dark:hover:bg-surface-800"
             :class="
               route.name === 'profile'
                 ? 'bg-primary-50 dark:bg-primary-950/40'
