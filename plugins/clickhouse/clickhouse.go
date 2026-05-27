@@ -106,7 +106,7 @@ func tableResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"clickhouse.column.add", "clickhouse.table.truncate", "clickhouse.table.drop"}},
 			Tabs: []plugin.Tab{
-				{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.rows", Params: tableParams()}},
+				{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}.Map()},
 				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"clickhouse.column.add"}}.Map()},
 				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns()}.Map()},
 				{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.constraints", Params: tableParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}.Map()},
@@ -123,7 +123,7 @@ func viewResource() plugin.ResourceType {
 		Kind: "view", Title: "Views",
 		List: plugin.DataSource{RouteID: "clickhouse.views.list"}, Columns: viewColumns(),
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.view.rows", Params: tableParams()}},
+			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.view.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}.Map()},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.view.definition", Params: tableParams()}},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "clickhouse.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM `${resource.namespace}`.`${resource.name}` LIMIT 100;")},
 		}},
@@ -204,6 +204,7 @@ func queryConfig(initial string) map[string]any {
 		"initialQuery":      initial,
 		"cancelRouteId":     "clickhouse.query.cancel",
 		"completionRouteId": "clickhouse.completion",
+		"exportable":        true,
 	}
 }
 

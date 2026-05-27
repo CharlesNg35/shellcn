@@ -11,7 +11,9 @@ import Dialog from "primevue/dialog";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
+import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
+import { exportRecords, type ExportFormat } from "../shared/exportData";
 import {
   fetchPage,
   runAction,
@@ -80,6 +82,24 @@ const rowActionIds = computed(() => tableConfig.value?.rowActionIds ?? []);
 const globalActions = computed(() => resolveActions(actionIds.value));
 const rowActions = computed(() => resolveActions(rowActionIds.value));
 const emptyText = computed(() => tableConfig.value?.emptyText ?? "No rows.");
+
+// Export the loaded rows (CSV/JSON). Opt-in per plugin via the manifest, so a
+// table never exposes export unless the plugin declares it.
+const canExport = computed(() => Boolean(tableConfig.value?.exportable));
+const exportMenu = ref<{ toggle: (event: Event) => void } | null>(null);
+function runExport(format: ExportFormat): void {
+  const keys = columns.value.map((c) => c.key);
+  exportRecords(
+    props.source?.routeId ?? "export",
+    keys,
+    rows.value as Record<string, unknown>[],
+    format,
+  );
+}
+const exportItems = [
+  { label: "Export CSV", icon: "pi", command: () => runExport("csv") },
+  { label: "Export JSON", icon: "pi", command: () => runExport("json") },
+];
 
 // --- editable data grid -------------------------------------------------
 // Editing is driven entirely by the manifest: a table is editable when it
@@ -421,20 +441,34 @@ onUnmounted(() => {
         :resource="selectedRow.ref"
         @done="onActionDone"
       />
-      <Button
-        type="button"
-        :disabled="loading"
-        severity="secondary"
-        class="ml-auto"
-        @click="load(first)"
-      >
-        <AppIcon
-          :icon="{ type: 'lucide', value: 'refresh-cw' }"
-          :size="14"
-          :loading="loading"
-        />
-        Refresh
-      </Button>
+      <div class="ml-auto flex items-center gap-2">
+        <Button
+          v-if="canExport"
+          type="button"
+          severity="secondary"
+          :disabled="!rows.length"
+          title="Export loaded rows"
+          aria-haspopup="true"
+          @click="exportMenu?.toggle($event)"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'download' }" :size="14" />
+          Export
+        </Button>
+        <Menu v-if="canExport" ref="exportMenu" :model="exportItems" popup />
+        <Button
+          type="button"
+          :disabled="loading"
+          severity="secondary"
+          @click="load(first)"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'refresh-cw' }"
+            :size="14"
+            :loading="loading"
+          />
+          Refresh
+        </Button>
+      </div>
     </div>
 
     <div class="min-h-0 flex-1 overflow-hidden">

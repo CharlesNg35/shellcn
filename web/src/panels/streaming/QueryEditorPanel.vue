@@ -2,7 +2,9 @@
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
+import Menu from "primevue/menu";
 import { fetchDoc, interpolate, runAction } from "../../api/dataSource";
+import { exportMatrix, type ExportFormat } from "../shared/exportData";
 import type { QueryEditorConfig } from "../../types/projection";
 import { useStream } from "../../composables/useStream";
 import type { PanelProps } from "../core/types";
@@ -52,6 +54,23 @@ const editorLabel = queryConfig?.label ?? "Editor";
 const executeLabel = queryConfig?.executeLabel ?? "Execute";
 const cancelLabel = queryConfig?.cancelLabel ?? "Cancel";
 const emptyText = queryConfig?.emptyText ?? "Execute to see results.";
+const canExport = queryConfig?.exportable === true;
+
+// Export the current result set — only when the plugin opts in via the manifest.
+const exportMenu = ref<{ toggle: (event: Event) => void } | null>(null);
+function runExport(format: ExportFormat): void {
+  if (!results.value) return;
+  exportMatrix(
+    props.source?.routeId ?? "query",
+    results.value.columns,
+    results.value.rows,
+    format,
+  );
+}
+const exportItems = [
+  { label: "Export CSV", command: () => runExport("csv") },
+  { label: "Export JSON", command: () => runExport("json") },
+];
 
 function onFrame(frame: string): void {
   try {
@@ -264,15 +283,30 @@ onUnmounted(() => {
     <div class="min-h-0 flex-1 overflow-auto">
       <div
         v-if="results"
-        class="border-b border-surface-200 px-3 py-2 text-xs text-surface-500 dark:border-surface-800"
+        class="flex items-center gap-2 border-b border-surface-200 px-3 py-2 text-xs text-surface-500 dark:border-surface-800"
       >
-        {{
-          results.commandTag ||
-          `${results.rowCount ?? results.rows.length} rows`
-        }}
-        <span v-if="results.elapsedMs != null">
-          · {{ results.elapsedMs }} ms</span
-        >
+        <span>
+          {{
+            results.commandTag ||
+            `${results.rowCount ?? results.rows.length} rows`
+          }}
+          <span v-if="results.elapsedMs != null">
+            · {{ results.elapsedMs }} ms</span
+          >
+        </span>
+        <template v-if="canExport && results.rows.length">
+          <Button
+            type="button"
+            text
+            size="small"
+            label="Export"
+            class="ml-auto"
+            title="Export results"
+            aria-haspopup="true"
+            @click="exportMenu?.toggle($event)"
+          />
+          <Menu ref="exportMenu" :model="exportItems" popup />
+        </template>
       </div>
       <table v-if="results" class="w-full border-collapse text-xs">
         <thead class="sticky top-0 bg-surface-50 dark:bg-surface-900">

@@ -98,7 +98,7 @@ func tableResource() plugin.ResourceType {
 		Columns:      tableColumns(),
 		RowActionIDs: []string{"cassandra.column.add", "cassandra.table.truncate", "cassandra.table.drop"},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"cassandra.column.add", "cassandra.table.truncate", "cassandra.table.drop"}}, Tabs: []plugin.Tab{
-			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.rows", Params: tableParams()}},
+			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}.Map()},
 			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"cassandra.column.add"}}.Map()},
 			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns()}.Map()},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.table.definition", Params: tableParams()}},
@@ -168,6 +168,7 @@ func queryConfig(initial string) map[string]any {
 		"initialQuery":      initial,
 		"cancelRouteId":     "cassandra.query.cancel",
 		"completionRouteId": "cassandra.completion",
+		"exportable":        true,
 	}
 }
 

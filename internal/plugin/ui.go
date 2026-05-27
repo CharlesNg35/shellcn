@@ -87,6 +87,10 @@ type TableConfig struct {
 	Update    *DataSource `json:"update,omitempty"`
 	Delete    *DataSource `json:"delete,omitempty"`
 	EmptyText string      `json:"emptyText,omitempty"`
+
+	// Exportable opts the table into the generic CSV/JSON export of loaded rows.
+	// Off by default so a plugin must deliberately allow data to leave the grid.
+	Exportable bool `json:"exportable,omitempty"`
 }
 
 func (c TableConfig) Map() map[string]any {
@@ -120,6 +124,9 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if c.EmptyText != "" {
 		out["emptyText"] = c.EmptyText
+	}
+	if c.Exportable {
+		out["exportable"] = true
 	}
 	return out
 }

@@ -223,6 +223,8 @@ export interface TablePanelConfig {
   update?: DataSource;
   delete?: DataSource;
   emptyText?: string;
+  // Opt-in: show the generic CSV/JSON export control for loaded rows.
+  exportable?: boolean;
 }
 
 export interface FormPanelConfig {
@@ -251,6 +253,8 @@ export interface QueryEditorConfig {
   cancelParams?: Record<string, string>;
   completionRouteId?: string;
   completionParams?: Record<string, string>;
+  // Opt-in: show the CSV/JSON export control for query results.
+  exportable?: boolean;
 }
 
 export interface GraphPanelConfig {

@@ -152,11 +152,12 @@ func tableParams() map[string]string {
 
 func dataGridConfig() map[string]any {
 	return plugin.TableConfig{
-		Editable:  true,
-		EmptyText: "No rows.",
-		Insert:    &plugin.DataSource{RouteID: "mysql.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
-		Update:    &plugin.DataSource{RouteID: "mysql.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
-		Delete:    &plugin.DataSource{RouteID: "mysql.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		Editable:   true,
+		Exportable: true,
+		EmptyText:  "No rows.",
+		Insert:     &plugin.DataSource{RouteID: "mysql.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
+		Update:     &plugin.DataSource{RouteID: "mysql.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
+		Delete:     &plugin.DataSource{RouteID: "mysql.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
 	}.Map()
 }
 
@@ -171,6 +172,7 @@ func queryConfig(initial string) map[string]any {
 		"initialQuery":      initial,
 		"cancelRouteId":     "mysql.query.cancel",
 		"completionRouteId": "mysql.completion",
+		"exportable":        true,
 	}
 }
 

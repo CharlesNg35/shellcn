@@ -128,6 +128,11 @@ Generic, manifest-driven; no per-plugin frontend.
       round-trips)
 - [x] UX.4b Cassandra integration test (docker-based, skipped without
       `SHELLCN_CASSANDRA_INTEGRATION=1`)
+- [x] UX.5 Generic CSV/JSON export of loaded rows in the table grid + query
+      editor, **opt-in per plugin** via manifest (`TableConfig.Exportable` /
+      query-editor `exportable`; off by default). Enabled on the DB plugins'
+      data grids + query/command editors (postgresql, mysql, cockroachdb, mssql,
+      oracle, clickhouse, cassandra, mongodb) and Redis clients/channels tables.
 - [x] UX.4d Hardening + verification (all docker integration tests run & green):
       row mutations validate the client key is exactly the primary key
       (`sqldb.ValidateRowKey`) and require one affected row; `_key` is withheld

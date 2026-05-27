@@ -164,11 +164,12 @@ func schemaParams() map[string]string {
 
 func dataGridConfig() map[string]any {
 	return plugin.TableConfig{
-		Editable:  true,
-		EmptyText: "No rows.",
-		Insert:    &plugin.DataSource{RouteID: "postgresql.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
-		Update:    &plugin.DataSource{RouteID: "postgresql.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
-		Delete:    &plugin.DataSource{RouteID: "postgresql.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		Editable:   true,
+		Exportable: true,
+		EmptyText:  "No rows.",
+		Insert:     &plugin.DataSource{RouteID: "postgresql.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
+		Update:     &plugin.DataSource{RouteID: "postgresql.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
+		Delete:     &plugin.DataSource{RouteID: "postgresql.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
 	}.Map()
 }
 
@@ -183,6 +184,7 @@ func queryConfig(initial string, params map[string]string) map[string]any {
 		"initialQuery":      initial,
 		"cancelRouteId":     "postgresql.query.cancel",
 		"completionRouteId": "postgresql.completion",
+		"exportable":        true,
 	}
 	if len(params) > 0 {
 		cfg["completionParams"] = params
