@@ -88,6 +88,11 @@ type TableConfig struct {
 	Delete    *DataSource `json:"delete,omitempty"`
 	EmptyText string      `json:"emptyText,omitempty"`
 
+	// StagedEdits buffers edits, added rows, and deletions locally so the user
+	// reviews them and commits or discards as a batch, rather than each change
+	// hitting its route immediately. Opt-in; when off, edits apply on the spot.
+	StagedEdits bool `json:"stagedEdits,omitempty"`
+
 	// HiddenColumns lists row field keys to omit when the grid derives its
 	// columns from the data (no declared Columns). Lets a plugin keep helper
 	// fields out of the view without the renderer hard-coding any field names.
@@ -129,6 +134,9 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if c.EmptyText != "" {
 		out["emptyText"] = c.EmptyText
+	}
+	if c.StagedEdits {
+		out["stagedEdits"] = true
 	}
 	if len(c.HiddenColumns) > 0 {
 		out["hiddenColumns"] = c.HiddenColumns

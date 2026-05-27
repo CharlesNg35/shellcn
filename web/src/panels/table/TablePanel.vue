@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch as vueWatch } from "vue";
+import { computed, onUnmounted, reactive, ref, watch as vueWatch } from "vue";
 import DataTable, {
   type DataTableCellEditCompleteEvent,
   type DataTablePageEvent,
@@ -57,7 +57,20 @@ const RESERVED = new Set([
   "badge",
   "_key",
   "_links",
+  "__rid",
 ]);
+
+// Stable per-row id used to key staged edits/inserts/deletes by row identity
+// without relying on object references (which change across reactive proxies).
+const RID = "__rid";
+let ridSeq = 0;
+function assignRid(row: Row): void {
+  const r = row as Record<string, unknown>;
+  if (!r[RID]) r[RID] = String(++ridSeq);
+}
+function rid(row: Row): string {
+  return ((row as Record<string, unknown>)[RID] as string) ?? "";
+}
 
 const rows = ref<Row[]>([]);
 const total = ref<number | undefined>();
@@ -119,6 +132,144 @@ const editable = computed(
     Boolean(insertSource.value || updateSource.value || deleteSource.value),
 );
 const editableCells = computed(() => editable.value && !!updateSource.value);
+
+// --- staged edits -------------------------------------------------------
+// Opt-in via the manifest: edits, added rows, and deletions are buffered
+// locally (keyed by each row's stable id) so the user reviews them and commits
+// or discards as a batch. On commit they replay through the same per-row
+// Insert/Update/Delete routes used by the immediate path — no extra contract.
+const staged = computed(
+  () => Boolean(tableConfig.value?.stagedEdits) && editable.value,
+);
+// rid -> { field -> original value } for cells changed since the last commit.
+const edits = reactive(new Map<string, Map<string, unknown>>());
+const insertedRows = reactive(new Set<string>());
+const deletedRows = reactive(new Set<string>());
+const committing = ref(false);
+
+const pendingCount = computed(() => {
+  const ids = new Set<string>();
+  for (const id of edits.keys()) ids.add(id);
+  for (const id of insertedRows) ids.add(id);
+  for (const id of deletedRows) ids.add(id);
+  return ids.size;
+});
+
+function isInserted(row: Row): boolean {
+  return insertedRows.has(rid(row));
+}
+function isDeleted(row: Row): boolean {
+  return deletedRows.has(rid(row));
+}
+function isEdited(row: Row, field: string): boolean {
+  return edits.get(rid(row))?.has(field) ?? false;
+}
+
+function clearStaging(): void {
+  edits.clear();
+  insertedRows.clear();
+  deletedRows.clear();
+}
+
+function stageCellEdit(row: Row, field: string, prev: unknown): void {
+  const id = rid(row);
+  if (insertedRows.has(id)) return; // new row: value ships with the insert
+  if (!edits.has(id)) edits.set(id, new Map());
+  const inner = edits.get(id)!;
+  if (!inner.has(field)) inner.set(field, prev);
+  if (row[field] === inner.get(field)) {
+    inner.delete(field);
+    if (inner.size === 0) edits.delete(id);
+  }
+}
+
+function onDeleteClick(row: Row): void {
+  if (!staged.value) {
+    askDeleteRow(row);
+    return;
+  }
+  const id = rid(row);
+  if (insertedRows.has(id)) {
+    rows.value = rows.value.filter((r) => rid(r) !== id);
+    insertedRows.delete(id);
+    edits.delete(id);
+    deletedRows.delete(id);
+    return;
+  }
+  if (deletedRows.has(id)) deletedRows.delete(id);
+  else deletedRows.add(id);
+}
+
+function canDelete(row: Row): boolean {
+  return (
+    (Boolean(deleteSource.value) && !!keyFor(row)) ||
+    (staged.value && isInserted(row))
+  );
+}
+
+function insertValues(row: Row): Record<string, unknown> {
+  const values: Record<string, unknown> = {};
+  for (const col of columns.value) {
+    const v = row[col.key];
+    if (v !== "" && v !== undefined) values[col.key] = v;
+  }
+  return values;
+}
+
+async function commitStaged(): Promise<void> {
+  committing.value = true;
+  try {
+    for (const row of rows.value) {
+      const id = rid(row);
+      if (deletedRows.has(id)) continue;
+      if (insertedRows.has(id)) {
+        if (insertSource.value)
+          await mutate(insertSource.value, { values: insertValues(row) });
+      } else if (edits.has(id) && updateSource.value) {
+        const key = keyFor(row);
+        if (!key) continue;
+        const values: Record<string, unknown> = {};
+        for (const field of edits.get(id)!.keys()) values[field] = row[field];
+        await mutate(updateSource.value, { key, values });
+      }
+    }
+    for (const row of rows.value) {
+      const id = rid(row);
+      if (!deletedRows.has(id) || insertedRows.has(id)) continue;
+      const key = keyFor(row);
+      if (key && deleteSource.value) await mutate(deleteSource.value, { key });
+    }
+    clearStaging();
+    toast.add({
+      severity: "success",
+      summary: "Changes committed",
+      life: 3000,
+    });
+    await load(first.value);
+  } catch (err) {
+    toast.add({
+      severity: "error",
+      summary: "Commit failed",
+      detail: (err as Error).message,
+      life: 6000,
+    });
+  } finally {
+    committing.value = false;
+  }
+}
+
+function discardStaged(): void {
+  for (const row of rows.value) {
+    const id = rid(row);
+    if (insertedRows.has(id)) continue;
+    const inner = edits.get(id);
+    if (inner) for (const [field, orig] of inner) row[field] = orig;
+  }
+  rows.value = rows.value.filter((r) => !insertedRows.has(rid(r)));
+  clearStaging();
+}
+
+// -----------------------------------------------------------------------
 
 function keyFor(row: Row): Record<string, unknown> | null {
   const explicit = row._key;
@@ -184,6 +335,10 @@ async function onCellEditComplete(
   const value = coerce(e.value, e.newValue);
   if (value === e.value) return;
   data[field] = value;
+  if (staged.value) {
+    stageCellEdit(data, field, e.value);
+    return;
+  }
   try {
     await mutate(src, { key, values: { [field]: value } });
   } catch (err) {
@@ -239,6 +394,14 @@ async function submitInsert(): Promise<void> {
   const values: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(insertDraft.value)) {
     if (v !== "") values[k] = v;
+  }
+  if (staged.value) {
+    const row = { ...values } as Row;
+    assignRid(row);
+    rows.value.unshift(row);
+    insertedRows.add(rid(row));
+    showInsert.value = false;
+    return;
   }
   inserting.value = true;
   try {
@@ -301,6 +464,7 @@ async function load(targetFirst = first.value): Promise<void> {
   loading.value = true;
   error.value = null;
   selectedRow.value = null;
+  clearStaging();
   try {
     const page = await fetchPage<Row>(
       props.connectionId,
@@ -315,6 +479,7 @@ async function load(targetFirst = first.value): Promise<void> {
           : undefined,
       },
     );
+    page.items.forEach(assignRid);
     rows.value = page.items;
     total.value = page.total;
     first.value = targetFirst;
@@ -344,6 +509,9 @@ function onRowClick(e: DataTableRowClickEvent): void {
 }
 
 function rowClass(row: Row): string {
+  if (staged.value && isDeleted(row)) return "line-through opacity-50";
+  if (staged.value && isInserted(row))
+    return "bg-emerald-50 dark:bg-emerald-500/10";
   return row.ref ? "cursor-pointer" : "";
 }
 
@@ -369,6 +537,7 @@ async function onActionDone(
 }
 
 function applyEvent(ev: ResourceEvent): void {
+  if (pendingCount.value > 0) return; // don't clobber buffered staged edits
   const idx = rows.value.findIndex((r) => r.ref?.uid === ev.ref.uid);
   if (ev.type === "deleted") {
     if (idx >= 0) rows.value.splice(idx, 1);
@@ -490,6 +659,36 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <div
+      v-if="staged && pendingCount"
+      class="flex items-center gap-2 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200"
+    >
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'git-commit-horizontal' }"
+        :size="14"
+      />
+      <span
+        >{{ pendingCount }} unsaved
+        {{ pendingCount === 1 ? "change" : "changes" }}</span
+      >
+      <div class="ml-auto flex gap-2">
+        <Button
+          type="button"
+          label="Discard"
+          severity="secondary"
+          :disabled="committing"
+          @click="discardStaged"
+        />
+        <Button
+          type="button"
+          label="Commit"
+          :loading="committing"
+          :disabled="committing"
+          @click="commitStaged"
+        />
+      </div>
+    </div>
+
     <div class="min-h-0 flex-1 overflow-hidden">
       <PanelError
         v-if="error"
@@ -501,7 +700,7 @@ onUnmounted(() => {
       <DataTable
         v-else
         :value="rows"
-        :data-key="editable ? undefined : 'ref.uid'"
+        :data-key="editable ? '__rid' : 'ref.uid'"
         :edit-mode="editableCells ? 'cell' : undefined"
         lazy
         paginator
@@ -530,25 +729,33 @@ onUnmounted(() => {
           :sortable="col.sortable"
         >
           <template #body="{ data }">
-            <button
-              v-if="linkRef(data as Row, col)"
-              type="button"
-              class="inline-flex items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
-              title="Open linked record"
-              @click.stop="openLink(linkRef(data as Row, col)!)"
-            >
-              {{ display(data as Row, col) }}
-              <AppIcon
-                :icon="{ type: 'lucide', value: 'arrow-up-right' }"
-                :size="12"
-              />
-            </button>
             <span
-              v-else-if="col.type === 'badge'"
-              class="rounded-full bg-surface-100 px-2 py-0.5 text-xs dark:bg-surface-800"
-              >{{ display(data as Row, col) }}</span
+              :class="
+                staged && isEdited(data as Row, col.key)
+                  ? 'rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-100'
+                  : undefined
+              "
             >
-            <template v-else>{{ display(data as Row, col) }}</template>
+              <button
+                v-if="linkRef(data as Row, col)"
+                type="button"
+                class="inline-flex items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
+                title="Open linked record"
+                @click.stop="openLink(linkRef(data as Row, col)!)"
+              >
+                {{ display(data as Row, col) }}
+                <AppIcon
+                  :icon="{ type: 'lucide', value: 'arrow-up-right' }"
+                  :size="12"
+                />
+              </button>
+              <span
+                v-else-if="col.type === 'badge'"
+                class="rounded-full bg-surface-100 px-2 py-0.5 text-xs dark:bg-surface-800"
+                >{{ display(data as Row, col) }}</span
+              >
+              <template v-else>{{ display(data as Row, col) }}</template>
+            </span>
           </template>
           <template
             v-if="editableCells && !columnReadOnly(col)"
@@ -574,22 +781,32 @@ onUnmounted(() => {
           </template>
         </Column>
         <Column
-          v-if="editable && deleteSource"
+          v-if="editable && (deleteSource || staged)"
           :pt="{ bodyCell: 'w-12 text-right' }"
         >
           <template #body="{ data }">
             <Button
-              v-if="keyFor(data as Row)"
+              v-if="canDelete(data as Row)"
               type="button"
               text
               rounded
-              severity="danger"
-              title="Delete row"
-              aria-label="Delete row"
-              @click.stop="askDeleteRow(data as Row)"
+              :severity="
+                staged && isDeleted(data as Row) ? 'secondary' : 'danger'
+              "
+              :title="
+                staged && isDeleted(data as Row) ? 'Undo delete' : 'Delete row'
+              "
+              :aria-label="
+                staged && isDeleted(data as Row) ? 'Undo delete' : 'Delete row'
+              "
+              @click.stop="onDeleteClick(data as Row)"
             >
               <AppIcon
-                :icon="{ type: 'lucide', value: 'trash-2' }"
+                :icon="{
+                  type: 'lucide',
+                  value:
+                    staged && isDeleted(data as Row) ? 'rotate-ccw' : 'trash-2',
+                }"
                 :size="15"
               />
             </Button>

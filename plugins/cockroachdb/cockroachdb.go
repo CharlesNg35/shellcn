@@ -229,12 +229,13 @@ func tableParams() map[string]string {
 
 func dataGridConfig() map[string]any {
 	return plugin.TableConfig{
-		Editable:   true,
-		Exportable: true,
-		EmptyText:  "No rows.",
-		Insert:     &plugin.DataSource{RouteID: "cockroachdb.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
-		Update:     &plugin.DataSource{RouteID: "cockroachdb.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
-		Delete:     &plugin.DataSource{RouteID: "cockroachdb.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		Editable:    true,
+		StagedEdits: true,
+		Exportable:  true,
+		EmptyText:   "No rows.",
+		Insert:      &plugin.DataSource{RouteID: "cockroachdb.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
+		Update:      &plugin.DataSource{RouteID: "cockroachdb.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
+		Delete:      &plugin.DataSource{RouteID: "cockroachdb.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
 	}.Map()
 }
 

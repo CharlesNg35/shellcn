@@ -149,6 +149,19 @@ Generic, manifest-driven; no per-plugin frontend.
       query-editor `exportable`; off by default). Enabled on the DB plugins'
       data grids + query/command editors (postgresql, mysql, cockroachdb, mssql,
       oracle, clickhouse, cassandra, mongodb) and Redis clients/channels tables.
+- [x] UX.10 Staged grid editing (commit/discard) — opt-in `TableConfig.StagedEdits`
+      makes the generic grid buffer cell edits, added rows, and deletions locally
+      (pending cells/rows highlighted, count + Commit/Discard bar) instead of
+      applying each change immediately; commit replays the buffer through the
+      existing per-row Insert/Update/Delete routes, discard reverts. Enabled on
+      postgresql, mysql, cockroachdb, mssql, oracle data grids. Unit-tested in
+      `TablePanel.test.ts` (buffer→commit update, discard, staged delete).
+- [x] UX.9 Foreign-key navigation in the data grid — relational plugins attach a
+      generic `_links` map (column → `ResourceRef`) to rows; the grid renders those
+      cells as buttons that emit `select` to open the referenced table (reuses the
+      existing row-select navigation, no new plumbing). Wired for postgresql,
+      mysql, cockroachdb, mssql, oracle; docker integration tests assert
+      `_links` points at the parent table.
 - [x] UX.4d Hardening + verification (all docker integration tests run & green):
       row mutations validate the client key is exactly the primary key
       (`sqldb.ValidateRowKey`) and require one affected row; `_key` is withheld

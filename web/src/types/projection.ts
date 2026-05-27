@@ -223,6 +223,9 @@ export interface TablePanelConfig {
   update?: DataSource;
   delete?: DataSource;
   emptyText?: string;
+  // Opt-in: buffer edits/inserts/deletes locally for review and commit or
+  // discard them as a batch instead of applying each change immediately.
+  stagedEdits?: boolean;
   // Row field keys to omit when the grid derives columns from the data.
   hiddenColumns?: string[];
   // Opt-in: show the generic CSV/JSON export control for loaded rows.

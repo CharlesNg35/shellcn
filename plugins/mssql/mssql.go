@@ -168,12 +168,13 @@ func tableParams() map[string]string {
 
 func dataGridConfig() map[string]any {
 	return plugin.TableConfig{
-		Editable:   true,
-		Exportable: true,
-		EmptyText:  "No rows.",
-		Insert:     &plugin.DataSource{RouteID: "mssql.table.row.insert", Method: plugin.MethodPost, Params: objectParams()},
-		Update:     &plugin.DataSource{RouteID: "mssql.table.row.update", Method: plugin.MethodPatch, Params: objectParams()},
-		Delete:     &plugin.DataSource{RouteID: "mssql.table.row.delete", Method: plugin.MethodDelete, Params: objectParams()},
+		Editable:    true,
+		StagedEdits: true,
+		Exportable:  true,
+		EmptyText:   "No rows.",
+		Insert:      &plugin.DataSource{RouteID: "mssql.table.row.insert", Method: plugin.MethodPost, Params: objectParams()},
+		Update:      &plugin.DataSource{RouteID: "mssql.table.row.update", Method: plugin.MethodPatch, Params: objectParams()},
+		Delete:      &plugin.DataSource{RouteID: "mssql.table.row.delete", Method: plugin.MethodDelete, Params: objectParams()},
 	}.Map()
 }
 

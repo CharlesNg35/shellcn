@@ -149,8 +149,9 @@ func tableParams() map[string]string {
 
 func dataGridConfig() map[string]any {
 	return plugin.TableConfig{
-		Editable:   true,
-		Exportable: true,
+		Editable:    true,
+		StagedEdits: true,
+		Exportable:  true,
 		EmptyText:  "No rows.",
 		Insert:     &plugin.DataSource{RouteID: "mysql.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
 		Update:     &plugin.DataSource{RouteID: "mysql.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
