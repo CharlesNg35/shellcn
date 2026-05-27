@@ -99,6 +99,17 @@ const rowActionIds = computed(() => tableConfig.value?.rowActionIds ?? []);
 const globalActions = computed(() => resolveActions(actionIds.value));
 const rowActions = computed(() => resolveActions(rowActionIds.value));
 const emptyText = computed(() => tableConfig.value?.emptyText ?? "No rows.");
+const DEFAULT_COLUMN_WIDTH = "16rem";
+const TYPE_COLUMN_WIDTH: Partial<
+  Record<NonNullable<ColumnSpec["type"]>, string>
+> = {
+  badge: "10rem",
+  bool: "8rem",
+  bytes: "9rem",
+  datetime: "14rem",
+  number: "9rem",
+  json: "22rem",
+};
 
 // Export the loaded rows (CSV/JSON). Opt-in per plugin via the manifest, so a
 // table never exposes export unless the plugin declares it.
@@ -459,6 +470,29 @@ function display(row: Row, col: ColumnSpec): string {
   return String(v);
 }
 
+function columnWidth(col: ColumnSpec): string {
+  return (
+    col.width || TYPE_COLUMN_WIDTH[col.type ?? "text"] || DEFAULT_COLUMN_WIDTH
+  );
+}
+
+function columnStyle(col: ColumnSpec): Record<string, string> {
+  const width = columnWidth(col);
+  return {
+    minWidth: col.width ? width : "7.5rem",
+    width,
+    maxWidth: width,
+  };
+}
+
+function cellClass(row: Row, col: ColumnSpec): string {
+  const base = "block min-w-0 truncate";
+  if (staged.value && isEdited(row, col.key)) {
+    return `${base} rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-100`;
+  }
+  return base;
+}
+
 async function load(targetFirst = first.value): Promise<void> {
   if (!props.source) return;
   loading.value = true;
@@ -728,23 +762,25 @@ onUnmounted(() => {
           :field="col.key"
           :header="col.label"
           :sortable="col.sortable"
+          :style="columnStyle(col)"
+          :header-style="columnStyle(col)"
+          :body-style="columnStyle(col)"
         >
           <template #body="{ data }">
             <span
-              :class="
-                staged && isEdited(data as Row, col.key)
-                  ? 'rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900 dark:bg-amber-500/20 dark:text-amber-100'
-                  : undefined
-              "
+              data-test="table-cell-value"
+              :class="cellClass(data as Row, col)"
+              :style="{ maxWidth: columnWidth(col) }"
+              :title="display(data as Row, col)"
             >
               <button
                 v-if="linkRef(data as Row, col)"
                 type="button"
-                class="inline-flex items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
-                title="Open linked record"
+                class="inline-flex max-w-full items-center gap-1 text-primary-600 hover:underline dark:text-primary-400"
+                :title="display(data as Row, col)"
                 @click.stop="openLink(linkRef(data as Row, col)!)"
               >
-                {{ display(data as Row, col) }}
+                <span class="truncate">{{ display(data as Row, col) }}</span>
                 <AppIcon
                   :icon="{ type: 'lucide', value: 'arrow-up-right' }"
                   :size="12"
@@ -752,7 +788,7 @@ onUnmounted(() => {
               </button>
               <span
                 v-else-if="col.type === 'badge'"
-                class="rounded-full bg-surface-100 px-2 py-0.5 text-xs dark:bg-surface-800"
+                class="inline-block max-w-full truncate rounded-full bg-surface-100 px-2 py-0.5 align-bottom text-xs dark:bg-surface-800"
                 >{{ display(data as Row, col) }}</span
               >
               <template v-else>{{ display(data as Row, col) }}</template>

@@ -66,6 +66,36 @@ describe("TablePanel", () => {
     expect(w.text()).toContain("gamma");
   });
 
+  it("bounds and titles long cell values", async () => {
+    const longValue = "sha256:" + "a".repeat(96);
+    vi.unstubAllGlobals();
+    installFetch(() => ({
+      body: {
+        items: [row("long", longValue)],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "docker.container.list" },
+        config: {
+          columns: [{ key: "name", label: "Image", width: "12rem" }],
+        },
+      },
+    });
+    await flushPromises();
+
+    const cell = w.get('[data-test="table-cell-value"]');
+    expect(cell.classes()).toContain("truncate");
+    expect(cell.attributes("title")).toBe(longValue);
+    expect(cell.attributes("style")).toContain("max-width: 12rem");
+    expect(w.get("thead th").attributes("style")).toContain("width: 12rem");
+    expect(w.get("thead th").attributes("style")).toContain("min-width: 12rem");
+  });
+
   it("filters server-side and resets the list", async () => {
     const w = mount(TablePanel, {
       props: {

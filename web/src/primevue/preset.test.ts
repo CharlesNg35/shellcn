@@ -67,4 +67,15 @@ describe("primeVuePassthrough", () => {
       "overflow-auto",
     );
   });
+
+  it("keeps data tables horizontally scrollable without stretching cells", () => {
+    expect(primeVuePassthrough.datatable.tableContainer).toContain(
+      "overflow-auto",
+    );
+    expect(primeVuePassthrough.datatable.tableContainer).toContain(
+      "thin-scrollbar",
+    );
+    expect(primeVuePassthrough.datatable.table).toContain("w-max");
+    expect(primeVuePassthrough.datatable.table).toContain("min-w-full");
+  });
 });

@@ -560,8 +560,8 @@ export const primeVuePassthrough = {
     mask: "absolute inset-0 z-20 flex items-center justify-center bg-surface-0/70 backdrop-blur-[1px] dark:bg-surface-950/70",
     loadingIcon: "h-5 w-5 animate-spin text-primary-500",
     pcPaginator: paginator,
-    tableContainer: "min-h-0 flex-1 overflow-auto",
-    table: "w-full border-collapse",
+    tableContainer: "thin-scrollbar min-h-0 flex-1 overflow-auto",
+    table: "w-max min-w-full border-collapse",
     thead:
       "sticky top-0 z-10 bg-surface-50/95 backdrop-blur dark:bg-surface-900/95",
     column: {
