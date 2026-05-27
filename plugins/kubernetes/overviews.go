@@ -44,17 +44,6 @@ func ClusterList(rc *plugin.RequestContext) (any, error) {
 	return plugin.Page[Row]{Items: []Row{row}, Total: ptr(1)}, nil
 }
 
-// ClusterTree returns the single Overview node opening the cluster dashboard.
-func ClusterTree(_ *plugin.RequestContext) (any, error) {
-	return plugin.Page[plugin.TreeNode]{Items: []plugin.TreeNode{{
-		Key:   "cluster",
-		Label: "Overview",
-		Icon:  lucide("layout-dashboard"),
-		Ref:   &plugin.ResourceRef{Kind: clusterKind, Name: "Cluster", UID: clusterKind},
-		Leaf:  true,
-	}}, Total: ptr(1)}, nil
-}
-
 // NodePods lists the pods scheduled on a node (for the node detail).
 func NodePods(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)

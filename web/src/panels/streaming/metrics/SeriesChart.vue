@@ -11,11 +11,13 @@ const props = defineProps<{
 
 const { isDark } = useTheme();
 
+// Hand Chart.js plain array snapshots, never reactive proxies — it mutates the
+// arrays it's given, and a Vue proxy turns that into infinite recursion.
 const data = computed(() => ({
-  labels: props.labels,
+  labels: [...props.labels],
   datasets: props.series.map((s, i) => ({
     label: s.label,
-    data: s.data,
+    data: [...s.data],
     borderColor: seriesColor(i),
     backgroundColor: fade(seriesColor(i)),
     fill: true,

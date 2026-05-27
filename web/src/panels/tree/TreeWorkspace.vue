@@ -50,7 +50,7 @@ function resolveGroupResource(key: string): ResourceType | undefined {
   const group = props.tree.find((g) => g.key === key);
   if (!group) return undefined;
   if (group.resourceKind) return resourceByKind.value.get(group.resourceKind);
-  return props.resources.find((r) => r.list.routeId === group.source.routeId);
+  return props.resources.find((r) => r.list.routeId === group.source?.routeId);
 }
 
 const activeDetailResource = computed(() => {
@@ -113,6 +113,8 @@ function openDetail(row: Row, qualifier?: string): void {
 function onSelectGroup(key: string): void {
   const group = props.tree.find((g) => g.key === key);
   if (!group) return;
+  // A container group (no resolvable resource) only expands — no view/tab.
+  if (!resolveGroupResource(key)) return;
   ws.openView(props.connectionId, {
     id: "group:" + key,
     title: group.label,

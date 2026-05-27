@@ -1,22 +1,19 @@
 package kubernetes
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import "github.com/charlesng35/shellcn/internal/plugin"
 
-	"github.com/charlesng35/shellcn/internal/plugin"
-)
-
-// tree builds the Lens-style cluster menu: top-level Nodes, the expandable
-// Workloads/Config/Network/Storage categories, top-level Namespaces and Events,
-// then Access Control and Custom Resources.
+// tree builds the Lens-style cluster menu: a direct Overview, top-level Nodes,
+// the expandable Workloads/Config/Network/Storage categories, top-level
+// Namespaces and Events, then Helm, Access Control, and Custom Resources.
+// Overview/Nodes/Namespaces/Events are leaves — they open a view directly
+// rather than expanding into children.
 func tree() []plugin.TreeGroup {
 	groups := []plugin.TreeGroup{
 		{
-			Key:          "overview",
-			Label:        "Overview",
-			Icon:         lucide("layout-dashboard"),
-			Source:       plugin.DataSource{RouteID: "kubernetes.cluster.tree"},
-			ResourceKind: clusterKind,
+			Key:   "overview",
+			Label: "Overview",
+			Icon:  lucide("layout-dashboard"),
+			Ref:   &plugin.ResourceRef{Kind: clusterKind, Name: "Cluster", UID: clusterKind},
 		},
 		kindGroup("node", "Nodes", "server"),
 	}
@@ -43,14 +40,13 @@ func tree() []plugin.TreeGroup {
 	return groups
 }
 
-// kindGroup is a top-level group that expands to a kind's instances and opens
-// that kind's list on click.
+// kindGroup is a top-level leaf that opens a kind's list directly (no expandable
+// children); the instances live in the list view, not the tree.
 func kindGroup(kindName, label, icon string) plugin.TreeGroup {
 	return plugin.TreeGroup{
 		Key:          kindName + "s",
 		Label:        label,
 		Icon:         plugin.Icon{Type: plugin.IconLucide, Value: icon},
-		Source:       plugin.DataSource{RouteID: "kubernetes.tree.kind", Params: map[string]string{"kind": kindName}},
 		ResourceKind: kindName,
 	}
 }
@@ -122,49 +118,6 @@ func TreeSubgroup(rc *plugin.RequestContext) (any, error) {
 		if k.subgroup == sub {
 			nodes = append(nodes, kindLeaf(k))
 		}
-	}
-	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
-}
-
-// treeInstanceLimit caps how many instances a top-level kind group expands to.
-const treeInstanceLimit = 200
-
-// TreeKindInstances returns a kind's instances as selectable detail nodes.
-func TreeKindInstances(rc *plugin.RequestContext) (any, error) {
-	s, err := sess(rc)
-	if err != nil {
-		return nil, err
-	}
-	k, err := resolveKind(s, rc.Param("kind"))
-	if err != nil {
-		return nil, err
-	}
-	ri := s.Dynamic().Resource(k.gvr)
-	opts := metav1.ListOptions{Limit: treeInstanceLimit}
-	ul, err := ri.List(rc.Ctx, opts)
-	if ns := s.listNamespace(rc, k); k.namespaced && ns != "" {
-		ul, err = ri.Namespace(ns).List(rc.Ctx, opts)
-	}
-	if err != nil {
-		return nil, apiErr(err)
-	}
-	nodes := make([]plugin.TreeNode, 0, len(ul.Items))
-	for i := range ul.Items {
-		o := ul.Items[i].Object
-		row := commonRow(o)
-		if k.extra != nil {
-			for key, val := range k.extra(o) {
-				row[key] = val
-			}
-		}
-		nodes = append(nodes, plugin.TreeNode{
-			Key:   k.name + ":" + str(o, "metadata", "uid"),
-			Label: refName(o),
-			Icon:  plugin.Icon{Type: plugin.IconLucide, Value: k.icon},
-			Ref:   &plugin.ResourceRef{Kind: k.name, Namespace: refNS(o), Name: refName(o), UID: str(o, "metadata", "uid")},
-			Leaf:  true,
-			Data:  row,
-		})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
 }

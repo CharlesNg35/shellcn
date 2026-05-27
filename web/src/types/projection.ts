@@ -432,8 +432,12 @@ export interface TreeGroup {
   key: string;
   label: string;
   icon?: Icon;
-  source: DataSource;
+  // A group with a source is expandable (children load on expand). Omit it for a
+  // leaf that opens directly: resourceKind opens that kind's list, ref opens a
+  // specific resource's detail.
+  source?: DataSource;
   resourceKind?: string;
+  ref?: ResourceRef;
   badge?: Badge;
 }
 

@@ -52,7 +52,10 @@ function validate(name: string, raw: unknown): PluginProjection {
     if (t.source) assertDataSource(t.source, `${name}.tab ${t.key}`);
   }
   for (const g of p.tree ?? []) {
-    assertDataSource(g.source, `${name}.tree ${g.key}`);
+    // Expandable group: valid children source. Leaf group: opens its
+    // resourceKind list or ref detail directly, so no source is required.
+    if (g.source?.routeId) assertDataSource(g.source, `${name}.tree ${g.key}`);
+    else expect(Boolean(g.resourceKind || g.ref)).toBe(true);
   }
   for (const r of p.resources ?? []) {
     assertDataSource(r.list, `${name}.resource ${r.kind}.list`);

@@ -92,14 +92,22 @@ watchEffect(() => {
   nodes.value = props.groups.map((g) => ({
     key: g.key,
     label: g.label,
-    leaf: false,
-    data: { isGroup: true, icon: g.icon, source: g.source },
+    // A group with no children source is a leaf: it opens its destination
+    // directly (a kind list, or a resource detail via ref) without expanding.
+    leaf: !g.source?.routeId,
+    data: {
+      isGroup: true,
+      icon: g.icon,
+      source: g.source,
+      ref: g.ref,
+      row: g.ref ? { ref: g.ref } : undefined,
+    },
   }));
 });
 
 async function loadChildren(node: PVNode): Promise<void> {
   const data = node.data as NodeData;
-  if (node.children || !data.source) return;
+  if (node.children || !data.source?.routeId) return;
   node.loading = true;
   try {
     const page = await fetchPage<TreeNode>(props.connectionId, data.source);
@@ -121,8 +129,13 @@ async function loadChildren(node: PVNode): Promise<void> {
 async function onNodeSelect(node: PVNode): Promise<void> {
   const data = node.data as NodeData;
   selectionKeys.value = { [String(node.key)]: true };
-  if (data.isGroup) emit("select-group", String(node.key));
-  else if (data.resourceKind)
+  if (data.isGroup) {
+    // A leaf group pointing at a specific resource opens that detail directly;
+    // otherwise it opens its list (or expands, for a group with children).
+    if (data.ref && data.row)
+      emit("select-node", data.row, nodeQualifier(data));
+    else emit("select-group", String(node.key));
+  } else if (data.resourceKind)
     emit("select-list", data.resourceKind, data.listParams);
   else if (data.row) emit("select-node", data.row, nodeQualifier(data));
   if (!node.leaf) {

@@ -97,7 +97,12 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
       </div>
     </header>
 
-    <Tabs :value="activeTab" @update:value="activeTab = String($event)">
+    <!-- A lone tab needs no tab bar — render just its panel below. -->
+    <Tabs
+      v-if="detail.tabs.length > 1"
+      :value="activeTab"
+      @update:value="activeTab = String($event)"
+    >
       <TabList>
         <Tab v-for="tab in detail.tabs" :key="tab.key" :value="tab.key">
           <AppIcon :icon="tab.icon" :size="14" />

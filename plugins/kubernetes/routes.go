@@ -13,7 +13,6 @@ const (
 func Routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "kubernetes.tree.category", Method: plugin.MethodGet, Path: "/tree/category/{category}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.category", Handle: TreeCategory},
-		{ID: "kubernetes.tree.kind", Method: plugin.MethodGet, Path: "/tree/kind/{kind}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.kind", Handle: TreeKindInstances},
 		{ID: "kubernetes.tree.crds", Method: plugin.MethodGet, Path: "/tree/crds", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.crds", Handle: TreeCRDs},
 		{ID: "kubernetes.tree.subgroup", Method: plugin.MethodGet, Path: "/tree/subgroup/{subgroup}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.subgroup", Handle: TreeSubgroup},
 		{ID: "kubernetes.tree.gatewayapi", Method: plugin.MethodGet, Path: "/tree/gatewayapi", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.gatewayapi", Handle: TreeGatewayAPI},
@@ -38,7 +37,6 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.pod.logs", Method: plugin.MethodWS, Path: "/pods/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.logs", Stream: LogsStream},
 		{ID: "kubernetes.pod.exec", Method: plugin.MethodWS, Path: "/pods/exec", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.exec", Stream: ExecStream},
 
-		{ID: "kubernetes.cluster.tree", Method: plugin.MethodGet, Path: "/tree/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.tree", Handle: ClusterTree},
 		{ID: "kubernetes.cluster.list", Method: plugin.MethodGet, Path: "/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.list", Handle: ClusterList},
 		{ID: "kubernetes.cluster.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.metrics", Stream: ClusterMetrics},
 		{ID: "kubernetes.node.metrics", Method: plugin.MethodWS, Path: "/nodes/metrics", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.node.metrics", Stream: NodeMetrics},
