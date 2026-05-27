@@ -8,10 +8,17 @@ import TablePanel from "../table/TablePanel.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import type {
   Action,
+  ResourceRef,
   ResourceType,
   Row,
   TreeGroup,
 } from "../../types/projection";
+
+// A tab's dim qualifier: the resource's container path (e.g. "database / schema"
+// for a SQL table, "namespace" for a k8s pod) so same-named tabs stay distinct.
+function refSubtitle(ref: ResourceRef): string {
+  return [ref.scope, ref.namespace].filter(Boolean).join(" / ");
+}
 
 // The sidebar-tree layout: a resource tree on the left and a closable workbench
 // tab strip on the right, where each open view is a resource detail or a kind
@@ -76,6 +83,7 @@ function openDetail(row: Row): void {
   ws.openView(props.connectionId, {
     id: "detail:" + row.ref.uid,
     title: row.ref.name,
+    subtitle: refSubtitle(row.ref),
     kind: "detail",
     ref: row.ref,
     row,
@@ -106,6 +114,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
   ws.openView(props.connectionId, {
     id: "list:" + kind + suffix,
     title: res.title,
+    subtitle: params ? Object.values(params).join(" / ") : undefined,
     kind: "list",
     resourceKind: kind,
     params,
@@ -137,7 +146,8 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
           v-for="v in view.views"
           :key="v.id"
           type="button"
-          class="group flex max-w-52 items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
+          :title="v.subtitle ? `${v.subtitle} / ${v.title}` : v.title"
+          class="group flex max-w-60 items-center gap-1.5 rounded px-2 py-1 text-xs transition-colors"
           :class="
             v.id === view.activeViewId
               ? 'bg-surface-0 text-surface-900 shadow-sm dark:bg-surface-800 dark:text-surface-0'
@@ -146,7 +156,15 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
           @click="ws.activateView(connectionId, v.id)"
         >
           <AppIcon v-if="v.icon" :icon="v.icon" :size="13" />
-          <span class="truncate">{{ v.title }}</span>
+          <span class="flex min-w-0 items-baseline gap-1">
+            <span class="truncate font-medium">{{ v.title }}</span>
+            <span
+              v-if="v.subtitle"
+              class="truncate text-[10px] text-surface-400"
+            >
+              {{ v.subtitle }}
+            </span>
+          </span>
           <Button
             type="button"
             text

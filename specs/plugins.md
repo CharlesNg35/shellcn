@@ -53,7 +53,7 @@ These plugins should prove the core architecture first.
 > audit metadata/result redaction, and TLS/config parsing). Dialect catalog
 > queries, driver connection code, actions, and manifests remain inside each
 > plugin. PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB, ClickHouse,
-> Redis, MongoDB, Cassandra, and DynamoDB are implemented as direct-only database/data-store plugins;
+> Redis, MongoDB, Cassandra, DynamoDB, and Neo4j are implemented as direct-only database/data-store plugins;
 > agent transport is reserved for private control-plane targets such as Docker
 > and Kubernetes.
 
@@ -96,11 +96,20 @@ reuse SQL database credentials or SQL host/database fields. The manifest exposes
 tables, indexes, items, TTL, tags, backups, item editing, guarded table/index/
 item/backup/TTL actions, and PartiQL query execution through generic panels.
 
+Neo4j is implemented as a direct-only graph database plugin using the official
+Neo4j Go driver v6. It keeps a Neo4j-specific schema: Bolt/routing scheme
+selection, host/port, default database, password/stored-password/bearer/stored-
+bearer/none auth, scheme-driven TLS with optional CA for verified TLS schemes,
+query/connect/retry/pool/fetch/page limits, and read-only/confirmation safety.
+It exposes databases, labels, relationship types, indexes, constraints, nodes,
+relationships, graph visualization, guarded node/relationship mutations, and a
+Cypher query console through generic renderer panels.
+
 | Plugin     | Purpose                 | Main Capabilities                                             |
 | ---------- | ----------------------- | ------------------------------------------------------------- |
 | `dynamodb` | Amazon DynamoDB         | tables, indexes, items, TTL, tags, backups, PartiQL           |
 | `sqlite`   | SQLite database files   | schema browser, query editor, table data                      |
-| `neo4j`    | Graph database          | Cypher query, graph/table results                             |
+| `neo4j`    | Graph database          | Cypher query, graph visualization, labels, relationships      |
 
 ## P2: Container And Orchestration Platforms
 

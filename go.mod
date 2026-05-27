@@ -34,6 +34,7 @@ require (
 	github.com/moby/moby/api v1.54.2
 	github.com/moby/moby/client v0.4.1
 	github.com/nats-io/nats.go v1.52.0
+	github.com/neo4j/neo4j-go-driver/v6 v6.1.0
 	github.com/pkg/sftp v1.13.10
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.19.0

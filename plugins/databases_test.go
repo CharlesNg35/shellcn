@@ -10,7 +10,7 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 	reg := plugin.NewRegistry()
 	Register(reg)
 
-	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra"} {
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra", "neo4j"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)
@@ -70,6 +70,18 @@ func TestDatabaseCredentialSelectorsExposeOnlyAppropriateKinds(t *testing.T) {
 	if credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) || credentialKindsContain(field.Credential.Kinds, plugin.CredentialTLSClientCert) {
 		t.Fatalf("dynamodb credential selector should not advertise database passwords or TLS client certificates: %+v", field.Credential.Kinds)
 	}
+
+	m, ok = reg.Manifest("neo4j")
+	if !ok {
+		t.Fatal("neo4j should be registered")
+	}
+	field, ok = credentialField(m.Config, "bearer_credential_id")
+	if !ok {
+		t.Fatal("neo4j should expose bearer_credential_id")
+	}
+	if !credentialKindsContain(field.Credential.Kinds, plugin.CredentialBearerToken) || credentialKindsContain(field.Credential.Kinds, plugin.CredentialDBPassword) {
+		t.Fatalf("neo4j bearer selector should only advertise bearer tokens: %+v", field.Credential.Kinds)
+	}
 }
 
 func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
@@ -86,7 +98,7 @@ func TestDatabaseConfigVisibleValuesAreAuthSpecific(t *testing.T) {
 		requireHidden(t, name, visible, "credential_id", "auth_client_cert_id")
 	}
 
-	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra"} {
+	for _, name := range []string{"postgresql", "mysql", "redis", "mongodb", "cockroachdb", "clickhouse", "mssql", "oracle", "cassandra", "neo4j"} {
 		m, ok := reg.Manifest(name)
 		if !ok {
 			t.Fatalf("plugin %q was not registered", name)

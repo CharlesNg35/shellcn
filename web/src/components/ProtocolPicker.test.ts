@@ -50,4 +50,18 @@ describe("ProtocolPicker", () => {
     expect(wrapper.text()).toContain("PostgreSQL");
     expect(wrapper.text()).not.toContain("SSH");
   });
+
+  it("keeps protocol icon tiles light in dark mode for fixed-color SVG icons", () => {
+    const wrapper = mount(ProtocolPicker, {
+      props: { modelValue: "ssh", plugins },
+    });
+
+    const iconTiles = wrapper.findAll(".h-9.w-9");
+    expect(iconTiles[0].classes()).toEqual(
+      expect.arrayContaining(["dark:bg-primary-100", "dark:text-primary-700"]),
+    );
+    expect(iconTiles[1].classes()).toEqual(
+      expect.arrayContaining(["dark:bg-surface-100", "dark:text-surface-700"]),
+    );
+  });
 });

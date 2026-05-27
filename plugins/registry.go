@@ -19,6 +19,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/mssql"
 	"github.com/charlesng/shellcn/plugins/mysql"
 	"github.com/charlesng/shellcn/plugins/nats"
+	"github.com/charlesng/shellcn/plugins/neo4j"
 	"github.com/charlesng/shellcn/plugins/nfs"
 	"github.com/charlesng/shellcn/plugins/opensearch"
 	"github.com/charlesng/shellcn/plugins/oracle"
@@ -80,6 +81,7 @@ func all() []plugin.Plugin {
 		clickhouse.New(),
 		cassandra.New(),
 		dynamodb.New(),
+		neo4j.New(),
 		ldap.New(),
 		elasticsearch.New(),
 		opensearch.New(),

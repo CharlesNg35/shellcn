@@ -12,6 +12,9 @@ export const MAX_WORKBENCH_TABS = 12;
 export interface OpenView {
   id: string;
   title: string;
+  // Dim qualifier shown beside the title to disambiguate same-named tabs
+  // (e.g. a table's "database / schema").
+  subtitle?: string;
   icon?: Icon;
   kind: "detail" | "list";
   // detail
