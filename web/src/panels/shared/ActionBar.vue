@@ -54,7 +54,9 @@ const riskClass: Record<RiskLevel, string> = {
 function dockItem(action: Action): DockItem {
   return {
     id: `${action.id}:${props.resource?.uid ?? "connection"}`,
-    title: action.label,
+    title: props.resource?.name
+      ? `${props.resource.name} · ${action.label}`
+      : action.label,
     icon: action.icon,
     panel: action.panel as string,
     source: {

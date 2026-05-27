@@ -778,7 +778,7 @@ func ContainerRows(items []container.Summary) []Row {
 			"ports":          ports(c.Ports),
 			"compose":        c.Labels[ComposeProjectLabel],
 			"composeService": c.Labels["com.docker.compose.service"],
-			"ref":            plugin.ResourceRef{Kind: "container", Namespace: c.Labels[ComposeProjectLabel], Name: name, UID: c.ID},
+			"ref":            plugin.ResourceRef{Kind: "container", Name: name, UID: c.ID},
 		})
 	}
 	return rows
@@ -1052,7 +1052,7 @@ func resourceEventFromDocker(msg events.Message) *plugin.ResourceEvent {
 	if name == "" {
 		name = shortID(id)
 	}
-	ref := plugin.ResourceRef{Kind: "container", Namespace: msg.Actor.Attributes[ComposeProjectLabel], Name: name, UID: id}
+	ref := plugin.ResourceRef{Kind: "container", Name: name, UID: id}
 	resource := Row{
 		"id":     id,
 		"name":   name,

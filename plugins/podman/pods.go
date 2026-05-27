@@ -116,7 +116,7 @@ func podContainers(rc *plugin.RequestContext) (any, error) {
 			"id":    c.ID,
 			"name":  c.Name,
 			"state": c.State,
-			"ref":   plugin.ResourceRef{Kind: "container", Namespace: p.Name, Name: c.Name, UID: c.ID},
+			"ref":   plugin.ResourceRef{Kind: "container", Name: c.Name, UID: c.ID},
 		})
 	}
 	return dockerengine.PageRows(rc, rows)

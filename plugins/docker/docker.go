@@ -144,9 +144,9 @@ func containerResource() plugin.ResourceType {
 		ListActionIDs: []string{
 			"docker.container.create",
 		},
-		ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.exec", "docker.container.logs.dock", "docker.container.remove"},
+		ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.exec", "docker.container.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.exec", "docker.container.logs.dock", "docker.container.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.exec", "docker.container.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "docker.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24", "command": "/bin/sh"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
@@ -254,7 +254,6 @@ func actions() []plugin.Action {
 		{ID: "docker.container.restart", Label: "Restart", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "refresh-cw"}, RouteID: "docker.container.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this container?", EnabledWhen: dockerengine.WhenState("running", "paused")},
 		{ID: "docker.container.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.container.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this container and anonymous volumes?"},
 		{ID: "docker.container.exec", Label: "Exec", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, RouteID: "docker.container.exec.prepare", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Open a shell inside this container?", OnSuccess: &plugin.ActionSuccess{SelectTab: "terminal"}, EnabledWhen: dockerengine.WhenState("running")},
-		{ID: "docker.container.logs.dock", Label: "Logs", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "scroll-text"}, RouteID: "docker.container.logs", Open: plugin.OpenDock, Panel: plugin.PanelLogStream, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}},
 		{ID: "docker.image.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.image.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this image?"},
 		{ID: "docker.volume.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.volume.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this volume?"},
 		{ID: "docker.network.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.network.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this network?"},

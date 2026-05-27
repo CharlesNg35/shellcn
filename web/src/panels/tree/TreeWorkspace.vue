@@ -19,8 +19,8 @@ import type {
   TreeGroup,
 } from "../../types/projection";
 
-// A tab's dim qualifier: the resource's container path (e.g. "database / schema"
-// for a SQL table, "namespace" for a k8s pod) so same-named tabs stay distinct.
+// Fallback qualifier (ref identity) for items opened outside the tree; the tree
+// ancestor path is preferred. See openDetail.
 function refSubtitle(ref: ResourceRef): string {
   return [ref.scope, ref.namespace].filter(Boolean).join(" / ");
 }
@@ -84,12 +84,12 @@ const treeSelectedUid = computed(() =>
   activeView.value?.kind === "detail" ? activeView.value.ref?.uid : undefined,
 );
 
-function openDetail(row: Row): void {
+function openDetail(row: Row, qualifier?: string): void {
   if (!row.ref || !resourceByKind.value.has(row.ref.kind)) return;
   ws.openView(props.connectionId, {
     id: "detail:" + row.ref.uid,
     title: row.ref.name,
-    subtitle: refSubtitle(row.ref),
+    subtitle: qualifier || refSubtitle(row.ref),
     kind: "detail",
     ref: row.ref,
     row,

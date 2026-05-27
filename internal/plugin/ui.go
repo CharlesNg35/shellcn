@@ -456,8 +456,8 @@ type TreeNode struct {
 	// ListParams scope that list (merged into the resource's list DataSource
 	// params), e.g. a namespace — so a nested node opens a filtered list.
 	ListParams map[string]string `json:"listParams,omitempty"`
-	// Data carries the node's row fields so a tree-opened detail has the same
-	// record a table row would (status badge, action gating).
+	// Data carries the node's row fields so a tree-opened detail matches a table
+	// row (status badge, action gating).
 	Data map[string]any `json:"data,omitempty"`
 }
 

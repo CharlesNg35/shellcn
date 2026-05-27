@@ -65,6 +65,21 @@ describe("ResourceTree", () => {
     const row = { ref: { kind: "pod", name: "p", uid: "p1" } };
     dt.vm.$emit("node-select", { key: "p1", leaf: true, data: { row } });
     await w.vm.$nextTick();
-    expect(w.emitted("select-node")?.[0]).toEqual([row]);
+    expect(w.emitted("select-node")?.[0]).toEqual([row, ""]);
+  });
+
+  it("emits the tree ancestor path as the tab qualifier", async () => {
+    const w = mountTree();
+    const dt = w.findComponent({ name: "Tree" });
+    const row = {
+      ref: { kind: "table", name: "users", uid: "app.public.users" },
+    };
+    dt.vm.$emit("node-select", {
+      key: "t1",
+      leaf: true,
+      data: { row, parentPath: ["app", "public"] },
+    });
+    await w.vm.$nextTick();
+    expect(w.emitted("select-node")?.[0]).toEqual([row, "app / public"]);
   });
 });
