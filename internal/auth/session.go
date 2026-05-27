@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/charlesng35/shellcn/internal/app"
 )
 
 const (
@@ -19,7 +21,7 @@ const (
 	CSRFHeader = "X-CSRF-Token"
 	// DefaultSessionTTL is how long a platform session lives.
 	DefaultSessionTTL = 24 * time.Hour
-	sessionIssuer     = "shellcn"
+	sessionIssuer     = app.SessionIssuer
 )
 
 // Session is one authenticated browser session.

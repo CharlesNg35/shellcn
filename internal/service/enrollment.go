@@ -20,13 +20,14 @@ import (
 	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/store"
 )
 
 // DefaultProxyImage is the container image install artifacts default to.
-const DefaultProxyImage = "ghcr.io/charlesng35/shellcn-agent:latest"
+const DefaultProxyImage = app.AgentImageLatest
 
 // DefaultEnrollmentTTL is how long an unused enrollment token stays valid.
 const DefaultEnrollmentTTL = 15 * time.Minute
@@ -306,7 +307,7 @@ func connectionSlug(conn models.Connection) string {
 		short = short[:8]
 	}
 	if slug == "" {
-		slug = "shellcn-agent"
+		slug = app.AgentSlugFallback
 	}
 	if short != "" {
 		slug += "-" + short

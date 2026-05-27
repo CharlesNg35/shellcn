@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/models"
 )
 
@@ -74,7 +75,7 @@ func dialector(cfg Config) (gorm.Dialector, error) {
 	case DriverSQLite, "":
 		dsn := cfg.DSN
 		if dsn == "" {
-			dsn = "shellcn.db"
+			dsn = app.DefaultDatabaseDSN
 		}
 		return sqlite.Open(dsn), nil
 	case DriverPostgres:

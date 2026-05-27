@@ -28,6 +28,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/hashicorp/yamux"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/transport"
 )
 
@@ -48,7 +49,7 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("shellcn-agent %s\n", version)
+		fmt.Printf("%s %s\n", app.AgentBinary, version)
 		return
 	}
 

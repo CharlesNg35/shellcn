@@ -13,6 +13,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/go-chi/chi/v5"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/models"
@@ -260,7 +261,7 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agentUser := models.User{ID: "agent", Username: "shellcn-agent"}
+	agentUser := models.User{ID: "agent", Username: app.AgentUsername}
 	s.auditAgentEvent(r.Context(), agentUser, connID, agentConnectEvent, models.AuditAllowed, nil)
 	s.deps.Logger.Info("agent tunnel online", "connection", connID, "mode", proxy.Mode)
 	tunnelErr := transport.ServeGatewayTunnel(c, connID, s.deps.Tunnels)

@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/config"
@@ -56,7 +57,7 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("shellcn %s\n", version)
+		fmt.Printf("%s %s\n", app.ServerBinary, version)
 		return
 	}
 

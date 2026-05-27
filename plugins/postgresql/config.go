@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
@@ -163,7 +164,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		QueryTimeout:      timeout,
 		RowLimit:          rowLimit,
 		MaxConns:          maxConns,
-		ApplicationName:   "shellcn",
+		ApplicationName:   app.DefaultClientName,
 		RedactPatterns:    sqldb.ParsePatterns(cfg.String("redact_columns"), sqldb.DefaultRedactColumnPatterns()),
 	}, nil
 }

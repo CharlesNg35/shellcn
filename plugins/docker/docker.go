@@ -4,6 +4,7 @@ package docker
 import (
 	"context"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 )
@@ -34,7 +35,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Label:      "Docker",
 				Kind:       "docker-run",
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
-				Template: "docker run --rm --name shellcn-agent " +
+				Template: "docker run --rm --name " + app.AgentBinary + " " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 					`--group-add "$(stat -c '%g' /var/run/docker.sock)" ` +
 					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +

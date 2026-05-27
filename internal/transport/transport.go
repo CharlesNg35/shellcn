@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
 )
@@ -218,7 +219,7 @@ func (r *Registry) Dialer(connectionID string) (DialFunc, bool) {
 // agentL7Host is the sentinel authority an L7 (http_proxy) agent client targets.
 // The agent ignores it and proxies to its declared upstream; the gateway-side
 // transport dials the tunnel regardless of this value.
-const agentL7Host = "shellcn-agent.internal"
+const agentL7Host = app.AgentInternalHost
 
 // agentNet routes traffic through an agent tunnel dialer. For L4 modes
 // (tcp/unix) it exposes DialContext; for the L7 http_proxy mode it additionally

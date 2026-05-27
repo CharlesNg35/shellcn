@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/yaml"
 
+	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
@@ -125,7 +126,7 @@ func ApplyYAML(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	force := true
-	opts := metav1.PatchOptions{FieldManager: "shellcn", Force: &force}
+	opts := metav1.PatchOptions{FieldManager: app.DefaultClientName, Force: &force}
 	if req.DryRun {
 		opts.DryRun = []string{metav1.DryRunAll}
 	}
