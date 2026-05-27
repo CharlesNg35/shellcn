@@ -80,6 +80,50 @@ func TestConfigSchemaVisibleValuesAreAuthSpecific(t *testing.T) {
 	}
 }
 
+func TestConfigSchemaHidesStaleCredentialRefsFromOtherAuthModes(t *testing.T) {
+	schema := configSchema()
+	tests := []struct {
+		name   string
+		values map[string]any
+		want   []string
+		reject []string
+	}{
+		{
+			name:   "bearer ignores stale stored password",
+			values: map[string]any{"auth": authBearer, "scheme": "bolt", credentialIDField: "cred-db"},
+			want:   []string{"bearer_token"},
+			reject: []string{"credential_id", "username", "password", "bearer_credential_id"},
+		},
+		{
+			name:   "password ignores stale stored bearer",
+			values: map[string]any{"auth": authPassword, "scheme": "bolt", bearerCredentialField: "cred-bearer"},
+			want:   []string{"username", "password", "realm"},
+			reject: []string{"credential_id", "bearer_token", "bearer_credential_id"},
+		},
+		{
+			name:   "none ignores stale stored credentials",
+			values: map[string]any{"auth": authNone, "scheme": "bolt", credentialIDField: "cred-db", bearerCredentialField: "cred-bearer"},
+			want:   []string{"auth", "scheme"},
+			reject: []string{"username", "password", "credential_id", "bearer_token", "bearer_credential_id"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			visible := visibleFields(schema, tt.values)
+			for _, key := range tt.want {
+				if !visible[key] {
+					t.Fatalf("visible values should include %q in %#v", key, visible)
+				}
+			}
+			for _, key := range tt.reject {
+				if visible[key] {
+					t.Fatalf("visible values should not include %q in %#v", key, visible)
+				}
+			}
+		})
+	}
+}
+
 func TestCypherSafety(t *testing.T) {
 	for _, query := range []string{"MATCH (n) RETURN n", "SHOW INDEXES", "EXPLAIN CREATE (n)", "RETURN 'CREATE (n)' AS text"} {
 		if cypherNeedsReview(query) {

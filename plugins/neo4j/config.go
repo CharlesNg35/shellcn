@@ -62,9 +62,15 @@ func (o options) URI() string {
 
 func configSchema() plugin.Schema {
 	passwordAuth := &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authPassword}, {Field: credentialIDField, Op: plugin.OpEmpty}}}
-	credentialAuth := &plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authCredential}, {Field: credentialIDField, Op: plugin.OpNotEmpty}}}
+	credentialAuth := &plugin.Condition{
+		AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpNin, Value: []string{authNone, authBearer, authStoredBearer}}},
+		AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authCredential}, {Field: credentialIDField, Op: plugin.OpNotEmpty}},
+	}
 	bearerAuth := &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authBearer}, {Field: bearerCredentialField, Op: plugin.OpEmpty}}}
-	storedBearerAuth := &plugin.Condition{AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authStoredBearer}, {Field: bearerCredentialField, Op: plugin.OpNotEmpty}}}
+	storedBearerAuth := &plugin.Condition{
+		AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpNin, Value: []string{authNone, authPassword, authCredential}}},
+		AnyOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: authStoredBearer}, {Field: bearerCredentialField, Op: plugin.OpNotEmpty}},
+	}
 	caVisible := &plugin.Condition{AllOf: []plugin.Rule{{Field: "scheme", Op: plugin.OpIn, Value: []any{"bolt+s", "neo4j+s"}}}}
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Server", Fields: []plugin.Field{
