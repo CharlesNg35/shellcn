@@ -6,6 +6,7 @@ import (
 	"github.com/charlesng/shellcn/plugins/clickhouse"
 	"github.com/charlesng/shellcn/plugins/cockroachdb"
 	"github.com/charlesng/shellcn/plugins/docker"
+	"github.com/charlesng/shellcn/plugins/dynamodb"
 	"github.com/charlesng/shellcn/plugins/elasticsearch"
 	"github.com/charlesng/shellcn/plugins/ftp"
 	"github.com/charlesng/shellcn/plugins/ftps"
@@ -78,6 +79,7 @@ func all() []plugin.Plugin {
 		cockroachdb.New(),
 		clickhouse.New(),
 		cassandra.New(),
+		dynamodb.New(),
 		ldap.New(),
 		elasticsearch.New(),
 		opensearch.New(),

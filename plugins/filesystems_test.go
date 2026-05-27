@@ -158,6 +158,47 @@ func TestFilesystemAuthSchemasAreProtocolSpecific(t *testing.T) {
 	}
 }
 
+func TestFilesystemAuthVisibleValuesAreProtocolSpecific(t *testing.T) {
+	reg := plugin.NewRegistry()
+	Register(reg)
+
+	for _, name := range []string{"ftp", "ftps", "webdav", "smb"} {
+		m, ok := reg.Manifest(name)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", name)
+		}
+		password := visibleFilesystemFields(m.Config, map[string]any{"auth": "password"})
+		requireFilesystemVisible(t, name, password, "username", "password")
+		requireFilesystemHidden(t, name, password, "credential_id", "machine_name", "uid", "gid")
+
+		credential := visibleFilesystemFields(m.Config, map[string]any{"auth": "credential"})
+		requireFilesystemVisible(t, name, credential, "credential_id")
+		requireFilesystemHidden(t, name, credential, "username", "password", "machine_name", "uid", "gid")
+	}
+
+	for _, name := range []string{"s3", "minio"} {
+		m, ok := reg.Manifest(name)
+		if !ok {
+			t.Fatalf("plugin %q was not registered", name)
+		}
+		accessKey := visibleFilesystemFields(m.Config, map[string]any{"auth": "access_key"})
+		requireFilesystemVisible(t, name, accessKey, "access_key_id", "secret_access_key", "session_token")
+		requireFilesystemHidden(t, name, accessKey, "credential_id", "username", "password", "machine_name", "uid", "gid")
+
+		credential := visibleFilesystemFields(m.Config, map[string]any{"auth": "credential"})
+		requireFilesystemVisible(t, name, credential, "credential_id", "session_token")
+		requireFilesystemHidden(t, name, credential, "access_key_id", "secret_access_key", "username", "password", "machine_name", "uid", "gid")
+	}
+
+	m, ok := reg.Manifest("nfs")
+	if !ok {
+		t.Fatal("nfs plugin was not registered")
+	}
+	visible := visibleFilesystemFields(m.Config, map[string]any{})
+	requireFilesystemVisible(t, "nfs", visible, "machine_name", "uid", "gid", "export_path")
+	requireFilesystemHidden(t, "nfs", visible, "auth", "credential_id", "username", "password", "access_key_id", "secret_access_key", "session_token")
+}
+
 func fieldMap(schema plugin.Schema) map[string]bool {
 	fields := map[string]bool{}
 	for _, group := range schema.Groups {
@@ -166,6 +207,57 @@ func fieldMap(schema plugin.Schema) map[string]bool {
 		}
 	}
 	return fields
+}
+
+func visibleFilesystemFields(schema plugin.Schema, overrides map[string]any) map[string]bool {
+	values := schema.Defaults()
+	for _, group := range schema.Groups {
+		for _, field := range group.Fields {
+			if _, ok := values[field.Key]; !ok {
+				values[field.Key] = blankFilesystemFieldValue(field.Type)
+			}
+		}
+	}
+	for key, value := range overrides {
+		values[key] = value
+	}
+	visible := schema.VisibleValues(values, nil)
+	out := map[string]bool{}
+	for key := range visible {
+		out[key] = true
+	}
+	return out
+}
+
+func blankFilesystemFieldValue(t plugin.FieldType) any {
+	switch t {
+	case plugin.FieldNumber:
+		return float64(0)
+	case plugin.FieldToggle:
+		return false
+	case plugin.FieldMultiSelect:
+		return []any{}
+	default:
+		return ""
+	}
+}
+
+func requireFilesystemVisible(t *testing.T, pluginName string, visible map[string]bool, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if !visible[key] {
+			t.Fatalf("%s should show %q for this auth mode; visible=%v", pluginName, key, visible)
+		}
+	}
+}
+
+func requireFilesystemHidden(t *testing.T, pluginName string, visible map[string]bool, keys ...string) {
+	t.Helper()
+	for _, key := range keys {
+		if visible[key] {
+			t.Fatalf("%s should hide %q for this auth mode; visible=%v", pluginName, key, visible)
+		}
+	}
 }
 
 func numericValue(v any) (float64, bool) {

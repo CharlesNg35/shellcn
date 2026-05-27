@@ -47,13 +47,13 @@ These plugins should prove the core architecture first.
 > only difference is the manifest each declares. The frontend special-cases
 > neither (v2 §12, §13).
 
-> **SQL plugins:** PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB,
+> **SQL/CQL plugins:** PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB,
 > ClickHouse, Cassandra, SQLite, and later SQL/CQL engines share only driver-neutral helpers from `plugins/shared/sqldb`
 > (query editor envelopes, identifier/DDL helpers, statement safety checks,
 > audit metadata/result redaction, and TLS/config parsing). Dialect catalog
 > queries, driver connection code, actions, and manifests remain inside each
 > plugin. PostgreSQL, MySQL/MariaDB, MSSQL, Oracle, CockroachDB, ClickHouse,
-> Redis, MongoDB, and Cassandra are implemented as direct-only database/data-store plugins;
+> Redis, MongoDB, Cassandra, and DynamoDB are implemented as direct-only database/data-store plugins;
 > agent transport is reserved for private control-plane targets such as Docker
 > and Kubernetes.
 
@@ -87,10 +87,20 @@ These plugins should prove the core architecture first.
 
 ## P2: Databases And Data Stores
 
-| Plugin   | Purpose               | Main Capabilities                        |
-| -------- | --------------------- | ---------------------------------------- |
-| `sqlite` | SQLite database files | schema browser, query editor, table data |
-| `neo4j`  | Graph database        | Cypher query, graph/table results        |
+DynamoDB is implemented as a direct-only data-store plugin using the AWS SDK for
+Go v2. It keeps a DynamoDB-specific schema: region, optional endpoint override
+for DynamoDB Local or compatible targets, optional table prefix filter, access
+key / stored cloud access key / AWS default provider chain auth, TLS server
+verification, request timeout, page limit, and write-safety gates. It does not
+reuse SQL database credentials or SQL host/database fields. The manifest exposes
+tables, indexes, items, TTL, tags, backups, item editing, guarded table/index/
+item/backup/TTL actions, and PartiQL query execution through generic panels.
+
+| Plugin     | Purpose                 | Main Capabilities                                             |
+| ---------- | ----------------------- | ------------------------------------------------------------- |
+| `dynamodb` | Amazon DynamoDB         | tables, indexes, items, TTL, tags, backups, PartiQL           |
+| `sqlite`   | SQLite database files   | schema browser, query editor, table data                      |
+| `neo4j`    | Graph database          | Cypher query, graph/table results                             |
 
 ## P2: Container And Orchestration Platforms
 
