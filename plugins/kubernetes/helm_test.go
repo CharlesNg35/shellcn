@@ -3,12 +3,10 @@ package kubernetes
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/base64"
 	"net/http"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
 	"github.com/charlesng/shellcn/internal/plugin"
 )
 
@@ -54,13 +52,5 @@ func TestHelmReleasesKeepsLatestRevision(t *testing.T) {
 	items := out.(plugin.Page[Row]).Items
 	if len(items) != 1 || items[0]["revision"] != int64(2) {
 		t.Fatalf("expected one release at latest revision 2: %+v", items)
-	}
-}
-
-func TestProxyExecuteRejectsNonAPIPath(t *testing.T) {
-	sess := connectTo(t, http.NewServeMux())
-	rcx := plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, sess, nil, nil, []byte(`{"method":"GET","url":"http://evil.example/"}`))
-	if _, err := ProxyExecute(rcx); err == nil {
-		t.Fatal("proxy must reject non-API-server paths")
 	}
 }

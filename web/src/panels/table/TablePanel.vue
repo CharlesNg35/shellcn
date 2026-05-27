@@ -706,11 +706,14 @@ onUnmounted(() => {
         />
         Add row
       </Button>
+      <!-- List-level actions inherit the list's own params as their scope, so an
+           action declared on a list runs within that list's context for free. -->
       <ActionBar
         v-if="globalActions.length"
         :connection-id="connectionId"
         :actions="globalActions"
         :resource="resource"
+        :scope="source?.params"
         @done="onActionDone"
       />
       <ActionBar

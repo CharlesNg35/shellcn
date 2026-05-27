@@ -9,8 +9,8 @@ const customResourceKind = "customresource"
 func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
 
 func resources() []plugin.ResourceType {
-	out := make([]plugin.ResourceType, 0, len(kinds)+4)
-	out = append(out, clusterResourceType(), helmReleaseResourceType(), portForwardResourceType())
+	out := make([]plugin.ResourceType, 0, len(kinds)+3)
+	out = append(out, clusterResourceType(), helmReleaseResourceType())
 	for _, k := range kinds {
 		out = append(out, resourceType(k))
 	}
@@ -59,6 +59,7 @@ func customResourceType() plugin.ResourceType {
 		List:  plugin.DataSource{RouteID: "kubernetes.resource.list"},
 		// No static columns: the CRD's own printer columns are fetched at runtime.
 		ColumnsSource: &plugin.DataSource{RouteID: "kubernetes.resource.columns"},
+		ListActionIDs: []string{"kubernetes.create.customresource"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
@@ -79,12 +80,12 @@ func actions() []plugin.Action {
 		{ID: "kubernetes.resource.restart", Label: "Restart", Icon: lucide("refresh-cw"), RouteID: "kubernetes.resource.restart", Params: uid, Confirm: true, ConfirmText: "Roll out a restart?"},
 		{ID: "kubernetes.node.cordon", Label: "Cordon", Icon: lucide("ban"), RouteID: "kubernetes.node.cordon", Params: uid, Confirm: true, ConfirmText: "Mark this node unschedulable?"},
 		{ID: "kubernetes.node.uncordon", Label: "Uncordon", Icon: lucide("circle-check"), RouteID: "kubernetes.node.uncordon", Params: uid},
-		{ID: "kubernetes.service.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.service.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}},
+		{ID: "kubernetes.service.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.service.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
 		editAction(),
 	}
 	base = append(base, podActions()...)
 	for _, k := range kinds {
 		base = append(base, createAction(k))
 	}
-	return base
+	return append(base, createCustomResourceAction())
 }

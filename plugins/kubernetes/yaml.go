@@ -60,13 +60,17 @@ func TemplateYAML(rc *plugin.RequestContext) (any, error) {
 		}
 		meta["namespace"] = ns
 	}
-	skeleton := map[string]any{
-		"apiVersion": gvk.GroupVersion().String(),
-		"kind":       gvk.Kind,
-		"metadata":   meta,
-		"spec":       map[string]any{},
+	body := obj{"spec": obj{}}
+	if isCRD(k) {
+		if sk, ok := crdSkeleton(rc, s, k.gvr); ok {
+			body = sk
+		}
 	}
-	out, err := yaml.Marshal(skeleton)
+	body["apiVersion"] = gvk.GroupVersion().String()
+	body["kind"] = gvk.Kind
+	body["metadata"] = meta
+	delete(body, "status")
+	out, err := yaml.Marshal(body)
 	if err != nil {
 		return nil, err
 	}

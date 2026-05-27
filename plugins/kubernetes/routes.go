@@ -37,7 +37,6 @@ func Routes() []plugin.Route {
 
 		{ID: "kubernetes.pod.logs", Method: plugin.MethodWS, Path: "/pods/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.logs", Stream: LogsStream},
 		{ID: "kubernetes.pod.exec", Method: plugin.MethodWS, Path: "/pods/exec", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.exec", Stream: ExecStream},
-		{ID: "kubernetes.pod.portforward", Method: plugin.MethodWS, Path: "/pods/portforward", Permission: "kubernetes.pods.portforward", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.portforward", Stream: PortForwardStream},
 
 		{ID: "kubernetes.cluster.tree", Method: plugin.MethodGet, Path: "/tree/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.tree", Handle: ClusterTree},
 		{ID: "kubernetes.cluster.list", Method: plugin.MethodGet, Path: "/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.list", Handle: ClusterList},
@@ -51,26 +50,10 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.helm.release", Method: plugin.MethodGet, Path: "/helm/release", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.helm.release", Handle: HelmRelease},
 
 		{ID: "kubernetes.service.open", Method: plugin.MethodGet, Path: "/services/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.service.open", Handle: ServiceProxyURL},
-
-		{ID: "kubernetes.tree.portforward", Method: plugin.MethodGet, Path: "/tree/portforward", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.portforward", Handle: TreePortForward},
-		{ID: "kubernetes.portforward.list", Method: plugin.MethodGet, Path: "/portforward", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.portforward.list", Handle: PortForwardList},
-		{ID: "kubernetes.proxy.execute", Method: plugin.MethodPost, Path: "/proxy/execute", Permission: "kubernetes.proxy.execute", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.proxy.execute", Input: proxySchema(), Handle: ProxyExecute},
 	}
 }
 
 func sess(rc *plugin.RequestContext) (*Session, error) { return Unwrap(rc.Session) }
-
-func proxySchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{
-		Name: "Request",
-		Fields: []plugin.Field{
-			{Key: "method", Label: "Method", Type: plugin.FieldText, Required: true},
-			{Key: "url", Label: "Path", Type: plugin.FieldText, Required: true},
-			{Key: "headers", Label: "Headers", Type: plugin.FieldJSON},
-			{Key: "body", Label: "Body", Type: plugin.FieldTextarea},
-		},
-	}}}
-}
 
 func applySchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{

@@ -60,3 +60,15 @@ func createAction(k kind) plugin.Action {
 		Config: yamlEditorConfig(),
 	}
 }
+
+// createCustomResourceAction is the single Create shared by every CRD list; the
+// concrete kind isn't known until runtime, so it's supplied by the active list's
+// scope params (not a static Params here). The template is derived from the CRD
+// schema like any other kind.
+func createCustomResourceAction() plugin.Action {
+	return plugin.Action{
+		ID: "kubernetes.create.customresource", Label: "Create", Icon: lucide("plus"),
+		RouteID: "kubernetes.resource.template", Open: plugin.OpenDock, Panel: plugin.PanelCodeEditor,
+		Config: yamlEditorConfig(),
+	}
+}

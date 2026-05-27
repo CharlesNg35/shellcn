@@ -124,6 +124,76 @@ func TreeGatewayAPI(rc *plugin.RequestContext) (any, error) {
 	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
 }
 
+// crdSkeleton builds a starter object for a custom resource by sampling the
+// CRD's OpenAPI v3 schema (required fields and declared defaults) of the served
+// version — so Create is derived from the definition, not a fixed blob.
+func crdSkeleton(rc *plugin.RequestContext, s *Session, gvr schema.GroupVersionResource) (obj, bool) {
+	def, err := s.Dynamic().Resource(crdGVR).Get(rc.Ctx, gvr.Resource+"."+gvr.Group, metav1.GetOptions{})
+	if err != nil {
+		return nil, false
+	}
+	for _, v := range slice(def.Object, "spec", "versions") {
+		vm, ok := v.(obj)
+		if !ok || str(vm, "name") != gvr.Version {
+			continue
+		}
+		if schemaObj := mapField(vm, "schema", "openAPIV3Schema"); schemaObj != nil {
+			return sampleObject(schemaObj), true
+		}
+	}
+	return nil, false
+}
+
+// sampleObject builds a minimal example from an OpenAPI v3 object schema: its
+// required properties plus any carrying a declared default, recursively.
+func sampleObject(schemaObj obj) obj {
+	out := obj{}
+	required := map[string]bool{}
+	for _, r := range slice(schemaObj, "required") {
+		if name, ok := r.(string); ok {
+			required[name] = true
+		}
+	}
+	for name, raw := range mapField(schemaObj, "properties") {
+		ps, ok := raw.(obj)
+		if !ok {
+			continue
+		}
+		if _, hasDefault := ps["default"]; required[name] || hasDefault {
+			out[name] = sampleValue(ps)
+		}
+	}
+	return out
+}
+
+// sampleValue derives a placeholder for one schema node: its default if present,
+// else a zero value matching the declared type (the first enum value for strings).
+func sampleValue(schemaObj obj) any {
+	if d, ok := schemaObj["default"]; ok {
+		return d
+	}
+	switch str(schemaObj, "type") {
+	case "array":
+		return []any{}
+	case "boolean":
+		return false
+	case "integer", "number":
+		return 0
+	case "string":
+		if en := slice(schemaObj, "enum"); len(en) > 0 {
+			return en[0]
+		}
+		return ""
+	case "object":
+		return sampleObject(schemaObj)
+	default:
+		if mapField(schemaObj, "properties") != nil {
+			return sampleObject(schemaObj)
+		}
+		return obj{}
+	}
+}
+
 // crdServedVersion prefers the storage version, else the first served one.
 func crdServedVersion(o obj) string {
 	var served string

@@ -475,8 +475,7 @@ const (
 	OpenDock   OpenTarget = "dock"
 	OpenDialog OpenTarget = "dialog"
 	// OpenURL runs the action's route, which returns {"url": "..."}, and opens
-	// that URL in a new browser tab — e.g. a generated connection-proxy link to a
-	// service's web UI. Generic: the route decides the URL.
+	// that URL in a new browser tab. The route decides the URL.
 	OpenURL OpenTarget = "url"
 )
 
