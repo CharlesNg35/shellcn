@@ -5,9 +5,15 @@ type FieldType string
 
 const (
 	FieldText          FieldType = "text"
+	FieldEmail         FieldType = "email"
+	FieldURL           FieldType = "url"
+	FieldTel           FieldType = "tel"
 	FieldNumber        FieldType = "number"
+	FieldStepper       FieldType = "stepper"
+	FieldSlider        FieldType = "slider"
 	FieldPassword      FieldType = "password"
 	FieldSelect        FieldType = "select"
+	FieldRadio         FieldType = "radio"
 	FieldMultiSelect   FieldType = "multiselect"
 	FieldFile          FieldType = "file"
 	FieldToggle        FieldType = "toggle"
@@ -100,6 +106,9 @@ type Field struct {
 	Credential  *CredentialSelector `json:"credential,omitempty"`
 	VisibleWhen *Condition          `json:"visibleWhen,omitempty"`
 	Validators  []Validator         `json:"validators,omitempty"`
+	// Step is the increment for number/slider inputs (defaults to 1). Min/max
+	// bounds come from the min/max validators.
+	Step any `json:"step,omitempty"`
 }
 
 type Group struct {

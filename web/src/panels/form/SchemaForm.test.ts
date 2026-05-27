@@ -138,6 +138,127 @@ describe("SchemaForm", () => {
     );
   });
 
+  it("renders a plain number input (no stepper buttons) with bounds", async () => {
+    const w = mount(SchemaForm, {
+      props: {
+        schema: {
+          groups: [
+            {
+              name: "Limits",
+              fields: [
+                {
+                  key: "timeout",
+                  label: "Timeout",
+                  type: "number",
+                  validators: [{ type: "min", value: 1 }],
+                },
+              ],
+            },
+          ],
+        },
+        modelValue: { timeout: 30 },
+      },
+    });
+    await flushPromises();
+    const num = w.findComponent({ name: "InputNumber" });
+    expect(num.props("showButtons")).toBeFalsy();
+    expect(num.props("min")).toBe(1);
+  });
+
+  it("renders a stepper field as bounded +/- buttons", async () => {
+    const w = mount(SchemaForm, {
+      props: {
+        schema: {
+          groups: [
+            {
+              name: "Scale",
+              fields: [
+                {
+                  key: "replicas",
+                  label: "Replicas",
+                  type: "stepper",
+                  validators: [
+                    { type: "min", value: 0 },
+                    { type: "max", value: 10 },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        modelValue: { replicas: 3 },
+      },
+    });
+    await flushPromises();
+    const num = w.findComponent({ name: "InputNumber" });
+    expect(num.props("showButtons")).toBe(true);
+    expect(num.props("min")).toBe(0);
+    expect(num.props("max")).toBe(10);
+  });
+
+  it("renders a slider field with bounds and a value readout", async () => {
+    const w = mount(SchemaForm, {
+      props: {
+        schema: {
+          groups: [
+            {
+              name: "Tuning",
+              fields: [
+                {
+                  key: "weight",
+                  label: "Weight",
+                  type: "slider",
+                  step: 5,
+                  validators: [
+                    { type: "min", value: 0 },
+                    { type: "max", value: 50 },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        modelValue: { weight: 25 },
+      },
+    });
+    await flushPromises();
+    const slider = w.findComponent({ name: "Slider" });
+    expect(slider.exists()).toBe(true);
+    expect(slider.props("max")).toBe(50);
+    expect(slider.props("step")).toBe(5);
+    expect(w.text()).toContain("25");
+  });
+
+  it("renders radio options and email inputs by type", async () => {
+    const w = mount(SchemaForm, {
+      props: {
+        schema: {
+          groups: [
+            {
+              name: "Profile",
+              fields: [
+                { key: "contact", label: "Contact", type: "email" },
+                {
+                  key: "mode",
+                  label: "Mode",
+                  type: "radio",
+                  default: "ro",
+                  options: [
+                    { label: "Read-only", value: "ro" },
+                    { label: "Read-write", value: "rw" },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+    expect(w.find('input[type="email"]').exists()).toBe(true);
+    expect(w.findAllComponents({ name: "RadioButton" })).toHaveLength(2);
+  });
+
   it("applies manifest defaults to toggle fields", async () => {
     const w = mount(SchemaForm, {
       props: {

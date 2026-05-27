@@ -104,9 +104,15 @@ export interface RecordingFilters {
 
 export type FieldType =
   | "text"
+  | "email"
+  | "url"
+  | "tel"
   | "number"
+  | "stepper"
+  | "slider"
   | "password"
   | "select"
+  | "radio"
   | "multiselect"
   | "file"
   | "toggle"
@@ -175,6 +181,9 @@ export interface Field {
   credential?: CredentialSelector;
   visibleWhen?: Condition;
   validators?: Validator[];
+  // Increment for number/slider inputs (defaults to 1); min/max come from the
+  // min/max validators.
+  step?: number;
 }
 
 export interface Group {

@@ -77,6 +77,11 @@ func TestServeHTTPProxyRewritesHTML(t *testing.T) {
 	if rec.Header().Get("Content-Security-Policy") != "" {
 		t.Fatal("CSP should be dropped so the shim/assets load")
 	}
+	// The shim must patch runtime-injected assets (bundler chunks/styles bypass
+	// fetch), so script/link src/href are rewritten under the prefix at runtime.
+	if !strings.Contains(body, "HTMLScriptElement.prototype") {
+		t.Fatalf("shim does not rewrite runtime-injected script URLs: %s", body)
+	}
 }
 
 func TestServiceProxyURL(t *testing.T) {

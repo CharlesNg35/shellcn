@@ -38,13 +38,16 @@ func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "transport: "+err.Error(), http.StatusBadGateway)
 		return
 	}
+	// Preserve the original path encoding (Next.js route-group chunks carry
+	// %5B/%28 etc.) so the upstream receives the exact filename.
+	apiRawPath, _, _, _ := s.proxyPaths(r.URL.EscapedPath())
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.Scheme = base.Scheme
 			req.URL.Host = base.Host
 			req.URL.Path = apiPath
+			req.URL.RawPath = apiRawPath
 			req.Host = base.Host
-			// Identity so we can rewrite HTML bodies without gunzipping.
 			req.Header.Set("Accept-Encoding", "identity")
 		},
 		Transport:     rt,
@@ -123,6 +126,9 @@ func rewriteProxyResponse(apiPrefix, prefix string) func(*http.Response) error {
 			}
 			return g[1] + prefix + g[2] + `"`
 		})
+		// The PWA manifest is fetched without credentials by default, which the
+		// authenticated proxy rejects; ask the browser to send them.
+		html = strings.ReplaceAll(html, `rel="manifest"`, `rel="manifest" crossorigin="use-credentials"`)
 		html = injectProxyShim(html, prefix)
 		resp.Body = io.NopCloser(strings.NewReader(html))
 		resp.ContentLength = int64(len(html))
@@ -153,13 +159,19 @@ func rewriteCookiePath(cookie, prefix string) string {
 	return strings.Join(parts, ";")
 }
 
-// injectProxyShim adds a <base> and a fetch/XHR/path shim after <head> so the
-// app's relative and root-absolute requests stay under the proxy prefix.
+// injectProxyShim adds a <base> and a shim after <head> so the app's requests
+// stay under the proxy prefix. It rewrites root-absolute URLs in fetch/XHR and,
+// crucially, in runtime-injected assets — script/link/img src/href and
+// setAttribute — so bundler-loaded chunks and styles (which bypass fetch) resolve
+// under the prefix instead of hitting the gateway root.
 func injectProxyShim(html, prefix string) string {
 	shim := `<base href="` + prefix + `/"><script>(function(){var p=` + jsString(prefix) + `;
 function fix(u){return (typeof u==="string"&&u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)?p+u:u;}
 var of=window.fetch;if(of){window.fetch=function(i,o){try{if(typeof i==="string")i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);}catch(e){}return of.call(this,i,o);};}
 var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){return ox.apply(this,[m,fix(u)].concat([].slice.call(arguments,2)));};
+function patch(proto,prop){var d=Object.getOwnPropertyDescriptor(proto,prop);if(d&&d.set)Object.defineProperty(proto,prop,{configurable:true,enumerable:d.enumerable,get:function(){return d.get.call(this);},set:function(v){d.set.call(this,fix(v));}});}
+try{patch(HTMLScriptElement.prototype,"src");patch(HTMLLinkElement.prototype,"href");patch(HTMLImageElement.prototype,"src");}catch(e){}
+var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){return sa.call(this,n,(n==="src"||n==="href")&&typeof v==="string"?fix(v):v);};
 })();</script>`
 	if i := headInsertIndex(html); i >= 0 {
 		return html[:i] + shim + html[i:]

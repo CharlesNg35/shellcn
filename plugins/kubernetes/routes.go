@@ -67,7 +67,7 @@ func scaleSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{
 		Name: "Scale",
 		Fields: []plugin.Field{
-			{Key: "replicas", Label: "Replicas", Type: plugin.FieldNumber, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
+			{Key: "replicas", Label: "Replicas", Type: plugin.FieldStepper, Required: true, Default: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
 		},
 	}}}
 }
