@@ -27,6 +27,7 @@ const component = computed(() => resolvePanel(props.panel));
 const panelKey = computed(() =>
   JSON.stringify({
     panel: props.panel,
+    connectionId: props.connectionId,
     source: props.source,
     resource: props.resource?.uid,
   }),
