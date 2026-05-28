@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"os"
 	"os/exec"
@@ -69,6 +70,21 @@ func TestRedisPluginIntegration(t *testing.T) {
 	}
 	if len(result.Rows) != 1 || result.Rows[0][0] != "hello" {
 		t.Fatalf("unexpected command result: %#v", result.Rows)
+	}
+
+	// Key write → verify → delete → verify, through the route handlers.
+	writeBody, _ := json.Marshal(map[string]any{"type": "string", "value": "world"})
+	if _, err := writeKey(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"key": "shellcn:written"}, nil, writeBody)); err != nil {
+		t.Fatalf("write key: %v", err)
+	}
+	if got, err := s.client.Get(ctx, "shellcn:written").Result(); err != nil || got != "world" {
+		t.Fatalf("written key = %q, err %v", got, err)
+	}
+	if _, err := deleteKey(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"key": "shellcn:written"}, nil, nil)); err != nil {
+		t.Fatalf("delete key: %v", err)
+	}
+	if n, err := s.client.Exists(ctx, "shellcn:written").Result(); err != nil || n != 0 {
+		t.Fatalf("deleted key still present (n=%d, err=%v)", n, err)
 	}
 }
 
