@@ -175,6 +175,18 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		t.Fatalf("expected password column dropped, got %d err=%v", cols, err)
 	}
 
+	// View create → drop round-trip.
+	if _, err := pool.Exec(ctx, `CREATE VIEW public.shellcn_people_v AS SELECT id, name FROM public.shellcn_people`); err != nil {
+		t.Fatalf("seed view: %v", err)
+	}
+	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "view": "shellcn_people_v"}, nil, nil)); err != nil {
+		t.Fatalf("drop view: %v", err)
+	}
+	var vcount int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM pg_views WHERE schemaname='public' AND viewname='shellcn_people_v'`).Scan(&vcount); err != nil || vcount != 0 {
+		t.Fatalf("expected view dropped, got %d err=%v", vcount, err)
+	}
+
 	// DROP DATABASE must succeed even after the connection has browsed (and
 	// cached a pool to) the target database.
 	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": "shellcn_droptest"})); err != nil {

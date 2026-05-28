@@ -41,6 +41,7 @@ func routes() []plugin.Route {
 		{ID: "cassandra.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "cassandra.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.relations.tree", Handle: treeRelations},
 		{ID: "cassandra.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "cassandra.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.tables.list", Handle: listTables},
 		{ID: "cassandra.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "cassandra.views.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.views.list", Handle: listViews},
+		{ID: "cassandra.view.drop", Method: plugin.MethodDelete, Path: "/views/{keyspace}/{view}", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.view.drop", Handle: dropView},
 		{ID: "cassandra.types.tree", Method: plugin.MethodGet, Path: "/tree/types", Permission: "cassandra.types.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.types.tree", Handle: treeTypes},
 		{ID: "cassandra.types.list", Method: plugin.MethodGet, Path: "/types", Permission: "cassandra.types.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.types.list", Handle: listTypes},
 		{ID: "cassandra.type.overview", Method: plugin.MethodGet, Path: "/types/{keyspace}/{name}/overview", Permission: "cassandra.types.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.type.overview", Handle: typeOverview},
@@ -800,6 +801,18 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return execDDL(rc, "DROP TABLE "+qualified(keyspace, table))
+}
+
+func dropView(rc *plugin.RequestContext) (any, error) {
+	keyspace, err := sqldb.SafeIdentifier(rc.Param("keyspace"))
+	if err != nil {
+		return nil, err
+	}
+	view, err := sqldb.SafeIdentifier(rc.Param("view"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP MATERIALIZED VIEW "+qualified(keyspace, view))
 }
 
 func execDDL(rc *plugin.RequestContext, cql string) (any, error) {

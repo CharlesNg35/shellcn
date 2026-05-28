@@ -43,6 +43,7 @@ func routes() []plugin.Route {
 		{ID: "oracle.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.tables.list", Handle: listTables},
 		{ID: "oracle.views.tree", Method: plugin.MethodGet, Path: "/tree/views", Permission: "oracle.views.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.views.tree", Handle: treeViews},
 		{ID: "oracle.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "oracle.views.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.views.list", Handle: listViews},
+		{ID: "oracle.view.drop", Method: plugin.MethodDelete, Path: "/views/{id}", Permission: "oracle.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.view.drop", Handle: dropView},
 		{ID: "oracle.procedures.tree", Method: plugin.MethodGet, Path: "/tree/procedures", Permission: "oracle.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.procedures.tree", Handle: treeProcedures},
 		{ID: "oracle.procedures.list", Method: plugin.MethodGet, Path: "/procedures", Permission: "oracle.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.procedures.list", Handle: listProcedures},
 		{ID: "oracle.packages.tree", Method: plugin.MethodGet, Path: "/tree/packages", Permission: "oracle.packages.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.packages.tree", Handle: treePackages},
@@ -1136,6 +1137,14 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return execDDL(rc, "DROP TABLE "+qualified(owner, table))
+}
+
+func dropView(rc *plugin.RequestContext) (any, error) {
+	owner, view, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP VIEW "+qualified(owner, view))
 }
 
 func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {

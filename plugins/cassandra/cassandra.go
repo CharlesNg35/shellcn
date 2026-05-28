@@ -98,7 +98,7 @@ func keyspaceResource() plugin.ResourceType {
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.keyspace.overview", Params: map[string]string{"keyspace": "${resource.uid}"}}},
 			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.tables.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"cassandra.table.create"}}.Map()},
-			{Key: "views", Label: "Materialized Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.views.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns()}.Map()},
+			{Key: "views", Label: "Materialized Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.views.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"cassandra.view.drop"}}.Map()},
 			{Key: "types", Label: "Types", Icon: icon("braces"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.types.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: typeColumns()}.Map()},
 			{Key: "functions", Label: "Functions", Icon: icon("function-square"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.functions.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: functionColumns()}.Map()},
 			{Key: "query", Label: "CQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT release_version FROM system.local;")},
@@ -125,9 +125,10 @@ func tableResource() plugin.ResourceType {
 func viewResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "view", Title: "Materialized Views",
-		List:    plugin.DataSource{RouteID: "cassandra.views.list"},
-		Columns: viewColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
+		List:         plugin.DataSource{RouteID: "cassandra.views.list"},
+		Columns:      viewColumns(),
+		RowActionIDs: []string{"cassandra.view.drop"},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"cassandra.view.drop"}}, Tabs: []plugin.Tab{
 			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns()}.Map()},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.view.definition", Params: tableParams()}},
 			{Key: "query", Label: "CQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM \"${resource.namespace}\".\"${resource.name}\" LIMIT 100;")},
@@ -221,5 +222,6 @@ func actions() []plugin.Action {
 		{ID: "cassandra.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "cassandra.index.drop", Params: map[string]string{"keyspace": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "cassandra.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "cassandra.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every partition and row will be deleted."},
 		{ID: "cassandra.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cassandra.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
+		{ID: "cassandra.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cassandra.view.drop", Params: map[string]string{"keyspace": "${resource.namespace}", "view": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this materialized view?"},
 	}
 }

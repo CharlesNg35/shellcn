@@ -44,6 +44,7 @@ func routes() []plugin.Route {
 		{ID: "mssql.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "mssql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.relations.tree", Handle: treeRelations},
 		{ID: "mssql.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "mssql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.tables.list", Handle: listTables},
 		{ID: "mssql.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "mssql.views.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.views.list", Handle: listViews},
+		{ID: "mssql.view.drop", Method: plugin.MethodDelete, Path: "/views/{id}", Permission: "mssql.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.view.drop", Handle: dropView},
 		{ID: "mssql.procedures.tree", Method: plugin.MethodGet, Path: "/tree/procedures", Permission: "mssql.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.procedures.tree", Handle: treeProcedures},
 		{ID: "mssql.procedures.list", Method: plugin.MethodGet, Path: "/procedures", Permission: "mssql.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.procedures.list", Handle: listProcedures},
 		{ID: "mssql.users.tree", Method: plugin.MethodGet, Path: "/tree/users", Permission: "mssql.users.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.users.tree", Handle: treeUsers},
@@ -1012,6 +1013,14 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return execDDL(rc, "DROP TABLE "+qualified(database, schema, table))
+}
+
+func dropView(rc *plugin.RequestContext) (any, error) {
+	database, schema, view, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP VIEW "+qualified(database, schema, view))
 }
 
 func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {

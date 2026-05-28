@@ -62,6 +62,7 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "cockroachdb.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.tables.list", Handle: listTables},
 		{ID: "cockroachdb.views.tree", Method: plugin.MethodGet, Path: "/tree/views", Permission: "cockroachdb.views.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.views.tree", Handle: treeViews},
 		{ID: "cockroachdb.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "cockroachdb.views.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.views.list", Handle: listViews},
+		{ID: "cockroachdb.view.drop", Method: plugin.MethodDelete, Path: "/views/{schema}/{view}", Permission: "cockroachdb.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.view.drop", Handle: dropView},
 		{ID: "cockroachdb.functions.tree", Method: plugin.MethodGet, Path: "/tree/functions", Permission: "cockroachdb.functions.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.functions.tree", Handle: treeFunctions},
 		{ID: "cockroachdb.functions.list", Method: plugin.MethodGet, Path: "/functions", Permission: "cockroachdb.functions.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.functions.list", Handle: listFunctions},
 		{ID: "cockroachdb.sequences.list", Method: plugin.MethodGet, Path: "/sequences", Permission: "cockroachdb.sequences.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.sequences.list", Handle: listSequences},
@@ -1135,6 +1136,32 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return execDDL(rc, "DROP TABLE "+sqldb.Qualified(schema, table))
+}
+
+func dropView(rc *plugin.RequestContext) (any, error) {
+	schema, err := sqldb.SafeIdentifier(rc.Param("schema"))
+	if err != nil {
+		return nil, err
+	}
+	view, err := sqldb.SafeIdentifier(rc.Param("view"))
+	if err != nil {
+		return nil, err
+	}
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	// Regular and materialized views are listed together but dropped with
+	// different statements, so resolve the relkind first.
+	var relkind string
+	if err := s.pool.QueryRow(rc.Ctx, `SELECT c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2`, schema, view).Scan(&relkind); err != nil {
+		return nil, cockroachErr(err)
+	}
+	stmt := "DROP VIEW " + sqldb.Qualified(schema, view)
+	if relkind == "m" {
+		stmt = "DROP MATERIALIZED VIEW " + sqldb.Qualified(schema, view)
+	}
+	return execDDL(rc, stmt)
 }
 
 func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {
