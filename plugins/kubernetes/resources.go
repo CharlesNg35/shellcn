@@ -44,7 +44,7 @@ func resourceType(k kind) plugin.ResourceType {
 		ActionIDs:     rowActions,
 		ListActionIDs: []string{"kubernetes.create." + k.name},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", ActionIDs: rowActions},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: columnSeverities(k.columns, "status"), ActionIDs: rowActions},
 			Tabs:   tabs,
 		},
 	}

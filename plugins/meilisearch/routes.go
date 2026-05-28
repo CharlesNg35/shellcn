@@ -392,9 +392,11 @@ func listTasks(rc *plugin.RequestContext) (any, error) {
 	if index := indexParam(rc); index != "" {
 		q.Set("indexUids", index)
 	}
+	// Meilisearch paginates /tasks with a numeric "next" (the uid to pass as
+	// "from"), or null when there are no more — not a string.
 	var out struct {
 		Results []row  `json:"results"`
-		Next    string `json:"next"`
+		Next    *int64 `json:"next"`
 	}
 	if err := s.client.Do(rc.Ctx, http.MethodGet, "/tasks", q, nil, &out); err != nil {
 		return nil, err
@@ -403,7 +405,11 @@ func listTasks(rc *plugin.RequestContext) (any, error) {
 		name := fmt.Sprint(item["uid"])
 		item["ref"] = plugin.ResourceRef{Kind: "task", Name: name, UID: name}
 	}
-	return plugin.Page[row]{Items: out.Results, NextCursor: out.Next}, nil
+	next := ""
+	if out.Next != nil {
+		next = strconv.FormatInt(*out.Next, 10)
+	}
+	return plugin.Page[row]{Items: out.Results, NextCursor: next}, nil
 }
 
 func readTask(rc *plugin.RequestContext) (any, error) {

@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { reactive, ref } from "vue";
+import { STREAM_CHANNEL_BUFFER_LIMIT } from "./sessionLimits";
 
 export type ChannelStatus = "connecting" | "open" | "closed" | "error";
 
@@ -18,8 +19,6 @@ interface Channel {
   buffer: string[];
 }
 
-const BUFFER_LIMIT = 2000;
-
 function frameText(ev: unknown): string {
   const data = (ev as { data?: unknown }).data;
   return typeof data === "string" ? data : String(data ?? "");
@@ -30,7 +29,7 @@ function frameText(ev: unknown): string {
 // tab switches. Channels are torn down explicitly when a connection closes.
 // A channel key is `${connectionId}:${routeId}:${params}`; the connection id is
 // everything before the first colon.
-export const useSessionsStore = defineStore("sessions", () => {
+export const useStreamChannelsStore = defineStore("streamChannels", () => {
   const channels = new Map<string, Channel>();
   const statuses = reactive<Record<string, ChannelStatus>>({});
   // Per-channel failure reason (from the WS close frame), surfaced by panels.
@@ -61,7 +60,9 @@ export const useSessionsStore = defineStore("sessions", () => {
     socket.addEventListener("message", (ev) => {
       const text = frameText(ev);
       channel.buffer.push(text);
-      if (channel.buffer.length > BUFFER_LIMIT) channel.buffer.shift();
+      if (channel.buffer.length > STREAM_CHANNEL_BUFFER_LIMIT) {
+        channel.buffer.shift();
+      }
       generation.value += 1;
       for (const fn of channel.listeners) fn(text);
     });

@@ -108,10 +108,10 @@ func containerResource() plugin.ResourceType {
 		List:          plugin.DataSource{RouteID: "podman.containers.list"},
 		Watch:         &plugin.DataSource{RouteID: "podman.events.watch", Method: plugin.MethodWS},
 		Columns:       containerColumns(),
-		ListActionIDs: []string{"podman.container.create"},
+		ListActionIDs: []string{"podman.container.create", "podman.containers.prune"},
 		ActionIDs:     []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", ActionIDs: []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "terminal", Label: "Terminal", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "podman.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24", "command": "/bin/sh"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
@@ -126,7 +126,7 @@ func containerResource() plugin.ResourceType {
 func podResource() plugin.ResourceType {
 	columns := []plugin.Column{
 		{Key: "name", Label: "Name", Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: dockerengine.StateSeverities()},
 		{Key: "containers", Label: "Containers", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "createdAt", Label: "Created", Type: plugin.ColumnDateTime, Sortable: true},
 	}
@@ -136,8 +136,9 @@ func podResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "pod", Title: "Pods", List: plugin.DataSource{RouteID: "podman.pods.list"}, Columns: columns,
+		ActionIDs: []string{"podman.pod.start", "podman.pod.stop", "podman.pod.restart", "podman.pod.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"podman.pod.start", "podman.pod.stop", "podman.pod.restart", "podman.pod.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.pod.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "containers", Label: "Containers", Icon: icon("box"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "podman.pod.containers", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: podContainerColumns}.Map()},
@@ -157,7 +158,8 @@ func imageResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "image", Title: "Images", List: plugin.DataSource{RouteID: "podman.images.list"}, Columns: columns,
-		ActionIDs: []string{"podman.image.remove"},
+		ActionIDs:     []string{"podman.image.remove"},
+		ListActionIDs: []string{"podman.image.pull", "podman.images.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"podman.image.remove"}},
 			Tabs: []plugin.Tab{
@@ -178,7 +180,8 @@ func volumeResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "volume", Title: "Volumes", List: plugin.DataSource{RouteID: "podman.volumes.list"}, Columns: columns,
-		ActionIDs: []string{"podman.volume.remove"},
+		ActionIDs:     []string{"podman.volume.remove"},
+		ListActionIDs: []string{"podman.volume.create", "podman.volumes.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"podman.volume.remove"}},
 			Tabs: []plugin.Tab{
@@ -198,7 +201,8 @@ func networkResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "network", Title: "Networks", List: plugin.DataSource{RouteID: "podman.networks.list"}, Columns: columns,
-		ActionIDs: []string{"podman.network.remove"},
+		ActionIDs:     []string{"podman.network.remove"},
+		ListActionIDs: []string{"podman.network.create", "podman.networks.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"podman.network.remove"}},
 			Tabs: []plugin.Tab{
@@ -219,5 +223,22 @@ func actions() []plugin.Action {
 		{ID: "podman.image.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.image.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this image?"},
 		{ID: "podman.volume.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.volume.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this volume?"},
 		{ID: "podman.network.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.network.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this network?"},
+		{ID: "podman.image.pull", Label: "Pull image", Icon: icon("download"), RouteID: "podman.image.pull"},
+		{ID: "podman.volume.create", Label: "Create volume", Icon: icon("plus"), RouteID: "podman.volume.create"},
+		{ID: "podman.network.create", Label: "Create network", Icon: icon("plus"), RouteID: "podman.network.create"},
+		{ID: "podman.containers.prune", Label: "Prune stopped", Icon: icon("eraser"), RouteID: "podman.containers.prune", Confirm: true, ConfirmText: "Remove all stopped containers?"},
+		{ID: "podman.images.prune", Label: "Prune dangling", Icon: icon("eraser"), RouteID: "podman.images.prune", Confirm: true, ConfirmText: "Remove all dangling images?"},
+		{ID: "podman.volumes.prune", Label: "Prune unused", Icon: icon("eraser"), RouteID: "podman.volumes.prune", Confirm: true, ConfirmText: "Remove all unused volumes?"},
+		{ID: "podman.networks.prune", Label: "Prune unused", Icon: icon("eraser"), RouteID: "podman.networks.prune", Confirm: true, ConfirmText: "Remove all unused networks?"},
+		{ID: "podman.pod.start", Label: "Start", Icon: icon("play"), RouteID: "podman.pod.start", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: whenPodStatus("Created", "Exited", "Stopped", "Dead", "Degraded")},
+		{ID: "podman.pod.stop", Label: "Stop", Icon: icon("square"), RouteID: "podman.pod.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this pod?", EnabledWhen: whenPodStatus("Running", "Degraded", "Paused")},
+		{ID: "podman.pod.restart", Label: "Restart", Icon: icon("refresh-cw"), RouteID: "podman.pod.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this pod?", EnabledWhen: whenPodStatus("Running", "Degraded", "Paused")},
+		{ID: "podman.pod.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.pod.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this pod and its containers?"},
 	}
+}
+
+// whenPodStatus gates a pod action on libpod's capitalised pod Status field,
+// which differs from the lowercase container state used by dockerengine.WhenState.
+func whenPodStatus(states ...string) *plugin.Condition {
+	return &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpIn, Value: states}}}
 }

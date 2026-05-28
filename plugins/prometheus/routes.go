@@ -737,9 +737,12 @@ func rules(ctx context.Context, s *Session) ([]row, error) {
 	return rows, nil
 }
 
+// metricNames returns the full metric catalogue. Names are bounded and cheap, so
+// no server-side limit is applied — the metric browser paginates and filters the
+// complete list client-side rather than truncating to one page.
 func metricNames(ctx context.Context, s *Session) ([]string, error) {
 	var names []string
-	if err := s.client.api(ctx, http.MethodGet, "/api/v1/label/__name__/values", url.Values{"limit": []string{strconv.Itoa(s.opts.PageLimit)}}, nil, &names); err != nil {
+	if err := s.client.api(ctx, http.MethodGet, "/api/v1/label/__name__/values", nil, nil, &names); err != nil {
 		return nil, err
 	}
 	sort.Strings(names)
@@ -747,7 +750,7 @@ func metricNames(ctx context.Context, s *Session) ([]string, error) {
 }
 
 func metadata(ctx context.Context, s *Session, metric string) (map[string][]row, error) {
-	q := url.Values{"limit": []string{strconv.Itoa(s.opts.PageLimit)}}
+	q := url.Values{}
 	if metric != "" {
 		q.Set("metric", metric)
 	}

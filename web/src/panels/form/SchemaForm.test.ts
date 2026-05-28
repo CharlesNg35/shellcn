@@ -118,6 +118,54 @@ describe("SchemaForm", () => {
     expect(w.find('input[placeholder="30s, 5m, 1h"]').exists()).toBe(true);
   });
 
+  it("populates a field's choices from a route (optionsSource)", async () => {
+    installFetch((url) =>
+      url.includes("table.columns")
+        ? {
+            body: {
+              items: [{ name: "id" }, { name: "email" }],
+              nextCursor: "",
+              total: 2,
+            },
+          }
+        : { body: {} },
+    );
+    const w = mount(SchemaForm, {
+      props: {
+        connectionId: "c1",
+        resource: {
+          kind: "table",
+          namespace: "public",
+          name: "users",
+          uid: "u1",
+        },
+        schema: {
+          groups: [
+            {
+              name: "Index",
+              fields: [
+                {
+                  key: "columns",
+                  label: "Columns",
+                  type: "multiselect",
+                  optionsSource: {
+                    routeId: "postgresql.table.columns",
+                    params: { table: "${resource.name}" },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+    expect(w.findComponent({ name: "MultiSelect" }).props("options")).toEqual([
+      { value: "id", label: "id" },
+      { value: "email", label: "email" },
+    ]);
+  });
+
   it("renders number fields without locale digit grouping", async () => {
     const w = mount(SchemaForm, {
       props: {

@@ -13,7 +13,7 @@ var statusSeverities = map[string]plugin.Severity{
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "tables", Label: "Tables", Icon: icon("table-2"), Source: plugin.DataSource{RouteID: rid("tables.tree")}, ResourceKind: "table"},
-		{Key: "backups", Label: "Backups", Icon: icon("archive"), Source: plugin.DataSource{RouteID: rid("backups.tree")}, ResourceKind: "backup"},
+		{Key: "backups", Label: "Backups", Icon: icon("archive"), ResourceKind: "backup"},
 	}
 }
 
@@ -70,10 +70,11 @@ func itemResource() plugin.ResourceType {
 		List:         plugin.DataSource{RouteID: rid("items.list")},
 		RowActionIDs: []string{rid("item.delete")},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("item.delete")}},
+			Header:     plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("item.delete")}},
+			DefaultTab: "editor",
 			Tabs: []plugin.Tab{
 				{Key: "document", Label: "Item", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("item.read"), Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("item.read"), Params: map[string]string{"id": "${resource.uid}"}}, Config: map[string]any{"language": "json", "saveRouteId": rid("item.update"), "saveMethod": "PUT", "saveParams": map[string]string{"id": "${resource.uid}"}}},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("item.read"), Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("item.update"), SaveMethod: plugin.MethodPut, SaveParams: map[string]string{"id": "${resource.uid}"}}.Map()},
 			},
 		},
 	}
@@ -98,7 +99,7 @@ func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: rid("table.create"), Label: "Create table", Icon: icon("plus"), RouteID: rid("table.create"), Confirm: true},
 		{ID: rid("table.delete"), Label: "Delete table", Icon: icon("trash-2"), RouteID: rid("table.delete"), Params: tableParams(), Confirm: true, ConfirmText: "Delete this DynamoDB table and all items?"},
-		{ID: rid("item.put"), Label: "Put item", Icon: icon("plus"), RouteID: rid("item.put"), Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "items"}},
+		{ID: rid("item.put"), Label: "Put item", Icon: icon("plus"), RouteID: rid("item.put"), Params: tableParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"pk\": \"example\"\n}", SaveRouteID: rid("item.put"), SaveMethod: plugin.MethodPost, SaveParams: tableParams(), SaveBodyKey: "item"}.Map(), OnSuccess: &plugin.ActionSuccess{SelectTab: "items"}},
 		{ID: rid("item.delete"), Label: "Delete item", Icon: icon("trash"), RouteID: rid("item.delete"), Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this item?"},
 		{ID: rid("gsi.create"), Label: "Create GSI", Icon: icon("plus"), RouteID: rid("gsi.create"), Params: tableParams(), Confirm: true, OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: rid("gsi.delete"), Label: "Delete GSI", Icon: icon("trash"), RouteID: rid("gsi.delete"), Params: indexParams(), Confirm: true, ConfirmText: "Delete this global secondary index?"},
@@ -109,16 +110,16 @@ func actions() []plugin.Action {
 }
 
 func queryConfig(initial string) map[string]any {
-	return map[string]any{
-		"language":          "sql",
-		"label":             "PartiQL",
-		"executeLabel":      "Run",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a PartiQL statement to see results.",
-		"initialQuery":      initial,
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "sql",
+		Label:             "PartiQL",
+		ExecuteLabel:      "Run",
+		RunningLabel:      "Running...",
+		EmptyText:         "Run a PartiQL statement to see results.",
+		InitialQuery:      initial,
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func tableParams() map[string]string { return map[string]string{"table": "${resource.name}"} }

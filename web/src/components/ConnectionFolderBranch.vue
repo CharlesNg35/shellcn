@@ -8,7 +8,6 @@ import ConnectionSidebarItem from "./ConnectionSidebarItem.vue";
 import type {
   ConnectionFolderMenuAction,
   ConnectionFolderNode,
-  ConnectionTreeDropPreference,
   ConnectionTreeItem,
 } from "./connectionTree";
 import type { ConnectionSummary, FolderColor } from "../types/projection";
@@ -20,7 +19,8 @@ const props = defineProps<{
   activeId: string | null;
   expanded: Record<string, boolean>;
   disabled: boolean;
-  parentId?: string;
+  dragging?: boolean;
+  droppedId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -28,8 +28,7 @@ const emit = defineEmits<{
   "toggle-folder": [folderId: string];
   "menu-action": [action: ConnectionFolderMenuAction];
   "drag-start": [];
-  "drag-add": [preference?: ConnectionTreeDropPreference];
-  "drag-end": [preference?: ConnectionTreeDropPreference];
+  "drag-end": [droppedId?: string];
   open: [connection: ConnectionSummary];
 }>();
 
@@ -93,27 +92,16 @@ function folderIconClass(folder: ConnectionFolderNode): string {
   return colorClasses[folder.color]?.icon ?? colorClasses.slate.icon;
 }
 
-function dragEnd(event: unknown): void {
-  const sortable = (event ?? {}) as {
-    item?: HTMLElement;
-    to?: HTMLElement;
-  };
-  emit("drag-end", {
-    connectionId: sortable.item?.dataset.connectionId,
-    folderId: sortable.item?.dataset.folderId,
-    targetParentId: sortable.to?.dataset.parentFolderId || undefined,
-  });
-}
-
-function dragAdd(event: unknown): void {
-  const sortable = (event ?? {}) as {
-    item?: HTMLElement;
-  };
-  emit("drag-add", {
-    connectionId: sortable.item?.dataset.connectionId,
-    folderId: sortable.item?.dataset.folderId,
-    targetParentId: props.parentId,
-  });
+// The id of whatever was dropped, read from Sortable's dragged element so the
+// sidebar can briefly highlight where it landed.
+function onEnd(event: unknown): void {
+  const item = (event as { item?: HTMLElement } | null | undefined)?.item;
+  const el =
+    item instanceof HTMLElement
+      ? (item.closest<HTMLElement>("[data-connection-id], [data-folder-id]") ??
+        item)
+      : item;
+  emit("drag-end", el?.dataset.connectionId ?? el?.dataset.folderId);
 }
 </script>
 
@@ -123,14 +111,14 @@ function dragAdd(event: unknown): void {
       v-model="items"
       group="sidebar-items"
       handle=".connection-sidebar-drag-item"
-      :data-parent-folder-id="parentId ?? ''"
       :disabled="disabled"
       :animation="150"
-      ghost-class="opacity-40"
+      chosen-class="connection-sidebar-sortable-chosen"
+      drag-class="connection-sidebar-sortable-drag"
+      ghost-class="connection-sidebar-sortable-ghost"
       class="min-h-3 space-y-1"
       @start="emit('drag-start')"
-      @add="dragAdd"
-      @end="dragEnd"
+      @end="onEnd"
     >
       <template
         v-for="item in items"
@@ -140,12 +128,18 @@ function dragAdd(event: unknown): void {
           v-if="item.kind === 'connection'"
           :connection="item.connection"
           :active="activeId === item.connection.id"
+          :dragging="dragging"
+          :highlighted="item.connection.id === droppedId"
           @open="emit('open', $event)"
         />
 
         <section v-else class="min-w-0" :data-folder-id="item.id">
           <div
-            class="connection-sidebar-drag-item group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+            class="connection-sidebar-drag-item group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors"
+            :class="[
+              !dragging && 'hover:bg-surface-100 dark:hover:bg-surface-800',
+              item.id === droppedId && 'bg-surface-100 dark:bg-surface-800',
+            ]"
           >
             <span
               class="shrink-0 rounded p-0.5"
@@ -168,9 +162,9 @@ function dragAdd(event: unknown): void {
               :aria-label="`${isExpanded(item) ? 'Collapse' : 'Expand'} ${item.name}`"
               @click="emit('toggle-folder', item.id)"
             >
-              <span class="block max-w-full truncate" :title="item.name">{{
-                item.name
-              }}</span>
+              <span class="block max-w-full truncate" :title="item.name">
+                {{ item.name }}
+              </span>
               <span class="block max-w-full truncate text-xs text-surface-400">
                 Folder
               </span>
@@ -205,12 +199,12 @@ function dragAdd(event: unknown): void {
             :active-id="activeId"
             :expanded="expanded"
             :disabled="disabled"
-            :parent-id="item.id"
+            :dragging="dragging"
+            :dropped-id="droppedId"
             class="mt-1 pl-4"
             @toggle-folder="emit('toggle-folder', $event)"
             @menu-action="emit('menu-action', $event)"
             @drag-start="emit('drag-start')"
-            @drag-add="emit('drag-add', $event)"
             @drag-end="emit('drag-end', $event)"
             @open="emit('open', $event)"
           />

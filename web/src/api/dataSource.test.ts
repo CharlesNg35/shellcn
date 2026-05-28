@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { installFetch } from "../test/fetchMock";
-import type { SocketLike } from "../stores/sessions";
+import type { SocketLike } from "../stores/streamChannels";
 import {
   fetchPage,
   interpolate,

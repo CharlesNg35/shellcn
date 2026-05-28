@@ -130,11 +130,16 @@ func authToken(opts options) (driver.AuthToken, error) {
 }
 
 func unwrap(sess plugin.Session) (*Session, error) {
-	s, ok := sess.(*Session)
-	if !ok {
-		return nil, plugin.ErrInvalidInput
+	if s, ok := sess.(*Session); ok {
+		return s, nil
 	}
-	return s, nil
+	// rc.Session is the core's borrowed Handle, which exposes the live session.
+	if h, ok := sess.(interface{ Session() plugin.Session }); ok {
+		if s, ok := h.Session().(*Session); ok {
+			return s, nil
+		}
+	}
+	return nil, plugin.ErrInvalidInput
 }
 
 func icon(name string) plugin.Icon {

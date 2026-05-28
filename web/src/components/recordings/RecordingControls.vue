@@ -8,7 +8,7 @@ import {
 } from "../../composables/useRecordingControl";
 import AppIcon from "../AppIcon.vue";
 import type { DataSource, ResourceRef } from "../../types/projection";
-import type { ChannelStatus } from "../../stores/sessions";
+import type { ChannelStatus } from "../../stores/streamChannels";
 
 const props = defineProps<{
   connectionId: string;

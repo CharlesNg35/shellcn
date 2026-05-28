@@ -25,8 +25,8 @@ func resources() []plugin.ResourceType {
 		},
 		{
 			Kind: "namespace", Title: "Databases / Buckets", List: plugin.DataSource{RouteID: rid("namespaces.list")},
-			Columns: namespaceColumns(), RowActionIDs: []string{rid("write.namespace")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("write.namespace")}}, Tabs: []plugin.Tab{
+			Columns: namespaceColumns(), ListActionIDs: []string{rid("namespace.create")}, RowActionIDs: []string{rid("write.namespace"), rid("namespace.delete")},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("write.namespace"), rid("namespace.delete")}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("namespace.read"), Params: namespaceParams()}},
 				{Key: "measurements", Label: "Measurements", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurements.list"), Params: namespaceParams()}, Config: plugin.TableConfig{Columns: measurementColumns(), Exportable: true}.Map()},
 				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: namespaceParams()}, Config: queryConfig()},
@@ -49,19 +49,21 @@ func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: rid("write.namespace"), Label: "Write line protocol", Icon: icon("send"), RouteID: rid("write"), Params: namespaceParams(), Confirm: true, ConfirmText: "Write line protocol to this InfluxDB container?"},
 		{ID: rid("write.measurement"), Label: "Write line protocol", Icon: icon("send"), RouteID: rid("write"), Params: map[string]string{"namespace": "${resource.namespace}"}, Confirm: true, ConfirmText: "Write line protocol to this InfluxDB container?"},
+		{ID: rid("namespace.create"), Label: "Create database / bucket", Icon: icon("plus"), RouteID: rid("namespace.create")},
+		{ID: rid("namespace.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: rid("namespace.delete"), Params: namespaceParams(), Confirm: true, ConfirmText: "Delete this database / bucket and all of its data?"},
 	}
 }
 
 func queryConfig() map[string]any {
-	return map[string]any{
-		"language":          "plaintext",
-		"label":             "Query",
-		"executeLabel":      "Run",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a query to see results.",
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "plaintext",
+		Label:             "Query",
+		ExecuteLabel:      "Run",
+		RunningLabel:      "Running...",
+		EmptyText:         "Run a query to see results.",
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func measurementQueryConfig() map[string]any {

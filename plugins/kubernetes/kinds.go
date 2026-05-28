@@ -25,18 +25,20 @@ var categories = []category{
 // drives the manifest tree, resource types, and the generic list/get/watch/
 // delete routes — adding a kind is one entry, no new routes or frontend.
 type kind struct {
-	name       string // Ref/route key, e.g. "pod"
-	title      string
-	category   string
-	icon       string
-	gvr        schema.GroupVersionResource
-	namespaced bool
-	redact     bool // never return object data (Secrets)
-	columns    []plugin.Column
-	extra      func(obj) Row // cells beyond commonRow
-	actionIDs  []string      // row + detail actions (Edit/Create added generically)
-	detailTabs []plugin.Tab  // extra detail tabs beyond Overview/YAML/Events
-	subgroup   string        // optional nested sub-group within the category
+	name        string // Ref/route key, e.g. "pod"
+	title       string
+	category    string
+	icon        string
+	gvr         schema.GroupVersionResource
+	namespaced  bool
+	redact      bool // never return object data (Secrets)
+	columns     []plugin.Column
+	extra       func(obj) Row // cells beyond commonRow
+	actionIDs   []string      // row + detail actions (Edit/Create added generically)
+	detailTabs  []plugin.Tab  // extra detail tabs beyond Overview/YAML/Events
+	subgroup    string        // optional nested sub-group within the category
+	listLimit   int64         // cap per list call (0 = unbounded), for high-churn kinds
+	recentFirst bool          // sort the fetched rows newest-first
 }
 
 // subgroupLabels names the nested sub-groups a category can expand into.
@@ -58,6 +60,17 @@ func statusBadge(sev map[string]plugin.Severity) func(*plugin.Column) {
 	return func(c *plugin.Column) { c.Type = plugin.ColumnBadge; c.Severities = sev }
 }
 
+// columnSeverities returns the badge color map of the named column, so a detail
+// header can reuse the same value->severity contract as the list column.
+func columnSeverities(cols []plugin.Column, field string) map[string]plugin.Severity {
+	for _, c := range cols {
+		if c.Key == field {
+			return c.Severities
+		}
+	}
+	return nil
+}
+
 var (
 	podSeverities = map[string]plugin.Severity{
 		"running": plugin.SeveritySuccess, "succeeded": plugin.SeverityInfo, "completed": plugin.SeverityInfo,
@@ -74,6 +87,7 @@ var (
 		"pending": plugin.SeverityWarn, "released": plugin.SeverityWarn,
 		"lost": plugin.SeverityDanger, "failed": plugin.SeverityDanger,
 	}
+	eventSeverities = map[string]plugin.Severity{"normal": plugin.SeverityInfo, "warning": plugin.SeverityWarn}
 )
 
 func nameCol() plugin.Column { return col("name", "Name") }
@@ -314,9 +328,11 @@ var kinds = []kind{
 	},
 	{
 		name: "event", title: "Events", category: "cluster", icon: "bell", namespaced: true,
-		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "events"},
-		columns: []plugin.Column{col("type", "Type", badge), col("reason", "Reason"), col("object", "Object"), col("message", "Message", notSort), col("count", "Count", num), ageCol()},
-		extra:   eventRow,
+		gvr:         schema.GroupVersionResource{Version: "v1", Resource: "events"},
+		columns:     []plugin.Column{col("type", "Type", statusBadge(eventSeverities)), col("reason", "Reason"), col("object", "Object"), col("message", "Message", notSort), col("count", "Count", num), ageCol()},
+		extra:       eventRow,
+		listLimit:   500,
+		recentFirst: true,
 	},
 	{
 		// "Definitions" under Custom Resources: the CRDs themselves.

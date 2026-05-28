@@ -41,6 +41,7 @@ func routes() []plugin.Route {
 		{ID: "cassandra.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "cassandra.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.relations.tree", Handle: treeRelations},
 		{ID: "cassandra.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "cassandra.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.tables.list", Handle: listTables},
 		{ID: "cassandra.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "cassandra.views.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.views.list", Handle: listViews},
+		{ID: "cassandra.view.drop", Method: plugin.MethodDelete, Path: "/views/{keyspace}/{view}", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.view.drop", Handle: dropView},
 		{ID: "cassandra.types.tree", Method: plugin.MethodGet, Path: "/tree/types", Permission: "cassandra.types.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.types.tree", Handle: treeTypes},
 		{ID: "cassandra.types.list", Method: plugin.MethodGet, Path: "/types", Permission: "cassandra.types.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.types.list", Handle: listTypes},
 		{ID: "cassandra.type.overview", Method: plugin.MethodGet, Path: "/types/{keyspace}/{name}/overview", Permission: "cassandra.types.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.type.overview", Handle: typeOverview},
@@ -105,7 +106,7 @@ func columnAddSchema() *plugin.Schema {
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "column", Label: "Column", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "Cassandra secondary indexes cover a single column."},
+		{Key: "column", Label: "Column", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Help: "Cassandra secondary indexes cover a single column."},
 	}}}}
 }
 
@@ -802,6 +803,18 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 	return execDDL(rc, "DROP TABLE "+qualified(keyspace, table))
 }
 
+func dropView(rc *plugin.RequestContext) (any, error) {
+	keyspace, err := sqldb.SafeIdentifier(rc.Param("keyspace"))
+	if err != nil {
+		return nil, err
+	}
+	view, err := sqldb.SafeIdentifier(rc.Param("view"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP MATERIALIZED VIEW "+qualified(keyspace, view))
+}
+
 func execDDL(rc *plugin.RequestContext, cql string) (any, error) {
 	s, err := cassandraSession(rc)
 	if err != nil {
@@ -991,7 +1004,7 @@ func iterRows(iter *gocql.Iter, limit int, redactions []string) ([]row, error) {
 		}
 		r := row{}
 		for k, v := range m {
-			r[k] = jsonValue(v)
+			r[k] = jsonValue(k, v)
 		}
 		redactRow(r, redactions)
 		out = append(out, r)
@@ -1002,12 +1015,12 @@ func iterRows(iter *gocql.Iter, limit int, redactions []string) ([]row, error) {
 	return out, nil
 }
 
-func jsonValue(v any) any {
+func jsonValue(key string, v any) any {
 	switch x := v.(type) {
 	case nil:
 		return nil
 	case []byte:
-		return base64.StdEncoding.EncodeToString(x)
+		return sqldb.DisplayBytes(key, x)
 	case time.Time:
 		return x.Format(time.RFC3339Nano)
 	case net.IP:

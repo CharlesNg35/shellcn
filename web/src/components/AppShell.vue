@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { useDocumentVisibility, useIntervalFn, useStorage } from "@vueuse/core";
 import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
 import { useAuthStore } from "../stores/auth";
+import { useConnectionSessionsStore } from "../stores/connectionSessions";
+import { KEEP_ALIVE_CONNECTION_WORKSPACES_MAX } from "../stores/sessionLimits";
 import { useTheme } from "../composables/useTheme";
 import AppIcon from "./AppIcon.vue";
 import AppLogo from "./AppLogo.vue";
@@ -14,6 +16,7 @@ import { searchInputClass } from "../primevue/preset";
 
 const conns = useConnectionsStore();
 const auth = useAuthStore();
+const connectionSessions = useConnectionSessionsStore();
 const route = useRoute();
 const router = useRouter();
 const { isDark, toggle: toggleTheme } = useTheme();
@@ -31,6 +34,7 @@ const query = ref("");
 const error = ref<string | null>(null);
 
 onMounted(async () => {
+  connectionSessions.start();
   if (conns.loaded) return;
   try {
     await conns.load();
@@ -38,6 +42,8 @@ onMounted(async () => {
     error.value = (e as Error).message;
   }
 });
+
+onUnmounted(() => connectionSessions.stop());
 
 // Keep the presence dots honest: re-fetch the catalog on a slow cadence so a
 // session opening or closing flips its dot without a manual reload. Paused
@@ -268,7 +274,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
       <!-- Keep each connection's workspace alive (bounded LRU) so terminals,
            consoles and log streams resume exactly as left when navigating back. -->
       <RouterView v-slot="{ Component }">
-        <KeepAlive :max="6">
+        <KeepAlive :max="KEEP_ALIVE_CONNECTION_WORKSPACES_MAX">
           <component :is="Component" :key="route.fullPath" />
         </KeepAlive>
       </RouterView>

@@ -32,6 +32,7 @@ import (
 	"github.com/charlesng35/shellcn/plugins/rdp"
 	"github.com/charlesng35/shellcn/plugins/redis"
 	"github.com/charlesng35/shellcn/plugins/s3"
+	"github.com/charlesng35/shellcn/plugins/servermonitor"
 	"github.com/charlesng35/shellcn/plugins/sftp"
 	"github.com/charlesng35/shellcn/plugins/smb"
 	"github.com/charlesng35/shellcn/plugins/solr"
@@ -71,6 +72,7 @@ func all() []plugin.Plugin {
 		rdp.New(),
 		proxmox.New(),
 		kubernetes.New(),
+		servermonitor.New(),
 		prometheus.New(),
 		influxdb.New(),
 		postgresql.New(),

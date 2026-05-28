@@ -146,6 +146,15 @@ func TestBuildHTTPProxyRejectsBadCA(t *testing.T) {
 	}
 }
 
+func TestResetReconnectBackoffAfterStableTunnel(t *testing.T) {
+	if got := resetReconnectBackoff(30*time.Second, stableTunnelDuration-time.Nanosecond); got != 30*time.Second {
+		t.Fatalf("short tunnel reset = %s, want existing backoff", got)
+	}
+	if got := resetReconnectBackoff(30*time.Second, stableTunnelDuration); got != initialReconnectBackoff {
+		t.Fatalf("stable tunnel reset = %s, want %s", got, initialReconnectBackoff)
+	}
+}
+
 func TestProxyStreamUnix(t *testing.T) {
 	socket := filepath.Join(t.TempDir(), "target.sock")
 	ln, err := net.Listen("unix", socket)

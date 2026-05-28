@@ -10,12 +10,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
 )
@@ -146,6 +148,91 @@ func NormalizeJSONValue(value any) ([]byte, error) {
 		}
 		return raw, nil
 	}
+}
+
+func DisplayValues(columns []string, values []any) []any {
+	out := make([]any, len(values))
+	for i, value := range values {
+		column := ""
+		if i < len(columns) {
+			column = columns[i]
+		}
+		out[i] = DisplayValue(column, value)
+	}
+	return out
+}
+
+func DisplayValue(column string, value any) any {
+	switch v := value.(type) {
+	case nil:
+		return nil
+	case []byte:
+		return DisplayBytes(column, v)
+	case time.Time:
+		return v.Format(time.RFC3339Nano)
+	}
+	if raw, ok := byteArray(value); ok {
+		return DisplayBytes(column, raw)
+	}
+	return value
+}
+
+func DisplayBytes(column string, raw []byte) string {
+	if display, ok := FormatBinaryID(column, raw); ok {
+		return display
+	}
+	if printableUTF8(raw) {
+		return string(raw)
+	}
+	return "0x" + hex.EncodeToString(raw)
+}
+
+func FormatBinaryID(column string, raw []byte) (string, bool) {
+	if !IDLikeColumn(column) {
+		return "", false
+	}
+	switch len(raw) {
+	case 12:
+		return hex.EncodeToString(raw), true
+	case 16:
+		return fmt.Sprintf("%x-%x-%x-%x-%x", raw[0:4], raw[4:6], raw[6:8], raw[8:10], raw[10:16]), true
+	default:
+		return "", false
+	}
+}
+
+func IDLikeColumn(column string) bool {
+	lower := strings.ToLower(strings.TrimSpace(column))
+	return lower == "id" || lower == "_id" || strings.HasSuffix(lower, "_id")
+}
+
+func byteArray(value any) ([]byte, bool) {
+	rv := reflect.ValueOf(value)
+	if !rv.IsValid() || (rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array) || rv.Type().Elem().Kind() != reflect.Uint8 {
+		return nil, false
+	}
+	out := make([]byte, rv.Len())
+	for i := 0; i < len(out); i++ {
+		out[i] = byte(rv.Index(i).Uint())
+	}
+	return out, true
+}
+
+func printableUTF8(raw []byte) bool {
+	if !utf8.Valid(raw) {
+		return false
+	}
+	for len(raw) > 0 {
+		r, size := utf8.DecodeRune(raw)
+		if r == utf8.RuneError && size == 1 {
+			return false
+		}
+		if unicode.IsControl(r) && r != '\n' && r != '\r' && r != '\t' {
+			return false
+		}
+		raw = raw[size:]
+	}
+	return true
 }
 
 func DDLColumn(spec ColumnSpec) (string, error) {
@@ -464,6 +551,26 @@ func IdentifierList(raw string, quote func(string) string) ([]string, error) {
 		return nil, fmt.Errorf("%w: at least one column is required", plugin.ErrInvalidInput)
 	}
 	return out, nil
+}
+
+// IdentifierListValue parses a column list supplied either as a multiselect array
+// (the route-sourced options path) or a comma-separated string (free text), so a
+// handler accepts both without caring how the form rendered the field.
+func IdentifierListValue(v any, quote func(string) string) ([]string, error) {
+	switch t := v.(type) {
+	case string:
+		return IdentifierList(t, quote)
+	case []string:
+		return IdentifierList(strings.Join(t, ","), quote)
+	case []any:
+		parts := make([]string, 0, len(t))
+		for _, item := range t {
+			parts = append(parts, fmt.Sprint(item))
+		}
+		return IdentifierList(strings.Join(parts, ","), quote)
+	default:
+		return nil, fmt.Errorf("%w: columns must be a list of column names", plugin.ErrInvalidInput)
+	}
 }
 
 // ValidateRowKey ensures a client-supplied key is exactly the table's primary

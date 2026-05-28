@@ -20,7 +20,7 @@ func rid(suffix string) string { return "meilisearch." + suffix }
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "indexes", Label: "Indexes", Icon: icon("database"), Source: plugin.DataSource{RouteID: rid("indexes.tree")}, ResourceKind: "index"},
-		{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Source: plugin.DataSource{RouteID: rid("tasks.tree")}, ResourceKind: "task"},
+		{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), ResourceKind: "task"},
 		{Key: "keys", Label: "API keys", Icon: icon("key-round"), Source: plugin.DataSource{RouteID: rid("keys.tree")}, ResourceKind: "key"},
 	}
 }
@@ -47,16 +47,16 @@ func resources() []plugin.ResourceType {
 			Kind: "document", Title: "Documents", List: plugin.DataSource{RouteID: rid("documents.list")},
 			Columns:      documentColumns(),
 			RowActionIDs: []string{rid("document.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{rid("document.delete")}}, Tabs: []plugin.Tab{
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{rid("document.delete")}}, DefaultTab: "editor", Tabs: []plugin.Tab{
 				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: map[string]any{"language": "json", "saveRouteId": rid("document.update"), "saveMethod": "PUT", "saveParams": documentParams()}},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("document.update"), SaveMethod: plugin.MethodPut, SaveParams: documentParams()}.Map()},
 			}},
 		},
 		{
 			Kind: "task", Title: "Tasks", List: plugin.DataSource{RouteID: rid("tasks.list")},
 			Columns:      taskColumns(),
 			RowActionIDs: []string{rid("task.cancel")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Task ${resource.name}", StatusField: "status", ActionIDs: []string{rid("task.cancel")}}, Tabs: []plugin.Tab{
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Task ${resource.name}", StatusField: "status", Severities: taskStatusSeverities, ActionIDs: []string{rid("task.cancel")}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("task.read"), Params: taskParams()}},
 			}},
 		},
@@ -78,7 +78,7 @@ func actions() []plugin.Action {
 		{ID: rid("index.update"), Label: "Update primary key", Icon: icon("key"), RouteID: rid("index.update"), Params: indexParams(), Confirm: true, ConfirmText: "Update this index primary key?"},
 		{ID: rid("index.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: rid("index.delete"), Params: indexParams(), Confirm: true, ConfirmText: "Delete this index and its documents?"},
 		{ID: rid("settings.update"), Label: "Update settings", Icon: icon("settings"), RouteID: rid("settings.update"), Params: indexParams(), Confirm: true, ConfirmText: "Update this index settings?"},
-		{ID: rid("document.upsert"), Label: "Upsert document", Icon: icon("plus"), RouteID: rid("document.upsert"), Params: indexParams()},
+		{ID: rid("document.upsert"), Label: "Upsert document", Icon: icon("plus"), RouteID: rid("document.upsert"), Params: indexParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"id\": \"example\"\n}", SaveRouteID: rid("document.upsert"), SaveMethod: plugin.MethodPut, SaveParams: indexParams(), SaveBodyKey: "document"}.Map()},
 		{ID: rid("document.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("document.delete"), Params: documentParams(), Confirm: true, ConfirmText: "Delete this document?"},
 		{ID: rid("documents.delete_all"), Label: "Delete all documents", Icon: icon("eraser"), RouteID: rid("documents.delete_all"), Params: indexParams(), Confirm: true, ConfirmText: "Delete every document in this index?"},
 		{ID: rid("task.cancel"), Label: "Cancel", Icon: icon("ban"), RouteID: rid("task.cancel"), Params: taskParams(), Confirm: true, ConfirmText: "Cancel matching enqueued or processing tasks?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpIn, Value: []string{"enqueued", "processing"}}}}},
@@ -90,16 +90,16 @@ func actions() []plugin.Action {
 }
 
 func searchConfig() map[string]any {
-	return map[string]any{
-		"language":          "json",
-		"label":             "Meilisearch query",
-		"executeLabel":      "Search",
-		"runningLabel":      "Searching...",
-		"emptyText":         "Run a Meilisearch JSON search to see hits.",
-		"initialQuery":      `{"q":"","limit":50}`,
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "json",
+		Label:             "Meilisearch query",
+		ExecuteLabel:      "Search",
+		RunningLabel:      "Searching...",
+		EmptyText:         "Run a Meilisearch JSON search to see hits.",
+		InitialQuery:      `{"q":"","limit":50}`,
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func indexParams() map[string]string { return map[string]string{"index": "${resource.name}"} }

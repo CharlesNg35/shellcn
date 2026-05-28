@@ -126,6 +126,21 @@ describe("ConnectPanel", () => {
     w.unmount();
   });
 
+  it("shows the backend connect error inline", () => {
+    const w = mount(ConnectPanel, {
+      props: {
+        connectionId: "c1",
+        connection: direct,
+        errorMessage: "ssh: unable to authenticate",
+      },
+    });
+
+    expect(w.find('[role="alert"]').text()).toContain("Could not connect");
+    expect(w.find('[role="alert"]').text()).toContain(
+      "ssh: unable to authenticate",
+    );
+  });
+
   it("stops polling an old agent connection when the panel is reused", async () => {
     const calls: string[] = [];
     installFetch((url) => {

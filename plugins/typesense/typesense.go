@@ -155,10 +155,10 @@ func configSchema() plugin.Schema {
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "api_key", Options: []plugin.Option{
 				{Label: "API key", Value: "api_key"},
-				{Label: "Stored credential", Value: "credential"},
+				{Label: "Stored API key", Value: "credential"},
 			}},
 			{Key: "api_key", Label: "API key", Type: plugin.FieldPassword, Required: true, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "api_key"}}}},
-			{Key: credentialField, Label: "Stored credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+			{Key: credentialField, Label: "Stored API key", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}, Protocols: []string{"typesense"},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 		}},
@@ -180,11 +180,16 @@ func configSchema() plugin.Schema {
 }
 
 func unwrap(sess plugin.Session) (*Session, error) {
-	s, ok := sess.(*Session)
-	if !ok {
-		return nil, plugin.ErrInvalidInput
+	if s, ok := sess.(*Session); ok {
+		return s, nil
 	}
-	return s, nil
+	// rc.Session is the core's borrowed Handle, which exposes the live session.
+	if h, ok := sess.(interface{ Session() plugin.Session }); ok {
+		if s, ok := h.Session().(*Session); ok {
+			return s, nil
+		}
+	}
+	return nil, plugin.ErrInvalidInput
 }
 
 func ensureWritable(s *Session) error {

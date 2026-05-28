@@ -82,3 +82,16 @@ func TestParseExtJSON(t *testing.T) {
 		t.Fatalf("unexpected document: %#v", doc)
 	}
 }
+
+func TestDisplayValueFormatsBSONIDs(t *testing.T) {
+	if got := displayValue("_id", map[string]any{"$oid": "64b64c2f9f1b2c3d4e5f6789"}); got != "64b64c2f9f1b2c3d4e5f6789" {
+		t.Fatalf("object id display: got %#v", got)
+	}
+	uuidBytes := []any{32, 90, 17, 95, 100, 227, 74, 220, 141, 56, 74, 239, 117, 197, 139, 249}
+	if got := displayValue("id", uuidBytes); got != "205a115f-64e3-4adc-8d38-4aef75c58bf9" {
+		t.Fatalf("uuid byte display: got %#v", got)
+	}
+	if got := displayValue("tags", uuidBytes); got != `[32,90,17,95,100,227,74,220,141,56,74,239,117,197,139,249]` {
+		t.Fatalf("non-id array should stay JSON: got %#v", got)
+	}
+}

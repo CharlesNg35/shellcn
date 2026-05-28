@@ -138,9 +138,19 @@ func TestManifestReferencesResolve(t *testing.T) {
 			t.Fatalf("action %q points at missing route %q", action.ID, action.RouteID)
 		}
 	}
+	resourceByKind := map[string]plugin.ResourceType{}
+	for _, res := range m.Resources {
+		resourceByKind[res.Kind] = res
+	}
 	for _, group := range m.Tree {
-		if !routeIDs[group.Source.RouteID] {
+		if group.Source.RouteID != "" && !routeIDs[group.Source.RouteID] {
 			t.Fatalf("tree group %q points at missing route %q", group.Key, group.Source.RouteID)
+		}
+		if group.Source.RouteID == "" {
+			res, ok := resourceByKind[group.ResourceKind]
+			if !ok || !routeIDs[res.List.RouteID] {
+				t.Fatalf("tree group %q points at missing resource kind %q", group.Key, group.ResourceKind)
+			}
 		}
 	}
 	for _, res := range m.Resources {

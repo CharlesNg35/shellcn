@@ -37,6 +37,8 @@ func routes() []plugin.Route {
 		{ID: rid("schema.read"), Method: plugin.MethodGet, Path: "/schema/{id}", Permission: "neo4j.schema.read", Risk: plugin.RiskSafe, AuditEvent: rid("schema.read"), Handle: schemaRead},
 		{ID: rid("indexes.list"), Method: plugin.MethodGet, Path: "/indexes", Permission: "neo4j.schema.read", Risk: plugin.RiskSafe, AuditEvent: rid("indexes.list"), Handle: indexesList},
 		{ID: rid("constraints.list"), Method: plugin.MethodGet, Path: "/constraints", Permission: "neo4j.schema.read", Risk: plugin.RiskSafe, AuditEvent: rid("constraints.list"), Handle: constraintsList},
+		{ID: rid("index.create"), Method: plugin.MethodPost, Path: "/databases/{database}/indexes", Permission: "neo4j.schema.write", Risk: plugin.RiskWrite, AuditEvent: rid("index.create"), Input: indexCreateSchema(), Handle: indexCreate},
+		{ID: rid("schema.drop"), Method: plugin.MethodDelete, Path: "/schema/{id}", Permission: "neo4j.schema.delete", Risk: plugin.RiskDestructive, AuditEvent: rid("schema.drop"), Handle: schemaDrop},
 		{ID: rid("nodes.list"), Method: plugin.MethodGet, Path: "/nodes", Permission: "neo4j.nodes.read", Risk: plugin.RiskSafe, AuditEvent: rid("nodes.list"), Handle: nodesList},
 		{ID: rid("node.read"), Method: plugin.MethodGet, Path: "/nodes/{id}", Permission: "neo4j.nodes.read", Risk: plugin.RiskSafe, AuditEvent: rid("node.read"), Handle: nodeRead},
 		{ID: rid("node.relationships"), Method: plugin.MethodGet, Path: "/nodes/{id}/relationships", Permission: "neo4j.relationships.read", Risk: plugin.RiskSafe, AuditEvent: rid("node.relationships"), Handle: nodeRelationships},
@@ -330,6 +332,79 @@ func schemaRead(rc *plugin.RequestContext) (any, error) {
 		}
 	}
 	return nil, plugin.ErrNotFound
+}
+
+func indexCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true},
+		{Key: "entity_type", Label: "Entity", Type: plugin.FieldSelect, Required: true, Default: "node", Options: []plugin.Option{{Label: "Node", Value: "node"}, {Label: "Relationship", Value: "relationship"}}},
+		{Key: "label", Label: "Label / type", Type: plugin.FieldText, Required: true, Placeholder: "Person"},
+		{Key: "properties", Label: "Properties", Type: plugin.FieldText, Required: true, Placeholder: "name, email"},
+	}}}}
+}
+
+func indexCreate(rc *plugin.RequestContext) (any, error) {
+	s, err := neo4jSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name       string `json:"name" validate:"required"`
+		EntityType string `json:"entity_type"`
+		Label      string `json:"label" validate:"required"`
+		Properties string `json:"properties" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	props := splitCommaList(req.Properties)
+	if len(props) == 0 {
+		return nil, fmt.Errorf("%w: at least one property is required", plugin.ErrInvalidInput)
+	}
+	varName, pattern := "n", "(n:"+quoteCypherName(req.Label)+")"
+	if strings.EqualFold(req.EntityType, "relationship") {
+		varName, pattern = "r", "()-[r:"+quoteCypherName(req.Label)+"]-()"
+	}
+	quoted := make([]string, 0, len(props))
+	for _, p := range props {
+		quoted = append(quoted, varName+"."+quoteCypherName(p))
+	}
+	query := "CREATE INDEX " + quoteCypherName(req.Name) + " FOR " + pattern + " ON (" + strings.Join(quoted, ", ") + ")"
+	_, err = writeRows(rc.Ctx, s, databaseName(rc), query, nil)
+	return actionResult{OK: err == nil}, err
+}
+
+func schemaDrop(rc *plugin.RequestContext) (any, error) {
+	kind, db, name, err := decodeID3(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	s, err := neo4jSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	verb := "DROP INDEX "
+	if kind == "constraint" {
+		verb = "DROP CONSTRAINT "
+	}
+	_, err = writeRows(rc.Ctx, s, db, verb+quoteCypherName(name), nil)
+	return actionResult{OK: err == nil}, err
+}
+
+func splitCommaList(in string) []string {
+	out := []string{}
+	for _, part := range strings.Split(in, ",") {
+		if v := strings.TrimSpace(part); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func schemaRowsForDB(ctx context.Context, sess plugin.Session, db, kind string) ([]row, error) {

@@ -96,21 +96,47 @@ func (t targetAllowlist) addString(raw string) {
 		t.unix[s] = true
 	}
 	if u, err := url.Parse(s); err == nil && u.Hostname() != "" {
-		t.hosts[u.Hostname()] = true
+		t.addHost(u.Hostname())
 		if u.Port() != "" {
-			t.addrs[net.JoinHostPort(u.Hostname(), u.Port())] = true
+			t.addAddr(u.Hostname(), u.Port())
 			t.ports[u.Port()] = true
 		}
 		return
 	}
 	if host, port, err := net.SplitHostPort(s); err == nil {
-		t.hosts[host] = true
-		t.addrs[net.JoinHostPort(host, port)] = true
+		t.addHost(host)
+		t.addAddr(host, port)
 		t.ports[port] = true
 		return
 	}
 	if !strings.ContainsAny(s, "/\\") {
-		t.hosts[s] = true
+		t.addHost(s)
+	}
+}
+
+func (t targetAllowlist) addHost(host string) {
+	if host == "" {
+		return
+	}
+	t.hosts[host] = true
+	for _, alias := range loopbackAliases(host) {
+		t.hosts[alias] = true
+	}
+}
+
+func (t targetAllowlist) addAddr(host, port string) {
+	t.addrs[net.JoinHostPort(host, port)] = true
+	for _, alias := range loopbackAliases(host) {
+		t.addrs[net.JoinHostPort(alias, port)] = true
+	}
+}
+
+func loopbackAliases(host string) []string {
+	switch strings.ToLower(strings.Trim(host, "[]")) {
+	case "localhost", "127.0.0.1", "::1":
+		return []string{"localhost", "127.0.0.1", "::1"}
+	default:
+		return nil
 	}
 }
 
@@ -234,12 +260,12 @@ func (a *agentNet) DialContext(ctx context.Context, network, addr string) (net.C
 	return a.dial(ctx, network, addr)
 }
 
-// HTTP returns an L7 base URL + RoundTripper for http_proxy mode (else ok=false).
+// HTTP returns an L7 base URL + RoundTripper for http_proxy-style modes (else ok=false).
 // The "http" scheme is logical: DialContext opens a yamux stream over the agent's
 // already-encrypted wss tunnel, which re-originates to the upstream over https —
 // so an inner TLS layer would only be TLS-in-TLS with no gain.
 func (a *agentNet) HTTP() (string, http.RoundTripper, bool) {
-	if a.mode != plugin.AgentHTTP {
+	if a.mode != plugin.AgentHTTP && a.mode != plugin.AgentHostMonitor {
 		return "", nil, false
 	}
 	rt := &http.Transport{

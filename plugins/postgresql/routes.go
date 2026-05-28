@@ -49,7 +49,9 @@ func routes() []plugin.Route {
 		{ID: "postgresql.schemas.list", Method: plugin.MethodGet, Path: "/schemas", Permission: "postgresql.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.schemas.list", Handle: listSchemas},
 		{ID: "postgresql.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{schema}/overview", Permission: "postgresql.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.schema.overview", Handle: schemaOverview},
 		{ID: "postgresql.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "postgresql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.tables.list", Handle: listTables},
+		{ID: "postgresql.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "postgresql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.relations.graph", Handle: relationGraph},
 		{ID: "postgresql.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "postgresql.views.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.views.list", Handle: listViews},
+		{ID: "postgresql.view.drop", Method: plugin.MethodDelete, Path: "/views/{schema}/{view}", Permission: "postgresql.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.view.drop", Handle: dropView},
 		{ID: "postgresql.functions.list", Method: plugin.MethodGet, Path: "/functions", Permission: "postgresql.functions.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.functions.list", Handle: listFunctions},
 		{ID: "postgresql.sequences.list", Method: plugin.MethodGet, Path: "/sequences", Permission: "postgresql.sequences.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.sequences.list", Handle: listSequences},
 
@@ -149,7 +151,7 @@ func columnAddSchema() *plugin.Schema {
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "postgresql.table.columns", Params: tableParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 	}}}}
 }
@@ -334,6 +336,43 @@ GROUP BY n.oid, n.nspname, n.nspowner`, []any{schema})
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, []string{"r", "p"}, "table")
+}
+
+const relationGraphSQL = `
+SELECT con.conname AS constraint_name,
+       cn.nspname AS child_schema, cc.relname AS child_table, ca.attname AS child_column,
+       pn.nspname AS parent_schema, pc.relname AS parent_table, pa.attname AS parent_column
+FROM pg_constraint con
+JOIN pg_class cc ON cc.oid = con.conrelid
+JOIN pg_namespace cn ON cn.oid = cc.relnamespace
+JOIN pg_class pc ON pc.oid = con.confrelid
+JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS ck(attnum, ord) ON true
+JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS pk(attnum, ord) ON pk.ord = ck.ord
+JOIN pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = ck.attnum
+JOIN pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = pk.attnum
+WHERE con.contype = 'f' AND cn.nspname !~ '^pg_' AND cn.nspname <> 'information_schema'
+  AND ($1::text = '' OR cn.nspname = $1)
+ORDER BY con.conname, ck.ord`
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := sqldb.OptionalIdentifier(paramOf(rc, "schema"))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, pool, s.opts.QueryTimeout, relationGraphSQL, []any{schema})
+	if err != nil {
+		return nil, err
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(rows))
+	for _, r := range rows {
+		fks = append(fks, sqldb.ForeignKeyFromRow(r))
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -1047,7 +1086,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	}
 	var req struct {
 		Name    string `json:"name" validate:"required"`
-		Columns string `json:"columns" validate:"required"`
+		Columns any    `json:"columns" validate:"required"`
 		Unique  bool   `json:"unique"`
 	}
 	if err := rc.Bind(&req); err != nil {
@@ -1057,7 +1096,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	cols, err := sqldb.IdentifierList(req.Columns, sqldb.QuoteIdent)
+	cols, err := sqldb.IdentifierListValue(req.Columns, sqldb.QuoteIdent)
 	if err != nil {
 		return nil, err
 	}
@@ -1108,6 +1147,38 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return execDDL(rc, "DROP TABLE "+sqldb.Qualified(schema, table))
+}
+
+func dropView(rc *plugin.RequestContext) (any, error) {
+	schema, err := sqldb.SafeIdentifier(paramOf(rc, "schema"))
+	if err != nil {
+		return nil, err
+	}
+	view, err := sqldb.SafeIdentifier(paramOf(rc, "view"))
+	if err != nil {
+		return nil, err
+	}
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	// Regular and materialized views are listed together but dropped with
+	// different statements, so resolve the relkind first.
+	var relkind string
+	if err := pool.QueryRow(rc.Ctx, `SELECT c.relkind::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2`, schema, view).Scan(&relkind); err != nil {
+		return nil, pgErr(err)
+	}
+	stmt := "DROP VIEW " + sqldb.Qualified(schema, view)
+	if relkind == "m" {
+		stmt = "DROP MATERIALIZED VIEW " + sqldb.Qualified(schema, view)
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	if _, err := pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, pgErr(err)
+	}
+	return actionResult{OK: true}, nil
 }
 
 func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {
@@ -1299,7 +1370,7 @@ func executeStatement(ctx context.Context, s *Session, pool *pgxpool.Pool, state
 		if err != nil {
 			return sqldb.StatementResult{}, pgErr(err)
 		}
-		out.Rows = append(out.Rows, jsonValues(values))
+		out.Rows = append(out.Rows, sqldb.DisplayValues(out.Columns, values))
 		if len(out.Rows) >= s.opts.RowLimit {
 			break
 		}
@@ -1359,7 +1430,7 @@ func queryRows(ctx context.Context, pool *pgxpool.Pool, timeout time.Duration, s
 		r := row{}
 		for i, name := range names {
 			if i < len(values) {
-				r[name] = jsonValue(values[i])
+				r[name] = sqldb.DisplayValue(name, values[i])
 			}
 		}
 		out = append(out, r)
@@ -1389,25 +1460,6 @@ func fieldNames(fields []pgconn.FieldDescription) []string {
 		out = append(out, f.Name)
 	}
 	return out
-}
-
-func jsonValues(values []any) []any {
-	out := make([]any, len(values))
-	for i, v := range values {
-		out[i] = jsonValue(v)
-	}
-	return out
-}
-
-func jsonValue(v any) any {
-	switch x := v.(type) {
-	case []byte:
-		return string(x)
-	case time.Time:
-		return x.Format(time.RFC3339Nano)
-	default:
-		return x
-	}
 }
 
 func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {

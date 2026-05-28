@@ -2,10 +2,11 @@
 
 BIN_DIR ?= bin
 APP_NAME ?= shellcn
-PKG ?= ./...
+PKG ?= ./cmd/... ./internal/... ./plugins/...
 WEB_DIR := web
 WEB_DIST := $(WEB_DIR)/dist
 GO_LDFLAGS ?= -s -w
+GO_SOURCE_DIRS := cmd internal plugins
 
 help:
 	@echo "ShellCN — make targets"
@@ -75,7 +76,7 @@ fmt: fmt-web fmt-go
 format: fmt
 
 fmt-go:
-	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint fmt $(PKG); else gofmt -w cmd internal plugins; fi
+	@if command -v gofumpt >/dev/null 2>&1; then gofumpt -w $(GO_SOURCE_DIRS); elif command -v golangci-lint >/dev/null 2>&1; then golangci-lint fmt $(GO_SOURCE_DIRS); else gofmt -w $(GO_SOURCE_DIRS); fi
 
 fmt-web:
 	@cd $(WEB_DIR) && pnpm format

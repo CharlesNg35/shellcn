@@ -74,9 +74,9 @@ func resources() []plugin.ResourceType {
 			Kind: "consumer_group", Title: "Consumer groups", List: plugin.DataSource{RouteID: "kafka.groups.list"},
 			Columns:      groupColumns(),
 			RowActionIDs: []string{"kafka.group.delete"},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"kafka.group.delete"}}, Tabs: []plugin.Tab{
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"kafka.group.reset_offsets", "kafka.group.delete"}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "kafka.group.overview", Params: map[string]string{"group": "${resource.name}"}}},
-				{Key: "offsets", Label: "Offsets", Icon: icon("gauge"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.group.offsets", Params: map[string]string{"group": "${resource.name}"}}, Config: plugin.TableConfig{Columns: offsetColumns(), Exportable: true}.Map()},
+				{Key: "offsets", Label: "Offsets", Icon: icon("gauge"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.group.offsets", Params: map[string]string{"group": "${resource.name}"}}, Config: plugin.TableConfig{Columns: offsetColumns(), ActionIDs: []string{"kafka.group.reset_offsets"}, Exportable: true}.Map()},
 			}},
 		},
 	}
@@ -88,6 +88,7 @@ func actions() []plugin.Action {
 		{ID: "kafka.topic.delete", Label: "Delete", Icon: icon("trash-2"), RouteID: "kafka.topic.delete", Params: map[string]string{"topic": "${resource.name}"}, Confirm: true, ConfirmText: "Delete this topic?"},
 		{ID: "kafka.message.produce", Label: "Produce", Icon: icon("send"), RouteID: "kafka.message.produce", Params: map[string]string{"topic": "${resource.name}"}, Confirm: true, ConfirmText: "Produce this record?"},
 		{ID: "kafka.group.delete", Label: "Delete", Icon: icon("trash-2"), RouteID: "kafka.group.delete", Params: map[string]string{"group": "${resource.name}"}, Confirm: true, ConfirmText: "Delete this consumer group?"},
+		{ID: "kafka.group.reset_offsets", Label: "Reset offsets", Icon: icon("history"), RouteID: "kafka.group.reset_offsets", Params: map[string]string{"group": "${resource.name}"}, Confirm: true, ConfirmText: "Reset this group's committed offsets?"},
 	}
 }
 

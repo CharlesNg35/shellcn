@@ -31,8 +31,19 @@ const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
 const editable = computed(() => Boolean(saveRouteId.value));
 
 async function load(): Promise<void> {
+  const initial = editorConfig.value?.initialContent;
+  if (initial !== undefined) {
+    text.value = initial;
+    loading.value = false;
+    error.value = null;
+    await nextTick();
+    await mountEditor();
+    return;
+  }
   if (!props.source) {
     loading.value = false;
+    await nextTick();
+    await mountEditor();
     return;
   }
   loading.value = true;
@@ -84,11 +95,18 @@ async function save(): Promise<void> {
   saving.value = true;
   saveError.value = null;
   try {
+    const bodyKey = editorConfig.value?.saveBodyKey;
+    const body = bodyKey
+      ? {
+          ...(editorConfig.value?.saveExtra ?? {}),
+          [bodyKey]: JSON.parse(text.value),
+        }
+      : { content: text.value };
     await runAction(
       props.connectionId,
       routeId,
       { resource: props.resource },
-      { content: text.value },
+      body,
       editorConfig.value?.saveParams ?? props.source?.params ?? {},
       editorConfig.value?.saveMethod ?? "PUT",
     );

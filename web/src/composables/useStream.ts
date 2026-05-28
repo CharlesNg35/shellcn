@@ -4,7 +4,10 @@ import {
   prepareStream,
   type ResolveContext,
 } from "../api/dataSource";
-import { useSessionsStore, type ChannelStatus } from "../stores/sessions";
+import {
+  useStreamChannelsStore,
+  type ChannelStatus,
+} from "../stores/streamChannels";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { DataSource } from "../types/projection";
 
@@ -19,7 +22,7 @@ export function useStream(
   ctx: ResolveContext,
   onFrame?: (data: string) => void,
 ) {
-  const store = useSessionsStore();
+  const store = useStreamChannelsStore();
   const live = useConnectionStatusStore();
   const key = ref<string | null>(null);
   const localError = ref<string | null>(null);

@@ -210,6 +210,55 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("saves initial code editor content under a configured JSON body key", async () => {
+    const calls: { url: string; method?: string; body: unknown }[] = [];
+    vi.unstubAllGlobals();
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    installFetch((url, init) => {
+      calls.push({
+        url,
+        method: init?.method,
+        body: init?.body ? JSON.parse(init.body as string) : undefined,
+      });
+      return { body: { ok: true } };
+    });
+    mockCodeMirror.value = '{"id":"ada","name":"Ada"}';
+
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        config: {
+          language: "json",
+          initialContent: '{\n  "id": "example"\n}',
+          saveRouteId: "search.document.upsert",
+          saveMethod: "POST",
+          saveParams: { index: "people" },
+          saveBodyKey: "document",
+          saveExtra: { action: "upsert" },
+        },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Save"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(calls).toEqual([
+      {
+        url: expect.stringContaining("search.document.upsert"),
+        method: "POST",
+        body: {
+          action: "upsert",
+          document: { id: "ada", name: "Ada" },
+        },
+      },
+    ]);
+    w.unmount();
+  });
+
   it("truncates long query history chips and keeps the full query as title", async () => {
     const text =
       "SELECT * FROM public.github_app_installation_repositories LIMIT 100;";
@@ -251,6 +300,63 @@ describe("streaming stub panels", () => {
     expect(w.get('[data-test="query-export-button"]').classes()).not.toContain(
       "ml-auto",
     );
+    w.unmount();
+  });
+
+  it("clears a previous query error after a successful result", async () => {
+    const w = mount(QueryEditorPanel, { props });
+    await flushPromises();
+
+    FakeWS.instances[0].emit("open");
+    FakeWS.instances[0].emit("message", {
+      data: JSON.stringify({ error: "bad query" }),
+    });
+    await flushPromises();
+    expect(w.text()).toContain("bad query");
+
+    FakeWS.instances[0].emit("message", {
+      data: JSON.stringify({ columns: ["ok"], rows: [[1]], rowCount: 1 }),
+    });
+    await flushPromises();
+    expect(w.text()).not.toContain("bad query");
+    expect(w.text()).toContain("1 row");
+    w.unmount();
+  });
+
+  it("resets query editor state when the query context changes", async () => {
+    const w = mount(QueryEditorPanel, {
+      props: {
+        ...props,
+        source: {
+          routeId: "postgresql.query",
+          method: "WS" as const,
+          params: { database: "a" },
+        },
+        config: { initialQuery: "select * from a;" },
+        resource: { kind: "table", name: "a", uid: "a.public.t" },
+      },
+    });
+    await flushPromises();
+
+    FakeWS.instances[0].emit("open");
+    FakeWS.instances[0].emit("message", {
+      data: JSON.stringify({ error: "context a failed" }),
+    });
+    await flushPromises();
+    expect(w.text()).toContain("context a failed");
+
+    await w.setProps({
+      source: {
+        routeId: "postgresql.query",
+        method: "WS" as const,
+        params: { database: "b" },
+      },
+      config: { initialQuery: "select * from b;" },
+      resource: { kind: "table", name: "b", uid: "b.public.t" },
+    });
+    await flushPromises();
+
+    expect(w.text()).not.toContain("context a failed");
     w.unmount();
   });
 });

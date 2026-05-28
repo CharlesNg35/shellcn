@@ -90,7 +90,7 @@ describe("TreeWorkspace", () => {
     await flushPromises();
 
     const tab = wrapper.get(
-      "button[title='production / analytics / public.github_app_installation_repositories']",
+      "button[title='public.github_app_installation_repositories - production / analytics ']",
     );
     expect(tab.classes()).toContain("max-w-60");
     expect(tab.classes()).toContain("overflow-hidden");

@@ -86,7 +86,7 @@ func tree() []plugin.TreeGroup {
 		{Key: "services", Label: "Services", Icon: icon("workflow"), Source: plugin.DataSource{RouteID: "swarm.services.tree"}, ResourceKind: "service"},
 		{Key: "stacks", Label: "Stacks", Icon: icon("layers"), Source: plugin.DataSource{RouteID: "swarm.stacks.tree"}, ResourceKind: "stack"},
 		{Key: "nodes", Label: "Nodes", Icon: icon("server"), Source: plugin.DataSource{RouteID: "swarm.nodes.tree"}, ResourceKind: "node"},
-		{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Source: plugin.DataSource{RouteID: "swarm.tasks.tree"}, ResourceKind: "task"},
+		{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), ResourceKind: "task"},
 	}
 }
 
@@ -128,9 +128,9 @@ func serviceResource() plugin.ResourceType {
 		List:      plugin.DataSource{RouteID: "swarm.services.list"},
 		Watch:     &plugin.DataSource{RouteID: "swarm.events.watch", Method: plugin.MethodWS},
 		Columns:   serviceColumns(),
-		ActionIDs: []string{"swarm.service.remove"},
+		ActionIDs: []string{"swarm.service.scale", "swarm.service.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"swarm.service.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"swarm.service.scale", "swarm.service.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.service.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}.Map()},
@@ -171,7 +171,7 @@ func nodeResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "node", Title: "Nodes", List: plugin.DataSource{RouteID: "swarm.nodes.list"}, Columns: columns,
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.node.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.node.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}.Map()},
@@ -185,7 +185,7 @@ func taskResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "task", Title: "Tasks", List: plugin.DataSource{RouteID: "swarm.tasks.list"}, Columns: taskColumns(),
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.task.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.task.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
@@ -196,6 +196,7 @@ func taskResource() plugin.ResourceType {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
+		{ID: "swarm.service.scale", Label: "Scale", Icon: icon("move-vertical"), RouteID: "swarm.service.scale", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "mode", Op: plugin.OpEq, Value: "replicated"}}}},
 		{ID: "swarm.service.remove", Label: "Remove", Icon: icon("trash"), RouteID: "swarm.service.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this service?"},
 	}
 }

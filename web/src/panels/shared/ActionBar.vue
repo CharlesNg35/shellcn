@@ -294,6 +294,8 @@ function onVisible(visible: boolean): void {
           :schema="pending.input"
           :submit-label="pending.label"
           :busy="busy"
+          :connection-id="connectionId"
+          :resource="targets()[0] ?? resource ?? null"
           @submit="execute(pending, $event)"
         />
 

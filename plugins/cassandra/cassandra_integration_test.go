@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -87,6 +88,21 @@ func TestCassandraPluginIntegration(t *testing.T) {
 	}
 	if !pageHasName(keyspaces.(plugin.Page[row]), "shellcn_it") {
 		t.Fatalf("created keyspace was not listed: %#v", keyspaces)
+	}
+
+	// Materialized view drop round-trip: create an MV, drop it via the handler.
+	if err := execCQL(ctx, s, `CREATE MATERIALIZED VIEW "shellcn_it"."people_by_name" AS SELECT * FROM "shellcn_it"."people" WHERE name IS NOT NULL AND id IS NOT NULL PRIMARY KEY (name, id)`); err != nil {
+		t.Fatalf("seed materialized view: %v", err)
+	}
+	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "view": "people_by_name"}, nil, nil)); err != nil {
+		t.Fatalf("drop materialized view: %v", err)
+	}
+	views, err := listViews(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.keyspace": {"shellcn_it"}}, nil))
+	if err != nil {
+		t.Fatalf("list views: %v", err)
+	}
+	if pageHasName(views.(plugin.Page[row]), "people_by_name") {
+		t.Fatalf("materialized view still listed after drop")
 	}
 
 	tableRC := plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, nil)

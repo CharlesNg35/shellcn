@@ -38,7 +38,7 @@ type options struct {
 func configSchema() plugin.Schema {
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Cluster", Fields: []plugin.Field{
-			{Key: "brokers", Label: "Bootstrap brokers", Type: plugin.FieldTextarea, Required: true, Default: "localhost:9092", Placeholder: "kafka-1:9092, kafka-2:9092"},
+			{Key: "brokers", Label: "Bootstrap brokers", Type: plugin.FieldTextarea, Required: true, Default: "localhost:9092", Placeholder: "kafka-1:9092, kafka-2:9092", Help: "One or more host:port brokers, comma-separated."},
 			{Key: "client_id", Label: "Client ID", Type: plugin.FieldText, Default: app.DefaultClientName},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
@@ -49,7 +49,7 @@ func configSchema() plugin.Schema {
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "plain"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "plain"}}}},
-			{Key: credentialIDField, Label: "Stored credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+			{Key: credentialIDField, Label: "Stored SASL/PLAIN credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialBasicAuth}, Protocols: []string{protocolName},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 		}},

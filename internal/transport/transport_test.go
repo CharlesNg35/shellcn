@@ -84,6 +84,30 @@ func TestDirectForConnectionOnlyDialsDeclaredTarget(t *testing.T) {
 	}
 }
 
+func TestDirectForConnectionAllowsLoopbackAliases(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+	go func() {
+		c, err := ln.Accept()
+		if err == nil {
+			_ = c.Close()
+		}
+	}()
+	_, port, err := net.SplitHostPort(ln.Addr().String())
+	if err != nil {
+		t.Fatalf("split addr: %v", err)
+	}
+	d := transport.NewDirectForConnection(models.Connection{Config: map[string]any{"urls": "nats://localhost:" + port}})
+	c, err := d.DialContext(context.Background(), "tcp", net.JoinHostPort("127.0.0.1", port))
+	if err != nil {
+		t.Fatalf("loopback alias dial: %v", err)
+	}
+	_ = c.Close()
+}
+
 func TestBuildAgentUnavailableWithoutTunnel(t *testing.T) {
 	_, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, transport.NewRegistry(), "")
 	if !errors.Is(err, transport.ErrAgentUnavailable) {

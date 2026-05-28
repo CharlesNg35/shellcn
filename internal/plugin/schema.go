@@ -94,18 +94,24 @@ type Validator struct {
 }
 
 type Field struct {
-	Key         string              `json:"key"`
-	Label       string              `json:"label"`
-	Type        FieldType           `json:"type"`
-	Required    bool                `json:"required,omitempty"`
-	Secret      bool                `json:"secret,omitempty"`
-	Default     any                 `json:"default,omitempty"`
-	Placeholder string              `json:"placeholder,omitempty"`
-	Help        string              `json:"help,omitempty"`
-	Options     []Option            `json:"options,omitempty"`
-	Credential  *CredentialSelector `json:"credential,omitempty"`
-	VisibleWhen *Condition          `json:"visibleWhen,omitempty"`
-	Validators  []Validator         `json:"validators,omitempty"`
+	Key         string    `json:"key"`
+	Label       string    `json:"label"`
+	Type        FieldType `json:"type"`
+	Required    bool      `json:"required,omitempty"`
+	Secret      bool      `json:"secret,omitempty"`
+	Default     any       `json:"default,omitempty"`
+	Placeholder string    `json:"placeholder,omitempty"`
+	Help        string    `json:"help,omitempty"`
+	Options     []Option  `json:"options,omitempty"`
+	// OptionsSource populates a select/multiselect/radio field's choices from a
+	// route at form-open time (rows -> {value,label}), so a field can offer the
+	// live values of a related resource (e.g. a table's real columns) instead of
+	// a static list or free-typed name. Its params interpolate ${resource.*} from
+	// the form's resource context. Static Options still apply when set.
+	OptionsSource *DataSource         `json:"optionsSource,omitempty"`
+	Credential    *CredentialSelector `json:"credential,omitempty"`
+	VisibleWhen   *Condition          `json:"visibleWhen,omitempty"`
+	Validators    []Validator         `json:"validators,omitempty"`
 	// Step is the increment for number/slider inputs (defaults to 1). Min/max
 	// bounds come from the min/max validators.
 	Step any `json:"step,omitempty"`

@@ -108,10 +108,10 @@ func TestOraclePluginIntegration(t *testing.T) {
 	if _, err := createIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "IX_PEOPLE_NAME", "columns": "NAME", "unique": false})); err != nil {
 		t.Fatalf("create index: %v", err)
 	}
-	if _, err := dropIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "IX_PEOPLE_NAME"})); err != nil {
+	if _, err := dropIndex(rowMutationRC(ctx, s, map[string]string{"id": objectID("SHELLCN_TEST", "PEOPLE"), "name": "IX_PEOPLE_NAME"}, nil)); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
-	if _, err := dropColumn(rowMutationRC(ctx, s, params, map[string]any{"column": "ACCESS_TOKEN"})); err != nil {
+	if _, err := dropColumn(rowMutationRC(ctx, s, map[string]string{"id": objectID("SHELLCN_TEST", "PEOPLE"), "name": "ACCESS_TOKEN"}, nil)); err != nil {
 		t.Fatalf("drop column: %v", err)
 	}
 	var cols int
@@ -132,6 +132,15 @@ func TestOraclePluginIntegration(t *testing.T) {
 	}
 	if links, ok := orderRows.(plugin.Page[row]).Items[0]["_links"].(map[string]plugin.ResourceRef); !ok || links["PERSON_ID"].UID != objectID("SHELLCN_TEST", "PEOPLE") {
 		t.Fatalf("expected _links[PERSON_ID] -> PEOPLE, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
+	}
+
+	// Foreign-key relationship graph (ERD), owner-scoped on Oracle.
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.schema": {"SHELLCN_TEST"}}, nil))
+	if err != nil {
+		t.Fatalf("relation graph: %v", err)
+	}
+	if !hasEdge(graph.(sqldb.GraphPayload), "SHELLCN_TEST.ORDERS", "SHELLCN_TEST.PEOPLE") {
+		t.Fatalf("expected FK edge orders -> people, got %#v", graph)
 	}
 }
 
@@ -257,6 +266,15 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 func pageHasName(page plugin.Page[row], name string) bool {
 	for _, item := range page.Items {
 		if item["name"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEdge(g sqldb.GraphPayload, source, target string) bool {
+	for _, e := range g.Edges {
+		if e.Source == source && e.Target == target {
 			return true
 		}
 	}

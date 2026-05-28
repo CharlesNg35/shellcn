@@ -124,6 +124,66 @@ func TestDockerPluginIntegrationAgentTransport(t *testing.T) {
 	}
 }
 
+func TestDockerEngineResourceCreateRoundTrip(t *testing.T) {
+	if os.Getenv("SHELLCN_DOCKER_INTEGRATION") != "1" {
+		t.Skip("set SHELLCN_DOCKER_INTEGRATION=1 to run against the local Docker daemon")
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker CLI unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	sess, err := Connect(ctx, plugin.ConnectConfig{
+		Config: map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"},
+		Net:    directNet{},
+	})
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	ds := sess.(*dockerengine.Session)
+
+	suffix := time.Now().UTC().Format("20060102150405")
+	volName := "shellcn-it-vol-" + suffix
+	netName := "shellcn-it-net-" + suffix
+
+	call := func(handler func(*plugin.RequestContext) (any, error), params map[string]string, body string) {
+		t.Helper()
+		rc := plugin.NewRequestContext(ctx, models.User{}, ds, params, nil, []byte(body))
+		res, err := handler(rc)
+		if err != nil {
+			t.Fatalf("handler: %v", err)
+		}
+		if ar, ok := res.(dockerengine.ActionResult); ok && !ar.OK {
+			t.Fatalf("handler reported not OK")
+		}
+	}
+
+	call(dockerengine.CreateVolume, nil, `{"name":"`+volName+`","driver":"local"}`)
+	if _, err := ds.Client().VolumeInspect(ctx, volName, dockerclient.VolumeInspectOptions{}); err != nil {
+		t.Fatalf("VolumeInspect after create: %v", err)
+	}
+	call(dockerengine.RemoveVolume, map[string]string{"id": volName}, "")
+	if _, err := ds.Client().VolumeInspect(ctx, volName, dockerclient.VolumeInspectOptions{}); err == nil {
+		t.Fatalf("volume %q still present after remove", volName)
+	}
+
+	call(dockerengine.CreateNetwork, nil, `{"name":"`+netName+`","driver":"bridge"}`)
+	if _, err := ds.Client().NetworkInspect(ctx, netName, dockerclient.NetworkInspectOptions{}); err != nil {
+		t.Fatalf("NetworkInspect after create: %v", err)
+	}
+	call(dockerengine.RemoveNetwork, map[string]string{"id": netName}, "")
+	if _, err := ds.Client().NetworkInspect(ctx, netName, dockerclient.NetworkInspectOptions{}); err == nil {
+		t.Fatalf("network %q still present after remove", netName)
+	}
+
+	call(dockerengine.PullImage, nil, `{"image":"alpine:3.20"}`)
+	if _, err := ds.Client().ImageInspect(ctx, "alpine:3.20"); err != nil {
+		t.Fatalf("ImageInspect after pull: %v", err)
+	}
+}
+
 func runDocker(ctx context.Context, t *testing.T, args ...string) {
 	t.Helper()
 	cmd := exec.CommandContext(ctx, "docker", args...)

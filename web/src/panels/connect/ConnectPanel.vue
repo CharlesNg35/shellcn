@@ -3,16 +3,19 @@ import { computed, toRef, watch } from "vue";
 import Button from "primevue/button";
 import { useAgentState } from "../../composables/useAgentState";
 import AppIcon from "../../components/AppIcon.vue";
+import AppAlert from "../../components/AppAlert.vue";
 import type { ConnectionSummary } from "../../types/projection";
 
 const props = defineProps<{
   connectionId: string;
   connection?: ConnectionSummary;
   connecting?: boolean;
+  errorMessage?: string;
 }>();
 const emit = defineEmits<{ connect: []; enroll: [] }>();
 
 const isAgent = computed(() => props.connection?.transport === "agent");
+const connectionError = computed(() => props.errorMessage?.trim() ?? "");
 
 const agent = useAgentState(toRef(props, "connectionId"));
 const canConnect = computed(() => !isAgent.value || agent.online.value);
@@ -102,6 +105,11 @@ watch(
         Connect
       </Button>
     </div>
+
+    <AppAlert v-if="connectionError" tone="danger" title="Could not connect">
+      {{ connectionError }}
+    </AppAlert>
+
     <p v-if="gated" class="text-xs text-surface-400">
       Connect becomes available once the agent is online.
     </p>

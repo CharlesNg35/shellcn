@@ -47,13 +47,14 @@ func icon(name string) plugin.Icon {
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
-		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mysql.databases.tree"}, ResourceKind: "database"},
+		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mysql.databases.tree"}, Ref: &plugin.ResourceRef{Kind: "server", Name: "Databases", UID: "server"}},
 		{Key: "users", Label: "Users", Icon: icon("users"), Source: plugin.DataSource{RouteID: "mysql.users.tree"}, ResourceKind: "user"},
 	}
 }
 
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
+		serverResource(),
 		databaseResource(),
 		tableResource(),
 		viewResource(),
@@ -62,24 +63,46 @@ func resources() []plugin.ResourceType {
 	}
 }
 
+// serverResource is the connection-level view opened by clicking the Databases
+// tree group: the database list plus a SQL console, so a user can browse and run
+// arbitrary SQL without first opening a specific database.
+func serverResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind: "server", Title: "Databases",
+		List: plugin.DataSource{RouteID: "mysql.databases.list"},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "Databases"},
+			Tabs: []plugin.Tab{
+				{Key: "databases", Label: "Databases", Icon: icon("database"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.databases.list"}, Config: plugin.TableConfig{Columns: databaseColumns(), ActionIDs: []string{"mysql.database.create"}}.Map()},
+				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mysql.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT VERSION();")},
+			},
+		},
+	}
+}
+
+func databaseColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "name", Label: "Database", Sortable: true},
+		{Key: "charset", Label: "Charset"},
+		{Key: "collation", Label: "Collation"},
+		{Key: "tables", Label: "Tables", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "views", Label: "Views", Type: plugin.ColumnNumber, Sortable: true},
+	}
+}
+
 func databaseResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "database", Title: "Databases",
 		List:          plugin.DataSource{RouteID: "mysql.databases.list"},
 		ListActionIDs: []string{"mysql.database.create"},
-		Columns: []plugin.Column{
-			{Key: "name", Label: "Database", Sortable: true},
-			{Key: "charset", Label: "Charset"},
-			{Key: "collation", Label: "Collation"},
-			{Key: "tables", Label: "Tables", Type: plugin.ColumnNumber, Sortable: true},
-			{Key: "views", Label: "Views", Type: plugin.ColumnNumber, Sortable: true},
-		},
+		Columns:       databaseColumns(),
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mysql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"mysql.table.create"}}.Map()},
-				{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.views.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns()}.Map()},
+				{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "mysql.relations.graph", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}.Map()},
+				{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.views.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"mysql.view.drop"}}.Map()},
 				{Key: "routines", Label: "Routines", Icon: icon("function-square"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.routines.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: routineColumns()}.Map()},
 				{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mysql.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT VERSION();")},
 			},
@@ -110,7 +133,8 @@ func viewResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "view", Title: "Views",
 		List: plugin.DataSource{RouteID: "mysql.views.list"}, Columns: viewColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
+		RowActionIDs: []string{"mysql.view.drop"},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mysql.view.drop"}}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.view.rows", Params: tableParams()}},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mysql.view.definition", Params: tableParams()}},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mysql.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM `${resource.namespace}`.`${resource.name}` LIMIT 100;")},
@@ -162,18 +186,18 @@ func dataGridConfig() map[string]any {
 }
 
 func queryConfig(initial string) map[string]any {
-	return map[string]any{
-		"language":          "mysql",
-		"label":             "SQL",
-		"executeLabel":      "Run query",
-		"cancelLabel":       "Cancel query",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a query to see results.",
-		"initialQuery":      initial,
-		"cancelRouteId":     "mysql.query.cancel",
-		"completionRouteId": "mysql.completion",
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "mysql",
+		Label:             "SQL",
+		ExecuteLabel:      "Run query",
+		CancelLabel:       "Cancel query",
+		RunningLabel:      "Running...",
+		EmptyText:         "Run a query to see results.",
+		InitialQuery:      initial,
+		CancelRouteID:     "mysql.query.cancel",
+		CompletionRouteID: "mysql.completion",
+		Exportable:        true,
+	}.Map()
 }
 
 func tableColumns() []plugin.Column {
@@ -210,5 +234,6 @@ func actions() []plugin.Action {
 		{ID: "mysql.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "mysql.index.drop", Params: map[string]string{"database": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "mysql.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "mysql.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "mysql.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mysql.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
+		{ID: "mysql.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mysql.view.drop", Params: map[string]string{"database": "${resource.namespace}", "view": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this view?"},
 	}
 }

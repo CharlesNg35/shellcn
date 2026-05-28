@@ -47,14 +47,15 @@ func icon(name string) plugin.Icon {
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
-		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mssql.databases.tree"}, ResourceKind: "database"},
+		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mssql.databases.tree"}, Ref: &plugin.ResourceRef{Kind: "server", Name: "Databases", UID: "server"}},
 		{Key: "users", Label: "Users", Icon: icon("users"), Source: plugin.DataSource{RouteID: "mssql.users.tree"}, ResourceKind: "user"},
-		{Key: "jobs", Label: "Jobs", Icon: icon("calendar-clock"), Source: plugin.DataSource{RouteID: "mssql.jobs.tree"}, ResourceKind: "job"},
+		{Key: "jobs", Label: "Jobs", Icon: icon("calendar-clock"), ResourceKind: "job"},
 	}
 }
 
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
+		serverResource(),
 		databaseResource(),
 		schemaResource(),
 		tableResource(),
@@ -62,6 +63,22 @@ func resources() []plugin.ResourceType {
 		procedureResource(),
 		userResource(),
 		jobResource(),
+	}
+}
+
+// serverResource is the connection-level view opened by clicking the Databases
+// tree group: the database list plus a SQL console.
+func serverResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind: "server", Title: "Databases",
+		List: plugin.DataSource{RouteID: "mssql.databases.list"},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "Databases"},
+			Tabs: []plugin.Tab{
+				{Key: "databases", Label: "Databases", Icon: icon("database"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.databases.list"}, Config: plugin.TableConfig{ActionIDs: []string{"mssql.database.create"}}.Map()},
+				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mssql.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT SYSDATETIMEOFFSET() AS now;")},
+			},
+		},
 	}
 }
 
@@ -80,6 +97,7 @@ func databaseResource() plugin.ResourceType {
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mssql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
 			{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.schemas.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: schemaColumns()}.Map()},
+			{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "mssql.relations.graph", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}.Map()},
 			{Key: "query", Label: "Query", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mssql.query", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: queryConfig("SELECT SYSDATETIMEOFFSET() AS now;")},
 		}},
 	}
@@ -93,7 +111,7 @@ func schemaResource() plugin.ResourceType {
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mssql.schema.overview", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}},
 			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.tables.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"mssql.table.create"}}.Map()},
-			{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.views.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns()}.Map()},
+			{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.views.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"mssql.view.drop"}}.Map()},
 			{Key: "procedures", Label: "Procedures", Icon: icon("function-square"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.procedures.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: procedureColumns()}.Map()},
 		}},
 	}
@@ -119,7 +137,8 @@ func viewResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "view", Title: "Views",
 		List: plugin.DataSource{RouteID: "mssql.views.list"}, Columns: viewColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
+		RowActionIDs: []string{"mssql.view.drop"},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mssql.view.drop"}}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.view.rows", Params: objectParams()}},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mssql.view.definition", Params: objectParams()}},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mssql.query", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.namespace}"}}, Config: queryConfig("SELECT TOP (100) * FROM ${resource.name};")},
@@ -181,18 +200,18 @@ func dataGridConfig() map[string]any {
 }
 
 func queryConfig(initial string) map[string]any {
-	return map[string]any{
-		"language":          "sql",
-		"label":             "T-SQL",
-		"executeLabel":      "Run query",
-		"cancelLabel":       "Cancel query",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a query to see results.",
-		"initialQuery":      initial,
-		"cancelRouteId":     "mssql.query.cancel",
-		"completionRouteId": "mssql.completion",
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "sql",
+		Label:             "T-SQL",
+		ExecuteLabel:      "Run query",
+		CancelLabel:       "Cancel query",
+		RunningLabel:      "Running...",
+		EmptyText:         "Run a query to see results.",
+		InitialQuery:      initial,
+		CancelRouteID:     "mssql.query.cancel",
+		CompletionRouteID: "mssql.completion",
+		Exportable:        true,
+	}.Map()
 }
 
 func schemaColumns() []plugin.Column {
@@ -233,5 +252,6 @@ func actions() []plugin.Action {
 		{ID: "mssql.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "mssql.index.drop", Params: map[string]string{"id": "${resource.scope}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "mssql.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "mssql.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "mssql.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mssql.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
+		{ID: "mssql.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mssql.view.drop", Params: objectParams(), Confirm: true, ConfirmText: "Drop this view?"},
 	}
 }

@@ -3,6 +3,7 @@ package mongodb
 import (
 	"context"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -69,6 +70,52 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 	if len(result.Rows) != 1 {
 		t.Fatalf("unexpected command result: %#v", result.Rows)
 	}
+
+	// Database create round-trip (a database is created with its first collection).
+	if _, err := createDatabase(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, []byte(`{"name":"shellcn_it_db","collection":"seed"}`))); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+	defer func() { _ = s.client.Database("shellcn_it_db").Drop(context.Background()) }()
+	if dbs, err := listDatabases(rc); err != nil {
+		t.Fatalf("list databases: %v", err)
+	} else if !pageHasName(dbs.(plugin.Page[row]), "shellcn_it_db") {
+		t.Fatalf("created database missing: %#v", dbs)
+	}
+
+	// Collection create round-trip.
+	if _, err := createCollection(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": "shellcn"}, nil, []byte(`{"name":"shellcn_it_coll"}`))); err != nil {
+		t.Fatalf("create collection: %v", err)
+	}
+	defer func() { _ = s.client.Database("shellcn").Collection("shellcn_it_coll").Drop(context.Background()) }()
+	collections, err := listCollections(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": "shellcn"}, mustQuery("p.database=shellcn"), nil))
+	if err != nil {
+		t.Fatalf("list collections: %v", err)
+	}
+	if !pageHasName(collections.(plugin.Page[row]), "shellcn_it_coll") {
+		t.Fatalf("created collection missing: %#v", collections)
+	}
+
+	// Index create → list → drop round-trip.
+	idxParams := map[string]string{"database": "shellcn", "collection": "people"}
+	if _, err := createIndex(plugin.NewRequestContext(ctx, models.User{}, s, idxParams, nil, []byte(`{"keys":{"role":1},"name":"role_1"}`))); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	indexes, err := listIndexes(plugin.NewRequestContext(ctx, models.User{}, s, idxParams, nil, nil))
+	if err != nil {
+		t.Fatalf("list indexes: %v", err)
+	}
+	if !pageHasName(indexes.(plugin.Page[row]), "role_1") {
+		t.Fatalf("created index missing: %#v", indexes)
+	}
+	dropParams := map[string]string{"database": "shellcn", "collection": "people", "name": "role_1"}
+	if _, err := dropIndex(plugin.NewRequestContext(ctx, models.User{}, s, dropParams, nil, nil)); err != nil {
+		t.Fatalf("drop index: %v", err)
+	}
+}
+
+func mustQuery(raw string) url.Values {
+	v, _ := url.ParseQuery(raw)
+	return v
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {

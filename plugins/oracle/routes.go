@@ -41,8 +41,10 @@ func routes() []plugin.Route {
 		{ID: "oracle.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{schema}/overview", Permission: "oracle.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.schema.overview", Handle: schemaOverview},
 		{ID: "oracle.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.tables.tree", Handle: treeTables},
 		{ID: "oracle.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.tables.list", Handle: listTables},
+		{ID: "oracle.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.relations.graph", Handle: relationGraph},
 		{ID: "oracle.views.tree", Method: plugin.MethodGet, Path: "/tree/views", Permission: "oracle.views.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.views.tree", Handle: treeViews},
 		{ID: "oracle.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "oracle.views.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.views.list", Handle: listViews},
+		{ID: "oracle.view.drop", Method: plugin.MethodDelete, Path: "/views/{id}", Permission: "oracle.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.view.drop", Handle: dropView},
 		{ID: "oracle.procedures.tree", Method: plugin.MethodGet, Path: "/tree/procedures", Permission: "oracle.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.procedures.tree", Handle: treeProcedures},
 		{ID: "oracle.procedures.list", Method: plugin.MethodGet, Path: "/procedures", Permission: "oracle.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.procedures.list", Handle: listProcedures},
 		{ID: "oracle.packages.tree", Method: plugin.MethodGet, Path: "/tree/packages", Permission: "oracle.packages.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.packages.tree", Handle: treePackages},
@@ -107,7 +109,7 @@ func columnAddSchema() *plugin.Schema {
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 	}}}}
 }
@@ -253,6 +255,40 @@ GROUP BY owner`, []any{schema})
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, "TABLE", "table")
+}
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := optionalIdent(paramOrQuery(rc, "schema"))
+	if err != nil {
+		return nil, err
+	}
+	filter, args := "", []any{}
+	if schema != "" {
+		filter = " AND ac.owner = :1"
+		args = append(args, schema)
+	}
+	rows, err := queryRows(rc.Ctx, s, `
+SELECT ac.constraint_name AS "constraint_name",
+       ac.owner AS "child_schema", ac.table_name AS "child_table", acc.column_name AS "child_column",
+       rc.owner AS "parent_schema", rc.table_name AS "parent_table", rcc.column_name AS "parent_column"
+FROM all_constraints ac
+JOIN all_cons_columns acc ON acc.owner = ac.owner AND acc.constraint_name = ac.constraint_name
+JOIN all_constraints rc ON rc.owner = ac.r_owner AND rc.constraint_name = ac.r_constraint_name
+JOIN all_cons_columns rcc ON rcc.owner = rc.owner AND rcc.constraint_name = rc.constraint_name AND rcc.position = acc.position
+WHERE ac.constraint_type = 'R'`+filter+`
+ORDER BY ac.constraint_name, acc.position`, args)
+	if err != nil {
+		return nil, err
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(rows))
+	for _, r := range rows {
+		fks = append(fks, sqldb.ForeignKeyFromRow(r))
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -957,7 +993,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	}
 	var req struct {
 		Name    string `json:"name" validate:"required"`
-		Columns string `json:"columns" validate:"required"`
+		Columns any    `json:"columns" validate:"required"`
 		Unique  bool   `json:"unique"`
 	}
 	if err := rc.Bind(&req); err != nil {
@@ -967,7 +1003,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	cols, err := sqldb.IdentifierList(req.Columns, quoteIdent)
+	cols, err := sqldb.IdentifierListValue(req.Columns, quoteIdent)
 	if err != nil {
 		return nil, err
 	}
@@ -1138,6 +1174,14 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 	return execDDL(rc, "DROP TABLE "+qualified(owner, table))
 }
 
+func dropView(rc *plugin.RequestContext) (any, error) {
+	owner, view, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP VIEW "+qualified(owner, view))
+}
+
 func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {
 	s, err := oracleSession(rc)
 	if err != nil {
@@ -1294,7 +1338,7 @@ func executeStatement(ctx context.Context, runner sqlRunner, s *Session, stateme
 	}
 	out := sqldb.StatementResult{Statement: statement, Columns: columns}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			_ = rows.Close()
 			return sqldb.StatementResult{}, oracleErr(err)
@@ -1331,7 +1375,7 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	}
 	out := []row{}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			return nil, oracleErr(err)
 		}
@@ -1349,30 +1393,17 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	return out, nil
 }
 
-func scanValues(rows *sql.Rows, count int) ([]any, error) {
-	values := make([]any, count)
-	ptrs := make([]any, count)
+func scanValues(rows *sql.Rows, columns []string) ([]any, error) {
+	values := make([]any, len(columns))
+	ptrs := make([]any, len(columns))
 	for i := range values {
 		ptrs[i] = &values[i]
 	}
 	if err := rows.Scan(ptrs...); err != nil {
 		return nil, err
 	}
-	for i, value := range values {
-		values[i] = jsonValue(value)
-	}
+	values = sqldb.DisplayValues(columns, values)
 	return values, nil
-}
-
-func jsonValue(v any) any {
-	switch x := v.(type) {
-	case []byte:
-		return string(x)
-	case time.Time:
-		return x.Format(time.RFC3339Nano)
-	default:
-		return x
-	}
 }
 
 func statementReturnsRows(statement string) bool {

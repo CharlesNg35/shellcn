@@ -39,6 +39,7 @@ func routes() []plugin.Route {
 		{ID: "clickhouse.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "clickhouse.tables.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.relations.tree", Handle: treeRelations},
 		{ID: "clickhouse.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "clickhouse.tables.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.tables.list", Handle: listTables},
 		{ID: "clickhouse.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "clickhouse.views.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.views.list", Handle: listViews},
+		{ID: "clickhouse.view.drop", Method: plugin.MethodDelete, Path: "/views/{database}/{view}", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.view.drop", Handle: dropView},
 		{ID: "clickhouse.dictionaries.tree", Method: plugin.MethodGet, Path: "/tree/dictionaries", Permission: "clickhouse.dictionaries.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.dictionaries.tree", Handle: treeDictionaries},
 		{ID: "clickhouse.dictionaries.list", Method: plugin.MethodGet, Path: "/dictionaries", Permission: "clickhouse.dictionaries.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.dictionaries.list", Handle: listDictionaries},
 		{ID: "clickhouse.dictionary.overview", Method: plugin.MethodGet, Path: "/dictionaries/{database}/{table}/overview", Permission: "clickhouse.dictionaries.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.dictionary.overview", Handle: dictionaryOverview},
@@ -767,6 +768,18 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 	return execDDL(rc, "DROP TABLE "+qualified(database, table))
 }
 
+func dropView(rc *plugin.RequestContext) (any, error) {
+	database, err := sqldb.SafeIdentifier(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	view, err := sqldb.SafeIdentifier(rc.Param("view"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP VIEW "+qualified(database, view))
+}
+
 func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {
 	s, err := clickhouseSession(rc)
 	if err != nil {
@@ -916,7 +929,7 @@ func executeStatement(ctx context.Context, s *Session, statement string) (sqldb.
 	}
 	out := sqldb.StatementResult{Statement: statement, Columns: columns}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			_ = rows.Close()
 			return sqldb.StatementResult{}, clickhouseErr(err)
@@ -1000,7 +1013,7 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	}
 	out := []row{}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			return nil, clickhouseErr(err)
 		}
@@ -1018,30 +1031,17 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	return out, nil
 }
 
-func scanValues(rows *sql.Rows, count int) ([]any, error) {
-	values := make([]any, count)
-	ptrs := make([]any, count)
+func scanValues(rows *sql.Rows, columns []string) ([]any, error) {
+	values := make([]any, len(columns))
+	ptrs := make([]any, len(columns))
 	for i := range values {
 		ptrs[i] = &values[i]
 	}
 	if err := rows.Scan(ptrs...); err != nil {
 		return nil, err
 	}
-	for i, value := range values {
-		values[i] = jsonValue(value)
-	}
+	values = sqldb.DisplayValues(columns, values)
 	return values, nil
-}
-
-func jsonValue(v any) any {
-	switch x := v.(type) {
-	case []byte:
-		return string(x)
-	case time.Time:
-		return x.Format(time.RFC3339Nano)
-	default:
-		return x
-	}
 }
 
 func redactRows(rows []row, patterns []string) {

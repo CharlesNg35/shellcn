@@ -44,11 +44,11 @@ func configSchema() plugin.Schema {
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "password", Options: []plugin.Option{
 				{Label: "None", Value: "none"},
 				{Label: "Username and password", Value: "password"},
-				{Label: "Stored credential", Value: "credential"},
+				{Label: "Stored username & password", Value: "credential"},
 			}},
 			{Key: "username", Label: "Username", Type: plugin.FieldText, Default: "guest", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "password"}}}},
-			{Key: credentialIDField, Label: "Stored credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+			{Key: credentialIDField, Label: "Stored username & password", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialBasicAuth}, Protocols: []string{protocolName},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 		}},

@@ -241,6 +241,115 @@ describe("TablePanel", () => {
     expect(document.body.textContent).toContain("name");
     w.unmount();
   });
+
+  it("derives add-row inputs from each column's data type", async () => {
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("db.table.columns")) {
+        return {
+          body: {
+            items: [
+              { name: "id", type: "integer", nullable: false },
+              { name: "active", type: "boolean", nullable: true },
+              { name: "label", type: "text", nullable: true },
+            ],
+            nextCursor: "",
+            total: 3,
+          },
+        };
+      }
+      return { body: { items: [], nextCursor: "", total: 0 } };
+    });
+
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: {
+          editable: true,
+          insert: { routeId: "db.row.insert", method: "POST" },
+          columnsSource: { routeId: "db.table.columns" },
+        },
+      },
+    });
+    await flushPromises();
+
+    bodyButton("Add row")!.click();
+    await flushPromises();
+    // A boolean column renders a toggle, an integer column a number input —
+    // not the old one-size-fits-all text box.
+    expect(w.findComponent({ name: "ToggleSwitch" }).exists()).toBe(true);
+    expect(w.findComponent({ name: "InputNumber" }).exists()).toBe(true);
+    w.unmount();
+  });
+
+  it("confirms direct row deletes with the app dialog", async () => {
+    const nativeConfirm = vi.fn();
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    let deleted = false;
+    vi.unstubAllGlobals();
+    vi.stubGlobal("confirm", nativeConfirm);
+    installFetch((url, init) => {
+      if (init?.method === "DELETE") {
+        calls.push({
+          url,
+          method: init.method,
+          body: init.body ? JSON.parse(init.body as string) : undefined,
+        });
+        deleted = true;
+        return { body: { ok: true } };
+      }
+      return {
+        body: {
+          items: deleted ? [row("b", "beta")] : [row("a", "alpha")],
+          nextCursor: "",
+          total: deleted ? 1 : 2,
+        },
+      };
+    });
+
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: {
+          columns,
+          editable: true,
+          rowKey: ["name"],
+          delete: { routeId: "db.row.delete", method: "DELETE" as const },
+        },
+      },
+    });
+    await flushPromises();
+
+    const delBtn = [...document.body.querySelectorAll("button")].find((b) =>
+      b.getAttribute("aria-label")?.includes("Delete"),
+    ) as HTMLButtonElement;
+    delBtn.click();
+    await flushPromises();
+
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Delete this row?");
+    expect(document.body.textContent).toContain(
+      "This change is permanent and cannot be undone.",
+    );
+
+    bodyButton("Delete")!.click();
+    await flushPromises();
+
+    expect(calls).toEqual([
+      {
+        url: expect.stringContaining("db.row.delete"),
+        method: "DELETE",
+        body: { key: { name: "alpha" } },
+      },
+    ]);
+    expect(w.text()).not.toContain("alpha");
+    expect(w.text()).toContain("beta");
+    w.unmount();
+  });
 });
 
 describe("TablePanel staged edits", () => {

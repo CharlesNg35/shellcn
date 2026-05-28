@@ -101,10 +101,12 @@ func clusterResourceType() plugin.ResourceType {
 		{
 			Key: "nodes", Label: "Nodes", Panel: plugin.PanelTable, Span: 2,
 			Source: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "node"}},
+			Config: kindColumnsConfig("node"),
 		},
 		{
 			Key: "events", Label: "Recent events", Panel: plugin.PanelTable, Span: 2,
 			Source: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "event"}},
+			Config: kindColumnsConfig("event"),
 		},
 	}}
 	return plugin.ResourceType{
@@ -121,9 +123,18 @@ func clusterResourceType() plugin.ResourceType {
 	}
 }
 
+// kindColumnsConfig reuses a catalog kind's declared columns for an embedded
+// dashboard table, so it matches the full list view (badges and all).
+func kindColumnsConfig(name string) map[string]any {
+	if k, ok := kindByName(name); ok {
+		return plugin.TableConfig{Columns: k.columns}.Map()
+	}
+	return nil
+}
+
 func podsTableConfig() map[string]any {
 	return plugin.TableConfig{Columns: []plugin.Column{
-		col("name", "Name"), col("ready", "Ready", notSort), col("status", "Status", badge),
+		col("name", "Name"), col("ready", "Ready", notSort), col("status", "Status", statusBadge(podSeverities)),
 		col("restarts", "Restarts", num), col("node", "Node"), ageCol(),
 	}}.Map()
 }

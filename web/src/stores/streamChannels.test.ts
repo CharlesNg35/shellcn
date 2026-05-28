@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
-import { useSessionsStore, type SocketLike } from "./sessions";
+import { useStreamChannelsStore, type SocketLike } from "./streamChannels";
 import { useConnectionStatusStore } from "./connectionStatus";
 
 class FakeSocket implements SocketLike {
@@ -26,9 +26,9 @@ beforeEach(() => {
   setActivePinia(createPinia());
 });
 
-describe("sessions store", () => {
+describe("stream channels store", () => {
   it("opens a channel once and reuses it", () => {
-    const store = useSessionsStore();
+    const store = useStreamChannelsStore();
     let created = 0;
     const factory = () => {
       created++;
@@ -40,7 +40,7 @@ describe("sessions store", () => {
   });
 
   it("delivers frames to subscribers and buffers them", () => {
-    const store = useSessionsStore();
+    const store = useStreamChannelsStore();
     const socket = new FakeSocket();
     store.ensure("k", () => socket);
     const received: string[] = [];
@@ -61,7 +61,7 @@ describe("sessions store", () => {
   });
 
   it("reflects error/close status and closes cleanly", () => {
-    const store = useSessionsStore();
+    const store = useStreamChannelsStore();
     const live = useConnectionStatusStore();
     const socket = new FakeSocket();
     live.connected("conn");
@@ -80,7 +80,7 @@ describe("sessions store", () => {
   });
 
   it("closeWhere tears down matching channels only", () => {
-    const store = useSessionsStore();
+    const store = useStreamChannelsStore();
     const a = new FakeSocket();
     const b = new FakeSocket();
     store.ensure("conn1:logs", () => a);

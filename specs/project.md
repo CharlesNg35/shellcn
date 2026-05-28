@@ -360,9 +360,9 @@ console) or a relative one the gateway serves, such as a connection-proxy link
 `Config` lets a `dock`/`dialog` action open an **editable** panel: the renderer
 hosts `Panel` sourced from the action's route and passes `Config` through as the
 panel's config. This is what makes a generic "Create / Edit" flow work — e.g. an
-action opens a `code_editor` seeded from a template/get route (the action's
-`Source`) and saves via `config.saveRouteId`. Plugin-agnostic: the core never
-interprets the config keys; the hosting panel does.
+action opens a `code_editor` seeded from `CodeEditorConfig.InitialContent` and
+saves via `SaveRouteID`. Plugin-agnostic: the core never interprets the config
+keys; the hosting panel does.
 
 **Scope inheritance.** An action rendered on a **list** (`ResourceType.ListActionIDs`)
 inherits that list's own `DataSource.Params` as default route params; the
@@ -455,11 +455,12 @@ type Field struct {
     Default     any
     Placeholder string
     Help        string
-    Options     []Option    // for select/radio/multiselect
-    Credential  *CredentialSelector // only for Type == "credential_ref"
-    VisibleWhen *Condition  // structured — NOT a string expression
-    Validators  []Validator // min/max/regex/oneOf, evaluated server-side too
-    Step        any         // increment for number/slider (default 1)
+    Options       []Option    // static choices for select/radio/multiselect
+    OptionsSource *DataSource // route → live choices for select/radio/multiselect
+    Credential    *CredentialSelector // only for Type == "credential_ref"
+    VisibleWhen   *Condition  // structured — NOT a string expression
+    Validators    []Validator // min/max/regex/oneOf, evaluated server-side too
+    Step          any         // increment for number/slider (default 1)
 }
 
 type CredentialKind string // ssh_private_key, ssh_password, kubeconfig, tls_client_cert, db_password, api_token, ...
@@ -497,6 +498,16 @@ opt-in, not forced on every number). Numeric `min`/`max` come from the `min`/`ma
 validators (single source of truth, enforced server-side too) and `Step` sets the
 increment. Adding a field type is a renderer concern only; plugins just declare
 the type, options, default, and validators.
+
+**Route-sourced choices.** A `select`/`radio`/`multiselect` field may set
+`OptionsSource` instead of (or in addition to) static `Options`: the renderer
+fetches it when the form opens and maps each row to `{value,label}`. Its params
+interpolate `${resource.*}` from the form's resource context, so a field can
+offer the live values of a related resource — e.g. a _Create index_ form whose
+_Columns_ field is a multiselect of the table's real columns, instead of a
+free-typed comma-separated string. Plugin-agnostic: the core only fetches rows
+and reads `value`/`name`/`label`; the plugin's route decides what the choices
+are. This keeps any "name an existing thing" field a picker, not free text.
 
 Rules normally read submitted schema fields. Reserved `$...` field names read
 ambient form context supplied by the core, currently `$transport` and
@@ -650,6 +661,11 @@ type TableConfig struct {
     HiddenColumns []string    // field keys to omit from auto-derived columns
     Exportable    bool        // opt-in: show the generic CSV/JSON export of loaded rows
 }
+
+type RowMutation struct {
+    Key    map[string]any `json:"key,omitempty"`
+    Values map[string]any `json:"values,omitempty"`
+}
 ```
 
 The grid is fully generic: it has no notion of databases, keys, or links beyond
@@ -668,6 +684,14 @@ on its own:
 
 Columns the grid should not display are declared with `HiddenColumns` — the
 renderer never hard-codes field names beyond its own reserved keys.
+
+**Add-row inputs are typed by column.** The add-row form derives each input
+widget from its column's declared type — a numeric column gets a number input, a
+boolean a toggle, JSON a code area, the rest a text box — rather than a
+one-size-fits-all text field. When columns come from a `ColumnsSource`, the
+renderer maps the column's data-type string (e.g. `integer`, `boolean`,
+`timestamptz`, `jsonb`) onto these generic widgets, so the typing works for any
+plugin whose column route reports a type, with no per-plugin code.
 
 The SQL plugins are one consumer: they build mutations through the driver-neutral
 `plugins/shared/sqldb` `Dialect` (parameterized, identifier-validated),
@@ -730,6 +754,20 @@ A group **opens a view only if it resolves to a resource** — via `ResourceKind
 view of its own: clicking it just expands, never opening an empty tab. A group
 may set both `Source` and a destination to expand _and_ open a view.
 
+The core validates every route/action/source reference during plugin
+registration. `DataSource.Method`, when declared, must match the referenced
+route. Read panels (`table`, `form`, `document`, `code_editor`, `file_browser`,
+etc.) must source from `GET` routes; streaming panels (`terminal`, `log_stream`,
+`metrics`, `query_editor`, `remote_desktop`, and table/resource watch sources)
+must source from `WS` routes. Table mutation sources (`insert`, `update`,
+`delete`) and editor/form save methods must resolve to write methods (`POST`,
+`PUT`, `PATCH`, or `DELETE`). Dashboard cells are validated recursively with the
+same rules as top-level tabs. The frontend renderer also validates generic panel
+config structure at the `PanelHost` boundary for values that can break generic
+rendering (iterated arrays, route/method fields, params maps, and recursive
+dashboard cells), then renders a panel error instead of mounting a panel with
+malformed config. Semantic manifest validation stays authoritative in Go.
+
 `remote_desktop` routes expose an RFB/VNC byte stream and the browser lazy-loads
 noVNC. VNC plugins stream raw RFB after the gateway authenticates upstream; RDP
 plugins decode the session with the pure-Go `grdp` client and bridge it to a
@@ -746,26 +784,34 @@ using the same `${resource.*}` rules as `DataSource`, and submits either JSON or
 JSON-encoded parts.
 
 ```go
-// Tab.Config for a form panel
-// {
-//   "submitRouteId": "proxmox.vm.config.update",
-//   "submitMethod":  "PATCH",
-//   "submitLabel":   "Apply",
-//   "params":        {"node": "${resource.namespace}", "vmid": "${resource.uid}"}
-// }
+type FormPanelConfig struct {
+    SubmitRouteID string
+    SubmitMethod  Method
+    SubmitLabel   string
+    Params        map[string]string
+}
 ```
 
 `PanelCodeEditor` is read-only unless its config declares a save route:
 
 ```go
-// Tab.Config for a code_editor panel
-// {
-//   "language":    "yaml",
-//   "saveRouteId": "kubernetes.object.apply",
-//   "saveMethod":  "PUT",
-//   "saveParams":  {"namespace": "${resource.namespace}", "name": "${resource.name}"}
-// }
+type CodeEditorConfig struct {
+    Language       string            // syntax mode, e.g. "yaml", "json", "sql"
+    InitialContent string            // optional template; skips the read route when set
+    SaveRouteID    string            // write route; absent means read-only
+    SaveMethod     Method            // POST/PUT/PATCH/DELETE; defaults to PUT in renderer
+    SaveParams     map[string]string // interpolated route params
+    SaveBodyKey    string            // optional: JSON-parse editor content into this request body key
+    SaveExtra      map[string]any    // optional static fields merged into the save body
+}
 ```
+
+By default saves send `{"content":"<editor text>"}`. When `SaveBodyKey` is set,
+the renderer parses the editor text as JSON and sends it under that key, merging
+`SaveExtra` first. This keeps document-store create/upsert flows generic: a
+manifest action can open `PanelCodeEditor` in a dialog with `InitialContent`, then
+save `{"document": {...}}`, `{"item": {...}}`, etc. without frontend
+plugin-specific code.
 
 `PanelQueryEditor` sends statements over its declared stream route. It may also
 declare a best-effort cancel route. It is an executable editor/results panel,
@@ -774,21 +820,20 @@ not a plain editor; plugins that need editing without an execute affordance use
 stays protocol-neutral.
 
 ```go
-// Tab.Config for a query_editor panel
-// {
-//   "language":       "sql",
-//   "label":          "SQL",
-//   "executeLabel":   "Run query",
-//   "cancelLabel":    "Cancel query",
-//   "runningLabel":   "Running…",
-//   "emptyText":      "Run a query to see results.",
-//   "initialQuery":   "select * from ${resource.name} limit 100",
-//   "cancelRouteId":  "postgres.query.cancel",
-//   "cancelParams":   {"database": "${resource.namespace}"},
-//   "completionRouteId": "postgres.completion",
-//   "completionParams":  {"schema": "${resource.namespace}"},
-//   "exportable":      true   // opt-in CSV/JSON export of the result set
-// }
+type QueryEditorConfig struct {
+    Language          string
+    Label             string
+    ExecuteLabel      string
+    CancelLabel       string
+    RunningLabel      string
+    EmptyText         string
+    InitialQuery      string
+    CancelRouteID     string
+    CancelParams      map[string]string
+    CompletionRouteID string
+    CompletionParams  map[string]string
+    Exportable        bool // opt-in CSV/JSON export of the result set
+}
 ```
 
 Specialized panels are also core renderer components. They stay route-bound and
@@ -845,13 +890,21 @@ type ResourceType struct {
 }
 
 type DetailView struct {
-    Header HeaderSpec // title, status badge, action buttons
-    Tabs   []Tab      // resource-level panels (Overview/Console/Logs/Config…)
+    Header     HeaderSpec // title, status badge, action buttons
+    DefaultTab string     // optional initial tab key; must reference Tabs
+    Tabs       []Tab      // resource-level panels (Overview/Console/Logs/Config…)
 }
 ```
 
 This single model expresses K8s, Proxmox, Docker, and SQL schema browsers
 identically — the data differs, the renderer does not.
+
+`DefaultTab` lets a plugin choose which tab a resource detail opens first while
+keeping the tab list fully declarative. It is a view preference only: users can
+still switch tabs normally, and the manifest validator rejects a key that is not
+present in `Tabs`. This is useful when the most common workflow is an editable
+view (for example a document resource whose first tab is read-only JSON and whose
+second tab is the `code_editor`).
 
 A detail with a **single tab** renders just that panel, with **no tab bar** —
 so a one-view detail (e.g. a dashboard landing page) doesn't show a redundant
@@ -875,9 +928,14 @@ plugin-specific frontend code.
 **Badge color by value.** A `Column` of type `badge` may declare
 `Severities map[string]Severity`, mapping a lower-cased cell value to a severity
 (success/warn/danger/info/secondary) so the renderer colors it (e.g. a pod's
-`running` reads green, `failed` red). Plugin-agnostic: the core only knows
-severity→color, never the domain values — the plugin owns the mapping. Unmapped
-values render neutral.
+`running` reads green, `failed` red). A `HeaderSpec` carries the same
+`Severities` map for its `StatusField`, so a detail view's header badge is
+colored by the same contract as the list column it mirrors. Plugin-agnostic: the
+core only knows severity→color, never the domain values — the plugin owns the
+mapping. Unmapped values render neutral. Apply it wherever a status/state/health
+value appears — the list column, the embedded tables (e.g. a workload's Pods
+tab), and the detail header — so a value is colored consistently everywhere it
+shows.
 
 ### 6.4 File browser & file-type preview (generic, reused by every fs plugin)
 
@@ -889,20 +947,20 @@ plugins are **manifest-only**; the panel ships zero per-plugin code (§12).
 It binds to routes via panel `Config`:
 
 ```go
-// Tab.Config for a file_browser panel
-// {
-//   "pathParam":       "path",          // route param carrying the directory/file path
-//   "readRouteId":     "sftp.read",     // GET inline preview content
-//   "downloadRouteId": "sftp.download", // GET original bytes
-//   "uploadRouteId":   "sftp.upload",   // POST multipart/form-data into current dir
-//   "mkdirRouteId":    "sftp.mkdir",    // POST JSON {name} in current dir
-//   "renameRouteId":   "sftp.rename",   // PATCH JSON {name} for selected path
-//   "deleteRouteId":   "sftp.delete",   // DELETE selected path
-//   "writable":        true,            // gates mutation affordances
-//   "multipleUpload":  true,
-//   "maxUploadBytes":  52428800,
-//   "uploadFieldName": "files"          // optional; defaults to "files"
-// }
+type FileBrowserConfig struct {
+    PathParam       string // route param carrying the directory/file path
+    ReadRouteID     string // GET inline preview content
+    DownloadRouteID string // GET original bytes
+    WriteRouteID    string // PUT text content for the selected path
+    UploadRouteID   string // POST multipart/form-data into current dir
+    MkdirRouteID    string // POST JSON {name} in current dir
+    RenameRouteID   string // PATCH JSON {name} for selected path
+    DeleteRouteID   string // DELETE selected path
+    Writable        bool   // gates mutation affordances
+    MultipleUpload  bool
+    MaxUploadBytes  int64
+    UploadFieldName string // optional; defaults to "files"
+}
 ```
 
 - **Listing.** The `Source` returns `Page[FileEntry]` for the current directory.

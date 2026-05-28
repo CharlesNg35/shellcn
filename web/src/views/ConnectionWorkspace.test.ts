@@ -309,6 +309,9 @@ describe("ConnectionWorkspace", () => {
       state: "error",
       reason: "docker ping failed",
     });
+    expect(wrapper.find('[role="alert"]').text()).toContain(
+      "docker ping failed",
+    );
   });
 
   it("renders every panel as a card in the dashboard layout", async () => {
@@ -380,31 +383,5 @@ describe("ConnectionWorkspace", () => {
     expect(wrapper.text()).toContain("Logs");
     // The span=2 panel fills the row.
     expect(cards[1].classes()).toContain("lg:col-span-2");
-  });
-
-  it("asks the browser to confirm reload while connected", async () => {
-    const ws = useWorkspaceStore();
-    ws.setConnected("c1", true);
-
-    mount(ConnectionWorkspace, {
-      props: { id: "c1" },
-      global: {
-        plugins: [router()],
-        stubs: {
-          AppIcon: true,
-          DetailView: true,
-          ResourceTree: true,
-          TablePanel: TablePanelStub,
-        },
-      },
-    });
-    await flushPromises();
-
-    const event = new Event("beforeunload", {
-      cancelable: true,
-    }) as BeforeUnloadEvent;
-    window.dispatchEvent(event);
-
-    expect(event.defaultPrevented).toBe(true);
   });
 });

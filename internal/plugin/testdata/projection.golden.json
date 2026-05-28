@@ -171,6 +171,7 @@
             "sample.start"
           ]
         },
+        "defaultTab": "editor",
         "tabs": [
           {
             "key": "logs",

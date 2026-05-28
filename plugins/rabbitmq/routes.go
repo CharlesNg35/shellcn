@@ -2,6 +2,8 @@ package rabbitmq
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -33,6 +35,8 @@ func routes() []plugin.Route {
 		{ID: "rabbitmq.exchange.create", Method: plugin.MethodPost, Path: "/exchanges", Permission: "rabbitmq.exchanges.write", Risk: plugin.RiskWrite, AuditEvent: "rabbitmq.exchange.create", Input: exchangeCreateSchema(), Handle: createExchange},
 		{ID: "rabbitmq.exchange.delete", Method: plugin.MethodDelete, Path: "/exchanges/{vhost}/{exchange}", Permission: "rabbitmq.exchanges.delete", Risk: plugin.RiskDestructive, AuditEvent: "rabbitmq.exchange.delete", Handle: deleteExchange},
 		{ID: "rabbitmq.bindings.list", Method: plugin.MethodGet, Path: "/queues/{vhost}/{queue}/bindings", Permission: "rabbitmq.bindings.read", Risk: plugin.RiskSafe, AuditEvent: "rabbitmq.bindings.list", Handle: queueBindings},
+		{ID: "rabbitmq.binding.create", Method: plugin.MethodPost, Path: "/queues/{vhost}/{queue}/bindings", Permission: "rabbitmq.bindings.write", Risk: plugin.RiskWrite, AuditEvent: "rabbitmq.binding.create", Input: bindingCreateSchema(), Handle: createBinding},
+		{ID: "rabbitmq.binding.delete", Method: plugin.MethodDelete, Path: "/bindings/{spec}", Permission: "rabbitmq.bindings.delete", Risk: plugin.RiskDestructive, AuditEvent: "rabbitmq.binding.delete", Handle: deleteBinding},
 		{ID: "rabbitmq.consumers.list", Method: plugin.MethodGet, Path: "/consumers", Permission: "rabbitmq.consumers.read", Risk: plugin.RiskSafe, AuditEvent: "rabbitmq.consumers.list", Handle: listConsumers},
 		{ID: "rabbitmq.message.publish", Method: plugin.MethodPost, Path: "/exchanges/{vhost}/{exchange}/publish", Permission: "rabbitmq.messages.write", Risk: plugin.RiskWrite, AuditEvent: "rabbitmq.message.publish", Input: publishSchema(), Handle: publishMessage},
 		{ID: "rabbitmq.queue.publish", Method: plugin.MethodPost, Path: "/queues/{vhost}/{queue}/publish", Permission: "rabbitmq.messages.write", Risk: plugin.RiskWrite, AuditEvent: "rabbitmq.queue.publish", Input: publishSchema(), Handle: publishQueueMessage},
@@ -58,6 +62,14 @@ func exchangeCreateSchema() *plugin.Schema {
 		{Key: "auto_delete", Label: "Auto delete", Type: plugin.FieldToggle, Default: false},
 		{Key: "internal", Label: "Internal", Type: plugin.FieldToggle, Default: false},
 		{Key: "arguments", Label: "Arguments", Type: plugin.FieldJSON},
+	}}}}
+}
+
+func bindingCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Binding", Fields: []plugin.Field{
+		{Key: "source", Label: "Source exchange", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "rabbitmq.exchanges.list"}, Help: "Exchange to bind this queue to."},
+		{Key: "routing_key", Label: "Routing key", Type: plugin.FieldText, Help: "Direct/topic routing key; ignored for fanout exchanges."},
+		{Key: "arguments", Label: "Arguments", Type: plugin.FieldJSON, Help: "Optional binding arguments (used by headers exchanges)."},
 	}}}}
 }
 
@@ -299,7 +311,90 @@ func bindingRequest(rc *plugin.RequestContext, path string) (any, error) {
 	if err := s.get(rc.Ctx, path, &rows); err != nil {
 		return nil, err
 	}
+	vhost := vhostParam(rc)
+	for _, r := range rows {
+		spec := bindingSpec{
+			VHost:       vhost,
+			Source:      fmt.Sprint(r["source"]),
+			Destination: fmt.Sprint(r["destination"]),
+			DestType:    fmt.Sprint(r["destination_type"]),
+			Props:       fmt.Sprint(r["properties_key"]),
+		}
+		r["ref"] = plugin.ResourceRef{Kind: "binding", Namespace: vhost, Name: spec.Source + " → " + spec.Destination, UID: spec.encode()}
+	}
 	return broker.PageRows(rc, rows)
+}
+
+type bindingSpec struct {
+	VHost       string `json:"v"`
+	Source      string `json:"s"`
+	Destination string `json:"d"`
+	DestType    string `json:"t"`
+	Props       string `json:"p"`
+}
+
+func (b bindingSpec) encode() string {
+	data, _ := json.Marshal(b)
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func decodeBindingSpec(token string) (bindingSpec, error) {
+	var b bindingSpec
+	data, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(token))
+	if err != nil {
+		return b, fmt.Errorf("%w: invalid binding reference", plugin.ErrInvalidInput)
+	}
+	if err := json.Unmarshal(data, &b); err != nil {
+		return b, fmt.Errorf("%w: invalid binding reference", plugin.ErrInvalidInput)
+	}
+	return b, nil
+}
+
+func createBinding(rc *plugin.RequestContext) (any, error) {
+	s, err := rabbitSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Source     string         `json:"source"`
+		RoutingKey string         `json:"routing_key"`
+		Arguments  map[string]any `json:"arguments"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	source := strings.TrimSpace(req.Source)
+	if source == "" {
+		return nil, fmt.Errorf("%w: source exchange is required", plugin.ErrInvalidInput)
+	}
+	vhost := vhostParam(rc)
+	queue := rc.Param("queue")
+	body := map[string]any{"routing_key": req.RoutingKey, "arguments": nonNilMap(req.Arguments)}
+	path := "/api/bindings/" + apiVHost(vhost) + "/e/" + apiName(source) + "/q/" + apiName(queue)
+	return actionResult{OK: true}, s.post(rc.Ctx, path, body, nil)
+}
+
+func deleteBinding(rc *plugin.RequestContext) (any, error) {
+	s, err := rabbitSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	spec, err := decodeBindingSpec(rc.Param("spec"))
+	if err != nil {
+		return nil, err
+	}
+	destSeg := "q"
+	if spec.DestType == "exchange" {
+		destSeg = "e"
+	}
+	path := "/api/bindings/" + apiVHost(spec.VHost) + "/e/" + apiName(spec.Source) + "/" + destSeg + "/" + apiName(spec.Destination) + "/" + apiName(spec.Props)
+	return actionResult{OK: true}, s.delete(rc.Ctx, path)
 }
 
 func listConsumers(rc *plugin.RequestContext) (any, error) {

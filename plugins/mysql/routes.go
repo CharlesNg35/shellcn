@@ -41,7 +41,9 @@ func routes() []plugin.Route {
 		{ID: "mysql.databases.list", Method: plugin.MethodGet, Path: "/databases", Permission: "mysql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.databases.list", Handle: listDatabases},
 		{ID: "mysql.database.overview", Method: plugin.MethodGet, Path: "/databases/{database}/overview", Permission: "mysql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.database.overview", Handle: databaseOverview},
 		{ID: "mysql.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.tables.list", Handle: listTables},
+		{ID: "mysql.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.relations.graph", Handle: relationGraph},
 		{ID: "mysql.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "mysql.views.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.views.list", Handle: listViews},
+		{ID: "mysql.view.drop", Method: plugin.MethodDelete, Path: "/views/{database}/{view}", Permission: "mysql.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.view.drop", Handle: dropView},
 		{ID: "mysql.routines.list", Method: plugin.MethodGet, Path: "/routines", Permission: "mysql.routines.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.routines.list", Handle: listRoutines},
 		{ID: "mysql.users.tree", Method: plugin.MethodGet, Path: "/tree/users", Permission: "mysql.users.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.users.tree", Handle: treeUsers},
 		{ID: "mysql.users.list", Method: plugin.MethodGet, Path: "/users", Permission: "mysql.users.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.users.list", Handle: listUsers},
@@ -104,7 +106,7 @@ func columnAddSchema() *plugin.Schema {
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "mysql.table.columns", Params: tableParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 	}}}}
 }
@@ -225,6 +227,36 @@ GROUP BY s.SCHEMA_NAME, s.DEFAULT_CHARACTER_SET_NAME, s.DEFAULT_COLLATION_NAME`,
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, "BASE TABLE", "table")
+}
+
+const relationGraphSQL = `
+SELECT CONSTRAINT_NAME AS constraint_name,
+       TABLE_SCHEMA AS child_schema, TABLE_NAME AS child_table, COLUMN_NAME AS child_column,
+       REFERENCED_TABLE_SCHEMA AS parent_schema, REFERENCED_TABLE_NAME AS parent_table, REFERENCED_COLUMN_NAME AS parent_column
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE REFERENCED_TABLE_NAME IS NOT NULL
+  AND TABLE_SCHEMA NOT IN ('information_schema', 'performance_schema', 'sys', 'mysql')
+  AND (? = '' OR TABLE_SCHEMA = ?)
+ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION`
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	database, err := sqldb.OptionalIdentifier(rc.Query().Get("p.database"))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{database, database})
+	if err != nil {
+		return nil, err
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(rows))
+	for _, r := range rows {
+		fks = append(fks, sqldb.ForeignKeyFromRow(r))
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -754,7 +786,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	}
 	var req struct {
 		Name    string `json:"name" validate:"required"`
-		Columns string `json:"columns" validate:"required"`
+		Columns any    `json:"columns" validate:"required"`
 		Unique  bool   `json:"unique"`
 	}
 	if err := rc.Bind(&req); err != nil {
@@ -764,7 +796,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	cols, err := sqldb.IdentifierList(req.Columns, quoteIdent)
+	cols, err := sqldb.IdentifierListValue(req.Columns, quoteIdent)
 	if err != nil {
 		return nil, err
 	}
@@ -940,6 +972,18 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 	return execDDL(rc, "DROP TABLE "+qualified(database, table))
 }
 
+func dropView(rc *plugin.RequestContext) (any, error) {
+	database, err := sqldb.SafeIdentifier(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	view, err := sqldb.SafeIdentifier(rc.Param("view"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP VIEW "+qualified(database, view))
+}
+
 func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {
 	s, err := mysqlSession(rc)
 	if err != nil {
@@ -1089,7 +1133,7 @@ func executeStatement(ctx context.Context, s *Session, statement string) (sqldb.
 	}
 	out := sqldb.StatementResult{Statement: statement, Columns: columns}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			_ = rows.Close()
 			return sqldb.StatementResult{}, mysqlErr(err)
@@ -1155,7 +1199,7 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	}
 	out := []row{}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			return nil, mysqlErr(err)
 		}
@@ -1173,30 +1217,17 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	return out, nil
 }
 
-func scanValues(rows *sql.Rows, count int) ([]any, error) {
-	values := make([]any, count)
-	ptrs := make([]any, count)
+func scanValues(rows *sql.Rows, columns []string) ([]any, error) {
+	values := make([]any, len(columns))
+	ptrs := make([]any, len(columns))
 	for i := range values {
 		ptrs[i] = &values[i]
 	}
 	if err := rows.Scan(ptrs...); err != nil {
 		return nil, err
 	}
-	for i, value := range values {
-		values[i] = jsonValue(value)
-	}
+	values = sqldb.DisplayValues(columns, values)
 	return values, nil
-}
-
-func jsonValue(v any) any {
-	switch x := v.(type) {
-	case []byte:
-		return string(x)
-	case time.Time:
-		return x.Format(time.RFC3339Nano)
-	default:
-		return x
-	}
 }
 
 func redactRows(rows []row, patterns []string) {

@@ -43,7 +43,9 @@ func routes() []plugin.Route {
 		{ID: "mssql.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{database}/{schema}/overview", Permission: "mssql.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.schema.overview", Handle: schemaOverview},
 		{ID: "mssql.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "mssql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.relations.tree", Handle: treeRelations},
 		{ID: "mssql.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "mssql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.tables.list", Handle: listTables},
+		{ID: "mssql.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "mssql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.relations.graph", Handle: relationGraph},
 		{ID: "mssql.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "mssql.views.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.views.list", Handle: listViews},
+		{ID: "mssql.view.drop", Method: plugin.MethodDelete, Path: "/views/{id}", Permission: "mssql.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.view.drop", Handle: dropView},
 		{ID: "mssql.procedures.tree", Method: plugin.MethodGet, Path: "/tree/procedures", Permission: "mssql.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.procedures.tree", Handle: treeProcedures},
 		{ID: "mssql.procedures.list", Method: plugin.MethodGet, Path: "/procedures", Permission: "mssql.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.procedures.list", Handle: listProcedures},
 		{ID: "mssql.users.tree", Method: plugin.MethodGet, Path: "/tree/users", Permission: "mssql.users.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.users.tree", Handle: treeUsers},
@@ -105,7 +107,7 @@ func columnAddSchema() *plugin.Schema {
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "mssql.table.columns", Params: objectParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 	}}}}
 }
@@ -287,6 +289,45 @@ func schemaOverview(rc *plugin.RequestContext) (any, error) {
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, "U", "table")
+}
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	databases, err := targetDatabases(rc, s)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := optionalIdent(rc.Query().Get("p.schema"))
+	if err != nil {
+		return nil, err
+	}
+	fks := []sqldb.ForeignKey{}
+	for _, database := range databases {
+		rows, err := queryRows(rc.Ctx, s, fmt.Sprintf(`
+SELECT fk.name AS constraint_name,
+       cs.name AS child_schema, ct.name AS child_table, cc.name AS child_column,
+       ps.name AS parent_schema, pt.name AS parent_table, pc.name AS parent_column
+FROM %[1]s.sys.foreign_keys fk
+JOIN %[1]s.sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+JOIN %[1]s.sys.tables ct ON ct.object_id = fkc.parent_object_id
+JOIN %[1]s.sys.schemas cs ON cs.schema_id = ct.schema_id
+JOIN %[1]s.sys.columns cc ON cc.object_id = fkc.parent_object_id AND cc.column_id = fkc.parent_column_id
+JOIN %[1]s.sys.tables pt ON pt.object_id = fkc.referenced_object_id
+JOIN %[1]s.sys.schemas ps ON ps.schema_id = pt.schema_id
+JOIN %[1]s.sys.columns pc ON pc.object_id = fkc.referenced_object_id AND pc.column_id = fkc.referenced_column_id
+WHERE (@p1 = '' OR cs.name = @p1)
+ORDER BY fk.name, fkc.constraint_column_id`, quoteIdent(database)), []any{schema})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			fks = append(fks, sqldb.ForeignKeyFromRow(r))
+		}
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -835,7 +876,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	}
 	var req struct {
 		Name    string `json:"name" validate:"required"`
-		Columns string `json:"columns" validate:"required"`
+		Columns any    `json:"columns" validate:"required"`
 		Unique  bool   `json:"unique"`
 	}
 	if err := rc.Bind(&req); err != nil {
@@ -845,7 +886,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	cols, err := sqldb.IdentifierList(req.Columns, quoteIdent)
+	cols, err := sqldb.IdentifierListValue(req.Columns, quoteIdent)
 	if err != nil {
 		return nil, err
 	}
@@ -1014,6 +1055,14 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 	return execDDL(rc, "DROP TABLE "+qualified(database, schema, table))
 }
 
+func dropView(rc *plugin.RequestContext) (any, error) {
+	database, schema, view, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP VIEW "+qualified(database, schema, view))
+}
+
 func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {
 	s, err := mssqlSession(rc)
 	if err != nil {
@@ -1165,7 +1214,7 @@ func executeStatement(ctx context.Context, runner sqlRunner, s *Session, stateme
 	}
 	out := sqldb.StatementResult{Statement: statement, Columns: columns}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			_ = rows.Close()
 			return sqldb.StatementResult{}, mssqlErr(err)
@@ -1202,7 +1251,7 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	}
 	out := []row{}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			return nil, mssqlErr(err)
 		}
@@ -1220,30 +1269,17 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	return out, nil
 }
 
-func scanValues(rows *sql.Rows, count int) ([]any, error) {
-	values := make([]any, count)
-	ptrs := make([]any, count)
+func scanValues(rows *sql.Rows, columns []string) ([]any, error) {
+	values := make([]any, len(columns))
+	ptrs := make([]any, len(columns))
 	for i := range values {
 		ptrs[i] = &values[i]
 	}
 	if err := rows.Scan(ptrs...); err != nil {
 		return nil, err
 	}
-	for i, value := range values {
-		values[i] = jsonValue(value)
-	}
+	values = sqldb.DisplayValues(columns, values)
 	return values, nil
-}
-
-func jsonValue(v any) any {
-	switch x := v.(type) {
-	case []byte:
-		return string(x)
-	case time.Time:
-		return x.Format(time.RFC3339Nano)
-	default:
-		return x
-	}
 }
 
 func statementReturnsRows(statement string) bool {

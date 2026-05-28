@@ -35,6 +35,8 @@ func Routes(provider Provider) []plugin.Route {
 		{ID: routeID(provider, "mapping.update"), Method: plugin.MethodPut, Path: "/indexes/{index}/mapping", Permission: provider.Protocol + ".mappings.write", Risk: plugin.RiskWrite, AuditEvent: routeID(provider, "mapping.update"), Input: mappingUpdateSchema(), Handle: updateMapping},
 		{ID: routeID(provider, "settings.read"), Method: plugin.MethodGet, Path: "/indexes/{index}/settings", Permission: provider.Protocol + ".settings.read", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "settings.read"), Handle: readSettings},
 		{ID: routeID(provider, "aliases.list"), Method: plugin.MethodGet, Path: "/indexes/{index}/aliases", Permission: provider.Protocol + ".aliases.read", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "aliases.list"), Handle: listAliases},
+		{ID: routeID(provider, "alias.create"), Method: plugin.MethodPost, Path: "/indexes/{index}/aliases", Permission: provider.Protocol + ".aliases.write", Risk: plugin.RiskWrite, AuditEvent: routeID(provider, "alias.create"), Input: aliasCreateSchema(), Handle: createAlias},
+		{ID: routeID(provider, "alias.delete"), Method: plugin.MethodDelete, Path: "/indexes/{index}/aliases/{alias}", Permission: provider.Protocol + ".aliases.delete", Risk: plugin.RiskDestructive, AuditEvent: routeID(provider, "alias.delete"), Handle: deleteAlias},
 		{ID: routeID(provider, "shards.list"), Method: plugin.MethodGet, Path: "/indexes/{index}/shards", Permission: provider.Protocol + ".shards.read", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "shards.list"), Handle: listShards},
 		{ID: routeID(provider, "documents.list"), Method: plugin.MethodGet, Path: "/indexes/{index}/documents", Permission: provider.Protocol + ".documents.read", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "documents.list"), Handle: listDocuments},
 		{ID: routeID(provider, "document.read"), Method: plugin.MethodGet, Path: "/indexes/{index}/documents/{id}", Permission: provider.Protocol + ".documents.read", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "document.read"), Handle: readDocument},
@@ -293,7 +295,62 @@ func listAliases(rc *plugin.RequestContext) (any, error) {
 		}
 		return nil, err
 	}
+	for _, r := range rows {
+		alias := strings.TrimSpace(fmt.Sprint(r["alias"]))
+		idx := strings.TrimSpace(fmt.Sprint(r["index"]))
+		r["ref"] = plugin.ResourceRef{Kind: "alias", Namespace: idx, Name: alias, UID: idx + "/" + alias}
+	}
 	return broker.PageRows(rc, rows)
+}
+
+func createAlias(rc *plugin.RequestContext) (any, error) {
+	s, err := searchSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name   string         `json:"name"`
+		Filter map[string]any `json:"filter"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, fmt.Errorf("%w: alias name is required", plugin.ErrInvalidInput)
+	}
+	var body any
+	if len(req.Filter) > 0 {
+		body = map[string]any{"filter": req.Filter}
+	}
+	err = s.client.Do(rc.Ctx, http.MethodPut, pathIndex(indexParam(rc))+"/_alias/"+url.PathEscape(name), nil, body, nil)
+	return actionResult{OK: err == nil}, err
+}
+
+func deleteAlias(rc *plugin.RequestContext) (any, error) {
+	s, err := searchSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	alias := strings.TrimSpace(rc.Param("alias"))
+	if alias == "" {
+		return nil, fmt.Errorf("%w: alias is required", plugin.ErrInvalidInput)
+	}
+	err = s.client.Do(rc.Ctx, http.MethodDelete, pathIndex(indexParam(rc))+"/_alias/"+url.PathEscape(alias), nil, nil, nil)
+	return actionResult{OK: err == nil}, err
+}
+
+func aliasCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Alias", Fields: []plugin.Field{
+		{Key: "name", Label: "Alias name", Type: plugin.FieldText, Required: true},
+		{Key: "filter", Label: "Filter", Type: plugin.FieldJSON, Help: "Optional query DSL to make this a filtered alias."},
+	}}}}
 }
 
 func listShards(rc *plugin.RequestContext) (any, error) {

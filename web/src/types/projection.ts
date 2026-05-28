@@ -178,6 +178,9 @@ export interface Field {
   placeholder?: string;
   help?: string;
   options?: Option[];
+  // Populates choices from a route at form-open time (rows -> {value,label});
+  // its params interpolate ${resource.*} from the form's resource context.
+  optionsSource?: DataSource;
   credential?: CredentialSelector;
   visibleWhen?: Condition;
   validators?: Validator[];
@@ -252,9 +255,12 @@ export interface FormPanelConfig {
 
 export interface CodeEditorConfig {
   language?: string;
+  initialContent?: string;
   saveRouteId?: string;
   saveMethod?: Exclude<Method, "GET" | "WS">;
   saveParams?: Record<string, string>;
+  saveBodyKey?: string;
+  saveExtra?: Record<string, unknown>;
 }
 
 export interface QueryEditorConfig {
@@ -471,11 +477,14 @@ export interface TreeNode {
 export interface HeaderSpec {
   title?: string;
   statusField?: string;
+  // Colors the status badge by value (same value->severity map as a badge column).
+  severities?: Record<string, Severity>;
   actionIds?: string[];
 }
 
 export interface DetailView {
   header: HeaderSpec;
+  defaultTab?: string;
   tabs: Tab[];
 }
 

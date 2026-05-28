@@ -4,6 +4,7 @@ import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import { interpolate } from "../../api/dataSource";
+import { KEEP_ALIVE_DETAIL_PANELS_MAX } from "../../stores/sessionLimits";
 import type {
   Action,
   DetailView as DetailViewSpec,
@@ -12,6 +13,7 @@ import type {
 import AppIcon from "../../components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
 import ActionBar from "../shared/ActionBar.vue";
+import { badgeClassFor } from "../shared/severity";
 
 const props = defineProps<{
   connectionId: string;
@@ -25,12 +27,22 @@ const emit = defineEmits<{
 }>();
 
 const resource = computed(() => props.row.ref ?? null);
-const activeTab = ref(props.detail.tabs[0]?.key);
+function initialTab(): string {
+  const key = props.detail.defaultTab;
+  if (key && props.detail.tabs.some((tab) => tab.key === key)) return key;
+  return props.detail.tabs[0]?.key ?? "";
+}
+
+const activeTab = ref(initialTab());
 
 watch(
-  () => props.row.ref?.uid,
+  () => [
+    props.row.ref?.uid,
+    props.detail.defaultTab,
+    props.detail.tabs.map((tab) => tab.key).join("\0"),
+  ],
   () => {
-    activeTab.value = props.detail.tabs[0]?.key;
+    activeTab.value = initialTab();
   },
 );
 
@@ -48,6 +60,10 @@ const status = computed(() => {
   const f = props.detail.header.statusField;
   return f ? props.row[f] : undefined;
 });
+
+const statusClass = computed(() =>
+  badgeClassFor(props.detail.header.severities, status.value),
+);
 
 const current = computed(() =>
   props.detail.tabs.find((t) => t.key === activeTab.value),
@@ -81,8 +97,9 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
             {{ title }}
           </h2>
           <span
-            v-if="status !== undefined"
-            class="rounded-full bg-surface-100 px-2 py-0.5 text-xs text-surface-500 dark:bg-surface-800"
+            v-if="status !== undefined && status !== ''"
+            class="rounded-full px-2 py-0.5 text-xs"
+            :class="statusClass"
             >{{ status }}</span
           >
         </div>
@@ -114,7 +131,7 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
     <!-- KeepAlive (not lazy TabPanels) so a resource's console/logs stay alive
          when switching between its detail tabs. -->
     <div class="min-h-0 flex-1 overflow-hidden">
-      <KeepAlive :max="8">
+      <KeepAlive :max="KEEP_ALIVE_DETAIL_PANELS_MAX">
         <PanelHost
           v-if="current"
           :key="`${row.ref?.uid}:${current.key}`"

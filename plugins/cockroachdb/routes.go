@@ -60,8 +60,10 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{schema}/overview", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schema.overview", Handle: schemaOverview},
 		{ID: "cockroachdb.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "cockroachdb.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.tables.tree", Handle: treeTables},
 		{ID: "cockroachdb.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "cockroachdb.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.tables.list", Handle: listTables},
+		{ID: "cockroachdb.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "cockroachdb.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.relations.graph", Handle: relationGraph},
 		{ID: "cockroachdb.views.tree", Method: plugin.MethodGet, Path: "/tree/views", Permission: "cockroachdb.views.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.views.tree", Handle: treeViews},
 		{ID: "cockroachdb.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "cockroachdb.views.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.views.list", Handle: listViews},
+		{ID: "cockroachdb.view.drop", Method: plugin.MethodDelete, Path: "/views/{schema}/{view}", Permission: "cockroachdb.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.view.drop", Handle: dropView},
 		{ID: "cockroachdb.functions.tree", Method: plugin.MethodGet, Path: "/tree/functions", Permission: "cockroachdb.functions.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.functions.tree", Handle: treeFunctions},
 		{ID: "cockroachdb.functions.list", Method: plugin.MethodGet, Path: "/functions", Permission: "cockroachdb.functions.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.functions.list", Handle: listFunctions},
 		{ID: "cockroachdb.sequences.list", Method: plugin.MethodGet, Path: "/sequences", Permission: "cockroachdb.sequences.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.sequences.list", Handle: listSequences},
@@ -78,6 +80,7 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.table.row.update", Method: plugin.MethodPatch, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.row.update", Handle: updateRow},
 		{ID: "cockroachdb.table.row.delete", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.row.delete", Handle: deleteRow},
 		{ID: "cockroachdb.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "cockroachdb.databases.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
+		{ID: "cockroachdb.schema.create", Method: plugin.MethodPost, Path: "/schemas", Permission: "cockroachdb.schemas.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.schema.create", Input: schemaCreateSchema(), Handle: createSchema},
 		{ID: "cockroachdb.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "cockroachdb.column.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "cockroachdb.column.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/drop", Permission: "cockroachdb.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.column.drop", Handle: dropColumn},
@@ -121,6 +124,26 @@ func databaseCreateSchema() *plugin.Schema {
 	}}}}
 }
 
+func schemaCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Schema", Fields: []plugin.Field{
+		{Key: "name", Label: "Schema name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func createSchema(rc *plugin.RequestContext) (any, error) {
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "CREATE SCHEMA "+sqldb.QuoteIdent(name))
+}
+
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
@@ -141,7 +164,7 @@ func columnAddSchema() *plugin.Schema {
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "cockroachdb.table.columns", Params: tableParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 	}}}}
 }
@@ -435,6 +458,40 @@ GROUP BY s.schema_name`, []any{schema})
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, []string{"BASE TABLE"}, "table")
+}
+
+const relationGraphSQL = `
+SELECT rc.constraint_name AS constraint_name,
+       kcu.table_schema AS child_schema, kcu.table_name AS child_table, kcu.column_name AS child_column,
+       uk.table_schema AS parent_schema, uk.table_name AS parent_table, uk.column_name AS parent_column
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu
+  ON kcu.constraint_schema = rc.constraint_schema AND kcu.constraint_name = rc.constraint_name
+JOIN information_schema.key_column_usage uk
+  ON uk.constraint_schema = rc.unique_constraint_schema AND uk.constraint_name = rc.unique_constraint_name
+ AND uk.ordinal_position = kcu.position_in_unique_constraint
+WHERE kcu.table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_extension', 'crdb_internal')
+  AND ($1::STRING = '' OR kcu.table_schema = $1)
+ORDER BY rc.constraint_name, kcu.ordinal_position`
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := sqldb.OptionalIdentifier(rc.Query().Get("p.schema"))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{schema})
+	if err != nil {
+		return nil, err
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(rows))
+	for _, r := range rows {
+		fks = append(fks, sqldb.ForeignKeyFromRow(r))
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -960,7 +1017,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	}
 	var req struct {
 		Name    string `json:"name" validate:"required"`
-		Columns string `json:"columns" validate:"required"`
+		Columns any    `json:"columns" validate:"required"`
 		Unique  bool   `json:"unique"`
 	}
 	if err := rc.Bind(&req); err != nil {
@@ -970,7 +1027,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	cols, err := sqldb.IdentifierList(req.Columns, sqldb.QuoteIdent)
+	cols, err := sqldb.IdentifierListValue(req.Columns, sqldb.QuoteIdent)
 	if err != nil {
 		return nil, err
 	}
@@ -1137,6 +1194,32 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 	return execDDL(rc, "DROP TABLE "+sqldb.Qualified(schema, table))
 }
 
+func dropView(rc *plugin.RequestContext) (any, error) {
+	schema, err := sqldb.SafeIdentifier(rc.Param("schema"))
+	if err != nil {
+		return nil, err
+	}
+	view, err := sqldb.SafeIdentifier(rc.Param("view"))
+	if err != nil {
+		return nil, err
+	}
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	// Regular and materialized views are listed together but dropped with
+	// different statements, so resolve the relkind first.
+	var relkind string
+	if err := s.pool.QueryRow(rc.Ctx, `SELECT c.relkind::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2`, schema, view).Scan(&relkind); err != nil {
+		return nil, cockroachErr(err)
+	}
+	stmt := "DROP VIEW " + sqldb.Qualified(schema, view)
+	if relkind == "m" {
+		stmt = "DROP MATERIALIZED VIEW " + sqldb.Qualified(schema, view)
+	}
+	return execDDL(rc, stmt)
+}
+
 func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {
 	s, err := cockroachSession(rc)
 	if err != nil {
@@ -1294,7 +1377,7 @@ func executeStatement(ctx context.Context, s *Session, statement string) (sqldb.
 		if err != nil {
 			return sqldb.StatementResult{}, cockroachErr(err)
 		}
-		out.Rows = append(out.Rows, jsonValues(values))
+		out.Rows = append(out.Rows, sqldb.DisplayValues(out.Columns, values))
 		if len(out.Rows) >= s.opts.RowLimit {
 			break
 		}
@@ -1333,7 +1416,7 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 		r := row{}
 		for i, name := range names {
 			if i < len(values) {
-				r[name] = jsonValue(values[i])
+				r[name] = sqldb.DisplayValue(name, values[i])
 			}
 		}
 		out = append(out, r)
@@ -1363,25 +1446,6 @@ func fieldNames(fields []pgconn.FieldDescription) []string {
 		out = append(out, f.Name)
 	}
 	return out
-}
-
-func jsonValues(values []any) []any {
-	out := make([]any, len(values))
-	for i, v := range values {
-		out[i] = jsonValue(v)
-	}
-	return out
-}
-
-func jsonValue(v any) any {
-	switch x := v.(type) {
-	case []byte:
-		return string(x)
-	case time.Time:
-		return x.Format(time.RFC3339Nano)
-	default:
-		return x
-	}
 }
 
 func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {

@@ -67,7 +67,7 @@ func resources() []plugin.ResourceType {
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{"rabbitmq.queue.publish", "rabbitmq.queue.purge", "rabbitmq.queue.delete"}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "rabbitmq.queue.overview", Params: queueParams()}},
 				{Key: "messages", Label: "Messages", Icon: icon("mail"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.queue.messages", Params: queueParams()}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"rabbitmq.queue.publish"}, Exportable: true}.Map()},
-				{Key: "bindings", Label: "Bindings", Icon: icon("link"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.bindings.list", Params: queueParams()}, Config: plugin.TableConfig{Columns: bindingColumns(), Exportable: true}.Map()},
+				{Key: "bindings", Label: "Bindings", Icon: icon("link"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.bindings.list", Params: queueParams()}, Config: plugin.TableConfig{Columns: bindingColumns(), ActionIDs: []string{"rabbitmq.binding.create"}, RowActionIDs: []string{"rabbitmq.binding.delete"}, Exportable: true}.Map()},
 				{Key: "consumers", Label: "Consumers", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.consumers.list", Params: queueParams()}, Config: plugin.TableConfig{Columns: consumerColumns(), Exportable: true}.Map()},
 			}},
 		},
@@ -78,7 +78,7 @@ func resources() []plugin.ResourceType {
 			RowActionIDs:  []string{"rabbitmq.exchange.delete"},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{"rabbitmq.message.publish", "rabbitmq.exchange.delete"}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "rabbitmq.exchange.overview", Params: exchangeParams()}},
-				{Key: "bindings", Label: "Bindings", Icon: icon("link"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.exchange.bindings", Params: exchangeParams()}, Config: plugin.TableConfig{Columns: bindingColumns(), Exportable: true}.Map()},
+				{Key: "bindings", Label: "Bindings", Icon: icon("link"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.exchange.bindings", Params: exchangeParams()}, Config: plugin.TableConfig{Columns: bindingColumns(), RowActionIDs: []string{"rabbitmq.binding.delete"}, Exportable: true}.Map()},
 			}},
 		},
 	}
@@ -93,6 +93,8 @@ func actions() []plugin.Action {
 		{ID: "rabbitmq.exchange.delete", Label: "Delete", Icon: icon("trash-2"), RouteID: "rabbitmq.exchange.delete", Params: exchangeParams(), Confirm: true, ConfirmText: "Delete this exchange?"},
 		{ID: "rabbitmq.message.publish", Label: "Publish", Icon: icon("send"), RouteID: "rabbitmq.message.publish", Params: map[string]string{"vhost": "${resource.namespace}", "exchange": "${resource.name}"}, Confirm: true, ConfirmText: "Publish this message?"},
 		{ID: "rabbitmq.queue.publish", Label: "Publish", Icon: icon("send"), RouteID: "rabbitmq.queue.publish", Params: queueParams(), Confirm: true, ConfirmText: "Publish this message to the queue?"},
+		{ID: "rabbitmq.binding.create", Label: "Add binding", Icon: icon("link"), RouteID: "rabbitmq.binding.create", Params: queueParams()},
+		{ID: "rabbitmq.binding.delete", Label: "Unbind", Icon: icon("unlink"), RouteID: "rabbitmq.binding.delete", Params: map[string]string{"spec": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this binding?"},
 	}
 }
 

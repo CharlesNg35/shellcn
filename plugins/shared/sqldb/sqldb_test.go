@@ -138,6 +138,29 @@ func TestParseDDLColumnsAcceptsJSONTextAreaValue(t *testing.T) {
 	}
 }
 
+func TestIdentifierListValueAcceptsArrayAndString(t *testing.T) {
+	want := []string{`"a"`, `"b"`}
+	for name, in := range map[string]any{
+		"comma string": "a, b",
+		"any slice":    []any{"a", "b"},
+		"string slice": []string{"a", "b"},
+	} {
+		got, err := IdentifierListValue(in, QuoteIdent)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+			t.Fatalf("%s: got %#v", name, got)
+		}
+	}
+	if _, err := IdentifierListValue([]any{"bad-name"}, QuoteIdent); err == nil {
+		t.Fatal("invalid identifier accepted")
+	}
+	if _, err := IdentifierListValue(42, QuoteIdent); err == nil {
+		t.Fatal("non-list value accepted")
+	}
+}
+
 func TestRedactRowsByColumnPattern(t *testing.T) {
 	rows := [][]any{{"alice", "plain", "t1"}}
 	got := RedactRows([]string{"username", "password_hash", "api_key"}, rows, DefaultRedactColumnPatterns())
@@ -146,6 +169,30 @@ func TestRedactRowsByColumnPattern(t *testing.T) {
 	}
 	if rows[0][1] != "plain" {
 		t.Fatalf("redaction mutated source rows: %#v", rows)
+	}
+}
+
+func TestDisplayValueFormatsBinaryIDs(t *testing.T) {
+	raw := []byte{32, 90, 17, 95, 100, 227, 74, 220, 141, 56, 74, 239, 117, 197, 139, 249}
+	if got := DisplayValue("id", raw); got != "205a115f-64e3-4adc-8d38-4aef75c58bf9" {
+		t.Fatalf("uuid display: got %#v", got)
+	}
+	if got := DisplayValue("trace_id", raw); got != "205a115f-64e3-4adc-8d38-4aef75c58bf9" {
+		t.Fatalf("suffix id display: got %#v", got)
+	}
+	if got := DisplayValue("payload", []byte("hello")); got != "hello" {
+		t.Fatalf("printable bytes display: got %#v", got)
+	}
+	if got := DisplayValue("payload", []byte{0, 1, 2}); got != "0x000102" {
+		t.Fatalf("binary payload display: got %#v", got)
+	}
+}
+
+func TestDisplayValuesUsesColumnContext(t *testing.T) {
+	raw := []byte{32, 90, 17, 95, 100, 227, 74, 220, 141, 56, 74, 239, 117, 197, 139, 249}
+	got := DisplayValues([]string{"id", "payload"}, []any{raw, raw})
+	if got[0] != "205a115f-64e3-4adc-8d38-4aef75c58bf9" || got[1] != "0x205a115f64e34adc8d384aef75c58bf9" {
+		t.Fatalf("unexpected values: %#v", got)
 	}
 }
 

@@ -44,9 +44,10 @@ const (
 type AgentMode string
 
 const (
-	AgentTCP  AgentMode = "tcp"
-	AgentUnix AgentMode = "unix"
-	AgentHTTP AgentMode = "http_proxy"
+	AgentTCP         AgentMode = "tcp"
+	AgentUnix        AgentMode = "unix"
+	AgentHTTP        AgentMode = "http_proxy"
+	AgentHostMonitor AgentMode = "host_monitor"
 )
 
 // ProxyTarget describes the single endpoint an agent exposes back to the gateway.

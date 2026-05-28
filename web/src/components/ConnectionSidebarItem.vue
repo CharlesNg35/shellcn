@@ -8,6 +8,8 @@ import type { ConnectionSummary } from "../types/projection";
 const props = defineProps<{
   connection: ConnectionSummary;
   active: boolean;
+  dragging?: boolean;
+  highlighted?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -68,13 +70,14 @@ function shareTitle(c: ConnectionSummary): string {
 
 <template>
   <div
-    class="connection-sidebar-drag-item mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+    class="connection-sidebar-drag-item mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm transition-colors"
     :data-connection-id="connection.id"
-    :class="
-      active
-        ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-        : ''
-    "
+    :class="[
+      !dragging && 'hover:bg-surface-100 dark:hover:bg-surface-800',
+      !active && highlighted && 'bg-surface-100 dark:bg-surface-800',
+      active &&
+        'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60',
+    ]"
   >
     <span class="shrink-0 rounded p-0.5 text-surface-500" aria-hidden="true">
       <AppIcon :icon="connection.icon" :size="16" />

@@ -47,12 +47,12 @@ func icon(name string) plugin.Icon {
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
-		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "cockroachdb.databases.tree"}, ResourceKind: "database"},
+		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "cockroachdb.databases.tree"}, Ref: &plugin.ResourceRef{Kind: "server", Name: "Databases", UID: "server"}},
 		{Key: "nodes", Label: "Nodes", Icon: icon("server"), Source: plugin.DataSource{RouteID: "cockroachdb.nodes.tree"}, ResourceKind: "node"},
 		{Key: "ranges", Label: "Ranges", Icon: icon("blocks"), Source: plugin.DataSource{RouteID: "cockroachdb.ranges.tree"}, ResourceKind: "range"},
-		{Key: "jobs", Label: "Jobs", Icon: icon("briefcase-business"), Source: plugin.DataSource{RouteID: "cockroachdb.jobs.tree"}, ResourceKind: "job"},
-		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), Source: plugin.DataSource{RouteID: "cockroachdb.sessions.tree"}, ResourceKind: "session"},
-		{Key: "queries", Label: "Queries", Icon: icon("search-code"), Source: plugin.DataSource{RouteID: "cockroachdb.queries.tree"}, ResourceKind: "query"},
+		{Key: "jobs", Label: "Jobs", Icon: icon("briefcase-business"), ResourceKind: "job"},
+		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), ResourceKind: "session"},
+		{Key: "queries", Label: "Queries", Icon: icon("search-code"), ResourceKind: "query"},
 		{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Source: plugin.DataSource{RouteID: "cockroachdb.schemas.tree"}, ResourceKind: "schema"},
 		{Key: "functions", Label: "Functions", Icon: icon("function-square"), Source: plugin.DataSource{RouteID: "cockroachdb.functions.tree"}, ResourceKind: "function"},
 	}
@@ -60,6 +60,7 @@ func tree() []plugin.TreeGroup {
 
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
+		serverResource(),
 		databaseResource(),
 		nodeResource(),
 		rangeResource(),
@@ -71,6 +72,22 @@ func resources() []plugin.ResourceType {
 		viewResource(),
 		functionResource(),
 		sequenceResource(),
+	}
+}
+
+// serverResource is the connection-level view opened by clicking the Databases
+// tree group: the database list plus a SQL console.
+func serverResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind: "server", Title: "Databases",
+		List: plugin.DataSource{RouteID: "cockroachdb.databases.list"},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "Databases"},
+			Tabs: []plugin.Tab{
+				{Key: "databases", Label: "Databases", Icon: icon("database"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.databases.list"}, Config: plugin.TableConfig{ActionIDs: []string{"cockroachdb.database.create"}}.Map()},
+				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cockroachdb.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT now();")},
+			},
+		},
 	}
 }
 
@@ -90,7 +107,8 @@ func databaseResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cockroachdb.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
-				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.schemas.list"}, Config: plugin.TableConfig{Columns: schemaColumns()}.Map()},
+				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.schemas.list"}, Config: plugin.TableConfig{Columns: schemaColumns(), ActionIDs: []string{"cockroachdb.schema.create"}}.Map()},
+				{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "cockroachdb.relations.graph"}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}.Map()},
 				{Key: "nodes", Label: "Nodes", Icon: icon("server"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.nodes.list"}, Config: plugin.TableConfig{Columns: nodeColumns()}.Map()},
 				{Key: "jobs", Label: "Jobs", Icon: icon("briefcase-business"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.jobs.list"}, Config: plugin.TableConfig{Columns: jobColumns()}.Map()},
 				{Key: "ranges", Label: "Ranges", Icon: icon("blocks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.ranges.list"}, Config: plugin.TableConfig{Columns: rangeColumns()}.Map()},
@@ -158,14 +176,15 @@ func queryResource() plugin.ResourceType {
 func schemaResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "schema", Title: "Schemas",
-		List:    plugin.DataSource{RouteID: "cockroachdb.schemas.list"},
-		Columns: schemaColumns(),
+		List:          plugin.DataSource{RouteID: "cockroachdb.schemas.list"},
+		ListActionIDs: []string{"cockroachdb.schema.create"},
+		Columns:       schemaColumns(),
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cockroachdb.schema.overview", Params: map[string]string{"schema": "${resource.uid}"}}},
 				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.tables.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"cockroachdb.table.create"}}.Map()},
-				{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.views.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns()}.Map()},
+				{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.views.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"cockroachdb.view.drop"}}.Map()},
 				{Key: "functions", Label: "Functions", Icon: icon("function-square"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.functions.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: functionColumns()}.Map()},
 				{Key: "sequences", Label: "Sequences", Icon: icon("list-ordered"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.sequences.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: sequenceColumns()}.Map()},
 			},
@@ -196,7 +215,8 @@ func viewResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "view", Title: "Views",
 		List: plugin.DataSource{RouteID: "cockroachdb.views.list"}, Columns: viewColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
+		RowActionIDs: []string{"cockroachdb.view.drop"},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"cockroachdb.view.drop"}}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.view.rows", Params: tableParams()}},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cockroachdb.view.definition", Params: tableParams()}},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cockroachdb.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM ${resource.namespace}.${resource.name} LIMIT 100;")},
@@ -242,18 +262,18 @@ func dataGridConfig() map[string]any {
 }
 
 func queryConfig(initial string) map[string]any {
-	return map[string]any{
-		"language":          "sql",
-		"label":             "SQL",
-		"executeLabel":      "Run query",
-		"cancelLabel":       "Cancel query",
-		"runningLabel":      "Running…",
-		"emptyText":         "Run a query to see results.",
-		"initialQuery":      initial,
-		"cancelRouteId":     "cockroachdb.query.cancel",
-		"completionRouteId": "cockroachdb.completion",
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "sql",
+		Label:             "SQL",
+		ExecuteLabel:      "Run query",
+		CancelLabel:       "Cancel query",
+		RunningLabel:      "Running…",
+		EmptyText:         "Run a query to see results.",
+		InitialQuery:      initial,
+		CancelRouteID:     "cockroachdb.query.cancel",
+		CompletionRouteID: "cockroachdb.completion",
+		Exportable:        true,
+	}.Map()
 }
 
 func schemaColumns() []plugin.Column {
@@ -311,6 +331,7 @@ func constraintColumns() []plugin.Column {
 func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "cockroachdb.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "cockroachdb.database.create"},
+		{ID: "cockroachdb.schema.create", Label: "Create schema", Icon: icon("folder-plus"), RouteID: "cockroachdb.schema.create"},
 		{ID: "cockroachdb.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "cockroachdb.table.create", Params: map[string]string{"schema": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
 		{ID: "cockroachdb.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "cockroachdb.column.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "cockroachdb.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "cockroachdb.column.drop", Params: map[string]string{"schema": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
@@ -318,5 +339,6 @@ func actions() []plugin.Action {
 		{ID: "cockroachdb.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "cockroachdb.index.drop", Params: map[string]string{"schema": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "cockroachdb.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "cockroachdb.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "cockroachdb.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cockroachdb.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
+		{ID: "cockroachdb.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cockroachdb.view.drop", Params: map[string]string{"schema": "${resource.namespace}", "view": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this view?"},
 	}
 }

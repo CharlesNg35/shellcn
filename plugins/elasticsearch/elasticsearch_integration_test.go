@@ -60,6 +60,21 @@ func TestElasticsearchPluginIntegration(t *testing.T) {
 	call(ctx, t, routes["elasticsearch.aliases.list"], sess, map[string]string{"index": index}, nil, nil)
 	call(ctx, t, routes["elasticsearch.shards.list"], sess, map[string]string{"index": index}, nil, nil)
 
+	aliasName := index + "-alias"
+	aliasBody, _ := json.Marshal(map[string]any{"name": aliasName})
+	call(ctx, t, routes["elasticsearch.alias.create"], sess, map[string]string{"index": index}, nil, aliasBody)
+	aliases := pageItems(call(ctx, t, routes["elasticsearch.aliases.list"], sess, map[string]string{"index": index}, nil, nil))
+	found := false
+	for _, a := range aliases {
+		if a["alias"] == aliasName {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("alias %q not listed after create: %#v", aliasName, aliases)
+	}
+	call(ctx, t, routes["elasticsearch.alias.delete"], sess, map[string]string{"index": index, "alias": aliasName}, nil, nil)
+
 	docs := call(ctx, t, routes["elasticsearch.documents.list"], sess, map[string]string{"index": index}, url.Values{"limit": []string{"10"}}, nil)
 	items := pageItems(docs)
 	if len(items) != 1 || items[0]["_id"] != "ada" {

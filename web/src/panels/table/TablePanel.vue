@@ -23,6 +23,8 @@ import type {
   Action,
   Column as ColumnSpec,
   DataSource,
+  Field,
+  FieldType,
   ResourceEvent,
   ResourceRef,
   Row,
@@ -32,10 +34,17 @@ import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
 import { dialogRoot, inputClass } from "../../primevue/preset";
 import { cn } from "../../utils/cn";
-import { useConfirmAction } from "../../composables/useConfirmAction";
+import {
+  deleteMutation,
+  insertMutation,
+  updateMutation,
+  type RowMutation,
+} from "./mutation";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
+import { badgeClassFor } from "../shared/severity";
 import PanelError from "../shared/PanelError.vue";
+import FormField from "../form/FormField.vue";
 import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
@@ -45,7 +54,6 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
-const { confirmDanger } = useConfirmAction();
 
 // Framework-reserved row keys the grid never renders as data columns. Plugins
 // hide their own fields declaratively via config.hiddenColumns instead.
@@ -88,6 +96,9 @@ const actionOutput = ref<{
   output: string;
   truncated: boolean;
 } | null>(null);
+const deleteTarget = ref<Row | null>(null);
+const deleteBusy = ref(false);
+const deleteError = ref<string | null>(null);
 
 const declaredColumns = computed(
   () => (props.config as TablePanelConfig | undefined)?.columns,
@@ -254,20 +265,21 @@ async function commitStaged(): Promise<void> {
       if (deletedRows.has(id)) continue;
       if (insertedRows.has(id)) {
         if (insertSource.value)
-          await mutate(insertSource.value, { values: insertValues(row) });
+          await mutate(insertSource.value, insertMutation(insertValues(row)));
       } else if (edits.has(id) && updateSource.value) {
         const key = keyFor(row);
         if (!key) continue;
         const values: Record<string, unknown> = {};
         for (const field of edits.get(id)!.keys()) values[field] = row[field];
-        await mutate(updateSource.value, { key, values });
+        await mutate(updateSource.value, updateMutation(key, values));
       }
     }
     for (const row of rows.value) {
       const id = rid(row);
       if (!deletedRows.has(id) || insertedRows.has(id)) continue;
       const key = keyFor(row);
-      if (key && deleteSource.value) await mutate(deleteSource.value, { key });
+      if (key && deleteSource.value)
+        await mutate(deleteSource.value, deleteMutation(key));
     }
     clearStaging();
     toast.add({
@@ -330,10 +342,7 @@ function coerce(prev: unknown, next: unknown): unknown {
   return next;
 }
 
-async function mutate(
-  src: DataSource,
-  body: Record<string, unknown>,
-): Promise<void> {
+async function mutate(src: DataSource, body: RowMutation): Promise<void> {
   await runAction(
     props.connectionId,
     src.routeId,
@@ -370,7 +379,7 @@ async function onCellEditComplete(
     return;
   }
   try {
-    await mutate(src, { key, values: { [field]: value } });
+    await mutate(src, updateMutation(key, { [field]: value }));
   } catch (err) {
     data[field] = e.value;
     toast.add({
@@ -388,33 +397,77 @@ function askDeleteRow(row: Row): void {
   const src = deleteSource.value;
   const key = keyFor(row);
   if (!src || !key) return;
-  confirmDanger({
-    header: "Delete row",
-    message: "Delete this row? This cannot be undone.",
-    accept: async () => {
-      try {
-        await mutate(src, { key });
-        toast.add({ severity: "success", summary: "Row deleted", life: 3000 });
-        await load(first.value);
-      } catch (err) {
-        toast.add({
-          severity: "error",
-          summary: "Delete failed",
-          detail: (err as Error).message,
-          life: 6000,
-        });
-      }
-    },
-  });
+  deleteTarget.value = row;
+  deleteError.value = null;
+}
+
+function closeDeleteDialog(): void {
+  if (deleteBusy.value) return;
+  deleteTarget.value = null;
+  deleteError.value = null;
+}
+
+const deleteRowLabel = computed(() => {
+  const row = deleteTarget.value;
+  if (!row) return "";
+  const raw = row.label ?? row.name ?? row.id ?? row._key;
+  if (raw == null) return "";
+  if (typeof raw === "string" || typeof raw === "number") return String(raw);
+  return "";
+});
+
+async function confirmDeleteRow(): Promise<void> {
+  const src = deleteSource.value;
+  const row = deleteTarget.value;
+  const key = row ? keyFor(row) : null;
+  if (!src || !key) {
+    closeDeleteDialog();
+    return;
+  }
+  deleteBusy.value = true;
+  deleteError.value = null;
+  try {
+    await mutate(src, deleteMutation(key));
+    toast.add({ severity: "success", summary: "Row deleted", life: 3000 });
+    deleteTarget.value = null;
+    await load(first.value);
+  } catch (err) {
+    deleteError.value = (err as Error).message;
+    toast.add({
+      severity: "error",
+      summary: "Delete failed",
+      detail: (err as Error).message,
+      life: 6000,
+    });
+  } finally {
+    deleteBusy.value = false;
+  }
 }
 
 const showInsert = ref(false);
-const insertDraft = ref<Record<string, string>>({});
+const insertDraft = ref<Record<string, unknown>>({});
 const inserting = ref(false);
+
+// The add-row form derives each input widget from its column's type, so a number
+// column gets a number input, a boolean a toggle, JSON a code area, etc.
+const COLUMN_FIELD_TYPE: Partial<
+  Record<NonNullable<ColumnSpec["type"]>, FieldType>
+> = {
+  number: "number",
+  bool: "toggle",
+  json: "json",
+};
+const insertFields = computed<Field[]>(() =>
+  columns.value.map((col) => ({
+    key: col.key,
+    label: col.label,
+    type: COLUMN_FIELD_TYPE[col.type ?? "text"] ?? "text",
+    placeholder: col.nullable ? "NULL" : undefined,
+  })),
+);
 
 function openInsert(): void {
   insertDraft.value = {};
-  for (const col of columns.value) insertDraft.value[col.key] = "";
   showInsert.value = true;
 }
 
@@ -423,7 +476,7 @@ async function submitInsert(): Promise<void> {
   if (!src) return;
   const values: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(insertDraft.value)) {
-    if (v !== "") values[k] = v;
+    if (v !== "" && v !== undefined && v !== null) values[k] = v;
   }
   if (staged.value) {
     const row = { ...values } as Row;
@@ -435,7 +488,7 @@ async function submitInsert(): Promise<void> {
   }
   inserting.value = true;
   try {
-    await mutate(src, { values });
+    await mutate(src, insertMutation(values));
     showInsert.value = false;
     toast.add({ severity: "success", summary: "Row added", life: 3000 });
     await load(0);
@@ -477,12 +530,27 @@ function dynamicColumnLabel(row: Row, key: string): string {
   return String(row.label ?? row.name ?? row.column_name ?? row.column ?? key);
 }
 
+// Maps a column's declared data type (a DB type string like "integer" or
+// "timestamptz", or a generic column type) to a renderer type, so a runtime
+// column grid and its add-row form pick the right widget without per-plugin code.
+function mapColumnType(raw: unknown): ColumnSpec["type"] | undefined {
+  const t = String(raw ?? "").toLowerCase();
+  if (!t) return undefined;
+  if (/bool/.test(t)) return "bool";
+  if (/json/.test(t)) return "json";
+  if (/(int|serial|numeric|decimal|real|double|float|money|number)/.test(t))
+    return "number";
+  if (/(date|time|timestamp)/.test(t)) return "datetime";
+  return undefined;
+}
+
 function dynamicColumn(row: Row): ColumnSpec | null {
   const key = dynamicColumnKey(row);
   if (!key || hidden.value.has(key)) return null;
   return {
     key,
     label: dynamicColumnLabel(row, key),
+    type: mapColumnType((row as Record<string, unknown>).type),
     nullable: row.nullable === true,
   };
 }
@@ -527,19 +595,8 @@ function display(row: Row, col: ColumnSpec): string {
   return String(v);
 }
 
-const BADGE_SEVERITY: Record<string, string> = {
-  success:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-  warn: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-  danger: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
-  info: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
-  secondary:
-    "bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300",
-};
-
 function badgeClass(row: Row, col: ColumnSpec): string {
-  const sev = col.severities?.[String(row[col.key] ?? "").toLowerCase()];
-  return BADGE_SEVERITY[sev ?? "secondary"];
+  return badgeClassFor(col.severities, row[col.key]);
 }
 
 function columnWidth(col: ColumnSpec): string {
@@ -977,18 +1034,13 @@ onUnmounted(() => {
       }"
     >
       <div class="flex max-h-[60vh] flex-col gap-3 overflow-auto p-1">
-        <label
-          v-for="col in columns"
-          :key="col.key"
-          class="flex flex-col gap-1 text-sm"
-        >
-          <span class="text-surface-500">{{ col.label }}</span>
-          <InputText
-            v-model="insertDraft[col.key]"
-            :class="inputClass"
-            placeholder="NULL"
-          />
-        </label>
+        <FormField
+          v-for="f in insertFields"
+          :key="f.key"
+          :field="f"
+          :model-value="insertDraft[f.key]"
+          @update:model-value="insertDraft[f.key] = $event"
+        />
       </div>
       <template #footer>
         <Button
@@ -1003,6 +1055,60 @@ onUnmounted(() => {
           :loading="inserting"
           :disabled="inserting"
           @click="submitInsert"
+        />
+      </template>
+    </Dialog>
+
+    <Dialog
+      :visible="!!deleteTarget"
+      modal
+      header="Delete row"
+      :dismissable-mask="!deleteBusy"
+      :closable="!deleteBusy"
+      :pt="{ root: dialogRoot('max-w-md') }"
+      @update:visible="(v) => !v && closeDeleteDialog()"
+    >
+      <div class="flex items-start gap-3">
+        <div
+          class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-500/10 text-rose-500"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'trash-2' }" :size="18" />
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-surface-900 dark:text-surface-50">
+            Delete this row?
+          </p>
+          <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
+            This change is permanent and cannot be undone.
+          </p>
+          <p
+            v-if="deleteRowLabel"
+            class="mt-3 truncate rounded-md border border-surface-200 bg-surface-50 px-2 py-1.5 font-mono text-xs text-surface-600 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-300"
+            :title="deleteRowLabel"
+          >
+            {{ deleteRowLabel }}
+          </p>
+          <p v-if="deleteError" class="mt-3 text-sm text-red-500">
+            {{ deleteError }}
+          </p>
+        </div>
+      </div>
+      <template #footer>
+        <Button
+          type="button"
+          label="Cancel"
+          severity="secondary"
+          :disabled="deleteBusy"
+          @click="closeDeleteDialog"
+        />
+        <Button
+          type="button"
+          label="Delete"
+          severity="danger"
+          :loading="deleteBusy"
+          :disabled="deleteBusy"
+          autofocus
+          @click="confirmDeleteRow"
         />
       </template>
     </Dialog>

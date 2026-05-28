@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 import Button from "primevue/button";
-import type { CredentialRefState, Field, Schema } from "../../types/projection";
+import type {
+  CredentialRefState,
+  Field,
+  ResourceRef,
+  Schema,
+} from "../../types/projection";
 import FormField from "./FormField.vue";
 import { isVisible, validateField } from "./condition";
 
@@ -14,6 +19,9 @@ const props = defineProps<{
   protocol?: string;
   submitLabel?: string;
   busy?: boolean;
+  // Forwarded to fields with a route-sourced options list (optionsSource).
+  connectionId?: string;
+  resource?: ResourceRef | null;
 }>();
 const emit = defineEmits<{
   "update:modelValue": [value: Record<string, unknown>];
@@ -158,6 +166,8 @@ defineExpose({ submit: onSubmit });
         :secret-set="secretsSet?.[field.key]"
         :credential-state="credentialStates?.[field.key]"
         :protocol="protocol"
+        :connection-id="connectionId"
+        :resource="resource"
         @update:model-value="set(field, $event)"
       />
     </fieldset>

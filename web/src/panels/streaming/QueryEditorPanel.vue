@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import Menu from "primevue/menu";
@@ -13,7 +13,9 @@ import { useTheme } from "../../composables/useTheme";
 import type { CodeMirrorCompletion, CodeMirrorEditor } from "../../codemirror";
 
 const props = defineProps<PanelProps>();
-const queryConfig = props.config as QueryEditorConfig | undefined;
+const queryConfig = computed(
+  () => props.config as QueryEditorConfig | undefined,
+);
 
 interface Results {
   columns: string[];
@@ -27,7 +29,7 @@ interface Results {
 }
 
 function initialQuery(): string {
-  const raw = queryConfig?.initialQuery ?? "";
+  const raw = queryConfig.value?.initialQuery ?? "";
   try {
     return interpolate(raw, { resource: props.resource });
   } catch {
@@ -49,12 +51,18 @@ const completionItems = ref<CodeMirrorCompletion[]>([]);
 let editor: CodeMirrorEditor | null = null;
 let codeMirror: typeof import("../../codemirror") | null = null;
 const { isDark } = useTheme();
-const editorLanguage = queryConfig?.language ?? "plaintext";
-const editorLabel = queryConfig?.label ?? "Editor";
-const executeLabel = queryConfig?.executeLabel ?? "Execute";
-const cancelLabel = queryConfig?.cancelLabel ?? "Cancel";
-const emptyText = queryConfig?.emptyText ?? "Execute to see results.";
-const canExport = queryConfig?.exportable === true;
+const editorLanguage = computed(
+  () => queryConfig.value?.language ?? "plaintext",
+);
+const editorLabel = computed(() => queryConfig.value?.label ?? "Editor");
+const executeLabel = computed(
+  () => queryConfig.value?.executeLabel ?? "Execute",
+);
+const cancelLabel = computed(() => queryConfig.value?.cancelLabel ?? "Cancel");
+const emptyText = computed(
+  () => queryConfig.value?.emptyText ?? "Execute to see results.",
+);
+const canExport = computed(() => queryConfig.value?.exportable === true);
 
 // Export the current result set — only when the plugin opts in via the manifest.
 const exportMenu = ref<{ toggle: (event: Event) => void } | null>(null);
@@ -83,7 +91,9 @@ function onFrame(frame: string): void {
         "This operation requires confirmation before it can run.";
     } else {
       results.value = { ...payload, rows: payload.rows ?? [] };
+      error.value = null;
       pendingConfirmation.value = false;
+      confirmationMessage.value = "";
     }
     running.value = false;
   } catch {
@@ -127,7 +137,7 @@ function run(confirm = false): void {
 }
 
 async function cancel(): Promise<void> {
-  const routeId = queryConfig?.cancelRouteId;
+  const routeId = queryConfig.value?.cancelRouteId;
   running.value = false;
   if (!routeId) return;
   try {
@@ -136,7 +146,7 @@ async function cancel(): Promise<void> {
       routeId,
       { resource: props.resource },
       {},
-      queryConfig?.cancelParams ?? props.source?.params ?? {},
+      queryConfig.value?.cancelParams ?? props.source?.params ?? {},
       "POST",
     );
   } catch (e) {
@@ -145,14 +155,14 @@ async function cancel(): Promise<void> {
 }
 
 async function loadCompletions(): Promise<CodeMirrorCompletion[]> {
-  const routeId = queryConfig?.completionRouteId;
+  const routeId = queryConfig.value?.completionRouteId;
   if (!routeId) return [];
   try {
     const items = await fetchDoc<CodeMirrorCompletion[]>(
       props.connectionId,
       {
         routeId,
-        params: queryConfig?.completionParams ?? props.source?.params,
+        params: queryConfig.value?.completionParams ?? props.source?.params,
       },
       { resource: props.resource },
     );
@@ -184,8 +194,8 @@ onMounted(async () => {
     completionItems.value = await loadCompletions();
     editor = helpers.createCodeMirrorEditor(container.value, {
       value: query.value,
-      language: editorLanguage,
-      ariaLabel: `${editorLabel} editor`,
+      language: editorLanguage.value,
+      ariaLabel: `${editorLabel.value} editor`,
       completions: completionItems.value,
       onChange(value) {
         query.value = value;
@@ -199,6 +209,27 @@ onMounted(async () => {
 watch(isDark, () => {
   codeMirror?.syncCodeMirrorTheme(editor);
 });
+
+watch(
+  () =>
+    JSON.stringify({
+      connectionId: props.connectionId,
+      routeId: props.source?.routeId,
+      params: props.source?.params,
+      resource: props.resource?.uid,
+      initialQuery: queryConfig.value?.initialQuery,
+    }),
+  async () => {
+    query.value = initialQuery();
+    results.value = null;
+    running.value = false;
+    error.value = null;
+    pendingConfirmation.value = false;
+    confirmationMessage.value = "";
+    codeMirror?.setEditorValue(editor, query.value);
+    completionItems.value = await loadCompletions();
+  },
+);
 
 onUnmounted(() => {
   try {

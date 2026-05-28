@@ -14,6 +14,13 @@ import (
 
 const helmKind = "helmrelease"
 
+// helmStatusSeverities colors a Helm release status badge by value.
+var helmStatusSeverities = map[string]plugin.Severity{
+	"deployed": plugin.SeveritySuccess, "failed": plugin.SeverityDanger,
+	"pending-install": plugin.SeverityWarn, "pending-upgrade": plugin.SeverityWarn, "pending-rollback": plugin.SeverityWarn,
+	"superseded": plugin.SeveritySecondary, "uninstalled": plugin.SeveritySecondary, "uninstalling": plugin.SeveritySecondary,
+}
+
 // helmRelease is the subset of a Helm v3 release object the cockpit shows.
 type helmRelease struct {
 	Name      string `json:"name"`
@@ -142,11 +149,11 @@ func helmReleaseResourceType() plugin.ResourceType {
 		Title: "Releases",
 		List:  plugin.DataSource{RouteID: "kubernetes.helm.releases"},
 		Columns: []plugin.Column{
-			nameCol(), nsCol(), col("revision", "Rev", num), col("status", "Status", badge),
+			nameCol(), nsCol(), col("revision", "Rev", num), col("status", "Status", statusBadge(helmStatusSeverities)),
 			col("chart", "Chart"), col("appVersion", "App version"), col("updatedAt", "Updated", func(c *plugin.Column) { c.Type = plugin.ColumnDateTime }),
 		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: helmStatusSeverities},
 			Tabs: []plugin.Tab{
 				{
 					Key: "overview", Label: "Overview", Icon: lucide("info"), Panel: plugin.PanelDocument,

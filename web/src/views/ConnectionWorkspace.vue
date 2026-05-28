@@ -1,28 +1,16 @@
 <script setup lang="ts">
-import {
-  computed,
-  onActivated,
-  onBeforeUnmount,
-  onDeactivated,
-  onMounted,
-  ref,
-  watch,
-} from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Button from "primevue/button";
-import { API_BASE, api, ApiError, getCsrfToken } from "../api/client";
-import {
-  closeConnectionSession,
-  keepaliveConnectionSession,
-  type ConnectionSession,
-} from "../api/connectionSession";
+import { api, ApiError } from "../api/client";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
-import { useSessionsStore } from "../stores/sessions";
+import { useConnectionSessionsStore } from "../stores/connectionSessions";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
+import { KEEP_ALIVE_TOP_LEVEL_PANELS_MAX } from "../stores/sessionLimits";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import PanelHost from "../panels/core/PanelHost.vue";
@@ -50,7 +38,7 @@ const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
 const dock = useDockStore();
 const dockState = computed(() => dock.state(props.id));
-const sessions = useSessionsStore();
+const connectionSessions = useConnectionSessionsStore();
 const liveStatus = useConnectionStatusStore();
 const router = useRouter();
 const notify = useNotify();
@@ -127,136 +115,30 @@ watch(
 // connected set lives in the store so the sidebar dot can reflect it (and it
 // survives in-app navigation, resetting only on a full reload).
 const connected = computed(() => ws.isConnected(props.id));
-const channelPrefix = computed(() => `${props.id}:`);
-const sessionPath = computed(
-  () => `/connections/${encodeURIComponent(props.id)}/session`,
-);
-const sessionURL = computed(() => `${API_BASE}${sessionPath.value}`);
-let heartbeat: ReturnType<typeof setInterval> | undefined;
-let activeWorkspace = false;
-
-function applyBackendSession(session: ConnectionSession): boolean {
-  liveStatus.applySession(props.id, session);
-  switch (session.state) {
-    case "connected":
-    case "connecting":
-      ws.setConnected(props.id, true);
-      return true;
-    case "error":
-      return connected.value;
-    default:
-      ws.setConnected(props.id, false);
-      return false;
-  }
-}
-
-async function keepBackendSessionAlive(reportError = false): Promise<boolean> {
-  liveStatus.connecting(props.id);
-  try {
-    const session = await keepaliveConnectionSession(props.id);
-    return applyBackendSession(session);
-  } catch (e) {
-    const message = (e as Error).message;
-    liveStatus.failed(props.id, message);
-    if (reportError) notify.error("Could not connect", message);
-    return false;
-  }
-}
-
-function stopHeartbeat(): void {
-  if (!heartbeat) return;
-  clearInterval(heartbeat);
-  heartbeat = undefined;
-}
-
-function startHeartbeat(): void {
-  stopHeartbeat();
-  heartbeat = setInterval(() => {
-    if (connected.value) void keepBackendSessionAlive();
-  }, 30000);
-}
-
-function syncAndStartHeartbeat(): void {
-  if (!connected.value) return;
-  void keepBackendSessionAlive();
-  startHeartbeat();
-}
-
-function activateWorkspace(): void {
-  if (activeWorkspace) return;
-  activeWorkspace = true;
-  syncAndStartHeartbeat();
-}
-
-function deactivateWorkspace(): void {
-  activeWorkspace = false;
-  stopHeartbeat();
-}
+const connectError = computed(() => {
+  const status = liveStatus.get(props.id);
+  return status?.state === "error"
+    ? (status.reason ?? "Connection failed.")
+    : "";
+});
 
 async function connect(): Promise<void> {
   showEnroll.value = false;
   sessionConnecting.value = true;
   try {
-    if (await keepBackendSessionAlive(true)) startHeartbeat();
+    await connectionSessions.connect(props.id, true);
   } finally {
     sessionConnecting.value = false;
   }
 }
 
-async function closeBackendSession(): Promise<void> {
-  await closeConnectionSession(props.id);
-}
-
-function closeBackendSessionOnPageHide(): void {
-  if (!connected.value) return;
-  const headers = new Headers();
-  const csrf = getCsrfToken();
-  if (csrf) headers.set("X-CSRF-Token", csrf);
-  void fetch(sessionURL.value, {
-    method: "DELETE",
-    headers,
-    keepalive: true,
-  }).catch(() => {});
-}
-
-function confirmBeforePageUnload(event: BeforeUnloadEvent): void {
-  if (!connected.value) return;
-  event.preventDefault();
-  event.returnValue = "";
-}
-
 async function disconnect(): Promise<void> {
-  stopHeartbeat();
-  sessions.closeWhere((key) => key.startsWith(channelPrefix.value));
-  ws.setConnected(props.id, false);
-  liveStatus.clear(props.id);
   try {
-    await closeBackendSession();
+    await connectionSessions.disconnect(props.id);
   } catch (e) {
     notify.error("Could not close session", (e as Error).message);
   }
 }
-
-onMounted(() => {
-  window.addEventListener("beforeunload", confirmBeforePageUnload);
-  window.addEventListener("pagehide", closeBackendSessionOnPageHide);
-  activateWorkspace();
-});
-
-onActivated(activateWorkspace);
-
-onDeactivated(deactivateWorkspace);
-
-onBeforeUnmount(() => {
-  deactivateWorkspace();
-  window.removeEventListener("beforeunload", confirmBeforePageUnload);
-  window.removeEventListener("pagehide", closeBackendSessionOnPageHide);
-});
-
-watch(connected, (on) => {
-  if (on && activeWorkspace) startHeartbeat();
-  else stopHeartbeat();
-});
 
 const activeTab = computed(() =>
   projection.value?.tabs?.find((t) => t.key === view.value.activeTab),
@@ -372,6 +254,7 @@ function onActionDone(action: Action): void {
         :connection-id="id"
         :connection="connection"
         :connecting="sessionConnecting"
+        :error-message="connectError"
         @connect="connect"
         @enroll="showEnroll = true"
       />
@@ -394,7 +277,7 @@ function onActionDone(action: Action): void {
               </TabList>
             </Tabs>
             <div class="min-h-0 flex-1 overflow-hidden">
-              <KeepAlive :max="10">
+              <KeepAlive :max="KEEP_ALIVE_TOP_LEVEL_PANELS_MAX">
                 <PanelHost
                   v-if="activeTab"
                   :key="`${id}:${activeTab.key}`"

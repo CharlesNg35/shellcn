@@ -41,6 +41,20 @@ func (s *Session) OpenChannel(context.Context, plugin.ChannelRequest) (plugin.Ch
 
 func (s *Session) Close() error { return nil }
 
+// rdpSession recovers the concrete Session from rc.Session, looking through the
+// core's borrowed Handle (which exposes the live session via Session()).
+func rdpSession(sess plugin.Session) (*Session, error) {
+	if s, ok := sess.(*Session); ok {
+		return s, nil
+	}
+	if h, ok := sess.(interface{ Session() plugin.Session }); ok {
+		if s, ok := h.Session().(*Session); ok {
+			return s, nil
+		}
+	}
+	return nil, fmt.Errorf("%w: rdp session unavailable", plugin.ErrUnavailable)
+}
+
 // bridge translates the browser's RFB input into grdp input events. Its methods
 // are only called from the framebuffer server's single read loop, so the
 // button-mask state needs no locking.
@@ -89,9 +103,9 @@ func (b *bridge) PointerEvent(mask uint8, x, y int) {
 // and bridges its decoded framebuffer to the browser's noVNC client as a
 // synthetic RFB session.
 func desktopStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
-	sess, ok := rc.Session.(*Session)
-	if !ok {
-		return fmt.Errorf("%w: rdp session unavailable", plugin.ErrUnavailable)
+	sess, err := rdpSession(rc.Session)
+	if err != nil {
+		return err
 	}
 
 	setting := gclient.NewSetting()
