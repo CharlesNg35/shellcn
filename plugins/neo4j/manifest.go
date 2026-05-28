@@ -2,6 +2,14 @@ package neo4j
 
 import "github.com/charlesng35/shellcn/internal/plugin"
 
+// statusSeverities colors a database status / index state badge by value.
+var statusSeverities = map[string]plugin.Severity{
+	"online":   plugin.SeveritySuccess,
+	"offline":  plugin.SeveritySecondary,
+	"starting": plugin.SeverityWarn, "stopping": plugin.SeverityWarn, "populating": plugin.SeverityWarn, "store copying": plugin.SeverityWarn,
+	"failed": plugin.SeverityDanger, "dirty": plugin.SeverityDanger, "quarantined": plugin.SeverityDanger,
+}
+
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: rid("databases.tree")}, ResourceKind: "database"},
@@ -28,8 +36,8 @@ func databaseResource() plugin.ResourceType {
 		List: plugin.DataSource{RouteID: rid("databases.list")},
 		Columns: []plugin.Column{
 			{Key: "name", Label: "Database", Sortable: true},
-			{Key: "current_status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
-			{Key: "requested_status", Label: "Requested", Type: plugin.ColumnBadge, Sortable: true},
+			{Key: "current_status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities},
+			{Key: "requested_status", Label: "Requested", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities},
 			{Key: "role", Label: "Role", Type: plugin.ColumnBadge, Sortable: true},
 			{Key: "address", Label: "Address"},
 		},
@@ -155,7 +163,7 @@ func relationshipColumns() []plugin.Column {
 }
 
 func indexColumns() []plugin.Column {
-	return []plugin.Column{{Key: "name", Label: "Index", Sortable: true}, {Key: "type", Label: "Type", Type: plugin.ColumnBadge}, {Key: "entity_type", Label: "Entity", Type: plugin.ColumnBadge}, {Key: "labels_or_types", Label: "Labels / Types"}, {Key: "properties", Label: "Properties"}, {Key: "state", Label: "State", Type: plugin.ColumnBadge}}
+	return []plugin.Column{{Key: "name", Label: "Index", Sortable: true}, {Key: "type", Label: "Type", Type: plugin.ColumnBadge}, {Key: "entity_type", Label: "Entity", Type: plugin.ColumnBadge}, {Key: "labels_or_types", Label: "Labels / Types"}, {Key: "properties", Label: "Properties"}, {Key: "state", Label: "State", Type: plugin.ColumnBadge, Severities: statusSeverities}}
 }
 
 func constraintColumns() []plugin.Column {

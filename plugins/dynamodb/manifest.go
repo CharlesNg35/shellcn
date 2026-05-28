@@ -2,6 +2,14 @@ package dynamodb
 
 import "github.com/charlesng35/shellcn/internal/plugin"
 
+// statusSeverities colors table/index/backup status badges by value.
+var statusSeverities = map[string]plugin.Severity{
+	"active": plugin.SeveritySuccess, "available": plugin.SeveritySuccess, "enabled": plugin.SeveritySuccess,
+	"creating": plugin.SeverityWarn, "updating": plugin.SeverityWarn, "archiving": plugin.SeverityWarn,
+	"deleting": plugin.SeverityDanger, "inaccessible_encryption_credentials": plugin.SeverityDanger,
+	"archived": plugin.SeveritySecondary, "deleted": plugin.SeveritySecondary, "disabled": plugin.SeveritySecondary,
+}
+
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "tables", Label: "Tables", Icon: icon("table-2"), Source: plugin.DataSource{RouteID: rid("tables.tree")}, ResourceKind: "table"},
@@ -121,7 +129,7 @@ func indexParams() map[string]string {
 func tableColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "name", Label: "Table", Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities},
 		{Key: "billing_mode", Label: "Billing", Type: plugin.ColumnBadge, Sortable: true},
 		{Key: "items", Label: "Items", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "size", Label: "Size", Type: plugin.ColumnBytes, Sortable: true},
@@ -134,7 +142,7 @@ func indexColumns() []plugin.Column {
 		{Key: "name", Label: "Index", Sortable: true},
 		{Key: "table", Label: "Table", Sortable: true},
 		{Key: "kind", Label: "Kind", Type: plugin.ColumnBadge, Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities},
 		{Key: "key_schema", Label: "Key schema"},
 		{Key: "projection", Label: "Projection", Type: plugin.ColumnBadge},
 		{Key: "items", Label: "Items", Type: plugin.ColumnNumber, Sortable: true},
@@ -146,7 +154,7 @@ func backupColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "name", Label: "Backup", Sortable: true},
 		{Key: "table", Label: "Table", Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities},
 		{Key: "size", Label: "Size", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "created", Label: "Created", Type: plugin.ColumnDateTime, Sortable: true},
 	}

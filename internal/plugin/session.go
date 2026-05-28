@@ -85,11 +85,6 @@ type Plugin interface {
 	Connect(ctx context.Context, cfg ConnectConfig) (Session, error)
 }
 
-// HealthChecker is an optional plugin capability surfaced on the status endpoint.
-type HealthChecker interface {
-	HealthCheck(ctx context.Context) error
-}
-
 // HTTPProxy is an optional Session capability: it reverse-proxies a browser
 // request to an upstream the session can reach (e.g. a web service behind the
 // connection's network). The core authenticates + authorizes the user and

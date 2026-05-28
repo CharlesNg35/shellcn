@@ -41,6 +41,9 @@ func (fakeSess) OpenChannel(context.Context, plugin.ChannelRequest) (plugin.Chan
 	return nil, plugin.ErrNotSupported
 }
 func (fakeSess) Close() error { return nil }
+func (fakeSess) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
+	_, _ = w.Write([]byte("proxied:" + r.URL.Path))
+}
 
 type testPlugin struct{}
 
@@ -397,6 +400,26 @@ func TestWrapperOrder(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected an allowed audit row for t.list, got %+v", rows)
+	}
+}
+
+func TestConnectionProxyLazilyAcquiresSession(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/proxy/services/default/app/80/en/login", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("proxy: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if got, want := string(resp.Body), "proxied:/services/default/app/80/en/login"; got != want {
+		t.Fatalf("proxy body = %q, want %q", got, want)
+	}
+
+	snap, ok := h.pluginSessions.Status(session.Key{ConnectionID: "c-op", OwnerScope: "op"})
+	if !ok {
+		t.Fatal("proxy request should create a live session")
+	}
+	if snap.State != session.StateConnected {
+		t.Fatalf("proxy session state = %s, want %s", snap.State, session.StateConnected)
 	}
 }
 

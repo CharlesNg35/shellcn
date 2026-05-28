@@ -2,6 +2,15 @@ package meilisearch
 
 import "github.com/charlesng35/shellcn/internal/plugin"
 
+// taskStatusSeverities colors a task's status badge by value.
+var taskStatusSeverities = map[string]plugin.Severity{
+	"succeeded":  plugin.SeveritySuccess,
+	"enqueued":   plugin.SeverityInfo,
+	"processing": plugin.SeverityWarn,
+	"failed":     plugin.SeverityDanger,
+	"canceled":   plugin.SeveritySecondary,
+}
+
 func icon(name string) plugin.Icon {
 	return plugin.Icon{Type: plugin.IconLucide, Value: name}
 }
@@ -122,7 +131,7 @@ func documentColumns() []plugin.Column {
 func taskColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "uid", Label: "UID", Type: plugin.ColumnNumber, Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: taskStatusSeverities},
 		{Key: "type", Label: "Type", Sortable: true},
 		{Key: "indexUid", Label: "Index", Sortable: true},
 		{Key: "duration", Label: "Duration"},

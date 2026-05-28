@@ -16,6 +16,14 @@ type Plugin struct{}
 
 func New() *Plugin { return &Plugin{} }
 
+// statusSeverities colors guest/node/task/storage status badges by value.
+var statusSeverities = map[string]plugin.Severity{
+	"running": plugin.SeveritySuccess, "online": plugin.SeveritySuccess, "ok": plugin.SeveritySuccess, "available": plugin.SeveritySuccess, "active": plugin.SeveritySuccess,
+	"stopped": plugin.SeveritySecondary, "offline": plugin.SeveritySecondary, "disabled": plugin.SeveritySecondary,
+	"paused": plugin.SeverityWarn, "unknown": plugin.SeverityWarn,
+	"error": plugin.SeverityDanger,
+}
+
 func (p *Plugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		APIVersion:          plugin.CurrentAPIVersion,
@@ -66,7 +74,7 @@ func guestColumns() []plugin.Column {
 		{Key: "name", Label: "Name", Sortable: true},
 		{Key: "vmid", Label: "VMID", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "node", Label: "Node", Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities},
 		{Key: "cpu", Label: "CPU %", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "mem", Label: "Memory", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber, Sortable: true},
@@ -137,7 +145,7 @@ func lxcResource() plugin.ResourceType {
 func nodeResource() plugin.ResourceType {
 	cols := []plugin.Column{
 		{Key: "name", Label: "Node", Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities},
 		{Key: "cpu", Label: "CPU %", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "mem", Label: "Memory", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "maxmem", Label: "Total", Type: plugin.ColumnBytes, Sortable: true},
@@ -180,7 +188,7 @@ func storageColumns() []plugin.Column {
 		{Key: "content", Label: "Content"},
 		{Key: "used", Label: "Used", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "total", Label: "Total", Type: plugin.ColumnBytes, Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: statusSeverities},
 	}
 }
 
@@ -200,7 +208,7 @@ func taskColumns() []plugin.Column {
 		{Key: "name", Label: "Type", Sortable: true},
 		{Key: "id", Label: "ID"},
 		{Key: "user", Label: "User", Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Severities: statusSeverities},
 		{Key: "starttime", Label: "Started", Type: plugin.ColumnDateTime, Sortable: true},
 	}
 }

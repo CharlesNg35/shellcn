@@ -163,6 +163,8 @@ func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	release := handle.TrackStream()
+	defer release()
 	proxier, ok := handle.Session().(plugin.HTTPProxy)
 	if !ok {
 		writeError(w, s.deps.Logger, plugin.ErrNotSupported)

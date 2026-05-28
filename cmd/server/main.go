@@ -160,18 +160,6 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		_, err := st.Users.Count(ctx)
 		return err
 	})
-	for _, plg := range reg.All() {
-		checker, ok := plg.(plugin.HealthChecker)
-		if !ok {
-			continue
-		}
-		name := plg.Manifest().Name
-		health.Register("plugin:"+name, func(ctx context.Context) error {
-			err := checker.HealthCheck(ctx)
-			metrics.SetPluginHealth(name, err == nil)
-			return err
-		})
-	}
 
 	// Background maintenance: always reap abandoned chunked (browser-capture)
 	// recordings so partial blobs from vanished sessions don't leak; additionally

@@ -14,6 +14,23 @@ type Plugin struct{}
 
 func New() *Plugin { return &Plugin{} }
 
+// stateSeverities colors a task/node state badge; availabilitySeverities colors a
+// node's availability badge.
+var (
+	stateSeverities = map[string]plugin.Severity{
+		"running": plugin.SeveritySuccess, "ready": plugin.SeveritySuccess,
+		"complete": plugin.SeverityInfo,
+		"new":      plugin.SeverityWarn, "pending": plugin.SeverityWarn, "assigned": plugin.SeverityWarn,
+		"accepted": plugin.SeverityWarn, "preparing": plugin.SeverityWarn, "starting": plugin.SeverityWarn,
+		"shutdown": plugin.SeveritySecondary,
+		"failed":   plugin.SeverityDanger, "rejected": plugin.SeverityDanger, "orphaned": plugin.SeverityDanger,
+		"down": plugin.SeverityDanger, "disconnected": plugin.SeverityDanger,
+	}
+	availabilitySeverities = map[string]plugin.Severity{
+		"active": plugin.SeveritySuccess, "pause": plugin.SeverityWarn, "drain": plugin.SeverityWarn,
+	}
+)
+
 const dockerIconSVG = `<?xml version="1.0" encoding="UTF-8"?><svg id=Layer_1 version=1.1 viewBox="0 0 340 268"xmlns=http://www.w3.org/2000/svg xmlns:xlink=http://www.w3.org/1999/xlink><defs><style>.st0{fill:none}.st1{fill:#2560ff}.st2{clip-path:url(#clippath)}</style><clipPath id=clippath><rect class=st0 height=268 width=339.5 /></clipPath></defs><g class=st2><path class=st1 d=M334,110.1c-8.3-5.6-30.2-8-46.1-3.7-.9-15.8-9-29.2-24-40.8l-5.5-3.7-3.7,5.6c-7.2,11-10.3,25.7-9.2,39,.8,8.2,3.7,17.4,9.2,24.1-20.7,12-39.8,9.3-124.3,9.3H0c-.4,19.1,2.7,55.8,26,85.6,2.6,3.3,5.4,6.5,8.5,9.6,19,19,47.6,32.9,90.5,33,65.4,0,121.4-35.3,155.5-120.8,11.2.2,40.8,2,55.3-26,.4-.5,3.7-7.4,3.7-7.4l-5.5-3.7h0ZM85.2,92.7h-36.7v36.7h36.7v-36.7ZM132.6,92.7h-36.7v36.7h36.7v-36.7ZM179.9,92.7h-36.7v36.7h36.7v-36.7ZM227.3,92.7h-36.7v36.7h36.7v-36.7ZM37.8,92.7H1.1v36.7h36.7v-36.7ZM85.2,46.3h-36.7v36.7h36.7v-36.7ZM132.6,46.3h-36.7v36.7h36.7v-36.7ZM179.9,46.3h-36.7v36.7h36.7v-36.7ZM179.9,0h-36.7v36.7h36.7V0Z /></g></svg>`
 
 func (p *Plugin) Manifest() plugin.Manifest {
@@ -99,7 +116,7 @@ func taskColumns() []plugin.Column {
 		{Key: "name", Label: "Task", Sortable: true},
 		{Key: "node", Label: "Node", Sortable: true},
 		{Key: "desiredState", Label: "Desired", Sortable: true},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: stateSeverities},
 		{Key: "image", Label: "Image"},
 		{Key: "error", Label: "Error"},
 	}
@@ -145,8 +162,8 @@ func nodeResource() plugin.ResourceType {
 	columns := []plugin.Column{
 		{Key: "name", Label: "Hostname", Sortable: true},
 		{Key: "role", Label: "Role", Type: plugin.ColumnBadge, Sortable: true},
-		{Key: "availability", Label: "Availability", Type: plugin.ColumnBadge, Sortable: true},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "availability", Label: "Availability", Type: plugin.ColumnBadge, Sortable: true, Severities: availabilitySeverities},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: stateSeverities},
 		{Key: "leader", Label: "Leader", Type: plugin.ColumnBool, Sortable: true},
 		{Key: "engine", Label: "Engine", Sortable: true},
 		{Key: "address", Label: "Address"},
