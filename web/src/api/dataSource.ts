@@ -8,7 +8,7 @@ import {
   reportApiError,
 } from "./client";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
-import type { SocketLike } from "../stores/sessions";
+import type { SocketLike } from "../stores/streamChannels";
 import type {
   DataSource,
   Page,

@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount } from "vue";
 import Button from "primevue/button";
 import { useDockStore } from "../../stores/dock";
+import { KEEP_ALIVE_DOCK_PANELS_MAX } from "../../stores/sessionLimits";
 import PanelHost from "../core/PanelHost.vue";
 import AppIcon from "../../components/AppIcon.vue";
 
@@ -95,7 +96,7 @@ onBeforeUnmount(onResizeEnd);
       </Button>
     </div>
     <div v-show="!state.collapsed" class="min-h-0 flex-1 overflow-hidden">
-      <KeepAlive :max="8">
+      <KeepAlive :max="KEEP_ALIVE_DOCK_PANELS_MAX">
         <PanelHost
           v-if="active"
           :key="active.id"

@@ -4,6 +4,7 @@ import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import { interpolate } from "../../api/dataSource";
+import { KEEP_ALIVE_DETAIL_PANELS_MAX } from "../../stores/sessionLimits";
 import type {
   Action,
   DetailView as DetailViewSpec,
@@ -130,7 +131,7 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
     <!-- KeepAlive (not lazy TabPanels) so a resource's console/logs stay alive
          when switching between its detail tabs. -->
     <div class="min-h-0 flex-1 overflow-hidden">
-      <KeepAlive :max="8">
+      <KeepAlive :max="KEEP_ALIVE_DETAIL_PANELS_MAX">
         <PanelHost
           v-if="current"
           :key="`${row.ref?.uid}:${current.key}`"

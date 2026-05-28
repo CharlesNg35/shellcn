@@ -2,11 +2,8 @@
 import { computed, nextTick, ref, watch } from "vue";
 import Button from "primevue/button";
 import { VueDraggable } from "vue-draggable-plus";
-import {
-  useWorkspaceStore,
-  MAX_WORKBENCH_TABS,
-  type OpenView,
-} from "../../stores/workspace";
+import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "../../stores/sessionLimits";
+import { useWorkspaceStore, type OpenView } from "../../stores/workspace";
 import ResourceTree from "./ResourceTree.vue";
 import DetailView from "../detail/DetailView.vue";
 import TablePanel from "../table/TablePanel.vue";
@@ -253,7 +250,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
       </div>
 
       <div class="min-h-0 flex-1 overflow-hidden">
-        <KeepAlive :max="MAX_WORKBENCH_TABS">
+        <KeepAlive :max="KEEP_ALIVE_WORKBENCH_TABS_MAX">
           <DetailView
             v-if="
               activeView?.kind === 'detail' &&

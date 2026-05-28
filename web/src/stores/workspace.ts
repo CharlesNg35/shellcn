@@ -1,11 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
+import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "./sessionLimits";
 import type { Icon, ResourceRef, Row } from "../types/projection";
-
-// Cap on open workbench tabs. Opening past it auto-closes the oldest non-active
-// tab. Kept in sync with the tree workspace's KeepAlive window so every open tab
-// stays warm (no surprise reload when switching back).
-export const MAX_WORKBENCH_TABS = 12;
 
 // An open view in the sidebar-tree workspace: either a resource detail or a
 // resource-kind list. Multiple stay open as a closable tab strip.
@@ -42,6 +38,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   // Connections the user has explicitly connected this session. Drives the
   // sidebar presence dot without assuming a live stream channel. Cleared on reload.
   const connected = ref<Record<string, boolean>>({});
+  const connectedOrder = ref<string[]>([]);
 
   function view(id: string): ConnectionView {
     if (!views.value[id]) views.value[id] = { views: [] };
@@ -49,12 +46,31 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   }
 
   function setConnected(id: string, on: boolean): void {
-    if (on) connected.value[id] = true;
-    else delete connected.value[id];
+    if (on) {
+      connected.value[id] = true;
+      connectedOrder.value = [
+        ...connectedOrder.value.filter((candidate) => candidate !== id),
+        id,
+      ];
+      return;
+    }
+    delete connected.value[id];
+    connectedOrder.value = connectedOrder.value.filter(
+      (candidate) => candidate !== id,
+    );
   }
 
   function isConnected(id: string): boolean {
     return Boolean(connected.value[id]);
+  }
+
+  function connectedIds(): string[] {
+    const live = new Set(Object.keys(connected.value));
+    connectedOrder.value = connectedOrder.value.filter((id) => live.has(id));
+    for (const id of live) {
+      if (!connectedOrder.value.includes(id)) connectedOrder.value.push(id);
+    }
+    return [...connectedOrder.value];
   }
 
   function open(id: string): void {
@@ -75,7 +91,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     if (!c.views.some((x) => x.id === v.id))
       c.views.push({ ...v, preview: false });
     c.activeViewId = v.id;
-    while (c.views.length > MAX_WORKBENCH_TABS) {
+    while (c.views.length > KEEP_ALIVE_WORKBENCH_TABS_MAX) {
       const idx = c.views.findIndex((x) => x.id !== c.activeViewId);
       if (idx < 0) break;
       c.views.splice(idx, 1);
@@ -93,7 +109,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     if (previewIdx >= 0) c.views.splice(previewIdx, 1, preview);
     else c.views.push(preview);
     c.activeViewId = v.id;
-    while (c.views.length > MAX_WORKBENCH_TABS) {
+    while (c.views.length > KEEP_ALIVE_WORKBENCH_TABS_MAX) {
       const idx = c.views.findIndex((x) => x.id !== c.activeViewId);
       if (idx < 0) break;
       c.views.splice(idx, 1);
@@ -141,10 +157,12 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     recent,
     views,
     connected,
+    connectedOrder,
     view,
     open,
     setConnected,
     isConnected,
+    connectedIds,
     setActiveTab,
     openView,
     openPreviewView,

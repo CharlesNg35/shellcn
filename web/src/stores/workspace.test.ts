@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
-import { useWorkspaceStore, MAX_WORKBENCH_TABS } from "./workspace";
+import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "./sessionLimits";
+import { useWorkspaceStore } from "./workspace";
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -29,6 +30,17 @@ describe("workspace store", () => {
     for (let i = 0; i < 15; i++) ws.open(`c${i}`);
     expect(ws.recent).toHaveLength(10);
     expect(ws.recent[0]).toBe("c14");
+  });
+
+  it("tracks connected ids in least-recent to most-recent order", () => {
+    const ws = useWorkspaceStore();
+    ws.setConnected("a", true);
+    ws.setConnected("b", true);
+    ws.setConnected("a", true);
+    expect(ws.connectedIds()).toEqual(["b", "a"]);
+
+    ws.setConnected("b", false);
+    expect(ws.connectedIds()).toEqual(["a"]);
   });
 
   it("opens multiple views (deduped) as a tab strip and tracks the active one", () => {
@@ -92,12 +104,14 @@ describe("workspace store", () => {
 
   it("caps open views and auto-closes the oldest non-active tab", () => {
     const ws = useWorkspaceStore();
-    for (let i = 0; i < MAX_WORKBENCH_TABS + 3; i++)
+    for (let i = 0; i < KEEP_ALIVE_WORKBENCH_TABS_MAX + 3; i++)
       ws.openView("a", detail(`x${i}`));
     const c = ws.view("a");
-    expect(c.views).toHaveLength(MAX_WORKBENCH_TABS);
+    expect(c.views).toHaveLength(KEEP_ALIVE_WORKBENCH_TABS_MAX);
     // The newest view stays open and active; the oldest were evicted.
-    expect(ws.activeView("a")?.id).toBe(`detail:x${MAX_WORKBENCH_TABS + 2}`);
+    expect(ws.activeView("a")?.id).toBe(
+      `detail:x${KEEP_ALIVE_WORKBENCH_TABS_MAX + 2}`,
+    );
     expect(c.views.some((v) => v.id === "detail:x0")).toBe(false);
   });
 
