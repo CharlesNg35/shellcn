@@ -612,8 +612,26 @@ function onPage(e: DataTablePageEvent): void {
   void load(e.first);
 }
 
+function isInteractiveTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        'button,a,input,select,textarea,[role="button"],[role="checkbox"]',
+      ),
+    )
+  );
+}
+
 function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
+  if (isInteractiveTarget(e.originalEvent?.target ?? null)) return;
+  if (selectable.value) {
+    selection.value =
+      selection.value.length === 1 && rid(selection.value[0]) === rid(row)
+        ? []
+        : [row];
+  }
   if (row.ref) emit("select", row);
 }
 
