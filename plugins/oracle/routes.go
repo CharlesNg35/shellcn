@@ -74,9 +74,9 @@ func routes() []plugin.Route {
 		{ID: "oracle.table.row.delete", Method: plugin.MethodDelete, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.row.delete", Handle: deleteRow},
 		{ID: "oracle.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "oracle.column.add", Method: plugin.MethodPost, Path: "/objects/{id}/columns", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.column.add", Input: columnAddSchema(), Handle: addColumn},
-		{ID: "oracle.column.drop", Method: plugin.MethodPost, Path: "/objects/{id}/columns/drop", Permission: "oracle.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "oracle.column.drop", Input: columnDropSchema(), Handle: dropColumn},
+		{ID: "oracle.column.drop", Method: plugin.MethodPost, Path: "/objects/{id}/columns/drop", Permission: "oracle.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "oracle.column.drop", Handle: dropColumn},
 		{ID: "oracle.index.create", Method: plugin.MethodPost, Path: "/objects/{id}/indexes", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.index.create", Input: indexCreateSchema(), Handle: createIndex},
-		{ID: "oracle.index.drop", Method: plugin.MethodPost, Path: "/objects/{id}/indexes/drop", Permission: "oracle.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "oracle.index.drop", Input: indexDropSchema(), Handle: dropIndex},
+		{ID: "oracle.index.drop", Method: plugin.MethodPost, Path: "/objects/{id}/indexes/drop", Permission: "oracle.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "oracle.index.drop", Handle: dropIndex},
 		{ID: "oracle.table.truncate", Method: plugin.MethodPost, Path: "/objects/{id}/truncate", Permission: "oracle.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.truncate", Handle: truncateTable},
 		{ID: "oracle.table.drop", Method: plugin.MethodDelete, Path: "/objects/{id}", Permission: "oracle.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.drop", Handle: dropTable},
 		{ID: "oracle.query", Method: plugin.MethodWS, Path: "/query", Permission: "oracle.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "oracle.query", Stream: queryStream},
@@ -104,23 +104,11 @@ func columnAddSchema() *plugin.Schema {
 	}}}}
 }
 
-func columnDropSchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
-		{Key: "column", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "The column to drop. Its data is permanently removed."},
-	}}}}
-}
-
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
-	}}}}
-}
-
-func indexDropSchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
-		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 	}}}}
 }
 
@@ -675,11 +663,14 @@ ORDER BY c.column_id`, []any{owner, name})
 	if err != nil {
 		return nil, err
 	}
+	id := rc.Param("id")
 	for _, r := range rows {
 		normalizeRowKeys(r)
 		r["default"] = r["default_value"]
 		r["nullable"] = boolish(r["nullable"])
 		delete(r, "default_value")
+		cn := fmt.Sprint(r["name"])
+		r["ref"] = plugin.ResourceRef{Kind: "column", Scope: id, Name: cn, UID: id + "." + cn}
 	}
 	return pageRows(rc, rows)
 }
@@ -707,10 +698,13 @@ ORDER BY i.index_name`, []any{owner, name})
 	if err != nil {
 		return nil, err
 	}
+	id := rc.Param("id")
 	for _, r := range rows {
 		normalizeRowKeys(r)
 		r["unique"] = boolish(r["unique_flag"])
 		delete(r, "unique_flag")
+		in := fmt.Sprint(r["name"])
+		r["ref"] = plugin.ResourceRef{Kind: "index", Scope: id, Name: in, UID: id + "." + in}
 	}
 	return pageRows(rc, rows)
 }
@@ -939,13 +933,7 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var req struct {
-		Column string `json:"column" validate:"required"`
-	}
-	if err := rc.Bind(&req); err != nil {
-		return nil, err
-	}
-	column, err := safeIdent(req.Column)
+	column, err := safeIdent(rc.Param("name"))
 	if err != nil {
 		return nil, err
 	}
@@ -1006,13 +994,7 @@ func dropIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var req struct {
-		Name string `json:"name" validate:"required"`
-	}
-	if err := rc.Bind(&req); err != nil {
-		return nil, err
-	}
-	name, err := safeIdent(req.Name)
+	name, err := safeIdent(rc.Param("name"))
 	if err != nil {
 		return nil, err
 	}
