@@ -98,9 +98,13 @@ const treeSelectedUid = computed(() =>
   activeView.value?.kind === "detail" ? activeView.value.ref?.uid : undefined,
 );
 
+function workbenchTabTitle(v: OpenView): string {
+  return v.subtitle ? `${v.subtitle} / ${v.title}` : v.title;
+}
+
 function openDetail(row: Row, qualifier?: string): void {
   if (!row.ref || !resourceByKind.value.has(row.ref.kind)) return;
-  ws.openView(props.connectionId, {
+  ws.openPreviewView(props.connectionId, {
     id: "detail:" + row.ref.uid,
     title: row.ref.name,
     subtitle: qualifier || refSubtitle(row.ref),
@@ -115,7 +119,7 @@ function onSelectGroup(key: string): void {
   if (!group) return;
   // A container group (no resolvable resource) only expands — no view/tab.
   if (!resolveGroupResource(key)) return;
-  ws.openView(props.connectionId, {
+  ws.openPreviewView(props.connectionId, {
     id: "group:" + key,
     title: group.label,
     icon: group.icon,
@@ -160,7 +164,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
         .map(([k, v]) => `${k}=${v}`)
         .join(",")
     : "";
-  ws.openView(props.connectionId, {
+  ws.openPreviewView(props.connectionId, {
     id: "list:" + kind + suffix,
     title: res.title,
     subtitle: params ? Object.values(params).join(" / ") : undefined,
@@ -202,8 +206,10 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             v-for="v in tabs"
             :key="v.id"
             type="button"
-            :title="v.subtitle ? `${v.subtitle} / ${v.title}` : v.title"
+            :title="workbenchTabTitle(v)"
+            :aria-label="workbenchTabTitle(v)"
             :data-active-tab="v.id === view.activeViewId ? 'true' : undefined"
+            :data-preview-tab="v.preview ? 'true' : undefined"
             class="group flex max-w-60 shrink-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded px-2 py-1 text-xs transition-colors active:cursor-pointer"
             :class="
               v.id === view.activeViewId
@@ -211,10 +217,15 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
                 : 'text-surface-500 hover:text-surface-800 dark:hover:text-surface-200'
             "
             @click="ws.activateView(connectionId, v.id)"
+            @dblclick="ws.pinView(connectionId, v.id)"
           >
             <AppIcon v-if="v.icon" :icon="v.icon" :size="13" />
             <span class="flex min-w-0 flex-1 items-baseline gap-1">
-              <span class="truncate font-medium">{{ v.title }}</span>
+              <span
+                class="truncate font-medium"
+                :class="{ italic: v.preview }"
+                >{{ v.title }}</span
+              >
               <span
                 v-if="v.subtitle"
                 class="truncate text-[10px] text-surface-400"
@@ -231,6 +242,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
               :aria-label="`Close ${v.title}`"
               :pt="{ root: 'h-4 w-4 p-0 opacity-60 hover:opacity-100' }"
               @click.stop="ws.closeView(connectionId, v.id)"
+              @dblclick.stop
             >
               <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="12" />
             </Button>

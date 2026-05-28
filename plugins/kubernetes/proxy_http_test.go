@@ -84,6 +84,23 @@ func TestServeHTTPProxyRewritesHTML(t *testing.T) {
 	}
 }
 
+func TestServeHTTPProxyServesServiceWorker(t *testing.T) {
+	sess := connectTo(t, http.NewServeMux()).(*Session)
+	rec := httptest.NewRecorder()
+	sess.ServeHTTPProxy(rec, httptest.NewRequest(http.MethodGet, "/services/default/web/80/__shellcn_sw.js", nil))
+
+	prefix := "/api/connections/c1/proxy/services/default/web/80"
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "javascript") {
+		t.Fatalf("worker content-type = %q", ct)
+	}
+	if got := rec.Header().Get("Service-Worker-Allowed"); got != prefix+"/" {
+		t.Fatalf("worker scope header = %q", got)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, prefix) || !strings.Contains(body, `addEventListener("fetch"`) {
+		t.Fatalf("worker body unexpected: %s", body)
+	}
+}
+
 func TestServiceProxyURL(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/namespaces/default/services/web", func(w http.ResponseWriter, _ *http.Request) {

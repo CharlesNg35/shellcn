@@ -168,10 +168,15 @@ func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, plugin.ErrNotSupported)
 		return
 	}
-	// The wildcard holds the plugin-defined target path; hand it over as the path.
+	// The wildcard holds the plugin-defined target path; hand it over as the path,
+	// preserving the original percent-encoding (chunk names carry %5B/%28 etc.).
 	rp := r.Clone(ctx)
 	rp.URL.Path = "/" + chi.URLParam(r, "*")
 	rp.URL.RawPath = ""
+	mark := "/" + conn.ID + "/proxy/"
+	if i := strings.Index(r.URL.EscapedPath(), mark); i >= 0 {
+		rp.URL.RawPath = "/" + r.URL.EscapedPath()[i+len(mark):]
+	}
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
 	proxier.ServeHTTPProxy(w, rp)
 }

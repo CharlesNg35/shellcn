@@ -22,10 +22,18 @@ import (
 // transport (so it works over both transports). The incoming path is
 // `/{services|pods}/{ns}/{name}/{port}/{rest...}`. Responses are rewritten so the
 // app's own absolute paths, redirects, and fetches resolve back under the proxy.
+// swFile is the in-scope service worker that re-routes the app's root-absolute
+// requests (bundler chunks, dynamic imports, CSS) under the proxy prefix.
+const swFile = "__shellcn_sw.js"
+
 func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	apiPath, apiPrefix, prefix, ok := s.proxyPaths(r.URL.Path)
 	if !ok {
 		http.Error(w, "unsupported proxy target", http.StatusBadRequest)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/"+swFile) {
+		serveProxyWorker(w, prefix)
 		return
 	}
 	base, err := url.Parse(s.rest.Host)
@@ -172,6 +180,8 @@ var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u)
 function patch(proto,prop){var d=Object.getOwnPropertyDescriptor(proto,prop);if(d&&d.set)Object.defineProperty(proto,prop,{configurable:true,enumerable:d.enumerable,get:function(){return d.get.call(this);},set:function(v){d.set.call(this,fix(v));}});}
 try{patch(HTMLScriptElement.prototype,"src");patch(HTMLLinkElement.prototype,"href");patch(HTMLImageElement.prototype,"src");}catch(e){}
 var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){return sa.call(this,n,(n==="src"||n==="href")&&typeof v==="string"?fix(v):v);};
+["pushState","replaceState"].forEach(function(m){var o=history[m];if(o)history[m]=function(s,t,u){return o.call(this,s,t,typeof u==="string"?fix(u):u);};});
+if(navigator.serviceWorker){try{navigator.serviceWorker.register(p+"/` + swFile + `").then(function(){if(!navigator.serviceWorker.controller){var k="scnsw:"+p;if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");navigator.serviceWorker.ready.then(function(){location.reload();});}}});}catch(e){}}
 })();</script>`
 	if i := headInsertIndex(html); i >= 0 {
 		return html[:i] + shim + html[i:]
@@ -193,6 +203,22 @@ func headInsertIndex(html string) int {
 }
 
 func jsString(s string) string { return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"` }
+
+// serveProxyWorker returns the service worker. Served from under the prefix, its
+// default scope is the proxy path, so it controls the app's page and rewrites any
+// root-absolute request it makes back under the prefix.
+func serveProxyWorker(w http.ResponseWriter, prefix string) {
+	w.Header().Set("Content-Type", "text/javascript")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Service-Worker-Allowed", prefix+"/")
+	_, _ = io.WriteString(w, `var P=`+jsString(prefix)+`;
+self.addEventListener("install",function(){self.skipWaiting();});
+self.addEventListener("activate",function(e){e.waitUntil(self.clients.claim());});
+self.addEventListener("fetch",function(e){var u;try{u=new URL(e.request.url);}catch(_){return;}
+if(u.origin===self.location.origin&&u.pathname.charAt(0)==="/"&&u.pathname.indexOf(P+"/")!==0){
+u.pathname=P+u.pathname;
+e.respondWith(fetch(u.href,{method:e.request.method,headers:e.request.headers,credentials:"include"}));}});`)
+}
 
 // ServiceProxyURL returns the gateway URL that proxies to a Service's web port
 // for an "Open in browser" link. It picks the most likely web port (an http
