@@ -136,8 +136,9 @@ func podResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "pod", Title: "Pods", List: plugin.DataSource{RouteID: "podman.pods.list"}, Columns: columns,
+		ActionIDs: []string{"podman.pod.start", "podman.pod.stop", "podman.pod.restart", "podman.pod.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: dockerengine.StateSeverities()},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"podman.pod.start", "podman.pod.stop", "podman.pod.restart", "podman.pod.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.pod.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "containers", Label: "Containers", Icon: icon("box"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "podman.pod.containers", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: podContainerColumns}.Map()},
@@ -229,5 +230,15 @@ func actions() []plugin.Action {
 		{ID: "podman.images.prune", Label: "Prune dangling", Icon: icon("eraser"), RouteID: "podman.images.prune", Confirm: true, ConfirmText: "Remove all dangling images?"},
 		{ID: "podman.volumes.prune", Label: "Prune unused", Icon: icon("eraser"), RouteID: "podman.volumes.prune", Confirm: true, ConfirmText: "Remove all unused volumes?"},
 		{ID: "podman.networks.prune", Label: "Prune unused", Icon: icon("eraser"), RouteID: "podman.networks.prune", Confirm: true, ConfirmText: "Remove all unused networks?"},
+		{ID: "podman.pod.start", Label: "Start", Icon: icon("play"), RouteID: "podman.pod.start", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: whenPodStatus("Created", "Exited", "Stopped", "Dead", "Degraded")},
+		{ID: "podman.pod.stop", Label: "Stop", Icon: icon("square"), RouteID: "podman.pod.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this pod?", EnabledWhen: whenPodStatus("Running", "Degraded", "Paused")},
+		{ID: "podman.pod.restart", Label: "Restart", Icon: icon("refresh-cw"), RouteID: "podman.pod.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this pod?", EnabledWhen: whenPodStatus("Running", "Degraded", "Paused")},
+		{ID: "podman.pod.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.pod.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this pod and its containers?"},
 	}
+}
+
+// whenPodStatus gates a pod action on libpod's capitalised pod Status field,
+// which differs from the lowercase container state used by dockerengine.WhenState.
+func whenPodStatus(states ...string) *plugin.Condition {
+	return &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpIn, Value: states}}}
 }

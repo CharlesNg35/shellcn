@@ -52,6 +52,27 @@ func TestRabbitMQPluginIntegration(t *testing.T) {
 	if _, err := queueBindings(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil)); err != nil {
 		t.Fatalf("queue bindings: %v", err)
 	}
+
+	bindBody, _ := json.Marshal(map[string]any{"source": "amq.direct", "routing_key": "shellcn-rk"})
+	if _, err := createBinding(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, bindBody)); err != nil {
+		t.Fatalf("create binding: %v", err)
+	}
+	bres, err := queueBindings(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, nil, nil))
+	if err != nil {
+		t.Fatalf("list bindings after create: %v", err)
+	}
+	var spec string
+	for _, b := range bres.(plugin.Page[row]).Items {
+		if b["source"] == "amq.direct" {
+			spec = b["ref"].(plugin.ResourceRef).UID
+		}
+	}
+	if spec == "" {
+		t.Fatalf("created binding not listed: %#v", bres.(plugin.Page[row]).Items)
+	}
+	if _, err := deleteBinding(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"spec": spec}, nil, nil)); err != nil {
+		t.Fatalf("delete binding: %v", err)
+	}
 	res, err := queueMessages(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"vhost": cfg["vhost"].(string), "queue": name}, url.Values{"limit": []string{"10"}}, nil))
 	if err != nil {
 		t.Fatalf("messages: %v", err)

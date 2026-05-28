@@ -51,7 +51,7 @@ func resources(provider Provider) []plugin.ResourceType {
 				{Key: "search", Label: "Search", Icon: icon("search"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "search.query"), Method: plugin.MethodWS, Params: map[string]string{"index": "${resource.name}"}}, Config: searchConfig(provider)},
 				{Key: "mapping", Label: "Mapping", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "mapping.read"), Params: map[string]string{"index": "${resource.name}"}}},
 				{Key: "settings", Label: "Settings", Icon: icon("settings"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "settings.read"), Params: map[string]string{"index": "${resource.name}"}}},
-				{Key: "aliases", Label: "Aliases", Icon: icon("tag"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "aliases.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: aliasColumns(), Exportable: true}.Map()},
+				{Key: "aliases", Label: "Aliases", Icon: icon("tag"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "aliases.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: aliasColumns(), ActionIDs: []string{routeID(provider, "alias.create")}, RowActionIDs: []string{routeID(provider, "alias.delete")}, Exportable: true}.Map()},
 				{Key: "shards", Label: "Shards", Icon: icon("split"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "shards.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: shardColumns(), Exportable: true}.Map()},
 			}},
 		},
@@ -85,7 +85,13 @@ func actions(provider Provider) []plugin.Action {
 		{ID: routeID(provider, "document.create"), Label: "Create document", Icon: icon("plus"), RouteID: routeID(provider, "document.create"), Params: indexParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"title\": \"Example\"\n}", SaveRouteID: routeID(provider, "document.create"), SaveMethod: plugin.MethodPost, SaveParams: indexParams(), SaveBodyKey: "document"}.Map()},
 		{ID: routeID(provider, "document.delete"), Label: "Delete", Icon: icon("trash"), RouteID: routeID(provider, "document.delete"), Params: documentParams(), Confirm: true, ConfirmText: "Delete this document?"},
 		{ID: routeID(provider, "reindex"), Label: "Reindex", Icon: icon("copy"), RouteID: routeID(provider, "reindex"), Params: map[string]string{"source": "${resource.name}"}, Confirm: true, ConfirmText: "Start a reindex operation?"},
+		{ID: routeID(provider, "alias.create"), Label: "Add alias", Icon: icon("plus"), RouteID: routeID(provider, "alias.create"), Params: indexParams()},
+		{ID: routeID(provider, "alias.delete"), Label: "Remove", Icon: icon("trash"), RouteID: routeID(provider, "alias.delete"), Params: aliasParams(), Confirm: true, ConfirmText: "Remove this alias?"},
 	}
+}
+
+func aliasParams() map[string]string {
+	return map[string]string{"index": "${resource.namespace}", "alias": "${resource.name}"}
 }
 
 func searchConfig(provider Provider) map[string]any {

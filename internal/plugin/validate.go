@@ -283,11 +283,37 @@ func streamKindForClass(class RecordingClass) StreamKind {
 
 // validateLayout checks every DataSource RouteID and ActionID reference resolves.
 func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bool, add func(string, ...any)) {
-	checkDS := func(ctx string, ds DataSource) {
+	checkDataSource := func(ctx string, ds DataSource) (Route, bool) {
 		if ds.RouteID == "" {
 			add("%s is missing a RouteID", ctx)
-		} else if _, ok := routes[ds.RouteID]; !ok {
+			return Route{}, false
+		}
+		rt, ok := routes[ds.RouteID]
+		if !ok {
 			add("%s references unknown route %q", ctx, ds.RouteID)
+			return Route{}, false
+		}
+		if ds.Method != "" && ds.Method != rt.Method {
+			add("%s declares method %q but route %q uses %q", ctx, ds.Method, ds.RouteID, rt.Method)
+		}
+		return rt, true
+	}
+	checkReadSource := func(ctx string, ds DataSource) {
+		rt, ok := checkDataSource(ctx, ds)
+		if !ok {
+			return
+		}
+		if rt.Method != MethodGet {
+			add("%s references route %q with invalid read method %q", ctx, ds.RouteID, rt.Method)
+		}
+	}
+	checkWriteSource := func(ctx string, ds DataSource) {
+		rt, ok := checkDataSource(ctx, ds)
+		if !ok {
+			return
+		}
+		if rt.Method == MethodGet || rt.Method == MethodWS {
+			add("%s references route %q with invalid write method %q", ctx, ds.RouteID, rt.Method)
 		}
 	}
 	checkRouteID := func(ctx string, routeID string) {
@@ -332,17 +358,22 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 			add("%s is missing a source", ctx)
 			return
 		}
-		if ds.RouteID == "" {
-			add("%s is missing a RouteID", ctx)
-			return
-		}
-		rt, ok := routes[ds.RouteID]
+		rt, ok := checkDataSource(ctx, *ds)
 		if !ok {
-			add("%s references unknown route %q", ctx, ds.RouteID)
 			return
 		}
 		if rt.Method != MethodWS {
 			add("%s references route %q with invalid stream method %q", ctx, ds.RouteID, rt.Method)
+		}
+	}
+	checkPanelSource := func(ctx string, panel PanelType, ds *DataSource) {
+		switch panel {
+		case PanelTerminal, PanelLogStream, PanelMetrics, PanelQueryEditor, PanelRemoteDesktop:
+			checkStreamSource(ctx, ds)
+		default:
+			if ds != nil {
+				checkReadSource(ctx, *ds)
+			}
 		}
 	}
 	checkActionIDs := func(ctx string, ids []string) {
@@ -354,18 +385,20 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 	}
 	checkTabs := func(ctx string, tabs []Tab) {
 		for _, t := range tabs {
-			if t.Source != nil && t.Panel != PanelRemoteDesktop {
-				checkDS(fmt.Sprintf("%s tab %q source", ctx, t.Key), *t.Source)
-			}
+			checkPanelSource(fmt.Sprintf("%s tab %q source", ctx, t.Key), t.Panel, t.Source)
 			checkActionIDs(fmt.Sprintf("%s tab %q actionIds", ctx, t.Key), stringConfigList(t.Config, "actionIds"))
 			checkActionIDs(fmt.Sprintf("%s tab %q rowActionIds", ctx, t.Key), stringConfigList(t.Config, "rowActionIds"))
 			checkPanelConfigRoutes(
 				fmt.Sprintf("%s tab %q", ctx, t.Key),
 				t,
+				checkReadSource,
+				checkWriteSource,
 				checkRouteID,
 				checkWriteRouteID,
 				checkMultipartRouteID,
 				checkStreamSource,
+				checkPanelSource,
+				checkActionIDs,
 				add,
 			)
 		}
@@ -379,10 +412,14 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		checkPanelConfigRoutes(
 			fmt.Sprintf("action %q panel", action.ID),
 			Tab{Panel: action.Panel, Source: &DataSource{RouteID: action.RouteID}, Config: action.Config},
+			checkReadSource,
+			checkWriteSource,
 			checkRouteID,
 			checkWriteRouteID,
 			checkMultipartRouteID,
 			checkStreamSource,
+			checkPanelSource,
+			checkActionIDs,
 			add,
 		)
 	}
@@ -395,7 +432,7 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		// (opens its ResourceKind list or Ref detail directly).
 		switch {
 		case g.Source.RouteID != "":
-			checkDS(fmt.Sprintf("tree group %q source", g.Key), g.Source)
+			checkReadSource(fmt.Sprintf("tree group %q source", g.Key), g.Source)
 		case g.ResourceKind == "" && g.Ref == nil:
 			add("tree group %q must declare a source, resourceKind, or ref", g.Key)
 		}
@@ -407,12 +444,12 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		}
 	}
 	for _, rt := range m.Resources {
-		checkDS(fmt.Sprintf("resource %q list", rt.Kind), rt.List)
+		checkReadSource(fmt.Sprintf("resource %q list", rt.Kind), rt.List)
 		if rt.Watch != nil {
-			checkDS(fmt.Sprintf("resource %q watch", rt.Kind), *rt.Watch)
+			checkStreamSource(fmt.Sprintf("resource %q watch", rt.Kind), rt.Watch)
 		}
 		if rt.ColumnsSource != nil {
-			checkDS(fmt.Sprintf("resource %q columnsSource", rt.Kind), *rt.ColumnsSource)
+			checkReadSource(fmt.Sprintf("resource %q columnsSource", rt.Kind), *rt.ColumnsSource)
 		}
 		checkActionIDs(fmt.Sprintf("resource %q", rt.Kind), rt.ActionIDs)
 		checkActionIDs(fmt.Sprintf("resource %q list", rt.Kind), rt.ListActionIDs)
@@ -454,48 +491,208 @@ func stringConfigList(config map[string]any, key string) []string {
 	}
 }
 
+func stringConfigValue(config map[string]any, key string) string {
+	if config == nil {
+		return ""
+	}
+	switch v := config[key].(type) {
+	case string:
+		return v
+	case PanelType:
+		return string(v)
+	default:
+		return ""
+	}
+}
+
+func methodConfigValue(config map[string]any, key string) Method {
+	if config == nil {
+		return ""
+	}
+	switch v := config[key].(type) {
+	case Method:
+		return v
+	case string:
+		return Method(v)
+	default:
+		return ""
+	}
+}
+
+func dataSourceConfigValue(config map[string]any, key string) (*DataSource, bool) {
+	if config == nil {
+		return nil, false
+	}
+	switch v := config[key].(type) {
+	case DataSource:
+		return &v, true
+	case *DataSource:
+		if v == nil {
+			return nil, false
+		}
+		return v, true
+	case map[string]any:
+		ds := DataSource{}
+		if routeID, _ := v["routeId"].(string); routeID != "" {
+			ds.RouteID = routeID
+		}
+		if method, _ := v["method"].(string); method != "" {
+			ds.Method = Method(method)
+		}
+		ds.Params = stringMapConfigValue(v, "params")
+		return &ds, ds.RouteID != "" || ds.Method != "" || len(ds.Params) > 0
+	default:
+		return nil, false
+	}
+}
+
+func stringMapConfigValue(config map[string]any, key string) map[string]string {
+	switch v := config[key].(type) {
+	case map[string]string:
+		return v
+	case map[string]any:
+		out := map[string]string{}
+		for k, raw := range v {
+			if s, ok := raw.(string); ok {
+				out[k] = s
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func dashboardCellsConfigValue(config map[string]any) []DashboardCell {
+	if config == nil {
+		return nil
+	}
+	switch v := config["cells"].(type) {
+	case []DashboardCell:
+		return v
+	case []any:
+		cells := make([]DashboardCell, 0, len(v))
+		for _, raw := range v {
+			if cell, ok := dashboardCellConfigValue(raw); ok {
+				cells = append(cells, cell)
+			}
+		}
+		return cells
+	default:
+		return nil
+	}
+}
+
+func dashboardCellConfigValue(raw any) (DashboardCell, bool) {
+	switch v := raw.(type) {
+	case DashboardCell:
+		return v, true
+	case map[string]any:
+		cell := DashboardCell{}
+		cell.Key, _ = v["key"].(string)
+		cell.Panel = PanelType(stringConfigValue(v, "panel"))
+		if ds, ok := dataSourceConfigValue(v, "source"); ok {
+			cell.Source = ds
+		}
+		if cfg, ok := v["config"].(map[string]any); ok {
+			cell.Config = cfg
+		}
+		return cell, cell.Key != "" || cell.Panel != "" || cell.Source != nil || cell.Config != nil
+	default:
+		return DashboardCell{}, false
+	}
+}
+
+func validateWriteConfigMethod(ctx string, method Method, add func(string, ...any)) {
+	if method == "" {
+		return
+	}
+	switch method {
+	case MethodPost, MethodPut, MethodPatch, MethodDelete:
+	default:
+		add("%s has invalid write method %q", ctx, method)
+	}
+}
+
 func checkPanelConfigRoutes(
 	ctx string,
 	tab Tab,
+	checkReadSource func(string, DataSource),
+	checkWriteSource func(string, DataSource),
 	checkRouteID func(string, string),
 	checkWriteRouteID func(string, string),
 	checkMultipartRouteID func(string, string),
 	checkStreamSource func(string, *DataSource),
+	checkPanelSource func(string, PanelType, *DataSource),
+	checkActionIDs func(string, []string),
 	add func(string, ...any),
 ) {
-	route := func(key string) string {
-		if tab.Config == nil {
-			return ""
-		}
-		v, _ := tab.Config[key].(string)
-		return v
-	}
 	switch tab.Panel {
+	case PanelTable:
+		if ds, ok := dataSourceConfigValue(tab.Config, "columnsSource"); ok {
+			checkReadSource(ctx+" columnsSource", *ds)
+		}
+		if ds, ok := dataSourceConfigValue(tab.Config, "watch"); ok {
+			checkStreamSource(ctx+" watch", ds)
+		}
+		if ds, ok := dataSourceConfigValue(tab.Config, "insert"); ok {
+			checkWriteSource(ctx+" insert", *ds)
+		}
+		if ds, ok := dataSourceConfigValue(tab.Config, "update"); ok {
+			checkWriteSource(ctx+" update", *ds)
+		}
+		if ds, ok := dataSourceConfigValue(tab.Config, "delete"); ok {
+			checkWriteSource(ctx+" delete", *ds)
+		}
 	case PanelFileBrowser:
-		checkRouteID(ctx+" readRouteId", route("readRouteId"))
-		checkRouteID(ctx+" downloadRouteId", route("downloadRouteId"))
-		checkWriteRouteID(ctx+" writeRouteId", route("writeRouteId"))
-		checkMultipartRouteID(ctx+" uploadRouteId", route("uploadRouteId"))
-		checkWriteRouteID(ctx+" mkdirRouteId", route("mkdirRouteId"))
-		checkWriteRouteID(ctx+" renameRouteId", route("renameRouteId"))
-		checkWriteRouteID(ctx+" deleteRouteId", route("deleteRouteId"))
+		checkRouteID(ctx+" readRouteId", stringConfigValue(tab.Config, "readRouteId"))
+		checkRouteID(ctx+" downloadRouteId", stringConfigValue(tab.Config, "downloadRouteId"))
+		checkWriteRouteID(ctx+" writeRouteId", stringConfigValue(tab.Config, "writeRouteId"))
+		checkMultipartRouteID(ctx+" uploadRouteId", stringConfigValue(tab.Config, "uploadRouteId"))
+		checkWriteRouteID(ctx+" mkdirRouteId", stringConfigValue(tab.Config, "mkdirRouteId"))
+		checkWriteRouteID(ctx+" renameRouteId", stringConfigValue(tab.Config, "renameRouteId"))
+		checkWriteRouteID(ctx+" deleteRouteId", stringConfigValue(tab.Config, "deleteRouteId"))
 	case PanelForm:
-		checkWriteRouteID(ctx+" submitRouteId", route("submitRouteId"))
+		checkWriteRouteID(ctx+" submitRouteId", stringConfigValue(tab.Config, "submitRouteId"))
+		validateWriteConfigMethod(ctx+" submitMethod", methodConfigValue(tab.Config, "submitMethod"), add)
 	case PanelCodeEditor:
-		checkWriteRouteID(ctx+" saveRouteId", route("saveRouteId"))
+		checkWriteRouteID(ctx+" saveRouteId", stringConfigValue(tab.Config, "saveRouteId"))
+		validateWriteConfigMethod(ctx+" saveMethod", methodConfigValue(tab.Config, "saveMethod"), add)
 	case PanelQueryEditor:
-		checkWriteRouteID(ctx+" cancelRouteId", route("cancelRouteId"))
-		checkRouteID(ctx+" completionRouteId", route("completionRouteId"))
+		checkWriteRouteID(ctx+" cancelRouteId", stringConfigValue(tab.Config, "cancelRouteId"))
+		checkRouteID(ctx+" completionRouteId", stringConfigValue(tab.Config, "completionRouteId"))
 	case PanelKV:
-		checkWriteRouteID(ctx+" createRouteId", route("createRouteId"))
-		checkRouteID(ctx+" readRouteId", route("readRouteId"))
-		checkWriteRouteID(ctx+" writeRouteId", route("writeRouteId"))
-		checkWriteRouteID(ctx+" deleteRouteId", route("deleteRouteId"))
+		checkWriteRouteID(ctx+" createRouteId", stringConfigValue(tab.Config, "createRouteId"))
+		checkRouteID(ctx+" readRouteId", stringConfigValue(tab.Config, "readRouteId"))
+		checkWriteRouteID(ctx+" writeRouteId", stringConfigValue(tab.Config, "writeRouteId"))
+		checkWriteRouteID(ctx+" deleteRouteId", stringConfigValue(tab.Config, "deleteRouteId"))
 	case PanelHTTPClient:
-		checkWriteRouteID(ctx+" executeRouteId", route("executeRouteId"))
+		checkWriteRouteID(ctx+" executeRouteId", stringConfigValue(tab.Config, "executeRouteId"))
 	case PanelRemoteDesktop:
-		checkStreamSource(ctx+" source", tab.Source)
 		validateRemoteDesktopConfig(ctx, tab.Config, add)
+	case PanelDashboard:
+		for _, cell := range dashboardCellsConfigValue(tab.Config) {
+			cellCtx := fmt.Sprintf("%s cell %q", ctx, cell.Key)
+			if cell.Panel == "" {
+				add("%s is missing a panel type", cellCtx)
+			}
+			checkPanelSource(cellCtx+" source", cell.Panel, cell.Source)
+			checkActionIDs(cellCtx+" actionIds", stringConfigList(cell.Config, "actionIds"))
+			checkActionIDs(cellCtx+" rowActionIds", stringConfigList(cell.Config, "rowActionIds"))
+			checkPanelConfigRoutes(
+				cellCtx,
+				Tab{Panel: cell.Panel, Source: cell.Source, Config: cell.Config},
+				checkReadSource,
+				checkWriteSource,
+				checkRouteID,
+				checkWriteRouteID,
+				checkMultipartRouteID,
+				checkStreamSource,
+				checkPanelSource,
+				checkActionIDs,
+				add,
+			)
+		}
 	}
 }
 

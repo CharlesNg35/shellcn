@@ -46,8 +46,8 @@ func databaseResource() plugin.ResourceType {
 			{Key: "graph", Label: "Graph", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: rid("graph"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}.Map()},
 			{Key: "labels", Label: "Labels", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("labels.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: labelColumns(), ActionIDs: []string{rid("node.create")}, Exportable: true}.Map()},
 			{Key: "relationship_types", Label: "Relationship Types", Icon: icon("git-branch"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("relationship_types.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: relationshipTypeColumns(), ActionIDs: []string{rid("relationship.create")}, Exportable: true}.Map()},
-			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("indexes.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: indexColumns(), Exportable: true}.Map()},
-			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("constraints.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: constraintColumns(), Exportable: true}.Map()},
+			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("indexes.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{rid("index.create")}, RowActionIDs: []string{rid("schema.drop")}, Exportable: true}.Map()},
+			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("constraints.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: constraintColumns(), RowActionIDs: []string{rid("schema.drop")}, Exportable: true}.Map()},
 			{Key: "cypher", Label: "Cypher", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: queryConfig("MATCH (n) RETURN n LIMIT 25")},
 		}},
 	}
@@ -118,7 +118,8 @@ func schemaItemResource() plugin.ResourceType {
 			{Key: "labels_or_types", Label: "Labels / Types"},
 			{Key: "properties", Label: "Properties"},
 		},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
+		RowActionIDs: []string{rid("schema.drop")},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("schema.drop")}}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("schema.read"), Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
 	}
@@ -130,6 +131,8 @@ func actions() []plugin.Action {
 		{ID: rid("node.delete"), Label: "Delete node", Icon: icon("trash"), RouteID: rid("node.delete"), Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this node and detach its relationships?"},
 		{ID: rid("relationship.create"), Label: "Create relationship", Icon: icon("git-branch-plus"), RouteID: rid("relationship.create"), Params: map[string]string{"database": "${resource.namespace}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "relationships"}},
 		{ID: rid("relationship.delete"), Label: "Delete relationship", Icon: icon("trash"), RouteID: rid("relationship.delete"), Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this relationship?"},
+		{ID: rid("index.create"), Label: "Create index", Icon: icon("plus"), RouteID: rid("index.create"), Params: map[string]string{"database": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: rid("schema.drop"), Label: "Drop", Icon: icon("trash"), RouteID: rid("schema.drop"), Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Drop this index or constraint?"},
 	}
 }
 

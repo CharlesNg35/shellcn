@@ -73,6 +73,20 @@ func TestKafkaPluginIntegration(t *testing.T) {
 	if _, err := groupOffsets(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"group": group}, nil, nil)); err != nil {
 		t.Fatalf("group offsets: %v", err)
 	}
+
+	reset, _ := json.Marshal(map[string]any{"target": "earliest"})
+	if _, err := resetGroupOffsets(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"group": group}, nil, reset)); err != nil {
+		t.Fatalf("reset offsets: %v", err)
+	}
+	res, err := groupOffsets(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"group": group}, nil, nil))
+	if err != nil {
+		t.Fatalf("group offsets after reset: %v", err)
+	}
+	for _, r := range res.(plugin.Page[row]).Items {
+		if r["partition"].(int32) == 0 && r["committed_offset"].(int64) != 0 {
+			t.Fatalf("expected committed offset reset to 0 (oldest), got %v", r["committed_offset"])
+		}
+	}
 }
 
 func kafkaIntegrationConfig(ctx context.Context, t *testing.T) map[string]any {

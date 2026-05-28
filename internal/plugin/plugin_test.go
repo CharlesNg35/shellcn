@@ -105,7 +105,10 @@ func TestDashboardConfigMapAndPanelValidate(t *testing.T) {
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Tabs:                []plugin.Tab{{Key: "overview", Label: "Overview", Panel: plugin.PanelDashboard, Config: cfg}},
 	}
-	routes := []plugin.Route{{ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop}}
+	routes := []plugin.Route{
+		{ID: "x.overview", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop},
+		{ID: "x.list", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop},
+	}
 	if err := plugin.Validate(m, routes); err != nil {
 		t.Fatalf("dashboard-panel tab should validate: %v", err)
 	}
@@ -186,6 +189,28 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"tab references unknown route", "references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Tab{{Key: "t", Label: "T", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ghost"}}}
 		}},
+		{"tab source method must match route", "declares method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "t", Label: "T", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list", Method: plugin.MethodPost}}}
+		}},
+		{"query editor source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "query", Label: "Query", Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "x.list"}}}
+		}},
+		{"table insert source must be write route", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "table", Label: "Table", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.TableConfig{
+				Editable: true,
+				Insert:   &plugin.DataSource{RouteID: "x.list"},
+			}.Map()}}
+		}},
+		{"table watch source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "table", Label: "Table", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.TableConfig{
+				Watch: &plugin.DataSource{RouteID: "x.list"},
+			}.Map()}}
+		}},
+		{"dashboard cell source must validate", "cell \"logs\" source references route", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Tabs = []plugin.Tab{{Key: "overview", Label: "Overview", Panel: plugin.PanelDashboard, Config: plugin.DashboardConfig{Cells: []plugin.DashboardCell{{
+				Key: "logs", Label: "Logs", Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "x.list"},
+			}}}.Map()}}
+		}},
 		{"file browser config references unknown route", "uploadRouteId references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Tab{{Key: "files", Label: "Files", Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"uploadRouteId": "ghost"}}}
 		}},
@@ -195,6 +220,14 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		}},
 		{"form submit route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"submitRouteId": "x.list"}}}
+		}},
+		{"form submit method must be write method", "submitMethod has invalid write method", func(m *plugin.Manifest, r *[]plugin.Route) {
+			*r = append(*r, plugin.Route{ID: "x.write", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
+			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.write", SubmitMethod: plugin.MethodGet}.Map()}}
+		}},
+		{"code editor save method must be write method", "saveMethod has invalid write method", func(m *plugin.Manifest, r *[]plugin.Route) {
+			*r = append(*r, plugin.Route{ID: "x.write", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
+			m.Tabs = []plugin.Tab{{Key: "editor", Label: "Editor", Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.CodeEditorConfig{SaveRouteID: "x.write", SaveMethod: plugin.MethodWS}.Map()}}
 		}},
 		{"kv write route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Tab{{Key: "kv", Label: "KV", Panel: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"writeRouteId": "x.list"}}}

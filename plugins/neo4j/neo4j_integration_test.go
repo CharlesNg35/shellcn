@@ -75,6 +75,20 @@ func TestNeo4jPluginIntegration(t *testing.T) {
 	call(ctx, t, routes[rid("schema.list")], sess, nil, url.Values{"p.database": []string{db}}, nil)
 	call(ctx, t, routes[rid("schema.tree")], sess, nil, url.Values{"p.database": []string{db}}, nil)
 
+	indexName := "shellcn_it_idx"
+	call(ctx, t, routes[rid("index.create")], sess, map[string]string{"database": db}, nil, testJSON(t, map[string]any{
+		"name": indexName, "entity_type": "node", "label": "ShellCNIT", "properties": "name",
+	}))
+	indexes := pageItems(call(ctx, t, routes[rid("indexes.list")], sess, nil, url.Values{"p.database": []string{db}}, nil))
+	if !hasRowName(indexes, indexName) {
+		t.Fatalf("expected created index %q in %#v", indexName, indexes)
+	}
+	call(ctx, t, routes[rid("schema.drop")], sess, map[string]string{"id": mustEncodeID("index", db, indexName)}, nil, nil)
+	indexes = pageItems(call(ctx, t, routes[rid("indexes.list")], sess, nil, url.Values{"p.database": []string{db}}, nil))
+	if hasRowName(indexes, indexName) {
+		t.Fatalf("index %q still present after drop: %#v", indexName, indexes)
+	}
+
 	nodes := pageItems(call(ctx, t, routes[rid("nodes.list")], sess, nil, url.Values{"p.database": []string{db}, "p.label": []string{"ShellCNIT"}}, nil))
 	if len(nodes) < 2 {
 		t.Fatalf("expected nodes, got %#v", nodes)

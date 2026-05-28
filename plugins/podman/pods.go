@@ -122,21 +122,70 @@ func podContainers(rc *plugin.RequestContext) (any, error) {
 	return dockerengine.PageRows(rc, rows)
 }
 
+func startPod(rc *plugin.RequestContext) (any, error) {
+	return podAction(rc, http.MethodPost, "/pods/"+rc.Param("id")+"/start")
+}
+
+func stopPod(rc *plugin.RequestContext) (any, error) {
+	return podAction(rc, http.MethodPost, "/pods/"+rc.Param("id")+"/stop")
+}
+
+func restartPod(rc *plugin.RequestContext) (any, error) {
+	return podAction(rc, http.MethodPost, "/pods/"+rc.Param("id")+"/restart")
+}
+
+func removePod(rc *plugin.RequestContext) (any, error) {
+	return podAction(rc, http.MethodDelete, "/pods/"+rc.Param("id")+"?force=true")
+}
+
+func podAction(rc *plugin.RequestContext, method, path string) (any, error) {
+	if err := libpodReq(rc, method, path); err != nil {
+		return nil, err
+	}
+	return dockerengine.ActionResult{OK: true}, nil
+}
+
 // libpodGet issues a GET against Podman's libpod API and decodes the JSON body.
 func libpodGet(rc *plugin.RequestContext, path string, out any) error {
-	s, err := dockerengine.Unwrap(rc.Session)
+	resp, err := libpodDo(rc, http.MethodGet, path)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(rc.Ctx, http.MethodGet, libpodPrefix+path, nil)
+	defer func() { _ = resp.Body.Close() }()
+	if status := checkLibpodStatus(resp, path); status != nil {
+		return status
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// libpodReq issues a non-GET libpod request (lifecycle action) and discards the
+// body, returning only the mapped error.
+func libpodReq(rc *plugin.RequestContext, method, path string) error {
+	resp, err := libpodDo(rc, method, path)
 	if err != nil {
-		return fmt.Errorf("%w: %v", plugin.ErrInvalidInput, err)
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return checkLibpodStatus(resp, path)
+}
+
+func libpodDo(rc *plugin.RequestContext, method, path string) (*http.Response, error) {
+	s, err := dockerengine.Unwrap(rc.Session)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(rc.Ctx, method, libpodPrefix+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", plugin.ErrInvalidInput, err)
 	}
 	resp, err := s.HTTPClient().Do(req)
 	if err != nil {
-		return dockerengine.DockerErr(err)
+		return nil, dockerengine.DockerErr(err)
 	}
-	defer func() { _ = resp.Body.Close() }()
+	return resp, nil
+}
+
+func checkLibpodStatus(resp *http.Response, path string) error {
 	if resp.StatusCode == http.StatusNotFound {
 		return plugin.ErrNotFound
 	}
@@ -144,5 +193,5 @@ func libpodGet(rc *plugin.RequestContext, path string, out any) error {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return fmt.Errorf("%w: libpod %s: %s", plugin.ErrUnavailable, path, strings.TrimSpace(string(body)))
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	return nil
 }

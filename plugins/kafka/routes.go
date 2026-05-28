@@ -37,6 +37,7 @@ func routes() []plugin.Route {
 		{ID: "kafka.group.overview", Method: plugin.MethodGet, Path: "/groups/{group}", Permission: "kafka.groups.read", Risk: plugin.RiskSafe, AuditEvent: "kafka.group.overview", Handle: groupOverview},
 		{ID: "kafka.group.offsets", Method: plugin.MethodGet, Path: "/groups/{group}/offsets", Permission: "kafka.groups.read", Risk: plugin.RiskSafe, AuditEvent: "kafka.group.offsets", Handle: groupOffsets},
 		{ID: "kafka.group.delete", Method: plugin.MethodDelete, Path: "/groups/{group}", Permission: "kafka.groups.delete", Risk: plugin.RiskDestructive, AuditEvent: "kafka.group.delete", Handle: deleteGroup},
+		{ID: "kafka.group.reset_offsets", Method: plugin.MethodPost, Path: "/groups/{group}/offsets/reset", Permission: "kafka.groups.write", Risk: plugin.RiskDestructive, AuditEvent: "kafka.group.reset_offsets", Input: offsetResetSchema(), Handle: resetGroupOffsets},
 	}
 }
 
@@ -385,6 +386,68 @@ func deleteGroup(rc *plugin.RequestContext) (any, error) {
 	}
 	err = s.admin.DeleteConsumerGroup(groupParam(rc))
 	return actionResult{OK: err == nil}, kafkaErr(err)
+}
+
+func offsetResetSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Reset offsets", Fields: []plugin.Field{
+		{Key: "target", Label: "Reset to", Type: plugin.FieldSelect, Required: true, Default: "earliest", Options: []plugin.Option{
+			{Label: "Earliest (oldest)", Value: "earliest"},
+			{Label: "Latest (newest)", Value: "latest"},
+		}, Help: "Move every committed partition of this group to the start or end of the log. The group must have no active members."},
+	}}}}
+}
+
+func resetGroupOffsets(rc *plugin.RequestContext) (any, error) {
+	s, err := kafkaSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Target string `json:"target"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	mark := sarama.OffsetOldest
+	if req.Target == "latest" {
+		mark = sarama.OffsetNewest
+	}
+	group := groupParam(rc)
+	committed, err := s.admin.ListConsumerGroupOffsets(group, nil)
+	if err != nil {
+		return nil, kafkaErr(err)
+	}
+	offsets := map[string]map[int32]sarama.OffsetAndMetadata{}
+	for topic, parts := range committed.Blocks {
+		for partition := range parts {
+			target, offErr := s.client.GetOffset(topic, partition, mark)
+			if offErr != nil {
+				return nil, kafkaErr(offErr)
+			}
+			if offsets[topic] == nil {
+				offsets[topic] = map[int32]sarama.OffsetAndMetadata{}
+			}
+			offsets[topic][partition] = sarama.OffsetAndMetadata{Offset: target, LeaderEpoch: -1}
+		}
+	}
+	if len(offsets) == 0 {
+		return nil, fmt.Errorf("%w: group has no committed offsets to reset", plugin.ErrInvalidInput)
+	}
+	resp, err := s.admin.AlterConsumerGroupOffsets(group, offsets, nil)
+	if err != nil {
+		return nil, kafkaErr(err)
+	}
+	for topic, parts := range resp.Errors {
+		for partition, kerr := range parts {
+			if kerr != sarama.ErrNoError {
+				return nil, fmt.Errorf("%w: %s[%d]: %s", plugin.ErrUnavailable, topic, partition, kerr.Error())
+			}
+		}
+	}
+	return actionResult{OK: true}, nil
 }
 
 func describeTopic(rc *plugin.RequestContext, topic string) (row, error) {
