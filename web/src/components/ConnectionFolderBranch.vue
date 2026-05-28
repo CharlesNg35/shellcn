@@ -122,7 +122,7 @@ function dragAdd(event: unknown): void {
     <VueDraggable
       v-model="items"
       group="sidebar-items"
-      handle=".connection-drag-handle, .folder-drag-handle"
+      handle=".connection-sidebar-drag-item"
       :data-parent-folder-id="parentId ?? ''"
       :disabled="disabled"
       :animation="150"
@@ -145,13 +145,12 @@ function dragAdd(event: unknown): void {
 
         <section v-else class="min-w-0" :data-folder-id="item.id">
           <div
-            class="group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+            class="connection-sidebar-drag-item group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
           >
             <span
-              class="folder-drag-handle shrink-0 cursor-grab touch-none rounded p-0.5 active:cursor-grabbing"
+              class="shrink-0 rounded p-0.5"
               :class="folderIconClass(item)"
-              title="Drag folder"
-              aria-label="Drag folder"
+              aria-hidden="true"
             >
               <AppIcon
                 :icon="{

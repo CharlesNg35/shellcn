@@ -68,7 +68,7 @@ function shareTitle(c: ConnectionSummary): string {
 
 <template>
   <div
-    class="mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+    class="connection-sidebar-drag-item mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
     :data-connection-id="connection.id"
     :class="
       active
@@ -76,11 +76,7 @@ function shareTitle(c: ConnectionSummary): string {
         : ''
     "
   >
-    <span
-      class="connection-drag-handle shrink-0 cursor-grab touch-none rounded p-0.5 text-surface-500 active:cursor-grabbing"
-      title="Drag connection"
-      aria-label="Drag connection"
-    >
+    <span class="shrink-0 rounded p-0.5 text-surface-500" aria-hidden="true">
       <AppIcon :icon="connection.icon" :size="16" />
     </span>
     <button

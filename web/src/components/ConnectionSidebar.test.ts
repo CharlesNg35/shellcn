@@ -92,12 +92,25 @@ describe("ConnectionSidebar", () => {
       wrapper.get('[data-connection-id="c-prod"] button span').classes(),
     ).toEqual(expect.arrayContaining(["block", "max-w-full", "truncate"]));
     expect(wrapper.get('[data-connection-id="c-prod"]').classes()).toEqual(
-      expect.arrayContaining(["mx-1", "w-[calc(100%-0.5rem)]"]),
+      expect.arrayContaining([
+        "connection-sidebar-drag-item",
+        "mx-1",
+        "w-[calc(100%-0.5rem)]",
+      ]),
     );
+    expect(
+      wrapper.get('[data-connection-id="c-prod"] > span').classes(),
+    ).not.toContain("cursor-grab");
 
     const folderButton = wrapper.get('[data-folder-id="f1"] > div button');
     expect(folderButton.attributes("title")).toBe("Production");
     expect(folderButton.attributes("aria-label")).toBe("Collapse Production");
+    expect(wrapper.get('[data-folder-id="f1"] > div').classes()).toContain(
+      "connection-sidebar-drag-item",
+    );
+    expect(
+      wrapper.get('[data-folder-id="f1"] > div > span').classes(),
+    ).not.toContain("cursor-grab");
     expect(
       JSON.parse(
         localStorage.getItem("shellcn:connection-folders:expanded") ?? "{}",
