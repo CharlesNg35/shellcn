@@ -66,6 +66,10 @@ type Column struct {
 	// cell to an empty/null value rather than an empty string.
 	ReadOnly bool `json:"readOnly,omitempty"`
 	Nullable bool `json:"nullable,omitempty"`
+	// Severities colors a badge column by value: it maps a lower-cased cell value
+	// to a Severity (e.g. "running" -> success). Unmapped values stay neutral;
+	// ignored for non-badge columns.
+	Severities map[string]Severity `json:"severities,omitempty"`
 }
 
 // TableConfig is the declarative config consumed by the generic table panel.

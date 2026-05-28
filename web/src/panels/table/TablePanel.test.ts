@@ -177,7 +177,7 @@ describe("TablePanel", () => {
     expect(w.text()).toContain("New snippet");
     expect(w.text()).not.toContain("Run");
 
-    await w.find("tbody tr").trigger("click");
+    await w.find('tbody tr input[type="checkbox"]').setValue(true);
     await flushPromises();
     expect(w.text()).toContain("Run");
     await w

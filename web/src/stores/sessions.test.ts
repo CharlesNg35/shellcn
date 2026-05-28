@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { useSessionsStore, type SocketLike } from "./sessions";
+import { useConnectionStatusStore } from "./connectionStatus";
 
 class FakeSocket implements SocketLike {
   sent: string[] = [];
@@ -61,18 +62,21 @@ describe("sessions store", () => {
 
   it("reflects error/close status and closes cleanly", () => {
     const store = useSessionsStore();
+    const live = useConnectionStatusStore();
     const socket = new FakeSocket();
-    store.ensure("k", () => socket);
+    live.connected("conn");
+    store.ensure("conn:k", () => socket);
 
     socket.emit("error");
-    expect(store.status("k")).toBe("error");
+    expect(store.status("conn:k")).toBe("error");
+    expect(live.get("conn")?.state).toBe("connected");
 
-    store.send("k", "ping");
+    store.send("conn:k", "ping");
     expect(socket.sent).toEqual(["ping"]);
 
-    store.close("k");
+    store.close("conn:k");
     expect(socket.closed).toBe(true);
-    expect(store.status("k")).toBeUndefined();
+    expect(store.status("conn:k")).toBeUndefined();
   });
 
   it("closeWhere tears down matching channels only", () => {

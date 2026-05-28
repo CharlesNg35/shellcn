@@ -24,6 +24,10 @@ const props = defineProps<{
   actions: Action[];
   resource?: ResourceRef | null;
   record?: Row | null; // the active row, so actions can gate on its fields
+  // Multi-target selection: when set, route actions run once per resource
+  // (bulk); records gate them. resource/record stay the single-target path.
+  resources?: ResourceRef[] | null;
+  records?: Row[] | null;
   // Default params contributed by the surrounding context (e.g. the params of
   // the list the action sits on). Actions without their own resource inherit
   // these, so an action declared on a scoped view operates within that scope
@@ -31,15 +35,36 @@ const props = defineProps<{
   scope?: Record<string, string> | null;
 }>();
 
-// Enabled unless the condition fails; when the row lacks the fields it needs
-// (e.g. only a ref is known) we can't judge, so stay enabled rather than disable.
+// The resources an action targets: the multi-selection if present, else the
+// single resource.
+function targets(): ResourceRef[] {
+  if (props.resources?.length) return props.resources;
+  return props.resource ? [props.resource] : [];
+}
+
+// A row satisfies a condition when it lacks the gated fields (can't judge) or
+// passes the predicate.
+function recordMatches(
+  cond: NonNullable<Action["enabledWhen"]>,
+  rec: Row,
+): boolean {
+  const r = rec as Record<string, unknown>;
+  const rules = [...(cond.allOf ?? []), ...(cond.anyOf ?? [])];
+  if (rules.some((x) => r[x.field] === undefined)) return true;
+  return isVisible(cond, r);
+}
+
+// Enabled unless the condition fails; for a multi-selection it must hold for
+// every selected row (so a bulk action only applies when valid for all).
 function isEnabled(action: Action): boolean {
   const cond = action.enabledWhen;
   if (!cond) return true;
-  const record = (props.record ?? {}) as Record<string, unknown>;
-  const rules = [...(cond.allOf ?? []), ...(cond.anyOf ?? [])];
-  if (rules.some((r) => record[r.field] === undefined)) return true;
-  return isVisible(cond, record);
+  const recs = props.records?.length
+    ? props.records
+    : props.record
+      ? [props.record]
+      : [];
+  return recs.every((rec) => recordMatches(cond, rec));
 }
 const emit = defineEmits<{
   done: [action: Action, result?: Record<string, unknown>];
@@ -73,20 +98,19 @@ function dockKey(action: Action): string {
 }
 
 function dockItem(action: Action): DockItem {
+  const ref = targets()[0] ?? props.resource ?? null;
   return {
     id: `${action.id}:${dockKey(action)}`,
-    title: props.resource?.name
-      ? `${props.resource.name} · ${action.label}`
-      : action.label,
+    title: ref?.name ? `${ref.name} · ${action.label}` : action.label,
     icon: action.icon,
     panel: action.panel as string,
     source: {
       routeId: action.routeId,
       method: action.method,
-      params: actionParams(action),
+      params: actionParams(action, ref),
     },
     config: action.config,
-    resource: props.resource,
+    resource: ref,
   };
 }
 
@@ -114,10 +138,12 @@ function trigger(action: Action): void {
   else void execute(action);
 }
 
-function actionParams(action: Action): Record<string, string> {
+function actionParams(
+  action: Action,
+  ref: ResourceRef | null | undefined = props.resource,
+): Record<string, string> {
   const base = props.scope ? { ...props.scope } : {};
   if (action.params) return { ...base, ...action.params };
-  const ref = props.resource;
   if (!ref) return base;
   const params: Record<string, string> = {
     ...base,
@@ -134,13 +160,14 @@ function actionParams(action: Action): Record<string, string> {
 async function openURL(action: Action): Promise<void> {
   error.value = null;
   busyAction.value = action.id;
+  const ref = targets()[0] ?? props.resource ?? null;
   try {
     const result: unknown = await runFormAction(
       props.connectionId,
       action.routeId,
-      { resource: props.resource },
+      { resource: ref },
       {},
-      actionParams(action),
+      actionParams(action, ref),
       action.method ?? "GET",
     );
     const raw =
@@ -164,22 +191,44 @@ async function execute(
   busy.value = true;
   busyAction.value = action.id;
   error.value = null;
+  const refs = targets();
   try {
-    const result = await runFormAction(
-      props.connectionId,
-      action.routeId,
-      { resource: props.resource },
-      body ?? {},
-      actionParams(action),
-      action.method ?? "POST",
-    );
-    pending.value = null;
-    toast.add({
-      severity: "success",
-      summary: `${action.label} succeeded.`,
-      life: 4000,
-    });
-    emit("done", action, result);
+    if (refs.length > 1) {
+      for (const ref of refs) {
+        await runFormAction(
+          props.connectionId,
+          action.routeId,
+          { resource: ref },
+          body ?? {},
+          actionParams(action, ref),
+          action.method ?? "POST",
+        );
+      }
+      pending.value = null;
+      toast.add({
+        severity: "success",
+        summary: `${action.label}: ${refs.length} items`,
+        life: 4000,
+      });
+      emit("done", action);
+    } else {
+      const ref = refs[0] ?? props.resource ?? null;
+      const result = await runFormAction(
+        props.connectionId,
+        action.routeId,
+        { resource: ref },
+        body ?? {},
+        actionParams(action, ref),
+        action.method ?? "POST",
+      );
+      pending.value = null;
+      toast.add({
+        severity: "success",
+        summary: `${action.label} succeeded.`,
+        life: 4000,
+      });
+      emit("done", action, result);
+    }
   } catch (e) {
     error.value = (e as Error).message;
     toast.add({

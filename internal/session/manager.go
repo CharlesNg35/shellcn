@@ -21,8 +21,7 @@ var (
 	ErrChannelLimit = errors.New("session: per-session channel limit reached")
 )
 
-// Key identifies a session: one connection within an owner scope (per-user, or
-// "shared" for a shared connection that reuses one upstream).
+// Key identifies one live session for an actor's scope on a connection.
 type Key struct {
 	ConnectionID string
 	OwnerScope   string
@@ -32,12 +31,36 @@ type Key struct {
 // the ConnectConfig (decrypt secrets, resolve credential, wire transport).
 type ConnectFunc func(ctx context.Context) (plugin.Session, error)
 
+// State is the lifecycle state of a registry entry.
+type State string
+
+const (
+	StateConnecting State = "connecting"
+	StateConnected  State = "connected"
+	StateClosed     State = "closed"
+	StateError      State = "error"
+)
+
+// Snapshot is a point-in-time view of one live registry entry.
+type Snapshot struct {
+	Key             Key
+	UserID          string
+	State           State
+	Reason          string
+	Channels        int
+	Streams         int
+	LastUsed        time.Time
+	CreatedAt       time.Time
+	LastHealthCheck time.Time
+}
+
 // Options bound the registry. Zero values fall back to sensible defaults.
 type Options struct {
 	IdleTimeout           time.Duration
 	MaxSessionsPerUser    int
 	MaxChannelsPerSession int
 	HealthInterval        time.Duration
+	FailureRetention      time.Duration
 }
 
 func (o Options) withDefaults() Options {
@@ -53,17 +76,29 @@ func (o Options) withDefaults() Options {
 	if o.HealthInterval <= 0 {
 		o.HealthInterval = 30 * time.Second
 	}
+	if o.FailureRetention <= 0 {
+		o.FailureRetention = 2 * time.Minute
+	}
 	return o
 }
 
 type entry struct {
-	mu       sync.Mutex
-	key      Key
-	userID   string
-	sess     plugin.Session
-	channels int
-	lastUsed time.Time
-	closed   bool
+	mu              sync.Mutex
+	key             Key
+	userID          string
+	sess            plugin.Session
+	channels        int
+	streams         int
+	lastUsed        time.Time
+	created         time.Time
+	lastHealthCheck time.Time
+	reason          string
+	closed          bool
+}
+
+type failure struct {
+	snapshot  Snapshot
+	expiresAt time.Time
 }
 
 // Manager owns the session registry and its lifecycle (lazy connect, idle
@@ -71,6 +106,7 @@ type entry struct {
 type Manager struct {
 	mu       sync.Mutex
 	sessions map[Key]*entry
+	failures map[Key]failure
 	opts     Options
 	now      func() time.Time
 	stop     chan struct{}
@@ -81,6 +117,7 @@ type Manager struct {
 func New(opts Options) *Manager {
 	m := &Manager{
 		sessions: make(map[Key]*entry),
+		failures: make(map[Key]failure),
 		opts:     opts.withDefaults(),
 		now:      time.Now,
 		stop:     make(chan struct{}),
@@ -99,26 +136,92 @@ func (m *Manager) Acquire(ctx context.Context, key Key, userID string, connect C
 			m.mu.Unlock()
 			return nil, ErrSessionLimit
 		}
-		e = &entry{key: key, userID: userID, lastUsed: m.now()}
+		now := m.now()
+		e = &entry{key: key, userID: userID, lastUsed: now, created: now}
 		m.sessions[key] = e
+		delete(m.failures, key)
 	}
 	m.mu.Unlock()
 
 	e.mu.Lock()
-	defer e.mu.Unlock()
 	if e.closed {
+		e.mu.Unlock()
 		return nil, ErrSessionClosed
 	}
 	if e.sess == nil {
 		sess, err := connect(ctx)
+		now := m.now()
 		if err != nil {
-			m.remove(key, e)
+			e.lastUsed = now
+			e.lastHealthCheck = now
+			e.reason = err.Error()
+			snap := e.snapshotLocked(StateError)
+			e.closed = true
+			e.mu.Unlock()
+			m.removeAndRememberFailure(key, e, snap)
+			return nil, err
+		}
+		if err := sess.HealthCheck(ctx); err != nil {
+			_ = sess.Close()
+			e.lastUsed = now
+			e.lastHealthCheck = now
+			e.reason = err.Error()
+			snap := e.snapshotLocked(StateError)
+			e.closed = true
+			e.mu.Unlock()
+			m.removeAndRememberFailure(key, e, snap)
 			return nil, err
 		}
 		e.sess = sess
+		e.lastHealthCheck = now
+		e.reason = ""
 	}
 	e.lastUsed = m.now()
+	e.mu.Unlock()
 	return &Handle{m: m, e: e}, nil
+}
+
+// Status returns a snapshot for key without creating or connecting a session.
+func (m *Manager) Status(key Key) (Snapshot, bool) {
+	m.mu.Lock()
+	e, ok := m.sessions[key]
+	if !ok {
+		if f, found := m.failures[key]; found {
+			now := m.now()
+			if now.Before(f.expiresAt) {
+				m.mu.Unlock()
+				return f.snapshot, true
+			}
+			delete(m.failures, key)
+		}
+	}
+	m.mu.Unlock()
+	if !ok {
+		return Snapshot{}, false
+	}
+	return e.snapshot(), true
+}
+
+func (e *entry) snapshot() Snapshot {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.snapshotLocked("")
+}
+
+func (e *entry) snapshotLocked(force State) Snapshot {
+	state := StateConnected
+	if force != "" {
+		state = force
+	} else if e.closed {
+		state = StateClosed
+	} else if e.sess == nil {
+		state = StateConnecting
+	}
+	return Snapshot{
+		Key: e.key, UserID: e.userID, State: state, Reason: e.reason,
+		Channels: e.channels, Streams: e.streams,
+		LastUsed: e.lastUsed, CreatedAt: e.created, LastHealthCheck: e.lastHealthCheck,
+	}
 }
 
 // countUser counts a user's live sessions (caller holds m.mu).
@@ -132,11 +235,12 @@ func (m *Manager) countUser(userID string) int {
 	return n
 }
 
-func (m *Manager) remove(key Key, e *entry) {
+func (m *Manager) removeAndRememberFailure(key Key, e *entry, snap Snapshot) {
 	m.mu.Lock()
 	if cur, ok := m.sessions[key]; ok && cur == e {
 		delete(m.sessions, key)
 	}
+	m.failures[key] = failure{snapshot: snap, expiresAt: m.now().Add(m.opts.FailureRetention)}
 	m.mu.Unlock()
 }
 
@@ -147,6 +251,7 @@ func (m *Manager) Close(key Key) {
 	if ok {
 		delete(m.sessions, key)
 	}
+	delete(m.failures, key)
 	m.mu.Unlock()
 	if ok {
 		e.shutdown()
@@ -165,6 +270,11 @@ func (m *Manager) CloseConnection(connectionID string) {
 			delete(m.sessions, key)
 		}
 	}
+	for key := range m.failures {
+		if key.ConnectionID == connectionID {
+			delete(m.failures, key)
+		}
+	}
 	m.mu.Unlock()
 	for _, e := range entries {
 		e.shutdown()
@@ -181,6 +291,7 @@ func (m *Manager) Shutdown() {
 		entries = append(entries, e)
 		delete(m.sessions, k)
 	}
+	m.failures = make(map[Key]failure)
 	m.mu.Unlock()
 	for _, e := range entries {
 		e.shutdown()
@@ -204,6 +315,11 @@ func (m *Manager) Stats() Stats {
 		e.mu.Unlock()
 	}
 	return s
+}
+
+// IdleTimeout returns the configured idle session timeout.
+func (m *Manager) IdleTimeout() time.Duration {
+	return m.opts.IdleTimeout
 }
 
 func (e *entry) shutdown() {
@@ -235,6 +351,7 @@ func (m *Manager) janitor() {
 // sweep reclaims idle sessions and drops upstreams that fail their health check.
 func (m *Manager) sweep() {
 	m.mu.Lock()
+	m.pruneFailuresLocked(m.now())
 	snapshot := make([]*entry, 0, len(m.sessions))
 	for _, e := range m.sessions {
 		snapshot = append(snapshot, e)
@@ -246,7 +363,7 @@ func (m *Manager) sweep() {
 
 	for _, e := range snapshot {
 		e.mu.Lock()
-		idle := e.channels == 0 && m.now().Sub(e.lastUsed) > m.opts.IdleTimeout
+		idle := e.channels == 0 && e.streams == 0 && m.now().Sub(e.lastUsed) > m.opts.IdleTimeout
 		sess := e.sess
 		closed := e.closed
 		e.mu.Unlock()
@@ -258,10 +375,48 @@ func (m *Manager) sweep() {
 			m.Close(e.key)
 			continue
 		}
-		if sess != nil && sess.HealthCheck(ctx) != nil {
-			// Dead upstream: closing the session closes its channels, which ends
-			// any WS stream and prompts the UI to offer reconnect.
-			m.Close(e.key)
+		if sess == nil {
+			continue
 		}
+		checkedAt := m.now()
+		if err := sess.HealthCheck(ctx); err != nil {
+			m.failEntry(e, err, checkedAt)
+			continue
+		}
+		e.mu.Lock()
+		if !e.closed {
+			e.lastHealthCheck = checkedAt
+			e.reason = ""
+		}
+		e.mu.Unlock()
+	}
+}
+
+func (m *Manager) pruneFailuresLocked(now time.Time) {
+	for key, f := range m.failures {
+		if !now.Before(f.expiresAt) {
+			delete(m.failures, key)
+		}
+	}
+}
+
+func (m *Manager) failEntry(e *entry, err error, checkedAt time.Time) {
+	e.mu.Lock()
+	if e.closed {
+		e.mu.Unlock()
+		return
+	}
+	e.lastUsed = checkedAt
+	e.lastHealthCheck = checkedAt
+	e.reason = err.Error()
+	snap := e.snapshotLocked(StateError)
+	e.closed = true
+	sess := e.sess
+	e.sess = nil
+	e.mu.Unlock()
+
+	m.removeAndRememberFailure(e.key, e, snap)
+	if sess != nil {
+		_ = sess.Close()
 	}
 }

@@ -358,6 +358,9 @@ export interface Column {
   // nullable lets the inline editor clear the cell to an empty/null value.
   readOnly?: boolean;
   nullable?: boolean;
+  // Maps a lower-cased badge value to a severity for color (e.g. running →
+  // success); unmapped values render neutral.
+  severities?: Record<string, Severity>;
 }
 
 export type Severity = "info" | "success" | "warn" | "danger" | "secondary";

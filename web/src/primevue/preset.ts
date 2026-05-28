@@ -634,6 +634,8 @@ export const primeVuePassthrough = {
     bodyRow:
       "cursor-pointer transition-colors hover:bg-surface-50 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:data-[p-selected=true]:bg-primary-500/10",
     emptyMessageCell: "px-4 py-6 text-center text-surface-400",
+    pcRowCheckbox: checkbox,
+    pcHeaderCheckbox: checkbox,
   },
 
   paginator,

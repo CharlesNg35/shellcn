@@ -95,7 +95,7 @@ func containerColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "name", Label: "Name", Sortable: true},
 		{Key: "image", Label: "Image", Sortable: true},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: dockerengine.StateSeverities()},
 		{Key: "status", Label: "Status"},
 		{Key: "ports", Label: "Ports"},
 		{Key: "createdAt", Label: "Created", Type: plugin.ColumnDateTime, Sortable: true},
@@ -132,7 +132,7 @@ func podResource() plugin.ResourceType {
 	}
 	podContainerColumns := []plugin.Column{
 		{Key: "name", Label: "Name", Sortable: true},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: dockerengine.StateSeverities()},
 	}
 	return plugin.ResourceType{
 		Kind: "pod", Title: "Pods", List: plugin.DataSource{RouteID: "podman.pods.list"}, Columns: columns,

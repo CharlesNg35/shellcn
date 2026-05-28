@@ -18,15 +18,15 @@ const ws = useWorkspaceStore();
 const live = useConnectionStatusStore();
 
 type DotState = "offline" | "error" | "connecting" | "connected" | "idle";
-// The dot reflects real connection health, not the intent to connect: agent
-// reachability (server), then the live state observed from actual traffic.
+// The dot reflects the pooled backend session: agent reachability first, then
+// the workspace keepalive/HTTP health state.
 const dotState = computed<DotState>(() => {
   const c = props.connection;
   if (c.status === "offline") return "offline";
-  if (!ws.isConnected(c.id)) return "idle";
   const state = live.get(c.id)?.state;
-  if (state === "connected") return "connected";
   if (state === "error") return "error";
+  if (!ws.isConnected(c.id)) return "idle";
+  if (state === "connected") return "connected";
   return "connecting";
 });
 

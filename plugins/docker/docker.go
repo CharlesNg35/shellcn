@@ -117,7 +117,7 @@ func containerColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "name", Label: "Name", Sortable: true},
 		{Key: "image", Label: "Image", Sortable: true},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: dockerengine.StateSeverities()},
 		{Key: "status", Label: "Status"},
 		{Key: "ports", Label: "Ports"},
 		{Key: "compose", Label: "Compose", Sortable: true},

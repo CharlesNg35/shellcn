@@ -22,7 +22,18 @@ type Session struct {
 	height   int
 }
 
-func (s *Session) HealthCheck(context.Context) error { return nil }
+func (s *Session) HealthCheck(ctx context.Context) error {
+	setting := gclient.NewSetting()
+	setting.Width = s.width
+	setting.Height = s.height
+	setting.LogLevel = glog.NONE
+	g := gclient.NewClient(s.addr, s.user, s.password, gclient.TC_RDP, setting)
+	defer g.Close()
+	if err := g.LoginContext(ctx); err != nil {
+		return fmt.Errorf("%w: rdp login failed: %v", plugin.ErrUnauthorized, err)
+	}
+	return nil
+}
 
 func (s *Session) OpenChannel(context.Context, plugin.ChannelRequest) (plugin.Channel, error) {
 	return nil, plugin.ErrNotSupported

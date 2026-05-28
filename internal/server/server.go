@@ -146,6 +146,8 @@ func (s *Server) routes() chi.Router {
 				pr.Get("/connections/{id}", s.handleConnectionDetail)
 				pr.Put("/connections/{id}", s.handleUpdateConnection)
 				pr.Delete("/connections/{id}", s.handleDeleteConnection)
+				pr.Get("/connections/{id}/session", s.handleConnectionSessionStatus)
+				pr.Post("/connections/{id}/session", s.handleKeepaliveConnectionSession)
 				pr.Delete("/connections/{id}/session", s.handleDisconnectConnectionSession)
 				pr.Post("/connection-folders", s.handleCreateConnectionFolder)
 				pr.Put("/connection-folders/{folderId}", s.handleUpdateConnectionFolder)

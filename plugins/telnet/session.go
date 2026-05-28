@@ -72,12 +72,21 @@ func NewSession(addr string, dial dialFunc) *Session {
 	return &Session{addr: addr, dial: dial, channels: map[*terminalChannel]struct{}{}}
 }
 
-func (s *Session) HealthCheck(context.Context) error {
+func (s *Session) HealthCheck(ctx context.Context) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.closed {
+		s.mu.Unlock()
 		return plugin.ErrUnavailable
 	}
+	addr := s.addr
+	dial := s.dial
+	s.mu.Unlock()
+
+	conn, err := dial(ctx, addr)
+	if err != nil {
+		return fmt.Errorf("%w: telnet connect %s: %v", plugin.ErrUnavailable, addr, err)
+	}
+	_ = conn.Close()
 	return nil
 }
 

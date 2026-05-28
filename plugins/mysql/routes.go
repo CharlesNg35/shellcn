@@ -62,7 +62,7 @@ func routes() []plugin.Route {
 		{ID: "mysql.column.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "mysql.column.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/drop", Permission: "mysql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mysql.column.drop", Input: columnDropSchema(), Handle: dropColumn},
 		{ID: "mysql.index.create", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.index.create", Input: indexCreateSchema(), Handle: createIndex},
-		{ID: "mysql.index.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes/drop", Permission: "mysql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mysql.index.drop", Input: indexDropSchema(), Handle: dropIndex},
+		{ID: "mysql.index.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes/drop", Permission: "mysql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mysql.index.drop", Handle: dropIndex},
 		{ID: "mysql.table.truncate", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/truncate", Permission: "mysql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.table.truncate", Handle: truncateTable},
 		{ID: "mysql.table.drop", Method: plugin.MethodDelete, Path: "/tables/{database}/{table}", Permission: "mysql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.table.drop", Handle: dropTable},
 		{ID: "mysql.query", Method: plugin.MethodWS, Path: "/query", Permission: "mysql.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "mysql.query", Stream: queryStream},
@@ -112,12 +112,6 @@ func indexCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
-	}}}}
-}
-
-func indexDropSchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
-		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 	}}}}
 }
 
@@ -476,6 +470,10 @@ ORDER BY INDEX_NAME, SEQ_IN_INDEX`, []any{database, table})
 	if err != nil {
 		return nil, err
 	}
+	for i := range rows {
+		name := fmt.Sprint(rows[i]["name"])
+		rows[i]["ref"] = plugin.ResourceRef{Kind: "index", Scope: database, Namespace: table, Name: name, UID: database + "." + table + "." + name + "." + fmt.Sprint(rows[i]["column"])}
+	}
 	return pageRows(rc, rows)
 }
 
@@ -801,13 +799,7 @@ func dropIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var req struct {
-		Name string `json:"name" validate:"required"`
-	}
-	if err := rc.Bind(&req); err != nil {
-		return nil, err
-	}
-	name, err := sqldb.SafeIdentifier(req.Name)
+	name, err := sqldb.SafeIdentifier(rc.Param("name"))
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -36,6 +37,16 @@ type connectionWriteRequest struct {
 	Config              map[string]any    `json:"config"`
 	PreserveCredentials []string          `json:"preserveCredentials"`
 	Recording           map[string]string `json:"recording"`
+}
+
+type connectionSessionDTO struct {
+	State           string `json:"state"`
+	Reason          string `json:"reason,omitempty"`
+	Channels        int    `json:"channels"`
+	Streams         int    `json:"streams"`
+	LastSeen        string `json:"lastSeen,omitempty"`
+	LastHealthCheck string `json:"lastHealthCheck,omitempty"`
+	IdleExpiresIn   int64  `json:"idleExpiresIn,omitempty"`
 }
 
 // toConnectionDTO projects a stored connection for the client.
@@ -176,6 +187,72 @@ func (s *Server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) 
 	s.cleanupConnectionDependents(ctx, conn.ID)
 	s.auditConnEvent(ctx, user, conn.ID, connDeleteEvent, plugin.RiskDestructive, models.AuditAllowed, nil)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) handleConnectionSessionStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := userFrom(ctx)
+	conn, err := s.deps.Store.Connections.Get(ctx, chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	if !s.canAccessConnection(ctx, user, conn) {
+		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		return
+	}
+	key := session.Key{ConnectionID: conn.ID, OwnerScope: user.ID}
+	snap, ok := s.deps.Sessions.Status(key)
+	if !ok {
+		writeJSON(w, http.StatusOK, connectionSessionDTO{State: "idle"})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.connectionSessionDTO(snap))
+}
+
+func (s *Server) handleKeepaliveConnectionSession(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, _ := userFrom(ctx)
+	conn, err := s.deps.Store.Connections.Get(ctx, chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	if !s.canAccessConnection(ctx, user, conn) {
+		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		return
+	}
+	res := resolved{user: user, conn: conn, route: plugin.Route{
+		ID: "connection.session.keepalive", Permission: "connection.use", Risk: plugin.RiskSafe, AuditEvent: "connection.session.keepalive",
+	}}
+	handle, err := s.acquireSession(ctx, res)
+	if err != nil {
+		if snap, ok := s.deps.Sessions.Status(session.Key{ConnectionID: conn.ID, OwnerScope: user.ID}); ok {
+			writeJSON(w, http.StatusOK, s.connectionSessionDTO(snap))
+			return
+		}
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.connectionSessionDTO(handle.Snapshot()))
+}
+
+func (s *Server) connectionSessionDTO(snap session.Snapshot) connectionSessionDTO {
+	dto := connectionSessionDTO{
+		State: string(snap.State), Reason: snap.Reason,
+		Channels: snap.Channels, Streams: snap.Streams,
+		LastSeen: snap.LastUsed.UTC().Format(time.RFC3339),
+	}
+	if !snap.LastHealthCheck.IsZero() {
+		dto.LastHealthCheck = snap.LastHealthCheck.UTC().Format(time.RFC3339)
+	}
+	if snap.State != session.StateError && snap.Channels == 0 && snap.Streams == 0 {
+		expires := time.Until(snap.LastUsed.Add(s.deps.Sessions.IdleTimeout()))
+		if expires > 0 {
+			dto.IdleExpiresIn = int64(expires.Seconds())
+		}
+	}
+	return dto
 }
 
 func (s *Server) handleDisconnectConnectionSession(w http.ResponseWriter, r *http.Request) {

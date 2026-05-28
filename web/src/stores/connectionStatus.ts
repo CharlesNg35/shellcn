@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { reactive } from "vue";
+import type { ConnectionSession } from "../api/connectionSession";
 
 export type ConnLiveState = "connecting" | "connected" | "error";
 
@@ -8,10 +9,9 @@ export interface ConnLive {
   reason?: string;
 }
 
-// The live health of connections the user has opened, derived from the actual
-// traffic: WS stream status (sessions store) and HTTP data outcomes (dataSource).
-// This is the source of truth for the sidebar presence dot — not the user's
-// intent to connect — so a failed connection reads as failed, not green.
+// The live health of connections the user has opened. The workspace keepalive is
+// authoritative for the pooled backend session; HTTP data outcomes can reinforce
+// it. Individual stream closes stay local to their panel.
 export const useConnectionStatusStore = defineStore("connectionStatus", () => {
   const live = reactive<Record<string, ConnLive>>({});
 
@@ -29,6 +29,22 @@ export const useConnectionStatusStore = defineStore("connectionStatus", () => {
     live[id] = { state: "error", reason: reason || live[id]?.reason };
   }
 
+  function applySession(id: string, session: ConnectionSession): void {
+    switch (session.state) {
+      case "connected":
+        connected(id);
+        return;
+      case "connecting":
+        connecting(id);
+        return;
+      case "error":
+        failed(id, session.reason);
+        return;
+      default:
+        clear(id);
+    }
+  }
+
   function clear(id: string): void {
     delete live[id];
   }
@@ -37,5 +53,5 @@ export const useConnectionStatusStore = defineStore("connectionStatus", () => {
     return live[id];
   }
 
-  return { live, connecting, connected, failed, clear, get };
+  return { live, connecting, connected, failed, applySession, clear, get };
 });

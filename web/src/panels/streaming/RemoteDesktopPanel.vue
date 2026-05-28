@@ -7,7 +7,6 @@ import {
 } from "../../composables/useDesktopRecorder";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import AppIcon from "../../components/AppIcon.vue";
-import { useConnectionStatusStore } from "../../stores/connectionStatus";
 import type { RemoteDesktopPanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import {
@@ -18,7 +17,6 @@ import {
 import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
-const live = useConnectionStatusStore();
 
 const loaded = ref(false);
 const status = ref("connecting");
@@ -95,7 +93,6 @@ async function handleEngineStatus(
     status.value = "ready";
     loaded.value = true;
     error.value = null;
-    live.connected(props.connectionId);
     if (forced.value || resumeRecording.value) {
       const recordingStarted = await beginCapture();
       if (!recordingStarted && forced.value && run === activeRun) {
@@ -132,7 +129,6 @@ async function connectRemote(): Promise<void> {
   const run = ++activeRun;
   status.value = "connecting";
   loaded.value = false;
-  live.connecting(props.connectionId);
   try {
     if (!props.source || !container.value) {
       status.value = "missing-route";
@@ -152,7 +148,6 @@ async function connectRemote(): Promise<void> {
         error: (message) => {
           if (run !== activeRun) return;
           error.value = message;
-          live.failed(props.connectionId, message);
         },
       },
     });
@@ -161,7 +156,6 @@ async function connectRemote(): Promise<void> {
     status.value = "error";
     error.value = (e as Error).message || "Remote desktop unavailable";
     loaded.value = false;
-    live.failed(props.connectionId, error.value);
   }
 }
 

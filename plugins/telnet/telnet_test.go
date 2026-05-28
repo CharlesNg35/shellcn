@@ -87,6 +87,36 @@ func TestSessionDialsPerTerminalChannelAndCloses(t *testing.T) {
 	}
 }
 
+func TestHealthCheckDialsAndClosesProbe(t *testing.T) {
+	var dialed []string
+	probe := &fakeConn{}
+	sess := NewSession("127.0.0.1:23", func(_ context.Context, addr string) (telnetConn, error) {
+		dialed = append(dialed, addr)
+		return probe, nil
+	})
+
+	if err := sess.HealthCheck(context.Background()); err != nil {
+		t.Fatalf("health check: %v", err)
+	}
+	if len(dialed) != 1 || dialed[0] != "127.0.0.1:23" {
+		t.Fatalf("health check dialed %+v", dialed)
+	}
+	if !probe.closed {
+		t.Fatal("health check probe connection should be closed")
+	}
+}
+
+func TestHealthCheckReportsDialFailure(t *testing.T) {
+	want := errors.New("refused")
+	sess := NewSession("127.0.0.1:23", func(context.Context, string) (telnetConn, error) {
+		return nil, want
+	})
+
+	if err := sess.HealthCheck(context.Background()); !errors.Is(err, plugin.ErrUnavailable) {
+		t.Fatalf("health check error = %v, want ErrUnavailable", err)
+	}
+}
+
 type fakeConn struct {
 	closed bool
 }

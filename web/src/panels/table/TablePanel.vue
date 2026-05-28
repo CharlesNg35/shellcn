@@ -82,7 +82,7 @@ const sortField = ref<string | undefined>();
 const sortOrder = ref<number | undefined>();
 const first = ref(0);
 const pageSize = ref(50);
-const selectedRow = ref<Row | null>(null);
+const selection = ref<Row[]>([]);
 const actionOutput = ref<{
   title: string;
   output: string;
@@ -147,6 +147,14 @@ const editable = computed(
     Boolean(insertSource.value || updateSource.value || deleteSource.value),
 );
 const editableCells = computed(() => editable.value && !!updateSource.value);
+// Row selection (checkboxes) is offered when a table declares row actions and
+// isn't an inline-editable grid (which has its own row controls).
+const selectable = computed(
+  () => rowActions.value.length > 0 && !editable.value,
+);
+const selectedRefs = computed(() =>
+  selection.value.map((r) => r.ref).filter((r): r is ResourceRef => Boolean(r)),
+);
 const addRowLoading = computed(
   () => columnsLoading.value || (loading.value && !columns.value.length),
 );
@@ -519,6 +527,21 @@ function display(row: Row, col: ColumnSpec): string {
   return String(v);
 }
 
+const BADGE_SEVERITY: Record<string, string> = {
+  success:
+    "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+  warn: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+  danger: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
+  info: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
+  secondary:
+    "bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300",
+};
+
+function badgeClass(row: Row, col: ColumnSpec): string {
+  const sev = col.severities?.[String(row[col.key] ?? "").toLowerCase()];
+  return BADGE_SEVERITY[sev ?? "secondary"];
+}
+
 function columnWidth(col: ColumnSpec): string {
   return (
     col.width || TYPE_COLUMN_WIDTH[col.type ?? "text"] || DEFAULT_COLUMN_WIDTH
@@ -549,7 +572,7 @@ async function load(targetFirst = first.value): Promise<void> {
   if (!props.source) return;
   loading.value = true;
   error.value = null;
-  selectedRow.value = null;
+  selection.value = [];
   clearStaging();
   try {
     const page = await fetchPage<Row>(
@@ -591,7 +614,6 @@ function onPage(e: DataTablePageEvent): void {
 
 function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
-  selectedRow.value = row;
   if (row.ref) emit("select", row);
 }
 
@@ -716,14 +738,20 @@ onUnmounted(() => {
         :scope="source?.params"
         @done="onActionDone"
       />
-      <ActionBar
-        v-if="rowActions.length && selectedRow?.ref"
-        :connection-id="connectionId"
-        :actions="rowActions"
-        :resource="selectedRow.ref"
-        :record="selectedRow"
-        @done="onActionDone"
-      />
+      <template v-if="rowActions.length && selection.length">
+        <span class="text-xs text-surface-400"
+          >{{ selection.length }} selected</span
+        >
+        <ActionBar
+          :connection-id="connectionId"
+          :actions="rowActions"
+          :resource="selection.length === 1 ? selectedRefs[0] : null"
+          :record="selection.length === 1 ? selection[0] : null"
+          :resources="selectedRefs"
+          :records="selection"
+          @done="onActionDone"
+        />
+      </template>
       <div class="ml-auto flex items-center gap-2">
         <Button
           v-if="canExport"
@@ -794,8 +822,9 @@ onUnmounted(() => {
       <SkeletonList v-else-if="loading && !rows.length" :rows="8" />
       <DataTable
         v-else
+        v-model:selection="selection"
         :value="rows"
-        :data-key="editable ? '__rid' : 'ref.uid'"
+        :data-key="editable || selectable ? '__rid' : 'ref.uid'"
         :edit-mode="editableCells ? 'cell' : undefined"
         lazy
         paginator
@@ -816,6 +845,12 @@ onUnmounted(() => {
         @row-click="onRowClick"
         @cell-edit-complete="onCellEditComplete"
       >
+        <Column
+          v-if="selectable"
+          selection-mode="multiple"
+          :header-style="{ width: '3rem' }"
+          :body-style="{ width: '3rem' }"
+        />
         <Column
           v-for="col in columns"
           :key="col.key"
@@ -848,7 +883,8 @@ onUnmounted(() => {
               </button>
               <span
                 v-else-if="col.type === 'badge'"
-                class="inline-block max-w-full truncate rounded-full bg-surface-100 px-2 py-0.5 align-bottom text-xs dark:bg-surface-800"
+                class="inline-block max-w-full truncate rounded-full px-2 py-0.5 align-bottom text-xs"
+                :class="badgeClass(data as Row, col)"
                 >{{ display(data as Row, col) }}</span
               >
               <template v-else>{{ display(data as Row, col) }}</template>

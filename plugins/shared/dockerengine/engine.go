@@ -686,6 +686,17 @@ func WhenState(states ...string) *plugin.Condition {
 	return &plugin.Condition{AllOf: []plugin.Rule{{Field: "state", Op: plugin.OpIn, Value: states}}}
 }
 
+// StateSeverities colors a container "state" badge by value.
+func StateSeverities() map[string]plugin.Severity {
+	return map[string]plugin.Severity{
+		"running": plugin.SeveritySuccess,
+		"paused":  plugin.SeverityWarn, "restarting": plugin.SeverityWarn, "removing": plugin.SeverityWarn,
+		"created": plugin.SeverityInfo, "configured": plugin.SeverityInfo,
+		"exited": plugin.SeveritySecondary, "stopped": plugin.SeveritySecondary,
+		"dead": plugin.SeverityDanger,
+	}
+}
+
 func ContainerRows(items []container.Summary) []Row {
 	rows := make([]Row, 0, len(items))
 	for _, c := range items {

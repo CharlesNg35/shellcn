@@ -17,7 +17,17 @@ type Session struct {
 	password string
 }
 
-func (s *Session) HealthCheck(context.Context) error { return nil }
+func (s *Session) HealthCheck(ctx context.Context) error {
+	conn, err := s.net.DialContext(ctx, "tcp", s.addr)
+	if err != nil {
+		return fmt.Errorf("%w: dial vnc target: %v", plugin.ErrUnavailable, err)
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := rfb.DialVNC(conn, s.password); err != nil {
+		return fmt.Errorf("%w: %v", plugin.ErrUnavailable, err)
+	}
+	return nil
+}
 
 func (s *Session) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (plugin.Channel, error) {
 	if req.Kind != plugin.StreamDesktop {

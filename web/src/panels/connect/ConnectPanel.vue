@@ -8,6 +8,7 @@ import type { ConnectionSummary } from "../../types/projection";
 const props = defineProps<{
   connectionId: string;
   connection?: ConnectionSummary;
+  connecting?: boolean;
 }>();
 const emit = defineEmits<{ connect: []; enroll: [] }>();
 
@@ -88,12 +89,16 @@ watch(
     <div class="flex items-center gap-2">
       <Button v-if="gated" @click="emit('enroll')">Set up agent</Button>
       <Button
-        :disabled="!canConnect"
+        :disabled="!canConnect || connecting"
         :severity="gated ? 'secondary' : undefined"
         :outlined="gated"
         @click="emit('connect')"
       >
-        <AppIcon :icon="{ type: 'lucide', value: 'play' }" :size="16" />
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'play' }"
+          :size="16"
+          :loading="connecting"
+        />
         Connect
       </Button>
     </div>

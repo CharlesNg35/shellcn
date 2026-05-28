@@ -284,6 +284,68 @@ func TestDisconnectConnectionSessionClosesOnlyCurrentUserSession(t *testing.T) {
 	}
 }
 
+func TestConnectionSessionKeepaliveConnectsAndReportsState(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodGet, "/api/connections/c-op/session", "op", nil)
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"state":"idle"`) {
+		t.Fatalf("initial session status: status=%d body=%s", resp.Status, resp.Body)
+	}
+
+	resp = h.do(t, http.MethodPost, "/api/connections/c-op/session", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("keepalive/connect: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	if body := string(resp.Body); !strings.Contains(body, `"state":"connected"`) || !strings.Contains(body, `"channels":0`) {
+		t.Fatalf("keepalive body missing connected state: %s", body)
+	}
+	if !strings.Contains(string(resp.Body), `"lastHealthCheck"`) {
+		t.Fatalf("keepalive body missing health metadata: %s", resp.Body)
+	}
+	if got := h.pluginSessions.Stats().Sessions; got != 1 {
+		t.Fatalf("sessions after keepalive = %d, want 1", got)
+	}
+
+	resp = h.do(t, http.MethodGet, "/api/connections/c-op/session", "op", nil)
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"state":"connected"`) {
+		t.Fatalf("connected session status: status=%d body=%s", resp.Status, resp.Body)
+	}
+}
+
+func TestConnectionSessionKeepaliveReportsConnectFailureState(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodPost, "/api/connections/c-boom/session", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("connect failure should be returned as session state: status=%d body=%s", resp.Status, resp.Body)
+	}
+	body := string(resp.Body)
+	if !strings.Contains(body, `"state":"error"`) || !strings.Contains(body, `"reason":"unavailable"`) {
+		t.Fatalf("connect failure body missing error state: %s", body)
+	}
+
+	resp = h.do(t, http.MethodGet, "/api/connections/c-boom/session", "op", nil)
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"state":"error"`) {
+		t.Fatalf("failure status should be queryable: status=%d body=%s", resp.Status, resp.Body)
+	}
+}
+
+func TestConnectionSessionKeepaliveHonorsAccess(t *testing.T) {
+	h := newHarness(t)
+
+	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/session", "viewer", nil); resp.Status != http.StatusForbidden {
+		t.Fatalf("viewer without grant: want 403, got %d (%s)", resp.Status, resp.Body)
+	}
+	if err := h.store.Grants.Create(context.Background(), &models.Grant{
+		ID: "g-use-session-c-op", ConnectionID: "c-op", SubjectID: "viewer", Access: models.AccessUse,
+	}); err != nil {
+		t.Fatalf("create grant: %v", err)
+	}
+	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/session", "viewer", nil); resp.Status != http.StatusOK {
+		t.Fatalf("viewer with grant: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+}
+
 func TestDisconnectConnectionSessionHonorsConnectionAccess(t *testing.T) {
 	h := newHarness(t)
 

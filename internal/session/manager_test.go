@@ -20,7 +20,17 @@ type fakeSession struct {
 	healthErr error
 }
 
-func (f *fakeSession) HealthCheck(context.Context) error { return f.healthErr }
+func (f *fakeSession) HealthCheck(context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.healthErr
+}
+
+func (f *fakeSession) setHealthErr(err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.healthErr = err
+}
 
 func (f *fakeSession) OpenChannel(context.Context, plugin.ChannelRequest) (plugin.Channel, error) {
 	return &fakeChannel{}, nil
@@ -81,6 +91,13 @@ func TestAcquireLazyConnectAndReuse(t *testing.T) {
 	if s := m.Stats(); s.Sessions != 1 {
 		t.Errorf("stats sessions: want 1, got %d", s.Sessions)
 	}
+	snap, ok := m.Status(key)
+	if !ok {
+		t.Fatal("expected status for acquired session")
+	}
+	if snap.State != session.StateConnected || snap.Channels != 0 || snap.UserID != "u1" {
+		t.Fatalf("unexpected snapshot: %+v", snap)
+	}
 }
 
 func TestConnectErrorNotCached(t *testing.T) {
@@ -98,9 +115,89 @@ func TestConnectErrorNotCached(t *testing.T) {
 	if s := m.Stats(); s.Sessions != 0 {
 		t.Errorf("failed connect must not leave an entry: %d sessions", s.Sessions)
 	}
+	snap, ok := m.Status(key)
+	if !ok {
+		t.Fatal("failed connect should leave a status tombstone")
+	}
+	if snap.State != session.StateError || snap.Reason != "dial failed" {
+		t.Fatalf("unexpected failure status: %+v", snap)
+	}
 	// A subsequent successful acquire works (entry was cleaned up).
 	if _, err := m.Acquire(context.Background(), key, "u1", connector(&fakeSession{}, nil)); err != nil {
 		t.Errorf("retry after failure: %v", err)
+	}
+	if snap, ok := m.Status(key); !ok || snap.State != session.StateConnected {
+		t.Fatalf("successful retry should replace failure status, ok=%v snap=%+v", ok, snap)
+	}
+}
+
+func TestInitialHealthCheckFailureNotCached(t *testing.T) {
+	m := session.New(session.Options{})
+	defer m.Shutdown()
+	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	fs := &fakeSession{healthErr: errors.New("unhealthy")}
+
+	_, err := m.Acquire(context.Background(), key, "u1", connector(fs, nil))
+	if !errors.Is(err, fs.healthErr) {
+		t.Fatalf("want health error, got %v", err)
+	}
+	if !fs.isClosed() {
+		t.Fatal("session should close after initial health failure")
+	}
+	if got := m.Stats().Sessions; got != 0 {
+		t.Fatalf("failed health session should not stay live, got %d", got)
+	}
+	snap, ok := m.Status(key)
+	if !ok || snap.State != session.StateError || snap.Reason != "unhealthy" {
+		t.Fatalf("unexpected failure status, ok=%v snap=%+v", ok, snap)
+	}
+}
+
+func TestConcurrentAcquireCreatesOneSession(t *testing.T) {
+	m := session.New(session.Options{})
+	defer m.Shutdown()
+	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	fs := &fakeSession{}
+
+	var hits int32
+	start := make(chan struct{})
+	connect := func(context.Context) (plugin.Session, error) {
+		<-start
+		atomic.AddInt32(&hits, 1)
+		return fs, nil
+	}
+
+	const callers = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, callers)
+	handles := make(chan *session.Handle, callers)
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h, err := m.Acquire(context.Background(), key, "u1", connect)
+			if err != nil {
+				errs <- err
+				return
+			}
+			handles <- h
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	close(handles)
+
+	for err := range errs {
+		t.Fatalf("acquire: %v", err)
+	}
+	for h := range handles {
+		if h.Session() != fs {
+			t.Fatal("all callers should receive the same plugin session")
+		}
+	}
+	if atomic.LoadInt32(&hits) != 1 {
+		t.Fatalf("connect ran %d times, want 1", hits)
 	}
 }
 
@@ -120,6 +217,9 @@ func TestChannelTrackingAndLimit(t *testing.T) {
 	if s := m.Stats(); s.Channels != 2 {
 		t.Errorf("channels open: want 2, got %d", s.Channels)
 	}
+	if snap, ok := m.Status(key); !ok || snap.Channels != 2 {
+		t.Fatalf("status should report 2 open channels, got ok=%v snap=%+v", ok, snap)
+	}
 	// Third exceeds the cap.
 	if _, err := h.OpenChannel(context.Background(), plugin.ChannelRequest{}); !errors.Is(err, session.ErrChannelLimit) {
 		t.Errorf("want ErrChannelLimit, got %v", err)
@@ -131,6 +231,40 @@ func TestChannelTrackingAndLimit(t *testing.T) {
 	}
 	if _, err := h.OpenChannel(context.Background(), plugin.ChannelRequest{}); err != nil {
 		t.Errorf("open after freeing a slot: %v", err)
+	}
+}
+
+func TestActiveStreamPreventsIdleReclaim(t *testing.T) {
+	m := session.New(session.Options{IdleTimeout: 10 * time.Millisecond, HealthInterval: 5 * time.Millisecond})
+	defer m.Shutdown()
+	fs := &fakeSession{}
+	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	h, err := m.Acquire(context.Background(), key, "u1", connector(fs, nil))
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	release := h.TrackStream()
+	defer release()
+
+	time.Sleep(40 * time.Millisecond)
+	if got := m.Stats().Sessions; got != 1 {
+		t.Fatalf("active stream session was reclaimed: sessions=%d", got)
+	}
+	if snap, ok := m.Status(key); !ok || snap.Streams != 1 {
+		t.Fatalf("status should report active stream, ok=%v snap=%+v", ok, snap)
+	}
+
+	release()
+	deadline := time.After(2 * time.Second)
+	for m.Stats().Sessions != 0 {
+		select {
+		case <-deadline:
+			t.Fatal("idle session was not reclaimed after stream release")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	if !fs.isClosed() {
+		t.Fatal("session should close after stream release and idle timeout")
 	}
 }
 
@@ -172,11 +306,12 @@ func TestIdleReclaim(t *testing.T) {
 func TestHealthCheckClosesDeadUpstream(t *testing.T) {
 	m := session.New(session.Options{HealthInterval: 5 * time.Millisecond, IdleTimeout: time.Hour})
 	defer m.Shutdown()
-	fs := &fakeSession{healthErr: errors.New("upstream gone")}
+	fs := &fakeSession{}
 	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
 	if _, err := m.Acquire(context.Background(), key, "u1", connector(fs, nil)); err != nil {
 		t.Fatalf("acquire: %v", err)
 	}
+	fs.setHealthErr(errors.New("upstream gone"))
 
 	deadline := time.After(2 * time.Second)
 	for m.Stats().Sessions != 0 {
@@ -185,6 +320,32 @@ func TestHealthCheckClosesDeadUpstream(t *testing.T) {
 			t.Fatal("dead upstream was not reclaimed by health check")
 		case <-time.After(5 * time.Millisecond):
 		}
+	}
+	snap, ok := m.Status(key)
+	if !ok {
+		t.Fatal("dead upstream should leave a failure status")
+	}
+	if snap.State != session.StateError || snap.Reason != "upstream gone" || snap.LastHealthCheck.IsZero() {
+		t.Fatalf("unexpected failure status: %+v", snap)
+	}
+	if !fs.isClosed() {
+		t.Fatal("dead upstream session should be closed")
+	}
+}
+
+func TestFailureStatusExpires(t *testing.T) {
+	m := session.New(session.Options{FailureRetention: 15 * time.Millisecond})
+	defer m.Shutdown()
+	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	_, _ = m.Acquire(context.Background(), key, "u1", func(context.Context) (plugin.Session, error) {
+		return nil, errors.New("dial failed")
+	})
+	if _, ok := m.Status(key); !ok {
+		t.Fatal("expected failure status")
+	}
+	time.Sleep(30 * time.Millisecond)
+	if snap, ok := m.Status(key); ok {
+		t.Fatalf("failure status should expire, got %+v", snap)
 	}
 }
 

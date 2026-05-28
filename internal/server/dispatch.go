@@ -413,6 +413,8 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
 		return
 	}
+	releaseStream := handle.TrackStream()
+	defer releaseStream()
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
 
 	streamCtx, cancel := context.WithCancel(ctx)

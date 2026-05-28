@@ -25,6 +25,38 @@ func (h *Handle) HealthCheck(ctx context.Context) error {
 	return h.Session().HealthCheck(ctx)
 }
 
+// Snapshot returns the current registry state for this borrowed session.
+func (h *Handle) Snapshot() Snapshot {
+	return h.e.snapshot()
+}
+
+// TrackStream pins the session while a browser stream is active. Not every
+// plugin stream maps to an upstream Channel, but an open WS still means the
+// session is in use and must not be reclaimed as idle.
+func (h *Handle) TrackStream() func() {
+	e := h.e
+	e.mu.Lock()
+	if e.closed || e.sess == nil {
+		e.mu.Unlock()
+		return func() {}
+	}
+	e.streams++
+	e.lastUsed = h.m.now()
+	e.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			e.mu.Lock()
+			if e.streams > 0 {
+				e.streams--
+			}
+			e.lastUsed = h.m.now()
+			e.mu.Unlock()
+		})
+	}
+}
+
 // OpenChannel opens a tracked upstream stream, enforcing the per-session channel
 // cap. The returned channel decrements the counter exactly once on Close.
 func (h *Handle) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (plugin.Channel, error) {

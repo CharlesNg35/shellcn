@@ -35,7 +35,10 @@ A step is `[x]` only when its **tests pass**; a phase is done when all its steps
 - [x] 2.4 Secret vault
 - [x] 2.5 Authentication and sessions
 - [x] 2.6 Authorization with Casbin
-- [x] 2.7 Session, channel, and transport runtime
+- [x] 2.7 Session, channel, and transport runtime — includes one live
+      user/connection session, browser keepalive, status snapshots, short-lived
+      error state, channel tracking, active stream pinning, and idle reclaim only
+      when no channels or streams are open
 - [x] 2.8 chi server and route wrapper
 - [x] 2.9 Audit and telemetry
 - [x] 2.10 Test plugin and end-to-end validation
@@ -112,8 +115,7 @@ _Done — SSH and SFTP are separate compiled-in plugins with shared SSH/SFTP ses
 
 Generic, manifest-driven; no per-plugin frontend.
 
-- [x] UX.1 Contract: editable `TableConfig` (insert/update/delete, rowKey, editable)
-      + `ResourceRef.Scope` for database/cluster hierarchies (`internal/plugin/ui.go`,
+- [x] UX.1 Contract: editable `TableConfig` (insert/update/delete, rowKey, editable) + `ResourceRef.Scope` for database/cluster hierarchies (`internal/plugin/ui.go`,
       `web/src/types/projection.ts`, `specs/v2.md`)
 - [x] UX.2 Generic editable data grid in `TablePanel.vue` (inline cell edit,
       add-row, delete-row) + driver-neutral row DML in `plugins/shared/sqldb`
@@ -150,24 +152,18 @@ Generic, manifest-driven; no per-plugin frontend.
       data grids + query/command editors (postgresql, mysql, cockroachdb, mssql,
       oracle, clickhouse, cassandra, mongodb) and Redis clients/channels tables.
 - [x] UX.12 Workbench renderer primitives (Phase-7 step 0, landed early & generic —
-      proven on existing plugins, no k8s yet):
-      - `dashboard` **panel** (`PanelDashboard` + `DashboardConfig.Cells`) — a
-        multi-panel grid usable as any detail/connection tab, sharing
-        `DashboardGrid` with the dashboard layout. Showcase: Redis Overview.
-      - Generic **metrics panel** (`MetricsConfig` stats/gauges/series via PrimeVue
-        `Chart`/chart.js, theme-aware, lazy-loaded) — renderer hardcodes no field
-        names. Showcase: Proxmox node/VM/LXC.
-      - **List-opening nav** (`TreeNode.ResourceKind` + optional `ListParams` to
-        scope, e.g. a namespace) — a tree node opens a kind's list view (vs. detail).
-      - **Multi-open workbench tabs** — the sidebar-tree workspace keeps several
-        open views (details + lists) as a closable tab strip with `KeepAlive`
-        (extracted into `TreeWorkspace.vue`), instead of one selection at a time.
-      - **Bottom dock** (`Action.Open` view/dock/dialog + `Action.Panel`) — a
-        resizable, tabbed, `KeepAlive` dock (`DockPanel.vue` + per-connection dock
-        store) hosting terminals/logs/editors from actions, or a modal. Showcase:
-        Docker "Logs in dock".
-      - Also fixed two manifest-driven leaks found en route: the metrics panel
-        (`cpu/mem`) and KV panel value types are now config-driven.
+      proven on existing plugins, no k8s yet): - `dashboard` **panel** (`PanelDashboard` + `DashboardConfig.Cells`) — a
+      multi-panel grid usable as any detail/connection tab, sharing
+      `DashboardGrid` with the dashboard layout. Showcase: Redis Overview. - Generic **metrics panel** (`MetricsConfig` stats/gauges/series via PrimeVue
+      `Chart`/chart.js, theme-aware, lazy-loaded) — renderer hardcodes no field
+      names. Showcase: Proxmox node/VM/LXC. - **List-opening nav** (`TreeNode.ResourceKind` + optional `ListParams` to
+      scope, e.g. a namespace) — a tree node opens a kind's list view (vs. detail). - **Multi-open workbench tabs** — the sidebar-tree workspace keeps several
+      open views (details + lists) as a closable tab strip with `KeepAlive`
+      (extracted into `TreeWorkspace.vue`), instead of one selection at a time. - **Bottom dock** (`Action.Open` view/dock/dialog + `Action.Panel`) — a
+      resizable, tabbed, `KeepAlive` dock (`DockPanel.vue` + per-connection dock
+      store) hosting terminals/logs/editors from actions, or a modal. Showcase:
+      Docker "Logs in dock". - Also fixed two manifest-driven leaks found en route: the metrics panel
+      (`cpu/mem`) and KV panel value types are now config-driven.
       All Go+TS contract-mirrored, validated, unit-tested; gates green.
 - [x] UX.11 Third workspace layout `dashboard` (`LayoutDashboard`) — renders every
       connection-level `Tab` panel at once in a responsive grid via the focused
@@ -196,14 +192,11 @@ Generic, manifest-driven; no per-plugin frontend.
       stops click propagation. Integration tests exercise row insert/update/
       delete, non-PK-key rejection, drop-after-browse, and structure/catalog
       routes across postgresql, mysql, cockroachdb, mssql, oracle.
-- [ ] UX.4c Deferred editable grids, with reasons:
-      - cassandra — gocql is strongly typed; JSON-decoded values won't bind back
-        into `uuid`/`int`/`timestamp` columns. Needs type-aware value coercion
-        from `system_schema.columns` before a grid is safe. `_key` must be the
-        full PARTITION+CLUSTERING key.
-      - clickhouse — no row UPDATE/DELETE (mutations are async `ALTER`); stays
-        read-only, optionally insert-only later.
-      - mongodb / redis — already mutable (document code-editor / writable KV).
+- [ ] UX.4c Deferred editable grids, with reasons: - cassandra — gocql is strongly typed; JSON-decoded values won't bind back
+      into `uuid`/`int`/`timestamp` columns. Needs type-aware value coercion
+      from `system_schema.columns` before a grid is safe. `_key` must be the
+      full PARTITION+CLUSTERING key. - clickhouse — no row UPDATE/DELETE (mutations are async `ALTER`); stays
+      read-only, optionally insert-only later. - mongodb / redis — already mutable (document code-editor / writable KV).
 
 ## Additional first-party plugins
 

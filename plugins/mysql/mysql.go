@@ -98,7 +98,7 @@ func tableResource() plugin.ResourceType {
 			Tabs: []plugin.Tab{
 				{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.table.rows", Params: tableParams()}, Config: dataGridConfig()},
 				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"mysql.column.add", "mysql.column.drop"}}.Map()},
-				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mysql.index.create", "mysql.index.drop"}}.Map()},
+				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mysql.index.create"}, RowActionIDs: []string{"mysql.index.drop"}}.Map()},
 				{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.table.constraints", Params: tableParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}.Map()},
 				{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mysql.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM `${resource.namespace}`.`${resource.name}` LIMIT 100;")},
 			},
@@ -207,7 +207,7 @@ func actions() []plugin.Action {
 		{ID: "mysql.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "mysql.column.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "mysql.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "mysql.column.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "mysql.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "mysql.index.create", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
-		{ID: "mysql.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "mysql.index.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: "mysql.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "mysql.index.drop", Params: map[string]string{"database": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "mysql.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "mysql.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "mysql.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mysql.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 	}
