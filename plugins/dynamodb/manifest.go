@@ -13,7 +13,7 @@ var statusSeverities = map[string]plugin.Severity{
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "tables", Label: "Tables", Icon: icon("table-2"), Source: plugin.DataSource{RouteID: rid("tables.tree")}, ResourceKind: "table"},
-		{Key: "backups", Label: "Backups", Icon: icon("archive"), Source: plugin.DataSource{RouteID: rid("backups.tree")}, ResourceKind: "backup"},
+		{Key: "backups", Label: "Backups", Icon: icon("archive"), ResourceKind: "backup"},
 	}
 }
 

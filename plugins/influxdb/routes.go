@@ -99,7 +99,7 @@ func namespaceTree(rc *plugin.RequestContext) (any, error) {
 		ref := plugin.ResourceRef{Kind: "namespace", Name: name, UID: name}
 		nodes = append(nodes, plugin.TreeNode{
 			Key: "namespace:" + name, Label: name, Icon: icon("database"), Ref: &ref,
-			ChildrenSource: &plugin.DataSource{RouteID: rid("measurements.tree"), Params: map[string]string{"namespace": name}},
+			Leaf: true, ResourceKind: "measurement", ListParams: map[string]string{"namespace": name},
 		})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: page.Total}, nil
