@@ -503,8 +503,8 @@ the type, options, default, and validators.
 `OptionsSource` instead of (or in addition to) static `Options`: the renderer
 fetches it when the form opens and maps each row to `{value,label}`. Its params
 interpolate `${resource.*}` from the form's resource context, so a field can
-offer the live values of a related resource — e.g. a *Create index* form whose
-*Columns* field is a multiselect of the table's real columns, instead of a
+offer the live values of a related resource — e.g. a _Create index_ form whose
+_Columns_ field is a multiselect of the table's real columns, instead of a
 free-typed comma-separated string. Plugin-agnostic: the core only fetches rows
 and reads `value`/`name`/`label`; the plugin's route decides what the choices
 are. This keeps any "name an existing thing" field a picker, not free text.
