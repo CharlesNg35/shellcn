@@ -42,6 +42,7 @@ func Routes() []plugin.Route {
 		{ID: "swarm.stack.overview", Method: plugin.MethodGet, Path: "/stacks/{stack}/overview", Permission: "swarm.stacks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stack.overview", Handle: stackOverview},
 		{ID: "swarm.stack.services", Method: plugin.MethodGet, Path: "/stacks/{stack}/services", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stack.services", Handle: stackServices},
 		{ID: "swarm.service.remove", Method: plugin.MethodDelete, Path: "/services/{id}", Permission: "swarm.services.delete", Risk: plugin.RiskDestructive, AuditEvent: "swarm.service.remove", Handle: removeService},
+		{ID: "swarm.service.scale", Method: plugin.MethodPost, Path: "/services/{id}/scale", Permission: "swarm.services.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.service.scale", Input: scaleSchema(), Handle: scaleService},
 		{ID: "swarm.service.logs", Method: plugin.MethodWS, Path: "/services/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "swarm.services.logs", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.logs", Input: dockerengine.LogsSchema(), Stream: serviceLogsStream},
 		{ID: "swarm.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.watch", Stream: watchServiceEvents},
 	}
@@ -298,6 +299,41 @@ func removeService(rc *plugin.RequestContext) (any, error) {
 	}
 	_, err = cli.ServiceRemove(rc.Ctx, rc.Param("id"), dockerclient.ServiceRemoveOptions{})
 	return dockerengine.ActionResult{OK: err == nil}, dockerengine.DockerErr(err)
+}
+
+func scaleSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Scale", Fields: []plugin.Field{
+		{Key: "replicas", Label: "Replicas", Type: plugin.FieldStepper, Required: true, Default: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}}},
+	}}}}
+}
+
+// scaleService sets the replica count on a replicated service via an in-place
+// ServiceUpdate against the current spec version.
+func scaleService(rc *plugin.RequestContext) (any, error) {
+	cli, err := client(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Replicas uint64 `json:"replicas"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	res, err := cli.ServiceInspect(rc.Ctx, rc.Param("id"), dockerclient.ServiceInspectOptions{})
+	if err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	svc := res.Service
+	if svc.Spec.Mode.Replicated == nil {
+		return nil, fmt.Errorf("%w: only replicated services can be scaled", plugin.ErrInvalidInput)
+	}
+	replicas := req.Replicas
+	svc.Spec.Mode.Replicated.Replicas = &replicas
+	if _, err := cli.ServiceUpdate(rc.Ctx, svc.ID, dockerclient.ServiceUpdateOptions{Version: svc.Version, Spec: svc.Spec}); err != nil {
+		return nil, dockerengine.DockerErr(err)
+	}
+	return dockerengine.ActionResult{OK: true}, nil
 }
 
 func serviceLogsStream(rc *plugin.RequestContext, stream plugin.ClientStream) error {

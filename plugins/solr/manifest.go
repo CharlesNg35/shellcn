@@ -42,7 +42,7 @@ func resources() []plugin.ResourceType {
 			RowActionIDs: []string{rid("document.delete")},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{rid("document.delete")}}, DefaultTab: "editor", Tabs: []plugin.Tab{
 				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: map[string]any{"language": "json", "saveRouteId": rid("document.update"), "saveMethod": "PATCH", "saveParams": documentParams()}},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("document.update"), SaveMethod: plugin.MethodPatch, SaveParams: documentParams()}.Map()},
 			}},
 		},
 		{
@@ -63,7 +63,7 @@ func actions() []plugin.Action {
 		{ID: rid("core.commit"), Label: "Commit", Icon: icon("check"), RouteID: rid("core.commit"), Params: coreParams(), Confirm: true, ConfirmText: "Commit pending updates for this collection or core?"},
 		{ID: rid("core.optimize"), Label: "Optimize", Icon: icon("gauge"), RouteID: rid("core.optimize"), Params: coreParams(), Confirm: true, ConfirmText: "Optimize this collection or core now?"},
 		{ID: rid("core.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: rid("core.delete"), Params: coreParams(), Confirm: true, ConfirmText: "Delete this collection or unload this core with its index data?"},
-		{ID: rid("document.upsert"), Label: "Upsert document", Icon: icon("plus"), RouteID: rid("document.upsert"), Params: coreParams()},
+		{ID: rid("document.upsert"), Label: "Upsert document", Icon: icon("plus"), RouteID: rid("document.upsert"), Params: coreParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"id\": \"example\"\n}", SaveRouteID: rid("document.upsert"), SaveMethod: plugin.MethodPost, SaveParams: coreParams(), SaveBodyKey: "document", SaveExtra: map[string]any{"commit": true}}.Map()},
 		{ID: rid("document.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("document.delete"), Params: documentParams(), Confirm: true, ConfirmText: "Delete this document?"},
 		{ID: rid("documents.delete_query"), Label: "Delete by query", Icon: icon("eraser"), RouteID: rid("documents.delete_query"), Params: coreParams(), Confirm: true, ConfirmText: "Delete all Solr documents matching this query?"},
 		{ID: rid("schema.field.add"), Label: "Add field", Icon: icon("columns-3"), RouteID: rid("schema.field.add"), Params: coreParams(), Confirm: true, ConfirmText: "Add this field to the managed schema?"},

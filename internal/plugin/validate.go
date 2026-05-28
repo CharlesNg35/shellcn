@@ -372,6 +372,20 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 	}
 
 	checkTabs("connection", m.Tabs)
+	for _, action := range m.Actions {
+		if action.Panel == "" || (action.Open != OpenDock && action.Open != OpenDialog) {
+			continue
+		}
+		checkPanelConfigRoutes(
+			fmt.Sprintf("action %q panel", action.ID),
+			Tab{Panel: action.Panel, Source: &DataSource{RouteID: action.RouteID}, Config: action.Config},
+			checkRouteID,
+			checkWriteRouteID,
+			checkMultipartRouteID,
+			checkStreamSource,
+			add,
+		)
+	}
 	resourceKinds := map[string]bool{}
 	for _, rt := range m.Resources {
 		resourceKinds[rt.Kind] = true

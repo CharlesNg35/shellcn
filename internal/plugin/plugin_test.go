@@ -218,6 +218,9 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"action success references unknown tab", "onSuccess.selectTab", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", OnSuccess: &plugin.ActionSuccess{SelectTab: "ghost"}}}
 		}},
+		{"action panel config references unknown save route", "saveRouteId references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{SaveRouteID: "ghost"}.Map()}}
+		}},
 		{"stream references non-ws route", "non-WS route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Streams = []plugin.Stream{{ID: "s", Kind: plugin.StreamLogs, RouteID: "x.list"}}
 		}},

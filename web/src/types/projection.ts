@@ -255,9 +255,12 @@ export interface FormPanelConfig {
 
 export interface CodeEditorConfig {
   language?: string;
+  initialContent?: string;
   saveRouteId?: string;
   saveMethod?: Exclude<Method, "GET" | "WS">;
   saveParams?: Record<string, string>;
+  saveBodyKey?: string;
+  saveExtra?: Record<string, unknown>;
 }
 
 export interface QueryEditorConfig {

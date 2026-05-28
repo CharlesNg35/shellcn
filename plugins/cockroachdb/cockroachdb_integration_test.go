@@ -70,6 +70,19 @@ func TestCockroachDBPluginIntegration(t *testing.T) {
 		t.Fatalf("expected view dropped, got %d err=%v", vcount, err)
 	}
 
+	// Schema create round-trip.
+	defer func() { _, _ = s.pool.Exec(context.Background(), `DROP SCHEMA IF EXISTS shellcn_sc CASCADE`) }()
+	if _, err := createSchema(rowMutationRC(ctx, s, nil, map[string]any{"name": "shellcn_sc"})); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	schemas, err := listSchemas(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list schemas: %v", err)
+	}
+	if !pageHasName(schemas.(plugin.Page[row]), "shellcn_sc") {
+		t.Fatalf("created schema was not listed: %#v", schemas)
+	}
+
 	if _, err := s.pool.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS public.shellcn_people (
   id INT8 PRIMARY KEY,

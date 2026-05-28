@@ -5,11 +5,11 @@ import "github.com/charlesng35/shellcn/internal/plugin"
 // yamlEditorConfig is the code_editor config that saves edits via server-side
 // apply (POST). Used by the YAML detail tab and the Edit/Create dock actions.
 func yamlEditorConfig() map[string]any {
-	return map[string]any{
-		"language":    "yaml",
-		"saveRouteId": "kubernetes.resource.apply",
-		"saveMethod":  "POST",
-	}
+	return plugin.CodeEditorConfig{
+		Language:    "yaml",
+		SaveRouteID: "kubernetes.resource.apply",
+		SaveMethod:  plugin.MethodPost,
+	}.Map()
 }
 
 // yamlTab is the editable YAML detail tab (loads current object, applies on save).

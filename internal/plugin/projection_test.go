@@ -81,12 +81,12 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 						"submitLabel":   "Apply",
 						"params":        map[string]string{"id": "${resource.uid}"},
 					}},
-					{Key: "editor", Label: "Editor", Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "sample.doc"}, Config: map[string]any{
-						"language":    "yaml",
-						"saveRouteId": "sample.doc.save",
-						"saveMethod":  "PUT",
-						"saveParams":  map[string]string{"id": "${resource.uid}"},
-					}},
+					{Key: "editor", Label: "Editor", Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "sample.doc"}, Config: plugin.CodeEditorConfig{
+						Language:    "yaml",
+						SaveRouteID: "sample.doc.save",
+						SaveMethod:  plugin.MethodPut,
+						SaveParams:  map[string]string{"id": "${resource.uid}"},
+					}.Map()},
 					{Key: "query", Label: "Query", Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "sample.query", Method: plugin.MethodWS}, Config: map[string]any{
 						"initialQuery":  "select * from ${resource.name} limit 100",
 						"cancelRouteId": "sample.query.cancel",

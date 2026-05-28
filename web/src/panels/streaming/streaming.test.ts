@@ -210,6 +210,55 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("saves initial code editor content under a configured JSON body key", async () => {
+    const calls: { url: string; method?: string; body: unknown }[] = [];
+    vi.unstubAllGlobals();
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    installFetch((url, init) => {
+      calls.push({
+        url,
+        method: init?.method,
+        body: init?.body ? JSON.parse(init.body as string) : undefined,
+      });
+      return { body: { ok: true } };
+    });
+    mockCodeMirror.value = '{"id":"ada","name":"Ada"}';
+
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        config: {
+          language: "json",
+          initialContent: '{\n  "id": "example"\n}',
+          saveRouteId: "search.document.upsert",
+          saveMethod: "POST",
+          saveParams: { index: "people" },
+          saveBodyKey: "document",
+          saveExtra: { action: "upsert" },
+        },
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Save"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(calls).toEqual([
+      {
+        url: expect.stringContaining("search.document.upsert"),
+        method: "POST",
+        body: {
+          action: "upsert",
+          document: { id: "ada", name: "Ada" },
+        },
+      },
+    ]);
+    w.unmount();
+  });
+
   it("truncates long query history chips and keeps the full query as title", async () => {
     const text =
       "SELECT * FROM public.github_app_installation_repositories LIMIT 100;";

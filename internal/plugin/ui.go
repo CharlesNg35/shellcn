@@ -327,6 +327,42 @@ func (c TerminalConfig) Map() map[string]any {
 	return out
 }
 
+type CodeEditorConfig struct {
+	Language       string            `json:"language,omitempty"`
+	InitialContent string            `json:"initialContent,omitempty"`
+	SaveRouteID    string            `json:"saveRouteId,omitempty"`
+	SaveMethod     Method            `json:"saveMethod,omitempty"`
+	SaveParams     map[string]string `json:"saveParams,omitempty"`
+	SaveBodyKey    string            `json:"saveBodyKey,omitempty"`
+	SaveExtra      map[string]any    `json:"saveExtra,omitempty"`
+}
+
+func (c CodeEditorConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.Language != "" {
+		out["language"] = c.Language
+	}
+	if c.InitialContent != "" {
+		out["initialContent"] = c.InitialContent
+	}
+	if c.SaveRouteID != "" {
+		out["saveRouteId"] = c.SaveRouteID
+	}
+	if c.SaveMethod != "" {
+		out["saveMethod"] = c.SaveMethod
+	}
+	if len(c.SaveParams) > 0 {
+		out["saveParams"] = c.SaveParams
+	}
+	if c.SaveBodyKey != "" {
+		out["saveBodyKey"] = c.SaveBodyKey
+	}
+	if len(c.SaveExtra) > 0 {
+		out["saveExtra"] = c.SaveExtra
+	}
+	return out
+}
+
 type HeaderDefault struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`

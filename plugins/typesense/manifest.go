@@ -38,7 +38,7 @@ func resources() []plugin.ResourceType {
 			RowActionIDs: []string{rid("document.delete")},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{rid("document.delete")}}, DefaultTab: "editor", Tabs: []plugin.Tab{
 				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: map[string]any{"language": "json", "saveRouteId": rid("document.update"), "saveMethod": "PATCH", "saveParams": documentParams()}},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("document.update"), SaveMethod: plugin.MethodPatch, SaveParams: documentParams()}.Map()},
 			}},
 		},
 		{
@@ -68,7 +68,7 @@ func actions() []plugin.Action {
 		{ID: rid("collection.clone"), Label: "Clone collection", Icon: icon("copy"), RouteID: rid("collection.clone"), Confirm: true, ConfirmText: "Create a collection from an existing schema?"},
 		{ID: rid("collection.update"), Label: "Update schema", Icon: icon("columns-3"), RouteID: rid("collection.update"), Params: collectionParams(), Confirm: true, ConfirmText: "Update this collection schema?"},
 		{ID: rid("collection.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: rid("collection.delete"), Params: collectionParams(), Confirm: true, ConfirmText: "Delete this collection and all documents?"},
-		{ID: rid("document.upsert"), Label: "Upsert document", Icon: icon("plus"), RouteID: rid("document.upsert"), Params: collectionParams()},
+		{ID: rid("document.upsert"), Label: "Upsert document", Icon: icon("plus"), RouteID: rid("document.upsert"), Params: collectionParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"id\": \"example\"\n}", SaveRouteID: rid("document.upsert"), SaveMethod: plugin.MethodPost, SaveParams: collectionParams(), SaveBodyKey: "document", SaveExtra: map[string]any{"action": "upsert"}}.Map()},
 		{ID: rid("documents.import"), Label: "Import JSONL", Icon: icon("upload"), RouteID: rid("documents.import"), Params: collectionParams(), Confirm: true, ConfirmText: "Import these documents into the collection?"},
 		{ID: rid("document.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("document.delete"), Params: documentParams(), Confirm: true, ConfirmText: "Delete this document?"},
 		{ID: rid("alias.upsert"), Label: "Upsert alias", Icon: icon("tag"), RouteID: rid("alias.upsert")},
