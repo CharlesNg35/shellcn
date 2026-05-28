@@ -34,7 +34,6 @@ import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
 import { dialogRoot, inputClass } from "../../primevue/preset";
 import { cn } from "../../utils/cn";
-import { useConfirmAction } from "../../composables/useConfirmAction";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
@@ -49,7 +48,6 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
-const { confirmDanger } = useConfirmAction();
 
 // Framework-reserved row keys the grid never renders as data columns. Plugins
 // hide their own fields declaratively via config.hiddenColumns instead.
@@ -92,6 +90,9 @@ const actionOutput = ref<{
   output: string;
   truncated: boolean;
 } | null>(null);
+const deleteTarget = ref<Row | null>(null);
+const deleteBusy = ref(false);
+const deleteError = ref<string | null>(null);
 
 const declaredColumns = computed(
   () => (props.config as TablePanelConfig | undefined)?.columns,
@@ -392,24 +393,51 @@ function askDeleteRow(row: Row): void {
   const src = deleteSource.value;
   const key = keyFor(row);
   if (!src || !key) return;
-  confirmDanger({
-    header: "Delete row",
-    message: "Delete this row? This cannot be undone.",
-    accept: async () => {
-      try {
-        await mutate(src, { key });
-        toast.add({ severity: "success", summary: "Row deleted", life: 3000 });
-        await load(first.value);
-      } catch (err) {
-        toast.add({
-          severity: "error",
-          summary: "Delete failed",
-          detail: (err as Error).message,
-          life: 6000,
-        });
-      }
-    },
-  });
+  deleteTarget.value = row;
+  deleteError.value = null;
+}
+
+function closeDeleteDialog(): void {
+  if (deleteBusy.value) return;
+  deleteTarget.value = null;
+  deleteError.value = null;
+}
+
+const deleteRowLabel = computed(() => {
+  const row = deleteTarget.value;
+  if (!row) return "";
+  const raw = row.label ?? row.name ?? row.id ?? row._key;
+  if (raw == null) return "";
+  if (typeof raw === "string" || typeof raw === "number") return String(raw);
+  return "";
+});
+
+async function confirmDeleteRow(): Promise<void> {
+  const src = deleteSource.value;
+  const row = deleteTarget.value;
+  const key = row ? keyFor(row) : null;
+  if (!src || !key) {
+    closeDeleteDialog();
+    return;
+  }
+  deleteBusy.value = true;
+  deleteError.value = null;
+  try {
+    await mutate(src, { key });
+    toast.add({ severity: "success", summary: "Row deleted", life: 3000 });
+    deleteTarget.value = null;
+    await load(first.value);
+  } catch (err) {
+    deleteError.value = (err as Error).message;
+    toast.add({
+      severity: "error",
+      summary: "Delete failed",
+      detail: (err as Error).message,
+      life: 6000,
+    });
+  } finally {
+    deleteBusy.value = false;
+  }
 }
 
 const showInsert = ref(false);
@@ -1023,6 +1051,60 @@ onUnmounted(() => {
           :loading="inserting"
           :disabled="inserting"
           @click="submitInsert"
+        />
+      </template>
+    </Dialog>
+
+    <Dialog
+      :visible="!!deleteTarget"
+      modal
+      header="Delete row"
+      :dismissable-mask="!deleteBusy"
+      :closable="!deleteBusy"
+      :pt="{ root: dialogRoot('max-w-md') }"
+      @update:visible="(v) => !v && closeDeleteDialog()"
+    >
+      <div class="flex items-start gap-3">
+        <div
+          class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-500/10 text-rose-500"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'trash-2' }" :size="18" />
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-medium text-surface-900 dark:text-surface-50">
+            Delete this row?
+          </p>
+          <p class="mt-1 text-sm text-surface-500 dark:text-surface-400">
+            This change is permanent and cannot be undone.
+          </p>
+          <p
+            v-if="deleteRowLabel"
+            class="mt-3 truncate rounded-md border border-surface-200 bg-surface-50 px-2 py-1.5 font-mono text-xs text-surface-600 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-300"
+            :title="deleteRowLabel"
+          >
+            {{ deleteRowLabel }}
+          </p>
+          <p v-if="deleteError" class="mt-3 text-sm text-red-500">
+            {{ deleteError }}
+          </p>
+        </div>
+      </div>
+      <template #footer>
+        <Button
+          type="button"
+          label="Cancel"
+          severity="secondary"
+          :disabled="deleteBusy"
+          @click="closeDeleteDialog"
+        />
+        <Button
+          type="button"
+          label="Delete"
+          severity="danger"
+          :loading="deleteBusy"
+          :disabled="deleteBusy"
+          autofocus
+          @click="confirmDeleteRow"
         />
       </template>
     </Dialog>

@@ -283,6 +283,73 @@ describe("TablePanel", () => {
     expect(w.findComponent({ name: "InputNumber" }).exists()).toBe(true);
     w.unmount();
   });
+
+  it("confirms direct row deletes with the app dialog", async () => {
+    const nativeConfirm = vi.fn();
+    const calls: { url: string; method: string; body: unknown }[] = [];
+    let deleted = false;
+    vi.unstubAllGlobals();
+    vi.stubGlobal("confirm", nativeConfirm);
+    installFetch((url, init) => {
+      if (init?.method === "DELETE") {
+        calls.push({
+          url,
+          method: init.method,
+          body: init.body ? JSON.parse(init.body as string) : undefined,
+        });
+        deleted = true;
+        return { body: { ok: true } };
+      }
+      return {
+        body: {
+          items: deleted ? [row("b", "beta")] : [row("a", "alpha")],
+          nextCursor: "",
+          total: deleted ? 1 : 2,
+        },
+      };
+    });
+
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: {
+          columns,
+          editable: true,
+          rowKey: ["name"],
+          delete: { routeId: "db.row.delete", method: "DELETE" as const },
+        },
+      },
+    });
+    await flushPromises();
+
+    const delBtn = [...document.body.querySelectorAll("button")].find((b) =>
+      b.getAttribute("aria-label")?.includes("Delete"),
+    ) as HTMLButtonElement;
+    delBtn.click();
+    await flushPromises();
+
+    expect(nativeConfirm).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Delete this row?");
+    expect(document.body.textContent).toContain(
+      "This change is permanent and cannot be undone.",
+    );
+
+    bodyButton("Delete")!.click();
+    await flushPromises();
+
+    expect(calls).toEqual([
+      {
+        url: expect.stringContaining("db.row.delete"),
+        method: "DELETE",
+        body: { key: { name: "alpha" } },
+      },
+    ]);
+    expect(w.text()).not.toContain("alpha");
+    expect(w.text()).toContain("beta");
+    w.unmount();
+  });
 });
 
 describe("TablePanel staged edits", () => {
