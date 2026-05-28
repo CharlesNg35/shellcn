@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  docker:
+    name: Publish Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tags
+        id: images
+        shell: bash
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          server="ghcr.io/${repo}"
+          agent="ghcr.io/${repo}-agent"
+
+          {
+            echo "server_tags<<EOF"
+            echo "${server}:latest"
+            if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+              echo "${server}:${GITHUB_REF_NAME}"
+            fi
+            echo "EOF"
+
+            echo "agent_tags<<EOF"
+            echo "${agent}:latest"
+            if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+              echo "${agent}:${GITHUB_REF_NAME}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push server image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./cmd/server/Dockerfile
+          push: true
+          tags: ${{ steps.images.outputs.server_tags }}
+
+      - name: Build and push agent image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./cmd/agent/Dockerfile
+          push: true
+          tags: ${{ steps.images.outputs.agent_tags }}
+
+  binaries:
+    name: Publish release binaries
+    runs-on: ubuntu-latest
+    if: github.ref_type == 'tag'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.1"
+          cache: true
+
+      - name: Build frontend
+        run: |
+          pnpm -C web install --frozen-lockfile
+          pnpm -C web build
+
+      - name: Build native binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME}"
+          ldflags="-s -w -X main.version=${version}"
+          mkdir -p dist
+
+          targets=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+            "windows/arm64"
+          )
+
+          for target in "${targets[@]}"; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            ext=""
+            if [[ "${goos}" == "windows" ]]; then
+              ext=".exe"
+            fi
+
+            CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" \
+              go build -trimpath -ldflags "${ldflags}" \
+              -o "dist/shellcn-${goos}-${goarch}${ext}" ./cmd/server
+
+            CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" \
+              go build -trimpath -ldflags "${ldflags}" \
+              -o "dist/shellcn-agent-${goos}-${goarch}${ext}" ./cmd/agent
+          done
+
+          (cd dist && sha256sum * > checksums.txt)
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes
+          gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
