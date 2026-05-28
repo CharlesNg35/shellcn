@@ -30,6 +30,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/plugins/shared/hostmonitor"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -98,10 +99,11 @@ var errEnrollmentRejected = errors.New("enrollment rejected by gateway")
 
 // run keeps a tunnel up, reconnecting with backoff until the context is cancelled.
 func run(ctx context.Context, logger *slog.Logger, connectURL, token string, insecure bool) {
-	backoff := time.Second
-	const maxBackoff = 30 * time.Second
+	backoff := initialReconnectBackoff
 	for {
+		started := time.Now()
 		err := serve(ctx, logger, connectURL, token, insecure)
+		backoff = resetReconnectBackoff(backoff, time.Since(started))
 		if errors.Is(err, errEnrollmentRejected) {
 			logger.Error("enrollment rejected — token is invalid, revoked, or expired before first use; not retrying", "err", err)
 			return
@@ -121,6 +123,19 @@ func run(ctx context.Context, logger *slog.Logger, connectURL, token string, ins
 			backoff *= 2
 		}
 	}
+}
+
+const (
+	initialReconnectBackoff = time.Second
+	maxBackoff              = 30 * time.Second
+	stableTunnelDuration    = time.Minute
+)
+
+func resetReconnectBackoff(backoff, tunnelDuration time.Duration) time.Duration {
+	if tunnelDuration >= stableTunnelDuration {
+		return initialReconnectBackoff
+	}
+	return backoff
 }
 
 // serve runs a single tunnel lifetime: dial, handshake, then accept + proxy
@@ -169,6 +184,9 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, i
 	}
 	defer func() { _ = sess.Close() }()
 
+	if target.Mode == transport.AgentModeHostMonitor {
+		return serveHostMonitor(ctx, logger, sess)
+	}
 	if target.Mode == string(transport.AgentModeHTTP) {
 		return serveHTTPProxy(ctx, logger, sess, target)
 	}
@@ -180,6 +198,22 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, i
 		}
 		go proxyStream(logger, stream, target)
 	}
+}
+
+func serveHostMonitor(ctx context.Context, logger *slog.Logger, sess *yamux.Session) error {
+	srv := &http.Server{
+		Handler:           hostmonitor.Handler(hostmonitor.NewLocal(hostmonitor.Options{})),
+		ReadHeaderTimeout: 30 * time.Second,
+	}
+	go func() {
+		<-ctx.Done()
+		_ = srv.Close()
+	}()
+	logger.Info("host_monitor online")
+	if err := srv.Serve(yamuxListener{sess: sess}); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
 // serveHTTPProxy serves the generic L7 mode: a credential-injecting reverse

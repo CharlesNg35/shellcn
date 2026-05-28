@@ -11,7 +11,15 @@ vi.mock("vue-draggable-plus", () => ({
   VueDraggable: {
     name: "VueDraggable",
     props: ["modelValue"],
-    emits: ["update:modelValue", "choose", "start", "update", "end"],
+    emits: [
+      "update:modelValue",
+      "choose",
+      "start",
+      "update",
+      "add",
+      "remove",
+      "end",
+    ],
     template: '<div data-draggable="true"><slot /></div>',
   },
 }));
@@ -170,7 +178,7 @@ describe("ConnectionSidebar", () => {
     const item = () => wrapper.get('[data-connection-id="c-root"]');
     expect(item().classes()).toContain("hover:bg-surface-100");
 
-    draggable.vm.$emit("choose");
+    draggable.vm.$emit("start");
     await flushPromises();
     expect(item().classes()).not.toContain("hover:bg-surface-100");
     expect(wrapper.get("[data-sidebar-scroll-region]").classes()).toContain(
@@ -178,9 +186,61 @@ describe("ConnectionSidebar", () => {
     );
 
     draggable.vm.$emit("end");
-    await vi.advanceTimersByTimeAsync(0);
     await flushPromises();
     expect(item().classes()).toContain("hover:bg-surface-100");
+  });
+
+  it("persists a cross-folder move from the resulting tree", async () => {
+    let saved: Record<string, unknown> | null = null;
+    installFetch((url, init) => {
+      if (url.endsWith("/api/connections/layout") && init?.method === "PUT") {
+        saved = JSON.parse(String(init.body));
+      }
+      if (url.endsWith("/api/connections")) return { body: connections };
+      if (url.endsWith("/api/connection-folders")) {
+        return {
+          body: [{ id: "f1", name: "Production", color: "blue", sortOrder: 0 }],
+        };
+      }
+      return { body: { ok: true } };
+    });
+    const conns = useConnectionsStore();
+    conns.loaded = true;
+    conns.folders = [
+      { id: "f1", name: "Production", color: "blue", sortOrder: 0 },
+    ];
+    conns.connections = connections;
+
+    const wrapper = mount(ConnectionSidebar, {
+      props: { activeId: null, query: "" },
+      global: { plugins: [router()] },
+    });
+    await flushPromises();
+
+    // vue-draggable-plus performs the cross-list move via v-model, so by the
+    // time `end` fires the bound tree already has the connection nested under
+    // the folder. The sidebar must persist that tree as-is.
+    const root = wrapper.findComponent({ name: "VueDraggable" });
+    root.vm.$emit("start");
+    root.vm.$emit("update:modelValue", [
+      { kind: "connection", connection: connections[1] },
+      {
+        kind: "folder",
+        id: "f1",
+        name: "Production",
+        color: "blue",
+        sortOrder: 0,
+        children: [{ kind: "connection", connection: connections[0] }],
+      },
+    ]);
+    root.vm.$emit("end");
+
+    await vi.waitFor(() => expect(saved).not.toBeNull());
+    expect(saved).toMatchObject({
+      items: expect.arrayContaining([
+        { connectionId: "c-root", folderId: "f1", sortOrder: 0 },
+      ]),
+    });
   });
 
   it("persists connection order and folder placement", async () => {
@@ -226,7 +286,7 @@ describe("ConnectionSidebar", () => {
     });
     await flushPromises();
     wrapper.findComponent({ name: "VueDraggable" }).vm.$emit("end");
-    await flushPromises();
+    await vi.waitFor(() => expect(saved).not.toBeNull());
 
     expect(saved).toMatchObject({
       folders: expect.arrayContaining([

@@ -18,9 +18,10 @@ type AgentHello struct {
 // Agent proxy mode wire values, mirroring plugin.AgentMode. They live here so
 // the standalone agent binary depends only on this package, not internal/plugin.
 const (
-	AgentModeTCP  = "tcp"
-	AgentModeUnix = "unix"
-	AgentModeHTTP = "http_proxy"
+	AgentModeTCP         = "tcp"
+	AgentModeUnix        = "unix"
+	AgentModeHTTP        = "http_proxy"
+	AgentModeHostMonitor = "host_monitor"
 )
 
 // AgentProxyTarget tells the agent what local endpoint to expose back. The L7

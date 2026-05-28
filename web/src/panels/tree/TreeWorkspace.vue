@@ -101,7 +101,7 @@ const treeSelectedUid = computed(() =>
 );
 
 function workbenchTabTitle(v: OpenView): string {
-  return v.subtitle ? `${v.subtitle} / ${v.title}` : v.title;
+  return v.subtitle ? `${v.title} - ${v.subtitle} ` : v.title;
 }
 
 function openDetail(row: Row, qualifier?: string): void {

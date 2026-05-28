@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useStorage } from "@vueuse/core";
 import Button from "primevue/button";
@@ -14,10 +14,8 @@ import type {
   ConnectionFolderMenuAction,
   ConnectionFolderNode,
   ConnectionNode,
-  ConnectionTreeDropPreference,
   ConnectionTreeItem,
 } from "./connectionTree";
-import { dedupeConnectionTree } from "./connectionTree";
 import type { ConnectionFolder, ConnectionSummary } from "../types/projection";
 
 const props = defineProps<{
@@ -46,7 +44,6 @@ const showFolderDialog = ref(false);
 const editingFolder = ref<ConnectionFolder | null>(null);
 const newFolderParentId = ref<string | null>(null);
 const savingLayout = ref(false);
-let dragEndTimer: ReturnType<typeof window.setTimeout> | undefined;
 let pendingPersist = false;
 
 const emptyFiltered = computed(
@@ -243,6 +240,47 @@ async function persistLayout(): Promise<void> {
   }
 }
 
+function applyOptimisticLayout(): void {
+  const items: Array<{
+    connectionId: string;
+    folderId?: string;
+    sortOrder: number;
+  }> = [];
+  const folders: Array<{
+    folderId: string;
+    parentId?: string;
+    sortOrder: number;
+  }> = [];
+
+  collectLayout(rootItems.value, undefined, items, folders);
+
+  const itemById = new Map(items.map((item) => [item.connectionId, item]));
+  conns.connections = conns.connections.map((connection) => {
+    const item = itemById.get(connection.id);
+    return item
+      ? {
+          ...connection,
+          folderId: item.folderId,
+          sortOrder: item.sortOrder,
+        }
+      : connection;
+  });
+
+  const folderById = new Map(
+    folders.map((folder) => [folder.folderId, folder]),
+  );
+  conns.folders = conns.folders.map((folder) => {
+    const item = folderById.get(folder.id);
+    return item
+      ? {
+          ...folder,
+          parentId: item.parentId,
+          sortOrder: item.sortOrder,
+        }
+      : folder;
+  });
+}
+
 function collectLayout(
   nodes: ConnectionTreeItem[],
   parentId: string | undefined,
@@ -263,35 +301,21 @@ function collectLayout(
   });
 }
 
-function onDragEnd(preference?: ConnectionTreeDropPreference): void {
-  if (props.query.trim()) return;
-  rootItems.value = dedupeConnectionTree(rootItems.value, preference);
-  void nextTick(updateScrollShadow);
-  void persistLayout();
-}
-
-function onDragChange(preference?: ConnectionTreeDropPreference): void {
-  if (props.query.trim()) return;
-  rootItems.value = dedupeConnectionTree(rootItems.value, preference);
-  void nextTick(updateScrollShadow);
-}
-
-function onDragAdd(preference?: ConnectionTreeDropPreference): void {
-  if (props.query.trim()) return;
-  onDragChange(preference);
-}
-
 function onDragStart(): void {
   dragging.value = true;
 }
 
-function afterDragEnd(preference?: ConnectionTreeDropPreference): void {
-  onDragEnd(preference);
-  if (dragEndTimer) window.clearTimeout(dragEndTimer);
-  dragEndTimer = window.setTimeout(() => {
-    dragging.value = false;
-    dragEndTimer = undefined;
-  }, 0);
+// vue-draggable-plus has already applied the cross-list move to the bound
+// arrays by the time `end` fires, so `rootItems` is authoritative. Commit it to
+// the store, then remount so the rendered DOM is rebuilt from clean data with no
+// Sortable-orphaned nodes left behind.
+function onDragEnd(): void {
+  dragging.value = false;
+  if (props.query.trim()) return;
+  applyOptimisticLayout();
+  remountTree();
+  void nextTick(updateScrollShadow);
+  void persistLayout();
 }
 
 function updateScrollShadow(): void {
@@ -299,10 +323,6 @@ function updateScrollShadow(): void {
 }
 
 onMounted(updateScrollShadow);
-
-onUnmounted(() => {
-  if (dragEndTimer) window.clearTimeout(dragEndTimer);
-});
 
 function go(connection: ConnectionSummary): void {
   if (dragging.value) return;
@@ -360,9 +380,7 @@ function go(connection: ConnectionSummary): void {
           @toggle-folder="toggleFolder"
           @menu-action="handleFolderMenu"
           @drag-start="onDragStart"
-          @drag-change="onDragChange"
-          @drag-add="onDragAdd"
-          @drag-end="afterDragEnd"
+          @drag-end="onDragEnd"
           @open="go"
         />
 
