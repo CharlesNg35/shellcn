@@ -72,7 +72,7 @@ func actions() []plugin.Action {
 		{ID: rid("document.upsert"), Label: "Upsert document", Icon: icon("plus"), RouteID: rid("document.upsert"), Params: indexParams()},
 		{ID: rid("document.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("document.delete"), Params: documentParams(), Confirm: true, ConfirmText: "Delete this document?"},
 		{ID: rid("documents.delete_all"), Label: "Delete all documents", Icon: icon("eraser"), RouteID: rid("documents.delete_all"), Params: indexParams(), Confirm: true, ConfirmText: "Delete every document in this index?"},
-		{ID: rid("task.cancel"), Label: "Cancel", Icon: icon("ban"), RouteID: rid("task.cancel"), Params: taskParams(), Confirm: true, ConfirmText: "Cancel matching enqueued or processing tasks?"},
+		{ID: rid("task.cancel"), Label: "Cancel", Icon: icon("ban"), RouteID: rid("task.cancel"), Params: taskParams(), Confirm: true, ConfirmText: "Cancel matching enqueued or processing tasks?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpIn, Value: []string{"enqueued", "processing"}}}}},
 		{ID: rid("key.create"), Label: "Create key", Icon: icon("plus"), RouteID: rid("key.create")},
 		{ID: rid("key.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("key.delete"), Params: keyParams(), Confirm: true, ConfirmText: "Delete this API key?"},
 		{ID: rid("dump.create"), Label: "Create dump", Icon: icon("archive"), RouteID: rid("dump.create"), Confirm: true, ConfirmText: "Create a Meilisearch dump?"},

@@ -53,13 +53,19 @@ func resources(provider Provider) []plugin.ResourceType {
 	}
 }
 
+// whenIndexOpen gates an action that only applies to an open index (its
+// `_cat/indices` status is "open"); closed indices can't be refreshed/flushed.
+func whenIndexOpen() *plugin.Condition {
+	return &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpEq, Value: "open"}}}
+}
+
 func actions(provider Provider) []plugin.Action {
 	return []plugin.Action{
 		{ID: routeID(provider, "index.create"), Label: "Create index", Icon: icon("plus"), RouteID: routeID(provider, "index.create")},
-		{ID: routeID(provider, "index.refresh"), Label: "Refresh", Icon: icon("refresh-cw"), RouteID: routeID(provider, "index.refresh"), Params: indexParams()},
-		{ID: routeID(provider, "index.flush"), Label: "Flush", Icon: icon("hard-drive-download"), RouteID: routeID(provider, "index.flush"), Params: indexParams(), Confirm: true, ConfirmText: "Flush this index?"},
-		{ID: routeID(provider, "index.close"), Label: "Close", Icon: icon("lock"), RouteID: routeID(provider, "index.close"), Params: indexParams(), Confirm: true, ConfirmText: "Close this index?"},
-		{ID: routeID(provider, "index.open"), Label: "Open", Icon: icon("lock-open"), RouteID: routeID(provider, "index.open"), Params: indexParams()},
+		{ID: routeID(provider, "index.refresh"), Label: "Refresh", Icon: icon("refresh-cw"), RouteID: routeID(provider, "index.refresh"), Params: indexParams(), EnabledWhen: whenIndexOpen()},
+		{ID: routeID(provider, "index.flush"), Label: "Flush", Icon: icon("hard-drive-download"), RouteID: routeID(provider, "index.flush"), Params: indexParams(), Confirm: true, ConfirmText: "Flush this index?", EnabledWhen: whenIndexOpen()},
+		{ID: routeID(provider, "index.close"), Label: "Close", Icon: icon("lock"), RouteID: routeID(provider, "index.close"), Params: indexParams(), Confirm: true, ConfirmText: "Close this index?", EnabledWhen: whenIndexOpen()},
+		{ID: routeID(provider, "index.open"), Label: "Open", Icon: icon("lock-open"), RouteID: routeID(provider, "index.open"), Params: indexParams(), EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpIn, Value: []string{"close", "closed"}}}}},
 		{ID: routeID(provider, "index.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: routeID(provider, "index.delete"), Params: indexParams(), Confirm: true, ConfirmText: "Delete this index and all documents?"},
 		{ID: routeID(provider, "mapping.update"), Label: "Update mapping", Icon: icon("braces"), RouteID: routeID(provider, "mapping.update"), Params: indexParams(), Confirm: true, ConfirmText: "Update this index mapping?"},
 		{ID: routeID(provider, "document.create"), Label: "Create document", Icon: icon("plus"), RouteID: routeID(provider, "document.create"), Params: indexParams()},
