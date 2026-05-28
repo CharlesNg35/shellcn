@@ -67,7 +67,7 @@ func exchangeCreateSchema() *plugin.Schema {
 
 func bindingCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Binding", Fields: []plugin.Field{
-		{Key: "source", Label: "Source exchange", Type: plugin.FieldText, Required: true, Help: "Exchange to bind this queue to."},
+		{Key: "source", Label: "Source exchange", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "rabbitmq.exchanges.list"}, Help: "Exchange to bind this queue to."},
 		{Key: "routing_key", Label: "Routing key", Type: plugin.FieldText, Help: "Direct/topic routing key; ignored for fanout exchanges."},
 		{Key: "arguments", Label: "Arguments", Type: plugin.FieldJSON, Help: "Optional binding arguments (used by headers exchanges)."},
 	}}}}

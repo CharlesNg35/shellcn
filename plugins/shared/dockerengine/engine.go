@@ -553,14 +553,14 @@ func ImagePullSchema() *plugin.Schema {
 func VolumeCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Volume", Fields: []plugin.Field{
 		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
-		{Key: "driver", Label: "Driver", Type: plugin.FieldText, Default: "local"},
+		{Key: "driver", Label: "Driver", Type: plugin.FieldText, Default: "local", Placeholder: "local", Help: "Volume driver. Use local unless a custom volume plugin is installed."},
 	}}}}
 }
 
 func NetworkCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Network", Fields: []plugin.Field{
 		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
-		{Key: "driver", Label: "Driver", Type: plugin.FieldText, Default: "bridge"},
+		{Key: "driver", Label: "Driver", Type: plugin.FieldText, Default: "bridge", Placeholder: "bridge", Help: "Network driver, e.g. bridge, overlay, macvlan, ipvlan, host, none."},
 	}}}}
 }
 
