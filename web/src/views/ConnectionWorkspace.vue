@@ -126,10 +126,7 @@ async function connect(): Promise<void> {
   showEnroll.value = false;
   sessionConnecting.value = true;
   try {
-    if (!(await connectionSessions.connect(props.id, true))) {
-      const message = liveStatus.get(props.id)?.reason;
-      if (message) notify.error("Could not connect", message);
-    }
+    await connectionSessions.connect(props.id, true);
   } finally {
     sessionConnecting.value = false;
   }
