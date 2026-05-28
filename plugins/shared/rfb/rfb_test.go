@@ -85,6 +85,23 @@ func TestDialVNCNoAuth(t *testing.T) {
 	}
 }
 
+// TestPushBitmapTopDown guards against the framebuffer being rendered upside
+// down: grdp's decoders emit top-down rows, so source row 0 must land on the top
+// framebuffer row, not the bottom.
+func TestPushBitmapTopDown(t *testing.T) {
+	s := NewFramebufferServer(nil, 1, 2)
+	// 1px-wide, 2px-tall BGRA source, top-down: row 0 has R=10, row 1 has R=20.
+	data := []byte{0, 0, 10, 0, 0, 0, 20, 0}
+	s.PushBitmap(0, 0, 1, 2, 4, data)
+
+	// fb is BGRX; the red channel sits at byte offset 2 of each pixel.
+	topRed := s.fb[(0*s.width+0)*4+2]
+	bottomRed := s.fb[(1*s.width+0)*4+2]
+	if topRed != 10 || bottomRed != 20 {
+		t.Fatalf("rows flipped: top red = %d (want 10), bottom red = %d (want 20)", topRed, bottomRed)
+	}
+}
+
 func buildServerInit(w, h int, name string) []byte {
 	b := make([]byte, 24+len(name))
 	binary.BigEndian.PutUint16(b[0:], uint16(w))

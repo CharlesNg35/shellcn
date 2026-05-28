@@ -141,8 +141,9 @@ func (s *FramebufferServer) writeServerInit() error {
 }
 
 // PushBitmap copies a decoded rectangle into the backing framebuffer (converting
-// from the source bytes-per-pixel) and marks it dirty. Source rows are assumed
-// bottom-up, as RDP delivers bitmap updates.
+// from the source bytes-per-pixel) and marks it dirty. grdp's bitmap decoders
+// already emit top-down rows — they un-flip RDP's bottom-up wire format during
+// decode — so a source row maps straight to the destination row.
 func (s *FramebufferServer) PushBitmap(x, y, w, h, srcBytesPerPixel int, data []byte) {
 	if w <= 0 || h <= 0 {
 		return
@@ -150,7 +151,6 @@ func (s *FramebufferServer) PushBitmap(x, y, w, h, srcBytesPerPixel int, data []
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for row := 0; row < h; row++ {
-		srcRow := h - 1 - row // bottom-up source
 		dy := y + row
 		if dy < 0 || dy >= s.height {
 			continue
@@ -160,7 +160,7 @@ func (s *FramebufferServer) PushBitmap(x, y, w, h, srcBytesPerPixel int, data []
 			if dx < 0 || dx >= s.width {
 				continue
 			}
-			si := (srcRow*w + col) * srcBytesPerPixel
+			si := (row*w + col) * srcBytesPerPixel
 			if si+srcBytesPerPixel > len(data) {
 				continue
 			}

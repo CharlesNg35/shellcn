@@ -24,6 +24,7 @@ func rid(suffix string) string { return protocolName + "." + suffix }
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
+		{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Ref: &plugin.ResourceRef{Kind: "server", Name: "Prometheus", UID: "server"}},
 		{Key: "status", Label: "Status", Icon: icon("activity"), Source: plugin.DataSource{RouteID: rid("status.tree")}, ResourceKind: "status"},
 		{Key: "targets", Label: "Targets", Icon: icon("crosshair"), ResourceKind: "target"},
 		{Key: "alerts", Label: "Alerts", Icon: icon("bell"), ResourceKind: "alert"},
@@ -36,12 +37,24 @@ func tree() []plugin.TreeGroup {
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
 		{
+			Kind: "server", Title: "Prometheus",
+			// List satisfies the manifest contract; the server is only ever opened
+			// via the Overview tree group's Ref, which goes straight to Detail.
+			List: plugin.DataSource{RouteID: rid("overview")},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("snapshot.create"), rid("tombstones.clean"), rid("config.reload")}}, Tabs: []plugin.Tab{
+				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
+				{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("overview")}},
+				{Key: "live", Label: "Live", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: rid("metrics.live"), Method: plugin.MethodWS}, Config: liveMetricsConfig()},
+				{Key: "targets", Label: "Targets", Icon: icon("crosshair"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("targets.list")}, Config: plugin.TableConfig{Columns: targetColumns(), Exportable: true}.Map()},
+				{Key: "alerts", Label: "Alerts", Icon: icon("bell"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("alerts.list")}, Config: plugin.TableConfig{Columns: alertColumns(), Exportable: true}.Map()},
+				{Key: "rules", Label: "Rules", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("rules.list")}, Config: plugin.TableConfig{Columns: ruleColumns(), Exportable: true}.Map()},
+			}},
+		},
+		{
 			Kind: "status", Title: "Status", List: plugin.DataSource{RouteID: rid("status.list")},
 			Columns: statusColumns(),
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("snapshot.create"), rid("tombstones.clean"), rid("config.reload")}}, Tabs: []plugin.Tab{
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("status.read"), Params: statusParams()}},
-				{Key: "live", Label: "Live", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: rid("metrics.live"), Method: plugin.MethodWS}, Config: liveMetricsConfig()},
-				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
 			}},
 		},
 		{

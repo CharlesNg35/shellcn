@@ -28,6 +28,7 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
   const failed = ref(false);
   let recorder: MediaRecorder | null = null;
   let stream: MediaStream | null = null;
+  let frameTimer: ReturnType<typeof setInterval> | null = null;
   let recordingID = "";
   let index = 0;
   let chain: Promise<void> = Promise.resolve();
@@ -36,9 +37,37 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
   let uploadFailed = false;
   let keepalive = false;
 
+  // A canvas capture only emits a frame when the canvas is repainted, so an idle
+  // remote desktop (a static login screen, an unchanged window) would produce no
+  // frames — and a recording with zero chunks is rejected at finalize and ends up
+  // discarded. Forcing a frame on a fixed cadence keeps data flowing regardless of
+  // remote activity, so every recording has content to save.
+  function startForcedFrames(
+    track: MediaStreamTrack | undefined,
+    fps: number,
+  ): void {
+    const request = (track as { requestFrame?: () => void } | undefined)
+      ?.requestFrame;
+    if (!request) return;
+    frameTimer = setInterval(
+      () => {
+        try {
+          request.call(track);
+        } catch {
+          // Track ended between ticks; the next stop() clears the timer.
+        }
+      },
+      Math.max(100, Math.round(1000 / Math.max(1, fps))),
+    );
+  }
+
   // Release the captured canvas stream so the browser stops the capture track;
   // MediaRecorder.stop() alone leaves the track live.
   function stopTracks(): void {
+    if (frameTimer) {
+      clearInterval(frameTimer);
+      frameTimer = null;
+    }
     if (stream) {
       for (const track of stream.getTracks()) track.stop();
       stream = null;
@@ -66,6 +95,11 @@ export function useDesktopRecorder(connectionId: string, streamRef: StreamRef) {
       uploadFailed = false;
       keepalive = false;
       stream = canvas.captureStream(fps);
+      const tracks =
+        (
+          stream as { getVideoTracks?: () => MediaStreamTrack[] }
+        ).getVideoTracks?.() ?? stream.getTracks();
+      startForcedFrames(tracks[0], fps);
       recorder = new MediaRecorder(stream, { mimeType: MIME });
       recorder.ondataavailable = (e: BlobEvent) => {
         if (uploadFailed) return;
