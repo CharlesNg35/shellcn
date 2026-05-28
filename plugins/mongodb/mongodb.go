@@ -118,16 +118,16 @@ func collectionParams() map[string]string {
 }
 
 func commandConfig(initial string) map[string]any {
-	return map[string]any{
-		"language":          "json",
-		"label":             "MongoDB command",
-		"executeLabel":      "Run command",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a MongoDB command document to see results.",
-		"initialQuery":      initial,
-		"completionRouteId": "mongodb.completion",
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "json",
+		Label:             "MongoDB command",
+		ExecuteLabel:      "Run command",
+		RunningLabel:      "Running...",
+		EmptyText:         "Run a MongoDB command document to see results.",
+		InitialQuery:      initial,
+		CompletionRouteID: "mongodb.completion",
+		Exportable:        true,
+	}.Map()
 }
 
 func collectionColumns() []plugin.Column {

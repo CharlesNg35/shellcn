@@ -156,6 +156,86 @@ func (c TableConfig) Map() map[string]any {
 	return out
 }
 
+type FileBrowserConfig struct {
+	PathParam       string `json:"pathParam,omitempty"`
+	ReadRouteID     string `json:"readRouteId,omitempty"`
+	DownloadRouteID string `json:"downloadRouteId,omitempty"`
+	WriteRouteID    string `json:"writeRouteId,omitempty"`
+	UploadRouteID   string `json:"uploadRouteId,omitempty"`
+	MkdirRouteID    string `json:"mkdirRouteId,omitempty"`
+	RenameRouteID   string `json:"renameRouteId,omitempty"`
+	DeleteRouteID   string `json:"deleteRouteId,omitempty"`
+	Writable        bool   `json:"writable,omitempty"`
+	MultipleUpload  bool   `json:"multipleUpload,omitempty"`
+	MaxUploadBytes  int64  `json:"maxUploadBytes,omitempty"`
+	UploadFieldName string `json:"uploadFieldName,omitempty"`
+}
+
+func (c FileBrowserConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.PathParam != "" {
+		out["pathParam"] = c.PathParam
+	}
+	if c.ReadRouteID != "" {
+		out["readRouteId"] = c.ReadRouteID
+	}
+	if c.DownloadRouteID != "" {
+		out["downloadRouteId"] = c.DownloadRouteID
+	}
+	if c.WriteRouteID != "" {
+		out["writeRouteId"] = c.WriteRouteID
+	}
+	if c.UploadRouteID != "" {
+		out["uploadRouteId"] = c.UploadRouteID
+	}
+	if c.MkdirRouteID != "" {
+		out["mkdirRouteId"] = c.MkdirRouteID
+	}
+	if c.RenameRouteID != "" {
+		out["renameRouteId"] = c.RenameRouteID
+	}
+	if c.DeleteRouteID != "" {
+		out["deleteRouteId"] = c.DeleteRouteID
+	}
+	if c.Writable {
+		out["writable"] = true
+	}
+	if c.MultipleUpload {
+		out["multipleUpload"] = true
+	}
+	if c.MaxUploadBytes > 0 {
+		out["maxUploadBytes"] = c.MaxUploadBytes
+	}
+	if c.UploadFieldName != "" {
+		out["uploadFieldName"] = c.UploadFieldName
+	}
+	return out
+}
+
+type FormPanelConfig struct {
+	SubmitRouteID string            `json:"submitRouteId,omitempty"`
+	SubmitMethod  Method            `json:"submitMethod,omitempty"`
+	SubmitLabel   string            `json:"submitLabel,omitempty"`
+	Params        map[string]string `json:"params,omitempty"`
+}
+
+func (c FormPanelConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.SubmitRouteID != "" {
+		out["submitRouteId"] = c.SubmitRouteID
+	}
+	if c.SubmitMethod != "" {
+		out["submitMethod"] = c.SubmitMethod
+	}
+	if c.SubmitLabel != "" {
+		out["submitLabel"] = c.SubmitLabel
+	}
+	if len(c.Params) > 0 {
+		out["params"] = c.Params
+	}
+	return out
+}
+
 // DashboardCell is one panel inside a PanelDashboard grid. It mirrors a Tab
 // minus the tab-bar semantics: any panel type, its own source/config, and an
 // optional Span (>= 2 fills the row). Plugin-agnostic — any plugin can compose
@@ -337,6 +417,21 @@ type CodeEditorConfig struct {
 	SaveExtra      map[string]any    `json:"saveExtra,omitempty"`
 }
 
+type QueryEditorConfig struct {
+	Language          string            `json:"language,omitempty"`
+	Label             string            `json:"label,omitempty"`
+	ExecuteLabel      string            `json:"executeLabel,omitempty"`
+	CancelLabel       string            `json:"cancelLabel,omitempty"`
+	RunningLabel      string            `json:"runningLabel,omitempty"`
+	EmptyText         string            `json:"emptyText,omitempty"`
+	InitialQuery      string            `json:"initialQuery,omitempty"`
+	CancelRouteID     string            `json:"cancelRouteId,omitempty"`
+	CancelParams      map[string]string `json:"cancelParams,omitempty"`
+	CompletionRouteID string            `json:"completionRouteId,omitempty"`
+	CompletionParams  map[string]string `json:"completionParams,omitempty"`
+	Exportable        bool              `json:"exportable,omitempty"`
+}
+
 func (c CodeEditorConfig) Map() map[string]any {
 	out := map[string]any{}
 	if c.Language != "" {
@@ -359,6 +454,47 @@ func (c CodeEditorConfig) Map() map[string]any {
 	}
 	if len(c.SaveExtra) > 0 {
 		out["saveExtra"] = c.SaveExtra
+	}
+	return out
+}
+
+func (c QueryEditorConfig) Map() map[string]any {
+	out := map[string]any{}
+	if c.Language != "" {
+		out["language"] = c.Language
+	}
+	if c.Label != "" {
+		out["label"] = c.Label
+	}
+	if c.ExecuteLabel != "" {
+		out["executeLabel"] = c.ExecuteLabel
+	}
+	if c.CancelLabel != "" {
+		out["cancelLabel"] = c.CancelLabel
+	}
+	if c.RunningLabel != "" {
+		out["runningLabel"] = c.RunningLabel
+	}
+	if c.EmptyText != "" {
+		out["emptyText"] = c.EmptyText
+	}
+	if c.InitialQuery != "" {
+		out["initialQuery"] = c.InitialQuery
+	}
+	if c.CancelRouteID != "" {
+		out["cancelRouteId"] = c.CancelRouteID
+	}
+	if len(c.CancelParams) > 0 {
+		out["cancelParams"] = c.CancelParams
+	}
+	if c.CompletionRouteID != "" {
+		out["completionRouteId"] = c.CompletionRouteID
+	}
+	if len(c.CompletionParams) > 0 {
+		out["completionParams"] = c.CompletionParams
+	}
+	if c.Exportable {
+		out["exportable"] = true
 	}
 	return out
 }

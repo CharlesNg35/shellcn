@@ -261,18 +261,18 @@ func dataGridConfig() map[string]any {
 }
 
 func queryConfig(initial string) map[string]any {
-	return map[string]any{
-		"language":          "sql",
-		"label":             "SQL",
-		"executeLabel":      "Run query",
-		"cancelLabel":       "Cancel query",
-		"runningLabel":      "Running…",
-		"emptyText":         "Run a query to see results.",
-		"initialQuery":      initial,
-		"cancelRouteId":     "cockroachdb.query.cancel",
-		"completionRouteId": "cockroachdb.completion",
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "sql",
+		Label:             "SQL",
+		ExecuteLabel:      "Run query",
+		CancelLabel:       "Cancel query",
+		RunningLabel:      "Running…",
+		EmptyText:         "Run a query to see results.",
+		InitialQuery:      initial,
+		CancelRouteID:     "cockroachdb.query.cancel",
+		CompletionRouteID: "cockroachdb.completion",
+		Exportable:        true,
+	}.Map()
 }
 
 func schemaColumns() []plugin.Column {

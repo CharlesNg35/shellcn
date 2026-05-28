@@ -72,16 +72,16 @@ func actions() []plugin.Action {
 }
 
 func searchConfig() map[string]any {
-	return map[string]any{
-		"language":          "json",
-		"label":             "Solr query",
-		"executeLabel":      "Search",
-		"runningLabel":      "Searching...",
-		"emptyText":         "Run a Solr JSON query to see documents.",
-		"initialQuery":      `{"q":"*:*","rows":50}`,
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "json",
+		Label:             "Solr query",
+		ExecuteLabel:      "Search",
+		RunningLabel:      "Searching...",
+		EmptyText:         "Run a Solr JSON query to see documents.",
+		InitialQuery:      `{"q":"*:*","rows":50}`,
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func coreParams() map[string]string { return map[string]string{"core": "${resource.name}"} }

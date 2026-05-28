@@ -134,16 +134,16 @@ func actions() []plugin.Action {
 }
 
 func queryConfig(initial string) map[string]any {
-	return map[string]any{
-		"language":          "cypher",
-		"label":             "Cypher",
-		"executeLabel":      "Run query",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a Cypher query to see results.",
-		"initialQuery":      initial,
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "cypher",
+		Label:             "Cypher",
+		ExecuteLabel:      "Run query",
+		RunningLabel:      "Running...",
+		EmptyText:         "Run a Cypher query to see results.",
+		InitialQuery:      initial,
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func labelColumns() []plugin.Column {

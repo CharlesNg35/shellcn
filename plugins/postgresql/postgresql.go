@@ -195,23 +195,23 @@ func dataGridConfig() map[string]any {
 }
 
 func queryConfig(initial string, params map[string]string) map[string]any {
-	cfg := map[string]any{
-		"language":          "sql",
-		"label":             "SQL",
-		"executeLabel":      "Run query",
-		"cancelLabel":       "Cancel query",
-		"runningLabel":      "Running…",
-		"emptyText":         "Run a query to see results.",
-		"initialQuery":      initial,
-		"cancelRouteId":     "postgresql.query.cancel",
-		"completionRouteId": "postgresql.completion",
-		"exportable":        true,
+	cfg := plugin.QueryEditorConfig{
+		Language:          "sql",
+		Label:             "SQL",
+		ExecuteLabel:      "Run query",
+		CancelLabel:       "Cancel query",
+		RunningLabel:      "Running…",
+		EmptyText:         "Run a query to see results.",
+		InitialQuery:      initial,
+		CancelRouteID:     "postgresql.query.cancel",
+		CompletionRouteID: "postgresql.completion",
+		Exportable:        true,
 	}
 	if len(params) > 0 {
-		cfg["completionParams"] = params
-		cfg["cancelParams"] = params
+		cfg.CompletionParams = params
+		cfg.CancelParams = params
 	}
-	return cfg
+	return cfg.Map()
 }
 
 func databaseColumns() []plugin.Column {

@@ -53,15 +53,15 @@ func actions() []plugin.Action {
 }
 
 func queryConfig() map[string]any {
-	return map[string]any{
-		"language":          "plaintext",
-		"label":             "Query",
-		"executeLabel":      "Run",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a query to see results.",
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "plaintext",
+		Label:             "Query",
+		ExecuteLabel:      "Run",
+		RunningLabel:      "Running...",
+		EmptyText:         "Run a query to see results.",
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func measurementQueryConfig() map[string]any {

@@ -89,16 +89,16 @@ func actions(provider Provider) []plugin.Action {
 }
 
 func searchConfig(provider Provider) map[string]any {
-	return map[string]any{
-		"language":          "json",
-		"label":             provider.Title + " query",
-		"executeLabel":      "Search",
-		"runningLabel":      "Searching...",
-		"emptyText":         "Run a JSON DSL search to see hits.",
-		"initialQuery":      `{"query":{"match_all":{}},"size":50}`,
-		"completionRouteId": routeID(provider, "completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "json",
+		Label:             provider.Title + " query",
+		ExecuteLabel:      "Search",
+		RunningLabel:      "Searching...",
+		EmptyText:         "Run a JSON DSL search to see hits.",
+		InitialQuery:      `{"query":{"match_all":{}},"size":50}`,
+		CompletionRouteID: routeID(provider, "completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func indexParams() map[string]string {

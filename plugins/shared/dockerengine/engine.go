@@ -543,6 +543,161 @@ func RemoveNetwork(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: err == nil}, DockerErr(err)
 }
 
+// ImagePullSchema returns the input form for the shared image pull handler.
+func ImagePullSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Image", Fields: []plugin.Field{
+		{Key: "image", Label: "Image", Type: plugin.FieldText, Required: true, Placeholder: "nginx:latest", Help: "Image reference (repository:tag)."},
+	}}}}
+}
+
+func VolumeCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Volume", Fields: []plugin.Field{
+		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+		{Key: "driver", Label: "Driver", Type: plugin.FieldText, Default: "local"},
+	}}}}
+}
+
+func NetworkCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Network", Fields: []plugin.Field{
+		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+		{Key: "driver", Label: "Driver", Type: plugin.FieldText, Default: "bridge"},
+	}}}}
+}
+
+// PullImage pulls an image by reference, waiting for the pull to finish.
+func PullImage(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Image string `json:"image" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	ref := strings.TrimSpace(req.Image)
+	if ref == "" {
+		return nil, fmt.Errorf("%w: image reference is required", plugin.ErrInvalidInput)
+	}
+	pull, err := s.cli.ImagePull(rc.Ctx, ref, dockerclient.ImagePullOptions{})
+	if err != nil {
+		return nil, DockerErr(err)
+	}
+	if err := pull.Wait(rc.Ctx); err != nil {
+		_ = pull.Close()
+		return nil, DockerErr(err)
+	}
+	if err := pull.Close(); err != nil {
+		return nil, DockerErr(err)
+	}
+	return ActionResult{OK: true}, nil
+}
+
+// CreateVolume creates a named volume.
+func CreateVolume(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name   string `json:"name" validate:"required"`
+		Driver string `json:"driver"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		return nil, fmt.Errorf("%w: volume name is required", plugin.ErrInvalidInput)
+	}
+	if _, err := s.cli.VolumeCreate(rc.Ctx, dockerclient.VolumeCreateOptions{Name: strings.TrimSpace(req.Name), Driver: strings.TrimSpace(req.Driver)}); err != nil {
+		return nil, DockerErr(err)
+	}
+	return ActionResult{OK: true}, nil
+}
+
+// CreateNetwork creates a network.
+func CreateNetwork(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name   string `json:"name" validate:"required"`
+		Driver string `json:"driver"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, fmt.Errorf("%w: network name is required", plugin.ErrInvalidInput)
+	}
+	if _, err := s.cli.NetworkCreate(rc.Ctx, name, dockerclient.NetworkCreateOptions{Driver: strings.TrimSpace(req.Driver)}); err != nil {
+		return nil, DockerErr(err)
+	}
+	return ActionResult{OK: true}, nil
+}
+
+// PruneResult summarises a prune sweep for the generic action toast.
+type PruneResult struct {
+	OK             bool   `json:"ok"`
+	Deleted        int    `json:"deleted"`
+	SpaceReclaimed uint64 `json:"spaceReclaimed"`
+}
+
+// PruneContainers removes all stopped containers.
+func PruneContainers(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.ContainerPrune(rc.Ctx, dockerclient.ContainerPruneOptions{})
+	if err != nil {
+		return nil, DockerErr(err)
+	}
+	return PruneResult{OK: true, Deleted: len(res.Report.ContainersDeleted), SpaceReclaimed: res.Report.SpaceReclaimed}, nil
+}
+
+// PruneImages removes dangling images.
+func PruneImages(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.ImagePrune(rc.Ctx, dockerclient.ImagePruneOptions{})
+	if err != nil {
+		return nil, DockerErr(err)
+	}
+	return PruneResult{OK: true, Deleted: len(res.Report.ImagesDeleted), SpaceReclaimed: res.Report.SpaceReclaimed}, nil
+}
+
+// PruneVolumes removes unused volumes.
+func PruneVolumes(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.VolumePrune(rc.Ctx, dockerclient.VolumePruneOptions{})
+	if err != nil {
+		return nil, DockerErr(err)
+	}
+	return PruneResult{OK: true, Deleted: len(res.Report.VolumesDeleted), SpaceReclaimed: res.Report.SpaceReclaimed}, nil
+}
+
+// PruneNetworks removes unused networks.
+func PruneNetworks(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	res, err := s.cli.NetworkPrune(rc.Ctx, dockerclient.NetworkPruneOptions{})
+	if err != nil {
+		return nil, DockerErr(err)
+	}
+	return PruneResult{OK: true, Deleted: len(res.Report.NetworksDeleted)}, nil
+}
+
 func LogsStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	ch, err := rc.Session.OpenChannel(rc.Ctx, plugin.ChannelRequest{Kind: plugin.StreamLogs, Params: streamParams(rc)})
 	if err != nil {

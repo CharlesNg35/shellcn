@@ -83,16 +83,16 @@ func actions() []plugin.Action {
 }
 
 func searchConfig() map[string]any {
-	return map[string]any{
-		"language":          "json",
-		"label":             "Typesense query",
-		"executeLabel":      "Search",
-		"runningLabel":      "Searching...",
-		"emptyText":         "Run a Typesense JSON search to see hits.",
-		"initialQuery":      `{"q":"*","per_page":50}`,
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "json",
+		Label:             "Typesense query",
+		ExecuteLabel:      "Search",
+		RunningLabel:      "Searching...",
+		EmptyText:         "Run a Typesense JSON search to see hits.",
+		InitialQuery:      `{"q":"*","per_page":50}`,
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func collectionParams() map[string]string { return map[string]string{"collection": "${resource.name}"} }

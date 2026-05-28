@@ -110,16 +110,16 @@ func actions() []plugin.Action {
 }
 
 func queryConfig(initial string) map[string]any {
-	return map[string]any{
-		"language":          "sql",
-		"label":             "PartiQL",
-		"executeLabel":      "Run",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a PartiQL statement to see results.",
-		"initialQuery":      initial,
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "sql",
+		Label:             "PartiQL",
+		ExecuteLabel:      "Run",
+		RunningLabel:      "Running...",
+		EmptyText:         "Run a PartiQL statement to see results.",
+		InitialQuery:      initial,
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func tableParams() map[string]string { return map[string]string{"table": "${resource.name}"} }

@@ -144,6 +144,7 @@ func containerResource() plugin.ResourceType {
 		Columns: columns,
 		ListActionIDs: []string{
 			"docker.container.create",
+			"docker.containers.prune",
 		},
 		ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"},
 		Detail: plugin.DetailView{
@@ -169,7 +170,8 @@ func imageResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "image", Title: "Images", List: plugin.DataSource{RouteID: "docker.images.list"}, Columns: columns,
-		ActionIDs: []string{"docker.image.remove"},
+		ActionIDs:     []string{"docker.image.remove"},
+		ListActionIDs: []string{"docker.image.pull", "docker.images.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"docker.image.remove"}},
 			Tabs: []plugin.Tab{
@@ -191,7 +193,8 @@ func volumeResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "volume", Title: "Volumes", List: plugin.DataSource{RouteID: "docker.volumes.list"}, Columns: columns,
-		ActionIDs: []string{"docker.volume.remove"},
+		ActionIDs:     []string{"docker.volume.remove"},
+		ListActionIDs: []string{"docker.volume.create", "docker.volumes.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"docker.volume.remove"}},
 			Tabs: []plugin.Tab{
@@ -213,7 +216,8 @@ func networkResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "network", Title: "Networks", List: plugin.DataSource{RouteID: "docker.networks.list"}, Columns: columns,
-		ActionIDs: []string{"docker.network.remove"},
+		ActionIDs:     []string{"docker.network.remove"},
+		ListActionIDs: []string{"docker.network.create", "docker.networks.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"docker.network.remove"}},
 			Tabs: []plugin.Tab{
@@ -255,5 +259,12 @@ func actions() []plugin.Action {
 		{ID: "docker.image.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.image.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this image?"},
 		{ID: "docker.volume.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.volume.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this volume?"},
 		{ID: "docker.network.remove", Label: "Remove", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "trash"}, RouteID: "docker.network.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this network?"},
+		{ID: "docker.image.pull", Label: "Pull image", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "download"}, RouteID: "docker.image.pull"},
+		{ID: "docker.volume.create", Label: "Create volume", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"}, RouteID: "docker.volume.create"},
+		{ID: "docker.network.create", Label: "Create network", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"}, RouteID: "docker.network.create"},
+		{ID: "docker.containers.prune", Label: "Prune stopped", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "eraser"}, RouteID: "docker.containers.prune", Confirm: true, ConfirmText: "Remove all stopped containers?"},
+		{ID: "docker.images.prune", Label: "Prune dangling", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "eraser"}, RouteID: "docker.images.prune", Confirm: true, ConfirmText: "Remove all dangling images?"},
+		{ID: "docker.volumes.prune", Label: "Prune unused", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "eraser"}, RouteID: "docker.volumes.prune", Confirm: true, ConfirmText: "Remove all unused volumes?"},
+		{ID: "docker.networks.prune", Label: "Prune unused", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "eraser"}, RouteID: "docker.networks.prune", Confirm: true, ConfirmText: "Remove all unused networks?"},
 	}
 }

@@ -113,22 +113,29 @@ func liveMetricsConfig() map[string]any {
 }
 
 func queryConfig() map[string]any {
-	return map[string]any{
-		"language":          "plaintext",
-		"label":             "PromQL",
-		"executeLabel":      "Query",
-		"runningLabel":      "Querying...",
-		"emptyText":         "Run a PromQL instant query, or a JSON range query.",
-		"initialQuery":      "up",
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "plaintext",
+		Label:             "PromQL",
+		ExecuteLabel:      "Query",
+		RunningLabel:      "Querying...",
+		EmptyText:         "Run a PromQL instant query, or a JSON range query.",
+		InitialQuery:      "up",
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func metricQueryConfig() map[string]any {
-	cfg := queryConfig()
-	cfg["initialQuery"] = "${resource.name}"
-	return cfg
+	return plugin.QueryEditorConfig{
+		Language:          "plaintext",
+		Label:             "PromQL",
+		ExecuteLabel:      "Query",
+		RunningLabel:      "Querying...",
+		EmptyText:         "Run a PromQL instant query, or a JSON range query.",
+		InitialQuery:      "${resource.name}",
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func statusParams() map[string]string { return map[string]string{"status": "${resource.name}"} }

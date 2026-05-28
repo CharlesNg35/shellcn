@@ -108,7 +108,7 @@ func containerResource() plugin.ResourceType {
 		List:          plugin.DataSource{RouteID: "podman.containers.list"},
 		Watch:         &plugin.DataSource{RouteID: "podman.events.watch", Method: plugin.MethodWS},
 		Columns:       containerColumns(),
-		ListActionIDs: []string{"podman.container.create"},
+		ListActionIDs: []string{"podman.container.create", "podman.containers.prune"},
 		ActionIDs:     []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"}},
@@ -157,7 +157,8 @@ func imageResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "image", Title: "Images", List: plugin.DataSource{RouteID: "podman.images.list"}, Columns: columns,
-		ActionIDs: []string{"podman.image.remove"},
+		ActionIDs:     []string{"podman.image.remove"},
+		ListActionIDs: []string{"podman.image.pull", "podman.images.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"podman.image.remove"}},
 			Tabs: []plugin.Tab{
@@ -178,7 +179,8 @@ func volumeResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "volume", Title: "Volumes", List: plugin.DataSource{RouteID: "podman.volumes.list"}, Columns: columns,
-		ActionIDs: []string{"podman.volume.remove"},
+		ActionIDs:     []string{"podman.volume.remove"},
+		ListActionIDs: []string{"podman.volume.create", "podman.volumes.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"podman.volume.remove"}},
 			Tabs: []plugin.Tab{
@@ -198,7 +200,8 @@ func networkResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "network", Title: "Networks", List: plugin.DataSource{RouteID: "podman.networks.list"}, Columns: columns,
-		ActionIDs: []string{"podman.network.remove"},
+		ActionIDs:     []string{"podman.network.remove"},
+		ListActionIDs: []string{"podman.network.create", "podman.networks.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"podman.network.remove"}},
 			Tabs: []plugin.Tab{
@@ -219,5 +222,12 @@ func actions() []plugin.Action {
 		{ID: "podman.image.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.image.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this image?"},
 		{ID: "podman.volume.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.volume.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this volume?"},
 		{ID: "podman.network.remove", Label: "Remove", Icon: icon("trash"), RouteID: "podman.network.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this network?"},
+		{ID: "podman.image.pull", Label: "Pull image", Icon: icon("download"), RouteID: "podman.image.pull"},
+		{ID: "podman.volume.create", Label: "Create volume", Icon: icon("plus"), RouteID: "podman.volume.create"},
+		{ID: "podman.network.create", Label: "Create network", Icon: icon("plus"), RouteID: "podman.network.create"},
+		{ID: "podman.containers.prune", Label: "Prune stopped", Icon: icon("eraser"), RouteID: "podman.containers.prune", Confirm: true, ConfirmText: "Remove all stopped containers?"},
+		{ID: "podman.images.prune", Label: "Prune dangling", Icon: icon("eraser"), RouteID: "podman.images.prune", Confirm: true, ConfirmText: "Remove all dangling images?"},
+		{ID: "podman.volumes.prune", Label: "Prune unused", Icon: icon("eraser"), RouteID: "podman.volumes.prune", Confirm: true, ConfirmText: "Remove all unused volumes?"},
+		{ID: "podman.networks.prune", Label: "Prune unused", Icon: icon("eraser"), RouteID: "podman.networks.prune", Confirm: true, ConfirmText: "Remove all unused networks?"},
 	}
 }

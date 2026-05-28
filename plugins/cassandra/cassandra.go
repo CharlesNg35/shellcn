@@ -174,18 +174,18 @@ func tableParams() map[string]string {
 }
 
 func queryConfig(initial string) map[string]any {
-	return map[string]any{
-		"language":          "sql",
-		"label":             "CQL",
-		"executeLabel":      "Run query",
-		"cancelLabel":       "Cancel query",
-		"runningLabel":      "Running...",
-		"emptyText":         "Run a CQL query to see results.",
-		"initialQuery":      initial,
-		"cancelRouteId":     "cassandra.query.cancel",
-		"completionRouteId": "cassandra.completion",
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "sql",
+		Label:             "CQL",
+		ExecuteLabel:      "Run query",
+		CancelLabel:       "Cancel query",
+		RunningLabel:      "Running...",
+		EmptyText:         "Run a CQL query to see results.",
+		InitialQuery:      initial,
+		CancelRouteID:     "cassandra.query.cancel",
+		CompletionRouteID: "cassandra.completion",
+		Exportable:        true,
+	}.Map()
 }
 
 func tableColumns() []plugin.Column {

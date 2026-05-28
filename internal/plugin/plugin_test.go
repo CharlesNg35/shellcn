@@ -317,6 +317,33 @@ func TestValidateAcceptsRemoteDesktopConfig(t *testing.T) {
 }
 
 func TestSpecializedPanelConfigMaps(t *testing.T) {
+	files := plugin.FileBrowserConfig{
+		PathParam: "path", ReadRouteID: "sftp.read", DownloadRouteID: "sftp.download",
+		WriteRouteID: "sftp.write", UploadRouteID: "sftp.upload", MkdirRouteID: "sftp.mkdir",
+		RenameRouteID: "sftp.rename", DeleteRouteID: "sftp.delete", Writable: true,
+		MultipleUpload: true, MaxUploadBytes: 1024, UploadFieldName: "files",
+	}.Map()
+	if files["readRouteId"] != "sftp.read" || files["writable"] != true || files["uploadFieldName"] != "files" {
+		t.Fatalf("file browser config map unexpected: %#v", files)
+	}
+
+	form := plugin.FormPanelConfig{
+		SubmitRouteID: "form.save", SubmitMethod: plugin.MethodPatch,
+		SubmitLabel: "Apply", Params: map[string]string{"id": "${resource.uid}"},
+	}.Map()
+	if form["submitRouteId"] != "form.save" || form["submitMethod"] != plugin.MethodPatch || form["submitLabel"] != "Apply" {
+		t.Fatalf("form config map unexpected: %#v", form)
+	}
+
+	query := plugin.QueryEditorConfig{
+		Language: "sql", Label: "SQL", ExecuteLabel: "Run", CancelLabel: "Cancel",
+		RunningLabel: "Running...", EmptyText: "Run a query.", InitialQuery: "select 1",
+		CancelRouteID: "query.cancel", CompletionRouteID: "query.complete", Exportable: true,
+	}.Map()
+	if query["initialQuery"] != "select 1" || query["cancelRouteId"] != "query.cancel" || query["exportable"] != true {
+		t.Fatalf("query editor config map unexpected: %#v", query)
+	}
+
 	kv := plugin.KVConfig{
 		CreateRouteID: "redis.key.create", ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write",
 		DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,

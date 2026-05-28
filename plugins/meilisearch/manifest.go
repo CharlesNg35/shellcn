@@ -90,16 +90,16 @@ func actions() []plugin.Action {
 }
 
 func searchConfig() map[string]any {
-	return map[string]any{
-		"language":          "json",
-		"label":             "Meilisearch query",
-		"executeLabel":      "Search",
-		"runningLabel":      "Searching...",
-		"emptyText":         "Run a Meilisearch JSON search to see hits.",
-		"initialQuery":      `{"q":"","limit":50}`,
-		"completionRouteId": rid("completion"),
-		"exportable":        true,
-	}
+	return plugin.QueryEditorConfig{
+		Language:          "json",
+		Label:             "Meilisearch query",
+		ExecuteLabel:      "Search",
+		RunningLabel:      "Searching...",
+		EmptyText:         "Run a Meilisearch JSON search to see hits.",
+		InitialQuery:      `{"q":"","limit":50}`,
+		CompletionRouteID: rid("completion"),
+		Exportable:        true,
+	}.Map()
 }
 
 func indexParams() map[string]string { return map[string]string{"index": "${resource.name}"} }
