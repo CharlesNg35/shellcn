@@ -110,7 +110,7 @@ func qemuResource() plugin.ResourceType {
 		List: plugin.DataSource{RouteID: "proxmox.qemu.list"}, Columns: cols,
 		ActionIDs: lifecycle,
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", ActionIDs: lifecycle},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities, ActionIDs: lifecycle},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.qemu.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics()},
 				{Key: "console", Label: "Console", Icon: icon("monitor"), Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "proxmox.qemu.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true}.Map()},
@@ -130,7 +130,7 @@ func lxcResource() plugin.ResourceType {
 		List: plugin.DataSource{RouteID: "proxmox.lxc.list"}, Columns: cols,
 		ActionIDs: lifecycle,
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", ActionIDs: lifecycle},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities, ActionIDs: lifecycle},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.lxc.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics()},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.lxc.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
@@ -156,7 +156,7 @@ func nodeResource() plugin.ResourceType {
 		Kind: "node", Title: "Nodes",
 		List: plugin.DataSource{RouteID: "proxmox.node.list"}, Columns: cols,
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.node.metrics", Method: plugin.MethodWS, Params: nodeParam}, Config: cpuMemMetrics()},
 				{Key: "shell", Label: "Shell", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.node.shell", Method: plugin.MethodWS, Params: nodeParam}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
@@ -172,7 +172,7 @@ func storageResource() plugin.ResourceType {
 		Kind: "storage", Title: "Storage",
 		List: plugin.DataSource{RouteID: "proxmox.storage.list"}, Columns: storageColumns(),
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Tab{
 				{Key: "content", Label: "Content", Icon: icon("hard-drive"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.storage.content", Params: map[string]string{"node": "${resource.namespace}", "storage": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: contentColumns(), RowActionIDs: []string{"act.backup.delete"}}.Map()},
 			},

@@ -241,6 +241,48 @@ describe("TablePanel", () => {
     expect(document.body.textContent).toContain("name");
     w.unmount();
   });
+
+  it("derives add-row inputs from each column's data type", async () => {
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.includes("db.table.columns")) {
+        return {
+          body: {
+            items: [
+              { name: "id", type: "integer", nullable: false },
+              { name: "active", type: "boolean", nullable: true },
+              { name: "label", type: "text", nullable: true },
+            ],
+            nextCursor: "",
+            total: 3,
+          },
+        };
+      }
+      return { body: { items: [], nextCursor: "", total: 0 } };
+    });
+
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "db.table.rows" },
+        config: {
+          editable: true,
+          insert: { routeId: "db.row.insert", method: "POST" },
+          columnsSource: { routeId: "db.table.columns" },
+        },
+      },
+    });
+    await flushPromises();
+
+    bodyButton("Add row")!.click();
+    await flushPromises();
+    // A boolean column renders a toggle, an integer column a number input —
+    // not the old one-size-fits-all text box.
+    expect(w.findComponent({ name: "ToggleSwitch" }).exists()).toBe(true);
+    expect(w.findComponent({ name: "InputNumber" }).exists()).toBe(true);
+    w.unmount();
+  });
 });
 
 describe("TablePanel staged edits", () => {

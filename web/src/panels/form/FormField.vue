@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import Slider from "primevue/slider";
@@ -15,8 +15,12 @@ import type { FileUploadSelectEvent } from "primevue/fileupload";
 import type {
   CredentialRefState,
   Field,
+  Option,
+  ResourceRef,
+  Row,
   ValidatorType,
 } from "../../types/projection";
+import { fetchPage } from "../../api/dataSource";
 import AppIcon from "../../components/AppIcon.vue";
 import CredentialSelect from "./CredentialSelect.vue";
 
@@ -27,8 +31,46 @@ const props = defineProps<{
   secretSet?: boolean;
   credentialState?: CredentialRefState;
   protocol?: string;
+  // Context for a field whose options come from a route (optionsSource).
+  connectionId?: string;
+  resource?: ResourceRef | null;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
+
+// A field's choices: route-sourced options when declared and loaded, else the
+// static manifest options. Rows map to {value,label} by convention.
+const fetchedOptions = ref<Option[] | null>(null);
+const options = computed<Option[]>(
+  () => fetchedOptions.value ?? props.field.options ?? [],
+);
+
+function rowOption(row: Row): Option {
+  const r = row as Record<string, unknown>;
+  const raw = r.value ?? r.name ?? r.column_name ?? r.column ?? r.key ?? "";
+  const value =
+    typeof raw === "number" || typeof raw === "boolean" ? raw : String(raw);
+  return { value, label: String(r.label ?? r.name ?? value) };
+}
+
+watch(
+  () => [props.field.optionsSource, props.connectionId, props.resource?.uid],
+  async () => {
+    const src = props.field.optionsSource;
+    if (!src || !props.connectionId) return;
+    try {
+      const page = await fetchPage<Row>(
+        props.connectionId,
+        src,
+        { resource: props.resource ?? null },
+        { limit: 500 },
+      );
+      fetchedOptions.value = page.items.map(rowOption);
+    } catch {
+      fetchedOptions.value = [];
+    }
+  },
+  { immediate: true },
+);
 
 const editingSecret = ref(false);
 const showSecretValue = computed(
@@ -104,7 +146,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     <Select
       v-else-if="field.type === 'select'"
       :model-value="modelValue"
-      :options="field.options"
+      :options="options"
       option-label="label"
       option-value="value"
       :placeholder="field.placeholder ?? 'Select…'"
@@ -114,7 +156,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
     <MultiSelect
       v-else-if="field.type === 'multiselect'"
       :model-value="(modelValue as unknown[]) ?? []"
-      :options="field.options"
+      :options="options"
       option-label="label"
       option-value="value"
       display="chip"
@@ -202,7 +244,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <div v-else-if="field.type === 'radio'" class="flex flex-col gap-2 pt-1">
       <label
-        v-for="opt in field.options ?? []"
+        v-for="opt in options"
         :key="String(opt.value)"
         class="flex items-center gap-2 text-sm text-surface-700 dark:text-surface-200"
       >

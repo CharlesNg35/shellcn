@@ -149,7 +149,7 @@ func columnAddSchema() *plugin.Schema {
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "postgresql.table.columns", Params: tableParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 	}}}}
 }
@@ -1047,7 +1047,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	}
 	var req struct {
 		Name    string `json:"name" validate:"required"`
-		Columns string `json:"columns" validate:"required"`
+		Columns any    `json:"columns" validate:"required"`
 		Unique  bool   `json:"unique"`
 	}
 	if err := rc.Bind(&req); err != nil {
@@ -1057,7 +1057,7 @@ func createIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	cols, err := sqldb.IdentifierList(req.Columns, sqldb.QuoteIdent)
+	cols, err := sqldb.IdentifierListValue(req.Columns, sqldb.QuoteIdent)
 	if err != nil {
 		return nil, err
 	}

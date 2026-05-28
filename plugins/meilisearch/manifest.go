@@ -56,7 +56,7 @@ func resources() []plugin.ResourceType {
 			Kind: "task", Title: "Tasks", List: plugin.DataSource{RouteID: rid("tasks.list")},
 			Columns:      taskColumns(),
 			RowActionIDs: []string{rid("task.cancel")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Task ${resource.name}", StatusField: "status", ActionIDs: []string{rid("task.cancel")}}, Tabs: []plugin.Tab{
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Task ${resource.name}", StatusField: "status", Severities: taskStatusSeverities, ActionIDs: []string{rid("task.cancel")}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("task.read"), Params: taskParams()}},
 			}},
 		},

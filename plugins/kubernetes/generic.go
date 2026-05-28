@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -79,16 +80,29 @@ func ListResource(rc *plugin.RequestContext) (any, error) {
 		return pageRows(rc, rows)
 	}
 	ri := s.Dynamic().Resource(k.gvr)
+	opts := metav1.ListOptions{Limit: k.listLimit}
 	var list *unstructured.UnstructuredList
 	if ns := s.listNamespace(rc, k); k.namespaced && ns != "" {
-		list, err = ri.Namespace(ns).List(rc.Ctx, metav1.ListOptions{})
+		list, err = ri.Namespace(ns).List(rc.Ctx, opts)
 	} else {
-		list, err = ri.List(rc.Ctx, metav1.ListOptions{})
+		list, err = ri.List(rc.Ctx, opts)
 	}
 	if err != nil {
 		return nil, apiErr(err)
 	}
-	return pageRows(rc, mapList(k, list))
+	rows := mapList(k, list)
+	if k.recentFirst {
+		sortRecentFirst(rows)
+	}
+	return pageRows(rc, rows)
+}
+
+// sortRecentFirst orders rows newest-first; k8s RFC3339 UTC stamps sort
+// chronologically as plain strings, so no parsing is needed.
+func sortRecentFirst(rows []Row) {
+	sort.Slice(rows, func(i, j int) bool {
+		return fmt.Sprint(rows[i]["createdAt"]) > fmt.Sprint(rows[j]["createdAt"])
+	})
 }
 
 // GetResource returns one object for the detail/YAML view (Secrets redacted).

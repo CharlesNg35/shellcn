@@ -2,6 +2,22 @@ package prometheus
 
 import "github.com/charlesng35/shellcn/internal/plugin"
 
+// Badge color maps: a lower-cased cell value to its severity.
+var (
+	healthSeverities = map[string]plugin.Severity{
+		"up": plugin.SeveritySuccess, "ok": plugin.SeveritySuccess,
+		"down": plugin.SeverityDanger, "err": plugin.SeverityDanger, "error": plugin.SeverityDanger,
+		"unknown": plugin.SeveritySecondary,
+	}
+	targetStateSeverities = map[string]plugin.Severity{
+		"active": plugin.SeveritySuccess, "dropped": plugin.SeveritySecondary,
+	}
+	alertStateSeverities = map[string]plugin.Severity{
+		"firing": plugin.SeverityDanger, "pending": plugin.SeverityWarn,
+		"inactive": plugin.SeveritySecondary, "ok": plugin.SeveritySuccess,
+	}
+)
+
 func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
 
 func rid(suffix string) string { return protocolName + "." + suffix }
@@ -130,8 +146,8 @@ func targetColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "job", Label: "Job", Sortable: true},
 		{Key: "instance", Label: "Instance", Sortable: true},
-		{Key: "health", Label: "Health", Type: plugin.ColumnBadge, Sortable: true},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "health", Label: "Health", Type: plugin.ColumnBadge, Sortable: true, Severities: healthSeverities},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: targetStateSeverities},
 		{Key: "scrapePool", Label: "Pool", Sortable: true},
 		{Key: "lastScrape", Label: "Last scrape", Type: plugin.ColumnDateTime, Sortable: true},
 		{Key: "lastError", Label: "Last error"},
@@ -143,11 +159,11 @@ func targetMetadataColumns() []plugin.Column {
 }
 
 func alertColumns() []plugin.Column {
-	return []plugin.Column{{Key: "alertname", Label: "Alert", Sortable: true}, {Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true}, {Key: "activeAt", Label: "Active at", Type: plugin.ColumnDateTime, Sortable: true}, {Key: "value", Label: "Value"}, {Key: "labels", Label: "Labels", Type: plugin.ColumnJSON}}
+	return []plugin.Column{{Key: "alertname", Label: "Alert", Sortable: true}, {Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: alertStateSeverities}, {Key: "activeAt", Label: "Active at", Type: plugin.ColumnDateTime, Sortable: true}, {Key: "value", Label: "Value"}, {Key: "labels", Label: "Labels", Type: plugin.ColumnJSON}}
 }
 
 func ruleColumns() []plugin.Column {
-	return []plugin.Column{{Key: "name", Label: "Rule", Sortable: true}, {Key: "group", Label: "Group", Sortable: true}, {Key: "type", Label: "Type", Type: plugin.ColumnBadge, Sortable: true}, {Key: "health", Label: "Health", Type: plugin.ColumnBadge, Sortable: true}, {Key: "state", Label: "State", Type: plugin.ColumnBadge}, {Key: "query", Label: "Query"}}
+	return []plugin.Column{{Key: "name", Label: "Rule", Sortable: true}, {Key: "group", Label: "Group", Sortable: true}, {Key: "type", Label: "Type", Type: plugin.ColumnBadge, Sortable: true}, {Key: "health", Label: "Health", Type: plugin.ColumnBadge, Sortable: true, Severities: healthSeverities}, {Key: "state", Label: "State", Type: plugin.ColumnBadge, Severities: alertStateSeverities}, {Key: "query", Label: "Query"}}
 }
 
 func metricColumns() []plugin.Column {

@@ -171,7 +171,7 @@ func nodeResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "node", Title: "Nodes", List: plugin.DataSource{RouteID: "swarm.nodes.list"}, Columns: columns,
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.node.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.node.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}.Map()},
@@ -185,7 +185,7 @@ func taskResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "task", Title: "Tasks", List: plugin.DataSource{RouteID: "swarm.tasks.list"}, Columns: taskColumns(),
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.task.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.task.inspect", Params: map[string]string{"id": "${resource.uid}"}}},

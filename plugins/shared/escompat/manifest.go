@@ -2,6 +2,20 @@ package escompat
 
 import "github.com/charlesng35/shellcn/internal/plugin"
 
+// Badge color maps: a lower-cased cell value to its severity.
+var (
+	healthSeverities = map[string]plugin.Severity{
+		"green": plugin.SeveritySuccess, "yellow": plugin.SeverityWarn, "red": plugin.SeverityDanger,
+	}
+	indexStatusSeverities = map[string]plugin.Severity{
+		"open": plugin.SeveritySuccess, "close": plugin.SeveritySecondary, "closed": plugin.SeveritySecondary,
+	}
+	shardStateSeverities = map[string]plugin.Severity{
+		"started": plugin.SeveritySuccess, "relocating": plugin.SeverityWarn,
+		"initializing": plugin.SeverityWarn, "unassigned": plugin.SeverityDanger,
+	}
+)
+
 func icon(name string) plugin.Icon {
 	return plugin.Icon{Type: plugin.IconLucide, Value: name}
 }
@@ -23,7 +37,7 @@ func resources(provider Provider) []plugin.ResourceType {
 			Columns:       indexColumns(),
 			ListActionIDs: []string{routeID(provider, "index.create")},
 			RowActionIDs:  []string{routeID(provider, "index.refresh"), routeID(provider, "index.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "health", ActionIDs: []string{
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "health", Severities: healthSeverities, ActionIDs: []string{
 				routeID(provider, "mapping.update"),
 				routeID(provider, "index.refresh"),
 				routeID(provider, "index.flush"),
@@ -97,8 +111,8 @@ func documentParams() map[string]string {
 
 func indexColumns() []plugin.Column {
 	return []plugin.Column{
-		{Key: "health", Label: "Health", Type: plugin.ColumnBadge, Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "health", Label: "Health", Type: plugin.ColumnBadge, Sortable: true, Severities: healthSeverities},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: indexStatusSeverities},
 		{Key: "index", Label: "Index", Sortable: true},
 		{Key: "uuid", Label: "UUID"},
 		{Key: "pri", Label: "Primaries", Type: plugin.ColumnNumber, Sortable: true},
@@ -135,7 +149,7 @@ func shardColumns() []plugin.Column {
 		{Key: "index", Label: "Index", Sortable: true},
 		{Key: "shard", Label: "Shard", Sortable: true},
 		{Key: "prirep", Label: "Type", Type: plugin.ColumnBadge},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: shardStateSeverities},
 		{Key: "docs", Label: "Docs", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "store", Label: "Store", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "ip", Label: "IP"},

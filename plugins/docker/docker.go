@@ -147,7 +147,7 @@ func containerResource() plugin.ResourceType {
 		},
 		ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "docker.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24", "command": "/bin/sh"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},

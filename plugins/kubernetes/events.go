@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
@@ -19,11 +20,19 @@ func ResourceEvents(rc *plugin.RequestContext) (any, error) {
 	if name == "" {
 		return pageRows(rc, nil)
 	}
-	list, err := s.Dynamic().Resource(eventGVR).List(rc.Ctx, metav1.ListOptions{
-		FieldSelector: "involvedObject.name=" + name,
-	})
-	if err != nil {
-		return nil, apiErr(err)
+	ri := s.Dynamic().Resource(eventGVR)
+	opts := metav1.ListOptions{FieldSelector: "involvedObject.name=" + name, Limit: 500}
+	var (
+		list *unstructured.UnstructuredList
+		err2 error
+	)
+	if ns := rc.Param("namespace"); ns != "" {
+		list, err2 = ri.Namespace(ns).List(rc.Ctx, opts)
+	} else {
+		list, err2 = ri.List(rc.Ctx, opts)
+	}
+	if err2 != nil {
+		return nil, apiErr(err2)
 	}
 	rows := make([]Row, 0, len(list.Items))
 	for i := range list.Items {
@@ -35,5 +44,6 @@ func ResourceEvents(rc *plugin.RequestContext) (any, error) {
 		row["ref"] = plugin.ResourceRef{Kind: "event", Namespace: refNS(o), Name: refName(o), UID: str(o, "metadata", "uid")}
 		rows = append(rows, row)
 	}
+	sortRecentFirst(rows)
 	return pageRows(rc, rows)
 }

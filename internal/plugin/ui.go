@@ -526,9 +526,12 @@ type Stream struct {
 
 // HeaderSpec configures a resource DetailView header.
 type HeaderSpec struct {
-	Title       string   `json:"title,omitempty"`
-	StatusField string   `json:"statusField,omitempty"`
-	ActionIDs   []string `json:"actionIds,omitempty"`
+	Title       string `json:"title,omitempty"`
+	StatusField string `json:"statusField,omitempty"`
+	// Severities colors the status badge by value (same value->severity map as a
+	// badge Column); unmapped values stay neutral.
+	Severities map[string]Severity `json:"severities,omitempty"`
+	ActionIDs  []string            `json:"actionIds,omitempty"`
 }
 
 // DetailView is opened when a resource row is clicked.

@@ -111,7 +111,7 @@ func containerResource() plugin.ResourceType {
 		ListActionIDs: []string{"podman.container.create"},
 		ActionIDs:     []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", ActionIDs: []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "terminal", Label: "Terminal", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "podman.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24", "command": "/bin/sh"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
@@ -126,7 +126,7 @@ func containerResource() plugin.ResourceType {
 func podResource() plugin.ResourceType {
 	columns := []plugin.Column{
 		{Key: "name", Label: "Name", Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: dockerengine.StateSeverities()},
 		{Key: "containers", Label: "Containers", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "createdAt", Label: "Created", Type: plugin.ColumnDateTime, Sortable: true},
 	}
@@ -137,7 +137,7 @@ func podResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "pod", Title: "Pods", List: plugin.DataSource{RouteID: "podman.pods.list"}, Columns: columns,
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: dockerengine.StateSeverities()},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.pod.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "containers", Label: "Containers", Icon: icon("box"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "podman.pod.containers", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: podContainerColumns}.Map()},

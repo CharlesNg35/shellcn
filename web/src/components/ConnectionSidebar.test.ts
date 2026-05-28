@@ -11,7 +11,7 @@ vi.mock("vue-draggable-plus", () => ({
   VueDraggable: {
     name: "VueDraggable",
     props: ["modelValue"],
-    emits: ["update:modelValue", "end"],
+    emits: ["update:modelValue", "choose", "start", "update", "end"],
     template: '<div data-draggable="true"><slot /></div>',
   },
 }));
@@ -54,7 +54,10 @@ beforeEach(() => {
   setActivePinia(createPinia());
   localStorage.clear();
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe("ConnectionSidebar", () => {
   it("renders folders and expands the active connection folder", async () => {
@@ -144,6 +147,40 @@ describe("ConnectionSidebar", () => {
     await scroller.trigger("scroll");
 
     expect(shadow.classes()).toContain("opacity-100");
+  });
+
+  it("suppresses sidebar row hover backgrounds while dragging", async () => {
+    vi.useFakeTimers();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections")) return { body: connections };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      return { body: { ok: true } };
+    });
+    const conns = useConnectionsStore();
+    conns.loaded = true;
+    conns.connections = connections;
+
+    const wrapper = mount(ConnectionSidebar, {
+      props: { activeId: null, query: "" },
+      global: { plugins: [router()] },
+    });
+    await flushPromises();
+
+    const draggable = wrapper.findComponent({ name: "VueDraggable" });
+    const item = () => wrapper.get('[data-connection-id="c-root"]');
+    expect(item().classes()).toContain("hover:bg-surface-100");
+
+    draggable.vm.$emit("choose");
+    await flushPromises();
+    expect(item().classes()).not.toContain("hover:bg-surface-100");
+    expect(wrapper.get("[data-sidebar-scroll-region]").classes()).toContain(
+      "connection-sidebar-list--dragging",
+    );
+
+    draggable.vm.$emit("end");
+    await vi.advanceTimersByTimeAsync(0);
+    await flushPromises();
+    expect(item().classes()).toContain("hover:bg-surface-100");
   });
 
   it("persists connection order and folder placement", async () => {

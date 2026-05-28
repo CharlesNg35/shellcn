@@ -127,6 +127,12 @@ watch(
 // connected set lives in the store so the sidebar dot can reflect it (and it
 // survives in-app navigation, resetting only on a full reload).
 const connected = computed(() => ws.isConnected(props.id));
+const connectError = computed(() => {
+  const status = liveStatus.get(props.id);
+  return status?.state === "error"
+    ? (status.reason ?? "Connection failed.")
+    : "";
+});
 const channelPrefix = computed(() => `${props.id}:`);
 const sessionPath = computed(
   () => `/connections/${encodeURIComponent(props.id)}/session`,
@@ -372,6 +378,7 @@ function onActionDone(action: Action): void {
         :connection-id="id"
         :connection="connection"
         :connecting="sessionConnecting"
+        :error-message="connectError"
         @connect="connect"
         @enroll="showEnroll = true"
       />

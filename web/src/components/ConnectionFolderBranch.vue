@@ -20,6 +20,7 @@ const props = defineProps<{
   activeId: string | null;
   expanded: Record<string, boolean>;
   disabled: boolean;
+  dragging?: boolean;
   parentId?: string;
 }>();
 
@@ -28,6 +29,7 @@ const emit = defineEmits<{
   "toggle-folder": [folderId: string];
   "menu-action": [action: ConnectionFolderMenuAction];
   "drag-start": [];
+  "drag-change": [preference?: ConnectionTreeDropPreference];
   "drag-add": [preference?: ConnectionTreeDropPreference];
   "drag-end": [preference?: ConnectionTreeDropPreference];
   open: [connection: ConnectionSummary];
@@ -109,11 +111,13 @@ function dragAdd(event: unknown): void {
   const sortable = (event ?? {}) as {
     item?: HTMLElement;
   };
-  emit("drag-add", {
+  const preference = {
     connectionId: sortable.item?.dataset.connectionId,
     folderId: sortable.item?.dataset.folderId,
     targetParentId: props.parentId,
-  });
+  };
+  emit("drag-change", preference);
+  emit("drag-add", preference);
 }
 </script>
 
@@ -126,9 +130,13 @@ function dragAdd(event: unknown): void {
       :data-parent-folder-id="parentId ?? ''"
       :disabled="disabled"
       :animation="150"
-      ghost-class="opacity-40"
+      chosen-class="connection-sidebar-sortable-chosen"
+      drag-class="connection-sidebar-sortable-drag"
+      ghost-class="connection-sidebar-sortable-ghost"
       class="min-h-3 space-y-1"
+      @choose="emit('drag-start')"
       @start="emit('drag-start')"
+      @update="emit('drag-change')"
       @add="dragAdd"
       @end="dragEnd"
     >
@@ -140,12 +148,16 @@ function dragAdd(event: unknown): void {
           v-if="item.kind === 'connection'"
           :connection="item.connection"
           :active="activeId === item.connection.id"
+          :dragging="dragging"
           @open="emit('open', $event)"
         />
 
         <section v-else class="min-w-0" :data-folder-id="item.id">
           <div
-            class="connection-sidebar-drag-item group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+            class="connection-sidebar-drag-item group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors"
+            :class="
+              !dragging && 'hover:bg-surface-100 dark:hover:bg-surface-800'
+            "
           >
             <span
               class="shrink-0 rounded p-0.5"
@@ -205,11 +217,13 @@ function dragAdd(event: unknown): void {
             :active-id="activeId"
             :expanded="expanded"
             :disabled="disabled"
+            :dragging="dragging"
             :parent-id="item.id"
             class="mt-1 pl-4"
             @toggle-folder="emit('toggle-folder', $event)"
             @menu-action="emit('menu-action', $event)"
             @drag-start="emit('drag-start')"
+            @drag-change="emit('drag-change', $event)"
             @drag-add="emit('drag-add', $event)"
             @drag-end="emit('drag-end', $event)"
             @open="emit('open', $event)"

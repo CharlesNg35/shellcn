@@ -47,6 +47,7 @@ const editingFolder = ref<ConnectionFolder | null>(null);
 const newFolderParentId = ref<string | null>(null);
 const savingLayout = ref(false);
 let dragEndTimer: ReturnType<typeof window.setTimeout> | undefined;
+let pendingPersist = false;
 
 const emptyFiltered = computed(
   () => conns.loaded && Boolean(props.query.trim()) && !rootItems.value.length,
@@ -210,9 +211,13 @@ function remountTree(): void {
 }
 
 async function persistLayout(): Promise<void> {
-  if (savingLayout.value) return;
+  if (savingLayout.value) {
+    pendingPersist = true;
+    return;
+  }
   savingLayout.value = true;
   try {
+    pendingPersist = false;
     const items: Array<{
       connectionId: string;
       folderId?: string;
@@ -227,9 +232,6 @@ async function persistLayout(): Promise<void> {
     collectLayout(rootItems.value, undefined, items, folders);
 
     await conns.saveLayout(items, folders);
-    await conns.refresh();
-    rebuildLists();
-    remountTree();
   } catch (e) {
     notify.error("Could not save sidebar order", (e as Error).message);
     await conns.refresh();
@@ -237,6 +239,7 @@ async function persistLayout(): Promise<void> {
     remountTree();
   } finally {
     savingLayout.value = false;
+    if (pendingPersist) void persistLayout();
   }
 }
 
@@ -262,18 +265,20 @@ function collectLayout(
 
 function onDragEnd(preference?: ConnectionTreeDropPreference): void {
   if (props.query.trim()) return;
-  void nextTick(() => {
-    rootItems.value = dedupeConnectionTree(rootItems.value, preference);
-    remountTree();
-    return persistLayout();
-  });
+  rootItems.value = dedupeConnectionTree(rootItems.value, preference);
+  void nextTick(updateScrollShadow);
+  void persistLayout();
+}
+
+function onDragChange(preference?: ConnectionTreeDropPreference): void {
+  if (props.query.trim()) return;
+  rootItems.value = dedupeConnectionTree(rootItems.value, preference);
+  void nextTick(updateScrollShadow);
 }
 
 function onDragAdd(preference?: ConnectionTreeDropPreference): void {
   if (props.query.trim()) return;
-  void nextTick(() => {
-    rootItems.value = dedupeConnectionTree(rootItems.value, preference);
-  });
+  onDragChange(preference);
 }
 
 function onDragStart(): void {
@@ -341,7 +346,8 @@ function go(connection: ConnectionSummary): void {
       <div
         ref="scrollEl"
         data-sidebar-scroll-region
-        class="h-full overflow-y-auto py-1"
+        class="connection-sidebar-list h-full overflow-y-auto py-1"
+        :class="{ 'connection-sidebar-list--dragging': dragging }"
         @scroll="updateScrollShadow"
       >
         <ConnectionFolderBranch
@@ -350,9 +356,11 @@ function go(connection: ConnectionSummary): void {
           :active-id="activeId"
           :expanded="expanded"
           :disabled="Boolean(query.trim())"
+          :dragging="dragging"
           @toggle-folder="toggleFolder"
           @menu-action="handleFolderMenu"
           @drag-start="onDragStart"
+          @drag-change="onDragChange"
           @drag-add="onDragAdd"
           @drag-end="afterDragEnd"
           @open="go"
@@ -398,3 +406,16 @@ function go(connection: ConnectionSummary): void {
     />
   </div>
 </template>
+
+<style scoped>
+.connection-sidebar-list--dragging :deep(.connection-sidebar-drag-item:hover),
+.connection-sidebar-list :deep(.connection-sidebar-sortable-chosen),
+.connection-sidebar-list :deep(.connection-sidebar-sortable-drag) {
+  background-color: transparent;
+}
+
+.connection-sidebar-list :deep(.connection-sidebar-sortable-ghost) {
+  background-color: transparent;
+  opacity: 0.4;
+}
+</style>

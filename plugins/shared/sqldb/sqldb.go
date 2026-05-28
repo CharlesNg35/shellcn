@@ -466,6 +466,26 @@ func IdentifierList(raw string, quote func(string) string) ([]string, error) {
 	return out, nil
 }
 
+// IdentifierListValue parses a column list supplied either as a multiselect array
+// (the route-sourced options path) or a comma-separated string (free text), so a
+// handler accepts both without caring how the form rendered the field.
+func IdentifierListValue(v any, quote func(string) string) ([]string, error) {
+	switch t := v.(type) {
+	case string:
+		return IdentifierList(t, quote)
+	case []string:
+		return IdentifierList(strings.Join(t, ","), quote)
+	case []any:
+		parts := make([]string, 0, len(t))
+		for _, item := range t {
+			parts = append(parts, fmt.Sprint(item))
+		}
+		return IdentifierList(strings.Join(parts, ","), quote)
+	default:
+		return nil, fmt.Errorf("%w: columns must be a list of column names", plugin.ErrInvalidInput)
+	}
+}
+
 // ValidateRowKey ensures a client-supplied key is exactly the table's primary
 // key — same columns, no more, no fewer — so a row mutation can only ever target
 // one identified row and a caller cannot turn an arbitrary column into a WHERE

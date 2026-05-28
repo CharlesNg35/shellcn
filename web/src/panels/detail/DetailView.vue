@@ -12,6 +12,7 @@ import type {
 import AppIcon from "../../components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
 import ActionBar from "../shared/ActionBar.vue";
+import { badgeClassFor } from "../shared/severity";
 
 const props = defineProps<{
   connectionId: string;
@@ -49,6 +50,10 @@ const status = computed(() => {
   return f ? props.row[f] : undefined;
 });
 
+const statusClass = computed(() =>
+  badgeClassFor(props.detail.header.severities, status.value),
+);
+
 const current = computed(() =>
   props.detail.tabs.find((t) => t.key === activeTab.value),
 );
@@ -81,8 +86,9 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
             {{ title }}
           </h2>
           <span
-            v-if="status !== undefined"
-            class="rounded-full bg-surface-100 px-2 py-0.5 text-xs text-surface-500 dark:bg-surface-800"
+            v-if="status !== undefined && status !== ''"
+            class="rounded-full px-2 py-0.5 text-xs"
+            :class="statusClass"
             >{{ status }}</span
           >
         </div>

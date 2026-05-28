@@ -35,7 +35,7 @@ func eventsTab(k kind) plugin.Tab {
 		Key: "events", Label: "Events", Icon: lucide("bell"), Panel: plugin.PanelTable,
 		Source: &plugin.DataSource{RouteID: "kubernetes.resource.events", Params: params},
 		Config: plugin.TableConfig{Columns: []plugin.Column{
-			col("type", "Type", badge), col("reason", "Reason"), col("message", "Message", notSort), col("count", "Count", num), ageCol(),
+			col("type", "Type", statusBadge(eventSeverities)), col("reason", "Reason"), col("message", "Message", notSort), col("count", "Count", num), ageCol(),
 		}}.Map(),
 	}
 }

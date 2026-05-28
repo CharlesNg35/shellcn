@@ -309,6 +309,9 @@ describe("ConnectionWorkspace", () => {
       state: "error",
       reason: "docker ping failed",
     });
+    expect(wrapper.find('[role="alert"]').text()).toContain(
+      "docker ping failed",
+    );
   });
 
   it("renders every panel as a card in the dashboard layout", async () => {

@@ -23,6 +23,8 @@ import type {
   Action,
   Column as ColumnSpec,
   DataSource,
+  Field,
+  FieldType,
   ResourceEvent,
   ResourceRef,
   Row,
@@ -35,7 +37,9 @@ import { cn } from "../../utils/cn";
 import { useConfirmAction } from "../../composables/useConfirmAction";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
+import { badgeClassFor } from "../shared/severity";
 import PanelError from "../shared/PanelError.vue";
+import FormField from "../form/FormField.vue";
 import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<PanelProps>();
@@ -409,12 +413,29 @@ function askDeleteRow(row: Row): void {
 }
 
 const showInsert = ref(false);
-const insertDraft = ref<Record<string, string>>({});
+const insertDraft = ref<Record<string, unknown>>({});
 const inserting = ref(false);
+
+// The add-row form derives each input widget from its column's type, so a number
+// column gets a number input, a boolean a toggle, JSON a code area, etc.
+const COLUMN_FIELD_TYPE: Partial<
+  Record<NonNullable<ColumnSpec["type"]>, FieldType>
+> = {
+  number: "number",
+  bool: "toggle",
+  json: "json",
+};
+const insertFields = computed<Field[]>(() =>
+  columns.value.map((col) => ({
+    key: col.key,
+    label: col.label,
+    type: COLUMN_FIELD_TYPE[col.type ?? "text"] ?? "text",
+    placeholder: col.nullable ? "NULL" : undefined,
+  })),
+);
 
 function openInsert(): void {
   insertDraft.value = {};
-  for (const col of columns.value) insertDraft.value[col.key] = "";
   showInsert.value = true;
 }
 
@@ -423,7 +444,7 @@ async function submitInsert(): Promise<void> {
   if (!src) return;
   const values: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(insertDraft.value)) {
-    if (v !== "") values[k] = v;
+    if (v !== "" && v !== undefined && v !== null) values[k] = v;
   }
   if (staged.value) {
     const row = { ...values } as Row;
@@ -477,12 +498,27 @@ function dynamicColumnLabel(row: Row, key: string): string {
   return String(row.label ?? row.name ?? row.column_name ?? row.column ?? key);
 }
 
+// Maps a column's declared data type (a DB type string like "integer" or
+// "timestamptz", or a generic column type) to a renderer type, so a runtime
+// column grid and its add-row form pick the right widget without per-plugin code.
+function mapColumnType(raw: unknown): ColumnSpec["type"] | undefined {
+  const t = String(raw ?? "").toLowerCase();
+  if (!t) return undefined;
+  if (/bool/.test(t)) return "bool";
+  if (/json/.test(t)) return "json";
+  if (/(int|serial|numeric|decimal|real|double|float|money|number)/.test(t))
+    return "number";
+  if (/(date|time|timestamp)/.test(t)) return "datetime";
+  return undefined;
+}
+
 function dynamicColumn(row: Row): ColumnSpec | null {
   const key = dynamicColumnKey(row);
   if (!key || hidden.value.has(key)) return null;
   return {
     key,
     label: dynamicColumnLabel(row, key),
+    type: mapColumnType((row as Record<string, unknown>).type),
     nullable: row.nullable === true,
   };
 }
@@ -527,19 +563,8 @@ function display(row: Row, col: ColumnSpec): string {
   return String(v);
 }
 
-const BADGE_SEVERITY: Record<string, string> = {
-  success:
-    "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
-  warn: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-  danger: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
-  info: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300",
-  secondary:
-    "bg-surface-100 text-surface-600 dark:bg-surface-800 dark:text-surface-300",
-};
-
 function badgeClass(row: Row, col: ColumnSpec): string {
-  const sev = col.severities?.[String(row[col.key] ?? "").toLowerCase()];
-  return BADGE_SEVERITY[sev ?? "secondary"];
+  return badgeClassFor(col.severities, row[col.key]);
 }
 
 function columnWidth(col: ColumnSpec): string {
@@ -977,18 +1002,13 @@ onUnmounted(() => {
       }"
     >
       <div class="flex max-h-[60vh] flex-col gap-3 overflow-auto p-1">
-        <label
-          v-for="col in columns"
-          :key="col.key"
-          class="flex flex-col gap-1 text-sm"
-        >
-          <span class="text-surface-500">{{ col.label }}</span>
-          <InputText
-            v-model="insertDraft[col.key]"
-            :class="inputClass"
-            placeholder="NULL"
-          />
-        </label>
+        <FormField
+          v-for="f in insertFields"
+          :key="f.key"
+          :field="f"
+          :model-value="insertDraft[f.key]"
+          @update:model-value="insertDraft[f.key] = $event"
+        />
       </div>
       <template #footer>
         <Button

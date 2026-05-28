@@ -105,7 +105,7 @@ func columnAddSchema() *plugin.Schema {
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "column", Label: "Column", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "Cassandra secondary indexes cover a single column."},
+		{Key: "column", Label: "Column", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Help: "Cassandra secondary indexes cover a single column."},
 	}}}}
 }
 

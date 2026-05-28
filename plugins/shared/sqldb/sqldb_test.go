@@ -138,6 +138,29 @@ func TestParseDDLColumnsAcceptsJSONTextAreaValue(t *testing.T) {
 	}
 }
 
+func TestIdentifierListValueAcceptsArrayAndString(t *testing.T) {
+	want := []string{`"a"`, `"b"`}
+	for name, in := range map[string]any{
+		"comma string": "a, b",
+		"any slice":    []any{"a", "b"},
+		"string slice": []string{"a", "b"},
+	} {
+		got, err := IdentifierListValue(in, QuoteIdent)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+			t.Fatalf("%s: got %#v", name, got)
+		}
+	}
+	if _, err := IdentifierListValue([]any{"bad-name"}, QuoteIdent); err == nil {
+		t.Fatal("invalid identifier accepted")
+	}
+	if _, err := IdentifierListValue(42, QuoteIdent); err == nil {
+		t.Fatal("non-list value accepted")
+	}
+}
+
 func TestRedactRowsByColumnPattern(t *testing.T) {
 	rows := [][]any{{"alice", "plain", "t1"}}
 	got := RedactRows([]string{"username", "password_hash", "api_key"}, rows, DefaultRedactColumnPatterns())
