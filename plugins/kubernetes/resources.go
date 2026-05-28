@@ -78,9 +78,10 @@ func actions() []plugin.Action {
 		{ID: "kubernetes.resource.delete", Label: "Delete", Icon: lucide("trash"), RouteID: "kubernetes.resource.delete", Params: uid, Confirm: true, ConfirmText: "Delete this resource?"},
 		{ID: "kubernetes.resource.scale", Label: "Scale", Icon: lucide("move-vertical"), RouteID: "kubernetes.resource.scale", Params: uid},
 		{ID: "kubernetes.resource.restart", Label: "Restart", Icon: lucide("refresh-cw"), RouteID: "kubernetes.resource.restart", Params: uid, Confirm: true, ConfirmText: "Roll out a restart?"},
-		{ID: "kubernetes.node.cordon", Label: "Cordon", Icon: lucide("ban"), RouteID: "kubernetes.node.cordon", Params: uid, Confirm: true, ConfirmText: "Mark this node unschedulable?"},
-		{ID: "kubernetes.node.uncordon", Label: "Uncordon", Icon: lucide("circle-check"), RouteID: "kubernetes.node.uncordon", Params: uid},
+		{ID: "kubernetes.node.cordon", Label: "Cordon", Icon: lucide("ban"), RouteID: "kubernetes.node.cordon", Params: uid, Confirm: true, ConfirmText: "Mark this node unschedulable?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpNeq, Value: true}}}},
+		{ID: "kubernetes.node.uncordon", Label: "Uncordon", Icon: lucide("circle-check"), RouteID: "kubernetes.node.uncordon", Params: uid, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpEq, Value: true}}}},
 		{ID: "kubernetes.service.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.service.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
+		{ID: "kubernetes.pod.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.pod.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
 		editAction(),
 	}
 	base = append(base, podActions()...)

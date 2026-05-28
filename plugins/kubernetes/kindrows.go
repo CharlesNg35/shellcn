@@ -27,7 +27,24 @@ func podRow(o obj) Row {
 		"restarts": restarts,
 		"node":     str(o, "spec", "nodeName"),
 		"podIP":    str(o, "status", "podIP"),
+		"ports":    podPorts(o),
 	}
+}
+
+func podPorts(o obj) string {
+	var ports []string
+	for _, c := range slice(o, "spec", "containers") {
+		cm, ok := c.(obj)
+		if !ok {
+			continue
+		}
+		for _, p := range slice(cm, "ports") {
+			if pm, ok := p.(obj); ok {
+				ports = append(ports, fmt.Sprintf("%d", i64(pm, "containerPort")))
+			}
+		}
+	}
+	return joinStrings(ports)
 }
 
 func deploymentRow(o obj) Row {
@@ -173,6 +190,10 @@ func nodeRow(o obj) Row {
 			status = "Ready"
 		}
 	}
+	unschedulable := boolField(o, "spec", "unschedulable")
+	if unschedulable {
+		status += ",SchedulingDisabled"
+	}
 	var roles []string
 	for label := range mapField(o, "metadata", "labels") {
 		if r, ok := cutNodeRole(label); ok {
@@ -180,9 +201,10 @@ func nodeRow(o obj) Row {
 		}
 	}
 	return Row{
-		"status":  status,
-		"roles":   joinStrings(roles),
-		"version": str(o, "status", "nodeInfo", "kubeletVersion"),
+		"status":        status,
+		"roles":         joinStrings(roles),
+		"version":       str(o, "status", "nodeInfo", "kubeletVersion"),
+		"unschedulable": unschedulable,
 	}
 }
 

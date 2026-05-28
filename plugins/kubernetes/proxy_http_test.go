@@ -135,6 +135,28 @@ func TestServiceProxyURL(t *testing.T) {
 	}
 }
 
+func TestPodProxyURL(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "Pod", "metadata": obj{"name": "web", "namespace": "default"},
+			"spec": obj{"containers": []any{obj{"name": "app", "ports": []any{
+				obj{"name": "metrics", "containerPort": int64(9090)},
+				obj{"name": "http", "containerPort": int64(8080)},
+			}}}},
+		})
+	})
+	sess := connectTo(t, mux)
+
+	out, err := PodProxyURL(rc(sess, map[string]string{"namespace": "default", "name": "web"}))
+	if err != nil {
+		t.Fatalf("pod proxy url: %v", err)
+	}
+	if url, _ := out.(map[string]any)["url"].(string); url != "/api/connections/c1/proxy/pods/default/web/8080/" {
+		t.Fatalf("http container port should win: %q", url)
+	}
+}
+
 func TestServeHTTPProxyForwardsToServiceProxy(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/namespaces/default/services/web:80/proxy/hello", func(w http.ResponseWriter, _ *http.Request) {

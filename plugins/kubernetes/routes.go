@@ -48,6 +48,7 @@ func Routes() []plugin.Route {
 		{ID: "kubernetes.helm.release", Method: plugin.MethodGet, Path: "/helm/release", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.helm.release", Handle: HelmRelease},
 
 		{ID: "kubernetes.service.open", Method: plugin.MethodGet, Path: "/services/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.service.open", Handle: ServiceProxyURL},
+		{ID: "kubernetes.pod.open", Method: plugin.MethodGet, Path: "/pods/open", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.open", Handle: PodProxyURL},
 	}
 }
 

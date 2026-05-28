@@ -48,6 +48,7 @@ const emit = defineEmits<{
 const toast = useToast();
 const pending = ref<Action | null>(null);
 const busy = ref(false);
+const busyAction = ref<string | null>(null);
 const error = ref<string | null>(null);
 
 const riskClass: Record<RiskLevel, string> = {
@@ -132,6 +133,7 @@ function actionParams(action: Action): Record<string, string> {
 // open="url": run the route, then open the returned {url} in a new tab.
 async function openURL(action: Action): Promise<void> {
   error.value = null;
+  busyAction.value = action.id;
   try {
     const result: unknown = await runFormAction(
       props.connectionId,
@@ -150,6 +152,8 @@ async function openURL(action: Action): Promise<void> {
     }
   } catch (e) {
     error.value = (e as Error).message;
+  } finally {
+    busyAction.value = null;
   }
 }
 
@@ -158,6 +162,7 @@ async function execute(
   body?: Record<string, unknown>,
 ): Promise<void> {
   busy.value = true;
+  busyAction.value = action.id;
   error.value = null;
   try {
     const result = await runFormAction(
@@ -185,6 +190,7 @@ async function execute(
     });
   } finally {
     busy.value = false;
+    busyAction.value = null;
   }
 }
 
@@ -202,7 +208,7 @@ function onVisible(visible: boolean): void {
       v-for="action in actions"
       :key="action.id"
       type="button"
-      :disabled="!isEnabled(action)"
+      :disabled="!isEnabled(action) || busyAction === action.id"
       :title="action.label"
       size="small"
       :pt="{
@@ -213,7 +219,11 @@ function onVisible(visible: boolean): void {
       }"
       @click="isEnabled(action) && trigger(action)"
     >
-      <AppIcon :icon="action.icon" :size="15" />
+      <AppIcon
+        :icon="action.icon"
+        :size="15"
+        :loading="busyAction === action.id"
+      />
       {{ action.label }}
     </Button>
 

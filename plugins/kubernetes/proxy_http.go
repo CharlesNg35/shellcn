@@ -240,8 +240,34 @@ func ServiceProxyURL(rc *plugin.RequestContext) (any, error) {
 			return nil, err
 		}
 	}
-	u := fmt.Sprintf("/api/connections/%s/proxy/services/%s/%s/%s/", url.PathEscape(s.connID), url.PathEscape(ns), url.PathEscape(name), portSeg)
-	return map[string]any{"url": u}, nil
+	return proxyURLResult(s.connID, "services", ns, name, portSeg), nil
+}
+
+// PodProxyURL is the pod equivalent of ServiceProxyURL: it proxies straight to a
+// pod's container port (a browser-usable, HTTP form of `kubectl port-forward`).
+func PodProxyURL(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	ns, name := rc.Param("namespace"), rc.Param("name")
+	portSeg := rc.Param("port")
+	if portSeg == "" {
+		pod, err := s.clientset.CoreV1().Pods(ns).Get(rc.Ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, apiErr(err)
+		}
+		portSeg, err = pickPodPort(pod.Spec.Containers)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return proxyURLResult(s.connID, "pods", ns, name, portSeg), nil
+}
+
+func proxyURLResult(connID, kind, ns, name, portSeg string) map[string]any {
+	u := fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/%s/", url.PathEscape(connID), kind, url.PathEscape(ns), url.PathEscape(name), portSeg)
+	return map[string]any{"url": u}
 }
 
 // pickServicePort returns the port segment to proxy ("8080" for http,
@@ -286,7 +312,12 @@ func webScheme(p corev1.ServicePort) (string, bool) {
 			return "", false
 		}
 	}
-	switch n := strings.ToLower(p.Name); {
+	return webSchemeName(p.Name)
+}
+
+// webSchemeName infers the scheme from a port's conventional name.
+func webSchemeName(name string) (string, bool) {
+	switch n := strings.ToLower(name); {
 	case strings.Contains(n, "https"):
 		return "https", true
 	case n == "http" || n == "web" || strings.HasPrefix(n, "http"):
@@ -294,4 +325,32 @@ func webScheme(p corev1.ServicePort) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// pickPodPort picks a pod's web container port (preferring a web-named TCP port,
+// else the first TCP port), mirroring pickServicePort.
+func pickPodPort(containers []corev1.Container) (string, error) {
+	var first *corev1.ContainerPort
+	for i := range containers {
+		for j := range containers[i].Ports {
+			p := &containers[i].Ports[j]
+			if p.Protocol != "" && p.Protocol != corev1.ProtocolTCP {
+				continue
+			}
+			if scheme, ok := webSchemeName(p.Name); ok {
+				return portSegment(p.ContainerPort, scheme), nil
+			}
+			if first == nil {
+				first = p
+			}
+		}
+	}
+	if first == nil {
+		return "", fmt.Errorf("%w: pod exposes no TCP ports", plugin.ErrInvalidInput)
+	}
+	scheme, _ := webSchemeName(first.Name)
+	if scheme == "" {
+		scheme = "http"
+	}
+	return portSegment(first.ContainerPort, scheme), nil
 }
