@@ -45,6 +45,18 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 	if !hasPods {
 		t.Fatal("podman tree must include a pods group")
 	}
+	for _, res := range m.Resources {
+		for _, tab := range res.Detail.Tabs {
+			if tab.Panel == plugin.PanelHTTPClient {
+				t.Fatalf("podman should not expose a raw API panel: resource=%s tab=%s", res.Kind, tab.Key)
+			}
+		}
+	}
+	for _, route := range New().Routes() {
+		if route.ID == "podman.api.execute" {
+			t.Fatal("podman should not expose a raw API execute route")
+		}
+	}
 }
 
 func TestPodsAndContainersAgainstFakeDaemon(t *testing.T) {

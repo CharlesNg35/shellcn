@@ -19,10 +19,12 @@ import type {
   TreeGroup,
 } from "../../types/projection";
 
-// Fallback qualifier (ref identity) for items opened outside the tree; the tree
-// ancestor path is preferred. See openDetail.
+// Fallback qualifier for items opened outside the tree (the tree ancestor path
+// is preferred). Leads with the kind so the tab says what the resource is, then
+// its location (namespace/scope) to disambiguate same-named resources.
 function refSubtitle(ref: ResourceRef): string {
-  return [ref.scope, ref.namespace].filter(Boolean).join(" / ");
+  const location = [ref.scope, ref.namespace].filter(Boolean).join(" / ");
+  return [ref.kind, location].filter(Boolean).join(" · ");
 }
 
 // The sidebar-tree layout: a resource tree on the left and a closable workbench

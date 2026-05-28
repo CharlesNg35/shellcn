@@ -6,8 +6,8 @@ import (
 )
 
 // Routes wires podman-namespaced route IDs. Containers, images, volumes,
-// networks, logs, exec, events, and the raw API reuse the shared dockerengine
-// handlers over Podman's Docker-compatible socket; pods are Podman-native.
+// networks, logs, exec, and events reuse the shared dockerengine handlers over
+// Podman's Docker-compatible socket; pods are Podman-native.
 func Routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "podman.containers.tree", Method: plugin.MethodGet, Path: "/tree/containers", Permission: "podman.containers.read", Risk: plugin.RiskSafe, AuditEvent: "podman.containers.tree", Handle: dockerengine.TreeContainers},
@@ -43,6 +43,5 @@ func Routes() []plugin.Route {
 		{ID: "podman.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "podman.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "podman.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
 		{ID: "podman.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec/ws/{cols}/{rows}/{command}", Permission: "podman.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "podman.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
 		{ID: "podman.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "podman.events.read", Risk: plugin.RiskSafe, AuditEvent: "podman.events.watch", Stream: dockerengine.WatchEvents},
-		{ID: "podman.api.execute", Method: plugin.MethodPost, Path: "/api/execute", Permission: "podman.api.execute", Risk: plugin.RiskPrivileged, AuditEvent: "podman.api.execute", Input: dockerengine.APISchema(), Handle: dockerengine.ExecuteAPI},
 	}
 }

@@ -155,17 +155,6 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	if !calls["POST /containers/create"] || !calls["POST /containers/def456789abcdef/start"] {
 		t.Fatalf("create/start endpoints not called: %+v", calls)
 	}
-
-	body := `{"method":"GET","url":"/version","headers":[]}`
-	apiRC := plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, nil, url.Values{}, []byte(body))
-	raw, err := ExecuteAPI(apiRC)
-	if err != nil {
-		t.Fatalf("execute api: %v", err)
-	}
-	resp := raw.(APIResponse)
-	if resp.Status != http.StatusOK {
-		t.Fatalf("raw api status = %d", resp.Status)
-	}
 }
 
 type directNet struct{}

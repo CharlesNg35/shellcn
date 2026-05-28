@@ -1,12 +1,10 @@
 package dockerengine
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"net/netip"
 	"sort"
 	"strconv"
@@ -622,78 +620,6 @@ func WatchEvents(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	}
 }
 
-type APIRequest struct {
-	Method  string      `json:"method" validate:"required"`
-	URL     string      `json:"url" validate:"required"`
-	Headers []APIHeader `json:"headers"`
-	Body    string      `json:"body"`
-}
-
-type APIHeader struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-type APIResponse struct {
-	OK         bool        `json:"ok"`
-	Status     int         `json:"status"`
-	StatusText string      `json:"statusText"`
-	DurationMS float64     `json:"durationMs"`
-	Headers    []APIHeader `json:"headers"`
-	Body       any         `json:"body"`
-}
-
-func ExecuteAPI(rc *plugin.RequestContext) (any, error) {
-	s, err := sess(rc)
-	if err != nil {
-		return nil, err
-	}
-	var in APIRequest
-	if err := rc.Bind(&in); err != nil {
-		return nil, err
-	}
-	method := strings.ToUpper(strings.TrimSpace(in.Method))
-	switch method {
-	case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
-	default:
-		return nil, fmt.Errorf("%w: unsupported Docker API method %q", plugin.ErrInvalidInput, in.Method)
-	}
-	apiPath, err := rawAPIPath(in.URL)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(rc.Ctx, method, "http://docker"+apiPath, strings.NewReader(in.Body))
-	if err != nil {
-		return nil, fmt.Errorf("%w: invalid Docker API request", plugin.ErrInvalidInput)
-	}
-	for _, h := range in.Headers {
-		key := http.CanonicalHeaderKey(strings.TrimSpace(h.Key))
-		if key == "" || strings.EqualFold(key, "Host") {
-			continue
-		}
-		req.Header.Set(key, h.Value)
-	}
-	start := time.Now()
-	resp, err := s.http.Do(req)
-	if err != nil {
-		return nil, DockerErr(err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if err != nil {
-		return nil, DockerErr(err)
-	}
-	out := APIResponse{
-		OK:         true,
-		Status:     resp.StatusCode,
-		StatusText: resp.Status,
-		DurationMS: float64(time.Since(start).Microseconds()) / 1000,
-		Headers:    headers(resp.Header),
-		Body:       decodeBody(body, resp.Header.Get("Content-Type")),
-	}
-	return out, nil
-}
-
 func (s *Session) openLogs(ctx context.Context, params map[string]string) (plugin.Channel, error) {
 	id := params["id"]
 	if id == "" {
@@ -1195,22 +1121,6 @@ func ExecSchema() *plugin.Schema {
 	}}}}
 }
 
-// APISchema is the manifest input schema for the raw API client panel.
-func APISchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Request", Fields: []plugin.Field{
-		{Key: "method", Label: "Method", Type: plugin.FieldSelect, Required: true, Options: []plugin.Option{
-			{Label: "GET", Value: "GET"},
-			{Label: "POST", Value: "POST"},
-			{Label: "PUT", Value: "PUT"},
-			{Label: "PATCH", Value: "PATCH"},
-			{Label: "DELETE", Value: "DELETE"},
-		}},
-		{Key: "url", Label: "Path", Type: plugin.FieldText, Required: true},
-		{Key: "headers", Label: "Headers", Type: plugin.FieldJSON},
-		{Key: "body", Label: "Body", Type: plugin.FieldTextarea},
-	}}}}
-}
-
 // DockerErr maps a moby client error to a platform sentinel so the response
 // layer can pick the right status code.
 func DockerErr(err error) error {
@@ -1246,32 +1156,6 @@ func rawOrValue(raw json.RawMessage, value any) (any, error) {
 		return value, nil
 	}
 	return out, nil
-}
-
-func headers(h http.Header) []APIHeader {
-	out := make([]APIHeader, 0, len(h))
-	for key, values := range h {
-		out = append(out, APIHeader{Key: key, Value: strings.Join(values, ", ")})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
-	return out
-}
-
-func decodeBody(b []byte, contentType string) any {
-	if len(bytes.TrimSpace(b)) == 0 {
-		return ""
-	}
-	if strings.Contains(strings.ToLower(contentType), "json") {
-		var out any
-		if json.Unmarshal(b, &out) == nil {
-			return out
-		}
-	}
-	var out any
-	if json.Unmarshal(b, &out) == nil {
-		return out
-	}
-	return string(b)
 }
 
 func pickStruct(value any, keys ...string) Row {

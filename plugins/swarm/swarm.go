@@ -22,7 +22,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Name:        "swarm",
 		Version:     "0.1.0",
 		Title:       "Docker Swarm",
-		Description: "Docker Swarm cockpit with services, stacks, nodes, tasks, service logs, and raw API access.",
+		Description: "Docker Swarm cockpit with services, stacks, nodes, tasks, and service logs.",
 		Icon:        plugin.Icon{Type: plugin.IconSVG, Value: dockerIconSVG},
 		Category:    plugin.CategoryContainers,
 		Config:      configSchema(),
@@ -119,7 +119,6 @@ func serviceResource() plugin.ResourceType {
 				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}.Map()},
 				{Key: "logs", Label: "Logs", Icon: icon("scroll-text"), Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "swarm.service.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.service.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "api", Label: "API", Icon: icon("upload"), Panel: plugin.PanelHTTPClient, Config: plugin.HTTPClientConfig{ExecuteRouteID: "swarm.api.execute", Methods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, DefaultMethod: "GET", DefaultURL: "/version"}.Map()},
 			},
 		},
 	}

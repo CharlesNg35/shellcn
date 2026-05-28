@@ -23,7 +23,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Name:        "podman",
 		Version:     "0.1.0",
 		Title:       "Podman",
-		Description: "Podman cockpit with containers, pods, images, volumes, networks, logs, exec, events, and raw API access.",
+		Description: "Podman cockpit with containers, pods, images, volumes, networks, logs, exec, and events.",
 		Icon:        plugin.Icon{Type: plugin.IconSVG, Value: podmanIconSvg},
 		Category:    plugin.CategoryContainers,
 		Config:      configSchema(),
@@ -118,7 +118,6 @@ func containerResource() plugin.ResourceType {
 				{Key: "logs", Label: "Logs", Icon: icon("scroll-text"), Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "podman.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "env", Label: "Env", Icon: icon("list"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "podman.container.env", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "key", Label: "Key", Sortable: true}, {Key: "value", Label: "Value"}}}.Map()},
-				{Key: "api", Label: "API", Icon: icon("upload"), Panel: plugin.PanelHTTPClient, Config: plugin.HTTPClientConfig{ExecuteRouteID: "podman.api.execute", Methods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, DefaultMethod: "GET", DefaultURL: "/version"}.Map()},
 			},
 		},
 	}

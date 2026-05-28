@@ -21,7 +21,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Name:        "docker",
 		Version:     "0.1.0",
 		Title:       "Docker",
-		Description: "Docker Engine cockpit with containers, images, volumes, networks, logs, exec, events, and raw API access.",
+		Description: "Docker Engine cockpit with containers, images, volumes, networks, logs, exec, and events.",
 		Icon:        plugin.Icon{Type: plugin.IconSVG, Value: dockerIconSVG},
 		Category:    plugin.CategoryContainers,
 		Config:      configSchema(),
@@ -154,7 +154,6 @@ func containerResource() plugin.ResourceType {
 				{Key: "logs", Label: "Logs", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "scroll-text"}, Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "docker.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "env", Label: "Env", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "list"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.container.env", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "key", Label: "Key", Sortable: true}, {Key: "value", Label: "Value"}}}.Map()},
-				{Key: "api", Label: "API", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "upload"}, Panel: plugin.PanelHTTPClient, Config: plugin.HTTPClientConfig{ExecuteRouteID: "docker.api.execute", Methods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, DefaultMethod: "GET", DefaultURL: "/version"}.Map()},
 			},
 		},
 	}
@@ -241,7 +240,6 @@ func composeResource() plugin.ResourceType {
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.compose.overview", Params: map[string]string{"project": "${resource.uid}"}}},
 				{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "box"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.containers", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: containerColumns()}.Map()},
 				{Key: "services", Label: "Services", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "workflow"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.services", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}.Map()},
-				{Key: "api", Label: "API", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "upload"}, Panel: plugin.PanelHTTPClient, Config: plugin.HTTPClientConfig{ExecuteRouteID: "docker.api.execute", Methods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, DefaultMethod: "GET", DefaultURL: "/version"}.Map()},
 			},
 		},
 	}

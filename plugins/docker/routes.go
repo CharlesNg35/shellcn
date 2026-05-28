@@ -42,6 +42,5 @@ func Routes() []plugin.Route {
 		{ID: "docker.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "docker.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "docker.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
 		{ID: "docker.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec/ws/{cols}/{rows}/{command}", Permission: "docker.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "docker.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
 		{ID: "docker.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "docker.events.read", Risk: plugin.RiskSafe, AuditEvent: "docker.events.watch", Stream: dockerengine.WatchEvents},
-		{ID: "docker.api.execute", Method: plugin.MethodPost, Path: "/api/execute", Permission: "docker.api.execute", Risk: plugin.RiskPrivileged, AuditEvent: "docker.api.execute", Input: dockerengine.APISchema(), Handle: dockerengine.ExecuteAPI},
 	}
 }
