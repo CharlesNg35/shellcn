@@ -2,6 +2,8 @@
 import { computed } from "vue";
 import { resolvePanel } from "./registry";
 import FallbackPanel from "./FallbackPanel.vue";
+import PanelError from "../shared/PanelError.vue";
+import { panelConfigError } from "./config";
 import type {
   Action,
   DataSource,
@@ -24,6 +26,7 @@ const emit = defineEmits<{
 }>();
 
 const component = computed(() => resolvePanel(props.panel));
+const configError = computed(() => panelConfigError(props.panel, props.config));
 const panelKey = computed(() =>
   JSON.stringify({
     panel: props.panel,
@@ -43,9 +46,10 @@ function onSelect(row: Row): void {
 </script>
 
 <template>
+  <PanelError v-if="configError" :message="configError" />
   <component
     :is="component"
-    v-if="component"
+    v-else-if="component"
     :key="panelKey"
     :connection-id="connectionId"
     :source="source"

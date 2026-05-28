@@ -61,6 +61,18 @@ func TestInfluxDBPluginIntegration(t *testing.T) {
 	call(ctx, t, routes["influxdb.namespaces.tree"], sess, nil, nil, nil)
 	call(ctx, t, routes["influxdb.namespace.read"], sess, map[string]string{"namespace": bucket}, nil, nil)
 
+	newBucket := "shellcn_it_bucket"
+	call(ctx, t, routes["influxdb.namespace.create"], sess, nil, nil, testJSON(t, map[string]any{"name": newBucket, "retention_period": "1h"}))
+	created := pageItems(call(ctx, t, routes["influxdb.namespaces.list"], sess, nil, nil, nil))
+	if !hasRowName(created, newBucket) {
+		t.Fatalf("expected created bucket %q in %#v", newBucket, created)
+	}
+	call(ctx, t, routes["influxdb.namespace.delete"], sess, map[string]string{"namespace": newBucket}, nil, nil)
+	afterDelete := pageItems(call(ctx, t, routes["influxdb.namespaces.list"], sess, nil, nil, nil))
+	if hasRowName(afterDelete, newBucket) {
+		t.Fatalf("bucket %q still present after delete: %#v", newBucket, afterDelete)
+	}
+
 	measurements := pageItems(call(ctx, t, routes["influxdb.measurements.list"], sess, map[string]string{"namespace": bucket}, nil, nil))
 	if !hasRowName(measurements, measurement) {
 		t.Fatalf("expected measurement %q in %#v", measurement, measurements)

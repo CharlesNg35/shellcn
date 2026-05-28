@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +34,8 @@ func routes() []plugin.Route {
 		{ID: rid("query"), Method: plugin.MethodWS, Path: "/query", Permission: "influxdb.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: rid("query"), Stream: queryStream},
 		{ID: rid("completion"), Method: plugin.MethodGet, Path: "/completion", Permission: "influxdb.query.execute", Risk: plugin.RiskSafe, AuditEvent: rid("completion"), Handle: completionRoute},
 		{ID: rid("write"), Method: plugin.MethodPost, Path: "/namespaces/{namespace}/write", Permission: "influxdb.write", Risk: plugin.RiskWrite, AuditEvent: rid("write"), Input: writeSchema(), Handle: writeLineProtocol},
+		{ID: rid("namespace.create"), Method: plugin.MethodPost, Path: "/namespaces", Permission: "influxdb.namespaces.write", Risk: plugin.RiskWrite, AuditEvent: rid("namespace.create"), Input: namespaceCreateSchema(), Handle: createNamespace},
+		{ID: rid("namespace.delete"), Method: plugin.MethodDelete, Path: "/namespaces/{namespace}", Permission: "influxdb.namespaces.delete", Risk: plugin.RiskDestructive, AuditEvent: rid("namespace.delete"), Handle: deleteNamespace},
 	}
 }
 
@@ -325,6 +328,185 @@ func writeLineProtocol(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return actionResult{OK: true}, nil
+}
+
+func namespaceCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Database / bucket", Fields: []plugin.Field{
+		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+		{Key: "retention_period", Label: "Retention period", Type: plugin.FieldText, Placeholder: "30d", Help: "Optional retention (e.g. 30d, 24h). Leave empty for infinite retention."},
+	}}}}
+}
+
+func createNamespace(rc *plugin.RequestContext) (any, error) {
+	s, err := session(rc)
+	if err != nil {
+		return nil, err
+	}
+	if s.opts.ReadOnly {
+		return nil, fmt.Errorf("%w: read-only mode blocks writes", plugin.ErrForbidden)
+	}
+	var req struct {
+		Name            string `json:"name" validate:"required"`
+		RetentionPeriod string `json:"retention_period"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return nil, fmt.Errorf("%w: name is required", plugin.ErrInvalidInput)
+	}
+	retention := strings.TrimSpace(req.RetentionPeriod)
+	switch s.opts.Mode {
+	case modeV2:
+		return createBucketV2(rc.Ctx, s, name, retention)
+	case modeV1:
+		if err := v1Exec(rc.Ctx, s, "CREATE DATABASE "+quoteV1Ident(name)); err != nil {
+			return nil, err
+		}
+		return actionResult{OK: true}, nil
+	default:
+		body := row{"db": name}
+		if retention != "" {
+			body["retention_period"] = retention
+		}
+		if err := s.client.json(rc.Ctx, http.MethodPost, "/api/v3/configure/database", nil, body, nil); err != nil {
+			return nil, err
+		}
+		return actionResult{OK: true}, nil
+	}
+}
+
+func deleteNamespace(rc *plugin.RequestContext) (any, error) {
+	s, err := session(rc)
+	if err != nil {
+		return nil, err
+	}
+	if s.opts.ReadOnly {
+		return nil, fmt.Errorf("%w: read-only mode blocks writes", plugin.ErrForbidden)
+	}
+	name := namespaceParam(rc)
+	if name == "" {
+		return nil, fmt.Errorf("%w: name is required", plugin.ErrInvalidInput)
+	}
+	switch s.opts.Mode {
+	case modeV2:
+		id, err := bucketIDV2(rc.Ctx, s, name)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.client.json(rc.Ctx, http.MethodDelete, "/api/v2/buckets/"+url.PathEscape(id), nil, nil, nil); err != nil {
+			return nil, err
+		}
+		return actionResult{OK: true}, nil
+	case modeV1:
+		if err := v1Exec(rc.Ctx, s, "DROP DATABASE "+quoteV1Ident(name)); err != nil {
+			return nil, err
+		}
+		return actionResult{OK: true}, nil
+	default:
+		q := url.Values{"db": []string{name}}
+		if err := s.client.json(rc.Ctx, http.MethodDelete, "/api/v3/configure/database", q, nil, nil); err != nil {
+			return nil, err
+		}
+		return actionResult{OK: true}, nil
+	}
+}
+
+func createBucketV2(ctx context.Context, s *Session, name, retention string) (any, error) {
+	id, err := orgIDV2(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	rules := []any{}
+	if secs := parseRetentionSeconds(retention); secs > 0 {
+		rules = append(rules, row{"type": "expire", "everySeconds": secs})
+	}
+	body := row{"orgID": id, "name": name, "retentionRules": rules}
+	if err := s.client.json(ctx, http.MethodPost, "/api/v2/buckets", nil, body, nil); err != nil {
+		return nil, err
+	}
+	return actionResult{OK: true}, nil
+}
+
+func orgIDV2(ctx context.Context, s *Session) (string, error) {
+	if s.opts.Org == "" {
+		return "", fmt.Errorf("%w: org is required to manage InfluxDB 2 buckets", plugin.ErrInvalidInput)
+	}
+	var out struct {
+		Orgs []struct {
+			ID string `json:"id"`
+		} `json:"orgs"`
+	}
+	if err := s.client.json(ctx, http.MethodGet, "/api/v2/orgs", url.Values{"org": []string{s.opts.Org}}, nil, &out); err != nil {
+		return "", err
+	}
+	if len(out.Orgs) == 0 || out.Orgs[0].ID == "" {
+		return "", fmt.Errorf("%w: org %q not found", plugin.ErrNotFound, s.opts.Org)
+	}
+	return out.Orgs[0].ID, nil
+}
+
+func bucketIDV2(ctx context.Context, s *Session, name string) (string, error) {
+	var out struct {
+		Buckets []struct {
+			ID string `json:"id"`
+		} `json:"buckets"`
+	}
+	q := url.Values{"name": []string{name}}
+	if s.opts.Org != "" {
+		q.Set("org", s.opts.Org)
+	}
+	if err := s.client.json(ctx, http.MethodGet, "/api/v2/buckets", q, nil, &out); err != nil {
+		return "", err
+	}
+	if len(out.Buckets) == 0 || out.Buckets[0].ID == "" {
+		return "", fmt.Errorf("%w: bucket %q not found", plugin.ErrNotFound, name)
+	}
+	return out.Buckets[0].ID, nil
+}
+
+func v1Exec(ctx context.Context, s *Session, stmt string) error {
+	var out v1Response
+	if err := s.client.json(ctx, http.MethodPost, "/query", url.Values{"q": []string{stmt}}, nil, &out); err != nil {
+		return err
+	}
+	return out.Err()
+}
+
+func quoteV1Ident(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `\"`) + `"`
+}
+
+// parseRetentionSeconds converts a retention string like "30d"/"24h"/"45m"/"90s"
+// into whole seconds. An empty or unparseable value yields 0 (infinite).
+func parseRetentionSeconds(in string) int64 {
+	in = strings.TrimSpace(in)
+	if in == "" {
+		return 0
+	}
+	unit := in[len(in)-1]
+	value := strings.TrimSpace(in[:len(in)-1])
+	mult := int64(0)
+	switch unit {
+	case 's':
+		mult = 1
+	case 'm':
+		mult = 60
+	case 'h':
+		mult = 3600
+	case 'd':
+		mult = 86400
+	case 'w':
+		mult = 604800
+	default:
+		return 0
+	}
+	n, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n * mult
 }
 
 func writeSchema() *plugin.Schema {

@@ -34,6 +34,12 @@ import type { PanelProps } from "../core/types";
 import { formatBytes } from "../file/fileTypes";
 import { dialogRoot, inputClass } from "../../primevue/preset";
 import { cn } from "../../utils/cn";
+import {
+  deleteMutation,
+  insertMutation,
+  updateMutation,
+  type RowMutation,
+} from "./mutation";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
@@ -259,20 +265,21 @@ async function commitStaged(): Promise<void> {
       if (deletedRows.has(id)) continue;
       if (insertedRows.has(id)) {
         if (insertSource.value)
-          await mutate(insertSource.value, { values: insertValues(row) });
+          await mutate(insertSource.value, insertMutation(insertValues(row)));
       } else if (edits.has(id) && updateSource.value) {
         const key = keyFor(row);
         if (!key) continue;
         const values: Record<string, unknown> = {};
         for (const field of edits.get(id)!.keys()) values[field] = row[field];
-        await mutate(updateSource.value, { key, values });
+        await mutate(updateSource.value, updateMutation(key, values));
       }
     }
     for (const row of rows.value) {
       const id = rid(row);
       if (!deletedRows.has(id) || insertedRows.has(id)) continue;
       const key = keyFor(row);
-      if (key && deleteSource.value) await mutate(deleteSource.value, { key });
+      if (key && deleteSource.value)
+        await mutate(deleteSource.value, deleteMutation(key));
     }
     clearStaging();
     toast.add({
@@ -335,10 +342,7 @@ function coerce(prev: unknown, next: unknown): unknown {
   return next;
 }
 
-async function mutate(
-  src: DataSource,
-  body: Record<string, unknown>,
-): Promise<void> {
+async function mutate(src: DataSource, body: RowMutation): Promise<void> {
   await runAction(
     props.connectionId,
     src.routeId,
@@ -375,7 +379,7 @@ async function onCellEditComplete(
     return;
   }
   try {
-    await mutate(src, { key, values: { [field]: value } });
+    await mutate(src, updateMutation(key, { [field]: value }));
   } catch (err) {
     data[field] = e.value;
     toast.add({
@@ -423,7 +427,7 @@ async function confirmDeleteRow(): Promise<void> {
   deleteBusy.value = true;
   deleteError.value = null;
   try {
-    await mutate(src, { key });
+    await mutate(src, deleteMutation(key));
     toast.add({ severity: "success", summary: "Row deleted", life: 3000 });
     deleteTarget.value = null;
     await load(first.value);
@@ -484,7 +488,7 @@ async function submitInsert(): Promise<void> {
   }
   inserting.value = true;
   try {
-    await mutate(src, { values });
+    await mutate(src, insertMutation(values));
     showInsert.value = false;
     toast.add({ severity: "success", summary: "Row added", life: 3000 });
     await load(0);

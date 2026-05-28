@@ -38,6 +38,40 @@ describe("PanelHost", () => {
     expect(w.text()).toContain("totally-made-up");
   });
 
+  it("renders a panel error for malformed generic config", () => {
+    const w = mount(PanelHost, {
+      props: {
+        panel: "table",
+        connectionId: "c1",
+        config: { columns: "bad" },
+      },
+    });
+
+    expect(w.text()).toContain("config.columns must be an array.");
+  });
+
+  it("validates dashboard cell config recursively", () => {
+    const w = mount(PanelHost, {
+      props: {
+        panel: "dashboard",
+        connectionId: "c1",
+        config: {
+          cells: [
+            {
+              key: "editor",
+              panel: "code_editor",
+              config: { saveMethod: "GET" },
+            },
+          ],
+        },
+      },
+    });
+
+    expect(w.text()).toContain(
+      'config.cells[0].config.saveMethod has unsupported method "GET".',
+    );
+  });
+
   it("remounts panels when the connection changes", async () => {
     const w = mount(PanelHost, {
       props: {
