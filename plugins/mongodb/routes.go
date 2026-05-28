@@ -37,6 +37,7 @@ func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "mongodb.databases.tree", Method: plugin.MethodGet, Path: "/tree/databases", Permission: "mongodb.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.databases.tree", Handle: treeDatabases},
 		{ID: "mongodb.databases.list", Method: plugin.MethodGet, Path: "/databases", Permission: "mongodb.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.databases.list", Handle: listDatabases},
+		{ID: "mongodb.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "mongodb.databases.write", Risk: plugin.RiskWrite, AuditEvent: "mongodb.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
 		{ID: "mongodb.database.overview", Method: plugin.MethodGet, Path: "/databases/{database}/overview", Permission: "mongodb.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.database.overview", Handle: databaseOverview},
 		{ID: "mongodb.collections.tree", Method: plugin.MethodGet, Path: "/tree/collections", Permission: "mongodb.collections.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.collections.tree", Handle: treeCollections},
 		{ID: "mongodb.collections.list", Method: plugin.MethodGet, Path: "/collections", Permission: "mongodb.collections.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.collections.list", Handle: listCollections},
@@ -58,6 +59,13 @@ func routes() []plugin.Route {
 
 func mongoSession(rc *plugin.RequestContext) (*Session, error) {
 	return unwrap(rc.Session)
+}
+
+func databaseCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Database", Fields: []plugin.Field{
+		{Key: "name", Label: "Database name", Type: plugin.FieldText, Required: true},
+		{Key: "collection", Label: "First collection", Type: plugin.FieldText, Required: true, Help: "A database is created with its first collection."},
+	}}}}
 }
 
 func collectionCreateSchema() *plugin.Schema {
@@ -426,6 +434,39 @@ func readDocument(rc *plugin.RequestContext) (any, error) {
 		return nil, mongoErr(err)
 	}
 	return bsonDoc(doc)
+}
+
+func createDatabase(rc *plugin.RequestContext) (any, error) {
+	s, err := mongoSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name       string `json:"name" validate:"required"`
+		Collection string `json:"collection" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	database, err := safeName(req.Name, "database")
+	if err != nil {
+		return nil, err
+	}
+	collection, err := safeName(req.Collection, "collection")
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := commandContext(rc.Ctx, s)
+	defer cancel()
+	// MongoDB has no standalone "create database"; the database springs into
+	// existence with its first collection.
+	if err := s.client.Database(database).CreateCollection(ctx, collection); err != nil {
+		return nil, mongoErr(err)
+	}
+	return actionResult{OK: true}, nil
 }
 
 func createCollection(rc *plugin.RequestContext) (any, error) {

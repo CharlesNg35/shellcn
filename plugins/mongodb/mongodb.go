@@ -68,8 +68,9 @@ func databaseResource() plugin.ResourceType {
 			{Key: "size", Label: "Size", Type: plugin.ColumnBytes, Sortable: true},
 			{Key: "empty", Label: "Empty", Type: plugin.ColumnBool, Sortable: true},
 		},
+		ListActionIDs: []string{"mongodb.database.create"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}"},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"mongodb.collection.create"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
 				{Key: "collections", Label: "Collections", Icon: icon("folders"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: collectionColumns(), ActionIDs: []string{"mongodb.collection.create"}}.Map()},
@@ -149,6 +150,7 @@ func indexColumns() []plugin.Column {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
+		{ID: "mongodb.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "mongodb.database.create"},
 		{ID: "mongodb.collection.create", Label: "Create collection", Icon: icon("plus"), RouteID: "mongodb.collection.create", Params: map[string]string{"database": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "collections"}},
 		{ID: "mongodb.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "mongodb.index.create", Params: collectionParams()},
 		{ID: "mongodb.index.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mongodb.index.drop", Params: map[string]string{"database": "${resource.scope}", "collection": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?"},

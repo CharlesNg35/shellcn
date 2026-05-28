@@ -71,6 +71,17 @@ func TestMongoDBPluginIntegration(t *testing.T) {
 		t.Fatalf("unexpected command result: %#v", result.Rows)
 	}
 
+	// Database create round-trip (a database is created with its first collection).
+	if _, err := createDatabase(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, []byte(`{"name":"shellcn_it_db","collection":"seed"}`))); err != nil {
+		t.Fatalf("create database: %v", err)
+	}
+	defer func() { _ = s.client.Database("shellcn_it_db").Drop(context.Background()) }()
+	if dbs, err := listDatabases(rc); err != nil {
+		t.Fatalf("list databases: %v", err)
+	} else if !pageHasName(dbs.(plugin.Page[row]), "shellcn_it_db") {
+		t.Fatalf("created database missing: %#v", dbs)
+	}
+
 	// Collection create round-trip.
 	if _, err := createCollection(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": "shellcn"}, nil, []byte(`{"name":"shellcn_it_coll"}`))); err != nil {
 		t.Fatalf("create collection: %v", err)
