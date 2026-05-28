@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/telemetry"
+	"github.com/charlesng35/shellcn/internal/telemetry"
 )
 
 func TestMetricsExposed(t *testing.T) {
@@ -19,7 +19,6 @@ func TestMetricsExposed(t *testing.T) {
 	m.ObserveAction("write", "allowed", 12*time.Millisecond)
 	m.IncAuthzFailure()
 	m.IncSecretAccess()
-	m.SetPluginHealth("ssh", true)
 
 	rec := httptest.NewRecorder()
 	m.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
@@ -30,7 +29,6 @@ func TestMetricsExposed(t *testing.T) {
 		"shellcn_channels_open 5",
 		"shellcn_authz_failures_total 1",
 		"shellcn_secret_access_total 1",
-		`shellcn_plugin_healthy{plugin="ssh"} 1`,
 		"shellcn_action_duration_seconds",
 	} {
 		if !strings.Contains(body, want) {

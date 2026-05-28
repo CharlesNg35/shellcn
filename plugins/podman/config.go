@@ -1,6 +1,6 @@
 package podman
 
-import "github.com/charlesng/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/internal/plugin"
 
 // configSchema is the Podman connection config. Podman keeps its own schema: the
 // socket defaults to the rootful path, and the help text points rootless users

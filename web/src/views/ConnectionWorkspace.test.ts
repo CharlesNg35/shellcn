@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFetch } from "../test/fetchMock";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { PluginProjection } from "../types/projection";
 import ConnectionWorkspace from "./ConnectionWorkspace.vue";
 
@@ -83,7 +84,14 @@ beforeEach(() => {
       };
     }
     if (url.endsWith("/api/connections/c1/session")) {
-      return { body: { ok: true } };
+      return {
+        body: {
+          state: "connected",
+          channels: 0,
+          streams: 0,
+          lastSeen: "2026-05-28T00:00:00Z",
+        },
+      };
     }
     if (url.endsWith("/api/connection-folders")) return { body: [] };
     if (url.endsWith("/api/plugins/docker")) return { body: projection };
@@ -207,6 +215,102 @@ describe("ConnectionWorkspace", () => {
     ).toBe(true);
   });
 
+  it("opens the backend plugin session before entering the workspace", async () => {
+    const ws = useWorkspaceStore();
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          DetailView: true,
+          ResourceTree: true,
+          TablePanel: TablePanelStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    const button = wrapper
+      .findAll("button")
+      .find((candidate) => candidate.text().includes("Connect"));
+    expect(button).toBeTruthy();
+    await button!.trigger("click");
+    await flushPromises();
+
+    expect(ws.isConnected("c1")).toBe(true);
+    expect(
+      requests.some(
+        (request) =>
+          request.url.endsWith("/api/connections/c1/session") &&
+          request.init?.method === "POST",
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps the connect gate visible when the backend session reports an error", async () => {
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      requests.push({ url, init });
+      if (url.endsWith("/api/connections")) {
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "docker",
+              protocol: "docker",
+              transport: "direct",
+            },
+          ],
+        };
+      }
+      if (url.endsWith("/api/connections/c1/session")) {
+        return {
+          body: {
+            state: "error",
+            reason: "docker ping failed",
+            channels: 0,
+            streams: 0,
+          },
+        };
+      }
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) return { body: projection };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+
+    const ws = useWorkspaceStore();
+    const live = useConnectionStatusStore();
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          DetailView: true,
+          ResourceTree: true,
+          TablePanel: TablePanelStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    const button = wrapper
+      .findAll("button")
+      .find((candidate) => candidate.text().includes("Connect"));
+    expect(button).toBeTruthy();
+    await button!.trigger("click");
+    await flushPromises();
+
+    expect(ws.isConnected("c1")).toBe(false);
+    expect(live.get("c1")).toEqual({
+      state: "error",
+      reason: "docker ping failed",
+    });
+  });
+
   it("renders every panel as a card in the dashboard layout", async () => {
     const dashboard: PluginProjection = {
       ...projection,
@@ -244,7 +348,14 @@ describe("ConnectionWorkspace", () => {
         };
       }
       if (url.endsWith("/api/connections/c1/session"))
-        return { body: { ok: true } };
+        return {
+          body: {
+            state: "connected",
+            channels: 0,
+            streams: 0,
+            lastSeen: "2026-05-28T00:00:00Z",
+          },
+        };
       if (url.endsWith("/api/connection-folders")) return { body: [] };
       if (url.endsWith("/api/plugins/docker")) return { body: dashboard };
       if (url.endsWith("/api/plugins")) return { body: [] };

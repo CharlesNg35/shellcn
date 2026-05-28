@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/transport"
 )
 
 const integrationKey = "shellcn_typesense_key"

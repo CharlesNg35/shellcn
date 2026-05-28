@@ -66,6 +66,10 @@ type Column struct {
 	// cell to an empty/null value rather than an empty string.
 	ReadOnly bool `json:"readOnly,omitempty"`
 	Nullable bool `json:"nullable,omitempty"`
+	// Severities colors a badge column by value: it maps a lower-cased cell value
+	// to a Severity (e.g. "running" -> success). Unmapped values stay neutral;
+	// ignored for non-badge columns.
+	Severities map[string]Severity `json:"severities,omitempty"`
 }
 
 // TableConfig is the declarative config consumed by the generic table panel.
@@ -435,13 +439,19 @@ type Tab struct {
 }
 
 // TreeGroup is a connection-level sidebar root, loaded lazily.
+//
+// A group with a Source is expandable: its children are fetched on expand. Omit
+// Source to make it a leaf — a direct destination that opens on click with no
+// expandable children: set ResourceKind to open that kind's list, or Ref to open
+// a specific resource's detail (e.g. a single dashboard/landing view).
 type TreeGroup struct {
-	Key          string     `json:"key"`
-	Label        string     `json:"label"`
-	Icon         Icon       `json:"icon,omitzero"`
-	Source       DataSource `json:"source"`
-	ResourceKind string     `json:"resourceKind,omitempty"`
-	Badge        *Badge     `json:"badge,omitempty"`
+	Key          string       `json:"key"`
+	Label        string       `json:"label"`
+	Icon         Icon         `json:"icon,omitzero"`
+	Source       DataSource   `json:"source,omitzero"`
+	ResourceKind string       `json:"resourceKind,omitempty"`
+	Ref          *ResourceRef `json:"ref,omitempty"`
+	Badge        *Badge       `json:"badge,omitempty"`
 }
 
 // TreeNode is one node returned by a tree DataSource.

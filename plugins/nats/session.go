@@ -6,7 +6,7 @@ import (
 
 	natsclient "github.com/nats-io/nats.go"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type Session struct {

@@ -24,6 +24,7 @@ export interface OpenView {
   resourceKind?: string;
   groupKey?: string;
   params?: Record<string, string>;
+  preview?: boolean;
 }
 
 interface ConnectionView {
@@ -71,13 +72,37 @@ export const useWorkspaceStore = defineStore("workspace", () => {
   // oldest non-active tab is auto-closed.
   function openView(id: string, v: OpenView): void {
     const c = view(id);
-    if (!c.views.some((x) => x.id === v.id)) c.views.push(v);
+    if (!c.views.some((x) => x.id === v.id))
+      c.views.push({ ...v, preview: false });
     c.activeViewId = v.id;
     while (c.views.length > MAX_WORKBENCH_TABS) {
       const idx = c.views.findIndex((x) => x.id !== c.activeViewId);
       if (idx < 0) break;
       c.views.splice(idx, 1);
     }
+  }
+
+  function openPreviewView(id: string, v: OpenView): void {
+    const c = view(id);
+    if (c.views.some((x) => x.id === v.id)) {
+      c.activeViewId = v.id;
+      return;
+    }
+    const previewIdx = c.views.findIndex((x) => x.preview);
+    const preview = { ...v, preview: true };
+    if (previewIdx >= 0) c.views.splice(previewIdx, 1, preview);
+    else c.views.push(preview);
+    c.activeViewId = v.id;
+    while (c.views.length > MAX_WORKBENCH_TABS) {
+      const idx = c.views.findIndex((x) => x.id !== c.activeViewId);
+      if (idx < 0) break;
+      c.views.splice(idx, 1);
+    }
+  }
+
+  function pinView(id: string, viewId: string): void {
+    const tab = view(id).views.find((v) => v.id === viewId);
+    if (tab) tab.preview = false;
   }
 
   function closeView(id: string, viewId: string): void {
@@ -122,6 +147,8 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     isConnected,
     setActiveTab,
     openView,
+    openPreviewView,
+    pinView,
     closeView,
     activateView,
     setViews,

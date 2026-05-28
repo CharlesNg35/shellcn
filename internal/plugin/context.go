@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 
-	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 // Pagination defaults applied when a request omits or over-asks for a limit.
@@ -343,11 +343,11 @@ func (rc *RequestContext) inputValues() (map[string]any, error) {
 
 func validateFieldValue(field Field, value any) error {
 	switch field.Type {
-	case FieldText, FieldPassword, FieldTextarea, FieldDuration, FieldCredentialRef:
+	case FieldText, FieldEmail, FieldURL, FieldTel, FieldPassword, FieldTextarea, FieldDuration, FieldCredentialRef, FieldRadio:
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("%w: %s must be a string", ErrInvalidInput, field.Key)
 		}
-	case FieldNumber:
+	case FieldNumber, FieldStepper, FieldSlider:
 		if _, ok := numberValue(value); !ok {
 			return fmt.Errorf("%w: %s must be a number", ErrInvalidInput, field.Key)
 		}
@@ -360,7 +360,7 @@ func validateFieldValue(field Field, value any) error {
 			return fmt.Errorf("%w: %s must be a list", ErrInvalidInput, field.Key)
 		}
 	}
-	if len(field.Options) > 0 && (field.Type == FieldSelect || field.Type == FieldMultiSelect) {
+	if len(field.Options) > 0 && (field.Type == FieldSelect || field.Type == FieldMultiSelect || field.Type == FieldRadio) {
 		if err := validateOptions(field, value); err != nil {
 			return err
 		}

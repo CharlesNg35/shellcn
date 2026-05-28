@@ -15,8 +15,8 @@ import (
 	dockerclient "github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/versions"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // podmanCompatAPIVersion is the Docker API version Podman's compatibility layer
@@ -154,17 +154,6 @@ func TestRoutesAgainstFakeDockerDaemon(t *testing.T) {
 	}
 	if !calls["POST /containers/create"] || !calls["POST /containers/def456789abcdef/start"] {
 		t.Fatalf("create/start endpoints not called: %+v", calls)
-	}
-
-	body := `{"method":"GET","url":"/version","headers":[]}`
-	apiRC := plugin.NewRequestContext(context.Background(), models.User{ID: "u"}, sess, nil, url.Values{}, []byte(body))
-	raw, err := ExecuteAPI(apiRC)
-	if err != nil {
-		t.Fatalf("execute api: %v", err)
-	}
-	resp := raw.(APIResponse)
-	if resp.Status != http.StatusOK {
-		t.Fatalf("raw api status = %d", resp.Status)
 	}
 }
 

@@ -2,6 +2,8 @@
 import { computed, ref } from "vue";
 import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
+import Slider from "primevue/slider";
+import RadioButton from "primevue/radiobutton";
 import Password from "primevue/password";
 import Textarea from "primevue/textarea";
 import Select from "primevue/select";
@@ -10,7 +12,12 @@ import ToggleSwitch from "primevue/toggleswitch";
 import Button from "primevue/button";
 import FileUpload from "primevue/fileupload";
 import type { FileUploadSelectEvent } from "primevue/fileupload";
-import type { CredentialRefState, Field } from "../../types/projection";
+import type {
+  CredentialRefState,
+  Field,
+  ValidatorType,
+} from "../../types/projection";
+import AppIcon from "../../components/AppIcon.vue";
 import CredentialSelect from "./CredentialSelect.vue";
 
 const props = defineProps<{
@@ -27,6 +34,29 @@ const editingSecret = ref(false);
 const showSecretValue = computed(
   () => !props.field.secret || !props.secretSet || editingSecret.value,
 );
+
+// Numeric bounds/step drive the stepper and slider; min/max come from the
+// field's validators so the control and server agree on the limits.
+function bound(type: ValidatorType): number | undefined {
+  const v = props.field.validators?.find((x) => x.type === type);
+  const n = v === undefined ? NaN : Number(v.value);
+  return Number.isFinite(n) ? n : undefined;
+}
+const min = computed(() => bound("min"));
+const max = computed(() => bound("max"));
+const step = computed(() => props.field.step ?? 1);
+const sliderValue = computed(() =>
+  typeof props.modelValue === "number" ? props.modelValue : (min.value ?? 0),
+);
+
+// Text-like fields share one input, differing only by the native input type
+// (so email/url/tel get the right keyboard and browser validation).
+const TEXT_INPUT_TYPES: Record<string, string> = {
+  email: "email",
+  url: "url",
+  tel: "tel",
+};
+const inputType = computed(() => TEXT_INPUT_TYPES[props.field.type] ?? "text");
 
 function update(value: unknown): void {
   emit("update:modelValue", value);
@@ -130,8 +160,61 @@ function updateFiles(event: FileUploadSelectEvent): void {
       v-else-if="field.type === 'number'"
       :model-value="(modelValue as number) ?? null"
       :use-grouping="false"
+      :min="min"
+      :max="max"
+      :step="step"
       @update:model-value="update"
     />
+
+    <InputNumber
+      v-else-if="field.type === 'stepper'"
+      :model-value="(modelValue as number) ?? null"
+      :use-grouping="false"
+      show-buttons
+      button-layout="horizontal"
+      :min="min"
+      :max="max"
+      :step="step"
+      @update:model-value="update"
+    >
+      <template #incrementicon>
+        <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="14" />
+      </template>
+      <template #decrementicon>
+        <AppIcon :icon="{ type: 'lucide', value: 'minus' }" :size="14" />
+      </template>
+    </InputNumber>
+
+    <div v-else-if="field.type === 'slider'" class="flex items-center gap-3">
+      <Slider
+        :model-value="sliderValue"
+        :min="min ?? 0"
+        :max="max ?? 100"
+        :step="step"
+        class="min-w-0 flex-1"
+        @update:model-value="update"
+      />
+      <span
+        class="w-12 shrink-0 text-right text-sm text-surface-700 tabular-nums dark:text-surface-200"
+        >{{ sliderValue }}</span
+      >
+    </div>
+
+    <div v-else-if="field.type === 'radio'" class="flex flex-col gap-2 pt-1">
+      <label
+        v-for="opt in field.options ?? []"
+        :key="String(opt.value)"
+        class="flex items-center gap-2 text-sm text-surface-700 dark:text-surface-200"
+      >
+        <RadioButton
+          :model-value="modelValue"
+          :value="opt.value"
+          :input-id="`${field.key}-${opt.value}`"
+          @update:model-value="update"
+        />
+        <span>{{ opt.label }}</span>
+      </label>
+    </div>
 
     <InputText
       v-else-if="field.type === 'duration'"
@@ -142,6 +225,7 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
     <InputText
       v-else
+      :type="inputType"
       :model-value="(modelValue as string) ?? ''"
       :placeholder="field.placeholder"
       @update:model-value="update"

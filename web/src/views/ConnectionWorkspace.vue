@@ -1,11 +1,24 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Button from "primevue/button";
 import { API_BASE, api, ApiError, getCsrfToken } from "../api/client";
+import {
+  closeConnectionSession,
+  keepaliveConnectionSession,
+  type ConnectionSession,
+} from "../api/connectionSession";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useSessionsStore } from "../stores/sessions";
@@ -72,6 +85,7 @@ async function onDelete(): Promise<void> {
 const projection = ref<PluginProjection | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
+const sessionConnecting = ref(false);
 // The connect screen can hand off to the agent enrollment screen and back.
 const showEnroll = ref(false);
 
@@ -118,15 +132,79 @@ const sessionPath = computed(
   () => `/connections/${encodeURIComponent(props.id)}/session`,
 );
 const sessionURL = computed(() => `${API_BASE}${sessionPath.value}`);
+let heartbeat: ReturnType<typeof setInterval> | undefined;
+let activeWorkspace = false;
 
-function connect(): void {
-  showEnroll.value = false;
-  ws.setConnected(props.id, true);
+function applyBackendSession(session: ConnectionSession): boolean {
+  liveStatus.applySession(props.id, session);
+  switch (session.state) {
+    case "connected":
+    case "connecting":
+      ws.setConnected(props.id, true);
+      return true;
+    case "error":
+      return connected.value;
+    default:
+      ws.setConnected(props.id, false);
+      return false;
+  }
+}
+
+async function keepBackendSessionAlive(reportError = false): Promise<boolean> {
   liveStatus.connecting(props.id);
+  try {
+    const session = await keepaliveConnectionSession(props.id);
+    return applyBackendSession(session);
+  } catch (e) {
+    const message = (e as Error).message;
+    liveStatus.failed(props.id, message);
+    if (reportError) notify.error("Could not connect", message);
+    return false;
+  }
+}
+
+function stopHeartbeat(): void {
+  if (!heartbeat) return;
+  clearInterval(heartbeat);
+  heartbeat = undefined;
+}
+
+function startHeartbeat(): void {
+  stopHeartbeat();
+  heartbeat = setInterval(() => {
+    if (connected.value) void keepBackendSessionAlive();
+  }, 30000);
+}
+
+function syncAndStartHeartbeat(): void {
+  if (!connected.value) return;
+  void keepBackendSessionAlive();
+  startHeartbeat();
+}
+
+function activateWorkspace(): void {
+  if (activeWorkspace) return;
+  activeWorkspace = true;
+  syncAndStartHeartbeat();
+}
+
+function deactivateWorkspace(): void {
+  activeWorkspace = false;
+  stopHeartbeat();
+}
+
+async function connect(): Promise<void> {
+  showEnroll.value = false;
+  sessionConnecting.value = true;
+  try {
+    if (await keepBackendSessionAlive(true)) startHeartbeat();
+  } finally {
+    sessionConnecting.value = false;
+  }
 }
 
 async function closeBackendSession(): Promise<void> {
-  await api.del(sessionPath.value);
+  await closeConnectionSession(props.id);
 }
 
 function closeBackendSessionOnPageHide(): void {
@@ -148,6 +226,7 @@ function confirmBeforePageUnload(event: BeforeUnloadEvent): void {
 }
 
 async function disconnect(): Promise<void> {
+  stopHeartbeat();
   sessions.closeWhere((key) => key.startsWith(channelPrefix.value));
   ws.setConnected(props.id, false);
   liveStatus.clear(props.id);
@@ -161,11 +240,22 @@ async function disconnect(): Promise<void> {
 onMounted(() => {
   window.addEventListener("beforeunload", confirmBeforePageUnload);
   window.addEventListener("pagehide", closeBackendSessionOnPageHide);
+  activateWorkspace();
 });
 
+onActivated(activateWorkspace);
+
+onDeactivated(deactivateWorkspace);
+
 onBeforeUnmount(() => {
+  deactivateWorkspace();
   window.removeEventListener("beforeunload", confirmBeforePageUnload);
   window.removeEventListener("pagehide", closeBackendSessionOnPageHide);
+});
+
+watch(connected, (on) => {
+  if (on && activeWorkspace) startHeartbeat();
+  else stopHeartbeat();
 });
 
 const activeTab = computed(() =>
@@ -281,6 +371,7 @@ function onActionDone(action: Action): void {
         v-else-if="!connected"
         :connection-id="id"
         :connection="connection"
+        :connecting="sessionConnecting"
         @connect="connect"
         @enroll="showEnroll = true"
       />

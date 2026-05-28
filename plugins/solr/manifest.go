@@ -1,8 +1,13 @@
 package solr
 
-import "github.com/charlesng/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/internal/plugin"
 
 func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
+
+// healthSeverities colors a collection's health badge by value.
+var healthSeverities = map[string]plugin.Severity{
+	"green": plugin.SeveritySuccess, "yellow": plugin.SeverityWarn, "red": plugin.SeverityDanger,
+}
 
 func rid(suffix string) string { return protocolName + "." + suffix }
 
@@ -93,7 +98,7 @@ func coreColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "name", Label: "Collection/Core", Sortable: true},
 		{Key: "mode", Label: "Mode", Type: plugin.ColumnBadge, Sortable: true},
-		{Key: "health", Label: "Health", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "health", Label: "Health", Type: plugin.ColumnBadge, Sortable: true, Severities: healthSeverities},
 		{Key: "numDocs", Label: "Documents", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "maxDoc", Label: "Max doc", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "deletedDocs", Label: "Deleted", Type: plugin.ColumnNumber, Sortable: true},

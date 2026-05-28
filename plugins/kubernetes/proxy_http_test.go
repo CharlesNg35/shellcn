@@ -7,24 +7,51 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 func TestProxyPaths(t *testing.T) {
 	s := connectTo(t, http.NewServeMux()).(*Session)
-	cases := map[string][2]string{
-		"/services/default/web/80/":      {"/api/v1/namespaces/default/services/web:80/proxy/", "/api/connections/c1/proxy/services/default/web/80"},
-		"/pods/default/api/8080/healthz": {"/api/v1/namespaces/default/pods/api:8080/proxy/healthz", "/api/connections/c1/proxy/pods/default/api/8080"},
-		"/services/mon/graf/https:8443/": {"/api/v1/namespaces/mon/services/https:graf:8443/proxy/", "/api/connections/c1/proxy/services/mon/graf/https:8443"},
+	cases := map[string][3]string{
+		"/services/default/web/80/":      {"/api/v1/namespaces/default/services/web:80/proxy/", "/api/v1/namespaces/default/services/web:80/proxy", "/api/connections/c1/proxy/services/default/web/80"},
+		"/pods/default/api/8080/healthz": {"/api/v1/namespaces/default/pods/api:8080/proxy/healthz", "/api/v1/namespaces/default/pods/api:8080/proxy", "/api/connections/c1/proxy/pods/default/api/8080"},
+		"/services/mon/graf/https:8443/": {"/api/v1/namespaces/mon/services/https:graf:8443/proxy/", "/api/v1/namespaces/mon/services/https:graf:8443/proxy", "/api/connections/c1/proxy/services/mon/graf/https:8443"},
 	}
 	for in, want := range cases {
-		apiPath, prefix, ok := s.proxyPaths(in)
-		if !ok || apiPath != want[0] || prefix != want[1] {
-			t.Errorf("proxyPaths(%q) = %q,%q,%v; want %q,%q", in, apiPath, prefix, ok, want[0], want[1])
+		apiPath, apiPrefix, prefix, ok := s.proxyPaths(in)
+		if !ok || apiPath != want[0] || apiPrefix != want[1] || prefix != want[2] {
+			t.Errorf("proxyPaths(%q) = %q,%q,%q,%v; want %q,%q,%q", in, apiPath, apiPrefix, prefix, ok, want[0], want[1], want[2])
 		}
 	}
-	if _, _, ok := s.proxyPaths("/configmaps/default/cm"); ok {
+	if _, _, _, ok := s.proxyPaths("/configmaps/default/cm"); ok {
 		t.Error("non-proxyable kind should be rejected")
+	}
+}
+
+// The API server's proxy subresource rewrites the app's root-relative URLs to
+// its own proxy prefix; the gateway must map that back to the public prefix, not
+// prepend on top (which would double the path and 404 the assets).
+func TestServeHTTPProxyUndoesAPIServerPrefix(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/services/web:80/proxy/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		// As an API-server-proxied app would emit it (already prefixed).
+		_, _ = io.WriteString(w, `<html><head></head><body><script src="/api/v1/namespaces/default/services/web:80/proxy/_next/app.js"></script><a href="/page">p</a></body></html>`)
+	})
+	sess := connectTo(t, mux).(*Session)
+	rec := httptest.NewRecorder()
+	sess.ServeHTTPProxy(rec, httptest.NewRequest(http.MethodGet, "/services/default/web/80/", nil))
+
+	body := rec.Body.String()
+	prefix := "/api/connections/c1/proxy/services/default/web/80"
+	if !strings.Contains(body, `src="`+prefix+`/_next/app.js"`) {
+		t.Fatalf("api-server prefix not mapped to public prefix: %s", body)
+	}
+	if strings.Contains(body, "/proxy/api/v1/namespaces") {
+		t.Fatalf("double-prefixed asset URL leaked: %s", body)
+	}
+	if !strings.Contains(body, `href="`+prefix+`/page"`) {
+		t.Fatalf("bare root-relative link not prefixed: %s", body)
 	}
 }
 
@@ -49,6 +76,28 @@ func TestServeHTTPProxyRewritesHTML(t *testing.T) {
 	}
 	if rec.Header().Get("Content-Security-Policy") != "" {
 		t.Fatal("CSP should be dropped so the shim/assets load")
+	}
+	// The shim must patch runtime-injected assets (bundler chunks/styles bypass
+	// fetch), so script/link src/href are rewritten under the prefix at runtime.
+	if !strings.Contains(body, "HTMLScriptElement.prototype") {
+		t.Fatalf("shim does not rewrite runtime-injected script URLs: %s", body)
+	}
+}
+
+func TestServeHTTPProxyServesServiceWorker(t *testing.T) {
+	sess := connectTo(t, http.NewServeMux()).(*Session)
+	rec := httptest.NewRecorder()
+	sess.ServeHTTPProxy(rec, httptest.NewRequest(http.MethodGet, "/services/default/web/80/__shellcn_sw.js", nil))
+
+	prefix := "/api/connections/c1/proxy/services/default/web/80"
+	if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "javascript") {
+		t.Fatalf("worker content-type = %q", ct)
+	}
+	if got := rec.Header().Get("Service-Worker-Allowed"); got != prefix+"/" {
+		t.Fatalf("worker scope header = %q", got)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, prefix) || !strings.Contains(body, `addEventListener("fetch"`) {
+		t.Fatalf("worker body unexpected: %s", body)
 	}
 }
 
@@ -83,6 +132,28 @@ func TestServiceProxyURL(t *testing.T) {
 	}
 	if url, _ := out.(map[string]any)["url"].(string); url != "/api/connections/c1/proxy/services/default/secure/https:8443/" {
 		t.Fatalf("https port segment wrong: %q", url)
+	}
+}
+
+func TestPodProxyURL(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/namespaces/default/pods/web", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "Pod", "metadata": obj{"name": "web", "namespace": "default"},
+			"spec": obj{"containers": []any{obj{"name": "app", "ports": []any{
+				obj{"name": "metrics", "containerPort": int64(9090)},
+				obj{"name": "http", "containerPort": int64(8080)},
+			}}}},
+		})
+	})
+	sess := connectTo(t, mux)
+
+	out, err := PodProxyURL(rc(sess, map[string]string{"namespace": "default", "name": "web"}))
+	if err != nil {
+		t.Fatalf("pod proxy url: %v", err)
+	}
+	if url, _ := out.(map[string]any)["url"].(string); url != "/api/connections/c1/proxy/pods/default/web/8080/" {
+		t.Fatalf("http container port should win: %q", url)
 	}
 }
 

@@ -15,7 +15,8 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/spf13/viper"
 
-	"github.com/charlesng/shellcn/internal/secrets"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/secrets"
 )
 
 type Config struct {
@@ -58,7 +59,7 @@ func (c AuthConfig) JWTSigningKey(masterKey []byte) []byte {
 		sum := sha256.Sum256([]byte(c.JWTSecret))
 		return sum[:]
 	}
-	sum := sha256.Sum256(append([]byte("shellcn auth jwt:"), masterKey...))
+	sum := sha256.Sum256(append([]byte(app.JWTSigningContext), masterKey...))
 	return sum[:]
 }
 
@@ -151,7 +152,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("bootstrap.admin_username", "admin")
 	v.SetDefault("bootstrap.admin_password", "")
 	v.SetDefault("database.driver", "sqlite")
-	v.SetDefault("database.dsn", "shellcn.db")
+	v.SetDefault("database.dsn", app.DefaultDatabaseDSN)
 	v.SetDefault("email.enabled", false)
 	v.SetDefault("email.port", 587)
 	v.SetDefault("email.use_tls", false)

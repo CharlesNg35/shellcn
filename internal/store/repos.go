@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 // normNotFound maps GORM's record-not-found to the store sentinel.

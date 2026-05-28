@@ -17,9 +17,9 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
 type row map[string]any
@@ -77,9 +77,9 @@ func routes() []plugin.Route {
 		{ID: "postgresql.schema.drop", Method: plugin.MethodDelete, Path: "/schemas/{schema}", Permission: "postgresql.schemas.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.schema.drop", Handle: dropSchema},
 		{ID: "postgresql.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "postgresql.column.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.column.add", Input: columnAddSchema(), Handle: addColumn},
-		{ID: "postgresql.column.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.column.drop", Input: columnDropSchema(), Handle: dropColumn},
+		{ID: "postgresql.column.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.column.drop", Handle: dropColumn},
 		{ID: "postgresql.index.create", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.index.create", Input: indexCreateSchema(), Handle: createIndex},
-		{ID: "postgresql.index.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.index.drop", Input: indexDropSchema(), Handle: dropIndex},
+		{ID: "postgresql.index.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.index.drop", Handle: dropIndex},
 		{ID: "postgresql.table.truncate", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/truncate", Permission: "postgresql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.table.truncate", Handle: truncateTable},
 		{ID: "postgresql.table.drop", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}", Permission: "postgresql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.table.drop", Handle: dropTable},
 
@@ -146,23 +146,11 @@ func columnAddSchema() *plugin.Schema {
 	}}}}
 }
 
-func columnDropSchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
-		{Key: "column", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "The column to drop. Its data is permanently removed."},
-	}}}}
-}
-
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "columns", Label: "Columns", Type: plugin.FieldText, Required: true, Help: "Comma-separated column names."},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
-	}}}}
-}
-
-func indexDropSchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
-		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 	}}}}
 }
 
@@ -588,6 +576,10 @@ ORDER BY ordinal_position`, []any{schema, table})
 	if err != nil {
 		return nil, err
 	}
+	for i := range rows {
+		name := fmt.Sprint(rows[i]["name"])
+		rows[i]["ref"] = plugin.ResourceRef{Kind: "column", Scope: schema, Namespace: table, Name: name, UID: schema + "." + table + "." + name}
+	}
 	return pageRows(rc, rows)
 }
 
@@ -611,6 +603,10 @@ WHERE n.nspname = $1 AND t.relname = $2
 ORDER BY i.relname`, []any{schema, table})
 	if err != nil {
 		return nil, err
+	}
+	for i := range rows {
+		name := fmt.Sprint(rows[i]["name"])
+		rows[i]["ref"] = plugin.ResourceRef{Kind: "index", Scope: schema, Namespace: table, Name: name, UID: schema + "." + table + "." + name}
 	}
 	return pageRows(rc, rows)
 }
@@ -1027,13 +1023,7 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var req struct {
-		Column string `json:"column" validate:"required"`
-	}
-	if err := rc.Bind(&req); err != nil {
-		return nil, err
-	}
-	column, err := sqldb.SafeIdentifier(req.Column)
+	column, err := sqldb.SafeIdentifier(rc.Param("name"))
 	if err != nil {
 		return nil, err
 	}
@@ -1094,13 +1084,7 @@ func dropIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var req struct {
-		Name string `json:"name" validate:"required"`
-	}
-	if err := rc.Bind(&req); err != nil {
-		return nil, err
-	}
-	name, err := sqldb.SafeIdentifier(req.Name)
+	name, err := sqldb.SafeIdentifier(rc.Param("name"))
 	if err != nil {
 		return nil, err
 	}

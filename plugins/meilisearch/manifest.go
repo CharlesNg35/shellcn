@@ -1,6 +1,15 @@
 package meilisearch
 
-import "github.com/charlesng/shellcn/internal/plugin"
+import "github.com/charlesng35/shellcn/internal/plugin"
+
+// taskStatusSeverities colors a task's status badge by value.
+var taskStatusSeverities = map[string]plugin.Severity{
+	"succeeded":  plugin.SeveritySuccess,
+	"enqueued":   plugin.SeverityInfo,
+	"processing": plugin.SeverityWarn,
+	"failed":     plugin.SeverityDanger,
+	"canceled":   plugin.SeveritySecondary,
+}
 
 func icon(name string) plugin.Icon {
 	return plugin.Icon{Type: plugin.IconLucide, Value: name}
@@ -72,7 +81,7 @@ func actions() []plugin.Action {
 		{ID: rid("document.upsert"), Label: "Upsert document", Icon: icon("plus"), RouteID: rid("document.upsert"), Params: indexParams()},
 		{ID: rid("document.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("document.delete"), Params: documentParams(), Confirm: true, ConfirmText: "Delete this document?"},
 		{ID: rid("documents.delete_all"), Label: "Delete all documents", Icon: icon("eraser"), RouteID: rid("documents.delete_all"), Params: indexParams(), Confirm: true, ConfirmText: "Delete every document in this index?"},
-		{ID: rid("task.cancel"), Label: "Cancel", Icon: icon("ban"), RouteID: rid("task.cancel"), Params: taskParams(), Confirm: true, ConfirmText: "Cancel matching enqueued or processing tasks?"},
+		{ID: rid("task.cancel"), Label: "Cancel", Icon: icon("ban"), RouteID: rid("task.cancel"), Params: taskParams(), Confirm: true, ConfirmText: "Cancel matching enqueued or processing tasks?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpIn, Value: []string{"enqueued", "processing"}}}}},
 		{ID: rid("key.create"), Label: "Create key", Icon: icon("plus"), RouteID: rid("key.create")},
 		{ID: rid("key.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("key.delete"), Params: keyParams(), Confirm: true, ConfirmText: "Delete this API key?"},
 		{ID: rid("dump.create"), Label: "Create dump", Icon: icon("archive"), RouteID: rid("dump.create"), Confirm: true, ConfirmText: "Create a Meilisearch dump?"},
@@ -122,7 +131,7 @@ func documentColumns() []plugin.Column {
 func taskColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "uid", Label: "UID", Type: plugin.ColumnNumber, Sortable: true},
-		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: taskStatusSeverities},
 		{Key: "type", Label: "Type", Sortable: true},
 		{Key: "indexUid", Label: "Index", Sortable: true},
 		{Key: "duration", Label: "Duration"},

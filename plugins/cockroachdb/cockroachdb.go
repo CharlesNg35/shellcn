@@ -4,7 +4,7 @@ package cockroachdb
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type Plugin struct{}
@@ -183,8 +183,8 @@ func tableResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"cockroachdb.table.truncate", "cockroachdb.table.drop"}},
 			Tabs: []plugin.Tab{
 				{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.table.rows", Params: tableParams()}, Config: dataGridConfig()},
-				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"cockroachdb.column.add", "cockroachdb.column.drop"}}.Map()},
-				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"cockroachdb.index.create", "cockroachdb.index.drop"}}.Map()},
+				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"cockroachdb.column.add"}, RowActionIDs: []string{"cockroachdb.column.drop"}}.Map()},
+				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"cockroachdb.index.create"}, RowActionIDs: []string{"cockroachdb.index.drop"}}.Map()},
 				{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.table.constraints", Params: tableParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}.Map()},
 				{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cockroachdb.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM ${resource.namespace}.${resource.name} LIMIT 100;")},
 			},
@@ -313,9 +313,9 @@ func actions() []plugin.Action {
 		{ID: "cockroachdb.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "cockroachdb.database.create"},
 		{ID: "cockroachdb.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "cockroachdb.table.create", Params: map[string]string{"schema": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
 		{ID: "cockroachdb.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "cockroachdb.column.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
-		{ID: "cockroachdb.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "cockroachdb.column.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
+		{ID: "cockroachdb.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "cockroachdb.column.drop", Params: map[string]string{"schema": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "cockroachdb.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "cockroachdb.index.create", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
-		{ID: "cockroachdb.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "cockroachdb.index.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: "cockroachdb.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "cockroachdb.index.drop", Params: map[string]string{"schema": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "cockroachdb.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "cockroachdb.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "cockroachdb.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cockroachdb.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 	}

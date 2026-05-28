@@ -8,7 +8,8 @@ package kubernetes
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // In-cluster API + ServiceAccount mount paths. Kubernetes-specific, so they live
@@ -84,26 +85,26 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: shellcn-agent
+  name: ` + app.AgentBinary + `
   namespace: "{{.Slug}}"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: "shellcn-agent-{{.Slug}}"
+  name: "` + app.AgentBinary + `-{{.Slug}}"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: cluster-admin
 subjects:
   - kind: ServiceAccount
-    name: shellcn-agent
+    name: ` + app.AgentBinary + `
     namespace: "{{.Slug}}"
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: shellcn-agent
+  name: ` + app.AgentBinary + `
   namespace: "{{.Slug}}"
 type: Opaque
 stringData:
@@ -113,21 +114,21 @@ stringData:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: shellcn-agent
+  name: ` + app.AgentBinary + `
   namespace: "{{.Slug}}"
   labels:
-    app: shellcn-agent
+    app: ` + app.AgentBinary + `
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: shellcn-agent
+      app: ` + app.AgentBinary + `
   template:
     metadata:
       labels:
-        app: shellcn-agent
+        app: ` + app.AgentBinary + `
     spec:
-      serviceAccountName: shellcn-agent
+      serviceAccountName: ` + app.AgentBinary + `
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
@@ -141,12 +142,12 @@ spec:
             - name: SHELLCN_CONNECT_URL
               valueFrom:
                 secretKeyRef:
-                  name: shellcn-agent
+                  name: ` + app.AgentBinary + `
                   key: connect-url
             - name: SHELLCN_ENROLL_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: shellcn-agent
+                  name: ` + app.AgentBinary + `
                   key: enroll-token
           resources:
             requests:

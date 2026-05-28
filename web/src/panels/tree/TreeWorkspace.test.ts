@@ -96,4 +96,33 @@ describe("TreeWorkspace", () => {
     expect(tab.classes()).toContain("overflow-hidden");
     expect(tab.get("span").classes()).toContain("min-w-0");
   });
+
+  it("pins a preview tab on double-click", async () => {
+    const wrapper = mountWorkspace();
+    const ws = useWorkspaceStore();
+
+    ws.openPreviewView("c1", {
+      id: "list:containers",
+      title: "Containers",
+      kind: "list",
+      resourceKind: "missing",
+    });
+    await nextTick();
+    await flushPromises();
+
+    const tab = wrapper.get("[data-active-tab='true']");
+    expect(ws.activeView("c1")?.preview).toBe(true);
+    expect(tab.attributes("data-preview-tab")).toBe("true");
+    expect(tab.attributes("title")).toBe("Containers");
+    expect(tab.get(".font-medium").classes()).toContain("italic");
+
+    await tab.trigger("dblclick");
+
+    expect(ws.activeView("c1")?.preview).toBe(false);
+    await nextTick();
+    const pinnedTab = wrapper.get("[data-active-tab='true']");
+    expect(pinnedTab.attributes("data-preview-tab")).toBeUndefined();
+    expect(pinnedTab.attributes("title")).toBe("Containers");
+    expect(pinnedTab.get(".font-medium").classes()).not.toContain("italic");
+  });
 });

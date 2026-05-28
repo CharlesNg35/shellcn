@@ -3,7 +3,7 @@ package kubernetes
 import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // category is an expandable sidebar group that drills into its kinds, mirroring
@@ -54,6 +54,28 @@ func badge(c *plugin.Column)   { c.Type = plugin.ColumnBadge }
 func num(c *plugin.Column)     { c.Type = plugin.ColumnNumber }
 func notSort(c *plugin.Column) { c.Sortable = false }
 
+func statusBadge(sev map[string]plugin.Severity) func(*plugin.Column) {
+	return func(c *plugin.Column) { c.Type = plugin.ColumnBadge; c.Severities = sev }
+}
+
+var (
+	podSeverities = map[string]plugin.Severity{
+		"running": plugin.SeveritySuccess, "succeeded": plugin.SeverityInfo, "completed": plugin.SeverityInfo,
+		"pending": plugin.SeverityWarn, "containercreating": plugin.SeverityWarn, "terminating": plugin.SeverityWarn,
+		"failed": plugin.SeverityDanger, "error": plugin.SeverityDanger, "crashloopbackoff": plugin.SeverityDanger,
+		"imagepullbackoff": plugin.SeverityDanger, "errimagepull": plugin.SeverityDanger,
+	}
+	nodeSeverities = map[string]plugin.Severity{
+		"ready": plugin.SeveritySuccess, "notready": plugin.SeverityDanger, "ready,schedulingdisabled": plugin.SeverityWarn,
+	}
+	namespaceSeverities = map[string]plugin.Severity{"active": plugin.SeveritySuccess, "terminating": plugin.SeverityWarn}
+	volumeSeverities    = map[string]plugin.Severity{
+		"bound": plugin.SeveritySuccess, "available": plugin.SeverityInfo,
+		"pending": plugin.SeverityWarn, "released": plugin.SeverityWarn,
+		"lost": plugin.SeverityDanger, "failed": plugin.SeverityDanger,
+	}
+)
+
 func nameCol() plugin.Column { return col("name", "Name") }
 func nsCol() plugin.Column   { return col("namespace", "Namespace") }
 func ageCol() plugin.Column  { return col("age", "Age") }
@@ -69,9 +91,9 @@ var kinds = []kind{
 	{
 		name: "pod", title: "Pods", category: "workloads", icon: "box", namespaced: true,
 		gvr:        schema.GroupVersionResource{Version: "v1", Resource: "pods"},
-		columns:    []plugin.Column{nameCol(), nsCol(), col("ready", "Ready", notSort), col("status", "Status", badge), col("restarts", "Restarts", num), col("node", "Node"), col("podIP", "IP", notSort), ageCol()},
+		columns:    []plugin.Column{nameCol(), nsCol(), col("ready", "Ready", notSort), col("status", "Status", statusBadge(podSeverities)), col("restarts", "Restarts", num), col("node", "Node"), col("podIP", "IP", notSort), ageCol()},
 		extra:      podRow,
-		actionIDs:  []string{"kubernetes.pod.logs", "kubernetes.pod.exec", "kubernetes.resource.delete"},
+		actionIDs:  []string{"kubernetes.pod.open", "kubernetes.pod.logs", "kubernetes.pod.exec", "kubernetes.resource.delete"},
 		detailTabs: podDetailTabs(),
 	},
 	{
@@ -155,13 +177,13 @@ var kinds = []kind{
 	{
 		name: "persistentvolumeclaim", title: "Persistent Volume Claims", category: "storage", icon: "hard-drive", namespaced: true,
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "persistentvolumeclaims"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("status", "Status", badge), col("volume", "Volume"), col("capacity", "Capacity", notSort), col("storageClass", "Storage class"), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("status", "Status", statusBadge(volumeSeverities)), col("volume", "Volume"), col("capacity", "Capacity", notSort), col("storageClass", "Storage class"), ageCol()},
 		extra:   pvcRow, actionIDs: justDelete,
 	},
 	{
 		name: "persistentvolume", title: "Persistent Volumes", category: "storage", icon: "hard-drive",
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "persistentvolumes"},
-		columns: []plugin.Column{nameCol(), col("capacity", "Capacity", notSort), col("status", "Status", badge), col("claim", "Claim"), col("storageClass", "Storage class"), col("reclaim", "Reclaim"), ageCol()},
+		columns: []plugin.Column{nameCol(), col("capacity", "Capacity", notSort), col("status", "Status", statusBadge(volumeSeverities)), col("claim", "Claim"), col("storageClass", "Storage class"), col("reclaim", "Reclaim"), ageCol()},
 		extra:   pvRow, actionIDs: justDelete,
 	},
 	{
@@ -281,13 +303,13 @@ var kinds = []kind{
 	{
 		name: "namespace", title: "Namespaces", category: "cluster", icon: "box",
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "namespaces"},
-		columns: []plugin.Column{nameCol(), col("status", "Status", badge), ageCol()},
+		columns: []plugin.Column{nameCol(), col("status", "Status", statusBadge(namespaceSeverities)), ageCol()},
 		extra:   namespaceExtra, actionIDs: justDelete,
 	},
 	{
 		name: "node", title: "Nodes", category: "cluster", icon: "server",
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "nodes"},
-		columns: []plugin.Column{nameCol(), col("status", "Status", badge), col("roles", "Roles"), col("version", "Version"), ageCol()},
+		columns: []plugin.Column{nameCol(), col("status", "Status", statusBadge(nodeSeverities)), col("roles", "Roles"), col("version", "Version"), ageCol()},
 		extra:   nodeRow, actionIDs: []string{"kubernetes.node.cordon", "kubernetes.node.uncordon"}, detailTabs: nodeDetailTabs(),
 	},
 	{

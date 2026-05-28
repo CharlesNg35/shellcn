@@ -10,11 +10,11 @@ import (
 
 	natsclient "github.com/nats-io/nats.go"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/plugins/shared/broker"
-	"github.com/charlesng/shellcn/plugins/shared/dbcred"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/broker"
+	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
 const (
@@ -41,7 +41,7 @@ func configSchema() plugin.Schema {
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Server", Fields: []plugin.Field{
 			{Key: "urls", Label: "Servers", Type: plugin.FieldTextarea, Required: true, Default: "nats://localhost:4222", Placeholder: "nats://nats-1:4222, nats://nats-2:4222"},
-			{Key: "name", Label: "Client name", Type: plugin.FieldText, Default: "shellcn"},
+			{Key: "name", Label: "Client name", Type: plugin.FieldText, Default: app.DefaultClientName},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "none", Options: []plugin.Option{
@@ -82,7 +82,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	}
 	opts := options{
 		URLs:          urls,
-		Name:          broker.StringValue(cfg.Config, "name", "shellcn"),
+		Name:          broker.StringValue(cfg.Config, "name", app.DefaultClientName),
 		Timeout:       broker.DurationValue(cfg.Config, "timeout", defaultTimeout),
 		MessageLimit:  broker.IntValue(cfg.Config, "message_limit", defaultMessageLimit, 1, plugin.MaxPageLimit),
 		ReadOnly:      broker.BoolValue(cfg.Config, "read_only", true),
@@ -95,8 +95,8 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	case "token":
 		opts.Token = cfg.String("token")
 	case "credential":
-		if cfg.String(service.CredentialKind) == string(plugin.CredentialBearerToken) {
-			opts.Token = dbcred.ResolvedSecret(cfg, service.CredentialField)
+		if cfg.CredentialKindFor(plugin.CredentialField) == plugin.CredentialBearerToken {
+			opts.Token = dbcred.ResolvedSecret(cfg, plugin.CredentialField)
 		} else {
 			material := dbcred.ApplyPasswordCredential(cfg, cfg.String("username"), cfg.String("password"))
 			opts.Username, opts.Password = material.Username, material.Password

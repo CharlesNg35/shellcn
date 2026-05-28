@@ -10,20 +10,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/plugins/shared/broker"
-	"github.com/charlesng/shellcn/plugins/shared/dbcred"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/broker"
+	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
 const (
 	protocolName     = "influxdb"
 	defaultTimeout   = 15 * time.Second
 	defaultPageLimit = 100
-	legacyTokenField = "api_token"
-	legacyTokenCred  = "token_credential_id"
-	legacyBasicCred  = "basic_credential_id"
 	tokenFieldV3     = "api_token_v3"
 	tokenFieldV2     = "api_token_v2"
 	tokenCredV3      = "token_credential_v3_id"
@@ -189,13 +185,13 @@ func parseAuth(cfg plugin.ConnectConfig, mode string) (authHeader, error) {
 		case "none":
 			return authHeader{}, nil
 		case "token":
-			token := stringAny(cfg, tokenFieldV2, legacyTokenField)
+			token := strings.TrimSpace(cfg.String(tokenFieldV2))
 			if token == "" {
 				return authHeader{}, fmt.Errorf("%w: API token is required", plugin.ErrInvalidInput)
 			}
 			return authHeader{Header: "Authorization", Value: "Token " + token}, nil
 		case "credential":
-			token := resolvedSecretAny(cfg, tokenCredV2, legacyTokenCred)
+			token := resolvedSecretAny(cfg, tokenCredV2)
 			if token == "" {
 				return authHeader{}, fmt.Errorf("%w: stored token credential is required", plugin.ErrInvalidInput)
 			}
@@ -208,20 +204,20 @@ func parseAuth(cfg plugin.ConnectConfig, mode string) (authHeader, error) {
 		case "none":
 			return authHeader{}, nil
 		case "basic":
-			username := stringAny(cfg, usernameFieldV1, "username")
+			username := strings.TrimSpace(cfg.String(usernameFieldV1))
 			if username == "" {
 				return authHeader{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
 			}
-			return basicAuth(username, stringAny(cfg, passwordFieldV1, "password")), nil
+			return basicAuth(username, cfg.String(passwordFieldV1)), nil
 		case "credential":
-			if kind := resolvedKindAny(cfg, basicCredV1, legacyBasicCred); kind != "" && kind != plugin.CredentialBasicAuth {
+			if kind := resolvedKindAny(cfg, basicCredV1); kind != "" && kind != plugin.CredentialBasicAuth {
 				return authHeader{}, fmt.Errorf("%w: InfluxDB 1 stored credentials must be basic auth", plugin.ErrInvalidInput)
 			}
-			username := resolvedIdentityAny(cfg, basicCredV1, legacyBasicCred)
+			username := resolvedIdentityAny(cfg, basicCredV1)
 			if username == "" {
 				return authHeader{}, fmt.Errorf("%w: basic auth credential identity is required", plugin.ErrInvalidInput)
 			}
-			return basicAuth(username, resolvedSecretAny(cfg, basicCredV1, legacyBasicCred)), nil
+			return basicAuth(username, resolvedSecretAny(cfg, basicCredV1)), nil
 		default:
 			return authHeader{}, fmt.Errorf("%w: unsupported InfluxDB 1 authentication mode %q", plugin.ErrInvalidInput, auth)
 		}
@@ -235,22 +231,22 @@ func parseTokenOrBasicAuth(cfg plugin.ConnectConfig, auth string, label string, 
 	case "none":
 		return authHeader{}, nil
 	case "token":
-		token := stringAny(cfg, tokenField, legacyTokenField)
+		token := strings.TrimSpace(cfg.String(tokenField))
 		if token == "" {
 			return authHeader{}, fmt.Errorf("%w: API token is required", plugin.ErrInvalidInput)
 		}
 		return authHeader{Header: "Authorization", Value: "Bearer " + token}, nil
 	case "basic":
-		username := stringAny(cfg, usernameField, "username")
+		username := strings.TrimSpace(cfg.String(usernameField))
 		if username == "" {
 			return authHeader{}, fmt.Errorf("%w: username is required", plugin.ErrInvalidInput)
 		}
-		return basicAuth(username, stringAny(cfg, passwordField, "password")), nil
+		return basicAuth(username, cfg.String(passwordField)), nil
 	case "token_credential":
-		kind := resolvedKindAny(cfg, tokenCredentialField, legacyTokenCred)
+		kind := resolvedKindAny(cfg, tokenCredentialField)
 		switch kind {
 		case plugin.CredentialAPIToken, plugin.CredentialBearerToken:
-			token := resolvedSecretAny(cfg, tokenCredentialField, legacyTokenCred)
+			token := resolvedSecretAny(cfg, tokenCredentialField)
 			if token == "" {
 				return authHeader{}, fmt.Errorf("%w: stored token credential is required", plugin.ErrInvalidInput)
 			}
@@ -259,26 +255,17 @@ func parseTokenOrBasicAuth(cfg plugin.ConnectConfig, auth string, label string, 
 			return authHeader{}, fmt.Errorf("%w: %s stored token credentials must be API or bearer tokens", plugin.ErrInvalidInput, label)
 		}
 	case "basic_credential":
-		if kind := resolvedKindAny(cfg, basicCredentialField, legacyBasicCred); kind != "" && kind != plugin.CredentialBasicAuth {
+		if kind := resolvedKindAny(cfg, basicCredentialField); kind != "" && kind != plugin.CredentialBasicAuth {
 			return authHeader{}, fmt.Errorf("%w: %s stored basic credentials must be basic auth", plugin.ErrInvalidInput, label)
 		}
-		username := resolvedIdentityAny(cfg, basicCredentialField, legacyBasicCred)
+		username := resolvedIdentityAny(cfg, basicCredentialField)
 		if username == "" {
 			return authHeader{}, fmt.Errorf("%w: basic auth credential identity is required", plugin.ErrInvalidInput)
 		}
-		return basicAuth(username, resolvedSecretAny(cfg, basicCredentialField, legacyBasicCred)), nil
+		return basicAuth(username, resolvedSecretAny(cfg, basicCredentialField)), nil
 	default:
 		return authHeader{}, fmt.Errorf("%w: unsupported %s authentication mode %q", plugin.ErrInvalidInput, label, auth)
 	}
-}
-
-func stringAny(cfg plugin.ConnectConfig, keys ...string) string {
-	for _, key := range keys {
-		if value := strings.TrimSpace(cfg.String(key)); value != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 func resolvedSecretAny(cfg plugin.ConnectConfig, keys ...string) string {
@@ -287,7 +274,7 @@ func resolvedSecretAny(cfg plugin.ConnectConfig, keys ...string) string {
 			return secret
 		}
 	}
-	return cfg.String(service.CredentialSecret)
+	return cfg.CredentialSecretFor(plugin.CredentialField)
 }
 
 func resolvedIdentityAny(cfg plugin.ConnectConfig, keys ...string) string {
@@ -296,7 +283,7 @@ func resolvedIdentityAny(cfg plugin.ConnectConfig, keys ...string) string {
 			return identity
 		}
 	}
-	return strings.TrimSpace(cfg.String(service.CredentialIdentity))
+	return cfg.CredentialIdentityFor(plugin.CredentialField)
 }
 
 func resolvedKindAny(cfg plugin.ConnectConfig, keys ...string) plugin.CredentialKind {
@@ -305,7 +292,7 @@ func resolvedKindAny(cfg plugin.ConnectConfig, keys ...string) plugin.Credential
 			return kind
 		}
 	}
-	return plugin.CredentialKind(strings.TrimSpace(cfg.String(service.CredentialKind)))
+	return cfg.CredentialKindFor(plugin.CredentialField)
 }
 
 func basicAuth(username, password string) authHeader {

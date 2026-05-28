@@ -12,7 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/transport"
 )
 
 func TestProxyStreamRefusesUnsupportedMode(t *testing.T) {
@@ -117,7 +118,7 @@ func TestBuildAPIProxyInjectsCredentials(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "http://shellcn-agent.internal/api/v1/namespaces", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://"+app.AgentInternalHost+"/api/v1/namespaces", nil)
 	proxy.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {

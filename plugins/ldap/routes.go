@@ -9,7 +9,7 @@ import (
 
 	ldapv3 "github.com/go-ldap/ldap/v3"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type row map[string]any

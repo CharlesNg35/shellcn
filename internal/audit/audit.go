@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/store"
 )
 
 // Event is one auditable operation, assembled by the route wrapper. Params must

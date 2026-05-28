@@ -104,9 +104,15 @@ export interface RecordingFilters {
 
 export type FieldType =
   | "text"
+  | "email"
+  | "url"
+  | "tel"
   | "number"
+  | "stepper"
+  | "slider"
   | "password"
   | "select"
+  | "radio"
   | "multiselect"
   | "file"
   | "toggle"
@@ -175,6 +181,9 @@ export interface Field {
   credential?: CredentialSelector;
   visibleWhen?: Condition;
   validators?: Validator[];
+  // Increment for number/slider inputs (defaults to 1); min/max come from the
+  // min/max validators.
+  step?: number;
 }
 
 export interface Group {
@@ -349,6 +358,9 @@ export interface Column {
   // nullable lets the inline editor clear the cell to an empty/null value.
   readOnly?: boolean;
   nullable?: boolean;
+  // Maps a lower-cased badge value to a severity for color (e.g. running →
+  // success); unmapped values render neutral.
+  severities?: Record<string, Severity>;
 }
 
 export type Severity = "info" | "success" | "warn" | "danger" | "secondary";
@@ -432,8 +444,12 @@ export interface TreeGroup {
   key: string;
   label: string;
   icon?: Icon;
-  source: DataSource;
+  // A group with a source is expandable (children load on expand). Omit it for a
+  // leaf that opens directly: resourceKind opens that kind's list, ref opens a
+  // specific resource's detail.
+  source?: DataSource;
   resourceKind?: string;
+  ref?: ResourceRef;
   badge?: Badge;
 }
 

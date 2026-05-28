@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/transport"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 	mysqldriver "github.com/go-sql-driver/mysql"
 )
 

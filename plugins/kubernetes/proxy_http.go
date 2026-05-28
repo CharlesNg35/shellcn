@@ -14,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // ServeHTTPProxy reverse-proxies a browser request to an in-cluster Service or
@@ -22,10 +22,18 @@ import (
 // transport (so it works over both transports). The incoming path is
 // `/{services|pods}/{ns}/{name}/{port}/{rest...}`. Responses are rewritten so the
 // app's own absolute paths, redirects, and fetches resolve back under the proxy.
+// swFile is the in-scope service worker that re-routes the app's root-absolute
+// requests (bundler chunks, dynamic imports, CSS) under the proxy prefix.
+const swFile = "__shellcn_sw.js"
+
 func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
-	apiPath, prefix, ok := s.proxyPaths(r.URL.Path)
+	apiPath, apiPrefix, prefix, ok := s.proxyPaths(r.URL.Path)
 	if !ok {
 		http.Error(w, "unsupported proxy target", http.StatusBadRequest)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, "/"+swFile) {
+		serveProxyWorker(w, prefix)
 		return
 	}
 	base, err := url.Parse(s.rest.Host)
@@ -38,34 +46,38 @@ func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "transport: "+err.Error(), http.StatusBadGateway)
 		return
 	}
+	// Preserve the original path encoding (Next.js route-group chunks carry
+	// %5B/%28 etc.) so the upstream receives the exact filename.
+	apiRawPath, _, _, _ := s.proxyPaths(r.URL.EscapedPath())
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.Scheme = base.Scheme
 			req.URL.Host = base.Host
 			req.URL.Path = apiPath
+			req.URL.RawPath = apiRawPath
 			req.Host = base.Host
-			// Identity so we can rewrite HTML bodies without gunzipping.
 			req.Header.Set("Accept-Encoding", "identity")
 		},
 		Transport:     rt,
 		FlushInterval: -1,
 		//nolint:bodyclose // body is read+closed in the HTML branch; otherwise the ReverseProxy owns it.
-		ModifyResponse: rewriteProxyResponse(prefix),
+		ModifyResponse: rewriteProxyResponse(apiPrefix, prefix),
 	}
 	proxy.ServeHTTP(w, r)
 }
 
-// proxyPaths maps the public sub-path to the API server proxy path and the
-// public prefix the app is served under (for response rewriting). The port
+// proxyPaths maps the public sub-path to the API server proxy path, the prefix
+// the API server itself prepends when rewriting the app's links (apiPrefix), and
+// the public prefix the app is served under (for response rewriting). The port
 // segment may carry an "https:" marker to proxy over TLS to the target.
-func (s *Session) proxyPaths(sub string) (apiPath, prefix string, ok bool) {
+func (s *Session) proxyPaths(sub string) (apiPath, apiPrefix, prefix string, ok bool) {
 	parts := strings.SplitN(strings.TrimPrefix(sub, "/"), "/", 5)
 	if len(parts) < 4 {
-		return "", "", false
+		return "", "", "", false
 	}
 	kind, ns, name, portSeg := parts[0], parts[1], parts[2], parts[3]
 	if kind != "services" && kind != "pods" {
-		return "", "", false
+		return "", "", "", false
 	}
 	rest := ""
 	if len(parts) == 5 {
@@ -76,20 +88,26 @@ func (s *Session) proxyPaths(sub string) (apiPath, prefix string, ok bool) {
 	if realPort, https := strings.CutPrefix(portSeg, "https:"); https {
 		target = "https:" + name + ":" + realPort
 	}
-	apiPath = fmt.Sprintf("/api/v1/namespaces/%s/%s/%s/proxy/%s", ns, kind, target, rest)
+	apiPrefix = fmt.Sprintf("/api/v1/namespaces/%s/%s/%s/proxy", ns, kind, target)
+	apiPath = apiPrefix + "/" + rest
 	prefix = fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/%s", s.connID, kind, ns, name, portSeg)
-	return apiPath, prefix, true
+	return apiPath, apiPrefix, prefix, true
 }
 
 var rootRelAttr = regexp.MustCompile(`(\s(?:href|src|action)=")(/[^"/][^"]*)"`)
 
-// rewriteProxyResponse adjusts an upstream response so it works under prefix:
-// rewrites redirect Location + Set-Cookie paths, drops framing/CSP restrictions,
-// and (for HTML) injects a <base> + a small fetch/XHR shim and rewrites
-// root-relative asset URLs.
-func rewriteProxyResponse(prefix string) func(*http.Response) error {
+// rewriteProxyResponse adjusts an upstream response so it works under prefix.
+// The API server's proxy subresource already absolutizes the app's root-relative
+// URLs to its own proxy path (apiPrefix); we map those back to our public prefix
+// rather than prepending again (which would double the path). It also rewrites
+// redirect Location + Set-Cookie paths, drops framing/CSP, and for HTML injects a
+// <base> + small fetch/XHR shim and prefixes any URLs the API server left bare.
+func rewriteProxyResponse(apiPrefix, prefix string) func(*http.Response) error {
 	return func(resp *http.Response) error {
-		if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, "//") && !strings.HasPrefix(loc, prefix) {
+		switch loc := resp.Header.Get("Location"); {
+		case strings.HasPrefix(loc, apiPrefix):
+			resp.Header.Set("Location", prefix+strings.TrimPrefix(loc, apiPrefix))
+		case strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, "//") && !strings.HasPrefix(loc, prefix):
 			resp.Header.Set("Location", prefix+loc)
 		}
 		rewriteCookiePaths(resp.Header, prefix)
@@ -105,9 +123,20 @@ func rewriteProxyResponse(prefix string) func(*http.Response) error {
 		if err != nil {
 			return err
 		}
-		// Rewrite the app's own root-relative URLs first, then inject our
-		// base+shim (so they aren't themselves re-prefixed).
-		html := rootRelAttr.ReplaceAllString(string(body), "${1}"+prefix+"$2\"")
+		// Map the API server's injected prefix back to ours, then prefix any
+		// root-relative URLs it left untouched (skipping ones already under our
+		// prefix), and finally inject our base+shim so they aren't re-prefixed.
+		html := strings.ReplaceAll(string(body), apiPrefix, prefix)
+		html = rootRelAttr.ReplaceAllStringFunc(html, func(m string) string {
+			g := rootRelAttr.FindStringSubmatch(m)
+			if strings.HasPrefix(g[2], prefix) {
+				return m
+			}
+			return g[1] + prefix + g[2] + `"`
+		})
+		// The PWA manifest is fetched without credentials by default, which the
+		// authenticated proxy rejects; ask the browser to send them.
+		html = strings.ReplaceAll(html, `rel="manifest"`, `rel="manifest" crossorigin="use-credentials"`)
 		html = injectProxyShim(html, prefix)
 		resp.Body = io.NopCloser(strings.NewReader(html))
 		resp.ContentLength = int64(len(html))
@@ -138,13 +167,21 @@ func rewriteCookiePath(cookie, prefix string) string {
 	return strings.Join(parts, ";")
 }
 
-// injectProxyShim adds a <base> and a fetch/XHR/path shim after <head> so the
-// app's relative and root-absolute requests stay under the proxy prefix.
+// injectProxyShim adds a <base> and a shim after <head> so the app's requests
+// stay under the proxy prefix. It rewrites root-absolute URLs in fetch/XHR and,
+// crucially, in runtime-injected assets — script/link/img src/href and
+// setAttribute — so bundler-loaded chunks and styles (which bypass fetch) resolve
+// under the prefix instead of hitting the gateway root.
 func injectProxyShim(html, prefix string) string {
 	shim := `<base href="` + prefix + `/"><script>(function(){var p=` + jsString(prefix) + `;
 function fix(u){return (typeof u==="string"&&u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)?p+u:u;}
 var of=window.fetch;if(of){window.fetch=function(i,o){try{if(typeof i==="string")i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);}catch(e){}return of.call(this,i,o);};}
 var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){return ox.apply(this,[m,fix(u)].concat([].slice.call(arguments,2)));};
+function patch(proto,prop){var d=Object.getOwnPropertyDescriptor(proto,prop);if(d&&d.set)Object.defineProperty(proto,prop,{configurable:true,enumerable:d.enumerable,get:function(){return d.get.call(this);},set:function(v){d.set.call(this,fix(v));}});}
+try{patch(HTMLScriptElement.prototype,"src");patch(HTMLLinkElement.prototype,"href");patch(HTMLImageElement.prototype,"src");}catch(e){}
+var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){return sa.call(this,n,(n==="src"||n==="href")&&typeof v==="string"?fix(v):v);};
+["pushState","replaceState"].forEach(function(m){var o=history[m];if(o)history[m]=function(s,t,u){return o.call(this,s,t,typeof u==="string"?fix(u):u);};});
+if(navigator.serviceWorker){try{navigator.serviceWorker.register(p+"/` + swFile + `").then(function(){if(!navigator.serviceWorker.controller){var k="scnsw:"+p;if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");navigator.serviceWorker.ready.then(function(){location.reload();});}}});}catch(e){}}
 })();</script>`
 	if i := headInsertIndex(html); i >= 0 {
 		return html[:i] + shim + html[i:]
@@ -167,6 +204,22 @@ func headInsertIndex(html string) int {
 
 func jsString(s string) string { return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"` }
 
+// serveProxyWorker returns the service worker. Served from under the prefix, its
+// default scope is the proxy path, so it controls the app's page and rewrites any
+// root-absolute request it makes back under the prefix.
+func serveProxyWorker(w http.ResponseWriter, prefix string) {
+	w.Header().Set("Content-Type", "text/javascript")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Service-Worker-Allowed", prefix+"/")
+	_, _ = io.WriteString(w, `var P=`+jsString(prefix)+`;
+self.addEventListener("install",function(){self.skipWaiting();});
+self.addEventListener("activate",function(e){e.waitUntil(self.clients.claim());});
+self.addEventListener("fetch",function(e){var u;try{u=new URL(e.request.url);}catch(_){return;}
+if(u.origin===self.location.origin&&u.pathname.charAt(0)==="/"&&u.pathname.indexOf(P+"/")!==0){
+u.pathname=P+u.pathname;
+e.respondWith(fetch(u.href,{method:e.request.method,headers:e.request.headers,credentials:"include"}));}});`)
+}
+
 // ServiceProxyURL returns the gateway URL that proxies to a Service's web port
 // for an "Open in browser" link. It picks the most likely web port (an http
 // port, else an https one, else the first) unless an explicit port is given.
@@ -187,8 +240,34 @@ func ServiceProxyURL(rc *plugin.RequestContext) (any, error) {
 			return nil, err
 		}
 	}
-	u := fmt.Sprintf("/api/connections/%s/proxy/services/%s/%s/%s/", url.PathEscape(s.connID), url.PathEscape(ns), url.PathEscape(name), portSeg)
-	return map[string]any{"url": u}, nil
+	return proxyURLResult(s.connID, "services", ns, name, portSeg), nil
+}
+
+// PodProxyURL is the pod equivalent of ServiceProxyURL: it proxies straight to a
+// pod's container port (a browser-usable, HTTP form of `kubectl port-forward`).
+func PodProxyURL(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	ns, name := rc.Param("namespace"), rc.Param("name")
+	portSeg := rc.Param("port")
+	if portSeg == "" {
+		pod, err := s.clientset.CoreV1().Pods(ns).Get(rc.Ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return nil, apiErr(err)
+		}
+		portSeg, err = pickPodPort(pod.Spec.Containers)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return proxyURLResult(s.connID, "pods", ns, name, portSeg), nil
+}
+
+func proxyURLResult(connID, kind, ns, name, portSeg string) map[string]any {
+	u := fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/%s/", url.PathEscape(connID), kind, url.PathEscape(ns), url.PathEscape(name), portSeg)
+	return map[string]any{"url": u}
 }
 
 // pickServicePort returns the port segment to proxy ("8080" for http,
@@ -233,7 +312,12 @@ func webScheme(p corev1.ServicePort) (string, bool) {
 			return "", false
 		}
 	}
-	switch n := strings.ToLower(p.Name); {
+	return webSchemeName(p.Name)
+}
+
+// webSchemeName infers the scheme from a port's conventional name.
+func webSchemeName(name string) (string, bool) {
+	switch n := strings.ToLower(name); {
 	case strings.Contains(n, "https"):
 		return "https", true
 	case n == "http" || n == "web" || strings.HasPrefix(n, "http"):
@@ -241,4 +325,32 @@ func webScheme(p corev1.ServicePort) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// pickPodPort picks a pod's web container port (preferring a web-named TCP port,
+// else the first TCP port), mirroring pickServicePort.
+func pickPodPort(containers []corev1.Container) (string, error) {
+	var first *corev1.ContainerPort
+	for i := range containers {
+		for j := range containers[i].Ports {
+			p := &containers[i].Ports[j]
+			if p.Protocol != "" && p.Protocol != corev1.ProtocolTCP {
+				continue
+			}
+			if scheme, ok := webSchemeName(p.Name); ok {
+				return portSegment(p.ContainerPort, scheme), nil
+			}
+			if first == nil {
+				first = p
+			}
+		}
+	}
+	if first == nil {
+		return "", fmt.Errorf("%w: pod exposes no TCP ports", plugin.ErrInvalidInput)
+	}
+	scheme, _ := webSchemeName(first.Name)
+	if scheme == "" {
+		scheme = "http"
+	}
+	return portSegment(first.ContainerPort, scheme), nil
 }

@@ -377,9 +377,19 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		resourceKinds[rt.Kind] = true
 	}
 	for _, g := range m.Tree {
-		checkDS(fmt.Sprintf("tree group %q source", g.Key), g.Source)
+		// A group is either expandable (declares a children Source) or a leaf
+		// (opens its ResourceKind list or Ref detail directly).
+		switch {
+		case g.Source.RouteID != "":
+			checkDS(fmt.Sprintf("tree group %q source", g.Key), g.Source)
+		case g.ResourceKind == "" && g.Ref == nil:
+			add("tree group %q must declare a source, resourceKind, or ref", g.Key)
+		}
 		if g.ResourceKind != "" && !resourceKinds[g.ResourceKind] {
 			add("tree group %q references unknown resource kind %q", g.Key, g.ResourceKind)
+		}
+		if g.Ref != nil && g.Ref.Kind != "" && !resourceKinds[g.Ref.Kind] {
+			add("tree group %q ref references unknown resource kind %q", g.Key, g.Ref.Kind)
 		}
 	}
 	for _, rt := range m.Resources {

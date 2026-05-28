@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 func TestManifestValidates(t *testing.T) {
@@ -46,7 +46,7 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if !contains(containerRes.ListActionIDs, "docker.container.create") {
 		t.Fatalf("container list actions = %#v, want create action", containerRes.ListActionIDs)
 	}
-	wantTabs := []string{"overview", "terminal", "logs", "inspect", "env", "api"}
+	wantTabs := []string{"overview", "terminal", "logs", "inspect", "env"}
 	if len(containerRes.Detail.Tabs) != len(wantTabs) {
 		t.Fatalf("container detail tabs = %d, want %d", len(containerRes.Detail.Tabs), len(wantTabs))
 	}
@@ -68,7 +68,7 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if composeRes == nil {
 		t.Fatal("missing compose resource")
 	}
-	wantComposeTabs := []string{"overview", "containers", "services", "api"}
+	wantComposeTabs := []string{"overview", "containers", "services"}
 	if len(composeRes.Detail.Tabs) != len(wantComposeTabs) {
 		t.Fatalf("compose detail tabs = %d, want %d", len(composeRes.Detail.Tabs), len(wantComposeTabs))
 	}
@@ -97,6 +97,11 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	}
 	if createRoute == nil || createRoute.Input == nil || createRoute.Risk != plugin.RiskWrite {
 		t.Fatalf("create container route mismatch: %+v", createRoute)
+	}
+	for i := range routes {
+		if routes[i].ID == "docker.api.execute" {
+			t.Fatal("docker should not expose a raw API execute route")
+		}
 	}
 }
 

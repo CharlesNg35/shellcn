@@ -46,9 +46,9 @@ Detailed when reached; needs its own control-plane endpoints:
 - User / role management + role assignment.
 - Policy-rule admin UI (additive stored `role + permission + risk`).
 - Audit-log view (filters: user / connection / route / risk / result) + per-connection activity panel.
-- Light status page (health, plugin health, session/channel counts) — **not** a Grafana replacement.
+- Light status page (gateway health, live session/channel counts) — **not** a Grafana replacement.
 - Agent management polish (re-enroll/rotate token, disconnect/offline history, artifact-URL + copy-env/download-manifest variants).
 
 These are **operate-it** surfaces, not blockers for first real use. Backend-only
 M1 behaviors (wrapper validation, denied-route audit, stored-policy loading,
-secret-access / plugin-health metrics) need **no** UI — they are test-verified.
+secret-access metrics) need **no** UI — they are test-verified.

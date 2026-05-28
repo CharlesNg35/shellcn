@@ -6,8 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 const (
@@ -68,10 +67,10 @@ func parseConnectOptions(cfg plugin.ConnectConfig) (connectOptions, error) {
 		Password: cfg.String("password"),
 	}
 	if strings.TrimSpace(cfg.String("auth")) == "credential" {
-		if secret := cfg.String(service.CredentialSecret); secret != "" {
+		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
 			opts.Password = secret
 		}
-		if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
+		if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
 			opts.User = identity
 		}
 	}

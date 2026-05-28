@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {

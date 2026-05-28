@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/internal/store"
 )
 
 type fakeMailer struct {

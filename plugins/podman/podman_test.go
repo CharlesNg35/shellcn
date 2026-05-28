@@ -10,9 +10,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 )
 
 func TestManifestValidates(t *testing.T) {
@@ -44,6 +44,18 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 	}
 	if !hasPods {
 		t.Fatal("podman tree must include a pods group")
+	}
+	for _, res := range m.Resources {
+		for _, tab := range res.Detail.Tabs {
+			if tab.Panel == plugin.PanelHTTPClient {
+				t.Fatalf("podman should not expose a raw API panel: resource=%s tab=%s", res.Kind, tab.Key)
+			}
+		}
+	}
+	for _, route := range New().Routes() {
+		if route.ID == "podman.api.execute" {
+			t.Fatal("podman should not expose a raw API execute route")
+		}
 	}
 }
 

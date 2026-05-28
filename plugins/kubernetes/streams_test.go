@@ -10,8 +10,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // captureClient is a ClientStream that records server→client bytes and feeds

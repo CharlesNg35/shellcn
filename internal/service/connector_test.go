@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/secrets"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/internal/store"
-	"github.com/charlesng/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/secrets"
+	"github.com/charlesng35/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/transport"
 )
 
 type credentialRefPlugin struct{}
@@ -74,13 +74,13 @@ func TestConnectorResolvesCredentialRefFieldsFromSchema(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build config: %v", err)
 	}
-	if got := cfg.Config["_api_credential_secret"]; got != "secret-token" {
+	if got := cfg.Config[plugin.CredentialSecretKey("api_credential")]; got != "secret-token" {
 		t.Fatalf("resolved credential secret = %#v, want secret-token", got)
 	}
-	if got := cfg.Config["_api_credential_identity"]; got != "svc-api" {
+	if got := cfg.Config[plugin.CredentialIdentityKey("api_credential")]; got != "svc-api" {
 		t.Fatalf("resolved credential identity = %#v, want svc-api", got)
 	}
-	if got := cfg.Config["_api_credential_kind"]; got != "api_token" {
+	if got := cfg.Config[plugin.CredentialResolvedKindKey("api_credential")]; got != "api_token" {
 		t.Fatalf("resolved credential kind = %#v, want api_token", got)
 	}
 	if got := cfg.Config["api_credential"]; got != cred.ID {
@@ -121,7 +121,7 @@ func TestConnectorResolvesSharedConnectionCredentialAsConnectionOwner(t *testing
 	if err != nil {
 		t.Fatalf("shared connection should resolve owner credential: %v", err)
 	}
-	if got := cfg.Config["_api_credential_secret"]; got != "owner-secret" {
+	if got := cfg.Config[plugin.CredentialSecretKey("api_credential")]; got != "owner-secret" {
 		t.Fatalf("resolved credential secret = %#v, want owner-secret", got)
 	}
 }

@@ -14,14 +14,13 @@ import (
 	"github.com/moby/moby/api/types/swarm"
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 )
 
 const stackNamespaceLabel = "com.docker.stack.namespace"
 
-// Routes wires Swarm-namespaced route IDs to the orchestration handlers, reusing
-// the shared raw-API executor for the API panel.
+// Routes wires Swarm-namespaced route IDs to the orchestration handlers.
 func Routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "swarm.services.tree", Method: plugin.MethodGet, Path: "/tree/services", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.services.tree", Handle: treeServices},
@@ -45,7 +44,6 @@ func Routes() []plugin.Route {
 		{ID: "swarm.service.remove", Method: plugin.MethodDelete, Path: "/services/{id}", Permission: "swarm.services.delete", Risk: plugin.RiskDestructive, AuditEvent: "swarm.service.remove", Handle: removeService},
 		{ID: "swarm.service.logs", Method: plugin.MethodWS, Path: "/services/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "swarm.services.logs", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.logs", Input: dockerengine.LogsSchema(), Stream: serviceLogsStream},
 		{ID: "swarm.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.watch", Stream: watchServiceEvents},
-		{ID: "swarm.api.execute", Method: plugin.MethodPost, Path: "/api/execute", Permission: "swarm.api.execute", Risk: plugin.RiskPrivileged, AuditEvent: "swarm.api.execute", Input: dockerengine.APISchema(), Handle: dockerengine.ExecuteAPI},
 	}
 }
 

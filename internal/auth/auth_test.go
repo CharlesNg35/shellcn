@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/auth"
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/store"
 )
 
 func TestPasswordHashVerifyRoundTrip(t *testing.T) {

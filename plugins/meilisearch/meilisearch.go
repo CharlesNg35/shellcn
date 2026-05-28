@@ -9,12 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/plugins/shared/broker"
-	"github.com/charlesng/shellcn/plugins/shared/dbcred"
-	"github.com/charlesng/shellcn/plugins/shared/searchrest"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/broker"
+	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
+	"github.com/charlesng35/shellcn/plugins/shared/searchrest"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
 const (
@@ -127,10 +126,10 @@ func parseOptions(cfg plugin.ConnectConfig) (Options, error) {
 	case "api_key":
 		opts.APIKey = cfg.String("api_key")
 	case "credential":
-		if kind := plugin.CredentialKind(cfg.String(service.CredentialKind)); kind != "" && kind != plugin.CredentialAPIToken {
+		if kind := cfg.CredentialKindFor(plugin.CredentialField); kind != "" && kind != plugin.CredentialAPIToken {
 			return Options{}, fmt.Errorf("%w: Meilisearch stored credentials must be API tokens", plugin.ErrInvalidInput)
 		}
-		opts.APIKey = dbcred.ResolvedSecret(cfg, service.CredentialField)
+		opts.APIKey = dbcred.ResolvedSecret(cfg, plugin.CredentialField)
 	default:
 		return Options{}, fmt.Errorf("%w: unsupported authentication mode %q", plugin.ErrInvalidInput, auth)
 	}

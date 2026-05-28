@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import AppIcon from "./AppIcon.vue";
 import { iconExists, toPascalCase } from "./lucideIconRegistry";
-import type { Icon } from "../types/projection";
 
 describe("lucideIconRegistry", () => {
   it("normalizes any separator/casing to Lucide PascalCase", () => {
@@ -38,18 +37,6 @@ describe("AppIcon", () => {
       const w = mount(AppIcon, { props: { icon: { type: "lucide", value } } });
       expect(w.find("svg").exists()).toBe(true);
     }
-  });
-
-  it("accepts legacy name icons from persisted projections", () => {
-    const legacy = mount(AppIcon, {
-      props: {
-        icon: { type: "name", value: "terminal" } as unknown as Icon,
-      },
-    });
-    const lucide = mount(AppIcon, {
-      props: { icon: { type: "lucide", value: "terminal" } },
-    });
-    expect(legacy.html()).toBe(lucide.html());
   });
 
   it("renders emoji as text", () => {

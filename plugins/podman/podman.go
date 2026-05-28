@@ -6,8 +6,9 @@ package podman
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 )
 
 type Plugin struct{}
@@ -22,7 +23,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Name:        "podman",
 		Version:     "0.1.0",
 		Title:       "Podman",
-		Description: "Podman cockpit with containers, pods, images, volumes, networks, logs, exec, events, and raw API access.",
+		Description: "Podman cockpit with containers, pods, images, volumes, networks, logs, exec, and events.",
 		Icon:        plugin.Icon{Type: plugin.IconSVG, Value: podmanIconSvg},
 		Category:    plugin.CategoryContainers,
 		Config:      configSchema(),
@@ -36,7 +37,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Label:      "Podman",
 				Kind:       "docker-run",
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.containers.internal"},
-				Template: "podman run --rm --name shellcn-agent " +
+				Template: "podman run --rm --name " + app.AgentBinary + " " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 					"--security-opt label=disable " +
 					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +
@@ -94,7 +95,7 @@ func containerColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "name", Label: "Name", Sortable: true},
 		{Key: "image", Label: "Image", Sortable: true},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: dockerengine.StateSeverities()},
 		{Key: "status", Label: "Status"},
 		{Key: "ports", Label: "Ports"},
 		{Key: "createdAt", Label: "Created", Type: plugin.ColumnDateTime, Sortable: true},
@@ -117,7 +118,6 @@ func containerResource() plugin.ResourceType {
 				{Key: "logs", Label: "Logs", Icon: icon("scroll-text"), Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "podman.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "env", Label: "Env", Icon: icon("list"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "podman.container.env", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "key", Label: "Key", Sortable: true}, {Key: "value", Label: "Value"}}}.Map()},
-				{Key: "api", Label: "API", Icon: icon("upload"), Panel: plugin.PanelHTTPClient, Config: plugin.HTTPClientConfig{ExecuteRouteID: "podman.api.execute", Methods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, DefaultMethod: "GET", DefaultURL: "/version"}.Map()},
 			},
 		},
 	}
@@ -132,7 +132,7 @@ func podResource() plugin.ResourceType {
 	}
 	podContainerColumns := []plugin.Column{
 		{Key: "name", Label: "Name", Sortable: true},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: dockerengine.StateSeverities()},
 	}
 	return plugin.ResourceType{
 		Kind: "pod", Title: "Pods", List: plugin.DataSource{RouteID: "podman.pods.list"}, Columns: columns,

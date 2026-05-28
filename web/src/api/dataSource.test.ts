@@ -68,9 +68,29 @@ describe("dataSource resolver", () => {
     expect(params).toEqual({ vmid: "101", node: "pve1", view: "summary" });
   });
 
-  it("errors cleanly on an unresolved param (no silent blank)", () => {
+  it("errors on a blank inside a composed string (no silent corruption)", () => {
     expect(() => interpolate("${resource.uid}", {})).toThrow(/Cannot resolve/);
-    expect(() => resolveParams({ id: "${resource.uid}" }, {})).toThrow();
+    // A token embedded in surrounding text must resolve — a blank would corrupt it.
+    expect(() => resolveParams({ p: "x-${resource.uid}" }, {})).toThrow();
+  });
+
+  it("omits a single-token param whose value is absent (no blank request)", () => {
+    // A namespaced ref keeps the param; a ref without that field drops it — the
+    // resolver special-cases no field name, only the single-token structure.
+    expect(
+      resolveParams(
+        { namespace: "${resource.namespace}", name: "${resource.name}" },
+        {
+          resource: { kind: "table", namespace: "public", name: "t", uid: "1" },
+        },
+      ),
+    ).toEqual({ namespace: "public", name: "t" });
+    expect(
+      resolveParams(
+        { namespace: "${resource.namespace}", name: "${resource.name}" },
+        { resource: { kind: "ns", name: "default", uid: "1" } },
+      ),
+    ).toEqual({ name: "default" });
   });
 
   it("builds the p.-prefixed scheme without colliding with list controls", () => {

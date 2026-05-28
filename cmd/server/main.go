@@ -18,23 +18,24 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/charlesng/shellcn/internal/audit"
-	"github.com/charlesng/shellcn/internal/auth"
-	"github.com/charlesng/shellcn/internal/config"
-	"github.com/charlesng/shellcn/internal/email"
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/policy"
-	"github.com/charlesng/shellcn/internal/recording"
-	"github.com/charlesng/shellcn/internal/secrets"
-	"github.com/charlesng/shellcn/internal/server"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/internal/session"
-	"github.com/charlesng/shellcn/internal/store"
-	"github.com/charlesng/shellcn/internal/telemetry"
-	"github.com/charlesng/shellcn/internal/transport"
-	"github.com/charlesng/shellcn/plugins"
-	"github.com/charlesng/shellcn/web"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/audit"
+	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/config"
+	"github.com/charlesng35/shellcn/internal/email"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/policy"
+	"github.com/charlesng35/shellcn/internal/recording"
+	"github.com/charlesng35/shellcn/internal/secrets"
+	"github.com/charlesng35/shellcn/internal/server"
+	"github.com/charlesng35/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/internal/session"
+	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/telemetry"
+	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/plugins"
+	"github.com/charlesng35/shellcn/web"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -56,7 +57,7 @@ func main() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("shellcn %s\n", version)
+		fmt.Printf("%s %s\n", app.ServerBinary, version)
 		return
 	}
 
@@ -159,18 +160,6 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		_, err := st.Users.Count(ctx)
 		return err
 	})
-	for _, plg := range reg.All() {
-		checker, ok := plg.(plugin.HealthChecker)
-		if !ok {
-			continue
-		}
-		name := plg.Manifest().Name
-		health.Register("plugin:"+name, func(ctx context.Context) error {
-			err := checker.HealthCheck(ctx)
-			metrics.SetPluginHealth(name, err == nil)
-			return err
-		})
-	}
 
 	// Background maintenance: always reap abandoned chunked (browser-capture)
 	// recordings so partial blobs from vanished sessions don't leak; additionally

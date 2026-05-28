@@ -47,6 +47,10 @@ export const btnGhost =
 
 const buttonBase =
   "inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-50";
+
+// A square spinner button for InputNumber's increment/decrement controls.
+const stepperButton =
+  "inline-flex w-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-surface-300 text-surface-600 outline-none transition-colors hover:bg-surface-100 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-40 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800";
 const buttonSize = {
   small: "px-2.5 py-1 text-xs",
   normal: "px-3 py-1.5",
@@ -278,7 +282,13 @@ export const primeVuePassthrough = {
   // colors come from theme-aware chart options, not classes.
   chart: { root: "relative h-full w-full" },
   textarea: { root: cn(inputBase, "min-h-20 font-mono") },
-  inputnumber: { root: "w-full", pcInputText: { root: inputBase } },
+  inputnumber: {
+    root: "flex w-full items-stretch gap-1.5",
+    pcInputText: { root: cn(inputBase, "min-w-0 flex-1") },
+    // Spinner buttons (showButtons): square icon buttons flanking the input.
+    incrementButton: stepperButton,
+    decrementButton: stepperButton,
+  },
   password: {
     root: "relative block w-full",
     // Leave room on the right for the absolutely-positioned show/hide toggle.
@@ -375,7 +385,7 @@ export const primeVuePassthrough = {
   },
 
   slider: {
-    root: "relative h-5 w-full",
+    root: "relative h-5 w-full before:absolute before:left-0 before:top-1/2 before:h-1 before:w-full before:-translate-y-1/2 before:rounded-full before:bg-surface-200 dark:before:bg-surface-700",
     range: "absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary-500",
     handle:
       "absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full border-2 border-primary-500 bg-surface-0 shadow-sm outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-primary-500/40 dark:bg-surface-950",
@@ -624,6 +634,8 @@ export const primeVuePassthrough = {
     bodyRow:
       "cursor-pointer transition-colors hover:bg-surface-50 data-[p-selected=true]:bg-primary-50/70 dark:hover:bg-surface-900 dark:data-[p-selected=true]:bg-primary-500/10",
     emptyMessageCell: "px-4 py-6 text-center text-surface-400",
+    pcRowCheckbox: checkbox,
+    pcHeaderCheckbox: checkbox,
   },
 
   paginator,

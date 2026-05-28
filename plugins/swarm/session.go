@@ -3,8 +3,8 @@ package swarm
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 )
 
 // defaultSocket is the Docker Engine socket on a Swarm manager node.

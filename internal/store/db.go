@@ -9,7 +9,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 // allModels is the full set of GORM models AutoMigrate manages. Additive schema
@@ -74,7 +75,7 @@ func dialector(cfg Config) (gorm.Dialector, error) {
 	case DriverSQLite, "":
 		dsn := cfg.DSN
 		if dsn == "" {
-			dsn = "shellcn.db"
+			dsn = app.DefaultDatabaseDSN
 		}
 		return sqlite.Open(dsn), nil
 	case DriverPostgres:

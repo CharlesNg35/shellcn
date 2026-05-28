@@ -4,8 +4,9 @@ package docker
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 )
 
 type Plugin struct{}
@@ -20,7 +21,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Name:        "docker",
 		Version:     "0.1.0",
 		Title:       "Docker",
-		Description: "Docker Engine cockpit with containers, images, volumes, networks, logs, exec, events, and raw API access.",
+		Description: "Docker Engine cockpit with containers, images, volumes, networks, logs, exec, and events.",
 		Icon:        plugin.Icon{Type: plugin.IconSVG, Value: dockerIconSVG},
 		Category:    plugin.CategoryContainers,
 		Config:      configSchema(),
@@ -34,7 +35,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Label:      "Docker",
 				Kind:       "docker-run",
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
-				Template: "docker run --rm --name shellcn-agent " +
+				Template: "docker run --rm --name " + app.AgentBinary + " " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 					`--group-add "$(stat -c '%g' /var/run/docker.sock)" ` +
 					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +
@@ -116,7 +117,7 @@ func containerColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "name", Label: "Name", Sortable: true},
 		{Key: "image", Label: "Image", Sortable: true},
-		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true},
+		{Key: "state", Label: "State", Type: plugin.ColumnBadge, Sortable: true, Severities: dockerengine.StateSeverities()},
 		{Key: "status", Label: "Status"},
 		{Key: "ports", Label: "Ports"},
 		{Key: "compose", Label: "Compose", Sortable: true},
@@ -153,7 +154,6 @@ func containerResource() plugin.ResourceType {
 				{Key: "logs", Label: "Logs", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "scroll-text"}, Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "docker.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "env", Label: "Env", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "list"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.container.env", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "key", Label: "Key", Sortable: true}, {Key: "value", Label: "Value"}}}.Map()},
-				{Key: "api", Label: "API", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "upload"}, Panel: plugin.PanelHTTPClient, Config: plugin.HTTPClientConfig{ExecuteRouteID: "docker.api.execute", Methods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, DefaultMethod: "GET", DefaultURL: "/version"}.Map()},
 			},
 		},
 	}
@@ -240,7 +240,6 @@ func composeResource() plugin.ResourceType {
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.compose.overview", Params: map[string]string{"project": "${resource.uid}"}}},
 				{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "box"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.containers", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: containerColumns()}.Map()},
 				{Key: "services", Label: "Services", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "workflow"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.services", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}.Map()},
-				{Key: "api", Label: "API", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "upload"}, Panel: plugin.PanelHTTPClient, Config: plugin.HTTPClientConfig{ExecuteRouteID: "docker.api.execute", Methods: []string{"GET", "POST", "PUT", "PATCH", "DELETE"}, DefaultMethod: "GET", DefaultURL: "/version"}.Map()},
 			},
 		},
 	}

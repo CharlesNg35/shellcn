@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/internal/store"
 )
 
 func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
@@ -31,12 +32,12 @@ func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
 	}
 	cmd := enr.Artifacts[0].Command
 	for _, want := range []string{
-		"docker run --rm --name shellcn-agent",
+		"docker run --rm --name " + app.AgentBinary,
 		`--group-add "$(stat -c '%g' /var/run/docker.sock)"`,
 		"-e SHELLCN_CONNECT_URL='wss://shellcn.test/api/agent/connect'",
 		"-e SHELLCN_ENROLL_TOKEN='",
 		"'/var/run/docker.sock:/var/run/docker.sock'",
-		"'ghcr.io/charlesng35/shellcn-agent:latest'",
+		"'" + app.AgentImageLatest + "'",
 	} {
 		if !strings.Contains(cmd, want) {
 			t.Fatalf("command missing %q: %s", want, cmd)

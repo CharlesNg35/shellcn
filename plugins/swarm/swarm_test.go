@@ -10,9 +10,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 )
 
 func TestManifestValidates(t *testing.T) {
@@ -32,6 +32,18 @@ func TestManifestDeclaresSwarmWorkspace(t *testing.T) {
 	}
 	if len(m.Tree) != 4 || len(m.Resources) != 4 {
 		t.Fatalf("tree=%d resources=%d, want 4/4", len(m.Tree), len(m.Resources))
+	}
+	for _, res := range m.Resources {
+		for _, tab := range res.Detail.Tabs {
+			if tab.Panel == plugin.PanelHTTPClient {
+				t.Fatalf("swarm should not expose a raw API panel: resource=%s tab=%s", res.Kind, tab.Key)
+			}
+		}
+	}
+	for _, route := range New().Routes() {
+		if route.ID == "swarm.api.execute" {
+			t.Fatal("swarm should not expose a raw API execute route")
+		}
 	}
 }
 

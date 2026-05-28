@@ -4,7 +4,7 @@ package mssql
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type Plugin struct{}
@@ -107,8 +107,8 @@ func tableResource() plugin.ResourceType {
 		RowActionIDs: []string{"mssql.column.add", "mssql.table.truncate", "mssql.table.drop"},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mssql.table.truncate", "mssql.table.drop"}}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.rows", Params: objectParams()}, Config: dataGridConfig()},
-			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"mssql.column.add", "mssql.column.drop"}}.Map()},
-			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mssql.index.create", "mssql.index.drop"}}.Map()},
+			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"mssql.column.add"}, RowActionIDs: []string{"mssql.column.drop"}}.Map()},
+			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mssql.index.create"}, RowActionIDs: []string{"mssql.index.drop"}}.Map()},
 			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.constraints", Params: objectParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}.Map()},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mssql.query", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.namespace}"}}, Config: queryConfig("SELECT TOP (100) * FROM ${resource.name};")},
 		}},
@@ -228,9 +228,9 @@ func actions() []plugin.Action {
 		{ID: "mssql.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "mssql.database.create"},
 		{ID: "mssql.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "mssql.table.create", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
 		{ID: "mssql.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "mssql.column.add", Params: objectParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
-		{ID: "mssql.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "mssql.column.drop", Params: objectParams(), Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
+		{ID: "mssql.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "mssql.column.drop", Params: map[string]string{"id": "${resource.scope}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "mssql.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "mssql.index.create", Params: objectParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
-		{ID: "mssql.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "mssql.index.drop", Params: objectParams(), Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: "mssql.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "mssql.index.drop", Params: map[string]string{"id": "${resource.scope}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "mssql.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "mssql.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "mssql.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mssql.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 	}

@@ -10,9 +10,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/dbcred"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
 const (
@@ -163,7 +164,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		QueryTimeout:      timeout,
 		RowLimit:          rowLimit,
 		MaxConns:          maxConns,
-		ApplicationName:   "shellcn-cockroachdb",
+		ApplicationName:   app.DefaultClientName + "-cockroachdb",
 		RedactPatterns:    sqldb.ParsePatterns(cfg.String("redact_columns"), sqldb.DefaultRedactColumnPatterns()),
 	}, nil
 }

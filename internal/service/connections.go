@@ -10,10 +10,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/secrets"
-	"github.com/charlesng/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/secrets"
+	"github.com/charlesng35/shellcn/internal/store"
 )
 
 // ConnectionService owns the control-plane lifecycle of a connection: it
@@ -397,7 +397,7 @@ func (s *ConnectionService) ReferencesCredential(ctx context.Context, credential
 			}
 			continue
 		}
-		if id, _ := c.Config[CredentialField].(string); id == credentialID {
+		if id, _ := c.Config[plugin.CredentialField].(string); id == credentialID {
 			return true, nil
 		}
 	}

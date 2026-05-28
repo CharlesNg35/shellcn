@@ -1,8 +1,8 @@
 // Package dockerengine is the shared runtime for Docker-API protocols. The
 // docker, swarm, and podman plugins all talk to a Docker-compatible daemon over
 // the moby client, so the session, streaming channels, row mapping, pagination,
-// raw-API passthrough, and generic route handlers live here once. Each plugin
-// supplies only its manifest and the route wiring (IDs, permissions, paths).
+// and generic route handlers live here once. Each plugin supplies only its
+// manifest and the route wiring (IDs, permissions, paths).
 package dockerengine
 
 import (
@@ -11,14 +11,13 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
 
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type endpoint struct {
@@ -38,8 +37,8 @@ type Session struct {
 // nodes, tasks; podman pods) can issue calls the shared handlers don't cover.
 func (s *Session) Client() *dockerclient.Client { return s.cli }
 
-// HTTPClient exposes the daemon-dialing HTTP client for raw API access (the raw
-// API panel, and podman's libpod-only endpoints).
+// HTTPClient exposes the daemon-dialing HTTP client for Podman's libpod-only
+// endpoints.
 func (s *Session) HTTPClient() *http.Client { return s.http }
 
 // Connect dials the daemon for cfg's transport. defaultSocket is the unix socket
@@ -192,24 +191,4 @@ func (c *execChannel) Resize(cols, rows int) error {
 func (c *execChannel) Close() error {
 	c.once.Do(func() { c.resp.Close() })
 	return nil
-}
-
-func rawAPIPath(raw string) (string, error) {
-	if raw == "" {
-		return "", fmt.Errorf("%w: Docker API path is required", plugin.ErrInvalidInput)
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
-		return "", fmt.Errorf("%w: invalid Docker API path", plugin.ErrInvalidInput)
-	}
-	if u.IsAbs() {
-		if u.Host != "docker" {
-			return "", fmt.Errorf("%w: Docker API requests must target the docker daemon", plugin.ErrInvalidInput)
-		}
-		return u.RequestURI(), nil
-	}
-	if !strings.HasPrefix(raw, "/") {
-		return "", fmt.Errorf("%w: Docker API path must start with /", plugin.ErrInvalidInput)
-	}
-	return raw, nil
 }

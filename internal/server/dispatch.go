@@ -16,13 +16,13 @@ import (
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/charlesng/shellcn/internal/audit"
-	"github.com/charlesng/shellcn/internal/auth"
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/policy"
-	"github.com/charlesng/shellcn/internal/recording"
-	"github.com/charlesng/shellcn/internal/session"
+	"github.com/charlesng35/shellcn/internal/audit"
+	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/policy"
+	"github.com/charlesng35/shellcn/internal/recording"
+	"github.com/charlesng35/shellcn/internal/session"
 )
 
 const (
@@ -163,15 +163,22 @@ func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	release := handle.TrackStream()
+	defer release()
 	proxier, ok := handle.Session().(plugin.HTTPProxy)
 	if !ok {
 		writeError(w, s.deps.Logger, plugin.ErrNotSupported)
 		return
 	}
-	// The wildcard holds the plugin-defined target path; hand it over as the path.
+	// The wildcard holds the plugin-defined target path; hand it over as the path,
+	// preserving the original percent-encoding (chunk names carry %5B/%28 etc.).
 	rp := r.Clone(ctx)
 	rp.URL.Path = "/" + chi.URLParam(r, "*")
 	rp.URL.RawPath = ""
+	mark := "/" + conn.ID + "/proxy/"
+	if i := strings.Index(r.URL.EscapedPath(), mark); i >= 0 {
+		rp.URL.RawPath = "/" + r.URL.EscapedPath()[i+len(mark):]
+	}
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
 	proxier.ServeHTTPProxy(w, rp)
 }
@@ -408,6 +415,8 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
 		return
 	}
+	releaseStream := handle.TrackStream()
+	defer releaseStream()
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
 
 	streamCtx, cancel := context.WithCancel(ctx)

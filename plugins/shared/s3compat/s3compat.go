@@ -22,9 +22,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithy "github.com/aws/smithy-go"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/plugins/shared/filesystem"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
 )
 
 type Options struct {
@@ -128,10 +127,10 @@ func normalizeOptions(cfg plugin.ConnectConfig, opts *Options) error {
 	switch auth {
 	case "access_key":
 	case "credential":
-		if identity := strings.TrimSpace(cfg.String(service.CredentialIdentity)); identity != "" {
+		if identity := cfg.CredentialIdentityFor(plugin.CredentialField); identity != "" {
 			opts.AccessKeyID = identity
 		}
-		if secret := cfg.String(service.CredentialSecret); secret != "" {
+		if secret := cfg.CredentialSecretFor(plugin.CredentialField); secret != "" {
 			opts.SecretKey = secret
 		}
 	default:

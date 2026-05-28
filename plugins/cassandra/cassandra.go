@@ -4,7 +4,7 @@ package cassandra
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type Plugin struct{}
@@ -97,8 +97,8 @@ func tableResource() plugin.ResourceType {
 		RowActionIDs: []string{"cassandra.column.add", "cassandra.table.truncate", "cassandra.table.drop"},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"cassandra.table.truncate", "cassandra.table.drop"}}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}.Map()},
-			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"cassandra.column.add", "cassandra.column.drop"}}.Map()},
-			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"cassandra.index.create", "cassandra.index.drop"}}.Map()},
+			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"cassandra.column.add"}, RowActionIDs: []string{"cassandra.column.drop"}}.Map()},
+			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"cassandra.index.create"}, RowActionIDs: []string{"cassandra.index.drop"}}.Map()},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.table.definition", Params: tableParams()}},
 			{Key: "query", Label: "CQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM \"${resource.namespace}\".\"${resource.name}\" LIMIT 100;")},
 		}},
@@ -199,9 +199,9 @@ func actions() []plugin.Action {
 		{ID: "cassandra.keyspace.create", Label: "Create keyspace", Icon: icon("plus"), RouteID: "cassandra.keyspace.create"},
 		{ID: "cassandra.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "cassandra.table.create", Params: map[string]string{"keyspace": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
 		{ID: "cassandra.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "cassandra.column.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
-		{ID: "cassandra.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "cassandra.column.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
+		{ID: "cassandra.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "cassandra.column.drop", Params: map[string]string{"keyspace": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "cassandra.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "cassandra.index.create", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
-		{ID: "cassandra.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "cassandra.index.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: "cassandra.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "cassandra.index.drop", Params: map[string]string{"keyspace": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "cassandra.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "cassandra.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every partition and row will be deleted."},
 		{ID: "cassandra.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cassandra.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 	}

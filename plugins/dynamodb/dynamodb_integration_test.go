@@ -15,10 +15,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsdynamodb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/transport"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/transport"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
 func TestDynamoDBPluginIntegration(t *testing.T) {

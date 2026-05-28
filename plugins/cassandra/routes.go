@@ -16,9 +16,9 @@ import (
 	"github.com/gocql/gocql"
 	"github.com/google/uuid"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
 type row map[string]any
@@ -59,9 +59,9 @@ func routes() []plugin.Route {
 		{ID: "cassandra.keyspace.create", Method: plugin.MethodPost, Path: "/keyspaces", Permission: "cassandra.keyspaces.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.keyspace.create", Input: keyspaceCreateSchema(), Handle: createKeyspace},
 		{ID: "cassandra.table.create", Method: plugin.MethodPost, Path: "/keyspaces/{keyspace}/tables", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "cassandra.column.add", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/columns", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.column.add", Input: columnAddSchema(), Handle: addColumn},
-		{ID: "cassandra.column.drop", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/columns/drop", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.column.drop", Input: columnDropSchema(), Handle: dropColumn},
+		{ID: "cassandra.column.drop", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/columns/drop", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.column.drop", Handle: dropColumn},
 		{ID: "cassandra.index.create", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/indexes", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.index.create", Input: indexCreateSchema(), Handle: createIndex},
-		{ID: "cassandra.index.drop", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/indexes/drop", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.index.drop", Input: indexDropSchema(), Handle: dropIndex},
+		{ID: "cassandra.index.drop", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/indexes/drop", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.index.drop", Handle: dropIndex},
 		{ID: "cassandra.table.truncate", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/truncate", Permission: "cassandra.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.table.truncate", Handle: truncateTable},
 		{ID: "cassandra.table.drop", Method: plugin.MethodDelete, Path: "/tables/{keyspace}/{table}", Permission: "cassandra.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.table.drop", Handle: dropTable},
 		{ID: "cassandra.query", Method: plugin.MethodWS, Path: "/query", Permission: "cassandra.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "cassandra.query", Stream: queryStream},
@@ -102,22 +102,10 @@ func columnAddSchema() *plugin.Schema {
 	}}}}
 }
 
-func columnDropSchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
-		{Key: "column", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "The column to drop. Its data is permanently removed."},
-	}}}}
-}
-
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "column", Label: "Column", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "Cassandra secondary indexes cover a single column."},
-	}}}}
-}
-
-func indexDropSchema() *plugin.Schema {
-	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
-		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 	}}}}
 }
 
@@ -494,6 +482,10 @@ WHERE keyspace_name = ? AND table_name = ?`, []any{keyspace, table})
 		}
 		return intValue(rows[i]["position"]) < intValue(rows[j]["position"])
 	})
+	for i := range rows {
+		name := fmt.Sprint(rows[i]["column_name"])
+		rows[i]["ref"] = plugin.ResourceRef{Kind: "column", Scope: keyspace, Namespace: table, Name: name, UID: keyspace + "." + table + "." + name}
+	}
 	return pageRows(rc, rows)
 }
 
@@ -515,6 +507,8 @@ WHERE keyspace_name = ? AND table_name = ?`, []any{keyspace, table})
 	}
 	for _, r := range rows {
 		r["options"] = compactJSON(r["options"])
+		name := fmt.Sprint(r["index_name"])
+		r["ref"] = plugin.ResourceRef{Kind: "index", Scope: keyspace, Namespace: table, Name: name, UID: keyspace + "." + table + "." + name}
 	}
 	return pageRows(rc, rows)
 }
@@ -727,13 +721,7 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var req struct {
-		Column string `json:"column" validate:"required"`
-	}
-	if err := rc.Bind(&req); err != nil {
-		return nil, err
-	}
-	column, err := safeIdent(req.Column)
+	column, err := safeIdent(rc.Param("name"))
 	if err != nil {
 		return nil, err
 	}
@@ -788,13 +776,7 @@ func dropIndex(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var req struct {
-		Name string `json:"name" validate:"required"`
-	}
-	if err := rc.Bind(&req); err != nil {
-		return nil, err
-	}
-	name, err := safeIdent(req.Name)
+	name, err := safeIdent(rc.Param("name"))
 	if err != nil {
 		return nil, err
 	}

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 // NewMemory returns a fully in-memory Store for unit tests — no DB, no gorm.

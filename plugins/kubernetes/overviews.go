@@ -7,7 +7,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 const clusterKind = "cluster"
@@ -42,17 +42,6 @@ func ClusterList(rc *plugin.RequestContext) (any, error) {
 		row["nodes"] = len(nodes.Items)
 	}
 	return plugin.Page[Row]{Items: []Row{row}, Total: ptr(1)}, nil
-}
-
-// ClusterTree returns the single Overview node opening the cluster dashboard.
-func ClusterTree(_ *plugin.RequestContext) (any, error) {
-	return plugin.Page[plugin.TreeNode]{Items: []plugin.TreeNode{{
-		Key:   "cluster",
-		Label: "Overview",
-		Icon:  lucide("layout-dashboard"),
-		Ref:   &plugin.ResourceRef{Kind: clusterKind, Name: "Cluster", UID: clusterKind},
-		Leaf:  true,
-	}}, Total: ptr(1)}, nil
 }
 
 // NodePods lists the pods scheduled on a node (for the node detail).

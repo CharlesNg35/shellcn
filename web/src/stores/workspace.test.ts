@@ -44,6 +44,40 @@ describe("workspace store", () => {
     expect(ws.activeView("a")?.id).toBe("detail:x1");
   });
 
+  it("reuses the active preview tab until it is pinned", () => {
+    const ws = useWorkspaceStore();
+    ws.openPreviewView("a", detail("x1"));
+    ws.openPreviewView("a", detail("x2"));
+    expect(ws.view("a").views.map((v) => v.id)).toEqual(["detail:x2"]);
+    expect(ws.activeView("a")?.preview).toBe(true);
+
+    ws.pinView("a", "detail:x2");
+    ws.openPreviewView("a", detail("x3"));
+    expect(ws.view("a").views.map((v) => v.id)).toEqual([
+      "detail:x2",
+      "detail:x3",
+    ]);
+    expect(ws.view("a").views.find((v) => v.id === "detail:x2")?.preview).toBe(
+      false,
+    );
+    expect(ws.activeView("a")?.id).toBe("detail:x3");
+    expect(ws.activeView("a")?.preview).toBe(true);
+  });
+
+  it("activates an already-open pinned tab instead of replacing preview state", () => {
+    const ws = useWorkspaceStore();
+    ws.openPreviewView("a", detail("x1"));
+    ws.pinView("a", "detail:x1");
+    ws.openPreviewView("a", detail("x2"));
+    ws.openPreviewView("a", detail("x1"));
+    expect(ws.view("a").views.map((v) => v.id)).toEqual([
+      "detail:x1",
+      "detail:x2",
+    ]);
+    expect(ws.activeView("a")?.id).toBe("detail:x1");
+    expect(ws.activeView("a")?.preview).toBe(false);
+  });
+
   it("closing the active view falls back to a neighbor", () => {
     const ws = useWorkspaceStore();
     ws.openView("a", detail("x1"));

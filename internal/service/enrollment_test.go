@@ -6,10 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/internal/store"
 )
 
 type agentTestPlugin struct{}
@@ -72,7 +73,7 @@ func TestEnrollmentArtifactsAndRedeem(t *testing.T) {
 	if !strings.Contains(cmd, "--token '") || strings.Contains(cmd, "/api/agent/connect/") {
 		t.Fatalf("artifact should use token env and not token-in-path: %s", cmd)
 	}
-	if !strings.Contains(cmd, "ghcr.io/charlesng35/shellcn-agent:latest") || strings.Contains(cmd, "shellcn-proxy") {
+	if !strings.Contains(cmd, app.AgentImageLatest) || strings.Contains(cmd, "shellcn-proxy") {
 		t.Fatalf("artifact should use the published shellcn-agent image: %s", cmd)
 	}
 	if strings.Contains(cmd, "--insecure") {

@@ -4,8 +4,8 @@ package ssh
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/plugins/shared/sshsftp"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/sshsftp"
 )
 
 // Plugin exposes full SSH: terminal, files, and command snippets.

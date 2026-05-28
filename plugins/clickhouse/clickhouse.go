@@ -4,7 +4,7 @@ package clickhouse
 import (
 	"context"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 type Plugin struct{}
@@ -106,8 +106,8 @@ func tableResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"clickhouse.table.truncate", "clickhouse.table.drop"}},
 			Tabs: []plugin.Tab{
 				{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}.Map()},
-				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"clickhouse.column.add", "clickhouse.column.drop"}}.Map()},
-				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"clickhouse.index.drop"}}.Map()},
+				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"clickhouse.column.add"}, RowActionIDs: []string{"clickhouse.column.drop"}}.Map()},
+				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), RowActionIDs: []string{"clickhouse.index.drop"}}.Map()},
 				{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.constraints", Params: tableParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}.Map()},
 				{Key: "mutations", Label: "Mutations", Icon: icon("git-compare-arrows"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.mutations.list", Params: tableParams()}, Config: plugin.TableConfig{Columns: mutationColumns()}.Map()},
 				{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.table.definition", Params: tableParams()}},
@@ -248,8 +248,8 @@ func actions() []plugin.Action {
 		{ID: "clickhouse.database.create", Label: "Create database", Icon: icon("plus"), RouteID: "clickhouse.database.create"},
 		{ID: "clickhouse.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "clickhouse.table.create", Params: map[string]string{"database": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
 		{ID: "clickhouse.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "clickhouse.column.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
-		{ID: "clickhouse.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "clickhouse.column.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
-		{ID: "clickhouse.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "clickhouse.index.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this data-skipping index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: "clickhouse.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "clickhouse.column.drop", Params: map[string]string{"database": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
+		{ID: "clickhouse.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "clickhouse.index.drop", Params: map[string]string{"database": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this data-skipping index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "clickhouse.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "clickhouse.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "clickhouse.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "clickhouse.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 	}

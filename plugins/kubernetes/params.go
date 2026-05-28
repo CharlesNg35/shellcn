@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 // param reads a renderer-supplied value from the path params, falling back to

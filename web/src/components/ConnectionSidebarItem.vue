@@ -18,15 +18,15 @@ const ws = useWorkspaceStore();
 const live = useConnectionStatusStore();
 
 type DotState = "offline" | "error" | "connecting" | "connected" | "idle";
-// The dot reflects real connection health, not the intent to connect: agent
-// reachability (server), then the live state observed from actual traffic.
+// The dot reflects the pooled backend session: agent reachability first, then
+// the workspace keepalive/HTTP health state.
 const dotState = computed<DotState>(() => {
   const c = props.connection;
   if (c.status === "offline") return "offline";
-  if (!ws.isConnected(c.id)) return "idle";
   const state = live.get(c.id)?.state;
-  if (state === "connected") return "connected";
   if (state === "error") return "error";
+  if (!ws.isConnected(c.id)) return "idle";
+  if (state === "connected") return "connected";
   return "connecting";
 });
 
@@ -68,7 +68,7 @@ function shareTitle(c: ConnectionSummary): string {
 
 <template>
   <div
-    class="mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+    class="connection-sidebar-drag-item mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
     :data-connection-id="connection.id"
     :class="
       active
@@ -76,11 +76,7 @@ function shareTitle(c: ConnectionSummary): string {
         : ''
     "
   >
-    <span
-      class="connection-drag-handle shrink-0 cursor-grab touch-none rounded p-0.5 text-surface-500 active:cursor-grabbing"
-      title="Drag connection"
-      aria-label="Drag connection"
-    >
+    <span class="shrink-0 rounded p-0.5 text-surface-500" aria-hidden="true">
       <AppIcon :icon="connection.icon" :size="16" />
     </span>
     <button

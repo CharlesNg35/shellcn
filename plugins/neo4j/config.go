@@ -8,10 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
-	"github.com/charlesng/shellcn/plugins/shared/dbcred"
-	"github.com/charlesng/shellcn/plugins/shared/sqldb"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
+	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
 
 const (
@@ -164,7 +163,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		}
 		bearer = dbcred.ResolvedSecret(cfg, bearerCredentialField)
 		if bearer == "" {
-			bearer = cfg.String(service.CredentialSecret)
+			bearer = cfg.CredentialSecretFor(plugin.CredentialField)
 		}
 	default:
 		return options{}, fmt.Errorf("%w: unsupported authentication method %q", plugin.ErrInvalidInput, authMode)

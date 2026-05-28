@@ -5,19 +5,10 @@ import (
 	"fmt"
 	"maps"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/secrets"
-	"github.com/charlesng/shellcn/internal/transport"
-)
-
-// CredentialField is the legacy/default config key holding a referenced
-// credential id; CredentialSecret is the matching resolved plaintext key.
-const (
-	CredentialField    = "credential_id"
-	CredentialSecret   = "_credential_secret"
-	CredentialIdentity = "_credential_identity"
-	CredentialKind     = "_credential_kind"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/secrets"
+	"github.com/charlesng35/shellcn/internal/transport"
 )
 
 // Connector assembles a plugin.ConnectConfig for a connection: it decrypts inline
@@ -108,10 +99,10 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 					if err != nil {
 						return plugin.ConnectConfig{}, nil, fmt.Errorf("resolve credential: %w", err)
 					}
-					cfg[credentialSecretKey(key)] = string(material)
-					cfg[credentialKindKey(key)] = cred.Kind
+					cfg[plugin.CredentialSecretKey(key)] = string(material)
+					cfg[plugin.CredentialResolvedKindKey(key)] = cred.Kind
 					if cred.Username != "" {
-						cfg[credentialIdentityKey(key)] = cred.Username
+						cfg[plugin.CredentialIdentityKey(key)] = cred.Username
 					}
 				}
 			}
@@ -135,25 +126,4 @@ func (c *Connector) Build(ctx context.Context, _ models.User, conn models.Connec
 		Config:       cfg,
 		Net:          net,
 	}, plg, nil
-}
-
-func credentialSecretKey(key string) string {
-	if key == CredentialField {
-		return CredentialSecret
-	}
-	return "_" + key + "_secret"
-}
-
-func credentialIdentityKey(key string) string {
-	if key == CredentialField {
-		return CredentialIdentity
-	}
-	return "_" + key + "_identity"
-}
-
-func credentialKindKey(key string) string {
-	if key == CredentialField {
-		return CredentialKind
-	}
-	return "_" + key + "_kind"
 }

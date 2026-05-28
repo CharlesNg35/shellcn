@@ -3,7 +3,8 @@ package service
 import (
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/models"
 )
 
 func TestConnectionSlugIsUniqueAndDNSSafe(t *testing.T) {
@@ -17,7 +18,7 @@ func TestConnectionSlugIsUniqueAndDNSSafe(t *testing.T) {
 		t.Fatalf("same-name connections must get distinct slugs: %q == %q", a, b)
 	}
 	// A name that folds to nothing still yields a valid DNS-1123 label.
-	if got := connectionSlug(models.Connection{Name: "***", ID: "abcdef01-0000-0000-0000-000000000000"}); got != "shellcn-agent-abcdef01" {
+	if got := connectionSlug(models.Connection{Name: "***", ID: "abcdef01-0000-0000-0000-000000000000"}); got != app.AgentSlugFallback+"-abcdef01" {
 		t.Fatalf("degenerate slug = %q", got)
 	}
 }

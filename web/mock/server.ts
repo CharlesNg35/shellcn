@@ -951,6 +951,29 @@ function handleHTTP(
     });
   }
 
+  const sessionMatch = path.match(/^\/api\/connections\/([^/]+)\/session$/);
+  if (sessionMatch) {
+    if (method === "GET") {
+      return send(res, 200, {
+        state: "idle",
+        channels: 0,
+        streams: 0,
+      });
+    }
+    if (method === "POST") {
+      return send(res, 200, {
+        state: "connected",
+        channels: 0,
+        streams: 0,
+        lastSeen: new Date().toISOString(),
+        idleExpiresIn: 900,
+      });
+    }
+    if (method === "DELETE") {
+      return send(res, 200, { ok: true });
+    }
+  }
+
   const ticketMatch = path.match(/^\/api\/connections\/([^/]+)\/tickets$/);
   if (ticketMatch && method === "POST") {
     return send(res, 201, {

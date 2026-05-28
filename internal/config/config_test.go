@@ -5,7 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/config"
+	"github.com/charlesng35/shellcn/internal/app"
+	"github.com/charlesng35/shellcn/internal/config"
 )
 
 func TestLoadDefaults(t *testing.T) {
@@ -19,7 +20,7 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Server.LogLevel != "info" {
 		t.Errorf("log level default: got %q", cfg.Server.LogLevel)
 	}
-	if cfg.Database.Driver != "sqlite" || cfg.Database.DSN != "shellcn.db" {
+	if cfg.Database.Driver != "sqlite" || cfg.Database.DSN != app.DefaultDatabaseDSN {
 		t.Errorf("database defaults: got %+v", cfg.Database)
 	}
 	if cfg.Auth.SessionTTLDuration().String() != "24h0m0s" {

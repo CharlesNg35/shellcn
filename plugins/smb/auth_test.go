@@ -3,15 +3,14 @@ package smb
 import (
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/plugin"
-	"github.com/charlesng/shellcn/internal/service"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 func TestParseOptionsValidatesAuthFields(t *testing.T) {
 	for name, cfg := range map[string]map[string]any{
 		"password missing password": {"host": "smb.example.com", "share": "files", "auth": "password", "username": "alice"},
 		"credential missing secret": {
-			"host": "smb.example.com", "share": "files", "auth": "credential", service.CredentialIdentity: "alice",
+			"host": "smb.example.com", "share": "files", "auth": "credential", plugin.CredentialIdentity: "alice",
 		},
 		"unsupported auth": {"host": "smb.example.com", "share": "files", "auth": "token", "username": "alice", "password": "pw"},
 	} {
@@ -35,7 +34,7 @@ func TestParseOptionsValidatesAuthFields(t *testing.T) {
 	t.Run("credential", func(t *testing.T) {
 		opts, err := parseOptions(plugin.ConnectConfig{Config: map[string]any{
 			"host": "smb.example.com", "share": "files", "auth": "credential",
-			service.CredentialIdentity: "alice", service.CredentialSecret: "pw",
+			plugin.CredentialIdentity: "alice", plugin.CredentialSecret: "pw",
 		}})
 		if err != nil {
 			t.Fatalf("credential auth should validate: %v", err)

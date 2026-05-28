@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charlesng/shellcn/internal/models"
-	"github.com/charlesng/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
 func testUser() models.User { return models.User{ID: "u1", Username: "ops"} }
