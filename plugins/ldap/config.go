@@ -73,11 +73,11 @@ func configSchema() plugin.Schema {
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authAnonymous, Options: []plugin.Option{
 				{Label: "Anonymous", Value: authAnonymous},
 				{Label: "Simple bind", Value: authSimple},
-				{Label: "Stored credential", Value: authCredential},
+				{Label: "Stored bind credential", Value: authCredential},
 			}},
 			{Key: "bind_dn", Label: "Bind DN", Type: plugin.FieldText, Placeholder: "cn=admin,dc=example,dc=com", VisibleWhen: &simpleAuth},
 			{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &simpleAuth},
-			{Key: credentialIDField, Label: "Stored credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+			{Key: credentialIDField, Label: "Stored bind credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialBasicAuth}, Protocols: []string{protocolName},
 			}, VisibleWhen: &credentialAuth, Help: "Reusable bind credential. Its identity is the bind DN and its secret is the password."},
 		}},

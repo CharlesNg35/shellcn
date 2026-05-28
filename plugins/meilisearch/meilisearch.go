@@ -153,11 +153,11 @@ func configSchema() plugin.Schema {
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "api_key", Options: []plugin.Option{
 				{Label: "API key", Value: "api_key"},
-				{Label: "Stored credential", Value: "credential"},
+				{Label: "Stored API key", Value: "credential"},
 				{Label: "None", Value: "none"},
 			}},
 			{Key: "api_key", Label: "API key", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "api_key"}}}},
-			{Key: credentialField, Label: "Stored credential", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
+			{Key: credentialField, Label: "Stored API key", Type: plugin.FieldCredentialRef, Required: true, Credential: &plugin.CredentialSelector{
 				Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}, Protocols: []string{"meilisearch"},
 			}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "auth", Op: plugin.OpEq, Value: "credential"}}}},
 		}},
