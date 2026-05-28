@@ -50,7 +50,7 @@ func tree() []plugin.TreeGroup {
 		{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Source: plugin.DataSource{RouteID: "oracle.schemas.tree"}, ResourceKind: "schema"},
 		{Key: "users", Label: "Users", Icon: icon("users"), Source: plugin.DataSource{RouteID: "oracle.users.tree"}, ResourceKind: "user"},
 		{Key: "tablespaces", Label: "Tablespaces", Icon: icon("hard-drive"), Source: plugin.DataSource{RouteID: "oracle.tablespaces.tree"}, ResourceKind: "tablespace"},
-		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), Source: plugin.DataSource{RouteID: "oracle.sessions.tree"}, ResourceKind: "session"},
+		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), ResourceKind: "session"},
 	}
 }
 

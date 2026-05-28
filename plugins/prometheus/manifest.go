@@ -28,8 +28,8 @@ func tree() []plugin.TreeGroup {
 		{Key: "targets", Label: "Targets", Icon: icon("crosshair"), Source: plugin.DataSource{RouteID: rid("targets.tree")}, ResourceKind: "target"},
 		{Key: "alerts", Label: "Alerts", Icon: icon("bell"), Source: plugin.DataSource{RouteID: rid("alerts.tree")}, ResourceKind: "alert"},
 		{Key: "rules", Label: "Rules", Icon: icon("list-checks"), Source: plugin.DataSource{RouteID: rid("rules.tree")}, ResourceKind: "rule"},
-		{Key: "metrics", Label: "Metrics", Icon: icon("chart-line"), Source: plugin.DataSource{RouteID: rid("metrics.tree")}, ResourceKind: "metric"},
-		{Key: "labels", Label: "Labels", Icon: icon("tag"), Source: plugin.DataSource{RouteID: rid("labels.tree")}, ResourceKind: "label"},
+		{Key: "metrics", Label: "Metrics", Icon: icon("chart-line"), ResourceKind: "metric"},
+		{Key: "labels", Label: "Labels", Icon: icon("tag"), ResourceKind: "label"},
 	}
 }
 

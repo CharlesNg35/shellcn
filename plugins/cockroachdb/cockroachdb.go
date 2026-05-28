@@ -50,9 +50,9 @@ func tree() []plugin.TreeGroup {
 		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "cockroachdb.databases.tree"}, ResourceKind: "database"},
 		{Key: "nodes", Label: "Nodes", Icon: icon("server"), Source: plugin.DataSource{RouteID: "cockroachdb.nodes.tree"}, ResourceKind: "node"},
 		{Key: "ranges", Label: "Ranges", Icon: icon("blocks"), Source: plugin.DataSource{RouteID: "cockroachdb.ranges.tree"}, ResourceKind: "range"},
-		{Key: "jobs", Label: "Jobs", Icon: icon("briefcase-business"), Source: plugin.DataSource{RouteID: "cockroachdb.jobs.tree"}, ResourceKind: "job"},
-		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), Source: plugin.DataSource{RouteID: "cockroachdb.sessions.tree"}, ResourceKind: "session"},
-		{Key: "queries", Label: "Queries", Icon: icon("search-code"), Source: plugin.DataSource{RouteID: "cockroachdb.queries.tree"}, ResourceKind: "query"},
+		{Key: "jobs", Label: "Jobs", Icon: icon("briefcase-business"), ResourceKind: "job"},
+		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), ResourceKind: "session"},
+		{Key: "queries", Label: "Queries", Icon: icon("search-code"), ResourceKind: "query"},
 		{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Source: plugin.DataSource{RouteID: "cockroachdb.schemas.tree"}, ResourceKind: "schema"},
 		{Key: "functions", Label: "Functions", Icon: icon("function-square"), Source: plugin.DataSource{RouteID: "cockroachdb.functions.tree"}, ResourceKind: "function"},
 	}

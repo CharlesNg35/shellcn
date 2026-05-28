@@ -86,7 +86,7 @@ func tree() []plugin.TreeGroup {
 		{Key: "services", Label: "Services", Icon: icon("workflow"), Source: plugin.DataSource{RouteID: "swarm.services.tree"}, ResourceKind: "service"},
 		{Key: "stacks", Label: "Stacks", Icon: icon("layers"), Source: plugin.DataSource{RouteID: "swarm.stacks.tree"}, ResourceKind: "stack"},
 		{Key: "nodes", Label: "Nodes", Icon: icon("server"), Source: plugin.DataSource{RouteID: "swarm.nodes.tree"}, ResourceKind: "node"},
-		{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Source: plugin.DataSource{RouteID: "swarm.tasks.tree"}, ResourceKind: "task"},
+		{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), ResourceKind: "task"},
 	}
 }
 

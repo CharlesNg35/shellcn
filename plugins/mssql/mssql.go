@@ -49,7 +49,7 @@ func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
 		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mssql.databases.tree"}, ResourceKind: "database"},
 		{Key: "users", Label: "Users", Icon: icon("users"), Source: plugin.DataSource{RouteID: "mssql.users.tree"}, ResourceKind: "user"},
-		{Key: "jobs", Label: "Jobs", Icon: icon("calendar-clock"), Source: plugin.DataSource{RouteID: "mssql.jobs.tree"}, ResourceKind: "job"},
+		{Key: "jobs", Label: "Jobs", Icon: icon("calendar-clock"), ResourceKind: "job"},
 	}
 }
 

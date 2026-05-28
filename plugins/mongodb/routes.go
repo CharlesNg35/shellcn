@@ -42,6 +42,8 @@ func routes() []plugin.Route {
 		{ID: "mongodb.collections.list", Method: plugin.MethodGet, Path: "/collections", Permission: "mongodb.collections.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.collections.list", Handle: listCollections},
 		{ID: "mongodb.collection.stats", Method: plugin.MethodGet, Path: "/collections/{database}/{collection}/stats", Permission: "mongodb.collections.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.collection.stats", Handle: collectionStats},
 		{ID: "mongodb.indexes.list", Method: plugin.MethodGet, Path: "/collections/{database}/{collection}/indexes", Permission: "mongodb.indexes.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.indexes.list", Handle: listIndexes},
+		{ID: "mongodb.index.create", Method: plugin.MethodPost, Path: "/collections/{database}/{collection}/indexes", Permission: "mongodb.indexes.write", Risk: plugin.RiskWrite, AuditEvent: "mongodb.index.create", Input: indexCreateSchema(), Handle: createIndex},
+		{ID: "mongodb.index.drop", Method: plugin.MethodDelete, Path: "/collections/{database}/{collection}/indexes/{name}", Permission: "mongodb.indexes.delete", Risk: plugin.RiskDestructive, AuditEvent: "mongodb.index.drop", Handle: dropIndex},
 		{ID: "mongodb.documents.list", Method: plugin.MethodGet, Path: "/collections/{database}/{collection}/documents", Permission: "mongodb.documents.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.documents.list", Handle: listDocuments},
 		{ID: "mongodb.document.read", Method: plugin.MethodGet, Path: "/documents/{id}", Permission: "mongodb.documents.read", Risk: plugin.RiskSafe, AuditEvent: "mongodb.document.read", Handle: readDocument},
 		{ID: "mongodb.collection.create", Method: plugin.MethodPost, Path: "/databases/{database}/collections", Permission: "mongodb.collections.write", Risk: plugin.RiskWrite, AuditEvent: "mongodb.collection.create", Input: collectionCreateSchema(), Handle: createCollection},
@@ -63,6 +65,15 @@ func collectionCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Collection name", Type: plugin.FieldText, Required: true},
 		{Key: "capped", Label: "Capped", Type: plugin.FieldToggle, Default: false},
 		{Key: "size", Label: "Max size bytes", Type: plugin.FieldNumber, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}}},
+	}}}}
+}
+
+func indexCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
+		{Key: "keys", Label: "Keys", Type: plugin.FieldJSON, Required: true, Help: `Field-to-direction map, e.g. {"email":1,"createdAt":-1}.`},
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Help: "Optional; derived from the keys when blank."},
+		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
+		{Key: "sparse", Label: "Sparse", Type: plugin.FieldToggle},
 	}}}}
 }
 
@@ -245,14 +256,94 @@ func listIndexes(rc *plugin.RequestContext) (any, error) {
 	}
 	rows := make([]row, 0, len(indexes))
 	for _, idx := range indexes {
+		name := fmt.Sprint(idx["name"])
 		rows = append(rows, row{
-			"name":   fmt.Sprint(idx["name"]),
+			"name":   name,
 			"keys":   compactJSON(idx["key"]),
 			"unique": boolField(idx["unique"]),
 			"sparse": boolField(idx["sparse"]),
+			"ref":    plugin.ResourceRef{Kind: "index", Scope: database, Namespace: collection, Name: name, UID: database + "." + collection + "." + name},
 		})
 	}
 	return pageRows(rc, rows)
+}
+
+func createIndex(rc *plugin.RequestContext) (any, error) {
+	database, collection, err := collectionIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	s, err := mongoSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Keys   any    `json:"keys" validate:"required"`
+		Name   string `json:"name"`
+		Unique bool   `json:"unique"`
+		Sparse bool   `json:"sparse"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	keys, err := indexKeys(req.Keys)
+	if err != nil {
+		return nil, err
+	}
+	opts := options.Index().SetUnique(req.Unique).SetSparse(req.Sparse)
+	if name := strings.TrimSpace(req.Name); name != "" {
+		if _, err := safeName(name, "index"); err != nil {
+			return nil, err
+		}
+		opts.SetName(name)
+	}
+	ctx, cancel := commandContext(rc.Ctx, s)
+	defer cancel()
+	if _, err := s.client.Database(database).Collection(collection).Indexes().CreateOne(ctx, mongo.IndexModel{Keys: keys, Options: opts}); err != nil {
+		return nil, mongoErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropIndex(rc *plugin.RequestContext) (any, error) {
+	database, collection, err := collectionIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	name, err := safeName(rc.Param("name"), "index")
+	if err != nil {
+		return nil, err
+	}
+	s, err := mongoSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	ctx, cancel := commandContext(rc.Ctx, s)
+	defer cancel()
+	if err := s.client.Database(database).Collection(collection).Indexes().DropOne(ctx, name); err != nil {
+		return nil, mongoErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// indexKeys parses a field-to-direction map into an ordered key document, so a
+// compound index keeps the field order the user wrote.
+func indexKeys(value any) (bson.D, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("%w: index keys must be a JSON object", plugin.ErrInvalidInput)
+	}
+	var keys bson.D
+	if err := bson.UnmarshalExtJSON(raw, false, &keys); err != nil || len(keys) == 0 {
+		return nil, fmt.Errorf("%w: index keys must be a non-empty field-to-direction map", plugin.ErrInvalidInput)
+	}
+	return keys, nil
 }
 
 func listDocuments(rc *plugin.RequestContext) (any, error) {
