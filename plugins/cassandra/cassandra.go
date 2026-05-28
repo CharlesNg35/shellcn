@@ -47,7 +47,7 @@ func icon(name string) plugin.Icon {
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
-		{Key: "keyspaces", Label: "Keyspaces", Icon: icon("database"), Source: plugin.DataSource{RouteID: "cassandra.keyspaces.tree"}, ResourceKind: "keyspace"},
+		{Key: "keyspaces", Label: "Keyspaces", Icon: icon("database"), Source: plugin.DataSource{RouteID: "cassandra.keyspaces.tree"}, Ref: &plugin.ResourceRef{Kind: "server", Name: "Keyspaces", UID: "server"}},
 		{Key: "types", Label: "Types", Icon: icon("braces"), Source: plugin.DataSource{RouteID: "cassandra.types.tree"}, ResourceKind: "type"},
 		{Key: "functions", Label: "Functions", Icon: icon("function-square"), Source: plugin.DataSource{RouteID: "cassandra.functions.tree"}, ResourceKind: "function"},
 		{Key: "nodes", Label: "Nodes", Icon: icon("server"), Source: plugin.DataSource{RouteID: "cassandra.nodes.tree"}, ResourceKind: "node"},
@@ -56,12 +56,29 @@ func tree() []plugin.TreeGroup {
 
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
+		serverResource(),
 		keyspaceResource(),
 		tableResource(),
 		viewResource(),
 		typeResource(),
 		functionResource(),
 		nodeResource(),
+	}
+}
+
+// serverResource is the connection-level view opened by clicking the Keyspaces
+// tree group: the keyspace list plus a CQL console.
+func serverResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind: "server", Title: "Keyspaces",
+		List: plugin.DataSource{RouteID: "cassandra.keyspaces.list"},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "Keyspaces"},
+			Tabs: []plugin.Tab{
+				{Key: "keyspaces", Label: "Keyspaces", Icon: icon("database"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.keyspaces.list"}, Config: plugin.TableConfig{ActionIDs: []string{"cassandra.keyspace.create"}}.Map()},
+				{Key: "console", Label: "CQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT release_version FROM system.local;")},
+			},
+		},
 	}
 }
 

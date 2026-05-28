@@ -24,6 +24,13 @@ const emit = defineEmits<{
 }>();
 
 const component = computed(() => resolvePanel(props.panel));
+const panelKey = computed(() =>
+  JSON.stringify({
+    panel: props.panel,
+    source: props.source,
+    resource: props.resource?.uid,
+  }),
+);
 
 function onActionDone(action: Action, result?: Record<string, unknown>): void {
   emit("actionDone", action, result);
@@ -38,6 +45,7 @@ function onSelect(row: Row): void {
   <component
     :is="component"
     v-if="component"
+    :key="panelKey"
     :connection-id="connectionId"
     :source="source"
     :config="config"

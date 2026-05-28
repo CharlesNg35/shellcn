@@ -172,6 +172,30 @@ func TestRedactRowsByColumnPattern(t *testing.T) {
 	}
 }
 
+func TestDisplayValueFormatsBinaryIDs(t *testing.T) {
+	raw := []byte{32, 90, 17, 95, 100, 227, 74, 220, 141, 56, 74, 239, 117, 197, 139, 249}
+	if got := DisplayValue("id", raw); got != "205a115f-64e3-4adc-8d38-4aef75c58bf9" {
+		t.Fatalf("uuid display: got %#v", got)
+	}
+	if got := DisplayValue("trace_id", raw); got != "205a115f-64e3-4adc-8d38-4aef75c58bf9" {
+		t.Fatalf("suffix id display: got %#v", got)
+	}
+	if got := DisplayValue("payload", []byte("hello")); got != "hello" {
+		t.Fatalf("printable bytes display: got %#v", got)
+	}
+	if got := DisplayValue("payload", []byte{0, 1, 2}); got != "0x000102" {
+		t.Fatalf("binary payload display: got %#v", got)
+	}
+}
+
+func TestDisplayValuesUsesColumnContext(t *testing.T) {
+	raw := []byte{32, 90, 17, 95, 100, 227, 74, 220, 141, 56, 74, 239, 117, 197, 139, 249}
+	got := DisplayValues([]string{"id", "payload"}, []any{raw, raw})
+	if got[0] != "205a115f-64e3-4adc-8d38-4aef75c58bf9" || got[1] != "0x205a115f64e34adc8d384aef75c58bf9" {
+		t.Fatalf("unexpected values: %#v", got)
+	}
+}
+
 func TestAuditParamsExcludeRawQuery(t *testing.T) {
 	params := AuditParams(QueryAudit{
 		Query:        "select 'secret literal'",

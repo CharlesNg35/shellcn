@@ -750,7 +750,7 @@ func docsRows(values []any) ([]string, [][]any) {
 	for _, doc := range mapped {
 		row := make([]any, 0, len(columns))
 		for _, key := range columns {
-			row = append(row, displayValue(doc[key]))
+			row = append(row, displayValue(key, doc[key]))
 		}
 		rows = append(rows, row)
 	}
@@ -766,7 +766,7 @@ func docRows(doc bson.M) ([]string, [][]any) {
 	sort.Strings(keys)
 	rows := make([][]any, 0, len(keys))
 	for _, key := range keys {
-		rows = append(rows, []any{key, displayValue(plain[key])})
+		rows = append(rows, []any{key, displayValue(key, plain[key])})
 	}
 	return []string{"key", "value"}, rows
 }
@@ -836,7 +836,7 @@ func documentRow(database, collection string, doc bson.M) (row, error) {
 	}
 	out := row{}
 	for key, value := range bsonMap(doc) {
-		out[key] = displayValue(value)
+		out[key] = displayValue(key, value)
 	}
 	out["ref"] = plugin.ResourceRef{Kind: "document", Name: idLabel(id), UID: encoded}
 	return out, nil
@@ -874,13 +874,88 @@ func compactJSON(value any) string {
 	return fmt.Sprint(value)
 }
 
-func displayValue(value any) any {
+func displayValue(key string, value any) any {
+	if display, ok := idDisplayValue(key, value); ok {
+		return display
+	}
 	switch v := value.(type) {
 	case map[string]any, []any:
 		return compactJSON(v)
 	default:
 		return v
 	}
+}
+
+func idDisplayValue(key string, value any) (string, bool) {
+	if !sqldb.IDLikeColumn(key) {
+		return "", false
+	}
+	switch v := value.(type) {
+	case map[string]any:
+		if oid, ok := stringMapValue(v, "$oid"); ok {
+			return oid, true
+		}
+		rawBinary, ok := v["$binary"].(map[string]any)
+		if !ok {
+			return "", false
+		}
+		data, ok := stringMapValue(rawBinary, "base64")
+		if !ok {
+			return "", false
+		}
+		raw, err := base64.StdEncoding.DecodeString(data)
+		if err != nil {
+			return "", false
+		}
+		return sqldb.FormatBinaryID(key, raw)
+	case []any:
+		raw, ok := byteSlice(v)
+		if !ok {
+			return "", false
+		}
+		return sqldb.FormatBinaryID(key, raw)
+	default:
+		return "", false
+	}
+}
+
+func stringMapValue(values map[string]any, key string) (string, bool) {
+	value, ok := values[key].(string)
+	return value, ok && strings.TrimSpace(value) != ""
+}
+
+func byteSlice(values []any) ([]byte, bool) {
+	out := make([]byte, 0, len(values))
+	for _, value := range values {
+		b, ok := byteValue(value)
+		if !ok {
+			return nil, false
+		}
+		out = append(out, b)
+	}
+	return out, true
+}
+
+func byteValue(value any) (byte, bool) {
+	switch v := value.(type) {
+	case int:
+		if v >= 0 && v <= 255 {
+			return byte(v), true
+		}
+	case int32:
+		if v >= 0 && v <= 255 {
+			return byte(v), true
+		}
+	case int64:
+		if v >= 0 && v <= 255 {
+			return byte(v), true
+		}
+	case float64:
+		if v >= 0 && v <= 255 && v == float64(byte(v)) {
+			return byte(v), true
+		}
+	}
+	return 0, false
 }
 
 func requestDocument(value any) (bson.M, error) {
@@ -975,9 +1050,26 @@ func idLabel(id any) string {
 	switch v := id.(type) {
 	case bson.ObjectID:
 		return v.Hex()
+	case bson.Binary:
+		if display, ok := sqldb.FormatBinaryID("_id", v.Data); ok {
+			return display
+		}
+	case bson.A:
+		if raw, ok := byteSlice([]any(v)); ok {
+			if display, ok := sqldb.FormatBinaryID("_id", raw); ok {
+				return display
+			}
+		}
+	case []any:
+		if raw, ok := byteSlice(v); ok {
+			if display, ok := sqldb.FormatBinaryID("_id", raw); ok {
+				return display
+			}
+		}
 	default:
 		return fmt.Sprint(v)
 	}
+	return fmt.Sprint(id)
 }
 
 func orderedCommand(in bson.M) bson.D {

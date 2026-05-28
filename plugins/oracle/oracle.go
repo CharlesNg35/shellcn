@@ -47,7 +47,7 @@ func icon(name string) plugin.Icon {
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
-		{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Source: plugin.DataSource{RouteID: "oracle.schemas.tree"}, ResourceKind: "schema"},
+		{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Source: plugin.DataSource{RouteID: "oracle.schemas.tree"}, Ref: &plugin.ResourceRef{Kind: "server", Name: "Schemas", UID: "server"}},
 		{Key: "users", Label: "Users", Icon: icon("users"), Source: plugin.DataSource{RouteID: "oracle.users.tree"}, ResourceKind: "user"},
 		{Key: "tablespaces", Label: "Tablespaces", Icon: icon("hard-drive"), Source: plugin.DataSource{RouteID: "oracle.tablespaces.tree"}, ResourceKind: "tablespace"},
 		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), ResourceKind: "session"},
@@ -56,6 +56,7 @@ func tree() []plugin.TreeGroup {
 
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
+		serverResource(),
 		schemaResource(),
 		tableResource(),
 		viewResource(),
@@ -65,6 +66,22 @@ func resources() []plugin.ResourceType {
 		userResource(),
 		tablespaceResource(),
 		sessionResource(),
+	}
+}
+
+// serverResource is the connection-level view opened by clicking the Schemas
+// tree group: the schema list plus a SQL console.
+func serverResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind: "server", Title: "Schemas",
+		List: plugin.DataSource{RouteID: "oracle.schemas.list"},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "Schemas"},
+			Tabs: []plugin.Tab{
+				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.schemas.list"}, Config: plugin.TableConfig{Columns: schemaColumns()}.Map()},
+				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT SYSDATE AS now FROM dual")},
+			},
+		},
 	}
 }
 

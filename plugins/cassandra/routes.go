@@ -991,7 +991,7 @@ func iterRows(iter *gocql.Iter, limit int, redactions []string) ([]row, error) {
 		}
 		r := row{}
 		for k, v := range m {
-			r[k] = jsonValue(v)
+			r[k] = jsonValue(k, v)
 		}
 		redactRow(r, redactions)
 		out = append(out, r)
@@ -1002,12 +1002,12 @@ func iterRows(iter *gocql.Iter, limit int, redactions []string) ([]row, error) {
 	return out, nil
 }
 
-func jsonValue(v any) any {
+func jsonValue(key string, v any) any {
 	switch x := v.(type) {
 	case nil:
 		return nil
 	case []byte:
-		return base64.StdEncoding.EncodeToString(x)
+		return sqldb.DisplayBytes(key, x)
 	case time.Time:
 		return x.Format(time.RFC3339Nano)
 	case net.IP:

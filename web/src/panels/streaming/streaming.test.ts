@@ -253,4 +253,61 @@ describe("streaming stub panels", () => {
     );
     w.unmount();
   });
+
+  it("clears a previous query error after a successful result", async () => {
+    const w = mount(QueryEditorPanel, { props });
+    await flushPromises();
+
+    FakeWS.instances[0].emit("open");
+    FakeWS.instances[0].emit("message", {
+      data: JSON.stringify({ error: "bad query" }),
+    });
+    await flushPromises();
+    expect(w.text()).toContain("bad query");
+
+    FakeWS.instances[0].emit("message", {
+      data: JSON.stringify({ columns: ["ok"], rows: [[1]], rowCount: 1 }),
+    });
+    await flushPromises();
+    expect(w.text()).not.toContain("bad query");
+    expect(w.text()).toContain("1 row");
+    w.unmount();
+  });
+
+  it("resets query editor state when the query context changes", async () => {
+    const w = mount(QueryEditorPanel, {
+      props: {
+        ...props,
+        source: {
+          routeId: "postgresql.query",
+          method: "WS" as const,
+          params: { database: "a" },
+        },
+        config: { initialQuery: "select * from a;" },
+        resource: { kind: "table", name: "a", uid: "a.public.t" },
+      },
+    });
+    await flushPromises();
+
+    FakeWS.instances[0].emit("open");
+    FakeWS.instances[0].emit("message", {
+      data: JSON.stringify({ error: "context a failed" }),
+    });
+    await flushPromises();
+    expect(w.text()).toContain("context a failed");
+
+    await w.setProps({
+      source: {
+        routeId: "postgresql.query",
+        method: "WS" as const,
+        params: { database: "b" },
+      },
+      config: { initialQuery: "select * from b;" },
+      resource: { kind: "table", name: "b", uid: "b.public.t" },
+    });
+    await flushPromises();
+
+    expect(w.text()).not.toContain("context a failed");
+    w.unmount();
+  });
 });

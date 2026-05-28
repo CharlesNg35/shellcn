@@ -1089,7 +1089,7 @@ func executeStatement(ctx context.Context, s *Session, statement string) (sqldb.
 	}
 	out := sqldb.StatementResult{Statement: statement, Columns: columns}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			_ = rows.Close()
 			return sqldb.StatementResult{}, mysqlErr(err)
@@ -1155,7 +1155,7 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	}
 	out := []row{}
 	for rows.Next() {
-		values, err := scanValues(rows, len(columns))
+		values, err := scanValues(rows, columns)
 		if err != nil {
 			return nil, mysqlErr(err)
 		}
@@ -1173,30 +1173,17 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 	return out, nil
 }
 
-func scanValues(rows *sql.Rows, count int) ([]any, error) {
-	values := make([]any, count)
-	ptrs := make([]any, count)
+func scanValues(rows *sql.Rows, columns []string) ([]any, error) {
+	values := make([]any, len(columns))
+	ptrs := make([]any, len(columns))
 	for i := range values {
 		ptrs[i] = &values[i]
 	}
 	if err := rows.Scan(ptrs...); err != nil {
 		return nil, err
 	}
-	for i, value := range values {
-		values[i] = jsonValue(value)
-	}
+	values = sqldb.DisplayValues(columns, values)
 	return values, nil
-}
-
-func jsonValue(v any) any {
-	switch x := v.(type) {
-	case []byte:
-		return string(x)
-	case time.Time:
-		return x.Format(time.RFC3339Nano)
-	default:
-		return x
-	}
 }
 
 func redactRows(rows []row, patterns []string) {

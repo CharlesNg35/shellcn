@@ -47,13 +47,14 @@ func icon(name string) plugin.Icon {
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
-		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mysql.databases.tree"}, ResourceKind: "database"},
+		{Key: "databases", Label: "Databases", Icon: icon("database"), Source: plugin.DataSource{RouteID: "mysql.databases.tree"}, Ref: &plugin.ResourceRef{Kind: "server", Name: "Databases", UID: "server"}},
 		{Key: "users", Label: "Users", Icon: icon("users"), Source: plugin.DataSource{RouteID: "mysql.users.tree"}, ResourceKind: "user"},
 	}
 }
 
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
+		serverResource(),
 		databaseResource(),
 		tableResource(),
 		viewResource(),
@@ -62,18 +63,39 @@ func resources() []plugin.ResourceType {
 	}
 }
 
+// serverResource is the connection-level view opened by clicking the Databases
+// tree group: the database list plus a SQL console, so a user can browse and run
+// arbitrary SQL without first opening a specific database.
+func serverResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind: "server", Title: "Databases",
+		List: plugin.DataSource{RouteID: "mysql.databases.list"},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "Databases"},
+			Tabs: []plugin.Tab{
+				{Key: "databases", Label: "Databases", Icon: icon("database"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.databases.list"}, Config: plugin.TableConfig{Columns: databaseColumns(), ActionIDs: []string{"mysql.database.create"}}.Map()},
+				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mysql.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT VERSION();")},
+			},
+		},
+	}
+}
+
+func databaseColumns() []plugin.Column {
+	return []plugin.Column{
+		{Key: "name", Label: "Database", Sortable: true},
+		{Key: "charset", Label: "Charset"},
+		{Key: "collation", Label: "Collation"},
+		{Key: "tables", Label: "Tables", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "views", Label: "Views", Type: plugin.ColumnNumber, Sortable: true},
+	}
+}
+
 func databaseResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "database", Title: "Databases",
 		List:          plugin.DataSource{RouteID: "mysql.databases.list"},
 		ListActionIDs: []string{"mysql.database.create"},
-		Columns: []plugin.Column{
-			{Key: "name", Label: "Database", Sortable: true},
-			{Key: "charset", Label: "Charset"},
-			{Key: "collation", Label: "Collation"},
-			{Key: "tables", Label: "Tables", Type: plugin.ColumnNumber, Sortable: true},
-			{Key: "views", Label: "Views", Type: plugin.ColumnNumber, Sortable: true},
-		},
+		Columns:       databaseColumns(),
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{

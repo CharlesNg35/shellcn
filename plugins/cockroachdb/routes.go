@@ -1294,7 +1294,7 @@ func executeStatement(ctx context.Context, s *Session, statement string) (sqldb.
 		if err != nil {
 			return sqldb.StatementResult{}, cockroachErr(err)
 		}
-		out.Rows = append(out.Rows, jsonValues(values))
+		out.Rows = append(out.Rows, sqldb.DisplayValues(out.Columns, values))
 		if len(out.Rows) >= s.opts.RowLimit {
 			break
 		}
@@ -1333,7 +1333,7 @@ func queryRows(ctx context.Context, s *Session, sqlText string, args []any) ([]r
 		r := row{}
 		for i, name := range names {
 			if i < len(values) {
-				r[name] = jsonValue(values[i])
+				r[name] = sqldb.DisplayValue(name, values[i])
 			}
 		}
 		out = append(out, r)
@@ -1363,25 +1363,6 @@ func fieldNames(fields []pgconn.FieldDescription) []string {
 		out = append(out, f.Name)
 	}
 	return out
-}
-
-func jsonValues(values []any) []any {
-	out := make([]any, len(values))
-	for i, v := range values {
-		out[i] = jsonValue(v)
-	}
-	return out
-}
-
-func jsonValue(v any) any {
-	switch x := v.(type) {
-	case []byte:
-		return string(x)
-	case time.Time:
-		return x.Format(time.RFC3339Nano)
-	default:
-		return x
-	}
 }
 
 func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
