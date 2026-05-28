@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { useStorage } from "@vueuse/core";
+import { useEventListener, useStorage, useTimeoutFn } from "@vueuse/core";
 import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
@@ -31,9 +31,33 @@ const { confirmDanger } = useConfirmAction();
 
 const rootItems = ref<ConnectionTreeItem[]>([]);
 const dragging = ref(false);
+// True from the moment a drop finishes until the pointer next moves, so the row
+// that slides under a stationary cursor doesn't flash a hover background.
+const settling = ref(false);
+const hoverSuppressed = computed(() => dragging.value || settling.value);
+// The just-dropped item, briefly highlighted so the user sees where it landed.
+const droppedId = ref<string | undefined>();
 const treeRenderKey = ref(0);
 const scrollEl = ref<HTMLElement | null>(null);
 const listScrolled = ref(false);
+
+const { start: startDropFade, stop: stopDropFade } = useTimeoutFn(
+  () => {
+    droppedId.value = undefined;
+  },
+  1500,
+  { immediate: false },
+);
+
+// The first real pointer move after a drop both restores hover and clears the
+// placement highlight — moving away from the dropped row returns it to normal.
+useEventListener(scrollEl, "pointermove", () => {
+  if (settling.value) settling.value = false;
+  if (droppedId.value) {
+    droppedId.value = undefined;
+    stopDropFade();
+  }
+});
 const expanded = useStorage<Record<string, boolean>>(
   "shellcn:connection-folders:expanded",
   {},
@@ -303,15 +327,19 @@ function collectLayout(
 
 function onDragStart(): void {
   dragging.value = true;
+  settling.value = false;
 }
 
 // vue-draggable-plus has already applied the cross-list move to the bound
 // arrays by the time `end` fires, so `rootItems` is authoritative. Commit it to
 // the store, then remount so the rendered DOM is rebuilt from clean data with no
 // Sortable-orphaned nodes left behind.
-function onDragEnd(): void {
+function onDragEnd(dropped?: string): void {
   dragging.value = false;
   if (props.query.trim()) return;
+  settling.value = true;
+  droppedId.value = dropped;
+  if (dropped) startDropFade();
   applyOptimisticLayout();
   remountTree();
   void nextTick(updateScrollShadow);
@@ -367,7 +395,7 @@ function go(connection: ConnectionSummary): void {
         ref="scrollEl"
         data-sidebar-scroll-region
         class="connection-sidebar-list h-full overflow-y-auto py-1"
-        :class="{ 'connection-sidebar-list--dragging': dragging }"
+        :class="{ 'connection-sidebar-list--dragging': hoverSuppressed }"
         @scroll="updateScrollShadow"
       >
         <ConnectionFolderBranch
@@ -376,7 +404,8 @@ function go(connection: ConnectionSummary): void {
           :active-id="activeId"
           :expanded="expanded"
           :disabled="Boolean(query.trim())"
-          :dragging="dragging"
+          :dragging="hoverSuppressed"
+          :dropped-id="droppedId"
           @toggle-folder="toggleFolder"
           @menu-action="handleFolderMenu"
           @drag-start="onDragStart"

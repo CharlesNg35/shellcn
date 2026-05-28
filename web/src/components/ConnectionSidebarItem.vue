@@ -9,6 +9,7 @@ const props = defineProps<{
   connection: ConnectionSummary;
   active: boolean;
   dragging?: boolean;
+  highlighted?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -73,6 +74,7 @@ function shareTitle(c: ConnectionSummary): string {
     :data-connection-id="connection.id"
     :class="[
       !dragging && 'hover:bg-surface-100 dark:hover:bg-surface-800',
+      !active && highlighted && 'bg-surface-100 dark:bg-surface-800',
       active &&
         'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60',
     ]"

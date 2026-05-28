@@ -40,7 +40,7 @@ type options struct {
 func configSchema() plugin.Schema {
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Server", Fields: []plugin.Field{
-			{Key: "urls", Label: "Servers", Type: plugin.FieldTextarea, Required: true, Default: "nats://localhost:4222", Placeholder: "nats://nats-1:4222, nats://nats-2:4222"},
+			{Key: "urls", Label: "Servers", Type: plugin.FieldTextarea, Required: true, Default: "nats://localhost:4222", Placeholder: "nats://nats-1:4222, nats://nats-2:4222", Help: "One or more nats:// URLs, comma-separated for a cluster."},
 			{Key: "name", Label: "Client name", Type: plugin.FieldText, Default: app.DefaultClientName},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{

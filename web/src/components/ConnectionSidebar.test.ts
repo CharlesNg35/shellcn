@@ -187,7 +187,44 @@ describe("ConnectionSidebar", () => {
 
     draggable.vm.$emit("end");
     await flushPromises();
+    // Hover stays suppressed after the drop until the pointer actually moves, so
+    // the row that slides under a stationary cursor doesn't flash a hover bg.
+    expect(item().classes()).not.toContain("hover:bg-surface-100");
+
+    await wrapper.get("[data-sidebar-scroll-region]").trigger("pointermove");
+    await flushPromises();
     expect(item().classes()).toContain("hover:bg-surface-100");
+  });
+
+  it("highlights the dropped row until the pointer moves away", async () => {
+    installFetch((url) => {
+      if (url.endsWith("/api/connections")) return { body: connections };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      return { body: { ok: true } };
+    });
+    const conns = useConnectionsStore();
+    conns.loaded = true;
+    conns.connections = connections;
+
+    const wrapper = mount(ConnectionSidebar, {
+      props: { activeId: null, query: "" },
+      global: { plugins: [router()] },
+    });
+    await flushPromises();
+
+    const draggable = wrapper.findComponent({ name: "VueDraggable" });
+    const item = () => wrapper.get('[data-connection-id="c-root"]');
+
+    draggable.vm.$emit("start");
+    draggable.vm.$emit("end", {
+      item: { dataset: { connectionId: "c-root" } },
+    });
+    await flushPromises();
+    expect(item().classes()).toContain("bg-surface-100");
+
+    await wrapper.get("[data-sidebar-scroll-region]").trigger("pointermove");
+    await flushPromises();
+    expect(item().classes()).not.toContain("bg-surface-100");
   });
 
   it("persists a cross-folder move from the resulting tree", async () => {

@@ -20,6 +20,7 @@ const props = defineProps<{
   expanded: Record<string, boolean>;
   disabled: boolean;
   dragging?: boolean;
+  droppedId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -27,7 +28,7 @@ const emit = defineEmits<{
   "toggle-folder": [folderId: string];
   "menu-action": [action: ConnectionFolderMenuAction];
   "drag-start": [];
-  "drag-end": [];
+  "drag-end": [droppedId?: string];
   open: [connection: ConnectionSummary];
 }>();
 
@@ -90,6 +91,18 @@ function totalConnections(folder: ConnectionFolderNode): number {
 function folderIconClass(folder: ConnectionFolderNode): string {
   return colorClasses[folder.color]?.icon ?? colorClasses.slate.icon;
 }
+
+// The id of whatever was dropped, read from Sortable's dragged element so the
+// sidebar can briefly highlight where it landed.
+function onEnd(event: unknown): void {
+  const item = (event as { item?: HTMLElement } | null | undefined)?.item;
+  const el =
+    item instanceof HTMLElement
+      ? (item.closest<HTMLElement>("[data-connection-id], [data-folder-id]") ??
+        item)
+      : item;
+  emit("drag-end", el?.dataset.connectionId ?? el?.dataset.folderId);
+}
 </script>
 
 <template>
@@ -105,7 +118,7 @@ function folderIconClass(folder: ConnectionFolderNode): string {
       ghost-class="connection-sidebar-sortable-ghost"
       class="min-h-3 space-y-1"
       @start="emit('drag-start')"
-      @end="emit('drag-end')"
+      @end="onEnd"
     >
       <template
         v-for="item in items"
@@ -116,6 +129,7 @@ function folderIconClass(folder: ConnectionFolderNode): string {
           :connection="item.connection"
           :active="activeId === item.connection.id"
           :dragging="dragging"
+          :highlighted="item.connection.id === droppedId"
           @open="emit('open', $event)"
         />
 
@@ -124,6 +138,7 @@ function folderIconClass(folder: ConnectionFolderNode): string {
             class="connection-sidebar-drag-item group mx-1 flex min-h-10 w-[calc(100%-0.5rem)] items-center gap-2.5 overflow-hidden rounded-md px-2 py-1.5 text-sm transition-colors"
             :class="[
               !dragging && 'hover:bg-surface-100 dark:hover:bg-surface-800',
+              item.id === droppedId && 'bg-surface-100 dark:bg-surface-800',
             ]"
           >
             <span
@@ -185,11 +200,12 @@ function folderIconClass(folder: ConnectionFolderNode): string {
             :expanded="expanded"
             :disabled="disabled"
             :dragging="dragging"
+            :dropped-id="droppedId"
             class="mt-1 pl-4"
             @toggle-folder="emit('toggle-folder', $event)"
             @menu-action="emit('menu-action', $event)"
             @drag-start="emit('drag-start')"
-            @drag-end="emit('drag-end')"
+            @drag-end="emit('drag-end', $event)"
             @open="emit('open', $event)"
           />
         </section>
