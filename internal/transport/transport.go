@@ -96,21 +96,47 @@ func (t targetAllowlist) addString(raw string) {
 		t.unix[s] = true
 	}
 	if u, err := url.Parse(s); err == nil && u.Hostname() != "" {
-		t.hosts[u.Hostname()] = true
+		t.addHost(u.Hostname())
 		if u.Port() != "" {
-			t.addrs[net.JoinHostPort(u.Hostname(), u.Port())] = true
+			t.addAddr(u.Hostname(), u.Port())
 			t.ports[u.Port()] = true
 		}
 		return
 	}
 	if host, port, err := net.SplitHostPort(s); err == nil {
-		t.hosts[host] = true
-		t.addrs[net.JoinHostPort(host, port)] = true
+		t.addHost(host)
+		t.addAddr(host, port)
 		t.ports[port] = true
 		return
 	}
 	if !strings.ContainsAny(s, "/\\") {
-		t.hosts[s] = true
+		t.addHost(s)
+	}
+}
+
+func (t targetAllowlist) addHost(host string) {
+	if host == "" {
+		return
+	}
+	t.hosts[host] = true
+	for _, alias := range loopbackAliases(host) {
+		t.hosts[alias] = true
+	}
+}
+
+func (t targetAllowlist) addAddr(host, port string) {
+	t.addrs[net.JoinHostPort(host, port)] = true
+	for _, alias := range loopbackAliases(host) {
+		t.addrs[net.JoinHostPort(alias, port)] = true
+	}
+}
+
+func loopbackAliases(host string) []string {
+	switch strings.ToLower(strings.Trim(host, "[]")) {
+	case "localhost", "127.0.0.1", "::1":
+		return []string{"localhost", "127.0.0.1", "::1"}
+	default:
+		return nil
 	}
 }
 

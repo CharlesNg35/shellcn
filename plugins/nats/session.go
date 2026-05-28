@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"fmt"
+	"time"
 
 	natsclient "github.com/nats-io/nats.go"
 
@@ -37,10 +38,22 @@ func (s *Session) HealthCheck(ctx context.Context) error {
 	if !s.conn.IsConnected() {
 		return plugin.ErrUnavailable
 	}
-	if err := s.conn.FlushWithContext(ctx); err != nil {
+	flushCtx, cancel := healthCheckContext(ctx, s.opts.Timeout)
+	defer cancel()
+	if err := s.conn.FlushWithContext(flushCtx); err != nil {
 		return fmt.Errorf("%w: %v", plugin.ErrUnavailable, err)
 	}
 	return nil
+}
+
+func healthCheckContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if _, ok := ctx.Deadline(); ok {
+		return ctx, func() {}
+	}
+	if timeout <= 0 {
+		timeout = defaultTimeout
+	}
+	return context.WithTimeout(ctx, timeout)
 }
 
 func (s *Session) OpenChannel(context.Context, plugin.ChannelRequest) (plugin.Channel, error) {
