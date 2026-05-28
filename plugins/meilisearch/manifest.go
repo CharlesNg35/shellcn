@@ -47,7 +47,7 @@ func resources() []plugin.ResourceType {
 			Kind: "document", Title: "Documents", List: plugin.DataSource{RouteID: rid("documents.list")},
 			Columns:      documentColumns(),
 			RowActionIDs: []string{rid("document.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{rid("document.delete")}}, Tabs: []plugin.Tab{
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{rid("document.delete")}}, DefaultTab: "editor", Tabs: []plugin.Tab{
 				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}},
 				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: map[string]any{"language": "json", "saveRouteId": rid("document.update"), "saveMethod": "PUT", "saveParams": documentParams()}},
 			}},

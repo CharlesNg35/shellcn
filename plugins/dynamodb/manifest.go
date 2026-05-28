@@ -70,7 +70,8 @@ func itemResource() plugin.ResourceType {
 		List:         plugin.DataSource{RouteID: rid("items.list")},
 		RowActionIDs: []string{rid("item.delete")},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("item.delete")}},
+			Header:     plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("item.delete")}},
+			DefaultTab: "editor",
 			Tabs: []plugin.Tab{
 				{Key: "document", Label: "Item", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("item.read"), Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("item.read"), Params: map[string]string{"id": "${resource.uid}"}}, Config: map[string]any{"language": "json", "saveRouteId": rid("item.update"), "saveMethod": "PUT", "saveParams": map[string]string{"id": "${resource.uid}"}}},

@@ -103,7 +103,8 @@ func documentResource() plugin.ResourceType {
 		Kind: "document", Title: "Documents",
 		List: plugin.DataSource{RouteID: "mongodb.documents.list"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"mongodb.document.delete"}},
+			Header:     plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"mongodb.document.delete"}},
+			DefaultTab: "editor",
 			Tabs: []plugin.Tab{
 				{Key: "document", Label: "Document", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.document.read", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "mongodb.document.read", Params: map[string]string{"id": "${resource.uid}"}}, Config: map[string]any{"language": "json", "saveRouteId": "mongodb.document.update", "saveMethod": "PUT", "saveParams": map[string]string{"id": "${resource.uid}"}}},

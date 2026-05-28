@@ -481,6 +481,7 @@ export interface HeaderSpec {
 
 export interface DetailView {
   header: HeaderSpec;
+  defaultTab?: string;
   tabs: Tab[];
 }
 

@@ -71,7 +71,8 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 			Columns:   []plugin.Column{{Key: "name", Label: "Name", Sortable: true, Type: plugin.ColumnText}},
 			ActionIDs: []string{"sample.start"},
 			Detail: plugin.DetailView{
-				Header: plugin.HeaderSpec{Title: "Container", ActionIDs: []string{"sample.start"}},
+				Header:     plugin.HeaderSpec{Title: "Container", ActionIDs: []string{"sample.start"}},
+				DefaultTab: "editor",
 				Tabs: []plugin.Tab{
 					{Key: "logs", Label: "Logs", Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "sample.logs", Method: plugin.MethodWS}},
 					{Key: "config", Label: "Config", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "sample.form"}, Config: map[string]any{

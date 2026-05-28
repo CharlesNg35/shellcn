@@ -536,8 +536,9 @@ type HeaderSpec struct {
 
 // DetailView is opened when a resource row is clicked.
 type DetailView struct {
-	Header HeaderSpec `json:"header"`
-	Tabs   []Tab      `json:"tabs"`
+	Header     HeaderSpec `json:"header"`
+	DefaultTab string     `json:"defaultTab,omitempty"`
+	Tabs       []Tab      `json:"tabs"`
 }
 
 // ResourceType is a managed object type: columns, actions, detail.

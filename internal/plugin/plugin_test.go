@@ -224,6 +224,12 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"resource references unknown action", "references unknown action", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Resources = []plugin.ResourceType{{Kind: "k", Title: "K", List: plugin.DataSource{RouteID: "x.list"}, ActionIDs: []string{"ghost"}}}
 		}},
+		{"detail default tab references unknown tab", "defaultTab references unknown tab", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Resources = []plugin.ResourceType{{
+				Kind: "k", Title: "K", List: plugin.DataSource{RouteID: "x.list"},
+				Detail: plugin.DetailView{DefaultTab: "ghost", Tabs: []plugin.Tab{{Key: "overview", Label: "Overview", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}}}},
+			}}
+		}},
 		{"credential ref missing selector", "missing Credential selector", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Config = plugin.Schema{Groups: []plugin.Group{{Name: "Auth"}}}
 			m.Config.Groups[0].Fields = append(m.Config.Groups[0].Fields, plugin.Field{Key: "cred", Label: "Cred", Type: plugin.FieldCredentialRef})

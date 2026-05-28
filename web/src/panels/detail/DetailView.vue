@@ -26,12 +26,22 @@ const emit = defineEmits<{
 }>();
 
 const resource = computed(() => props.row.ref ?? null);
-const activeTab = ref(props.detail.tabs[0]?.key);
+function initialTab(): string {
+  const key = props.detail.defaultTab;
+  if (key && props.detail.tabs.some((tab) => tab.key === key)) return key;
+  return props.detail.tabs[0]?.key ?? "";
+}
+
+const activeTab = ref(initialTab());
 
 watch(
-  () => props.row.ref?.uid,
+  () => [
+    props.row.ref?.uid,
+    props.detail.defaultTab,
+    props.detail.tabs.map((tab) => tab.key).join("\0"),
+  ],
   () => {
-    activeTab.value = props.detail.tabs[0]?.key;
+    activeTab.value = initialTab();
   },
 );
 

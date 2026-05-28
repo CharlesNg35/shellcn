@@ -58,6 +58,18 @@ func TestCockroachDBPluginIntegration(t *testing.T) {
 		t.Fatalf("created database was not listed: %#v", databases)
 	}
 
+	// View drop round-trip: create a view, drop it through the handler, verify gone.
+	if _, err := s.pool.Exec(ctx, `CREATE VIEW public.shellcn_v AS SELECT 1 AS x`); err != nil {
+		t.Fatalf("seed view: %v", err)
+	}
+	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "view": "shellcn_v"}, nil, nil)); err != nil {
+		t.Fatalf("drop view: %v", err)
+	}
+	var vcount int
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM pg_views WHERE schemaname='public' AND viewname='shellcn_v'`).Scan(&vcount); err != nil || vcount != 0 {
+		t.Fatalf("expected view dropped, got %d err=%v", vcount, err)
+	}
+
 	if _, err := s.pool.Exec(ctx, `
 CREATE TABLE IF NOT EXISTS public.shellcn_people (
   id INT8 PRIMARY KEY,

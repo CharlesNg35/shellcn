@@ -404,6 +404,18 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		checkActionIDs(fmt.Sprintf("resource %q list", rt.Kind), rt.ListActionIDs)
 		checkActionIDs(fmt.Sprintf("resource %q row", rt.Kind), rt.RowActionIDs)
 		checkActionIDs(fmt.Sprintf("resource %q header", rt.Kind), rt.Detail.Header.ActionIDs)
+		if rt.Detail.DefaultTab != "" {
+			found := false
+			for _, tab := range rt.Detail.Tabs {
+				if tab.Key == rt.Detail.DefaultTab {
+					found = true
+					break
+				}
+			}
+			if !found {
+				add("resource %q detail defaultTab references unknown tab %q", rt.Kind, rt.Detail.DefaultTab)
+			}
+		}
 		checkTabs(fmt.Sprintf("resource %q detail", rt.Kind), rt.Detail.Tabs)
 	}
 }

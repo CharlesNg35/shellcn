@@ -59,6 +59,18 @@ func TestMySQLPluginIntegration(t *testing.T) {
 		t.Fatalf("created database was not listed: %#v", databases)
 	}
 
+	// View drop round-trip: create a view, drop it through the handler, verify gone.
+	if _, err := s.db.ExecContext(ctx, "CREATE VIEW "+qualified(createdDatabase, "shellcn_v")+" AS SELECT 1 AS x"); err != nil {
+		t.Fatalf("seed view: %v", err)
+	}
+	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": createdDatabase, "view": "shellcn_v"}, nil, nil)); err != nil {
+		t.Fatalf("drop view: %v", err)
+	}
+	var vcount int
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM information_schema.VIEWS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?", createdDatabase, "shellcn_v").Scan(&vcount); err != nil || vcount != 0 {
+		t.Fatalf("expected view dropped, got %d err=%v", vcount, err)
+	}
+
 	seedStatements := []string{
 		`
 CREATE TABLE IF NOT EXISTS shellcn_people (
