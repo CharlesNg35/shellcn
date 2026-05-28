@@ -43,6 +43,7 @@ func routes() []plugin.Route {
 		{ID: "mssql.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{database}/{schema}/overview", Permission: "mssql.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.schema.overview", Handle: schemaOverview},
 		{ID: "mssql.relations.tree", Method: plugin.MethodGet, Path: "/tree/relations", Permission: "mssql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.relations.tree", Handle: treeRelations},
 		{ID: "mssql.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "mssql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.tables.list", Handle: listTables},
+		{ID: "mssql.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "mssql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.relations.graph", Handle: relationGraph},
 		{ID: "mssql.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "mssql.views.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.views.list", Handle: listViews},
 		{ID: "mssql.view.drop", Method: plugin.MethodDelete, Path: "/views/{id}", Permission: "mssql.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.view.drop", Handle: dropView},
 		{ID: "mssql.procedures.tree", Method: plugin.MethodGet, Path: "/tree/procedures", Permission: "mssql.procedures.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.procedures.tree", Handle: treeProcedures},
@@ -288,6 +289,45 @@ func schemaOverview(rc *plugin.RequestContext) (any, error) {
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, "U", "table")
+}
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	databases, err := targetDatabases(rc, s)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := optionalIdent(rc.Query().Get("p.schema"))
+	if err != nil {
+		return nil, err
+	}
+	fks := []sqldb.ForeignKey{}
+	for _, database := range databases {
+		rows, err := queryRows(rc.Ctx, s, fmt.Sprintf(`
+SELECT fk.name AS constraint_name,
+       cs.name AS child_schema, ct.name AS child_table, cc.name AS child_column,
+       ps.name AS parent_schema, pt.name AS parent_table, pc.name AS parent_column
+FROM %[1]s.sys.foreign_keys fk
+JOIN %[1]s.sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+JOIN %[1]s.sys.tables ct ON ct.object_id = fkc.parent_object_id
+JOIN %[1]s.sys.schemas cs ON cs.schema_id = ct.schema_id
+JOIN %[1]s.sys.columns cc ON cc.object_id = fkc.parent_object_id AND cc.column_id = fkc.parent_column_id
+JOIN %[1]s.sys.tables pt ON pt.object_id = fkc.referenced_object_id
+JOIN %[1]s.sys.schemas ps ON ps.schema_id = pt.schema_id
+JOIN %[1]s.sys.columns pc ON pc.object_id = fkc.referenced_object_id AND pc.column_id = fkc.referenced_column_id
+WHERE (@p1 = '' OR cs.name = @p1)
+ORDER BY fk.name, fkc.constraint_column_id`, quoteIdent(database)), []any{schema})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range rows {
+			fks = append(fks, sqldb.ForeignKeyFromRow(r))
+		}
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {

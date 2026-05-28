@@ -41,6 +41,7 @@ func routes() []plugin.Route {
 		{ID: "oracle.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{schema}/overview", Permission: "oracle.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.schema.overview", Handle: schemaOverview},
 		{ID: "oracle.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.tables.tree", Handle: treeTables},
 		{ID: "oracle.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.tables.list", Handle: listTables},
+		{ID: "oracle.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.relations.graph", Handle: relationGraph},
 		{ID: "oracle.views.tree", Method: plugin.MethodGet, Path: "/tree/views", Permission: "oracle.views.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.views.tree", Handle: treeViews},
 		{ID: "oracle.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "oracle.views.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.views.list", Handle: listViews},
 		{ID: "oracle.view.drop", Method: plugin.MethodDelete, Path: "/views/{id}", Permission: "oracle.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.view.drop", Handle: dropView},
@@ -254,6 +255,40 @@ GROUP BY owner`, []any{schema})
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, "TABLE", "table")
+}
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := optionalIdent(paramOrQuery(rc, "schema"))
+	if err != nil {
+		return nil, err
+	}
+	filter, args := "", []any{}
+	if schema != "" {
+		filter = " AND ac.owner = :1"
+		args = append(args, schema)
+	}
+	rows, err := queryRows(rc.Ctx, s, `
+SELECT ac.constraint_name AS "constraint_name",
+       ac.owner AS "child_schema", ac.table_name AS "child_table", acc.column_name AS "child_column",
+       rc.owner AS "parent_schema", rc.table_name AS "parent_table", rcc.column_name AS "parent_column"
+FROM all_constraints ac
+JOIN all_cons_columns acc ON acc.owner = ac.owner AND acc.constraint_name = ac.constraint_name
+JOIN all_constraints rc ON rc.owner = ac.r_owner AND rc.constraint_name = ac.r_constraint_name
+JOIN all_cons_columns rcc ON rcc.owner = rc.owner AND rcc.constraint_name = rc.constraint_name AND rcc.position = acc.position
+WHERE ac.constraint_type = 'R'`+filter+`
+ORDER BY ac.constraint_name, acc.position`, args)
+	if err != nil {
+		return nil, err
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(rows))
+	for _, r := range rows {
+		fks = append(fks, sqldb.ForeignKeyFromRow(r))
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {

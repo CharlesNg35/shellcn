@@ -60,6 +60,7 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{schema}/overview", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schema.overview", Handle: schemaOverview},
 		{ID: "cockroachdb.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "cockroachdb.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.tables.tree", Handle: treeTables},
 		{ID: "cockroachdb.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "cockroachdb.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.tables.list", Handle: listTables},
+		{ID: "cockroachdb.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "cockroachdb.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.relations.graph", Handle: relationGraph},
 		{ID: "cockroachdb.views.tree", Method: plugin.MethodGet, Path: "/tree/views", Permission: "cockroachdb.views.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.views.tree", Handle: treeViews},
 		{ID: "cockroachdb.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "cockroachdb.views.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.views.list", Handle: listViews},
 		{ID: "cockroachdb.view.drop", Method: plugin.MethodDelete, Path: "/views/{schema}/{view}", Permission: "cockroachdb.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.view.drop", Handle: dropView},
@@ -457,6 +458,40 @@ GROUP BY s.schema_name`, []any{schema})
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, []string{"BASE TABLE"}, "table")
+}
+
+const relationGraphSQL = `
+SELECT rc.constraint_name AS constraint_name,
+       kcu.table_schema AS child_schema, kcu.table_name AS child_table, kcu.column_name AS child_column,
+       uk.table_schema AS parent_schema, uk.table_name AS parent_table, uk.column_name AS parent_column
+FROM information_schema.referential_constraints rc
+JOIN information_schema.key_column_usage kcu
+  ON kcu.constraint_schema = rc.constraint_schema AND kcu.constraint_name = rc.constraint_name
+JOIN information_schema.key_column_usage uk
+  ON uk.constraint_schema = rc.unique_constraint_schema AND uk.constraint_name = rc.unique_constraint_name
+ AND uk.ordinal_position = kcu.position_in_unique_constraint
+WHERE kcu.table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_extension', 'crdb_internal')
+  AND ($1::STRING = '' OR kcu.table_schema = $1)
+ORDER BY rc.constraint_name, kcu.ordinal_position`
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := sqldb.OptionalIdentifier(rc.Query().Get("p.schema"))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{schema})
+	if err != nil {
+		return nil, err
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(rows))
+	for _, r := range rows {
+		fks = append(fks, sqldb.ForeignKeyFromRow(r))
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -1175,7 +1210,7 @@ func dropView(rc *plugin.RequestContext) (any, error) {
 	// Regular and materialized views are listed together but dropped with
 	// different statements, so resolve the relkind first.
 	var relkind string
-	if err := s.pool.QueryRow(rc.Ctx, `SELECT c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2`, schema, view).Scan(&relkind); err != nil {
+	if err := s.pool.QueryRow(rc.Ctx, `SELECT c.relkind::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2`, schema, view).Scan(&relkind); err != nil {
 		return nil, cockroachErr(err)
 	}
 	stmt := "DROP VIEW " + sqldb.Qualified(schema, view)

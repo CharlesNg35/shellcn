@@ -49,6 +49,7 @@ func routes() []plugin.Route {
 		{ID: "postgresql.schemas.list", Method: plugin.MethodGet, Path: "/schemas", Permission: "postgresql.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.schemas.list", Handle: listSchemas},
 		{ID: "postgresql.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{schema}/overview", Permission: "postgresql.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.schema.overview", Handle: schemaOverview},
 		{ID: "postgresql.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "postgresql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.tables.list", Handle: listTables},
+		{ID: "postgresql.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "postgresql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.relations.graph", Handle: relationGraph},
 		{ID: "postgresql.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "postgresql.views.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.views.list", Handle: listViews},
 		{ID: "postgresql.view.drop", Method: plugin.MethodDelete, Path: "/views/{schema}/{view}", Permission: "postgresql.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.view.drop", Handle: dropView},
 		{ID: "postgresql.functions.list", Method: plugin.MethodGet, Path: "/functions", Permission: "postgresql.functions.read", Risk: plugin.RiskSafe, AuditEvent: "postgresql.functions.list", Handle: listFunctions},
@@ -335,6 +336,43 @@ GROUP BY n.oid, n.nspname, n.nspowner`, []any{schema})
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, []string{"r", "p"}, "table")
+}
+
+const relationGraphSQL = `
+SELECT con.conname AS constraint_name,
+       cn.nspname AS child_schema, cc.relname AS child_table, ca.attname AS child_column,
+       pn.nspname AS parent_schema, pc.relname AS parent_table, pa.attname AS parent_column
+FROM pg_constraint con
+JOIN pg_class cc ON cc.oid = con.conrelid
+JOIN pg_namespace cn ON cn.oid = cc.relnamespace
+JOIN pg_class pc ON pc.oid = con.confrelid
+JOIN pg_namespace pn ON pn.oid = pc.relnamespace
+JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS ck(attnum, ord) ON true
+JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS pk(attnum, ord) ON pk.ord = ck.ord
+JOIN pg_attribute ca ON ca.attrelid = con.conrelid AND ca.attnum = ck.attnum
+JOIN pg_attribute pa ON pa.attrelid = con.confrelid AND pa.attnum = pk.attnum
+WHERE con.contype = 'f' AND cn.nspname !~ '^pg_' AND cn.nspname <> 'information_schema'
+  AND ($1::text = '' OR cn.nspname = $1)
+ORDER BY con.conname, ck.ord`
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	schema, err := sqldb.OptionalIdentifier(paramOf(rc, "schema"))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, pool, s.opts.QueryTimeout, relationGraphSQL, []any{schema})
+	if err != nil {
+		return nil, err
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(rows))
+	for _, r := range rows {
+		fks = append(fks, sqldb.ForeignKeyFromRow(r))
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -1127,7 +1165,7 @@ func dropView(rc *plugin.RequestContext) (any, error) {
 	// Regular and materialized views are listed together but dropped with
 	// different statements, so resolve the relkind first.
 	var relkind string
-	if err := pool.QueryRow(rc.Ctx, `SELECT c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2`, schema, view).Scan(&relkind); err != nil {
+	if err := pool.QueryRow(rc.Ctx, `SELECT c.relkind::text FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relname = $2`, schema, view).Scan(&relkind); err != nil {
 		return nil, pgErr(err)
 	}
 	stmt := "DROP VIEW " + sqldb.Qualified(schema, view)

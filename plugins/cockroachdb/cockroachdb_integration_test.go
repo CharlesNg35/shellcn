@@ -99,6 +99,23 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		_, _ = s.pool.Exec(cleanupCtx, `DROP TABLE IF EXISTS public.shellcn_people`)
 	})
 
+	// Foreign-key relationship graph (ERD) round-trip.
+	if _, err := s.pool.Exec(ctx, `CREATE TABLE IF NOT EXISTS public.shellcn_orders (id INT8 PRIMARY KEY, person_id INT8 REFERENCES public.shellcn_people(id))`); err != nil {
+		t.Fatalf("create child table: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = s.pool.Exec(cleanupCtx, `DROP TABLE IF EXISTS public.shellcn_orders`)
+	})
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("relation graph: %v", err)
+	}
+	if !hasEdge(graph.(sqldb.GraphPayload), "public.shellcn_orders", "public.shellcn_people") {
+		t.Fatalf("expected FK edge orders -> people, got %#v", graph)
+	}
+
 	rc := plugin.NewRequestContext(ctx, models.User{ID: "u1", Username: "admin"}, s, nil, nil, nil)
 	list, err := listTables(rc)
 	if err != nil {
@@ -160,10 +177,10 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 	if _, err := createIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name", "columns": "name", "unique": false})); err != nil {
 		t.Fatalf("create index: %v", err)
 	}
-	if _, err := dropIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name"})); err != nil {
+	if _, err := dropIndex(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "ix_people_name"}, nil)); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
-	if _, err := dropColumn(rowMutationRC(ctx, s, params, map[string]any{"column": "access_token"})); err != nil {
+	if _, err := dropColumn(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "access_token"}, nil)); err != nil {
 		t.Fatalf("drop column: %v", err)
 	}
 	var cols int
@@ -297,6 +314,15 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 func pageHasName(page plugin.Page[row], name string) bool {
 	for _, item := range page.Items {
 		if item["name"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEdge(g sqldb.GraphPayload, source, target string) bool {
+	for _, e := range g.Edges {
+		if e.Source == source && e.Target == target {
 			return true
 		}
 	}

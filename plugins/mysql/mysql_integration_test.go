@@ -186,10 +186,10 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = ? AND table_name = 'shellcn_people' AND index_name = 'ix_people_name'`, database).Scan(&idx); err != nil || idx == 0 {
 		t.Fatalf("expected created index, got %d err=%v", idx, err)
 	}
-	if _, err := dropIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name"})); err != nil {
+	if _, err := dropIndex(rowMutationRC(ctx, s, map[string]string{"database": database, "table": "shellcn_people", "name": "ix_people_name"}, nil)); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
-	if _, err := dropColumn(rowMutationRC(ctx, s, params, map[string]any{"column": "access_token"})); err != nil {
+	if _, err := dropColumn(rowMutationRC(ctx, s, map[string]string{"database": database, "table": "shellcn_people", "name": "access_token"}, nil)); err != nil {
 		t.Fatalf("drop column: %v", err)
 	}
 	var cols int
@@ -210,6 +210,15 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 	}
 	if links, ok := orderRows.(plugin.Page[row]).Items[0]["_links"].(map[string]plugin.ResourceRef); !ok || links["person_id"].Name != "shellcn_people" {
 		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
+	}
+
+	// Foreign-key relationship graph (ERD) over the FK created above.
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {database}}, nil))
+	if err != nil {
+		t.Fatalf("relation graph: %v", err)
+	}
+	if !hasEdge(graph.(sqldb.GraphPayload), database+".shellcn_orders", database+".shellcn_people") {
+		t.Fatalf("expected FK edge orders -> people, got %#v", graph)
 	}
 }
 
@@ -332,6 +341,15 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 func pageHasName(page plugin.Page[row], name string) bool {
 	for _, item := range page.Items {
 		if item["name"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEdge(g sqldb.GraphPayload, source, target string) bool {
+	for _, e := range g.Edges {
+		if e.Source == source && e.Target == target {
 			return true
 		}
 	}

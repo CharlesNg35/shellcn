@@ -154,10 +154,10 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	if _, err := createIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name", "columns": "name", "unique": false})); err != nil {
 		t.Fatalf("create index: %v", err)
 	}
-	if _, err := dropIndex(rowMutationRC(ctx, s, params, map[string]any{"name": "ix_people_name"})); err != nil {
+	if _, err := dropIndex(rowMutationRC(ctx, s, map[string]string{"id": objectID("shellcn", "dbo", "people"), "name": "ix_people_name"}, nil)); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
-	if _, err := dropColumn(rowMutationRC(ctx, s, params, map[string]any{"column": "access_token"})); err != nil {
+	if _, err := dropColumn(rowMutationRC(ctx, s, map[string]string{"id": objectID("shellcn", "dbo", "people"), "name": "access_token"}, nil)); err != nil {
 		t.Fatalf("drop column: %v", err)
 	}
 	var cols int
@@ -178,6 +178,15 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	}
 	if links, ok := orderRows.(plugin.Page[row]).Items[0]["_links"].(map[string]plugin.ResourceRef); !ok || links["person_id"].UID != objectID("shellcn", "dbo", "people") {
 		t.Fatalf("expected _links[person_id] -> people, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
+	}
+
+	// Foreign-key relationship graph (ERD) over the FK created above.
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.database": {"shellcn"}}, nil))
+	if err != nil {
+		t.Fatalf("relation graph: %v", err)
+	}
+	if !hasEdge(graph.(sqldb.GraphPayload), "dbo.orders", "dbo.people") {
+		t.Fatalf("expected FK edge orders -> people, got %#v", graph)
 	}
 }
 
@@ -310,6 +319,15 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 func pageHasName(page plugin.Page[row], name string) bool {
 	for _, item := range page.Items {
 		if item["name"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEdge(g sqldb.GraphPayload, source, target string) bool {
+	for _, e := range g.Edges {
+		if e.Source == source && e.Target == target {
 			return true
 		}
 	}

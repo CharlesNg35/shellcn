@@ -41,6 +41,7 @@ func routes() []plugin.Route {
 		{ID: "mysql.databases.list", Method: plugin.MethodGet, Path: "/databases", Permission: "mysql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.databases.list", Handle: listDatabases},
 		{ID: "mysql.database.overview", Method: plugin.MethodGet, Path: "/databases/{database}/overview", Permission: "mysql.databases.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.database.overview", Handle: databaseOverview},
 		{ID: "mysql.tables.list", Method: plugin.MethodGet, Path: "/tables", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.tables.list", Handle: listTables},
+		{ID: "mysql.relations.graph", Method: plugin.MethodGet, Path: "/relations/graph", Permission: "mysql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.relations.graph", Handle: relationGraph},
 		{ID: "mysql.views.list", Method: plugin.MethodGet, Path: "/views", Permission: "mysql.views.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.views.list", Handle: listViews},
 		{ID: "mysql.view.drop", Method: plugin.MethodDelete, Path: "/views/{database}/{view}", Permission: "mysql.views.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.view.drop", Handle: dropView},
 		{ID: "mysql.routines.list", Method: plugin.MethodGet, Path: "/routines", Permission: "mysql.routines.read", Risk: plugin.RiskSafe, AuditEvent: "mysql.routines.list", Handle: listRoutines},
@@ -226,6 +227,36 @@ GROUP BY s.SCHEMA_NAME, s.DEFAULT_CHARACTER_SET_NAME, s.DEFAULT_COLLATION_NAME`,
 
 func listTables(rc *plugin.RequestContext) (any, error) {
 	return relationList(rc, "BASE TABLE", "table")
+}
+
+const relationGraphSQL = `
+SELECT CONSTRAINT_NAME AS constraint_name,
+       TABLE_SCHEMA AS child_schema, TABLE_NAME AS child_table, COLUMN_NAME AS child_column,
+       REFERENCED_TABLE_SCHEMA AS parent_schema, REFERENCED_TABLE_NAME AS parent_table, REFERENCED_COLUMN_NAME AS parent_column
+FROM information_schema.KEY_COLUMN_USAGE
+WHERE REFERENCED_TABLE_NAME IS NOT NULL
+  AND TABLE_SCHEMA NOT IN ('information_schema', 'performance_schema', 'sys', 'mysql')
+  AND (? = '' OR TABLE_SCHEMA = ?)
+ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION`
+
+func relationGraph(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	database, err := sqldb.OptionalIdentifier(rc.Query().Get("p.database"))
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{database, database})
+	if err != nil {
+		return nil, err
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(rows))
+	for _, r := range rows {
+		fks = append(fks, sqldb.ForeignKeyFromRow(r))
+	}
+	return sqldb.RelationGraph(fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {

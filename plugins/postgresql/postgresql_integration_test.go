@@ -136,6 +136,15 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		t.Fatalf("expected _links[person_id] -> shellcn_people, got %#v", orderRows.(plugin.Page[row]).Items[0]["_links"])
 	}
 
+	graph, err := relationGraph(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.schema": {"public"}}, nil))
+	if err != nil {
+		t.Fatalf("relation graph: %v", err)
+	}
+	payload := graph.(sqldb.GraphPayload)
+	if !hasEdge(payload, "public.shellcn_orders", "public.shellcn_people") {
+		t.Fatalf("expected FK edge orders -> people, got %#v", payload)
+	}
+
 	// Cover the table structure + catalog routes the UI drives.
 	structRoutes := map[string]func(*plugin.RequestContext) (any, error){
 		"columns": tableColumnsRoute, "indexes": tableIndexes,
@@ -164,10 +173,10 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND tablename='shellcn_people' AND indexname='ix_people_name'`).Scan(&idx); err != nil || idx != 1 {
 		t.Fatalf("expected created index, got %d err=%v", idx, err)
 	}
-	if _, err := dropIndex(rowMutationRC(ctx, s, tableParams, map[string]any{"name": "ix_people_name"})); err != nil {
+	if _, err := dropIndex(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "ix_people_name"}, nil)); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
-	if _, err := dropColumn(rowMutationRC(ctx, s, tableParams, map[string]any{"column": "password"})); err != nil {
+	if _, err := dropColumn(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "password"}, nil)); err != nil {
 		t.Fatalf("drop column: %v", err)
 	}
 	var cols int
@@ -296,6 +305,15 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 func pageHasName(page plugin.Page[row], name string) bool {
 	for _, item := range page.Items {
 		if item["name"] == name {
+			return true
+		}
+	}
+	return false
+}
+
+func hasEdge(g sqldb.GraphPayload, source, target string) bool {
+	for _, e := range g.Edges {
+		if e.Source == source && e.Target == target {
 			return true
 		}
 	}
