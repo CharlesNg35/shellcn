@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildGraph } from "./graphLayout";
+import { buildGraph, mergeGraph, edgeColor } from "./graphLayout";
 
 describe("buildGraph", () => {
   it("renders fielded nodes as record boxes and plain nodes as default", () => {
@@ -47,5 +47,37 @@ describe("buildGraph", () => {
     const { nodes, edges } = buildGraph({});
     expect(nodes).toEqual([]);
     expect(edges).toEqual([]);
+  });
+
+  it("colors edges of the same label identically and differently across labels", () => {
+    expect(edgeColor("KNOWS")).toBe(edgeColor("KNOWS"));
+    expect(edgeColor(undefined)).toBe("#94a3b8");
+  });
+});
+
+describe("mergeGraph", () => {
+  it("merges an expanded neighbourhood without duplicating nodes or edges", () => {
+    const base = {
+      nodes: [{ id: "a" }, { id: "b" }],
+      edges: [{ id: "e1", source: "a", target: "b" }],
+    };
+    const incoming = {
+      nodes: [{ id: "b" }, { id: "c" }],
+      edges: [
+        { id: "e1", source: "a", target: "b" },
+        { id: "e2", source: "b", target: "c" },
+      ],
+    };
+    const merged = mergeGraph(base, incoming);
+    expect(merged.nodes.map((n) => n.id).sort()).toEqual(["a", "b", "c"]);
+    expect(merged.edges.map((e) => e.id).sort()).toEqual(["e1", "e2"]);
+  });
+
+  it("dedupes edges without ids by endpoints + label", () => {
+    const merged = mergeGraph(
+      { edges: [{ source: "a", target: "b", label: "fk" }] },
+      { edges: [{ source: "a", target: "b", label: "fk" }] },
+    );
+    expect(merged.edges).toHaveLength(1);
   });
 });

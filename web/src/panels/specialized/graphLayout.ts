@@ -38,6 +38,50 @@ const FIELDS_WIDTH = 220;
 const PLAIN_WIDTH = 170;
 const PLAIN_HEIGHT = 42;
 
+const EDGE_PALETTE = [
+  "#6366f1", "#10b981", "#f59e0b", "#ef4444",
+  "#06b6d4", "#8b5cf6", "#ec4899", "#14b8a6",
+];
+
+// edgeColor maps an edge label (relationship type, foreign key, …) to a stable
+// colour so edges of the same kind read as a group. Unlabelled edges stay grey.
+export function edgeColor(label?: string): string {
+  if (!label) return "#94a3b8";
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) {
+    hash = (hash * 31 + label.charCodeAt(i)) >>> 0;
+  }
+  return EDGE_PALETTE[hash % EDGE_PALETTE.length];
+}
+
+// mergeGraph folds an incoming payload (e.g. an expanded node's neighbourhood)
+// into the current one, deduping nodes by id and edges by id/endpoints, so
+// repeated expansions accumulate without duplicates.
+export function mergeGraph(
+  base: GraphPayload,
+  incoming: GraphPayload,
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const edgeKey = (e: GraphEdge) => e.id ?? `${e.source}->${e.target}:${e.label ?? ""}`;
+  const nodes = [...(base.nodes ?? [])];
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  for (const node of incoming.nodes ?? []) {
+    if (!nodeIds.has(node.id)) {
+      nodes.push(node);
+      nodeIds.add(node.id);
+    }
+  }
+  const edges = [...(base.edges ?? [])];
+  const edgeKeys = new Set(edges.map(edgeKey));
+  for (const edge of incoming.edges ?? []) {
+    const key = edgeKey(edge);
+    if (!edgeKeys.has(key)) {
+      edges.push(edge);
+      edgeKeys.add(key);
+    }
+  }
+  return { nodes, edges };
+}
+
 // nodeSize derives a node's footprint from its content so the layout engine can
 // pack boxes without overlap: a node that lists fields grows with that list, a
 // plain node is a fixed box.
@@ -101,15 +145,19 @@ export function buildGraph(payload: GraphPayload): {
     };
   });
 
-  const edges: Edge[] = (payload.edges ?? []).map((edge, i) => ({
-    id: edge.id ?? `${edge.source}-${edge.target}-${i}`,
-    source: edge.source,
-    target: edge.target,
-    label: edge.label,
-    type: "smoothstep",
-    animated: edge.animated,
-    markerEnd: MarkerType.ArrowClosed,
-  }));
+  const edges: Edge[] = (payload.edges ?? []).map((edge, i) => {
+    const color = edgeColor(edge.label);
+    return {
+      id: edge.id ?? `${edge.source}-${edge.target}-${i}`,
+      source: edge.source,
+      target: edge.target,
+      label: edge.label,
+      type: "smoothstep",
+      animated: edge.animated,
+      style: { stroke: color },
+      markerEnd: { type: MarkerType.ArrowClosed, color },
+    };
+  });
 
   return { nodes, edges };
 }

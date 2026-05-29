@@ -841,9 +841,19 @@ plugin-neutral:
 
 ```go
 type GraphConfig struct {
-    Layout  GraphLayout // "grid" or "manual"
-    FitView bool
+    Layout        GraphLayout // legacy hint; the panel auto-lays out with dagre
+    FitView       bool
+    ExpandRouteID string // optional; nodes become expandable — the panel fetches a
+                         // node's neighbourhood from this read route and merges it
+    ExpandParam   string // node-id param name for ExpandRouteID (default "node")
 }
+
+// The graph payload is plugin-emitted JSON the renderer treats generically:
+//   nodes: [{ id, label, group?, summary?, properties?, fields?[] }]
+//   edges: [{ id?, source, target, label?, sourceField?, targetField? }]
+// A node with `fields` ([{name,type?,key?}]) renders as a record/ERD table box
+// (relational schemas); a node without renders as a plain node (graph DBs). The
+// panel auto-lays out (dagre), colours edges by label, and filters by edge type.
 
 type TraceConfig struct {
     ServiceField string // optional span field used as service label

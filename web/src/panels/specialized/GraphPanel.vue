@@ -16,19 +16,44 @@ import SkeletonList from "../../components/SkeletonList.vue";
 import type { PanelProps } from "../core/types";
 import PanelError from "../shared/PanelError.vue";
 import RecordNode from "./RecordNode.vue";
-import { buildGraph, type GraphNode, type GraphPayload } from "./graphLayout";
+import {
+  buildGraph,
+  mergeGraph,
+  edgeColor,
+  type GraphNode,
+  type GraphPayload,
+} from "./graphLayout";
+
+const MAX_FILTER_CHIPS = 12;
 
 const props = defineProps<PanelProps>();
 
 const loading = ref(false);
+const expanding = ref(false);
 const error = ref<string | null>(null);
 const payload = ref<GraphPayload>({});
 const selectedId = ref<string | null>(null);
-const graphConfig = computed(
-  () => props.config as GraphPanelConfig | undefined,
+const hidden = ref<Set<string>>(new Set());
+const graphConfig = computed(() => props.config as GraphPanelConfig | undefined);
+
+const edgeLabels = computed(() => {
+  const labels = new Set<string>();
+  for (const edge of payload.value.edges ?? []) {
+    if (edge.label) labels.add(edge.label);
+  }
+  return [...labels].sort();
+});
+
+const showFilter = computed(
+  () => edgeLabels.value.length > 1 && edgeLabels.value.length <= MAX_FILTER_CHIPS,
 );
 
-const graph = computed(() => buildGraph(payload.value));
+const visible = computed<GraphPayload>(() => ({
+  nodes: payload.value.nodes,
+  edges: (payload.value.edges ?? []).filter((e) => !hidden.value.has(e.label ?? "")),
+}));
+
+const graph = computed(() => buildGraph(visible.value));
 
 const selected = computed<GraphNode | null>(
   () => payload.value.nodes?.find((n) => n.id === selectedId.value) ?? null,
@@ -43,6 +68,18 @@ const properties = computed(() =>
     : [],
 );
 
+const canExpand = computed(() => Boolean(graphConfig.value?.expandRouteId));
+
+function toggleLabel(label: string): void {
+  const next = new Set(hidden.value);
+  if (next.has(label)) {
+    next.delete(label);
+  } else {
+    next.add(label);
+  }
+  hidden.value = next;
+}
+
 async function load(): Promise<void> {
   if (!props.source) {
     loading.value = false;
@@ -50,18 +87,34 @@ async function load(): Promise<void> {
   }
   loading.value = true;
   error.value = null;
+  hidden.value = new Set();
   try {
-    payload.value = await fetchDoc<GraphPayload>(
-      props.connectionId,
-      props.source,
-      {
-        resource: props.resource,
-      },
-    );
+    payload.value = await fetchDoc<GraphPayload>(props.connectionId, props.source, {
+      resource: props.resource,
+    });
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
     loading.value = false;
+  }
+}
+
+async function expand(nodeId: string): Promise<void> {
+  const routeId = graphConfig.value?.expandRouteId;
+  if (!routeId || expanding.value) return;
+  expanding.value = true;
+  try {
+    const param = graphConfig.value?.expandParam || "node";
+    const incoming = await fetchDoc<GraphPayload>(
+      props.connectionId,
+      { routeId, params: { ...props.source?.params, [param]: nodeId } },
+      { resource: props.resource },
+    );
+    payload.value = mergeGraph(payload.value, incoming);
+  } catch {
+    // Best effort: a failed expansion leaves the current graph intact.
+  } finally {
+    expanding.value = false;
   }
 }
 
@@ -83,19 +136,40 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         <AppIcon :icon="{ type: 'lucide', value: 'workflow' }" :size="16" />
         <span>{{ graph.nodes.length }} nodes</span>
         <span>{{ graph.edges.length }} edges</span>
+        <span v-if="canExpand" class="text-xs text-surface-400"
+          >· double-click a node to expand</span
+        >
       </div>
-      <Button
-        type="button"
-        severity="secondary"
-        :disabled="loading"
-        @click="load"
-      >
+      <Button type="button" severity="secondary" :disabled="loading" @click="load">
         <AppIcon
           :icon="{ type: 'lucide', value: 'refresh-cw' }"
           :size="14"
-          :loading="loading"
+          :loading="loading || expanding"
         />
         Refresh
+      </Button>
+    </div>
+
+    <div
+      v-if="showFilter"
+      class="flex flex-wrap items-center gap-1.5 border-b border-surface-200 px-3 py-2 dark:border-surface-800"
+    >
+      <Button
+        v-for="label in edgeLabels"
+        :key="label"
+        size="small"
+        rounded
+        severity="secondary"
+        :variant="hidden.has(label) ? 'outlined' : 'text'"
+        :aria-pressed="!hidden.has(label)"
+        :class="{ 'opacity-50': hidden.has(label) }"
+        @click="toggleLabel(label)"
+      >
+        <span
+          class="h-2 w-2 rounded-full"
+          :style="{ backgroundColor: edgeColor(label) }"
+        />
+        {{ label }}
       </Button>
     </div>
 
@@ -117,12 +191,10 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         :nodes-connectable="false"
         class="h-full bg-surface-50 dark:bg-surface-950"
         @node-click="selectNode"
+        @node-double-click="expand($event.node.id)"
       >
         <template #node-record="recordProps">
-          <RecordNode
-            :data="recordProps.data"
-            :selected="recordProps.selected"
-          />
+          <RecordNode :data="recordProps.data" :selected="recordProps.selected" />
         </template>
         <Background :gap="16" />
         <Controls />

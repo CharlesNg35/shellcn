@@ -282,6 +282,11 @@ export interface QueryEditorConfig {
 export interface GraphPanelConfig {
   layout?: "grid" | "manual";
   fitView?: boolean;
+  // When set, nodes are expandable: the panel fetches a node's neighbourhood
+  // from this read route (passing the node id as expandParam, default "node")
+  // and merges the result into the graph.
+  expandRouteId?: string;
+  expandParam?: string;
 }
 
 export interface TracePanelConfig {

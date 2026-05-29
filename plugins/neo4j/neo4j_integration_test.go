@@ -56,7 +56,12 @@ func TestNeo4jPluginIntegration(t *testing.T) {
 	})).(row)
 
 	call(ctx, t, routes[rid("databases.tree")], sess, nil, nil, nil)
-	call(ctx, t, routes[rid("databases.list")], sess, nil, nil, nil)
+	// The administrative `system` database is excluded so its data tabs never run
+	// MATCH (which it rejects).
+	dbList := pageItems(call(ctx, t, routes[rid("databases.list")], sess, nil, nil, nil))
+	if hasRowName(dbList, "system") {
+		t.Fatalf("system database must not be listed: %#v", dbList)
+	}
 	call(ctx, t, routes[rid("database.overview")], sess, map[string]string{"database": db}, nil, nil)
 	call(ctx, t, routes[rid("labels.tree")], sess, nil, nil, nil)
 	labels := pageItems(call(ctx, t, routes[rid("labels.list")], sess, nil, url.Values{"p.database": []string{db}}, nil))
@@ -109,6 +114,13 @@ func TestNeo4jPluginIntegration(t *testing.T) {
 	}
 	call(ctx, t, routes[rid("label.graph")], sess, map[string]string{"database": db, "label": "ShellCNIT"}, nil, nil)
 	call(ctx, t, routes[rid("relationship_type.graph")], sess, map[string]string{"database": db, "type": "KNOWS"}, nil, nil)
+
+	// Click-to-expand: a node's neighbourhood includes its KNOWS edge.
+	expanded := call(ctx, t, routes[rid("node.graph")], sess, nil, url.Values{"p.database": []string{db}, "p.node": []string{fmt.Sprint(a["element_id"])}}, nil)
+	if payload := graphPayloadFromAny(expanded); len(payload.Edges) < 1 || len(payload.Nodes) < 2 {
+		t.Fatalf("expected node expansion to return neighbours, got %#v", expanded)
+	}
+
 	call(ctx, t, routes[rid("completion")], sess, nil, nil, nil)
 
 	result, err := executeCypher(ctx, s, db, sqldb.QueryRequest{Query: "MATCH (n:ShellCNIT) RETURN count(n) AS nodes"})

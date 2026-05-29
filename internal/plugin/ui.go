@@ -325,6 +325,11 @@ const (
 type GraphConfig struct {
 	Layout  GraphLayout `json:"layout,omitempty"`
 	FitView bool        `json:"fitView,omitempty"`
+	// ExpandRouteID, when set, makes nodes expandable: the panel fetches a node's
+	// neighbourhood from this read route (passing the node id as ExpandParam,
+	// default "node") and merges the result into the graph.
+	ExpandRouteID string `json:"expandRouteId,omitempty"`
+	ExpandParam   string `json:"expandParam,omitempty"`
 }
 
 func (c GraphConfig) Map() map[string]any {
@@ -334,6 +339,12 @@ func (c GraphConfig) Map() map[string]any {
 	}
 	if c.FitView {
 		out["fitView"] = c.FitView
+	}
+	if c.ExpandRouteID != "" {
+		out["expandRouteId"] = c.ExpandRouteID
+	}
+	if c.ExpandParam != "" {
+		out["expandParam"] = c.ExpandParam
 	}
 	return out
 }

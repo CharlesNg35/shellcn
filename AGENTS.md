@@ -18,7 +18,6 @@ projection — **adding a plugin requires zero frontend changes.**
   sub-task checklist + Definition of Done).
 - [`specs/plans/TESTING.md`](specs/plans/TESTING.md) — testing standard.
 - [`specs/plugins.md`](specs/plugins.md) — plugin roadmap.
-- [`checklist.md`](checklist.md) — **living progress tracker.**
 
 ## How to work here
 
@@ -26,7 +25,7 @@ projection — **adding a plugin requires zero frontend changes.**
 2. Follow the **phase order** (UI-first: M0 declarative UI on fixtures → M1 core →
    M2 SSH → …). Don't jump ahead.
 3. After finishing a step: tick its sub-tasks, set the step file's
-   **`Status: ✅ Done`**, and **update `checklist.md`**. Keep them in sync, always.
+   **`Status: ✅ Done`**
 4. A step is done only when its **tests pass**; a phase only when its e2e is green.
 5. **After implementing anything, always run `make fmt`, then `make lint` and
    `make test` — all must be green before you finish or hand off.** Never leave

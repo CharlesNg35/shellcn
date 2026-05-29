@@ -427,16 +427,11 @@ export const primeVuePassthrough = {
   },
 
   toast: {
+    // AppToast renders each message through the #container slot, so the message
+    // wrapper stays a bare layout element — the card lives in AppToast, avoiding
+    // a card-in-a-card.
     root: "fixed z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2",
-    message: messageRoot,
-    messageContent: "flex min-w-0 flex-1 items-start gap-2",
-    messageIcon: "mt-0.5 h-4 w-4 shrink-0",
-    messageText: "min-w-0 flex-1",
-    summary: "font-medium",
-    detail: "text-current/80",
-    closeButton:
-      "ml-auto shrink-0 rounded p-0.5 text-current/60 transition-colors hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
-    closeIcon: "h-4 w-4",
+    message: "",
   },
 
   menu: {
