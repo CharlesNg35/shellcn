@@ -125,6 +125,22 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		t.Fatalf("created table was not listed: %#v", list)
 	}
 
+	// A schema tree node expands to its real tables (not detail-tab categories).
+	treeRC := plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.schema": {"public"}}, nil)
+	treeNodes, err := treeTables(treeRC)
+	if err != nil {
+		t.Fatalf("schema tree children: %v", err)
+	}
+	foundTable := false
+	for _, n := range treeNodes.(plugin.Page[plugin.TreeNode]).Items {
+		if n.Ref != nil && n.Ref.Kind == "table" && strings.Contains(n.Label, "shellcn_people") {
+			foundTable = true
+		}
+	}
+	if !foundTable {
+		t.Fatalf("schema tree should list real tables, got %#v", treeNodes)
+	}
+
 	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)

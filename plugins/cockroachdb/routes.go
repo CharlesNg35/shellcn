@@ -55,7 +55,6 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.queries.list", Method: plugin.MethodGet, Path: "/queries", Permission: "cockroachdb.queries.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.queries.list", Handle: listQueries},
 		{ID: "cockroachdb.query.overview", Method: plugin.MethodGet, Path: "/queries/{query}/overview", Permission: "cockroachdb.queries.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.query.overview", Handle: queryOverview},
 		{ID: "cockroachdb.schemas.tree", Method: plugin.MethodGet, Path: "/tree/schemas", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schemas.tree", Handle: schemaTree},
-		{ID: "cockroachdb.schema.children", Method: plugin.MethodGet, Path: "/tree/schemas/{schema}", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schema.children", Handle: schemaChildren},
 		{ID: "cockroachdb.schemas.list", Method: plugin.MethodGet, Path: "/schemas", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schemas.list", Handle: listSchemas},
 		{ID: "cockroachdb.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{schema}/overview", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schema.overview", Handle: schemaOverview},
 		{ID: "cockroachdb.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "cockroachdb.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.tables.tree", Handle: treeTables},
@@ -358,49 +357,10 @@ func schemaTree(rc *plugin.RequestContext) (any, error) {
 			Label:          name,
 			Icon:           icon("folder"),
 			Ref:            &plugin.ResourceRef{Kind: "schema", Name: name, UID: name},
-			ChildrenSource: &plugin.DataSource{RouteID: "cockroachdb.schema.children", Params: map[string]string{"schema": name}},
+			ChildrenSource: &plugin.DataSource{RouteID: "cockroachdb.tables.tree", Params: map[string]string{"schema": name}},
 		})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: schemas.NextCursor, Total: schemas.Total}, nil
-}
-
-func schemaChildren(rc *plugin.RequestContext) (any, error) {
-	schema, err := sqldb.SafeIdentifier(rc.Param("schema"))
-	if err != nil {
-		return nil, err
-	}
-	nodes := []plugin.TreeNode{
-		{
-			Key:   "schema:" + schema + ":tables",
-			Label: "Tables",
-			Icon:  icon("table-2"),
-			Leaf:  true,
-			Ref:   &plugin.ResourceRef{Kind: "schema", Name: schema, UID: schema},
-		},
-		{
-			Key:   "schema:" + schema + ":views",
-			Label: "Views",
-			Icon:  icon("panel-top"),
-			Leaf:  true,
-			Ref:   &plugin.ResourceRef{Kind: "schema", Name: schema, UID: schema},
-		},
-		{
-			Key:   "schema:" + schema + ":functions",
-			Label: "Functions",
-			Icon:  icon("function-square"),
-			Leaf:  true,
-			Ref:   &plugin.ResourceRef{Kind: "schema", Name: schema, UID: schema},
-		},
-		{
-			Key:   "schema:" + schema + ":sequences",
-			Label: "Sequences",
-			Icon:  icon("list-ordered"),
-			Leaf:  true,
-			Ref:   &plugin.ResourceRef{Kind: "schema", Name: schema, UID: schema},
-		},
-	}
-	total := len(nodes)
-	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: &total}, nil
 }
 
 func listSchemas(rc *plugin.RequestContext) (any, error) {
