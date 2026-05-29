@@ -114,11 +114,25 @@ function onSubmit(): void {
   const preserveCredentials: string[] = [];
   for (const group of groups.value) {
     for (const field of visibleFields(group.fields ?? [])) {
-      const value = values[field.key];
+      let value = values[field.key];
       // A write-only secret that is already set and left untouched is kept by
       // the backend — never require or resubmit it.
       if (field.secret && props.secretsSet?.[field.key] && isBlank(value)) {
         continue;
+      }
+      // JSON fields edit as text; parse to an object so it binds server-side.
+      if (field.type === "json" && typeof value === "string") {
+        const trimmed = value.trim();
+        if (trimmed === "") {
+          value = undefined;
+        } else {
+          try {
+            value = JSON.parse(trimmed);
+          } catch {
+            next[field.key] = "Enter valid JSON.";
+            continue;
+          }
+        }
       }
       const credentialState = props.credentialStates?.[field.key];
       if (

@@ -499,6 +499,19 @@ validators (single source of truth, enforced server-side too) and `Step` sets th
 increment. Adding a field type is a renderer concern only; plugins just declare
 the type, options, default, and validators.
 
+**Structured (`json`) fields.** A `json` field renders as the same CodeMirror
+editor used by `PanelCodeEditor` (syntax highlight, JSON validation), not a plain
+textarea — `textarea` stays a plain multiline control for free text. The renderer
+pretty-prints an object `Default` for editing and **parses the text back into an
+object on submit** (a parse failure blocks submit with a field error), so a `json`
+field always binds server-side as a JSON object/array — never a string. This is
+the in-form counterpart to `CodeEditorConfig.SaveBodyKey`: a single `json` blob
+that fills one whole resource (a mapping, an index's settings) is better as an
+action that opens `PanelCodeEditor` in a dialog; a `json` field is for structured
+input that lives **alongside other fields** in a form (e.g. a _Create table_ form's
+`columns` next to its `name`). Both paths are plugin-agnostic — the plugin only
+declares the field/config; the renderer owns the editor and the round-trip.
+
 **Route-sourced choices.** A `select`/`radio`/`multiselect` field may set
 `OptionsSource` instead of (or in addition to) static `Options`: the renderer
 fetches it when the form opens and maps each row to `{value,label}`. Its params
