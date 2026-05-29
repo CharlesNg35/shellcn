@@ -14,9 +14,18 @@ interface Tone {
 }
 
 const tones: Record<string, Tone> = {
-  success: { icon: { type: "lucide", value: "circle-check" }, accent: "text-emerald-500" },
-  error: { icon: { type: "lucide", value: "circle-alert" }, accent: "text-rose-500" },
-  warn: { icon: { type: "lucide", value: "triangle-alert" }, accent: "text-amber-500" },
+  success: {
+    icon: { type: "lucide", value: "circle-check" },
+    accent: "text-emerald-500",
+  },
+  error: {
+    icon: { type: "lucide", value: "circle-alert" },
+    accent: "text-rose-500",
+  },
+  warn: {
+    icon: { type: "lucide", value: "triangle-alert" },
+    accent: "text-amber-500",
+  },
   info: { icon: { type: "lucide", value: "info" }, accent: "text-sky-500" },
 };
 

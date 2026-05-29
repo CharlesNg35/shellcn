@@ -107,23 +107,23 @@ func tabs() []plugin.Tab {
 				{
 					Key: "disks", Label: "Disks", Panel: plugin.PanelTable,
 					Source: &plugin.DataSource{RouteID: "server_monitor.disks"},
-					Config: watchTableConfig(diskColumns(), "server_monitor.disks.watch"),
+					Config: liveTableConfig(diskColumns(), 10000, sortBy("usedPct")),
 				},
 				{
 					Key: "network", Label: "Network", Panel: plugin.PanelTable,
 					Source: &plugin.DataSource{RouteID: "server_monitor.network"},
-					Config: watchTableConfig(networkColumns(), "server_monitor.network.watch"),
+					Config: liveTableConfig(networkColumns(), 3000, sortBy("bytesRecv")),
 				},
 			}}.Map(),
 		},
-		{Key: "processes", Label: "Processes", Icon: lucide("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.processes"}, Config: watchTableConfig(processColumns(), "server_monitor.processes.watch")},
-		{Key: "services", Label: "Services", Icon: lucide("settings"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.services"}, Config: watchTableConfig(serviceColumns(), "server_monitor.services.watch")},
-		{Key: "disks", Label: "Disks", Icon: lucide("hard-drive"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disks"}, Config: watchTableConfig(diskColumns(), "server_monitor.disks.watch")},
-		{Key: "io", Label: "Disk IO", Icon: lucide("activity"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disk_io"}, Config: watchTableConfig(diskIOColumns(), "server_monitor.disk_io.watch")},
-		{Key: "network", Label: "Network", Icon: lucide("network"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.network"}, Config: watchTableConfig(networkColumns(), "server_monitor.network.watch")},
-		{Key: "connections", Label: "Connections", Icon: lucide("radio-tower"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.connections"}, Config: watchTableConfig(connectionColumns(), "server_monitor.connections.watch")},
-		{Key: "sessions", Label: "Sessions", Icon: lucide("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.users"}, Config: watchTableConfig(userColumns(), "server_monitor.users.watch")},
-		{Key: "sensors", Label: "Sensors", Icon: lucide("thermometer"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.sensors"}, Config: watchTableConfig(sensorColumns(), "server_monitor.sensors.watch")},
+		{Key: "processes", Label: "Processes", Icon: lucide("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.processes"}, Config: liveTableConfig(processColumns(), 3000, sortBy("cpuPct"))},
+		{Key: "services", Label: "Services", Icon: lucide("settings"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.services"}, Config: liveTableConfig(serviceColumns(), 10000, nil)},
+		{Key: "disks", Label: "Disks", Icon: lucide("hard-drive"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disks"}, Config: liveTableConfig(diskColumns(), 10000, sortBy("usedPct"))},
+		{Key: "io", Label: "Disk IO", Icon: lucide("activity"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.disk_io"}, Config: liveTableConfig(diskIOColumns(), 3000, sortBy("writeBytes"))},
+		{Key: "network", Label: "Network", Icon: lucide("network"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.network"}, Config: liveTableConfig(networkColumns(), 3000, sortBy("bytesRecv"))},
+		{Key: "connections", Label: "Connections", Icon: lucide("radio-tower"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.connections"}, Config: liveTableConfig(connectionColumns(), 5000, nil)},
+		{Key: "sessions", Label: "Sessions", Icon: lucide("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.users"}, Config: liveTableConfig(userColumns(), 15000, nil)},
+		{Key: "sensors", Label: "Sensors", Icon: lucide("thermometer"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.sensors"}, Config: liveTableConfig(sensorColumns(), 5000, sortBy("temperature"))},
 		{Key: "cpu", Label: "CPU", Icon: lucide("cpu"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.cpu"}, Config: tableConfig(cpuColumns())},
 		{Key: "system", Label: "System", Icon: lucide("server"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "server_monitor.overview"}},
 	}
@@ -157,13 +157,18 @@ func tableConfig(columns []plugin.Column) map[string]any {
 	return plugin.TableConfig{Columns: columns, Exportable: true}.Map()
 }
 
-func watchTableConfig(columns []plugin.Column, watchRoute string) map[string]any {
+func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortKey) map[string]any {
 	return plugin.TableConfig{
-		Columns:    columns,
-		Watch:      &plugin.DataSource{RouteID: watchRoute, Method: plugin.MethodWS},
-		Exportable: true,
+		Columns:           columns,
+		RefreshIntervalMs: intervalMs,
+		DefaultSort:       sort,
+		Exportable:        true,
 	}.Map()
 }
+
+func sortBy(field string) *plugin.SortKey { return &plugin.SortKey{Field: field, Desc: true} }
+
+func prec(n int) *int { return &n }
 
 func processColumns() []plugin.Column {
 	return []plugin.Column{
@@ -171,8 +176,8 @@ func processColumns() []plugin.Column {
 		{Key: "name", Label: "Name", Sortable: true},
 		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true},
 		{Key: "user", Label: "User", Sortable: true},
-		{Key: "cpuPct", Label: "CPU %", Type: plugin.ColumnNumber, Sortable: true},
-		{Key: "memPct", Label: "Mem %", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "cpuPct", Label: "CPU", Type: plugin.ColumnPercent, Precision: prec(1), Sortable: true},
+		{Key: "memPct", Label: "Mem", Type: plugin.ColumnPercent, Precision: prec(1), Sortable: true},
 		{Key: "rss", Label: "RSS", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "threads", Label: "Threads", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "createdAt", Label: "Started", Type: plugin.ColumnDateTime, Sortable: true},
@@ -199,7 +204,7 @@ func diskColumns() []plugin.Column {
 		{Key: "device", Label: "Device", Sortable: true},
 		{Key: "mountpoint", Label: "Mount", Sortable: true},
 		{Key: "fstype", Label: "FS", Sortable: true},
-		{Key: "usedPct", Label: "Used %", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "usedPct", Label: "Used", Type: plugin.ColumnPercent, Precision: prec(1), Sortable: true},
 		{Key: "total", Label: "Total", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "used", Label: "Used", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "free", Label: "Free", Type: plugin.ColumnBytes, Sortable: true},
@@ -261,9 +266,9 @@ func userColumns() []plugin.Column {
 func sensorColumns() []plugin.Column {
 	return []plugin.Column{
 		{Key: "sensor", Label: "Sensor", Sortable: true},
-		{Key: "temperature", Label: "Temp", Type: plugin.ColumnNumber, Sortable: true},
-		{Key: "high", Label: "High", Type: plugin.ColumnNumber, Sortable: true},
-		{Key: "critical", Label: "Critical", Type: plugin.ColumnNumber, Sortable: true},
+		{Key: "temperature", Label: "Temp °C", Type: plugin.ColumnNumber, Precision: prec(1), Sortable: true},
+		{Key: "high", Label: "High", Type: plugin.ColumnNumber, Precision: prec(1), Sortable: true},
+		{Key: "critical", Label: "Critical", Type: plugin.ColumnNumber, Precision: prec(1), Sortable: true},
 	}
 }
 

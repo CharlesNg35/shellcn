@@ -39,8 +39,14 @@ const PLAIN_WIDTH = 170;
 const PLAIN_HEIGHT = 42;
 
 const EDGE_PALETTE = [
-  "#6366f1", "#10b981", "#f59e0b", "#ef4444",
-  "#06b6d4", "#8b5cf6", "#ec4899", "#14b8a6",
+  "#6366f1",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#06b6d4",
+  "#8b5cf6",
+  "#ec4899",
+  "#14b8a6",
 ];
 
 // edgeColor maps an edge label (relationship type, foreign key, …) to a stable
@@ -61,7 +67,8 @@ export function mergeGraph(
   base: GraphPayload,
   incoming: GraphPayload,
 ): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const edgeKey = (e: GraphEdge) => e.id ?? `${e.source}->${e.target}:${e.label ?? ""}`;
+  const edgeKey = (e: GraphEdge) =>
+    e.id ?? `${e.source}->${e.target}:${e.label ?? ""}`;
   const nodes = [...(base.nodes ?? [])];
   const nodeIds = new Set(nodes.map((n) => n.id));
   for (const node of incoming.nodes ?? []) {

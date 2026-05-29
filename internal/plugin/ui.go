@@ -51,6 +51,7 @@ const (
 	ColumnBytes    ColumnType = "bytes"
 	ColumnDateTime ColumnType = "datetime"
 	ColumnNumber   ColumnType = "number"
+	ColumnPercent  ColumnType = "percent"
 	ColumnBool     ColumnType = "bool"
 	ColumnJSON     ColumnType = "json"
 )
@@ -66,6 +67,8 @@ type Column struct {
 	// cell to an empty/null value rather than an empty string.
 	ReadOnly bool `json:"readOnly,omitempty"`
 	Nullable bool `json:"nullable,omitempty"`
+	// Precision fixes fraction digits for number/percent cells.
+	Precision *int `json:"precision,omitempty"`
 	// Severities colors a badge column by value: it maps a lower-cased cell value
 	// to a Severity (e.g. "running" -> success). Unmapped values stay neutral;
 	// ignored for non-badge columns.
@@ -86,6 +89,13 @@ type TableConfig struct {
 	Watch         *DataSource `json:"watch,omitempty"`
 	ActionIDs     []string    `json:"actionIds,omitempty"`
 	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
+
+	// RefreshIntervalMs re-fetches the current page on a cadence and replaces it
+	// in place — preferred over Watch for high-churn tables where per-row diffs
+	// would flood the client.
+	RefreshIntervalMs int `json:"refreshIntervalMs,omitempty"`
+	// DefaultSort is the column the table sorts by on first load.
+	DefaultSort *SortKey `json:"defaultSort,omitempty"`
 
 	Editable  bool        `json:"editable,omitempty"`
 	RowKey    []string    `json:"rowKey,omitempty"`
@@ -119,6 +129,12 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if c.Watch != nil {
 		out["watch"] = c.Watch
+	}
+	if c.RefreshIntervalMs > 0 {
+		out["refreshIntervalMs"] = c.RefreshIntervalMs
+	}
+	if c.DefaultSort != nil {
+		out["defaultSort"] = c.DefaultSort
 	}
 	if len(c.ActionIDs) > 0 {
 		out["actionIds"] = c.ActionIDs

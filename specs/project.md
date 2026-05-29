@@ -641,6 +641,8 @@ type Tab struct {
 type TableConfig struct {
     Columns      []Column
     Watch        *DataSource
+    RefreshIntervalMs int      // live view: re-fetch the current page on this cadence (alternative to Watch)
+    DefaultSort       *SortKey // column to sort by on first load
     ActionIDs    []string // toolbar actions; references Manifest.Actions
     RowActionIDs []string // selected-row actions; references Manifest.Actions
     // Declaring RowActionIDs makes the table's rows selectable (checkbox column,
@@ -935,6 +937,10 @@ create/run/delete actions once, the validator ensures the IDs exist, and the
 generic table renderer places toolbar or selected-row affordances without
 plugin-specific frontend code.
 
+**Number formatting.** A `Column` of type `number` or `percent` may set
+`Precision` to fix its fraction digits, so volatile metrics (CPU %, load) render
+as stable values rather than long floats; `percent` also appends `%`.
+
 **Badge color by value.** A `Column` of type `badge` may declare
 `Severities map[string]Severity`, mapping a lower-cased cell value to a severity
 (success/warn/danger/info/secondary) so the renderer colors it (e.g. a pod's
@@ -1086,7 +1092,14 @@ type ResourceEvent struct {
 }
 ```
 
-Plugins without a watch API fall back to core-driven interval refresh.
+`Watch` suits low-churn lists (containers, pods) where state changes
+occasionally and per-row diffs are cheap. For **high-churn** tables — process or
+connection lists where nearly every row changes every tick — a plugin instead
+sets `TableConfig.RefreshIntervalMs`: the renderer re-fetches the current page
+(same sort/filter/cursor) on that cadence and replaces it in place. This bounds
+work to one page per tick and reuses pagination/sort/filter, where streaming a
+per-row diff of the whole table would flood the client. Plugins with neither
+rely on manual refresh.
 
 ### 7.4 WebSocket authentication (browsers can't set Authorization)
 

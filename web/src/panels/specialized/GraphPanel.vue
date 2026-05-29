@@ -34,7 +34,9 @@ const error = ref<string | null>(null);
 const payload = ref<GraphPayload>({});
 const selectedId = ref<string | null>(null);
 const hidden = ref<Set<string>>(new Set());
-const graphConfig = computed(() => props.config as GraphPanelConfig | undefined);
+const graphConfig = computed(
+  () => props.config as GraphPanelConfig | undefined,
+);
 
 const edgeLabels = computed(() => {
   const labels = new Set<string>();
@@ -45,12 +47,15 @@ const edgeLabels = computed(() => {
 });
 
 const showFilter = computed(
-  () => edgeLabels.value.length > 1 && edgeLabels.value.length <= MAX_FILTER_CHIPS,
+  () =>
+    edgeLabels.value.length > 1 && edgeLabels.value.length <= MAX_FILTER_CHIPS,
 );
 
 const visible = computed<GraphPayload>(() => ({
   nodes: payload.value.nodes,
-  edges: (payload.value.edges ?? []).filter((e) => !hidden.value.has(e.label ?? "")),
+  edges: (payload.value.edges ?? []).filter(
+    (e) => !hidden.value.has(e.label ?? ""),
+  ),
 }));
 
 const graph = computed(() => buildGraph(visible.value));
@@ -89,9 +94,13 @@ async function load(): Promise<void> {
   error.value = null;
   hidden.value = new Set();
   try {
-    payload.value = await fetchDoc<GraphPayload>(props.connectionId, props.source, {
-      resource: props.resource,
-    });
+    payload.value = await fetchDoc<GraphPayload>(
+      props.connectionId,
+      props.source,
+      {
+        resource: props.resource,
+      },
+    );
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -140,7 +149,12 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
           >· double-click a node to expand</span
         >
       </div>
-      <Button type="button" severity="secondary" :disabled="loading" @click="load">
+      <Button
+        type="button"
+        severity="secondary"
+        :disabled="loading"
+        @click="load"
+      >
         <AppIcon
           :icon="{ type: 'lucide', value: 'refresh-cw' }"
           :size="14"
@@ -194,7 +208,10 @@ watch(() => [props.connectionId, props.resource?.uid], load, {
         @node-double-click="expand($event.node.id)"
       >
         <template #node-record="recordProps">
-          <RecordNode :data="recordProps.data" :selected="recordProps.selected" />
+          <RecordNode
+            :data="recordProps.data"
+            :selected="recordProps.selected"
+          />
         </template>
         <Background :gap="16" />
         <Controls />

@@ -33,7 +33,10 @@ beforeEach(() => {
     };
   });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 function bodyButton(text: string): HTMLButtonElement | undefined {
   return [...document.body.querySelectorAll("button")].find(
@@ -412,7 +415,10 @@ describe("TablePanel staged edits", () => {
     });
   }
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it("buffers a cell edit and commits it through the update route", async () => {
     const { w, calls } = mountStaged();
@@ -468,6 +474,77 @@ describe("TablePanel staged edits", () => {
     await flushPromises();
     const del = calls.find((c) => c.url.includes("db.row.delete"));
     expect(del?.body).toEqual({ key: { name: "alpha" } });
+    w.unmount();
+  });
+
+  it("requests the declared defaultSort on first load", async () => {
+    const fetchFn = installFetch(() => ({
+      body: { items: [row("a", "alpha")], nextCursor: "", total: 1 },
+    }));
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: { columns, defaultSort: { field: "cpuPct", desc: true } },
+      },
+    });
+    await flushPromises();
+    const url = fetchFn.mock.calls[0]?.[0] as string;
+    expect(url).toContain("sort=-cpuPct");
+    w.unmount();
+  });
+
+  it("formats percent columns with fixed precision", async () => {
+    installFetch(() => ({
+      body: {
+        items: [{ ref: { kind: "p", name: "x", uid: "x" }, cpuPct: 12.3456 }],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: {
+          columns: [
+            { key: "cpuPct", label: "CPU", type: "percent", precision: 1 },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+    expect(w.find('[data-test="table-cell-value"]').text()).toBe("12.3%");
+    w.unmount();
+  });
+
+  it("polls the current page on refreshIntervalMs and replaces rows in place", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    installFetch(() => {
+      calls += 1;
+      return {
+        body: {
+          items: [row("a", calls === 1 ? "alpha" : "alpha-refreshed")],
+          nextCursor: "",
+          total: 1,
+        },
+      };
+    });
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: { columns, refreshIntervalMs: 1000 },
+      },
+    });
+    await flushPromises();
+    expect(calls).toBe(1);
+    expect(w.text()).toContain("alpha");
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toBe(2);
+    expect(w.text()).toContain("alpha-refreshed");
     w.unmount();
   });
 });

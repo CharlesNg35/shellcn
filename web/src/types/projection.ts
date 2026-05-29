@@ -225,6 +225,11 @@ export interface TablePanelConfig {
   columns?: Column[];
   columnsSource?: DataSource;
   watch?: DataSource;
+  // refreshIntervalMs re-fetches the current page on a cadence and replaces it
+  // in place — used instead of `watch` for high-churn tables.
+  refreshIntervalMs?: number;
+  // defaultSort is the column the table sorts by on first load.
+  defaultSort?: SortKey;
   actionIds?: string[];
   rowActionIds?: string[];
   // Inline data-grid editing (plugin-agnostic). When `editable` is set and
@@ -356,6 +361,7 @@ export type ColumnType =
   | "bytes"
   | "datetime"
   | "number"
+  | "percent"
   | "bool"
   | "json";
 
@@ -369,6 +375,8 @@ export interface Column {
   // nullable lets the inline editor clear the cell to an empty/null value.
   readOnly?: boolean;
   nullable?: boolean;
+  // precision fixes fraction digits for number/percent cells.
+  precision?: number;
   // Maps a lower-cased badge value to a severity for color (e.g. running →
   // success); unmapped values render neutral.
   severities?: Record<string, Severity>;
