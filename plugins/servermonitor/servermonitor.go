@@ -98,21 +98,26 @@ func tabs() []plugin.Tab {
 				{
 					Key: "metrics", Label: "Live metrics", Panel: plugin.PanelMetrics, Span: 2,
 					Source: &plugin.DataSource{RouteID: "server_monitor.metrics", Method: plugin.MethodWS},
-					Config: metricsConfig(),
+					Config: summaryConfig(),
 				},
 				{
-					Key: "system", Label: "System", Panel: plugin.PanelDocument,
+					Key: "cpumem", Label: "CPU & Memory", Panel: plugin.PanelMetrics, Span: 1,
+					Source: &plugin.DataSource{RouteID: "server_monitor.metrics", Method: plugin.MethodWS},
+					Config: cpuMemConfig(),
+				},
+				{
+					Key: "throughput", Label: "Throughput", Panel: plugin.PanelMetrics, Span: 1,
+					Source: &plugin.DataSource{RouteID: "server_monitor.metrics", Method: plugin.MethodWS},
+					Config: throughputConfig(),
+				},
+				{
+					Key: "system", Label: "System", Panel: plugin.PanelDocument, Span: 1,
 					Source: &plugin.DataSource{RouteID: "server_monitor.overview"},
 				},
 				{
-					Key: "disks", Label: "Disks", Panel: plugin.PanelTable,
+					Key: "disks", Label: "Disks", Panel: plugin.PanelTable, Span: 1,
 					Source: &plugin.DataSource{RouteID: "server_monitor.disks"},
 					Config: liveTableConfig(diskColumns(), 10000, sortBy("usedPct")),
-				},
-				{
-					Key: "network", Label: "Network", Panel: plugin.PanelTable,
-					Source: &plugin.DataSource{RouteID: "server_monitor.network"},
-					Config: liveTableConfig(networkColumns(), 3000, sortBy("bytesRecv")),
 				},
 			}}.Map(),
 		},
@@ -131,7 +136,10 @@ func tabs() []plugin.Tab {
 
 func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
 
-func metricsConfig() map[string]any {
+// summaryConfig is the full-width header card: the CPU/Mem/Swap gauges plus the
+// process/load stats. The line charts live in their own cells (below) so they
+// can sit in a grid.
+func summaryConfig() map[string]any {
 	return plugin.MetricsConfig{
 		Gauges: []plugin.MetricGauge{
 			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
@@ -143,11 +151,30 @@ func metricsConfig() map[string]any {
 			{Key: "load1", Label: "Load 1m"},
 			{Key: "load5", Label: "Load 5m"},
 		},
+	}.Map()
+}
+
+// cpuMemConfig charts CPU and Memory over time on one shared 0–100 axis.
+func cpuMemConfig() map[string]any {
+	return plugin.MetricsConfig{
 		Series: []plugin.MetricSeries{
 			{Key: "cpuPct", Label: "CPU", Unit: "%"},
 			{Key: "memPct", Label: "Memory", Unit: "%"},
-			{Key: "netBytesRecv", Label: "Network in", Unit: "bytes"},
-			{Key: "netBytesSent", Label: "Network out", Unit: "bytes"},
+		},
+		History: 120,
+	}.Map()
+}
+
+// throughputConfig charts network and disk I/O as per-second rates (derived in
+// the metrics stream), kept off the percentage chart so their byte scale doesn't
+// flatten it.
+func throughputConfig() map[string]any {
+	return plugin.MetricsConfig{
+		Series: []plugin.MetricSeries{
+			{Key: "netRecvRate", Label: "Net in", Unit: "bytes"},
+			{Key: "netSentRate", Label: "Net out", Unit: "bytes"},
+			{Key: "diskReadRate", Label: "Disk read", Unit: "bytes"},
+			{Key: "diskWriteRate", Label: "Disk write", Unit: "bytes"},
 		},
 		History: 120,
 	}.Map()

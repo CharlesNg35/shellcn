@@ -95,11 +95,21 @@ func Metrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	enc := json.NewEncoder(client)
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
+	var prev map[string]any
+	var prevAt time.Time
 	for {
 		frame, err := s.backend.Metrics(rc.Ctx)
 		if err != nil {
 			return err
 		}
+		now := time.Now()
+		if dt := now.Sub(prevAt).Seconds(); prev != nil && dt > 0 {
+			addRate(frame, prev, "netBytesRecv", "netRecvRate", dt)
+			addRate(frame, prev, "netBytesSent", "netSentRate", dt)
+			addRate(frame, prev, "diskReadBytes", "diskReadRate", dt)
+			addRate(frame, prev, "diskWriteBytes", "diskWriteRate", dt)
+		}
+		prev, prevAt = frame, now
 		if err := enc.Encode(frame); err != nil {
 			return nil
 		}
@@ -110,6 +120,17 @@ func Metrics(rc *plugin.RequestContext, client plugin.ClientStream) error {
 			return nil
 		case <-ticker.C:
 		}
+	}
+}
+
+// addRate derives a per-second rate from a monotonic counter and the previous
+// frame, so cumulative byte totals become a meaningful live series. A counter
+// reset (reboot/wrap) yields a negative delta and is skipped.
+func addRate(frame, prev map[string]any, cumKey, rateKey string, dt float64) {
+	cur, ok1 := number(frame[cumKey])
+	old, ok2 := number(prev[cumKey])
+	if ok1 && ok2 && cur >= old {
+		frame[rateKey] = (cur - old) / dt
 	}
 }
 
