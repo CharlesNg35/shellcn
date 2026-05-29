@@ -108,6 +108,44 @@ func TestDirectForConnectionAllowsLoopbackAliases(t *testing.T) {
 	_ = c.Close()
 }
 
+func TestDirectForConnectionAllowsDeclaredPortRange(t *testing.T) {
+	control, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen control: %v", err)
+	}
+	defer func() { _ = control.Close() }()
+	data, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen data: %v", err)
+	}
+	defer func() { _ = data.Close() }()
+	go func() {
+		c, err := data.Accept()
+		if err == nil {
+			_ = c.Close()
+		}
+	}()
+	host, controlPort, err := net.SplitHostPort(control.Addr().String())
+	if err != nil {
+		t.Fatalf("split control addr: %v", err)
+	}
+	_, dataPort, err := net.SplitHostPort(data.Addr().String())
+	if err != nil {
+		t.Fatalf("split data addr: %v", err)
+	}
+	d := transport.NewDirectForConnection(models.Connection{Config: map[string]any{
+		"host":               host,
+		"port":               controlPort,
+		"passive_port_start": dataPort,
+		"passive_port_end":   dataPort,
+	}})
+	c, err := d.DialContext(context.Background(), "tcp", data.Addr().String())
+	if err != nil {
+		t.Fatalf("declared range dial: %v", err)
+	}
+	_ = c.Close()
+}
+
 func TestBuildAgentUnavailableWithoutTunnel(t *testing.T) {
 	_, err := transport.Build(models.Connection{ID: "c1", Transport: "agent"}, transport.NewRegistry(), "")
 	if !errors.Is(err, transport.ErrAgentUnavailable) {

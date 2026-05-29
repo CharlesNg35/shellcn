@@ -3,14 +3,18 @@ import AppIcon from "../../components/AppIcon.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { FileEntry } from "../../types/projection";
-import { formatBytes } from "./fileTypes";
+import { formatBytes, iconFor } from "./fileTypes";
 
-defineProps<{
-  entries: FileEntry[];
-  selectedPath?: string;
-  loading: boolean;
-  error?: string | null;
-}>();
+withDefaults(
+  defineProps<{
+    entries: FileEntry[];
+    selectedPath?: string;
+    loading: boolean;
+    error?: string | null;
+    emptyText?: string;
+  }>(),
+  { selectedPath: undefined, error: null, emptyText: "This folder is empty." },
+);
 const emit = defineEmits<{
   select: [entry: FileEntry];
   open: [entry: FileEntry];
@@ -31,7 +35,7 @@ const emit = defineEmits<{
       v-else-if="!entries.length"
       class="py-12 text-center text-sm text-surface-400"
     >
-      This folder is empty.
+      {{ emptyText }}
     </p>
     <div
       v-else
@@ -55,9 +59,14 @@ const emit = defineEmits<{
         @dblclick="emit('open', entry)"
       >
         <AppIcon
-          :icon="{ type: 'lucide', value: entry.isDir ? 'folder' : 'code' }"
+          :icon="{ type: 'lucide', value: iconFor(entry.name, entry.isDir) }"
           :size="28"
-          class="mb-2 text-surface-400"
+          class="mb-2"
+          :class="
+            entry.isDir
+              ? 'text-amber-500 dark:text-amber-400'
+              : 'text-surface-400'
+          "
         />
         <span
           class="block truncate text-sm font-medium text-surface-800 dark:text-surface-100"

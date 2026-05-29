@@ -153,6 +153,87 @@ export function languageFor(name: string): string {
   return CODE_LANG[extensionOf(name)] ?? "plaintext";
 }
 
+// Lucide icon per file kind. Specific extensions win; otherwise the preview
+// viewer category picks a sensible default. Folders are handled by the caller.
+const ICON_BY_EXT: Record<string, string> = {
+  json: "file-json",
+  jsonc: "file-json",
+  jsonl: "file-json",
+  yaml: "file-cog",
+  yml: "file-cog",
+  toml: "file-cog",
+  ini: "file-cog",
+  conf: "file-cog",
+  config: "file-cog",
+  env: "file-cog",
+  properties: "file-cog",
+  editorconfig: "file-cog",
+  service: "file-cog",
+  socket: "file-cog",
+  timer: "file-cog",
+  xml: "code-xml",
+  html: "code-xml",
+  sh: "file-terminal",
+  bash: "file-terminal",
+  zsh: "file-terminal",
+  fish: "file-terminal",
+  ps1: "file-terminal",
+  sql: "database",
+  csv: "file-spreadsheet",
+  tsv: "file-spreadsheet",
+  txt: "file-text",
+  log: "file-text",
+  md: "file-text",
+  markdown: "file-text",
+  mdx: "file-text",
+  dockerfile: "container",
+};
+
+const ICON_BY_VIEWER: Record<ViewerKind, string> = {
+  code: "file-code",
+  image: "file-image",
+  pdf: "file-text",
+  audio: "file-audio",
+  video: "file-video",
+  download: "file",
+};
+
+const ARCHIVE_EXT = new Set([
+  "zip",
+  "tar",
+  "gz",
+  "tgz",
+  "bz2",
+  "tbz2",
+  "xz",
+  "7z",
+  "rar",
+  "zst",
+  "lz",
+  "lzma",
+]);
+const KEY_EXT = new Set([
+  "key",
+  "pem",
+  "crt",
+  "cer",
+  "pub",
+  "p12",
+  "pfx",
+  "keystore",
+  "asc",
+  "gpg",
+]);
+
+export function iconFor(name: string, isDir: boolean): string {
+  if (isDir) return "folder";
+  const ext = extensionOf(name);
+  if (ICON_BY_EXT[ext]) return ICON_BY_EXT[ext];
+  if (ARCHIVE_EXT.has(ext)) return "file-archive";
+  if (KEY_EXT.has(ext)) return "file-key";
+  return ICON_BY_VIEWER[viewerFor(name)];
+}
+
 export function isPreviewable(name: string, mime?: string): boolean {
   return viewerFor(name, mime) !== "download";
 }

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   extensionOf,
   formatBytes,
+  iconFor,
   isPreviewable,
   languageFor,
   viewerFor,
@@ -45,6 +46,23 @@ describe("file type mapping", () => {
   it("flags previewable vs download-only", () => {
     expect(isPreviewable("a.json")).toBe(true);
     expect(isPreviewable("a.zip")).toBe(false);
+  });
+
+  it("picks a file icon by extension, category, and special kinds", () => {
+    expect(iconFor("any", true)).toBe("folder");
+    expect(iconFor("data.json", false)).toBe("file-json");
+    expect(iconFor("compose.yaml", false)).toBe("file-cog");
+    expect(iconFor("schema.sql", false)).toBe("database");
+    expect(iconFor("deploy.sh", false)).toBe("file-terminal");
+    expect(iconFor("rows.csv", false)).toBe("file-spreadsheet");
+    expect(iconFor("page.html", false)).toBe("code-xml");
+    expect(iconFor("Dockerfile", false)).toBe("container");
+    expect(iconFor("main.go", false)).toBe("file-code"); // code viewer fallback
+    expect(iconFor("photo.png", false)).toBe("file-image");
+    expect(iconFor("clip.mp4", false)).toBe("file-video");
+    expect(iconFor("bundle.tar.gz", false)).toBe("file-archive");
+    expect(iconFor("server.pem", false)).toBe("file-key");
+    expect(iconFor("blob.bin", false)).toBe("file"); // unknown → generic
   });
 
   it("formats sizes", () => {

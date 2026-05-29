@@ -155,6 +155,27 @@ describe("FileBrowserPanel", () => {
     );
   });
 
+  it("filters the listing by name and shows a no-match empty state", async () => {
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+      },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("etc");
+    expect(w.text()).toContain("README.md");
+
+    const filter = w.get('input[aria-label="Filter files"]');
+    await filter.setValue("readme");
+    expect(w.text()).toContain("README.md");
+    expect(w.text()).not.toContain("etc");
+
+    await filter.setValue("zzz-nomatch");
+    expect(w.text()).toContain("No items match your filter.");
+  });
+
   it("shows an inline file preview error with retry", async () => {
     let failRead = true;
     vi.unstubAllGlobals();

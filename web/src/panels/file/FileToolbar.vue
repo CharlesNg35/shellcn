@@ -8,6 +8,9 @@ import SelectButton from "primevue/selectbutton";
 import AppIcon from "../../components/AppIcon.vue";
 import type { UploadProgress } from "../../api/dataSource";
 import { formatBytes } from "./fileTypes";
+import { inputClass } from "../../primevue/preset";
+
+const filter = defineModel<string>("filter", { default: "" });
 
 const props = defineProps<{
   viewMode: "split" | "grid";
@@ -146,6 +149,15 @@ const statusText = computed(() => {
         />
         Refresh
       </Button>
+      <div class="ml-auto w-48">
+        <input
+          v-model="filter"
+          type="search"
+          placeholder="Filter…"
+          aria-label="Filter files"
+          :class="inputClass"
+        />
+      </div>
     </div>
 
     <div

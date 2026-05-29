@@ -78,11 +78,25 @@ const renameName = ref("");
 
 type FileListPage = Page<FileEntry> & { path?: string };
 
+const fileFilter = ref("");
+
 const sorted = computed(() =>
   [...entries.value].sort((a, b) => {
     if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
     return a.name.localeCompare(b.name);
   }),
+);
+
+const filtered = computed(() => {
+  const term = fileFilter.value.trim().toLowerCase();
+  if (!term) return sorted.value;
+  return sorted.value.filter((e) => e.name.toLowerCase().includes(term));
+});
+
+const listEmptyText = computed(() =>
+  fileFilter.value.trim()
+    ? "No items match your filter."
+    : "This folder is empty.",
 );
 
 const operationCtx = computed(() => ({ resource: props.resource }));
@@ -156,6 +170,7 @@ async function loadList(path: string): Promise<void> {
   selected.value = null;
   content.value = null;
   contentError.value = null;
+  fileFilter.value = "";
   try {
     const page = (await fetchPage<FileEntry>(
       props.connectionId,
@@ -405,6 +420,7 @@ watch(
 
     <FileToolbar
       v-model:view-mode="viewMode"
+      v-model:filter="fileFilter"
       :can-upload="canUpload"
       :can-mkdir="canMkdir"
       :can-rename="canRename"
@@ -432,10 +448,11 @@ watch(
         class="w-80 shrink-0 border-r border-surface-200 bg-surface-50/40 dark:border-surface-800 dark:bg-surface-950/30"
       >
         <FileEntryList
-          :entries="sorted"
+          :entries="filtered"
           :selected-path="selected?.path"
           :loading="loadingList"
           :error="listError"
+          :empty-text="listEmptyText"
           @select="selectEntry"
           @open="openEntry"
           @retry="loadList(cwd)"
@@ -478,10 +495,11 @@ watch(
     <FileEntryGrid
       v-else
       class="min-h-0 flex-1"
-      :entries="sorted"
+      :entries="filtered"
       :selected-path="selected?.path"
       :loading="loadingList"
       :error="listError"
+      :empty-text="listEmptyText"
       @select="selectEntry"
       @open="openEntry"
       @retry="loadList(cwd)"

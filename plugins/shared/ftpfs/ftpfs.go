@@ -80,13 +80,35 @@ type Client struct {
 	root string
 }
 
+type ftpControlConn struct {
+	net.Conn
+}
+
+func (c ftpControlConn) SetDeadline(t time.Time) error {
+	return c.SetReadDeadline(t)
+}
+
+func (c ftpControlConn) Write(b []byte) (int, error) {
+	_ = c.Conn.SetDeadline(time.Time{})
+	return c.Conn.Write(b)
+}
+
 func Connect(ctx context.Context, cfg plugin.ConnectConfig, opts Options) (plugin.Session, error) {
 	if err := normalizeOptions(cfg, &opts); err != nil {
 		return nil, err
 	}
 	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
 	dial := func(network, address string) (net.Conn, error) {
-		return cfg.Net.DialContext(ctx, network, address)
+		dialCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		defer cancel()
+		conn, err := cfg.Net.DialContext(dialCtx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		if address == addr {
+			return ftpControlConn{Conn: conn}, nil
+		}
+		return conn, nil
 	}
 	ftpOpts := []ftplib.DialOption{
 		ftplib.DialWithContext(ctx),

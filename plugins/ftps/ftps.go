@@ -54,6 +54,8 @@ func configSchema() plugin.Schema {
 			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "files.example.com"},
 			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Default: ftpfs.DefaultFTPPort, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
 			{Key: "root_path", Label: "Root path", Type: plugin.FieldText, Default: "/", Placeholder: "/"},
+			{Key: "passive_port_start", Label: "Passive port start", Type: plugin.FieldNumber, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}, Help: "Optional start of the passive data port range allowed for file transfers."},
+			{Key: "passive_port_end", Label: "Passive port end", Type: plugin.FieldNumber, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}, Help: "Optional end of the passive data port range allowed for file transfers."},
 			{Key: "tls_mode", Label: "TLS mode", Type: plugin.FieldSelect, Required: true, Default: string(ftpfs.TLSExplicit), Options: []plugin.Option{
 				{Label: "Explicit TLS", Value: string(ftpfs.TLSExplicit)},
 				{Label: "Implicit TLS", Value: string(ftpfs.TLSImplicit)},

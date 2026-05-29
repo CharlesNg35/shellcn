@@ -1014,7 +1014,10 @@ type FileBrowserConfig struct {
 
 - **Listing.** The `Source` returns `Page[FileEntry]` for the current directory.
   Navigating into a directory re-fetches the same route with the `pathParam`
-  updated (breadcrumb-driven); directories sort before files.
+  updated (breadcrumb-driven); directories sort before files. A toolbar filter
+  narrows the current listing by name (client-side, case-insensitive) with a
+  distinct "no match" empty state; it resets on navigation. Same behaviour for
+  every fs plugin — it lives in the panel, not the manifest.
 
   ```go
   type FileEntry struct {
