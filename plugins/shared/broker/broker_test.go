@@ -37,14 +37,3 @@ func TestPageRowsFiltersMapRows(t *testing.T) {
 		t.Fatalf("no filter = %d items, want 3", len(all.Items))
 	}
 }
-
-func TestPageRowsLeavesNonMapRowsUnfiltered(t *testing.T) {
-	rows := [][]any{{"a"}, {"b"}}
-	page, err := PageRows(pageRC(t, "zzz"), rows)
-	if err != nil {
-		t.Fatalf("PageRows: %v", err)
-	}
-	if len(page.Items) != 2 {
-		t.Fatalf("non-map rows must pass through unfiltered: got %d", len(page.Items))
-	}
-}

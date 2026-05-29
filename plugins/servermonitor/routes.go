@@ -164,31 +164,7 @@ func pageRows(rc *plugin.RequestContext, rows []hostmonitor.Row) (plugin.Page[ho
 }
 
 func filterRows(rows []hostmonitor.Row, q string) []hostmonitor.Row {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := make([]hostmonitor.Row, 0, len(rows))
-	for _, r := range rows {
-		if rowMatches(r, q) {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
-// rowMatches tests the query against a row's values, not its map representation,
-// so the "map[" / key-name noise of fmt.Sprint(row) can't match everything.
-func rowMatches(r hostmonitor.Row, q string) bool {
-	for k, v := range r {
-		if k == "_id" {
-			continue
-		}
-		if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {
-			return true
-		}
-	}
-	return false
+	return plugin.FilterRows(rows, q)
 }
 
 func sortRows(rows []hostmonitor.Row, keys []plugin.SortKey) {

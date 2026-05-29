@@ -8,7 +8,6 @@ import (
 	"math"
 	"sort"
 	"strconv"
-	"strings"
 
 	pmox "github.com/luthermonson/go-proxmox"
 
@@ -130,17 +129,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 }
 
 func filterRows(rows []row, q string) []row {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, r := range rows {
-		if strings.Contains(strings.ToLower(fmt.Sprint(r)), q) {
-			out = append(out, r)
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, q)
 }
 
 func sortRows(rows []row, keys []plugin.SortKey) {

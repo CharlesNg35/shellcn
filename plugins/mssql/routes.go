@@ -1423,23 +1423,7 @@ func treeFromPage(rc *plugin.RequestContext, kind string, iconName string, label
 }
 
 func filterRows(rows []row, q string) []row {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, r := range rows {
-		for k, v := range r {
-			if k == "_key" || k == "ref" {
-				continue
-			}
-			if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {
-				out = append(out, r)
-				break
-			}
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, q)
 }
 
 func sortRows(rows []row, keys []plugin.SortKey) {

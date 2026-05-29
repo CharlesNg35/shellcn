@@ -1182,20 +1182,7 @@ func overviewByUID(rc *plugin.RequestContext, param string, load func(*plugin.Re
 }
 
 func filterRows(rows []row, q string) []row {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, r := range rows {
-		for _, v := range r {
-			if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {
-				out = append(out, r)
-				break
-			}
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, q)
 }
 
 func sortRows(rows []row, keys []plugin.SortKey) {

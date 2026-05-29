@@ -1309,20 +1309,7 @@ func cassandraErr(err error) error {
 }
 
 func filterRows(rows []row, query string) []row {
-	query = strings.ToLower(strings.TrimSpace(query))
-	if query == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, r := range rows {
-		for _, v := range r {
-			if strings.Contains(strings.ToLower(fmt.Sprint(v)), query) {
-				out = append(out, r)
-				break
-			}
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, query)
 }
 
 func sortRows(rows []row, sorts []plugin.SortKey) {

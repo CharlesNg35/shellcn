@@ -955,20 +955,7 @@ func pageRows(rc *plugin.RequestContext, rows []map[string]any) (plugin.Page[map
 }
 
 func filterRows(rows []map[string]any, q string) []map[string]any {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, row := range rows {
-		for _, value := range row {
-			if strings.Contains(strings.ToLower(fmt.Sprint(value)), q) {
-				out = append(out, row)
-				break
-			}
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, q)
 }
 
 func sortRows(rows []map[string]any, keys []plugin.SortKey) {
