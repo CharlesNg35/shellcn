@@ -142,11 +142,25 @@ func (s *Server) handleRecordingContent(w http.ResponseWriter, r *http.Request) 
 
 	s.auditRecordingEvent(ctx, user, rec, recReadEvent, models.AuditAllowed, nil)
 	w.Header().Set("Content-Type", recording.ContentType(plugin.RecordingFormat(rec.Format)))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Disposition", "inline; filename=\""+rec.ID+contentExt(rec.Format)+"\"")
+
+	name := rec.ID + contentExt(rec.Format)
+	modTime := rec.StartedAt
+	if rec.EndedAt != nil {
+		modTime = *rec.EndedAt
+	}
+	// A seekable blob enables Range/seek (video scrubbing) and HEAD via ServeContent.
+	if seeker, ok := rc.(io.ReadSeeker); ok {
+		http.ServeContent(w, r, name, modTime, seeker)
+		return
+	}
 	if rec.Size > 0 {
 		w.Header().Set("Content-Length", strconv.FormatInt(rec.Size, 10))
 	}
-	_, _ = io.Copy(w, rc)
+	if r.Method != http.MethodHead {
+		_, _ = io.Copy(w, rc)
+	}
 }
 
 func contentExt(format string) string {

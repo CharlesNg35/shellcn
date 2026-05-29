@@ -175,6 +175,7 @@ func (s *Server) routes() chi.Router {
 				pr.Get("/recordings", s.handleListRecordings)
 				pr.Get("/recordings/{id}", s.handleGetRecording)
 				pr.Get("/recordings/{id}/content", s.handleRecordingContent)
+				pr.Head("/recordings/{id}/content", s.handleRecordingContent)
 				pr.Delete("/recordings/{id}", s.handleDeleteRecording)
 				if s.deps.Connections != nil {
 					pr.Get("/connections/{id}/recordings", s.handleListConnectionRecordings)
