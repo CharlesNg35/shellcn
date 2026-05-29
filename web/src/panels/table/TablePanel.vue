@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref, watch as vueWatch } from "vue";
+import {
+  computed,
+  onActivated,
+  onDeactivated,
+  onUnmounted,
+  reactive,
+  ref,
+  watch as vueWatch,
+} from "vue";
 import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
 import DataTable, {
   type DataTableCellEditCompleteEvent,
@@ -875,6 +883,11 @@ function startWatch(): void {
 // staged state untouched so the view never flickers or loses the user's place.
 const refreshMs = computed(() => tableConfig.value?.refreshIntervalMs ?? 0);
 const visibility = useDocumentVisibility();
+// Under KeepAlive an off-screen tab stays mounted; pause its poll so a plugin
+// with many live tabs only refreshes the visible one. No-op when not kept alive.
+const active = ref(true);
+onActivated(() => (active.value = true));
+onDeactivated(() => (active.value = false));
 
 async function refresh(): Promise<void> {
   if (!props.source || loading.value || committing.value) return;
@@ -914,8 +927,15 @@ const { pause: pausePoll, resume: resumePoll } = useIntervalFn(
   { immediate: false },
 );
 vueWatch(
-  () => refreshMs.value > 0 && visibility.value === "visible",
-  (on) => (on ? resumePoll() : pausePoll()),
+  () => refreshMs.value > 0 && active.value && visibility.value === "visible",
+  (on, was) => {
+    if (!on) {
+      pausePoll();
+      return;
+    }
+    if (was === false) void refresh(); // catch up after being paused
+    resumePoll();
+  },
   { immediate: true },
 );
 

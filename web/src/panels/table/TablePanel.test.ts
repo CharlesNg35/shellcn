@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { defineComponent, h, KeepAlive } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
@@ -605,6 +606,50 @@ describe("TablePanel staged edits", () => {
     await flushPromises();
     expect(w.emitted("select")).toBeFalsy();
     expect(document.body.textContent).toContain("nginx");
+    w.unmount();
+  });
+
+  it("pauses live polling while deactivated under KeepAlive", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    installFetch(() => {
+      calls += 1;
+      return {
+        body: { items: [{ _id: "a", name: "x" }], nextCursor: "", total: 1 },
+      };
+    });
+    const Parent = defineComponent({
+      props: { show: { type: Boolean, default: true } },
+      setup(p) {
+        return () =>
+          h(KeepAlive, () =>
+            p.show
+              ? h(TablePanel, {
+                  connectionId: "c1",
+                  source: { routeId: "server_monitor.processes" },
+                  config: {
+                    columns: [{ key: "name", label: "Name" }],
+                    refreshIntervalMs: 1000,
+                  },
+                })
+              : null,
+          );
+      },
+    });
+    const w = mount(Parent, { props: { show: true } });
+    await flushPromises();
+    expect(calls).toBe(1); // initial load
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toBe(2); // polls while visible/active
+
+    await w.setProps({ show: false }); // deactivate (kept alive, not unmounted)
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(calls).toBe(2); // paused — no background polling
+
+    await w.setProps({ show: true }); // reactivate
+    await flushPromises();
+    expect(calls).toBe(3); // immediate catch-up refresh
     w.unmount();
   });
 

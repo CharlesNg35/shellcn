@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import Chart from "primevue/chart";
+import { computed, ref } from "vue";
+import type { ChartData, ChartOptions } from "chart.js";
 import { useTheme } from "../../../composables/useTheme";
 import { seriesColor } from "./chartTheme";
+import { useChart } from "./useChart";
 
 const props = withDefaults(
   defineProps<{
@@ -24,7 +25,8 @@ const pct = computed(() => {
   return Math.max(0, Math.min(100, (props.value / max) * 100));
 });
 
-const data = computed(() => ({
+const data = computed<ChartData>(() => ({
+  labels: ["value", "rest"],
   datasets: [
     {
       data: [pct.value, 100 - pct.value],
@@ -37,13 +39,21 @@ const data = computed(() => ({
   ],
 }));
 
-const options = {
+const options = computed<ChartOptions>(() => ({
   cutout: "78%",
   responsive: true,
   maintainAspectRatio: false,
   plugins: { legend: { display: false }, tooltip: { enabled: false } },
   animation: { duration: 400 },
-};
+}));
+
+const canvasEl = ref<HTMLCanvasElement | null>(null);
+useChart(
+  canvasEl,
+  "doughnut",
+  () => data.value,
+  () => options.value,
+);
 
 const display = computed(() => {
   if (props.value === null) return { value: "—", unit: "" };
@@ -59,7 +69,7 @@ const display = computed(() => {
     class="flex flex-col items-center rounded-xl border border-surface-200 bg-surface-0 p-4 dark:border-surface-800 dark:bg-surface-900"
   >
     <div class="relative h-28 w-28">
-      <Chart type="doughnut" :data="data" :options="options" />
+      <canvas ref="canvasEl" />
       <div class="absolute inset-0 flex flex-col items-center justify-center">
         <span
           class="text-xl font-semibold text-surface-900 dark:text-surface-0"
