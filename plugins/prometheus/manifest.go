@@ -45,9 +45,9 @@ func resources() []plugin.ResourceType {
 				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
 				{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("overview")}},
 				{Key: "live", Label: "Live", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: rid("metrics.live"), Method: plugin.MethodWS}, Config: liveMetricsConfig()},
-				{Key: "targets", Label: "Targets", Icon: icon("crosshair"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("targets.list")}, Config: plugin.TableConfig{Columns: targetColumns(), Exportable: true}.Map()},
-				{Key: "alerts", Label: "Alerts", Icon: icon("bell"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("alerts.list")}, Config: plugin.TableConfig{Columns: alertColumns(), Exportable: true}.Map()},
-				{Key: "rules", Label: "Rules", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("rules.list")}, Config: plugin.TableConfig{Columns: ruleColumns(), Exportable: true}.Map()},
+				{Key: "targets", Label: "Targets", Icon: icon("crosshair"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("targets.list")}, Config: plugin.TableConfig{Columns: targetColumns(), Exportable: true, RowDetail: true}.Map()},
+				{Key: "alerts", Label: "Alerts", Icon: icon("bell"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("alerts.list")}, Config: plugin.TableConfig{Columns: alertColumns(), Exportable: true, RowDetail: true}.Map()},
+				{Key: "rules", Label: "Rules", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("rules.list")}, Config: plugin.TableConfig{Columns: ruleColumns(), Exportable: true, RowDetail: true}.Map()},
 			}},
 		},
 		{

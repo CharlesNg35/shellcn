@@ -547,4 +547,74 @@ describe("TablePanel staged edits", () => {
     expect(w.text()).toContain("alpha-refreshed");
     w.unmount();
   });
+
+  it("opens the row-detail dialog from the details icon, with all fields", async () => {
+    installFetch(() => ({
+      body: {
+        items: [{ name: "nginx", cpuPct: 12.34 }],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: {
+          columns: [
+            { key: "name", label: "Name" },
+            { key: "cpuPct", label: "CPU", type: "percent", precision: 1 },
+          ],
+          rowDetail: true,
+        },
+      },
+    });
+    await flushPromises();
+    const detailsBtn = [...document.body.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "View details",
+    ) as HTMLButtonElement;
+    expect(detailsBtn).toBeTruthy();
+    detailsBtn.click();
+    await flushPromises();
+    expect(document.body.textContent).toContain("12.3%");
+    w.unmount();
+  });
+
+  it("does not hijack row-click navigation when rowDetail is set", async () => {
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: { columns, rowDetail: true },
+      },
+    });
+    await flushPromises();
+    // Rows carry a ref → click still navigates; the detail dialog stays closed.
+    await w.find("tbody tr").trigger("click");
+    expect(w.emitted("select")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Close");
+    w.unmount();
+  });
+
+  it("falls back to the detail dialog on row-click when nothing else handles it", async () => {
+    installFetch(() => ({
+      body: { items: [{ name: "nginx", cpuPct: 5 }], nextCursor: "", total: 1 },
+    }));
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: { columns: [{ key: "name", label: "Name" }], rowDetail: true },
+      },
+    });
+    await flushPromises();
+    // No ref, not selectable → row-click opens details as the fallback.
+    await w.find("tbody tr").trigger("click");
+    await flushPromises();
+    expect(w.emitted("select")).toBeFalsy();
+    expect(document.body.textContent).toContain("nginx");
+    w.unmount();
+  });
 });

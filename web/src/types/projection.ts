@@ -249,6 +249,9 @@ export interface TablePanelConfig {
   hiddenColumns?: string[];
   // Opt-in: show the generic CSV/JSON export control for loaded rows.
   exportable?: boolean;
+  // Opt-in: adds a per-row details icon opening a dialog with every field;
+  // row-click falls back to it only when nothing else handles the click.
+  rowDetail?: boolean;
 }
 
 export interface FormPanelConfig {

@@ -117,6 +117,11 @@ type TableConfig struct {
 	// Exportable opts the table into the generic CSV/JSON export of loaded rows.
 	// Off by default so a plugin must deliberately allow data to leave the grid.
 	Exportable bool `json:"exportable,omitempty"`
+
+	// RowDetail adds a per-row details icon that opens a dialog listing every
+	// field of the row; row-click also falls back to it when nothing else
+	// (selection/navigation) handles the click. For field-rich flat tables.
+	RowDetail bool `json:"rowDetail,omitempty"`
 }
 
 func (c TableConfig) Map() map[string]any {
@@ -168,6 +173,9 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if c.Exportable {
 		out["exportable"] = true
+	}
+	if c.RowDetail {
+		out["rowDetail"] = true
 	}
 	return out
 }

@@ -662,6 +662,7 @@ type TableConfig struct {
     StagedEdits   bool        // opt-in: buffer edits/inserts/deletes; commit or discard as a batch
     HiddenColumns []string    // field keys to omit from auto-derived columns
     Exportable    bool        // opt-in: show the generic CSV/JSON export of loaded rows
+    RowDetail     bool        // opt-in: per-row details icon opens a dialog of every field (row-click falls back to it)
 }
 
 type RowMutation struct {
@@ -712,6 +713,14 @@ by default, so a plugin opts into the review-then-apply workflow deliberately.
 config) are off by default; a plugin must declare them, so data never leaves a
 panel unless the manifest allows it. Export is client-side (the loaded rows) and
 fully generic — every panel that sets the flag gets CSV + JSON for free.
+
+**Row detail is opt-in.** `RowDetail` adds a per-row **details icon** that opens
+a dialog listing every field of the row — declared columns (with their labels
+and formatting) plus any extra fields — for field-rich flat tables (a process, a
+service). The icon is always available and never interferes with other clicks;
+row-click only **falls back** to the dialog when nothing else (row selection or
+`ref` navigation) handles the click. Off by default, and skipped for editable
+grids.
 
 ```go
 

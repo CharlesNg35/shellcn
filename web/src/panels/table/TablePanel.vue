@@ -41,6 +41,7 @@ import {
   updateMutation,
   type RowMutation,
 } from "./mutation";
+import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
@@ -694,21 +695,82 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
 function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
   if (isInteractiveTarget(e.originalEvent?.target ?? null)) return;
+  if (editable.value) return;
+  let handled = false;
   if (selectable.value) {
     selection.value =
       selection.value.length === 1 && rid(selection.value[0]) === rid(row)
         ? []
         : [row];
+    handled = true;
   }
-  if (row.ref) emit("select", row);
+  if (row.ref) {
+    emit("select", row);
+    handled = true;
+  }
+  // Only fall back to the detail dialog when the click had nothing else to do;
+  // selection and navigation always win. The explicit details icon stays
+  // available regardless.
+  if (!handled && rowDetailEnabled.value) detailRow.value = row;
 }
 
 function rowClass(row: Row): string {
   if (staged.value && isDeleted(row)) return "line-through opacity-50";
   if (staged.value && isInserted(row))
     return "bg-emerald-50 dark:bg-emerald-500/10";
-  return row.ref ? "cursor-pointer" : "";
+  const clickable =
+    row.ref || selectable.value || (rowDetailEnabled.value && !editable.value);
+  return clickable ? "cursor-pointer" : "";
 }
+
+// --- row detail dialog --------------------------------------------------
+// Opt-in (config.rowDetail): clicking a row opens a dialog listing all its
+// fields — declared columns first (with their labels/formatting), then any
+// extra row fields — for flat tables whose rows have no resource detail view.
+const rowDetailEnabled = computed(() => Boolean(tableConfig.value?.rowDetail));
+const detailRow = ref<Row | null>(null);
+
+function humanize(key: string): string {
+  const spaced = key
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z\d])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+const detailItems = computed<DetailItem[]>(() => {
+  const r = detailRow.value;
+  if (!r) return [];
+  const items: DetailItem[] = [];
+  const declared = new Set<string>();
+  for (const col of columns.value) {
+    declared.add(col.key);
+    items.push({
+      key: col.key,
+      label: col.label,
+      text: display(r, col),
+      badge: col.type === "badge" ? badgeClass(r, col) : undefined,
+    });
+  }
+  for (const key of Object.keys(r)) {
+    if (declared.has(key) || hidden.value.has(key)) continue;
+    const v = (r as Record<string, unknown>)[key];
+    if (v === undefined || v === null || v === "") continue;
+    items.push({
+      key,
+      label: humanize(key),
+      text: typeof v === "object" ? JSON.stringify(v) : String(v),
+    });
+  }
+  return items;
+});
+
+const detailTitle = computed(() => {
+  const r = detailRow.value;
+  if (!r) return "";
+  const raw =
+    r.label ?? r.name ?? r.ref?.name ?? r[columns.value[0]?.key ?? ""];
+  return raw != null && raw !== "" ? String(raw) : "Details";
+});
 
 function resolveActions(ids: string[]): Action[] {
   return ids
@@ -802,6 +864,7 @@ async function refresh(): Promise<void> {
   if (!props.source || loading.value || committing.value) return;
   if (pendingCount.value > 0) return;
   if (showInsert.value || deleteTarget.value || actionOutput.value) return;
+  if (detailRow.value) return;
   try {
     const page = await fetchPage<Row>(
       props.connectionId,
@@ -1121,6 +1184,28 @@ onUnmounted(() => {
             </Button>
           </template>
         </Column>
+        <Column
+          v-if="rowDetailEnabled && !editable"
+          :header-style="{ width: '3rem' }"
+          :pt="{ bodyCell: 'w-12 text-right' }"
+        >
+          <template #body="{ data }">
+            <Button
+              type="button"
+              text
+              rounded
+              severity="secondary"
+              title="View details"
+              aria-label="View details"
+              @click.stop="detailRow = data as Row"
+            >
+              <AppIcon
+                :icon="{ type: 'lucide', value: 'panel-right-open' }"
+                :size="15"
+              />
+            </Button>
+          </template>
+        </Column>
         <template #empty>{{ emptyText }}</template>
       </DataTable>
     </div>
@@ -1240,5 +1325,12 @@ onUnmounted(() => {
         />
       </template>
     </Dialog>
+
+    <RowDetailDialog
+      :visible="!!detailRow"
+      :title="detailTitle"
+      :items="detailItems"
+      @update:visible="(v) => !v && (detailRow = null)"
+    />
   </div>
 </template>
