@@ -355,6 +355,13 @@ WHERE con.contype = 'f' AND cn.nspname !~ '^pg_' AND cn.nspname <> 'information_
   AND ($1::text = '' OR cn.nspname = $1)
 ORDER BY con.conname, ck.ord`
 
+const relationColumnsSQL = `
+SELECT table_schema, table_name, column_name, data_type
+FROM information_schema.columns
+WHERE table_schema !~ '^pg_' AND table_schema <> 'information_schema'
+  AND ($1::text = '' OR table_schema = $1)
+ORDER BY table_schema, table_name, ordinal_position`
+
 func relationGraph(rc *plugin.RequestContext) (any, error) {
 	s, pool, err := dbPool(rc)
 	if err != nil {
@@ -364,15 +371,23 @@ func relationGraph(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := queryRows(rc.Ctx, pool, s.opts.QueryTimeout, relationGraphSQL, []any{schema})
+	colRows, err := queryRows(rc.Ctx, pool, s.opts.QueryTimeout, relationColumnsSQL, []any{schema})
 	if err != nil {
 		return nil, err
 	}
-	fks := make([]sqldb.ForeignKey, 0, len(rows))
-	for _, r := range rows {
+	fkRows, err := queryRows(rc.Ctx, pool, s.opts.QueryTimeout, relationGraphSQL, []any{schema})
+	if err != nil {
+		return nil, err
+	}
+	columns := make([]sqldb.TableColumn, 0, len(colRows))
+	for _, r := range colRows {
+		columns = append(columns, sqldb.TableColumnFromRow(r))
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(fkRows))
+	for _, r := range fkRows {
 		fks = append(fks, sqldb.ForeignKeyFromRow(r))
 	}
-	return sqldb.RelationGraph(fks), nil
+	return sqldb.RelationGraph(columns, fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {

@@ -474,6 +474,13 @@ WHERE kcu.table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_extension
   AND ($1::STRING = '' OR kcu.table_schema = $1)
 ORDER BY rc.constraint_name, kcu.ordinal_position`
 
+const relationColumnsSQL = `
+SELECT table_schema, table_name, column_name, data_type
+FROM information_schema.columns
+WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_extension', 'crdb_internal')
+  AND ($1::STRING = '' OR table_schema = $1)
+ORDER BY table_schema, table_name, ordinal_position`
+
 func relationGraph(rc *plugin.RequestContext) (any, error) {
 	s, err := cockroachSession(rc)
 	if err != nil {
@@ -483,15 +490,23 @@ func relationGraph(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{schema})
+	colRows, err := queryRows(rc.Ctx, s, relationColumnsSQL, []any{schema})
 	if err != nil {
 		return nil, err
 	}
-	fks := make([]sqldb.ForeignKey, 0, len(rows))
-	for _, r := range rows {
+	fkRows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{schema})
+	if err != nil {
+		return nil, err
+	}
+	columns := make([]sqldb.TableColumn, 0, len(colRows))
+	for _, r := range colRows {
+		columns = append(columns, sqldb.TableColumnFromRow(r))
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(fkRows))
+	for _, r := range fkRows {
 		fks = append(fks, sqldb.ForeignKeyFromRow(r))
 	}
-	return sqldb.RelationGraph(fks), nil
+	return sqldb.RelationGraph(columns, fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {

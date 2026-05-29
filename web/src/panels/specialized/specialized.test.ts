@@ -16,6 +16,12 @@ vi.mock("@vue-flow/core", () => ({
     template:
       '<div data-test="graph"><button v-for="n in nodes" :key="n.id" type="button" @click="$emit(\'node-click\', { node: n })">{{ n.data.label }}</button><slot /></div>',
   }),
+  Handle: defineComponent({
+    props: ["type", "position", "id"],
+    template: "<div />",
+  }),
+  Position: { Left: "left", Right: "right", Top: "top", Bottom: "bottom" },
+  MarkerType: { ArrowClosed: "arrowclosed" },
 }));
 vi.mock("@vue-flow/background", () => ({
   Background: defineComponent({ template: "<div />" }),

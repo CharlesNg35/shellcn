@@ -271,7 +271,20 @@ func relationGraph(rc *plugin.RequestContext) (any, error) {
 		filter = " AND ac.owner = :1"
 		args = append(args, schema)
 	}
-	rows, err := queryRows(rc.Ctx, s, `
+	colFilter, colArgs := "", []any{}
+	if schema != "" {
+		colFilter = " AND owner = :1"
+		colArgs = append(colArgs, schema)
+	}
+	colRows, err := queryRows(rc.Ctx, s, `
+SELECT owner AS "table_schema", table_name AS "table_name", column_name AS "column_name", data_type AS "data_type"
+FROM all_tab_columns
+WHERE 1 = 1`+colFilter+`
+ORDER BY owner, table_name, column_id`, colArgs)
+	if err != nil {
+		return nil, err
+	}
+	fkRows, err := queryRows(rc.Ctx, s, `
 SELECT ac.constraint_name AS "constraint_name",
        ac.owner AS "child_schema", ac.table_name AS "child_table", acc.column_name AS "child_column",
        rc.owner AS "parent_schema", rc.table_name AS "parent_table", rcc.column_name AS "parent_column"
@@ -284,11 +297,15 @@ ORDER BY ac.constraint_name, acc.position`, args)
 	if err != nil {
 		return nil, err
 	}
-	fks := make([]sqldb.ForeignKey, 0, len(rows))
-	for _, r := range rows {
+	columns := make([]sqldb.TableColumn, 0, len(colRows))
+	for _, r := range colRows {
+		columns = append(columns, sqldb.TableColumnFromRow(r))
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(fkRows))
+	for _, r := range fkRows {
 		fks = append(fks, sqldb.ForeignKeyFromRow(r))
 	}
-	return sqldb.RelationGraph(fks), nil
+	return sqldb.RelationGraph(columns, fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {

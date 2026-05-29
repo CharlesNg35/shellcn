@@ -304,9 +304,21 @@ func relationGraph(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	columns := []sqldb.TableColumn{}
 	fks := []sqldb.ForeignKey{}
 	for _, database := range databases {
-		rows, err := queryRows(rc.Ctx, s, fmt.Sprintf(`
+		colRows, err := queryRows(rc.Ctx, s, fmt.Sprintf(`
+SELECT TABLE_SCHEMA AS table_schema, TABLE_NAME AS table_name, COLUMN_NAME AS column_name, DATA_TYPE AS data_type
+FROM %[1]s.INFORMATION_SCHEMA.COLUMNS
+WHERE (@p1 = '' OR TABLE_SCHEMA = @p1)
+ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION`, quoteIdent(database)), []any{schema})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range colRows {
+			columns = append(columns, sqldb.TableColumnFromRow(r))
+		}
+		fkRows, err := queryRows(rc.Ctx, s, fmt.Sprintf(`
 SELECT fk.name AS constraint_name,
        cs.name AS child_schema, ct.name AS child_table, cc.name AS child_column,
        ps.name AS parent_schema, pt.name AS parent_table, pc.name AS parent_column
@@ -323,11 +335,11 @@ ORDER BY fk.name, fkc.constraint_column_id`, quoteIdent(database)), []any{schema
 		if err != nil {
 			return nil, err
 		}
-		for _, r := range rows {
+		for _, r := range fkRows {
 			fks = append(fks, sqldb.ForeignKeyFromRow(r))
 		}
 	}
-	return sqldb.RelationGraph(fks), nil
+	return sqldb.RelationGraph(columns, fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {

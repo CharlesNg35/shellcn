@@ -239,6 +239,13 @@ WHERE REFERENCED_TABLE_NAME IS NOT NULL
   AND (? = '' OR TABLE_SCHEMA = ?)
 ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION`
 
+const relationColumnsSQL = `
+SELECT TABLE_SCHEMA AS table_schema, TABLE_NAME AS table_name, COLUMN_NAME AS column_name, COLUMN_TYPE AS data_type
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA NOT IN ('information_schema', 'performance_schema', 'sys', 'mysql')
+  AND (? = '' OR TABLE_SCHEMA = ?)
+ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION`
+
 func relationGraph(rc *plugin.RequestContext) (any, error) {
 	s, err := mysqlSession(rc)
 	if err != nil {
@@ -248,15 +255,23 @@ func relationGraph(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{database, database})
+	colRows, err := queryRows(rc.Ctx, s, relationColumnsSQL, []any{database, database})
 	if err != nil {
 		return nil, err
 	}
-	fks := make([]sqldb.ForeignKey, 0, len(rows))
-	for _, r := range rows {
+	fkRows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{database, database})
+	if err != nil {
+		return nil, err
+	}
+	columns := make([]sqldb.TableColumn, 0, len(colRows))
+	for _, r := range colRows {
+		columns = append(columns, sqldb.TableColumnFromRow(r))
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(fkRows))
+	for _, r := range fkRows {
 		fks = append(fks, sqldb.ForeignKeyFromRow(r))
 	}
-	return sqldb.RelationGraph(fks), nil
+	return sqldb.RelationGraph(columns, fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
