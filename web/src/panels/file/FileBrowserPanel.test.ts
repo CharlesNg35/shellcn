@@ -123,6 +123,10 @@ function panelButton(w: ReturnType<typeof mount>, text: string) {
   return w.findAll("button").find((b) => b.text().trim() === text)!;
 }
 
+function panelButtonByLabel(w: ReturnType<typeof mount>, label: string) {
+  return w.findAll("button").find((b) => b.attributes("aria-label") === label)!;
+}
+
 async function setBodyInput(placeholder: string, value: string): Promise<void> {
   const input = document.body.querySelector(
     `input[placeholder="${placeholder}"]`,
@@ -191,7 +195,7 @@ describe("FileBrowserPanel", () => {
       .find((b) => b.text().includes("README.md"))!
       .trigger("click");
     await flushPromises();
-    await panelButton(w, "Rename").trigger("click");
+    await panelButtonByLabel(w, "Rename selected item").trigger("click");
     await flushPromises();
 
     // Pre-filled with the current name → no change → disabled.
@@ -399,7 +403,7 @@ describe("FileBrowserPanel", () => {
       "/api/connections/c1/x/ssh.sftp.download?p.path=%2FREADME.md",
     );
 
-    await panelButton(w, "Rename").trigger("click");
+    await panelButtonByLabel(w, "Rename selected item").trigger("click");
     await setBodyInput("Name", "NOTES.md");
     bodyButton("Rename")!.click();
     await flushPromises();
@@ -433,7 +437,7 @@ describe("FileBrowserPanel", () => {
       .findAll("li button")
       .find((b) => b.text().includes("README.md"));
     await fileForDelete!.trigger("click");
-    await panelButton(w, "Delete").trigger("click");
+    await panelButtonByLabel(w, "Delete selected item").trigger("click");
     bodyButton("Delete")!.click();
     await flushPromises();
 
