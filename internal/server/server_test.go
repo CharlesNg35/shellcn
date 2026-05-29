@@ -298,7 +298,7 @@ func newHarness(t *testing.T) *harness {
 	for _, u := range []struct {
 		id   string
 		role models.Role
-	}{{"admin", models.RoleAdmin}, {"op", models.RoleOperator}, {"viewer", models.RoleViewer}} {
+	}{{"admin", models.RoleAdmin}, {"op", models.RoleOperator}, {"op2", models.RoleOperator}, {"viewer", models.RoleViewer}} {
 		_ = st.Users.Create(ctx, &models.User{ID: u.id, Username: u.id, Roles: []models.Role{u.role}}, "")
 		h.sessions[u.id] = authMgr.Create(u.id)
 	}

@@ -56,6 +56,18 @@ func (s *gormUserStore) GetByUsername(ctx context.Context, username string) (mod
 	return u, nil
 }
 
+func (s *gormUserStore) GetByEmail(ctx context.Context, email string) (models.User, error) {
+	if email == "" {
+		return models.User{}, ErrNotFound
+	}
+	var u models.User
+	if err := s.db.WithContext(ctx).First(&u, "email = ?", email).Error; err != nil {
+		return models.User{}, normNotFound(err)
+	}
+	u.PasswordHash = ""
+	return u, nil
+}
+
 func (s *gormUserStore) GetPasswordHash(ctx context.Context, userID string) (string, error) {
 	var u models.User
 	if err := s.db.WithContext(ctx).Select("password_hash").First(&u, "id = ?", userID).Error; err != nil {

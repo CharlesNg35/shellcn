@@ -5,7 +5,7 @@ import { useTheme } from "../composables/useTheme";
 import { useAuthStore } from "../stores/auth";
 import { api } from "../api/client";
 import RoleGate from "../components/RoleGate.vue";
-import UsersSection from "../components/settings/UsersSection.vue";
+import AppIcon from "../components/AppIcon.vue";
 
 const { isDark, toggle } = useTheme();
 const auth = useAuthStore();
@@ -15,16 +15,20 @@ const emailEnabled = ref<boolean | null>(null);
 onMounted(async () => {
   if (!auth.isAdmin) return;
   try {
-    const status = await api.get<{ enabled: boolean }>("/admin/email");
-    emailEnabled.value = status.enabled;
+    emailEnabled.value = (
+      await api.get<{ enabled: boolean }>("/admin/email")
+    ).enabled;
   } catch {
     emailEnabled.value = null;
   }
 });
+
+const linkClass =
+  "flex items-center gap-3 rounded-lg border border-surface-200 px-4 py-3 transition-colors hover:bg-surface-100 focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none dark:border-surface-800 dark:hover:bg-surface-800/60";
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-4xl flex-col gap-4 p-8">
+  <div class="mx-auto flex max-w-2xl flex-col gap-4 p-8">
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       Settings
     </h1>
@@ -40,7 +44,43 @@ onMounted(async () => {
       </Button>
     </div>
 
+    <RouterLink :to="{ name: 'activity' }" :class="linkClass">
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'scroll-text' }"
+        :size="18"
+        class="text-surface-400"
+      />
+      <span
+        class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
+      >
+        My activity
+      </span>
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'chevron-right' }"
+        :size="16"
+        class="text-surface-300"
+      />
+    </RouterLink>
+
     <RoleGate admin>
+      <RouterLink :to="{ name: 'users' }" :class="linkClass">
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'users' }"
+          :size="18"
+          class="text-surface-400"
+        />
+        <span
+          class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
+        >
+          Users &amp; access
+        </span>
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'chevron-right' }"
+          :size="16"
+          class="text-surface-300"
+        />
+      </RouterLink>
+
       <div
         class="flex items-center justify-between rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
       >
@@ -57,15 +97,6 @@ onMounted(async () => {
           {{ emailEnabled ? "Configured" : "Not configured" }}
         </span>
       </div>
-
-      <section
-        class="flex flex-col gap-3 rounded-lg border border-surface-200 p-4 dark:border-surface-800"
-      >
-        <h2 class="font-medium text-surface-800 dark:text-surface-100">
-          Users &amp; access
-        </h2>
-        <UsersSection />
-      </section>
     </RoleGate>
   </div>
 </template>

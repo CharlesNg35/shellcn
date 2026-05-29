@@ -49,6 +49,11 @@ func (s *Server) auditCredEvent(ctx context.Context, user models.User, credID, e
 func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := userFrom(ctx)
+	if !canCreate(user) {
+		s.auditCredEvent(ctx, user, "", credCreateEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		return
+	}
 
 	var req credentialWriteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

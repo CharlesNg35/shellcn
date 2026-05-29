@@ -35,3 +35,8 @@ config.global.plugins = [
   ToastService,
   ConfirmationService,
 ];
+
+// Render RouterLink as a plain anchor when no router is installed in a unit test.
+config.global.stubs = {
+  RouterLink: { props: ["to"], template: "<a><slot /></a>" },
+};

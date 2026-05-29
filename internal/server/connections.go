@@ -93,6 +93,11 @@ func (s *Server) auditConnEvent(ctx context.Context, user models.User, connID, e
 func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := userFrom(ctx)
+	if !canCreate(user) {
+		s.auditConnEvent(ctx, user, "", connCreateEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		return
+	}
 
 	var req connectionWriteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

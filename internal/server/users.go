@@ -13,19 +13,21 @@ type userSummary struct {
 	DisplayName string `json:"displayName,omitempty"`
 }
 
-const userLookupLimit = 20
+const userSearchLimit = 20
 
-// handleListUsers returns non-secret user summaries matching ?query=.
-func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+// handleSearchUsers returns non-secret user summaries matching ?query=, backing
+// the admin-only share-picker autocomplete. It is admin-gated by its route group;
+// operators share by exact email instead of enumerating accounts.
+func (s *Server) handleSearchUsers(w http.ResponseWriter, r *http.Request) {
 	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("query")))
 	users, err := s.deps.Store.Users.List(r.Context())
 	if err != nil {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	out := make([]userSummary, 0, userLookupLimit)
+	out := make([]userSummary, 0, userSearchLimit)
 	for _, u := range users {
-		if len(out) >= userLookupLimit {
+		if len(out) >= userSearchLimit {
 			break
 		}
 		if q != "" && !matchesUser(u, q) {

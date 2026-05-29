@@ -553,11 +553,19 @@ connection form.
 **Three roles (`models.Role` — never hardcode the strings; the frontend mirrors
 them in `constants/roles.ts`).**
 
-- **viewer** — consumes only resources shared to it; creates nothing (the role/risk
-  policy denies `write`+ risk, so create routes are refused). The UI hides create
-  affordances when `!auth.canCreate`.
+- **viewer** — consumes only resources shared to it; creates nothing. Every create
+  route (`POST /connections|/credentials|/connection-folders`) is gated by
+  `canCreate` (operator/admin) **server-side**; the UI also hides those affordances
+  when `!auth.canCreate`, but the check is enforced regardless of the UI.
 - **operator** — full self-service over its own connections/credentials/recordings.
 - **admin** — manages user accounts only (see below).
+
+**Sharing the picker.** Only admins may enumerate users
+(`GET /admin/users/search`, the autocomplete). Operators, who can't enumerate
+accounts, share by the recipient's **exact email**: a grant request carries either
+`subjectId` (admin picked) or `email` (resolved server-side via
+`Users.GetByEmail`). The ShareDialog shows an autocomplete for admins and a plain
+email field otherwise.
 
 **Admin is a user-management role, not a super-user.** Admin grants the right to
 manage users (create/role/deactivate/invite, email status) — it confers **no
@@ -585,14 +593,20 @@ gates the Share affordance on `canShare` and the backend enforces it.
 only their own recordings (`RecordingService.List` is always scoped to the actor;
 `canView` is owner-only). Admins never view another user's recordings or content.
 
-**Admin management lives in Settings.** User management and email status are
-sections of the Settings page, shown only to admins via a generic `RoleGate`
-(client gate; the admin APIs enforce server-side). An admin opens a user's detail
-page (`/settings/users/:id`, admin-only) with three tabs: **Overview** (name, email,
-status, role + deactivate), **Connections** (a metadata-only inventory — name,
-protocol, icon, created date; never config, secrets, or access), and **Audit** (the
-user's paginated audit trail). These are the only cross-user views an admin gets,
-and none expose another user's resources.
+**Admin management lives in Settings.** The Settings page is a hub of navigable,
+breadcrumbed links (`AppBreadcrumb` wraps PrimeVue `Breadcrumb`, styled in the
+preset). Admin-only links (Users) are gated by a generic `RoleGate` (client gate;
+the admin APIs enforce server-side). `Settings → Users` (`/settings/users`) lists
+users + invitations; opening one goes to `Settings → Users → {name}`
+(`/settings/users/:id`) with three tabs: **Overview** (name, email, status, role +
+deactivate), **Connections** (a metadata-only inventory — name, protocol, icon,
+created date; never config, secrets, or access), and **Audit** (the user's
+paginated audit trail, `GET /admin/users/:id/audit`). These are the only cross-user
+views an admin gets, and none expose another user's resources.
+
+**My activity.** Every user has `Settings → My activity` (`/settings/activity`),
+their own paginated audit trail via `GET /audit/me` — the self-service counterpart
+to the admin Audit tab, reusing the same `AuditTable`.
 
 The schema renderer resolves choices for a `credential_ref` field through a core
 API, not through plugin routes: `GET /api/credentials?kind=...&protocol=...`

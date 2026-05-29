@@ -159,7 +159,7 @@ func (s *Server) routes() chi.Router {
 				pr.Delete("/credentials/{id}", s.handleDeleteCredential)
 			}
 
-			pr.Get("/users", s.handleListUsers)
+			pr.Get("/audit/me", s.handleMyAudit)
 			if s.deps.Connections != nil {
 				pr.Get("/connections/{id}/grants", s.handleListConnectionGrants)
 				pr.Post("/connections/{id}/grants", s.handleCreateConnectionGrant)
@@ -200,6 +200,7 @@ func (s *Server) routes() chi.Router {
 				pr.Group(func(ar chi.Router) {
 					ar.Use(s.requireAdmin)
 					ar.Get("/admin/users", s.handleAdminListUsers)
+					ar.Get("/admin/users/search", s.handleSearchUsers)
 					ar.Post("/admin/users", s.handleAdminCreateUser)
 					ar.Get("/admin/users/{id}", s.handleAdminGetUser)
 					ar.Put("/admin/users/{id}", s.handleAdminUpdateUser)

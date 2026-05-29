@@ -3,8 +3,10 @@ import { computed, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import AutoComplete from "primevue/autocomplete";
+import InputText from "primevue/inputtext";
 import Button from "primevue/button";
 import { api, ApiError } from "../api/client";
+import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
@@ -23,15 +25,22 @@ const props = defineProps<{
 const emit = defineEmits<{ "update:visible": [value: boolean] }>();
 
 const notify = useNotify();
+const auth = useAuthStore();
 
 const grants = ref<ShareGrant[]>([]);
 type UserOption = UserSummary & { label: string };
 const users = ref<UserOption[]>([]);
 const subject = ref<UserOption | null>(null);
+// Operators can't enumerate users; they share by exact email instead.
+const email = ref("");
 const access = ref<GrantAccess>("use");
 const loading = ref(false);
 const busy = ref(false);
 const { confirmDanger } = useConfirmAction();
+
+const canAdd = computed(() =>
+  auth.isAdmin ? Boolean(subject.value) : email.value.trim().length > 0,
+);
 
 const base = computed(() => `/${props.resource}/${props.resourceId}/grants`);
 const accessChoices = [
@@ -47,10 +56,11 @@ const subjectChoices = computed(() => {
 async function load(): Promise<void> {
   loading.value = true;
   subject.value = null;
+  email.value = "";
   access.value = "use";
   try {
     grants.value = await api.get<ShareGrant[]>(base.value);
-    await searchUsers("");
+    if (auth.isAdmin) await searchUsers("");
   } finally {
     loading.value = false;
   }
@@ -66,7 +76,7 @@ async function searchUsers(query: string): Promise<void> {
   const params = new URLSearchParams();
   if (query.trim()) params.set("query", query.trim());
   const found = await api.get<UserSummary[]>(
-    `/users${params.toString() ? `?${params.toString()}` : ""}`,
+    `/admin/users/search${params.toString() ? `?${params.toString()}` : ""}`,
   );
   users.value = found.map((u) => ({ ...u, label: userLabel(u) }));
 }
@@ -84,18 +94,21 @@ watch(
 );
 
 async function add(): Promise<void> {
-  if (!subject.value) return;
+  if (!canAdd.value) return;
   busy.value = true;
   try {
-    const grant = await api.post<ShareGrant>(base.value, {
-      subjectId: subject.value.id,
+    const body: Record<string, unknown> = {
       access: props.allowManage ? access.value : "use",
-    });
+    };
+    if (auth.isAdmin && subject.value) body.subjectId = subject.value.id;
+    else body.email = email.value.trim();
+    const grant = await api.post<ShareGrant>(base.value, body);
     grants.value = [...grants.value, grant];
     subject.value = null;
+    email.value = "";
     access.value = "use";
     notify.success("Access granted", grant.username);
-    await searchUsers("");
+    if (auth.isAdmin) await searchUsers("");
   } catch (e) {
     if (e instanceof ApiError)
       notify.error("Could not grant access", e.message);
@@ -148,9 +161,10 @@ async function revoke(grant: ShareGrant): Promise<void> {
           <label
             class="mb-1 block text-xs font-medium text-surface-500 dark:text-surface-400"
           >
-            User
+            {{ auth.isAdmin ? "User" : "Email" }}
           </label>
           <AutoComplete
+            v-if="auth.isAdmin"
             :model-value="subject"
             :suggestions="subjectChoices"
             option-label="label"
@@ -159,6 +173,15 @@ async function revoke(grant: ShareGrant): Promise<void> {
             input-class="w-full"
             @complete="completeUsers"
             @update:model-value="subject = $event"
+          />
+          <InputText
+            v-else
+            :model-value="email"
+            type="email"
+            placeholder="person@example.com"
+            class="w-full"
+            @update:model-value="email = $event ?? ''"
+            @keyup.enter="add"
           />
         </div>
         <div v-if="allowManage" class="w-28">
@@ -179,7 +202,7 @@ async function revoke(grant: ShareGrant): Promise<void> {
           type="button"
           label="Add"
           :loading="busy"
-          :disabled="busy || !subject"
+          :disabled="busy || !canAdd"
           :pt="{ root: btnPrimary }"
           @click="add"
         />

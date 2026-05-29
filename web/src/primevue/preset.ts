@@ -278,6 +278,13 @@ const paginator = {
 
 export const primeVuePassthrough = {
   inputtext: { root: inputBase },
+  breadcrumb: {
+    root: "w-full",
+    list: "flex flex-wrap items-center gap-1 text-sm",
+    item: "inline-flex items-center",
+    separator:
+      "mx-0.5 inline-flex items-center text-surface-300 dark:text-surface-600",
+  },
   // Chart (chart.js) renders a canvas; the pass-through only sizes its wrapper —
   // colors come from theme-aware chart options, not classes.
   chart: { root: "relative h-full w-full" },

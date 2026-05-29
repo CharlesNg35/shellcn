@@ -69,6 +69,17 @@ func (s *memUserStore) GetByUsername(_ context.Context, username string) (models
 	return models.User{}, ErrNotFound
 }
 
+func (s *memUserStore) GetByEmail(_ context.Context, email string) (models.User, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.users {
+		if u.Email != "" && u.Email == email {
+			return u, nil
+		}
+	}
+	return models.User{}, ErrNotFound
+}
+
 func (s *memUserStore) GetPasswordHash(_ context.Context, userID string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

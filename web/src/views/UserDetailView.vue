@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
@@ -13,6 +12,7 @@ import { adminUsersApi } from "../api/admin";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
+import AppBreadcrumb from "../components/AppBreadcrumb.vue";
 import SkeletonList from "../components/SkeletonList.vue";
 import AuditTable from "../components/admin/AuditTable.vue";
 import { Role } from "../constants/roles";
@@ -25,7 +25,12 @@ import type {
 const props = defineProps<{ id: string }>();
 const auth = useAuthStore();
 const notify = useNotify();
-const router = useRouter();
+
+const crumbs = computed(() => [
+  { label: "Settings", to: { name: "settings" } },
+  { label: "Users", to: { name: "users" } },
+  { label: user.value?.displayName || user.value?.username || "User" },
+]);
 
 const tab = ref("overview");
 const user = ref<AdminUser | null>(null);
@@ -122,22 +127,10 @@ function formatDate(iso: string): string {
 
 <template>
   <div class="mx-auto flex h-full max-w-4xl flex-col gap-5 p-8">
-    <div class="flex items-center gap-3">
-      <Button
-        text
-        rounded
-        severity="secondary"
-        size="small"
-        title="Back to users"
-        aria-label="Back to users"
-        @click="router.push({ name: 'settings' })"
-      >
-        <AppIcon :icon="{ type: 'lucide', value: 'arrow-left' }" :size="16" />
-      </Button>
-      <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
-        {{ user?.displayName || user?.username || "User" }}
-      </h1>
-    </div>
+    <AppBreadcrumb :items="crumbs" />
+    <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
+      {{ user?.displayName || user?.username || "User" }}
+    </h1>
 
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
     <SkeletonList v-else-if="loading && !user" :rows="4" />

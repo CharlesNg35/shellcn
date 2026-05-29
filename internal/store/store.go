@@ -19,6 +19,7 @@ type UserStore interface {
 	Create(ctx context.Context, u *models.User, passwordHash string) error
 	GetByID(ctx context.Context, id string) (models.User, error)
 	GetByUsername(ctx context.Context, username string) (models.User, error)
+	GetByEmail(ctx context.Context, email string) (models.User, error)
 	GetPasswordHash(ctx context.Context, userID string) (string, error)
 	SetPasswordHash(ctx context.Context, userID, hash string) error
 	List(ctx context.Context) ([]models.User, error)
