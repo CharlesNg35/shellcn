@@ -251,7 +251,8 @@ export interface TablePanelConfig {
   hiddenColumns?: string[];
   // Opt-in: show the generic CSV/JSON export control for loaded rows.
   exportable?: boolean;
-  // Row-body click action; empty → renderer default.
+  // Overrides the automatic row-body click (navigate a navigable row, else
+  // select); empty uses that default.
   rowClick?: RowClickAction;
 }
 

@@ -128,7 +128,8 @@ type TableConfig struct {
 	// Off by default so a plugin must deliberately allow data to leave the grid.
 	Exportable bool `json:"exportable,omitempty"`
 
-	// RowClick declares the row-body click action; empty → renderer default.
+	// RowClick overrides the automatic row-body click (navigate a navigable row,
+	// else select); empty uses that default.
 	RowClick RowClickAction `json:"rowClick,omitempty"`
 }
 

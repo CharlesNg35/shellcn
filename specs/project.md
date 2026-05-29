@@ -662,7 +662,7 @@ type TableConfig struct {
     StagedEdits   bool        // opt-in: buffer edits/inserts/deletes; commit or discard as a batch
     HiddenColumns []string    // field keys to omit from auto-derived columns
     Exportable    bool        // opt-in: show the generic CSV/JSON export of loaded rows
-    RowClick      RowClickAction // navigate | detail | select | none (empty → safe default)
+    RowClick      RowClickAction // override; empty → auto (navigate navigable rows, else select)
 }
 
 type RowMutation struct {
@@ -720,17 +720,18 @@ config) are off by default; a plugin must declare them, so data never leaves a
 panel unless the manifest allows it. Export is client-side (the loaded rows) and
 fully generic — every panel that sets the flag gets CSV + JSON for free.
 
-**Row-click behavior is declared, not inferred.** `RowClick` states what a click
-on the row **body** does — `navigate` (open the row's `ref` resource), `detail`
-(open a dialog listing every field of the row — declared columns with their
-labels/formatting plus any extras — and show a per-row details icon), `select`
-(toggle selection), or `none`. When empty the renderer picks a safe default
-(select if the table is selectable, navigate if rows carry a `ref`, else none).
-Editable grids always reserve the body for cell editing; interactive cells (link
-cells, action buttons, the details icon) work regardless of `RowClick`. Declaring
-it removes all ambiguity — a field-rich flat table (a process, a service) sets
-`RowClick: detail`, and a row that has an identity but no real destination opens
-the dialog instead of dead navigation.
+**Row-click is automatic; selection is the checkbox.** The renderer learns which
+resource **kinds are navigable** from the projection (those with a detail view)
+and decides per row, with no per-table declaration: a row whose `ref` is a
+navigable kind **opens it**; otherwise, on a selectable table, the body click
+**selects** the row (selection is also always available via the checkbox column).
+So a database's _tables_ list navigates on row-click while its _columns_ list
+selects — automatically, because `table` is a resource kind and `column` is not.
+`RowClick` exists only to **override** this: `detail` (open a dialog of every
+field — for field-rich flat tables like processes — and show a per-row details
+icon), or an explicit `navigate` / `select` / `none`. Editable grids always
+reserve the body for cell editing; interactive cells (link cells, action buttons,
+the details icon) work regardless.
 
 ```go
 

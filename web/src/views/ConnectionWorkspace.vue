@@ -14,6 +14,7 @@ import { KEEP_ALIVE_TOP_LEVEL_PANELS_MAX } from "../stores/sessionLimits";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import PanelHost from "../panels/core/PanelHost.vue";
+import { provideNavigableKinds } from "../panels/core/navigable";
 import EnrollPanel from "../panels/enroll/EnrollPanel.vue";
 import ConnectPanel from "../panels/connect/ConnectPanel.vue";
 import PanelError from "../panels/shared/PanelError.vue";
@@ -71,6 +72,15 @@ async function onDelete(): Promise<void> {
 }
 
 const projection = ref<PluginProjection | null>(null);
+
+// Resource kinds the connection can open a detail view for. The generic table
+// uses this to decide row-click = navigate (resource) vs select (everything
+// else), so no table has to declare it.
+provideNavigableKinds(
+  computed(
+    () => new Set((projection.value?.resources ?? []).map((r) => r.kind)),
+  ),
+);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const sessionConnecting = ref(false);

@@ -37,7 +37,6 @@ import type {
   ResourceEvent,
   ResourceRef,
   Row,
-  RowClickAction,
   TablePanelConfig,
 } from "../../types/projection";
 import type { PanelProps } from "../core/types";
@@ -51,6 +50,7 @@ import {
   type RowMutation,
 } from "./mutation";
 import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
+import { useNavigableKinds } from "../core/navigable";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
@@ -702,17 +702,24 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   );
 }
 
-// Row-body click follows the declared RowClick; empty picks a safe default.
-// Interactive cells (links, action buttons, the details icon) bypass this.
-const effectiveRowClick = computed<RowClickAction>(() => {
-  const declared = tableConfig.value?.rowClick;
-  if (declared) return declared;
-  if (selectable.value) return "select";
-  if (rows.value.some((r) => r.ref)) return "navigate";
-  return "none";
-});
-const detailEnabled = computed(() => effectiveRowClick.value === "detail");
+// Row-click is automatic: a row whose ref is a navigable resource opens it,
+// everything else selects (when selectable). `RowClick` only overrides this —
+// `detail` for the field dialog, or an explicit navigate/select/none.
+const navigableKinds = useNavigableKinds();
+const rowClickMode = computed(() => tableConfig.value?.rowClick);
+const detailEnabled = computed(() => rowClickMode.value === "detail");
 const detailRow = ref<Row | null>(null);
+
+function navigates(row: Row): boolean {
+  return Boolean(row.ref && navigableKinds.value.has(row.ref.kind));
+}
+
+function toggleSelection(row: Row): void {
+  selection.value =
+    selection.value.length === 1 && rid(selection.value[0]) === rid(row)
+      ? []
+      : [row];
+}
 
 // Stable row identity for keying/diff/refresh: a behavior-free `_id`, or a
 // navigable `ref.uid`; the client-only `__rid` covers editable/selectable grids.
@@ -728,30 +735,38 @@ function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
   if (isInteractiveTarget(e.originalEvent?.target ?? null)) return;
   if (editable.value) return; // body reserved for cell editing
-  switch (effectiveRowClick.value) {
-    case "select":
-      selection.value =
-        selection.value.length === 1 && rid(selection.value[0]) === rid(row)
-          ? []
-          : [row];
-      break;
-    case "navigate":
-      if (row.ref) emit("select", row);
-      else detailRow.value = row;
-      break;
+  switch (rowClickMode.value) {
+    case "none":
+      return;
     case "detail":
       detailRow.value = row;
-      break;
+      return;
+    case "select":
+      toggleSelection(row);
+      return;
+    case "navigate":
+      if (row.ref) emit("select", row);
+      return;
   }
+  // Default: navigate if the row is a navigable resource (or nothing else can
+  // handle the click); otherwise select. Selection is also available via the
+  // checkbox column.
+  if (navigates(row) || (row.ref && !selectable.value)) emit("select", row);
+  else if (selectable.value) toggleSelection(row);
+}
+
+function rowClickable(row: Row): boolean {
+  if (editable.value) return false;
+  const mode = rowClickMode.value;
+  if (mode) return mode !== "none";
+  return navigates(row) || Boolean(row.ref) || selectable.value;
 }
 
 function rowClass(row: Row): string {
   if (staged.value && isDeleted(row)) return "line-through opacity-50";
   if (staged.value && isInserted(row))
     return "bg-emerald-50 dark:bg-emerald-500/10";
-  return !editable.value && effectiveRowClick.value !== "none"
-    ? "cursor-pointer"
-    : "";
+  return rowClickable(row) ? "cursor-pointer" : "";
 }
 
 function humanize(key: string): string {
