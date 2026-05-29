@@ -261,7 +261,7 @@ func listDocuments(rc *plugin.RequestContext) (any, error) {
 		"rows":  []string{strconv.Itoa(limit)},
 		"wt":    []string{"json"},
 	}
-	if filter := strings.TrimSpace(req.Filter["q"]); filter != "" {
+	if filter := req.Search(); filter != "" {
 		q.Set("q", filter)
 	}
 	result, err := searchDocuments(rc.Ctx, s, coreParam(rc), q)

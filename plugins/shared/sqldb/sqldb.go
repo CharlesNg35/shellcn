@@ -710,6 +710,35 @@ func (d Dialect) matchClause(key map[string]any, n *int) (string, []any, error) 
 	return strings.Join(parts, " AND "), bound, nil
 }
 
+// SearchClause builds a case-insensitive "contains" filter across cols for the
+// term, binding one placeholder formatted at position start. textType is the
+// dialect's CAST target so non-text columns are searchable (e.g. "TEXT", "CHAR",
+// "NVARCHAR(MAX)", "VARCHAR2(4000)", "String"). Returns ("", nil) when term or
+// cols is empty; unsafe identifiers are skipped.
+func (d Dialect) SearchClause(textType string, cols []string, term string, start int) (string, []any) {
+	term = strings.TrimSpace(term)
+	if term == "" || len(cols) == 0 {
+		return "", nil
+	}
+	pattern := "%" + term + "%"
+	parts := make([]string, 0, len(cols))
+	args := make([]any, 0, len(cols))
+	n := start
+	for _, c := range cols {
+		col, err := SafeIdentifier(c)
+		if err != nil {
+			continue
+		}
+		parts = append(parts, "UPPER(CAST("+d.quote(col)+" AS "+textType+")) LIKE UPPER("+d.Placeholder(n)+")")
+		args = append(args, pattern)
+		n++
+	}
+	if len(parts) == 0 {
+		return "", nil
+	}
+	return "(" + strings.Join(parts, " OR ") + ")", args
+}
+
 func (d Dialect) quote(col string) string {
 	if d.QuoteIdent != nil {
 		return d.QuoteIdent(col)

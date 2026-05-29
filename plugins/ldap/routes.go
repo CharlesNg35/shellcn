@@ -151,7 +151,7 @@ func searchEntries(rc *plugin.RequestContext) (any, error) {
 	if base == "" {
 		base = s.opts.BaseDN
 	}
-	filter := searchFilter(req.Filter["q"])
+	filter := searchFilter(req.Search())
 	entries, err := search(s, base, ldapv3.ScopeWholeSubtree, filter, structAttrs)
 	if err != nil {
 		return nil, err
@@ -660,7 +660,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if err != nil {
 		return plugin.Page[row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	return sliceRows(rows, req)
 }

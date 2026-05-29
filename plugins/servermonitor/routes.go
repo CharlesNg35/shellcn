@@ -139,7 +139,7 @@ func pageRows(rc *plugin.RequestContext, rows []hostmonitor.Row) (plugin.Page[ho
 	if err != nil {
 		return plugin.Page[hostmonitor.Row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	start := 0
 	if req.Cursor != "" {

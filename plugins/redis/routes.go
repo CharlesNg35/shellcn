@@ -123,7 +123,7 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	pattern := strings.TrimSpace(req.Filter["q"])
+	pattern := req.Search()
 	if pattern == "" {
 		pattern = s.opts.KeyPattern
 	}
@@ -259,7 +259,7 @@ func listChannels(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	pattern := strings.TrimSpace(req.Filter["q"])
+	pattern := req.Search()
 	if pattern == "" {
 		pattern = "*"
 	}
@@ -936,7 +936,7 @@ func pageRows(rc *plugin.RequestContext, rows []map[string]any) (plugin.Page[map
 	if err != nil {
 		return plugin.Page[map[string]any]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := offsetCursor(req.Cursor)

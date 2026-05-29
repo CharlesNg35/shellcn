@@ -110,6 +110,23 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		t.Fatalf("expected redacted table data, got %#v", page.Items)
 	}
 
+	// Free-text search filters the data grid server-side (per-column).
+	chPeople := map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}
+	chMatch, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, chPeople, url.Values{"filter": {"alice"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows: %v", err)
+	}
+	if len(chMatch.(plugin.Page[row]).Items) != 1 {
+		t.Fatalf("filter 'alice' should match 1 row, got %#v", chMatch.(plugin.Page[row]).Items)
+	}
+	chMiss, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, chPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows (miss): %v", err)
+	}
+	if len(chMiss.(plugin.Page[row]).Items) != 0 {
+		t.Fatalf("filter 'zzz-nomatch' should match 0 rows, got %#v", chMiss.(plugin.Page[row]).Items)
+	}
+
 	result, err := executeQueryRequest(ctx, s, sqldb.QueryRequest{Query: `SELECT name, access_token FROM shellcn_people`})
 	if err != nil {
 		t.Fatalf("query: %v", err)

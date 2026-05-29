@@ -504,8 +504,21 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	qualified := sqldb.Qualified(schema, table)
+	// Free-text search (the grid's filter box): match the whole row's text form,
+	// so any column containing the term matches without naming columns.
+	filter := req.Search()
+	where := ""
+	if filter != "" {
+		where = " WHERE t::text ILIKE "
+	}
 	var total int
-	if err := pool.QueryRow(rc.Ctx, "SELECT COUNT(*) FROM "+qualified).Scan(&total); err != nil {
+	countArgs := []any{}
+	countSQL := "SELECT COUNT(*) FROM " + qualified + " AS t"
+	if filter != "" {
+		countSQL += where + "$1"
+		countArgs = append(countArgs, "%"+filter+"%")
+	}
+	if err := pool.QueryRow(rc.Ctx, countSQL, countArgs...).Scan(&total); err != nil {
 		return nil, pgErr(err)
 	}
 	orderBy := ""
@@ -520,8 +533,14 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		}
 		orderBy = " ORDER BY " + sqldb.QuoteIdent(col) + " " + dir
 	}
-	sqlText := "SELECT * FROM " + qualified + orderBy + " LIMIT $1 OFFSET $2"
-	rows, err := queryRows(rc.Ctx, pool, s.opts.QueryTimeout, sqlText, []any{limit, offset})
+	dataArgs := []any{limit, offset}
+	dataWhere := ""
+	if filter != "" {
+		dataWhere = where + "$3"
+		dataArgs = append(dataArgs, "%"+filter+"%")
+	}
+	sqlText := "SELECT * FROM " + qualified + " AS t" + dataWhere + orderBy + " LIMIT $1 OFFSET $2"
+	rows, err := queryRows(rc.Ctx, pool, s.opts.QueryTimeout, sqlText, dataArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1482,7 +1501,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if err != nil {
 		return plugin.Page[row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := cursorOffset(req.Cursor)

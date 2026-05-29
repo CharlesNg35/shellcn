@@ -1027,7 +1027,7 @@ func PageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 	if err != nil {
 		return plugin.Page[Row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start := 0

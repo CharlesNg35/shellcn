@@ -22,7 +22,7 @@ func pageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 	if err != nil {
 		return plugin.Page[Row]{}, err
 	}
-	rows = filterRows(rows, page.Filter["q"])
+	rows = filterRows(rows, page.Search())
 	start := 0
 	if page.Cursor != "" {
 		start, err = strconv.Atoi(page.Cursor)

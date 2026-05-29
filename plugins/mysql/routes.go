@@ -407,8 +407,21 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	filter := req.Search()
+	var cols []string
+	if filter != "" {
+		cols, err = columnNames(rc.Ctx, s, database, table)
+		if err != nil {
+			return nil, err
+		}
+	}
+	searchClause, searchArgs := dialect.SearchClause("CHAR", cols, filter, 1)
+	where := ""
+	if searchClause != "" {
+		where = " WHERE " + searchClause
+	}
 	var total int
-	if err := s.db.QueryRowContext(rc.Ctx, "SELECT COUNT(*) FROM "+qualified(database, table)).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(rc.Ctx, "SELECT COUNT(*) FROM "+qualified(database, table)+where, searchArgs...).Scan(&total); err != nil {
 		return nil, mysqlErr(err)
 	}
 	orderBy := ""
@@ -423,7 +436,8 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		}
 		orderBy = " ORDER BY " + quoteIdent(col) + " " + dir
 	}
-	rows, err := queryRows(rc.Ctx, s, fmt.Sprintf("SELECT * FROM %s%s LIMIT ? OFFSET ?", qualified(database, table), orderBy), []any{limit, offset})
+	dataArgs := append(append([]any{}, searchArgs...), limit, offset)
+	rows, err := queryRows(rc.Ctx, s, fmt.Sprintf("SELECT * FROM %s%s%s LIMIT ? OFFSET ?", qualified(database, table), where, orderBy), dataArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -938,6 +952,24 @@ func keyedRowMutation(rc *plugin.RequestContext, del bool) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+// columnNames returns a table's column names in order, for building the data
+// grid's free-text search across every column.
+func columnNames(ctx context.Context, s *Session, database, table string) ([]string, error) {
+	rows, err := queryRows(ctx, s, `
+SELECT COLUMN_NAME AS name
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+ORDER BY ORDINAL_POSITION`, []any{database, table})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, fmt.Sprint(r["name"]))
+	}
+	return out, nil
+}
+
 func primaryKeyColumns(ctx context.Context, s *Session, database, table string) ([]string, error) {
 	rows, err := queryRows(ctx, s, `
 SELECT COLUMN_NAME AS name
@@ -1263,7 +1295,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if err != nil {
 		return plugin.Page[row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := cursorOffset(req.Cursor)

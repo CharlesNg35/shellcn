@@ -612,9 +612,16 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s", sqldb.Qualified(schema, table))
+	qualified := sqldb.Qualified(schema, table)
+	filter := req.Search()
+	countSQL := "SELECT COUNT(*) FROM " + qualified + " AS t"
+	countArgs := []any{}
+	if filter != "" {
+		countSQL += " WHERE t::string ILIKE $1"
+		countArgs = append(countArgs, "%"+filter+"%")
+	}
 	var total int
-	if err := s.pool.QueryRow(rc.Ctx, countSQL).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(rc.Ctx, countSQL, countArgs...).Scan(&total); err != nil {
 		return nil, cockroachErr(err)
 	}
 	orderBy := ""
@@ -629,8 +636,14 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		}
 		orderBy = " ORDER BY " + sqldb.QuoteIdent(col) + " " + dir
 	}
-	sqlText := fmt.Sprintf("SELECT * FROM %s%s LIMIT $1 OFFSET $2", sqldb.Qualified(schema, table), orderBy)
-	rows, err := queryRows(rc.Ctx, s, sqlText, []any{limit, offset})
+	dataArgs := []any{limit, offset}
+	where := ""
+	if filter != "" {
+		where = " WHERE t::string ILIKE $3"
+		dataArgs = append(dataArgs, "%"+filter+"%")
+	}
+	sqlText := "SELECT * FROM " + qualified + " AS t" + where + orderBy + " LIMIT $1 OFFSET $2"
+	rows, err := queryRows(rc.Ctx, s, sqlText, dataArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1468,7 +1481,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if err != nil {
 		return plugin.Page[row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := cursorOffset(req.Cursor)

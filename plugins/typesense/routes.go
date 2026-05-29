@@ -282,7 +282,7 @@ func listDocuments(rc *plugin.RequestContext) (any, error) {
 	}
 	collection := collectionParam(rc)
 	q := url.Values{"q": []string{"*"}, "page": []string{pageCursor(req.Cursor)}, "per_page": []string{strconv.Itoa(limitFor(s, req.Limit))}}
-	if filter := strings.TrimSpace(req.Filter["q"]); filter != "" {
+	if filter := req.Search(); filter != "" {
 		q.Set("q", filter)
 	}
 	if queryBy := defaultQueryBy(rc.Ctx, s, collection); queryBy != "" {

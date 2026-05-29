@@ -83,6 +83,23 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 		t.Fatalf("expected redacted table data, got %#v", page.Items)
 	}
 
+	// Free-text search filters the data grid server-side (per-column).
+	msPeople := map[string]string{"id": objectID("shellcn", "dbo", "people")}
+	msMatch, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, msPeople, url.Values{"filter": {"alice"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows: %v", err)
+	}
+	if len(msMatch.(plugin.Page[row]).Items) != 1 {
+		t.Fatalf("filter 'alice' should match 1 row, got %#v", msMatch.(plugin.Page[row]).Items)
+	}
+	msMiss, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, msPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows (miss): %v", err)
+	}
+	if len(msMiss.(plugin.Page[row]).Items) != 0 {
+		t.Fatalf("filter 'zzz-nomatch' should match 0 rows, got %#v", msMiss.(plugin.Page[row]).Items)
+	}
+
 	result, err := executeQueryRequest(ctx, s, "shellcn", sqldb.QueryRequest{Query: `SELECT name, access_token FROM dbo.people`})
 	if err != nil {
 		t.Fatalf("query: %v", err)

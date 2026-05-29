@@ -66,6 +66,23 @@ func TestOraclePluginIntegration(t *testing.T) {
 	if len(page.Items) != 1 || page.Items[0]["ACCESS_TOKEN"] != sqldb.RedactedValue {
 		t.Fatalf("expected redacted table data, got %#v", page.Items)
 	}
+
+	// Free-text search filters the data grid server-side (per-column).
+	orPeople := map[string]string{"id": objectID("SHELLCN_TEST", "PEOPLE")}
+	orMatch, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, orPeople, url.Values{"filter": {"alice"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows: %v", err)
+	}
+	if len(orMatch.(plugin.Page[row]).Items) != 1 {
+		t.Fatalf("filter 'alice' should match 1 row, got %#v", orMatch.(plugin.Page[row]).Items)
+	}
+	orMiss, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, orPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows (miss): %v", err)
+	}
+	if len(orMiss.(plugin.Page[row]).Items) != 0 {
+		t.Fatalf("filter 'zzz-nomatch' should match 0 rows, got %#v", orMiss.(plugin.Page[row]).Items)
+	}
 	if key, ok := page.Items[0]["_key"].(map[string]any); !ok || key["ID"] == nil {
 		t.Fatalf("table rows must carry a _key from the primary key: %#v", page.Items[0])
 	}
