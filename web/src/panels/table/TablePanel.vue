@@ -29,6 +29,7 @@ import type {
   ResourceEvent,
   ResourceRef,
   Row,
+  RowClickAction,
   TablePanelConfig,
 } from "../../types/projection";
 import type { PanelProps } from "../core/types";
@@ -68,6 +69,7 @@ const RESERVED = new Set([
   "badge",
   "_key",
   "_links",
+  "_id",
   "__rid",
 ]);
 
@@ -692,43 +694,57 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   );
 }
 
+// Row-body click follows the declared RowClick; empty picks a safe default.
+// Interactive cells (links, action buttons, the details icon) bypass this.
+const effectiveRowClick = computed<RowClickAction>(() => {
+  const declared = tableConfig.value?.rowClick;
+  if (declared) return declared;
+  if (selectable.value) return "select";
+  if (rows.value.some((r) => r.ref)) return "navigate";
+  return "none";
+});
+const detailEnabled = computed(() => effectiveRowClick.value === "detail");
+const detailRow = ref<Row | null>(null);
+
+// Stable row identity for keying/diff/refresh: a behavior-free `_id`, or a
+// navigable `ref.uid`; the client-only `__rid` covers editable/selectable grids.
+const dataKeyField = computed(() => {
+  if (editable.value || selectable.value) return "__rid";
+  const r = rows.value[0] as (Row & { _id?: unknown }) | undefined;
+  if (r?.ref?.uid) return "ref.uid";
+  if (r?._id != null) return "_id";
+  return "__rid";
+});
+
 function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
   if (isInteractiveTarget(e.originalEvent?.target ?? null)) return;
-  if (editable.value) return;
-  let handled = false;
-  if (selectable.value) {
-    selection.value =
-      selection.value.length === 1 && rid(selection.value[0]) === rid(row)
-        ? []
-        : [row];
-    handled = true;
+  if (editable.value) return; // body reserved for cell editing
+  switch (effectiveRowClick.value) {
+    case "select":
+      selection.value =
+        selection.value.length === 1 && rid(selection.value[0]) === rid(row)
+          ? []
+          : [row];
+      break;
+    case "navigate":
+      if (row.ref) emit("select", row);
+      else detailRow.value = row;
+      break;
+    case "detail":
+      detailRow.value = row;
+      break;
   }
-  if (row.ref) {
-    emit("select", row);
-    handled = true;
-  }
-  // Only fall back to the detail dialog when the click had nothing else to do;
-  // selection and navigation always win. The explicit details icon stays
-  // available regardless.
-  if (!handled && rowDetailEnabled.value) detailRow.value = row;
 }
 
 function rowClass(row: Row): string {
   if (staged.value && isDeleted(row)) return "line-through opacity-50";
   if (staged.value && isInserted(row))
     return "bg-emerald-50 dark:bg-emerald-500/10";
-  const clickable =
-    row.ref || selectable.value || (rowDetailEnabled.value && !editable.value);
-  return clickable ? "cursor-pointer" : "";
+  return !editable.value && effectiveRowClick.value !== "none"
+    ? "cursor-pointer"
+    : "";
 }
-
-// --- row detail dialog --------------------------------------------------
-// Opt-in (config.rowDetail): clicking a row opens a dialog listing all its
-// fields — declared columns first (with their labels/formatting), then any
-// extra row fields — for flat tables whose rows have no resource detail view.
-const rowDetailEnabled = computed(() => Boolean(tableConfig.value?.rowDetail));
-const detailRow = ref<Row | null>(null);
 
 function humanize(key: string): string {
   const spaced = key
@@ -1063,7 +1079,7 @@ onUnmounted(() => {
         v-else
         v-model:selection="selection"
         :value="rows"
-        :data-key="editable || selectable ? '__rid' : 'ref.uid'"
+        :data-key="dataKeyField"
         :edit-mode="editableCells ? 'cell' : undefined"
         lazy
         paginator
@@ -1185,7 +1201,7 @@ onUnmounted(() => {
           </template>
         </Column>
         <Column
-          v-if="rowDetailEnabled && !editable"
+          v-if="detailEnabled && !editable"
           :header-style="{ width: '3rem' }"
           :pt="{ bodyCell: 'w-12 text-right' }"
         >

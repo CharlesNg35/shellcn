@@ -154,7 +154,7 @@ func metricsConfig() map[string]any {
 }
 
 func tableConfig(columns []plugin.Column) map[string]any {
-	return plugin.TableConfig{Columns: columns, Exportable: true, RowDetail: true}.Map()
+	return plugin.TableConfig{Columns: columns, Exportable: true, RowClick: plugin.RowClickDetail}.Map()
 }
 
 func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortKey) map[string]any {
@@ -163,7 +163,7 @@ func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortK
 		RefreshIntervalMs: intervalMs,
 		DefaultSort:       sort,
 		Exportable:        true,
-		RowDetail:         true,
+		RowClick:          plugin.RowClickDetail,
 	}.Map()
 }
 

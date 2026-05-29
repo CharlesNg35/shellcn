@@ -386,7 +386,7 @@ func listTasks(rc *plugin.RequestContext) (any, error) {
 			"user":      str(t["user"]),
 			"status":    status,
 			"starttime": rfcTime(t["starttime"]),
-			"ref":       plugin.ResourceRef{Kind: "task", Namespace: node, Name: str(t["type"]), UID: upid},
+			"_id":       upid,
 		})
 	}
 	return pageRows(rc, rows)

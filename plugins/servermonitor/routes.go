@@ -160,7 +160,7 @@ func filterRows(rows []hostmonitor.Row, q string) []hostmonitor.Row {
 // so the "map[" / key-name noise of fmt.Sprint(row) can't match everything.
 func rowMatches(r hostmonitor.Row, q string) bool {
 	for k, v := range r {
-		if k == "ref" {
+		if k == "_id" {
 			continue
 		}
 		if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {

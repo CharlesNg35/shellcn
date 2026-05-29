@@ -57,8 +57,8 @@ func icon(name string) plugin.Icon {
 func overviewDashboard() map[string]any {
 	return plugin.DashboardConfig{Cells: []plugin.DashboardCell{
 		{Key: "server", Label: "Server", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.overview"}, Span: 2},
-		{Key: "clients", Label: "Clients", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: plugin.TableConfig{Columns: clientColumns(), Exportable: true, RowDetail: true}.Map()},
-		{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: plugin.TableConfig{Columns: channelColumns(), Exportable: true, RowDetail: true}.Map()},
+		{Key: "clients", Label: "Clients", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: plugin.TableConfig{Columns: clientColumns(), Exportable: true, RowClick: plugin.RowClickDetail}.Map()},
+		{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: plugin.TableConfig{Columns: channelColumns(), Exportable: true, RowClick: plugin.RowClickDetail}.Map()},
 	}}.Map()
 }
 

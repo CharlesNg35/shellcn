@@ -12,14 +12,10 @@ import (
 
 func sampleRows() []hostmonitor.Row {
 	return []hostmonitor.Row{
-		{"ref": refRow("p1"), "name": "redis", "cpuPct": 10.0},
-		{"ref": refRow("p2"), "name": "nginx", "cpuPct": 30.0},
-		{"ref": refRow("p3"), "name": "postgres", "cpuPct": 20.0},
+		{"_id": "p1", "name": "redis", "cpuPct": 10.0},
+		{"_id": "p2", "name": "nginx", "cpuPct": 30.0},
+		{"_id": "p3", "name": "postgres", "cpuPct": 20.0},
 	}
-}
-
-func refRow(uid string) plugin.ResourceRef {
-	return plugin.ResourceRef{Kind: "process", Name: uid, UID: uid}
 }
 
 func pageWith(t *testing.T, q url.Values, rows []hostmonitor.Row) plugin.Page[hostmonitor.Row] {

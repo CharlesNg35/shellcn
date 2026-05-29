@@ -662,7 +662,7 @@ type TableConfig struct {
     StagedEdits   bool        // opt-in: buffer edits/inserts/deletes; commit or discard as a batch
     HiddenColumns []string    // field keys to omit from auto-derived columns
     Exportable    bool        // opt-in: show the generic CSV/JSON export of loaded rows
-    RowDetail     bool        // opt-in: per-row details icon opens a dialog of every field (row-click falls back to it)
+    RowClick      RowClickAction // navigate | detail | select | none (empty → safe default)
 }
 
 type RowMutation struct {
@@ -672,10 +672,16 @@ type RowMutation struct {
 ```
 
 The grid is fully generic: it has no notion of databases, keys, or links beyond
-three reserved row fields a route may attach, and renders nothing plugin-specific
+a few reserved row fields a route may attach, and renders nothing plugin-specific
 on its own:
 
-- `ref` — the row's own resource identity (row-click navigation).
+- `ref` — a **navigable** resource identity: rows that carry it can open that
+  resource's DetailView. Present only when there is a real destination.
+- `_id` — a **stable, opaque** row identity used for keying, diffing, live
+  refresh, and selection. Behavior-free: it never implies a row is navigable.
+  Rows that aren't resources (a process, a metric sample) use `_id`; navigable
+  rows may reuse `ref.uid` as their identity. This separation keeps identity
+  distinct from navigation, so a flat table needn't fake a `ref` just to be keyed.
 - `_key` — an **opaque** key map identifying the row for inline update/delete;
   when absent the row is read-only. Mutation bodies are uniform across plugins
   (`{values}` / `{key,values}` / `{key}`), so the renderer ships zero per-plugin
@@ -714,13 +720,17 @@ config) are off by default; a plugin must declare them, so data never leaves a
 panel unless the manifest allows it. Export is client-side (the loaded rows) and
 fully generic — every panel that sets the flag gets CSV + JSON for free.
 
-**Row detail is opt-in.** `RowDetail` adds a per-row **details icon** that opens
-a dialog listing every field of the row — declared columns (with their labels
-and formatting) plus any extra fields — for field-rich flat tables (a process, a
-service). The icon is always available and never interferes with other clicks;
-row-click only **falls back** to the dialog when nothing else (row selection or
-`ref` navigation) handles the click. Off by default, and skipped for editable
-grids.
+**Row-click behavior is declared, not inferred.** `RowClick` states what a click
+on the row **body** does — `navigate` (open the row's `ref` resource), `detail`
+(open a dialog listing every field of the row — declared columns with their
+labels/formatting plus any extras — and show a per-row details icon), `select`
+(toggle selection), or `none`. When empty the renderer picks a safe default
+(select if the table is selectable, navigate if rows carry a `ref`, else none).
+Editable grids always reserve the body for cell editing; interactive cells (link
+cells, action buttons, the details icon) work regardless of `RowClick`. Declaring
+it removes all ambiguity — a field-rich flat table (a process, a service) sets
+`RowClick: detail`, and a row that has an identity but no real destination opens
+the dialog instead of dead navigation.
 
 ```go
 

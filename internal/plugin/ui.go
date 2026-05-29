@@ -75,6 +75,16 @@ type Column struct {
 	Severities map[string]Severity `json:"severities,omitempty"`
 }
 
+// RowClickAction declares what a click on a table row's body does.
+type RowClickAction string
+
+const (
+	RowClickNavigate RowClickAction = "navigate" // open the row's ref resource
+	RowClickDetail   RowClickAction = "detail"   // open the per-row details dialog
+	RowClickSelect   RowClickAction = "select"   // toggle row selection
+	RowClickNone     RowClickAction = "none"
+)
+
 // TableConfig is the declarative config consumed by the generic table panel.
 //
 // The editing affordances are plugin-agnostic: when Editable is true and RowKey
@@ -118,10 +128,8 @@ type TableConfig struct {
 	// Off by default so a plugin must deliberately allow data to leave the grid.
 	Exportable bool `json:"exportable,omitempty"`
 
-	// RowDetail adds a per-row details icon that opens a dialog listing every
-	// field of the row; row-click also falls back to it when nothing else
-	// (selection/navigation) handles the click. For field-rich flat tables.
-	RowDetail bool `json:"rowDetail,omitempty"`
+	// RowClick declares the row-body click action; empty → renderer default.
+	RowClick RowClickAction `json:"rowClick,omitempty"`
 }
 
 func (c TableConfig) Map() map[string]any {
@@ -174,8 +182,8 @@ func (c TableConfig) Map() map[string]any {
 	if c.Exportable {
 		out["exportable"] = true
 	}
-	if c.RowDetail {
-		out["rowDetail"] = true
+	if c.RowClick != "" {
+		out["rowClick"] = c.RowClick
 	}
 	return out
 }

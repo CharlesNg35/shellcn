@@ -548,10 +548,10 @@ describe("TablePanel staged edits", () => {
     w.unmount();
   });
 
-  it("opens the row-detail dialog from the details icon, with all fields", async () => {
+  it("opens the detail dialog from the details icon when rowClick is detail", async () => {
     installFetch(() => ({
       body: {
-        items: [{ name: "nginx", cpuPct: 12.34 }],
+        items: [{ _id: "p1", name: "nginx", cpuPct: 12.34 }],
         nextCursor: "",
         total: 1,
       },
@@ -566,7 +566,7 @@ describe("TablePanel staged edits", () => {
             { key: "name", label: "Name" },
             { key: "cpuPct", label: "CPU", type: "percent", precision: 1 },
           ],
-          rowDetail: true,
+          rowClick: "detail",
         },
       },
     });
@@ -581,40 +581,46 @@ describe("TablePanel staged edits", () => {
     w.unmount();
   });
 
-  it("does not hijack row-click navigation when rowDetail is set", async () => {
-    const w = mount(TablePanel, {
-      props: {
-        connectionId: "c1",
-        source: { routeId: "server_monitor.processes" },
-        config: { columns, rowDetail: true },
-      },
-    });
-    await flushPromises();
-    // Rows carry a ref → click still navigates; the detail dialog stays closed.
-    await w.find("tbody tr").trigger("click");
-    expect(w.emitted("select")).toBeTruthy();
-    expect(document.body.textContent).not.toContain("Close");
-    w.unmount();
-  });
-
-  it("falls back to the detail dialog on row-click when nothing else handles it", async () => {
+  it("opens the dialog on row-body click when rowClick is detail", async () => {
     installFetch(() => ({
-      body: { items: [{ name: "nginx", cpuPct: 5 }], nextCursor: "", total: 1 },
+      body: {
+        items: [{ _id: "p1", name: "nginx", cpuPct: 5 }],
+        nextCursor: "",
+        total: 1,
+      },
     }));
     const w = mount(TablePanel, {
       attachTo: document.body,
       props: {
         connectionId: "c1",
         source: { routeId: "server_monitor.processes" },
-        config: { columns: [{ key: "name", label: "Name" }], rowDetail: true },
+        config: {
+          columns: [{ key: "name", label: "Name" }],
+          rowClick: "detail",
+        },
       },
     });
     await flushPromises();
-    // No ref, not selectable → row-click opens details as the fallback.
     await w.find("tbody tr").trigger("click");
     await flushPromises();
     expect(w.emitted("select")).toBeFalsy();
     expect(document.body.textContent).toContain("nginx");
+    w.unmount();
+  });
+
+  it("navigates on row-click when rowClick is navigate", async () => {
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "docker.container.list" },
+        config: { columns, rowClick: "navigate" },
+      },
+    });
+    await flushPromises();
+    // Rows carry a ref → navigate; the detail dialog stays closed.
+    await w.find("tbody tr").trigger("click");
+    expect(w.emitted("select")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Close");
     w.unmount();
   });
 });
