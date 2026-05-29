@@ -3,7 +3,7 @@ import AppIcon from "../../components/AppIcon.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { FileEntry } from "../../types/projection";
-import { formatBytes, iconFor } from "./fileTypes";
+import { formatBytes, formatDate, iconFor } from "./fileTypes";
 
 withDefaults(
   defineProps<{
@@ -20,6 +20,18 @@ const emit = defineEmits<{
   open: [entry: FileEntry];
   retry: [];
 }>();
+
+// Roving focus: arrow keys move between rows so the list is keyboard-navigable.
+function moveFocus(event: KeyboardEvent, dir: 1 | -1): void {
+  const li = (event.currentTarget as HTMLElement).closest("li");
+  const sibling =
+    dir === 1 ? li?.nextElementSibling : li?.previousElementSibling;
+  const button = sibling?.querySelector("button");
+  if (button) {
+    event.preventDefault();
+    button.focus();
+  }
+}
 </script>
 
 <template>
@@ -47,12 +59,15 @@ const emit = defineEmits<{
               ? 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-200'
               : ''
           "
+          :aria-current="selectedPath === entry.path || undefined"
           :aria-label="
             entry.isDir ? `Open ${entry.name}` : `Select ${entry.name}`
           "
           :title="entry.path"
           @click="entry.isDir ? emit('open', entry) : emit('select', entry)"
           @dblclick="emit('open', entry)"
+          @keydown.down="moveFocus($event, 1)"
+          @keydown.up="moveFocus($event, -1)"
         >
           <AppIcon
             :icon="{ type: 'lucide', value: iconFor(entry.name, entry.isDir) }"
@@ -70,7 +85,16 @@ const emit = defineEmits<{
           >
             {{ entry.name }}
           </span>
-          <span v-if="!entry.isDir" class="shrink-0 text-xs text-surface-400">
+          <span
+            v-if="entry.modTime"
+            class="shrink-0 text-xs whitespace-nowrap text-surface-400 tabular-nums"
+          >
+            {{ formatDate(entry.modTime) }}
+          </span>
+          <span
+            v-if="!entry.isDir"
+            class="shrink-0 text-xs whitespace-nowrap text-surface-400 tabular-nums"
+          >
             {{ formatBytes(entry.size) }}
           </span>
           <AppIcon

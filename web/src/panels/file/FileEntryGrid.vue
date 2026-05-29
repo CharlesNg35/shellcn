@@ -3,7 +3,7 @@ import AppIcon from "../../components/AppIcon.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { FileEntry } from "../../types/projection";
-import { formatBytes, iconFor } from "./fileTypes";
+import { formatBytes, formatDate, iconFor } from "./fileTypes";
 
 withDefaults(
   defineProps<{
@@ -51,6 +51,7 @@ const emit = defineEmits<{
             ? 'border-primary-400 bg-primary-50 dark:border-primary-500 dark:bg-primary-500/10'
             : ''
         "
+        :aria-current="selectedPath === entry.path || undefined"
         :aria-label="
           entry.isDir ? `Open ${entry.name}` : `Select ${entry.name}`
         "
@@ -76,6 +77,12 @@ const emit = defineEmits<{
         </span>
         <span class="mt-1 block truncate text-xs text-surface-400">
           {{ entry.isDir ? "Folder" : formatBytes(entry.size) }}
+        </span>
+        <span
+          v-if="entry.modTime"
+          class="mt-0.5 block truncate text-xs text-surface-400/80 tabular-nums"
+        >
+          {{ formatDate(entry.modTime) }}
         </span>
       </button>
     </div>

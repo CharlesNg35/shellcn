@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { useDropZone } from "@vueuse/core";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
@@ -20,13 +21,18 @@ import type {
   Page,
 } from "../../types/projection";
 import type { PanelProps } from "../core/types";
-import CodeTextEditor from "../shared/CodeTextEditor.vue";
+import AppIcon from "../../components/AppIcon.vue";
 import FileCrumbs from "./FileCrumbs.vue";
 import FileEntryGrid from "./FileEntryGrid.vue";
 import FileEntryList from "./FileEntryList.vue";
-import FilePreview from "./FilePreview.vue";
+import FilePane from "./FilePane.vue";
 import FileToolbar from "./FileToolbar.vue";
-import { formatBytes, languageFor } from "./fileTypes";
+import {
+  formatBytes,
+  languageFor,
+  sortEntries,
+  type FileSortKey,
+} from "./fileTypes";
 import { dialogRoot } from "../../primevue/preset";
 
 const props = defineProps<PanelProps>();
@@ -79,12 +85,11 @@ const renameName = ref("");
 type FileListPage = Page<FileEntry> & { path?: string };
 
 const fileFilter = ref("");
+const sortKey = ref<FileSortKey>("name");
+const sortDir = ref<"asc" | "desc">("asc");
 
 const sorted = computed(() =>
-  [...entries.value].sort((a, b) => {
-    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
-    return a.name.localeCompare(b.name);
-  }),
+  sortEntries(entries.value, sortKey.value, sortDir.value),
 );
 
 const filtered = computed(() => {
@@ -121,7 +126,9 @@ const canEdit = computed(
     !selected.value.isDir,
 );
 const dirty = computed(
-  () => canEdit.value && editContent.value !== (content.value?.content ?? ""),
+  () =>
+    Boolean(canEdit.value) &&
+    editContent.value !== (content.value?.content ?? ""),
 );
 const selectedEditorLanguage = computed(() =>
   languageFor(selected.value?.name ?? ""),
@@ -136,6 +143,25 @@ const downloadHref = computed(() => {
     operationParams(selected.value.path),
   );
 });
+const panelEl = ref<HTMLElement | null>(null);
+const { isOverDropZone } = useDropZone(panelEl, {
+  onDrop: (files) => {
+    if (files?.length && canUpload.value) void uploadFileList(files);
+  },
+  multiple: multipleUpload.value,
+});
+const dropActive = computed(() => isOverDropZone.value && canUpload.value);
+
+// Submit is gated so a no-op (empty, or a rename to the same name) can't be
+// triggered — the disabled button signals "nothing to apply".
+const canSubmitMkdir = computed(
+  () => Boolean(newFolderName.value.trim()) && !mutating.value,
+);
+const canSubmitRename = computed(() => {
+  const name = renameName.value.trim();
+  return Boolean(name) && name !== selected.value?.name && !mutating.value;
+});
+
 const statusLabel = computed(() => {
   if (uploadProgress.value) return `Uploading ${uploadLabel.value}`;
   if (operation.value === "save") return "Saving file";
@@ -270,11 +296,14 @@ function notifyError(e: unknown): void {
   });
 }
 
-async function upload(event: FileUploadUploaderEvent): Promise<void> {
-  const routeId = uploadRouteId.value;
-  if (!routeId) return;
+function upload(event: FileUploadUploaderEvent): void {
   const files = Array.isArray(event.files) ? event.files : [event.files];
-  if (files.length === 0) return;
+  void uploadFileList(files);
+}
+
+async function uploadFileList(files: File[]): Promise<void> {
+  const routeId = uploadRouteId.value;
+  if (!routeId || files.length === 0) return;
   const total = files.reduce((sum, file) => sum + file.size, 0);
   uploadLabel.value =
     files.length === 1
@@ -415,12 +444,23 @@ watch(
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
+  <div ref="panelEl" class="relative flex h-full flex-col">
+    <div
+      v-if="dropActive"
+      class="pointer-events-none absolute inset-0 z-10 m-2 flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary-400 bg-primary-50/80 text-primary-700 dark:border-primary-500 dark:bg-primary-950/70 dark:text-primary-200"
+    >
+      <AppIcon :icon="{ type: 'lucide', value: 'upload-cloud' }" :size="32" />
+      <p class="text-sm font-medium">Drop files to upload here</p>
+      <p class="text-xs opacity-80">{{ cwd }}</p>
+    </div>
+
     <FileCrumbs :path="cwd" @navigate="loadList" />
 
     <FileToolbar
       v-model:view-mode="viewMode"
       v-model:filter="fileFilter"
+      v-model:sort-key="sortKey"
+      v-model:sort-dir="sortDir"
       :can-upload="canUpload"
       :can-mkdir="canMkdir"
       :can-rename="canRename"
@@ -460,33 +500,19 @@ watch(
       </div>
 
       <div class="min-w-0 flex-1">
-        <div v-if="canEdit" class="flex h-full flex-col">
-          <div
-            class="flex items-center justify-end border-b border-surface-200 px-3 py-2 dark:border-surface-800"
-          >
-            <Button
-              type="button"
-              label="Save"
-              :loading="operation === 'save'"
-              :disabled="!dirty || mutating"
-              @click="saveFile"
-            />
-          </div>
-          <CodeTextEditor
-            v-model:value="editContent"
-            :language="selectedEditorLanguage"
-            :disabled="mutating"
-            :aria-label="
-              selected?.name ? `${selected.name} editor` : 'File editor'
-            "
-          />
-        </div>
-        <FilePreview
-          v-else
-          :name="selected?.name ?? ''"
+        <FilePane
+          v-model:edit-content="editContent"
+          :selected="selected"
           :content="content"
+          :can-edit="Boolean(canEdit)"
+          :language="selectedEditorLanguage"
           :loading="loadingContent"
           :error="contentError"
+          :mutating="mutating"
+          :saving="operation === 'save'"
+          :dirty="dirty"
+          :download-href="downloadHref"
+          @save="saveFile"
           @retry="retryContent"
         />
       </div>
@@ -515,33 +541,19 @@ watch(
       }"
     >
       <div class="h-[70vh] min-h-0">
-        <div v-if="canEdit" class="flex h-full flex-col">
-          <div
-            class="flex items-center justify-end border-b border-surface-200 px-3 py-2 dark:border-surface-800"
-          >
-            <Button
-              type="button"
-              label="Save"
-              :loading="operation === 'save'"
-              :disabled="!dirty || mutating"
-              @click="saveFile"
-            />
-          </div>
-          <CodeTextEditor
-            v-model:value="editContent"
-            :language="selectedEditorLanguage"
-            :disabled="mutating"
-            :aria-label="
-              selected?.name ? `${selected.name} editor` : 'File editor'
-            "
-          />
-        </div>
-        <FilePreview
-          v-else
-          :name="selected?.name ?? ''"
+        <FilePane
+          v-model:edit-content="editContent"
+          :selected="selected"
           :content="content"
+          :can-edit="Boolean(canEdit)"
+          :language="selectedEditorLanguage"
           :loading="loadingContent"
           :error="contentError"
+          :mutating="mutating"
+          :saving="operation === 'save'"
+          :dirty="dirty"
+          :download-href="downloadHref"
+          @save="saveFile"
           @retry="retryContent"
         />
       </div>
@@ -567,7 +579,7 @@ watch(
             type="submit"
             label="Create"
             :loading="operation === 'mkdir'"
-            :disabled="mutating"
+            :disabled="!canSubmitMkdir"
           />
         </div>
       </form>
@@ -575,7 +587,12 @@ watch(
 
     <Dialog v-model:visible="renameOpen" modal header="Rename">
       <form class="flex flex-col gap-4" @submit.prevent="renameEntry">
-        <InputText v-model="renameName" autofocus placeholder="Name" />
+        <InputText
+          v-model="renameName"
+          autofocus
+          placeholder="Name"
+          @focus="($event.target as HTMLInputElement).select()"
+        />
         <div class="flex justify-end gap-2">
           <Button
             type="button"
@@ -589,7 +606,7 @@ watch(
             type="submit"
             label="Rename"
             :loading="operation === 'rename'"
-            :disabled="mutating"
+            :disabled="!canSubmitRename"
           />
         </div>
       </form>

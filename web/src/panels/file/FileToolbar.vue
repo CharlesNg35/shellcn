@@ -4,13 +4,27 @@ import Button from "primevue/button";
 import FileUpload from "primevue/fileupload";
 import type { FileUploadUploaderEvent } from "primevue/fileupload";
 import ProgressBar from "primevue/progressbar";
+import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
 import AppIcon from "../../components/AppIcon.vue";
 import type { UploadProgress } from "../../api/dataSource";
+import type { FileSortKey } from "./fileTypes";
 import { formatBytes } from "./fileTypes";
 import { inputClass } from "../../primevue/preset";
 
 const filter = defineModel<string>("filter", { default: "" });
+const sortKey = defineModel<FileSortKey>("sortKey", { default: "name" });
+const sortDir = defineModel<"asc" | "desc">("sortDir", { default: "asc" });
+
+const sortOptions = [
+  { label: "Name", value: "name" },
+  { label: "Size", value: "size" },
+  { label: "Modified", value: "modified" },
+];
+
+function toggleSortDir(): void {
+  sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
+}
 
 const props = defineProps<{
   viewMode: "split" | "grid";
@@ -149,7 +163,31 @@ const statusText = computed(() => {
         />
         Refresh
       </Button>
-      <div class="ml-auto w-48">
+      <Select
+        v-model="sortKey"
+        class="ml-auto"
+        :options="sortOptions"
+        option-label="label"
+        option-value="value"
+        size="small"
+        aria-label="Sort files by"
+      />
+      <Button
+        type="button"
+        severity="secondary"
+        :title="sortDir === 'asc' ? 'Ascending' : 'Descending'"
+        :aria-label="`Sort direction: ${sortDir === 'asc' ? 'ascending' : 'descending'}`"
+        @click="toggleSortDir"
+      >
+        <AppIcon
+          :icon="{
+            type: 'lucide',
+            value: sortDir === 'asc' ? 'arrow-up' : 'arrow-down',
+          }"
+          :size="15"
+        />
+      </Button>
+      <div class="w-48">
         <input
           v-model="filter"
           type="search"

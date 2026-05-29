@@ -2,6 +2,8 @@
 // extensible — a new viewer is a one-time core addition, reused by every
 // filesystem plugin.
 
+import type { FileEntry } from "../../types/projection";
+
 export type ViewerKind =
   | "code"
   | "image"
@@ -236,6 +238,41 @@ export function iconFor(name: string, isDir: boolean): string {
 
 export function isPreviewable(name: string, mime?: string): boolean {
   return viewerFor(name, mime) !== "download";
+}
+
+function dateMs(iso?: string): number {
+  if (!iso) return 0;
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+export function formatDate(iso?: string): string {
+  if (!dateMs(iso)) return "—";
+  return new Date(iso as string).toLocaleString(undefined, {
+    dateStyle: "short",
+    timeStyle: "short",
+  });
+}
+
+export type FileSortKey = "name" | "size" | "modified";
+
+// Sorts entries with directories grouped first (always), then by the chosen key
+// and direction; ties fall back to name so ordering is stable.
+export function sortEntries(
+  entries: FileEntry[],
+  key: FileSortKey,
+  dir: "asc" | "desc",
+): FileEntry[] {
+  const sign = dir === "asc" ? 1 : -1;
+  return [...entries].sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    let cmp: number;
+    if (key === "size") cmp = (a.size ?? 0) - (b.size ?? 0);
+    else if (key === "modified") cmp = dateMs(a.modTime) - dateMs(b.modTime);
+    else cmp = a.name.localeCompare(b.name);
+    if (cmp === 0) cmp = a.name.localeCompare(b.name);
+    return cmp * sign;
+  });
 }
 
 export function formatBytes(bytes?: number): string {

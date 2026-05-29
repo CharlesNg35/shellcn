@@ -1014,10 +1014,14 @@ type FileBrowserConfig struct {
 
 - **Listing.** The `Source` returns `Page[FileEntry]` for the current directory.
   Navigating into a directory re-fetches the same route with the `pathParam`
-  updated (breadcrumb-driven); directories sort before files. A toolbar filter
-  narrows the current listing by name (client-side, case-insensitive) with a
-  distinct "no match" empty state; it resets on navigation. Same behaviour for
-  every fs plugin — it lives in the panel, not the manifest.
+  updated (breadcrumb-driven); directories always group before files. A toolbar
+  filter narrows the current listing by name (client-side, case-insensitive)
+  with a distinct "no match" empty state and resets on navigation; a sort
+  control orders by name / size / modified in either direction. List and grid
+  rows show an extension-aware icon plus size and modified time, and the list is
+  keyboard-navigable (arrow keys, `aria-current` on the selection). Breadcrumbs
+  are a `<nav>` with the current folder marked `aria-current="page"`. All of this
+  lives in the panel, not the manifest — identical for every fs plugin.
 
   ```go
   type FileEntry struct {
@@ -1056,7 +1060,15 @@ type FileBrowserConfig struct {
   small validated request bodies (`{name}` for mkdir/rename, delete body optional
   because the path param is authoritative). Upload uses `multipart/form-data`,
   appending selected browser `File` objects under `uploadFieldName` and leaving
-  the browser to set the content boundary.
+  the browser to set the content boundary. Files can be added via the upload
+  button **or dropped onto the panel** (a drop overlay appears while dragging
+  when uploads are enabled); rename/mkdir submit is disabled until the value is
+  non-empty and actually changed, so a no-op can't be triggered.
+
+- **Selected-file pane.** Selecting a file opens a pane with a header (name,
+  size, modified time, permissions, symlink target, download) above the
+  viewer/editor; writable UTF-8 files are editable in place via the CodeMirror
+  editor with a dirty-gated Save.
 
 - **Safety.** Read is range/size-bounded; previews are sandboxed (images/pdf via
   bounded elements, never executed); path traversal is validated server-side;
