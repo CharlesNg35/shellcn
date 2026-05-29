@@ -5,6 +5,7 @@ import { useEventListener, useStorage, useTimeoutFn } from "@vueuse/core";
 import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import AppIcon from "./AppIcon.vue";
@@ -25,6 +26,7 @@ const props = defineProps<{
 
 const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
+const auth = useAuthStore();
 const router = useRouter();
 const notify = useNotify();
 const { confirmDanger } = useConfirmAction();
@@ -367,6 +369,7 @@ function go(connection: ConnectionSummary): void {
       </p>
       <div class="flex items-center gap-0.5">
         <Button
+          v-if="auth.canCreate"
           text
           rounded
           severity="secondary"

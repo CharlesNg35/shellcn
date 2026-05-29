@@ -117,7 +117,7 @@ const hasItems = computed(() => items.value.length > 0);
           Credentials
         </h1>
       </div>
-      <Button type="button" @click="openCreate">
+      <Button v-if="auth.canCreate" type="button" @click="openCreate">
         <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="15" />
         New credential
       </Button>
@@ -135,8 +135,14 @@ const hasItems = computed(() => items.value.length > 0);
         :size="28"
         class="text-surface-400"
       />
-      <p class="text-surface-500">No credentials yet.</p>
-      <Button type="button" @click="openCreate">
+      <p class="text-surface-500">
+        {{
+          auth.canCreate
+            ? "No credentials yet."
+            : "No credentials shared with you yet."
+        }}
+      </p>
+      <Button v-if="auth.canCreate" type="button" @click="openCreate">
         Create your first credential
       </Button>
     </div>

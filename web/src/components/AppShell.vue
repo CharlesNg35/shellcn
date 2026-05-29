@@ -126,6 +126,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
         <ConnectionSidebar v-else :active-id="activeId" :query="query">
           <template #create>
             <Button
+              v-if="auth.canCreate"
               text
               rounded
               severity="secondary"

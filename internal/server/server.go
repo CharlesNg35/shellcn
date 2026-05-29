@@ -201,8 +201,12 @@ func (s *Server) routes() chi.Router {
 					ar.Use(s.requireAdmin)
 					ar.Get("/admin/users", s.handleAdminListUsers)
 					ar.Post("/admin/users", s.handleAdminCreateUser)
+					ar.Get("/admin/users/{id}", s.handleAdminGetUser)
 					ar.Put("/admin/users/{id}", s.handleAdminUpdateUser)
-					ar.Delete("/admin/users/{id}", s.handleAdminDeleteUser)
+					ar.Post("/admin/users/{id}/activate", s.handleAdminActivateUser)
+					ar.Post("/admin/users/{id}/deactivate", s.handleAdminDeactivateUser)
+					ar.Get("/admin/users/{id}/audit", s.handleAdminUserAudit)
+					ar.Get("/admin/users/{id}/connections", s.handleAdminUserConnections)
 					if s.deps.Invitations != nil {
 						ar.Get("/admin/email", s.handleAdminEmailStatus)
 						ar.Get("/admin/invitations", s.handleAdminListInvitations)

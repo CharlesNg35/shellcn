@@ -51,7 +51,7 @@ func TestAdminCreateUser(t *testing.T) {
 	}
 }
 
-func TestAdminDeleteUserRootRules(t *testing.T) {
+func TestAdminDeactivateUserRules(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
 	_ = h.store.Users.Create(ctx, &models.User{ID: "root", Username: "root", Roles: []models.Role{models.RoleAdmin}, Protected: true}, "")
@@ -59,29 +59,36 @@ func TestAdminDeleteUserRootRules(t *testing.T) {
 	_ = h.store.Users.Create(ctx, &models.User{ID: "target", Username: "target", Roles: []models.Role{models.RoleViewer}}, "")
 	h.sessions["root"] = h.sessionMgr.Create("root")
 
-	// A non-root admin may delete a non-admin.
-	if resp := h.do(t, http.MethodDelete, "/api/admin/users/target", "admin", nil); resp.Status != http.StatusOK {
-		t.Errorf("admin delete non-admin: want 200, got %d", resp.Status)
+	deactivate := func(id, as string) int {
+		return h.do(t, http.MethodPost, "/api/admin/users/"+id+"/deactivate", as, nil).Status
 	}
-	// …but not another admin.
-	if resp := h.do(t, http.MethodDelete, "/api/admin/users/admin2", "admin", nil); resp.Status != http.StatusForbidden {
-		t.Errorf("non-root delete admin: want 403, got %d", resp.Status)
+
+	// A non-root admin may deactivate a non-admin.
+	if s := deactivate("target", "admin"); s != http.StatusOK {
+		t.Errorf("admin deactivate non-admin: want 200, got %d", s)
 	}
+	// …but not another admin, and never itself.
+	if s := deactivate("admin2", "admin"); s != http.StatusForbidden {
+		t.Errorf("non-root deactivate admin: want 403, got %d", s)
+	}
+	if s := deactivate("admin", "admin"); s != http.StatusForbidden {
+		t.Errorf("self-deactivate: want 403, got %d", s)
+	}
+	// The protected root can never be deactivated.
+	if s := deactivate("root", "root"); s != http.StatusForbidden {
+		t.Errorf("deactivate protected root: want 403, got %d", s)
+	}
+	// A non-root admin still cannot edit another admin via update.
 	if resp := h.do(t, http.MethodPut, "/api/admin/users/admin2", "admin",
 		strings.NewReader(`{"role":"viewer","disabled":false}`)); resp.Status != http.StatusForbidden {
 		t.Errorf("non-root demote admin: want 403, got %d", resp.Status)
 	}
-	if resp := h.do(t, http.MethodPut, "/api/admin/users/admin2", "admin",
-		strings.NewReader(`{"role":"admin","disabled":true}`)); resp.Status != http.StatusForbidden {
-		t.Errorf("non-root disable admin: want 403, got %d", resp.Status)
+	// The root admin may deactivate another admin and re-activate it.
+	if s := deactivate("admin2", "root"); s != http.StatusOK {
+		t.Errorf("root deactivate admin: want 200, got %d", s)
 	}
-	// The protected root admin can never be deleted.
-	if resp := h.do(t, http.MethodDelete, "/api/admin/users/root", "root", nil); resp.Status != http.StatusForbidden {
-		t.Errorf("delete protected root: want 403, got %d", resp.Status)
-	}
-	// The root admin may delete other admins.
-	if resp := h.do(t, http.MethodDelete, "/api/admin/users/admin2", "root", nil); resp.Status != http.StatusOK {
-		t.Errorf("root delete admin: want 200, got %d", resp.Status)
+	if s := h.do(t, http.MethodPost, "/api/admin/users/admin2/activate", "root", nil).Status; s != http.StatusOK {
+		t.Errorf("root activate admin: want 200, got %d", s)
 	}
 }
 

@@ -25,6 +25,13 @@ const router = createRouter({
         },
         { path: "users", redirect: { name: "settings" } },
         {
+          path: "settings/users/:id",
+          name: "user-detail",
+          component: () => import("../views/UserDetailView.vue"),
+          props: true,
+          meta: { admin: true },
+        },
+        {
           path: "profile",
           name: "profile",
           component: () => import("../views/ProfileView.vue"),

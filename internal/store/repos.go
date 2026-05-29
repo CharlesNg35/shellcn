@@ -319,11 +319,26 @@ func (s *gormAuditStore) List(ctx context.Context, f AuditFilter) ([]models.Audi
 	if f.Limit > 0 {
 		q = q.Limit(f.Limit)
 	}
+	if f.Offset > 0 {
+		q = q.Offset(f.Offset)
+	}
 	var list []models.AuditEntry
 	if err := q.Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
+}
+
+func (s *gormAuditStore) Count(ctx context.Context, f AuditFilter) (int64, error) {
+	q := s.db.WithContext(ctx).Model(&models.AuditEntry{})
+	if f.UserID != "" {
+		q = q.Where("user_id = ?", f.UserID)
+	}
+	if f.ConnectionID != "" {
+		q = q.Where("connection_id = ?", f.ConnectionID)
+	}
+	var n int64
+	return n, q.Count(&n).Error
 }
 
 type gormSnippetStore struct{ db *gorm.DB }
@@ -483,22 +498,6 @@ func (s *gormRecordingStore) Update(ctx context.Context, r *models.Recording) er
 
 func (s *gormRecordingStore) Delete(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&models.Recording{}, "id = ?", id).Error
-}
-
-func (s *gormRecordingStore) CountByUser(ctx context.Context) (map[string]int64, error) {
-	var rows []struct {
-		UserID string
-		N      int64
-	}
-	if err := s.db.WithContext(ctx).Model(&models.Recording{}).
-		Select("user_id, count(*) as n").Group("user_id").Scan(&rows).Error; err != nil {
-		return nil, err
-	}
-	out := make(map[string]int64, len(rows))
-	for _, r := range rows {
-		out[r.UserID] = r.N
-	}
-	return out, nil
 }
 
 func (s *gormRecordingStore) List(ctx context.Context, f RecordingFilter) ([]models.Recording, error) {

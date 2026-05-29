@@ -550,14 +550,28 @@ credential via `preserveCredentials` or replace it with a credential they can
 use. Credential grants remain managed from the credentials surface, not from a
 connection form.
 
+**Three roles (`models.Role` — never hardcode the strings; the frontend mirrors
+them in `constants/roles.ts`).**
+
+- **viewer** — consumes only resources shared to it; creates nothing (the role/risk
+  policy denies `write`+ risk, so create routes are refused). The UI hides create
+  affordances when `!auth.canCreate`.
+- **operator** — full self-service over its own connections/credentials/recordings.
+- **admin** — manages user accounts only (see below).
+
 **Admin is a user-management role, not a super-user.** Admin grants the right to
-manage users (create/disable/role/invite, email status) — it confers **no implicit
-access** to other users' connections, credentials, or recordings. Resource access
-is purely ownership + grants: the role/risk policy (Casbin) decides *what risk
-tier* a role may perform on resources it can reach, while ownership/grants decide
-*which* resources. `canAccessConnection`, `canManageConnection`,
-`canManageCredential`, and connection/credential sharing are all owner/grant-based
-with no admin bypass.
+manage users (create/role/deactivate/invite, email status) — it confers **no
+implicit access** to other users' connections, credentials, or recordings.
+Resource access is purely ownership + grants: the role/risk policy (Casbin) decides
+*what risk tier* a role may perform on resources it can reach, while
+ownership/grants decide *which* resources. `canAccessConnection`,
+`canManageConnection`, `canManageCredential`, and connection/credential sharing are
+all owner/grant-based with no admin bypass.
+
+**Accounts are deactivated, never hard-deleted.** Deactivating sets `Disabled`
+(the account can't sign in) while keeping its audit trail and owned resources. No
+admin may deactivate themselves; the **protected** root admin (created on first run)
+can never be deactivated or demoted; only the root admin manages other admins.
 
 **Sharing visibility & re-share rule.** Connection/credential lists return the
 viewer's owned **plus** shared-with-me resources; each carries the owner's display
@@ -569,13 +583,16 @@ gates the Share affordance on `canShare` and the backend enforces it.
 
 **Recordings are private to their creator.** Every user — admin included — sees
 only their own recordings (`RecordingService.List` is always scoped to the actor;
-`canView` is owner-only). Admins never view another user's recordings or content;
-they may see **aggregate stats only** — e.g. a per-user recording *count* in the
-admin Users list, which exposes no recording content.
+`canView` is owner-only). Admins never view another user's recordings or content.
 
 **Admin management lives in Settings.** User management and email status are
 sections of the Settings page, shown only to admins via a generic `RoleGate`
-(client gate; the admin APIs enforce server-side).
+(client gate; the admin APIs enforce server-side). An admin opens a user's detail
+page (`/settings/users/:id`, admin-only) with three tabs: **Overview** (name, email,
+status, role + deactivate), **Connections** (a metadata-only inventory — name,
+protocol, icon, created date; never config, secrets, or access), and **Audit** (the
+user's paginated audit trail). These are the only cross-user views an admin gets,
+and none expose another user's resources.
 
 The schema renderer resolves choices for a `credential_ref` field through a core
 API, not through plugin routes: `GET /api/credentials?kind=...&protocol=...`
@@ -1521,9 +1538,8 @@ Two recording classes are first-class:
 Recordings are private to their creator: every user — admin included — may
 list/view/delete only recordings they created. Sharing grants and connection
 ownership never expose another person's recordings, and admin (a user-management
-role) gets no exception — at most an aggregate per-user *count* as a stat.
-Recording read/delete operations are audited separately from the original stream
-route.
+role) gets no exception. Recording read/delete operations are audited separately
+from the original stream route.
 
 ### 9.6 Per-protocol safety (non-negotiable defaults)
 

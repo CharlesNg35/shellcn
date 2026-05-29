@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
@@ -8,17 +9,19 @@ import TabPanel from "primevue/tabpanel";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
-import { api, ApiError } from "../../api/client";
+import { api } from "../../api/client";
 import { useAuthStore } from "../../stores/auth";
 import { useNotify } from "../../composables/useNotify";
 import { useConfirmAction } from "../../composables/useConfirmAction";
 import AppIcon from "../AppIcon.vue";
 import UserFormDialog from "../UserFormDialog.vue";
 import InviteDialog from "../InviteDialog.vue";
+import { Role } from "../../constants/roles";
 import type { AdminUser, InvitationSummary } from "../../types/projection";
 
 const auth = useAuthStore();
 const notify = useNotify();
+const router = useRouter();
 const { confirmDanger } = useConfirmAction();
 
 const tab = ref("users");
@@ -40,18 +43,15 @@ onMounted(() => {
   void loadInvitations();
 });
 
-// The root admin can never be deleted; only the root admin may delete admins.
-function canDelete(u: AdminUser): boolean {
-  if (u.protected) return false;
-  if (u.roles.includes("admin")) return auth.user?.protected === true;
-  return true;
-}
-
 // Root admin edits anyone; a regular admin edits non-admin users and their own
 // account, but not other admins (the backend enforces this too).
 function canEdit(u: AdminUser): boolean {
   if (auth.user?.protected) return true;
-  return !u.roles.includes("admin") || u.id === auth.user?.id;
+  return !u.roles.includes(Role.Admin) || u.id === auth.user?.id;
+}
+
+function viewUser(u: AdminUser): void {
+  void router.push({ name: "user-detail", params: { id: u.id } });
 }
 
 function openCreate(): void {
@@ -61,26 +61,6 @@ function openCreate(): void {
 function openEdit(u: AdminUser): void {
   editingUser.value = u;
   showUserForm.value = true;
-}
-
-function askDeleteUser(u: AdminUser): void {
-  confirmDanger({
-    header: "Delete user",
-    message: `Delete “${u.username}”? This cannot be undone.`,
-    accept: () => deleteUser(u),
-  });
-}
-
-async function deleteUser(u: AdminUser): Promise<void> {
-  try {
-    await api.del(`/admin/users/${u.id}`);
-    notify.success("User deleted", u.username);
-    await loadUsers();
-  } catch (e) {
-    if (e instanceof ApiError && e.status === 403) {
-      notify.error("Not allowed", e.message);
-    }
-  }
 }
 
 function askRevoke(inv: InvitationSummary): void {
@@ -143,20 +123,6 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
                 }}</span>
               </template>
             </Column>
-            <Column header="Recordings">
-              <template #body="{ data }">
-                <span
-                  class="inline-flex items-center gap-1.5 text-sm text-surface-500"
-                  :title="`${(data as AdminUser).recordingCount ?? 0} recordings`"
-                >
-                  <AppIcon
-                    :icon="{ type: 'lucide', value: 'video' }"
-                    :size="14"
-                  />
-                  {{ (data as AdminUser).recordingCount ?? 0 }}
-                </span>
-              </template>
-            </Column>
             <Column header="Status">
               <template #body="{ data }">
                 <span
@@ -174,6 +140,20 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
               <template #body="{ data }">
                 <div class="flex items-center justify-end gap-1">
                   <Button
+                    text
+                    rounded
+                    severity="secondary"
+                    size="small"
+                    title="View details"
+                    :aria-label="`View ${(data as AdminUser).username}`"
+                    @click="viewUser(data as AdminUser)"
+                  >
+                    <AppIcon
+                      :icon="{ type: 'lucide', value: 'arrow-right' }"
+                      :size="16"
+                    />
+                  </Button>
+                  <Button
                     v-if="canEdit(data as AdminUser)"
                     text
                     rounded
@@ -185,21 +165,6 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
                   >
                     <AppIcon
                       :icon="{ type: 'lucide', value: 'pencil' }"
-                      :size="16"
-                    />
-                  </Button>
-                  <Button
-                    v-if="canDelete(data as AdminUser)"
-                    text
-                    rounded
-                    severity="danger"
-                    size="small"
-                    title="Delete"
-                    :aria-label="`Delete ${(data as AdminUser).username}`"
-                    @click="askDeleteUser(data as AdminUser)"
-                  >
-                    <AppIcon
-                      :icon="{ type: 'lucide', value: 'trash' }"
                       :size="16"
                     />
                   </Button>

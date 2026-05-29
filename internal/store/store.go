@@ -87,6 +87,8 @@ type CredentialGrantStore interface {
 type AuditStore interface {
 	Append(ctx context.Context, e *models.AuditEntry) error
 	List(ctx context.Context, f AuditFilter) ([]models.AuditEntry, error)
+	// Count returns the number of entries matching the filter (Limit/Offset ignored).
+	Count(ctx context.Context, f AuditFilter) (int64, error)
 }
 
 // RecordingStore persists session-recording metadata (the blobs live elsewhere).
@@ -96,9 +98,6 @@ type RecordingStore interface {
 	Update(ctx context.Context, r *models.Recording) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, f RecordingFilter) ([]models.Recording, error)
-	// CountByUser returns recording counts keyed by user id — an admin stat that
-	// exposes no recording content.
-	CountByUser(ctx context.Context) (map[string]int64, error)
 }
 
 // RecordingFilter narrows a recording query. Zero-value fields are ignored.
@@ -122,6 +121,7 @@ type AuditFilter struct {
 	UserID       string
 	ConnectionID string
 	Limit        int
+	Offset       int
 }
 
 // SnippetStore persists saved command/query snippets.

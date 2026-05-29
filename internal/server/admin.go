@@ -16,11 +16,12 @@ import (
 )
 
 const (
-	userCreateEvent   = "user.create"
-	userUpdateEvent   = "user.update"
-	userDeleteEvent   = "user.delete"
-	inviteCreateEvent = "invitation.create"
-	inviteRevokeEvent = "invitation.revoke"
+	userCreateEvent     = "user.create"
+	userUpdateEvent     = "user.update"
+	userActivateEvent   = "user.activate"
+	userDeactivateEvent = "user.deactivate"
+	inviteCreateEvent   = "invitation.create"
+	inviteRevokeEvent   = "invitation.revoke"
 )
 
 type adminUserDTO struct {
@@ -31,9 +32,6 @@ type adminUserDTO struct {
 	Roles       []models.Role `json:"roles"`
 	Disabled    bool          `json:"disabled"`
 	Protected   bool          `json:"protected"`
-	// RecordingCount is an admin stat — how many recordings the user owns, never
-	// the recordings themselves.
-	RecordingCount int64 `json:"recordingCount"`
 }
 
 func toAdminUserDTO(u models.User) adminUserDTO {
@@ -70,16 +68,9 @@ func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	counts, err := s.deps.Store.Recordings.CountByUser(r.Context())
-	if err != nil {
-		writeError(w, s.deps.Logger, err)
-		return
-	}
 	out := make([]adminUserDTO, 0, len(list))
 	for _, u := range list {
-		dto := toAdminUserDTO(u)
-		dto.RecordingCount = counts[u.ID]
-		out = append(out, dto)
+		out = append(out, toAdminUserDTO(u))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -181,32 +172,68 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toAdminUserDTO(updated))
 }
 
-func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAdminGetUser(w http.ResponseWriter, r *http.Request) {
+	user, err := s.deps.Users.Get(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAdminUserDTO(user))
+}
+
+// Accounts are deactivated, never hard-deleted: the audit trail and any owned
+// resources stay intact. A deactivated user cannot sign in.
+func (s *Server) handleAdminDeactivateUser(w http.ResponseWriter, r *http.Request) {
+	s.setUserActive(w, r, false)
+}
+
+func (s *Server) handleAdminActivateUser(w http.ResponseWriter, r *http.Request) {
+	s.setUserActive(w, r, true)
+}
+
+func (s *Server) setUserActive(w http.ResponseWriter, r *http.Request, active bool) {
 	ctx := r.Context()
 	actor, _ := userFrom(ctx)
+	event := userActivateEvent
+	if !active {
+		event = userDeactivateEvent
+	}
+	deny := func(msg string) {
+		s.auditAdminEvent(ctx, actor, event, models.AuditDenied, nil, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, errForbidden(msg))
+	}
+
 	target, err := s.deps.Users.Get(ctx, chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if target.Protected {
-		s.auditAdminEvent(ctx, actor, userDeleteEvent, models.AuditDenied, nil, plugin.ErrForbidden)
-		writeError(w, s.deps.Logger, errForbidden("the root admin cannot be deleted"))
+	if !active {
+		if target.ID == actor.ID {
+			deny("you cannot deactivate your own account")
+			return
+		}
+		if target.Protected {
+			deny("the root admin cannot be deactivated")
+			return
+		}
+	}
+	// Only the root admin may manage another admin's account.
+	if target.HasRole(models.RoleAdmin) && target.ID != actor.ID && !actor.Protected {
+		deny("only the root admin may manage another admin")
 		return
 	}
-	// Only the root admin may delete other admins.
-	if target.HasRole(models.RoleAdmin) && !actor.Protected {
-		s.auditAdminEvent(ctx, actor, userDeleteEvent, models.AuditDenied, nil, plugin.ErrForbidden)
-		writeError(w, s.deps.Logger, errForbidden("only the root admin may delete an admin"))
-		return
-	}
-	if err := s.deps.Users.Delete(ctx, target.ID); err != nil {
-		s.auditAdminEvent(ctx, actor, userDeleteEvent, models.AuditError, nil, err)
+
+	updated, err := s.deps.Users.Update(ctx, target.ID, service.UpdateUserInput{
+		Email: target.Email, DisplayName: target.DisplayName, Roles: target.Roles, Disabled: !active,
+	})
+	if err != nil {
+		s.auditAdminEvent(ctx, actor, event, models.AuditError, nil, err)
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	s.auditAdminEvent(ctx, actor, userDeleteEvent, models.AuditAllowed, map[string]string{"username": target.Username}, nil)
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	s.auditAdminEvent(ctx, actor, event, models.AuditAllowed, map[string]string{"username": updated.Username}, nil)
+	writeJSON(w, http.StatusOK, toAdminUserDTO(updated))
 }
 
 // --- invitations (admin) ----------------------------------------------------

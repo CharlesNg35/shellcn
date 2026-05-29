@@ -500,16 +500,28 @@ func (s *memAuditStore) Append(_ context.Context, e *models.AuditEntry) error {
 	return nil
 }
 
+func (s *memAuditStore) matches(e models.AuditEntry, f AuditFilter) bool {
+	if f.UserID != "" && e.UserID != f.UserID {
+		return false
+	}
+	if f.ConnectionID != "" && e.ConnectionID != f.ConnectionID {
+		return false
+	}
+	return true
+}
+
 func (s *memAuditStore) List(_ context.Context, f AuditFilter) ([]models.AuditEntry, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []models.AuditEntry
+	skipped := 0
 	for i := len(s.entries) - 1; i >= 0; i-- {
 		e := s.entries[i]
-		if f.UserID != "" && e.UserID != f.UserID {
+		if !s.matches(e, f) {
 			continue
 		}
-		if f.ConnectionID != "" && e.ConnectionID != f.ConnectionID {
+		if f.Offset > 0 && skipped < f.Offset {
+			skipped++
 			continue
 		}
 		out = append(out, e)
@@ -518,6 +530,18 @@ func (s *memAuditStore) List(_ context.Context, f AuditFilter) ([]models.AuditEn
 		}
 	}
 	return out, nil
+}
+
+func (s *memAuditStore) Count(_ context.Context, f AuditFilter) (int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var n int64
+	for _, e := range s.entries {
+		if s.matches(e, f) {
+			n++
+		}
+	}
+	return n, nil
 }
 
 type memSnippetStore struct {
@@ -821,16 +845,6 @@ func (s *memEnrollmentStore) Consume(_ context.Context, id string, now time.Time
 type memRecordingStore struct {
 	mu sync.RWMutex
 	m  map[string]models.Recording
-}
-
-func (s *memRecordingStore) CountByUser(_ context.Context) (map[string]int64, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := map[string]int64{}
-	for _, r := range s.m {
-		out[r.UserID]++
-	}
-	return out, nil
 }
 
 func (s *memRecordingStore) Create(_ context.Context, r *models.Recording) error {

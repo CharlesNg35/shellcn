@@ -1,13 +1,14 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { api, setCsrfToken } from "../api/client";
+import { Role } from "../constants/roles";
 
 export interface AuthUser {
   id: string;
   username: string;
   displayName?: string;
   email?: string;
-  roles: string[];
+  roles: Role[];
   protected?: boolean;
 }
 
@@ -22,7 +23,13 @@ export const useAuthStore = defineStore("auth", () => {
   let bootstrapPromise: Promise<void> | null = null;
 
   const isAuthenticated = computed(() => user.value !== null);
-  const isAdmin = computed(() => user.value?.roles.includes("admin") ?? false);
+  const roles = computed<Role[]>(() => user.value?.roles ?? []);
+  const isAdmin = computed(() => roles.value.includes(Role.Admin));
+  // Viewers consume only shared resources; operators/admins may create their own.
+  const canCreate = computed(
+    () =>
+      roles.value.includes(Role.Operator) || roles.value.includes(Role.Admin),
+  );
 
   function apply(session: SessionDTO): void {
     user.value = session.user;
@@ -81,6 +88,7 @@ export const useAuthStore = defineStore("auth", () => {
     ready,
     isAuthenticated,
     isAdmin,
+    canCreate,
     ensureReady,
     bootstrap,
     login,

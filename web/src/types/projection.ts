@@ -2,6 +2,8 @@
 // Mirrors the Go manifest projection. Carries no server-only fields
 // (handlers, raw mount paths, permission keys, audit-event names).
 
+import type { Role } from "../constants/roles";
+
 export type IconType = "lucide" | "url" | "base64" | "emoji" | "svg";
 
 export interface Icon {
@@ -634,10 +636,35 @@ export interface AdminUser {
   username: string;
   email?: string;
   displayName?: string;
-  roles: string[];
+  roles: Role[];
   disabled: boolean;
   protected: boolean;
-  recordingCount?: number;
+}
+
+// Metadata-only view of a user's connection (admin user-detail inventory) — never
+// config, secrets, or access.
+export interface UserConnectionSummary {
+  id: string;
+  name: string;
+  protocol: string;
+  icon?: Icon;
+  createdAt: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  time: string;
+  event: string;
+  risk?: string;
+  result: string;
+  connectionId?: string;
+  error?: string;
+  remoteAddr?: string;
+}
+
+export interface AuditPage {
+  items: AuditEntry[];
+  total: number;
 }
 
 export interface InvitationSummary {
