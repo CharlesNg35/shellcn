@@ -37,6 +37,18 @@ type ErrorMapper interface {
 	MapError(error) error
 }
 
+// Seekable is an optional Client capability: a seekable handle enables full HTTP
+// Range support for downloads/previews.
+type Seekable interface {
+	OpenSeeker(ctx context.Context, p string) (io.ReadSeekCloser, error)
+}
+
+// RangeOpener is an optional Client capability for backends that read from an
+// offset but cannot seek. length <= 0 means to EOF.
+type RangeOpener interface {
+	OpenRange(ctx context.Context, p string, offset, length int64) (io.ReadCloser, error)
+}
+
 type Session interface {
 	Filesystem() (Client, error)
 }
@@ -212,14 +224,14 @@ func read(rc *plugin.RequestContext) (any, error) {
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
-	content := FileContent{Path: p, MIME: mimeType, Size: info.Size(), Truncated: info.Size() > int64(n)}
+	content := FileContent{Path: p, MIME: mimeType, Size: info.Size()}
 	if isText(mimeType, buf) {
 		content.Encoding = "utf8"
 		content.Content = string(buf)
+		content.Truncated = info.Size() > int64(n)
 		return content, nil
 	}
-	content.Encoding = "base64"
-	content.Content = base64.StdEncoding.EncodeToString(buf)
+	content.Encoding = "binary"
 	return content, nil
 }
 
@@ -239,11 +251,36 @@ func download(rc *plugin.RequestContext) (any, error) {
 	if info.IsDir() {
 		return nil, plugin.ErrInvalidInput
 	}
-	f, err := fs.Open(rc.Ctx, p)
-	if err != nil {
-		return nil, mapClientError(fs, err)
+	dl := &plugin.Download{
+		Name:    path.Base(p),
+		MIME:    mimeFor(p),
+		Size:    info.Size(),
+		ModTime: info.ModTime(),
+		Inline:  rc.Param("inline") == "1",
 	}
-	return &plugin.Download{Name: path.Base(p), MIME: mimeFor(p), Size: info.Size(), ModTime: info.ModTime(), Body: f}, nil
+	switch fsc := fs.(type) {
+	case Seekable:
+		sk, err := fsc.OpenSeeker(rc.Ctx, p)
+		if err != nil {
+			return nil, mapClientError(fs, err)
+		}
+		dl.Seeker = sk
+	case RangeOpener:
+		dl.OpenRange = func(off, length int64) (io.ReadCloser, error) {
+			r, err := fsc.OpenRange(rc.Ctx, p, off, length)
+			if err != nil {
+				return nil, mapClientError(fs, err)
+			}
+			return r, nil
+		}
+	default:
+		f, err := fs.Open(rc.Ctx, p)
+		if err != nil {
+			return nil, mapClientError(fs, err)
+		}
+		dl.Body = f
+	}
+	return dl, nil
 }
 
 func upload(rc *plugin.RequestContext) (any, error) {

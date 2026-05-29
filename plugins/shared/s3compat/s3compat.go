@@ -254,6 +254,22 @@ func (c *Client) Open(ctx context.Context, p string) (io.ReadCloser, error) {
 	return out.Body, nil
 }
 
+func (c *Client) OpenRange(ctx context.Context, p string, offset, length int64) (io.ReadCloser, error) {
+	in := &awss3.GetObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(c.key(p))}
+	if offset > 0 || length > 0 {
+		spec := fmt.Sprintf("bytes=%d-", offset)
+		if length > 0 {
+			spec = fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
+		}
+		in.Range = aws.String(spec)
+	}
+	out, err := c.s3.GetObject(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out.Body, nil
+}
+
 func (c *Client) Write(ctx context.Context, p string, r io.Reader) error {
 	_, err := c.s3.PutObject(ctx, &awss3.PutObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(c.key(p)), Body: r})
 	return err

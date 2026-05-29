@@ -31,6 +31,7 @@ import {
   formatBytes,
   languageFor,
   sortEntries,
+  viewerFor,
   type FileSortKey,
 } from "./fileTypes";
 import { dialogRoot } from "../../primevue/preset";
@@ -143,6 +144,20 @@ const downloadHref = computed(() => {
     operationParams(selected.value.path),
   );
 });
+const streamSrc = computed(() => {
+  const entry = selected.value;
+  if (!entry || entry.isDir || !downloadRouteId.value) return "";
+  return routeURL(
+    props.connectionId,
+    downloadRouteId.value,
+    operationCtx.value,
+    {
+      ...operationParams(entry.path),
+      inline: "1",
+    },
+  );
+});
+
 const panelEl = ref<HTMLElement | null>(null);
 const { isOverDropZone } = useDropZone(panelEl, {
   onDrop: (files) => {
@@ -221,6 +236,12 @@ async function selectEntry(entry: FileEntry): Promise<void> {
   contentError.value = null;
   editContent.value = "";
   if (entry.isDir) return;
+  // Media streams via the download URL; only text/unknown fetch inline content.
+  const viewer = viewerFor(entry.name, entry.mime);
+  if (["image", "pdf", "audio", "video"].includes(viewer)) {
+    content.value = { path: entry.path, mime: entry.mime, size: entry.size };
+    return;
+  }
   if (!readRouteId.value) return;
   loadingContent.value = true;
   try {
@@ -505,6 +526,7 @@ watch(
           :selected="selected"
           :content="content"
           :can-edit="Boolean(canEdit)"
+          :stream-src="streamSrc"
           :language="selectedEditorLanguage"
           :loading="loadingContent"
           :error="contentError"
@@ -546,6 +568,7 @@ watch(
           :selected="selected"
           :content="content"
           :can-edit="Boolean(canEdit)"
+          :stream-src="streamSrc"
           :language="selectedEditorLanguage"
           :loading="loadingContent"
           :error="contentError"

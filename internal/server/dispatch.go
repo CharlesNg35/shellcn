@@ -3,13 +3,16 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
 	"net"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -225,7 +228,10 @@ func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 		s.serveStream(w, r, res)
 		return
 	}
-	if r.Method != string(res.route.Method) {
+	// HEAD is allowed on GET routes so players/ServeContent can probe range support.
+	methodOK := r.Method == string(res.route.Method) ||
+		(r.Method == http.MethodHead && res.route.Method == plugin.MethodGet)
+	if !methodOK {
 		writeJSON(w, http.StatusMethodNotAllowed, errorEnvelope{Error: "method not allowed"})
 		return
 	}
@@ -273,18 +279,17 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, res resolved)
 	}
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
 	if dl, ok := result.(*plugin.Download); ok {
-		s.writeDownload(w, dl)
+		s.writeDownload(w, r, dl)
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (s *Server) writeDownload(w http.ResponseWriter, dl *plugin.Download) {
-	if dl == nil || dl.Body == nil {
+func (s *Server) writeDownload(w http.ResponseWriter, r *http.Request, dl *plugin.Download) {
+	if dl == nil || (dl.Body == nil && dl.Seeker == nil && dl.OpenRange == nil) {
 		writeError(w, s.deps.Logger, plugin.ErrNotFound)
 		return
 	}
-	defer func() { _ = dl.Body.Close() }()
 	name := path.Base(dl.Name)
 	if name == "." || name == "/" || name == "" {
 		name = "download"
@@ -293,18 +298,119 @@ func (s *Server) writeDownload(w http.ResponseWriter, dl *plugin.Download) {
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
-	w.Header().Set("Content-Type", mimeType)
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
-	if dl.Size >= 0 {
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", dl.Size))
+	h := w.Header()
+	h.Set("Content-Type", mimeType)
+	h.Set("X-Content-Type-Options", "nosniff")
+	disposition := "attachment"
+	if dl.Inline {
+		disposition = "inline"
+		h.Set("Content-Security-Policy", "sandbox")
 	}
+	h.Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": name}))
 	if !dl.ModTime.IsZero() {
-		w.Header().Set("Last-Modified", dl.ModTime.UTC().Format(http.TimeFormat))
+		h.Set("Last-Modified", dl.ModTime.UTC().Format(http.TimeFormat))
+	}
+
+	if dl.Seeker != nil {
+		defer func() { _ = dl.Seeker.Close() }()
+		http.ServeContent(w, r, name, dl.ModTime, dl.Seeker)
+		return
+	}
+
+	if dl.OpenRange != nil && dl.Size >= 0 {
+		h.Set("Accept-Ranges", "bytes")
+		start, length, status := resolveRange(r.Header.Get("Range"), dl.Size)
+		if status == http.StatusRequestedRangeNotSatisfiable {
+			h.Set("Content-Range", fmt.Sprintf("bytes */%d", dl.Size))
+			writeJSON(w, status, errorEnvelope{Error: "range not satisfiable"})
+			return
+		}
+		off, n := int64(0), dl.Size
+		if status == http.StatusPartialContent {
+			off, n = start, length
+		}
+		body, err := dl.OpenRange(off, n)
+		if err != nil {
+			writeError(w, s.deps.Logger, err)
+			return
+		}
+		defer func() { _ = body.Close() }()
+		if status == http.StatusPartialContent {
+			h.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", off, off+n-1, dl.Size))
+		}
+		h.Set("Content-Length", strconv.FormatInt(n, 10))
+		w.WriteHeader(status)
+		if r.Method != http.MethodHead {
+			s.streamBody(io.LimitReader(body, n), w)
+		}
+		return
+	}
+
+	defer func() { _ = dl.Body.Close() }()
+	if dl.Size >= 0 {
+		h.Set("Content-Length", strconv.FormatInt(dl.Size, 10))
 	}
 	w.WriteHeader(http.StatusOK)
-	if _, err := io.Copy(w, dl.Body); err != nil && s.deps.Logger != nil {
+	if r.Method != http.MethodHead {
+		s.streamBody(dl.Body, w)
+	}
+}
+
+// resolveRange parses a single byte range: StatusOK = whole resource (absent,
+// malformed, or multi-range), StatusPartialContent, or 416.
+func resolveRange(header string, size int64) (start, length int64, status int) {
+	if !strings.HasPrefix(header, "bytes=") {
+		return 0, 0, http.StatusOK
+	}
+	spec := strings.TrimPrefix(header, "bytes=")
+	if spec == "" || strings.Contains(spec, ",") {
+		return 0, 0, http.StatusOK
+	}
+	dash := strings.IndexByte(spec, '-')
+	if dash < 0 {
+		return 0, 0, http.StatusOK
+	}
+	startStr, endStr := spec[:dash], spec[dash+1:]
+	if size == 0 {
+		return 0, 0, http.StatusRequestedRangeNotSatisfiable
+	}
+	if startStr == "" {
+		n, err := strconv.ParseInt(endStr, 10, 64)
+		if err != nil || n <= 0 {
+			return 0, 0, http.StatusRequestedRangeNotSatisfiable
+		}
+		if n > size {
+			n = size
+		}
+		return size - n, n, http.StatusPartialContent
+	}
+	begin, err := strconv.ParseInt(startStr, 10, 64)
+	if err != nil || begin < 0 || begin >= size {
+		return 0, 0, http.StatusRequestedRangeNotSatisfiable
+	}
+	end := size - 1
+	if endStr != "" {
+		if end, err = strconv.ParseInt(endStr, 10, 64); err != nil || end < begin {
+			return 0, 0, http.StatusRequestedRangeNotSatisfiable
+		}
+		if end > size-1 {
+			end = size - 1
+		}
+	}
+	return begin, end - begin + 1, http.StatusPartialContent
+}
+
+func (s *Server) streamBody(src io.Reader, w http.ResponseWriter) {
+	if _, err := io.Copy(w, src); err != nil && !isBenignStreamError(err) && s.deps.Logger != nil {
 		s.deps.Logger.Warn("download stream failed", "err", err)
 	}
+}
+
+func isBenignStreamError(err error) bool {
+	return errors.Is(err, context.Canceled) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, net.ErrClosed)
 }
 
 func (s *Server) bindRequest(w http.ResponseWriter, r *http.Request, res resolved, sess plugin.Session) (*plugin.RequestContext, func(), error) {

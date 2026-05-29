@@ -230,6 +230,49 @@ describe("FileBrowserPanel", () => {
     expect(dl?.attributes("href")).toContain("p.path=%2FREADME.md");
   });
 
+  it("streams media via an inline URL and skips the read fetch", async () => {
+    const calls: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      calls.push(url);
+      if (url.includes("sftp.list"))
+        return {
+          body: {
+            items: [
+              {
+                name: "clip.mp4",
+                path: "/clip.mp4",
+                isDir: false,
+                size: 999,
+                mime: "video/mp4",
+              },
+            ],
+            nextCursor: "",
+          },
+        };
+      return { body: {} };
+    });
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: writableConfig(),
+      },
+    });
+    await flushPromises();
+    await w
+      .findAll("li button")
+      .find((b) => b.text().includes("clip.mp4"))!
+      .trigger("click");
+    await flushPromises();
+
+    const video = w.find("video");
+    expect(video.exists()).toBe(true);
+    expect(video.attributes("src")).toContain("ssh.sftp.download");
+    expect(video.attributes("src")).toContain("inline=1");
+    expect(calls.some((u) => u.includes("sftp.read"))).toBe(false);
+  });
+
   it("shows an inline file preview error with retry", async () => {
     let failRead = true;
     vi.unstubAllGlobals();

@@ -242,6 +242,21 @@ func (c *Client) Open(_ context.Context, p string) (io.ReadCloser, error) {
 	return &lockedReadCloser{ReadCloser: r, unlock: c.mu.Unlock}, nil
 }
 
+// OpenRange reads from offset via REST/RETR; the single connection is held until
+// Close, so ranged reads serialize.
+func (c *Client) OpenRange(_ context.Context, p string, offset, _ int64) (io.ReadCloser, error) {
+	if offset < 0 {
+		offset = 0
+	}
+	c.mu.Lock()
+	r, err := c.conn.RetrFrom(p, uint64(offset))
+	if err != nil {
+		c.mu.Unlock()
+		return nil, err
+	}
+	return &lockedReadCloser{ReadCloser: r, unlock: c.mu.Unlock}, nil
+}
+
 func (c *Client) Write(_ context.Context, p string, r io.Reader) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

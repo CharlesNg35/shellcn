@@ -719,7 +719,7 @@ export interface FileEntry {
 export interface FileContent {
   path: string;
   mime?: string;
-  encoding?: "utf8" | "base64" | "url";
+  encoding?: "utf8" | "base64" | "url" | "binary";
   content?: string;
   url?: string;
   size?: number;

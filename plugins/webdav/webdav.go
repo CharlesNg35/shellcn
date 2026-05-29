@@ -194,6 +194,10 @@ func (c *Client) Open(_ context.Context, p string) (io.ReadCloser, error) {
 	return c.client.ReadStream(p)
 }
 
+func (c *Client) OpenRange(_ context.Context, p string, offset, length int64) (io.ReadCloser, error) {
+	return c.client.ReadStreamRange(p, offset, length)
+}
+
 func (c *Client) Write(_ context.Context, p string, r io.Reader) error {
 	return c.client.WriteStream(p, r, 0o644)
 }

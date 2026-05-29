@@ -12,6 +12,7 @@ withDefaults(
     content: FileContent | null;
     canEdit: boolean;
     language: string;
+    streamSrc?: string;
     loading?: boolean;
     error?: string | null;
     mutating?: boolean;
@@ -20,6 +21,7 @@ withDefaults(
     downloadHref?: string;
   }>(),
   {
+    streamSrc: "",
     loading: false,
     error: null,
     mutating: false,
@@ -96,6 +98,7 @@ const emit = defineEmits<{ save: []; retry: [] }>();
         v-else
         :name="selected?.name ?? ''"
         :content="content"
+        :stream-src="streamSrc"
         :loading="loading"
         :error="error"
         @retry="emit('retry')"

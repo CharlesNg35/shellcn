@@ -224,6 +224,14 @@ func (c *Client) Open(_ context.Context, p string) (io.ReadCloser, error) {
 	return c.share.Open(smbPath(p))
 }
 
+func (c *Client) OpenSeeker(_ context.Context, p string) (io.ReadSeekCloser, error) {
+	f, err := c.share.Open(smbPath(p))
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
 func (c *Client) Write(_ context.Context, p string, r io.Reader) error {
 	f, err := c.share.OpenFile(smbPath(p), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {

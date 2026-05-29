@@ -1036,9 +1036,12 @@ type FileBrowserConfig struct {
   }
   ```
 
-- **Preview, popular types by default.** Selecting a file fetches it via
-  `readRouteId` and renders it with a viewer chosen by MIME/extension. The
-  default, built-in viewer set (no plugin code, size-bounded, sandboxed):
+- **Preview, popular types by default.** Selecting a file renders it with a
+  viewer chosen by MIME/extension. Text/code is fetched inline via `readRouteId`
+  (size-capped utf8); binary viewers (image/pdf/audio/video) **stream the bytes
+  from `downloadRouteId`** (served inline) rather than an inline base64 payload —
+  so arbitrarily large media works and never buffers in memory. The default,
+  built-in viewer set (no plugin code):
   - **text / code / config** (`.txt .log .md .json .yaml .toml .sh .py .go .ts
 .js .sql .conf …`) → code viewer (reuses the CodeMirror `code_editor`; plain
     `<pre>` fallback). Markdown may render or show source.
@@ -1070,8 +1073,18 @@ type FileBrowserConfig struct {
   viewer/editor; writable UTF-8 files are editable in place via the CodeMirror
   editor with a dirty-gated Save.
 
-- **Safety.** Read is range/size-bounded; previews are sandboxed (images/pdf via
-  bounded elements, never executed); path traversal is validated server-side;
+- **Streaming & Range.** Downloads/previews stream over HTTP with constant memory.
+  The core serves a `Download` whose handler supplies one byte source — a seekable
+  handle (full `Range`/conditional/HEAD via `http.ServeContent`), an offset opener
+  (single-range `206` for object-store/WebDAV/FTP-style backends), or a plain body
+  (full `200`). `HEAD` is allowed on `GET` routes for range probing. Backends opt
+  into Range by implementing the optional `Seekable`/`RangeOpener` capabilities;
+  this is generic — no per-plugin serving code. Auth is the session cookie, so a
+  bare media-element `src` loads a protected stream.
+
+- **Safety.** Read is size-bounded; inline responses send `X-Content-Type-Options:
+  nosniff` and `Content-Security-Policy: sandbox` (neutralizing inline SVG/HTML);
+  ranges are clamped to the file size; path traversal is validated server-side;
   every read/download is audited.
 
 ---
