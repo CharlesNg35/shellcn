@@ -15,7 +15,8 @@ vi.mock("../api/recordings", () => ({
   },
 }));
 
-// useRoute drives the filter (admin per-user drill-down via ?user=).
+// Per-user drill-down moved to UserRecordings; RecordingsView only reads
+// ?connection= and shows My/All. A stray ?user= must be ignored here.
 vi.mock("vue-router", () => ({
   useRoute: () => ({ query: { user: "u9" } }),
   RouterLink: { template: "<a><slot /></a>" },
@@ -63,15 +64,16 @@ beforeEach(() => {
 });
 
 describe("RecordingsView", () => {
-  it("lists recordings with the route filter and shows type + play affordances", async () => {
+  it("shows only the viewer's own recordings, even for an admin", async () => {
     const wrapper = mount(RecordingsView);
     await flushPromises();
 
-    expect(list).toHaveBeenCalledWith({ user: "u9" });
+    // ?user= is ignored: recordings are private to their creator.
+    expect(list).toHaveBeenCalledWith({});
     const text = wrapper.text();
     expect(text).toContain("prod-ssh");
     expect(text).toContain("kiosk-vnc");
-    expect(text).toContain("User Recordings");
+    expect(text).toContain("My Recordings");
     expect(text).toContain("Terminal");
     expect(text).toContain("Desktop");
 
@@ -79,7 +81,7 @@ describe("RecordingsView", () => {
     expect(wrapper.findAll('[aria-label="Play recording"]')).toHaveLength(1);
   });
 
-  it("ignores per-user route filters for non-admin users", async () => {
+  it("scopes the list to the viewer for non-admins too", async () => {
     const auth = useAuthStore();
     auth.user = { id: "op", username: "op", roles: ["operator"] };
 

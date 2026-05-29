@@ -33,8 +33,10 @@ type grantDTO struct {
 	Access      string `json:"access"`
 }
 
-func isOwnerOrAdmin(user models.User, ownerID string) bool {
-	return user.HasRole(models.RoleAdmin) || ownerID == user.ID
+// isOwner gates sharing (grant create/list/revoke): only the resource owner may
+// share. Admin is a user-management role and confers no access to others' shares.
+func isOwner(user models.User, ownerID string) bool {
+	return ownerID == user.ID
 }
 
 // subjectLabel resolves a subject id to its username/display name for display.
@@ -56,7 +58,7 @@ func (s *Server) handleListConnectionGrants(w http.ResponseWriter, r *http.Reque
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !s.canManageConnection(ctx, user, conn) {
+	if !isOwner(user, conn.OwnerID) {
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
@@ -81,7 +83,7 @@ func (s *Server) handleCreateConnectionGrant(w http.ResponseWriter, r *http.Requ
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !s.canManageConnection(ctx, user, conn) {
+	if !isOwner(user, conn.OwnerID) {
 		s.auditConnEvent(ctx, user, conn.ID, connGrantCreateEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
@@ -113,7 +115,7 @@ func (s *Server) handleDeleteConnectionGrant(w http.ResponseWriter, r *http.Requ
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !s.canManageConnection(ctx, user, conn) {
+	if !isOwner(user, conn.OwnerID) {
 		s.auditConnEvent(ctx, user, conn.ID, connGrantDeleteEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
@@ -141,7 +143,7 @@ func (s *Server) handleListCredentialGrants(w http.ResponseWriter, r *http.Reque
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !isOwnerOrAdmin(user, cred.OwnerID) {
+	if !isOwner(user, cred.OwnerID) {
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
 	}
@@ -166,7 +168,7 @@ func (s *Server) handleCreateCredentialGrant(w http.ResponseWriter, r *http.Requ
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !isOwnerOrAdmin(user, cred.OwnerID) {
+	if !isOwner(user, cred.OwnerID) {
 		s.auditCredEvent(ctx, user, cred.ID, credGrantCreateEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
@@ -199,7 +201,7 @@ func (s *Server) handleDeleteCredentialGrant(w http.ResponseWriter, r *http.Requ
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if !isOwnerOrAdmin(user, cred.OwnerID) {
+	if !isOwner(user, cred.OwnerID) {
 		s.auditCredEvent(ctx, user, cred.ID, credGrantDeleteEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return

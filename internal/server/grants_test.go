@@ -23,12 +23,15 @@ func TestConnectionGrantUseVsManage(t *testing.T) {
 	}
 	if resp := h.do(t, http.MethodGet, "/api/connections", "viewer", nil); resp.Status != http.StatusOK ||
 		!strings.Contains(string(resp.Body), `"sharedWithMe":true`) ||
-		!strings.Contains(string(resp.Body), `"access":"use"`) {
-		t.Fatalf("shared connection list should mark grant access: status=%d body=%s", resp.Status, resp.Body)
+		!strings.Contains(string(resp.Body), `"access":"use"`) ||
+		!strings.Contains(string(resp.Body), `"canShare":false`) ||
+		!strings.Contains(string(resp.Body), `"ownerName":`) {
+		t.Fatalf("shared connection list should mark grant access + owner: status=%d body=%s", resp.Status, resp.Body)
 	}
 	if resp := h.do(t, http.MethodGet, "/api/connections", "op", nil); resp.Status != http.StatusOK ||
 		!strings.Contains(string(resp.Body), `"sharedByMe":true`) ||
-		!strings.Contains(string(resp.Body), `"access":"owner"`) {
+		!strings.Contains(string(resp.Body), `"access":"owner"`) ||
+		!strings.Contains(string(resp.Body), `"canShare":true`) {
 		t.Fatalf("owner connection list should mark shared-out state: status=%d body=%s", resp.Status, resp.Body)
 	}
 	// …but not edit it (edit needs manage).
@@ -55,10 +58,15 @@ func TestConnectionGrantUseVsManage(t *testing.T) {
 		strings.NewReader(`{"name":"managed","config":{"host":"h"}}`)); resp.Status != http.StatusOK {
 		t.Errorf("manage grant should allow edit: got %d (%s)", resp.Status, resp.Body)
 	}
-	// …and share it with another subject.
+	// …but NOT re-share it: only the owner may share, never a manage-grantee or
+	// even an admin (admin has no implicit access to others' connections).
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "viewer",
-		strings.NewReader(`{"subjectId":"admin","access":"use"}`)); resp.Status != http.StatusCreated {
-		t.Errorf("manage grant should allow sharing: got %d", resp.Status)
+		strings.NewReader(`{"subjectId":"admin","access":"use"}`)); resp.Status != http.StatusForbidden {
+		t.Errorf("manage grant must not allow re-sharing: got %d", resp.Status)
+	}
+	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "admin",
+		strings.NewReader(`{"subjectId":"admin","access":"use"}`)); resp.Status != http.StatusForbidden {
+		t.Errorf("admin must not share another's connection: got %d", resp.Status)
 	}
 }
 
@@ -71,7 +79,8 @@ func TestGrantDeleteIsScopedToResource(t *testing.T) {
 		t.Fatalf("grant connection: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
 	connGrantID := createConnID(t, resp)
-	if resp := h.do(t, http.MethodDelete, "/api/connections/c-view/grants/"+connGrantID, "admin", nil); resp.Status != http.StatusNotFound {
+	// viewer owns c-view; the grant belongs to c-op, so it is not found there.
+	if resp := h.do(t, http.MethodDelete, "/api/connections/c-view/grants/"+connGrantID, "viewer", nil); resp.Status != http.StatusNotFound {
 		t.Fatalf("delete connection grant through wrong connection: want 404, got %d (%s)", resp.Status, resp.Body)
 	}
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "viewer", nil); resp.Status != http.StatusOK {

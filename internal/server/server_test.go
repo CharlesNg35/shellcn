@@ -635,11 +635,12 @@ func TestAgentStateTreatsTunnelRegistryAsAuthoritative(t *testing.T) {
 	}
 }
 
-func TestAdminCanAccessAnyConnection(t *testing.T) {
+func TestAdminCannotAccessOthersConnection(t *testing.T) {
 	h := newHarness(t)
-	// admin owns nothing, but may act on op's connection.
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "admin", nil); resp.Status != http.StatusOK {
-		t.Errorf("admin on another's connection: want 200, got %d", resp.Status)
+	// Admin is a user-management role, not a super-user: no implicit access to
+	// another user's connection.
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "admin", nil); resp.Status != http.StatusForbidden {
+		t.Errorf("admin on another's connection: want 403, got %d", resp.Status)
 	}
 }
 

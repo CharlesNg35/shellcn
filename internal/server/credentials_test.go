@@ -48,9 +48,13 @@ func TestCredentialCreateRotateAuthz(t *testing.T) {
 		t.Errorf("non-owner delete: want 403, got %d", resp.Status)
 	}
 
-	// admin may delete it.
-	if resp := h.do(t, http.MethodDelete, "/api/credentials/"+id, "admin", nil); resp.Status != http.StatusOK {
-		t.Errorf("admin delete: want 200, got %d (%s)", resp.Status, resp.Body)
+	// admin has no implicit access — it may neither rotate nor delete another's.
+	if resp := h.do(t, http.MethodDelete, "/api/credentials/"+id, "admin", nil); resp.Status != http.StatusForbidden {
+		t.Errorf("admin delete of another's credential: want 403, got %d", resp.Status)
+	}
+	// the owner may delete it.
+	if resp := h.do(t, http.MethodDelete, "/api/credentials/"+id, "op", nil); resp.Status != http.StatusOK {
+		t.Errorf("owner delete: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 

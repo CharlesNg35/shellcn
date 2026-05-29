@@ -49,6 +49,8 @@ const showShare = ref(false);
 const { confirmDanger } = useConfirmAction();
 
 const canManage = computed(() => connection.value?.canManage ?? false);
+// Only the owner (or an admin) may share; a manage-grantee can edit but not re-share.
+const canShare = computed(() => connection.value?.canShare ?? false);
 
 function askDelete(): void {
   confirmDanger({
@@ -208,17 +210,18 @@ function onActionDone(action: Action): void {
           <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           Disconnect
         </Button>
+        <Button
+          v-if="canShare"
+          text
+          rounded
+          severity="secondary"
+          title="Share"
+          aria-label="Share connection"
+          @click="showShare = true"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="17" />
+        </Button>
         <template v-if="canManage">
-          <Button
-            text
-            rounded
-            severity="secondary"
-            title="Share"
-            aria-label="Share connection"
-            @click="showShare = true"
-          >
-            <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="17" />
-          </Button>
           <Button
             text
             rounded

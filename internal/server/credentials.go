@@ -36,7 +36,7 @@ func (r credentialWriteRequest) principal() string {
 }
 
 func canManageCredential(user models.User, cred models.Credential) bool {
-	return user.HasRole(models.RoleAdmin) || cred.OwnerID == user.ID
+	return cred.OwnerID == user.ID
 }
 
 func (s *Server) auditCredEvent(ctx context.Context, user models.User, credID, event string, risk plugin.RiskLevel, result models.AuditResult, err error) {

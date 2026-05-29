@@ -175,21 +175,8 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
             :aria-hidden="!sidebarMenuOpen"
           >
             <RouterLink
-              v-if="auth.isAdmin"
-              :to="{ name: 'users' }"
-              class="mx-2 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-              :class="
-                route.name === 'users'
-                  ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-                  : ''
-              "
-            >
-              <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="16" />
-              Users
-            </RouterLink>
-            <RouterLink
               :to="{ name: 'credentials' }"
-              class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              class="mx-2 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
               :class="
                 route.name === 'credentials'
                   ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'

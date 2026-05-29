@@ -91,11 +91,12 @@ func TestConnectionAccessGate(t *testing.T) {
 		t.Errorf("owner should be allowed: %v", err)
 	}
 
-	// Admin: allowed on any connection (no ownership/grant needed).
+	// Admin is a user-management role, not a super-user — denied without ownership
+	// or a grant on the connection.
 	admin := base
 	admin.User = user("root", models.RoleAdmin)
-	if err := en.Authorize(admin); err != nil {
-		t.Errorf("admin should be allowed on any connection: %v", err)
+	if err := en.Authorize(admin); err == nil {
+		t.Error("admin should be denied on another's connection (no ownership/grant)")
 	}
 }
 

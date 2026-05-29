@@ -4,6 +4,8 @@ import Button from "primevue/button";
 import { useTheme } from "../composables/useTheme";
 import { useAuthStore } from "../stores/auth";
 import { api } from "../api/client";
+import RoleGate from "../components/RoleGate.vue";
+import UsersSection from "../components/settings/UsersSection.vue";
 
 const { isDark, toggle } = useTheme();
 const auth = useAuthStore();
@@ -22,7 +24,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-2xl flex-col gap-4 p-8">
+  <div class="mx-auto flex max-w-4xl flex-col gap-4 p-8">
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
       Settings
     </h1>
@@ -38,22 +40,32 @@ onMounted(async () => {
       </Button>
     </div>
 
-    <div
-      v-if="auth.isAdmin"
-      class="flex items-center justify-between rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
-    >
-      <p class="font-medium text-surface-800 dark:text-surface-100">Email</p>
-      <span
-        v-if="emailEnabled !== null"
-        class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium"
-        :class="
-          emailEnabled
-            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-            : 'bg-surface-100 text-surface-500 dark:bg-surface-800'
-        "
+    <RoleGate admin>
+      <div
+        class="flex items-center justify-between rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
       >
-        {{ emailEnabled ? "Configured" : "Not configured" }}
-      </span>
-    </div>
+        <p class="font-medium text-surface-800 dark:text-surface-100">Email</p>
+        <span
+          v-if="emailEnabled !== null"
+          class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium"
+          :class="
+            emailEnabled
+              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+              : 'bg-surface-100 text-surface-500 dark:bg-surface-800'
+          "
+        >
+          {{ emailEnabled ? "Configured" : "Not configured" }}
+        </span>
+      </div>
+
+      <section
+        class="flex flex-col gap-3 rounded-lg border border-surface-200 p-4 dark:border-surface-800"
+      >
+        <h2 class="font-medium text-surface-800 dark:text-surface-100">
+          Users &amp; access
+        </h2>
+        <UsersSection />
+      </section>
+    </RoleGate>
   </div>
 </template>

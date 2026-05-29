@@ -39,8 +39,10 @@ type connectionDTO struct {
 	Online       bool              `json:"online"`
 	Status       string            `json:"status,omitempty"`
 	CanManage    bool              `json:"canManage"`
+	CanShare     bool              `json:"canShare"`
 	Access       string            `json:"access"`
 	Owned        bool              `json:"owned"`
+	OwnerName    string            `json:"ownerName,omitempty"`
 	SharedWithMe bool              `json:"sharedWithMe"`
 	SharedByMe   bool              `json:"sharedByMe"`
 	Recording    map[string]string `json:"recording,omitempty"`
@@ -68,9 +70,10 @@ func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
 	for _, p := range placements {
 		placementByConnection[p.ConnectionID] = p
 	}
+	names := map[string]string{}
 	for _, c := range conns {
 		dto := s.toConnectionDTO(c)
-		s.decorateConnectionAccess(ctx, user, c, &dto)
+		s.decorateConnectionAccess(ctx, user, c, &dto, names)
 		if p, ok := placementByConnection[c.ID]; ok {
 			dto.FolderID = p.FolderID
 			dto.SortOrder = p.SortOrder
@@ -80,22 +83,41 @@ func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-func (s *Server) decorateConnectionAccess(ctx context.Context, user models.User, c models.Connection, dto *connectionDTO) {
+func (s *Server) decorateConnectionAccess(ctx context.Context, user models.User, c models.Connection, dto *connectionDTO, names map[string]string) {
 	dto.Owned = c.OwnerID == user.ID
 	dto.Access = string(models.AccessUse)
 	if dto.Owned {
 		dto.Access = "owner"
-	} else if user.HasRole(models.RoleAdmin) {
-		dto.Access = "admin"
 	} else if g, err := s.deps.Store.Grants.Get(ctx, c.ID, user.ID); err == nil {
 		dto.Access = string(g.Access)
 		dto.SharedWithMe = true
+		dto.OwnerName = s.displayName(ctx, c.OwnerID, names)
 	}
 	dto.CanManage = s.canManageConnection(ctx, user, c)
+	dto.CanShare = dto.Owned
 	if dto.Owned {
 		grants, err := s.deps.Store.Grants.ListByConnection(ctx, c.ID)
 		dto.SharedByMe = err == nil && len(grants) > 0
 	}
+}
+
+// displayName resolves a user id to a display label (display name, else username),
+// memoized in cache to avoid repeated lookups across a list.
+func (s *Server) displayName(ctx context.Context, userID string, cache map[string]string) string {
+	if userID == "" {
+		return ""
+	}
+	if n, ok := cache[userID]; ok {
+		return n
+	}
+	n := ""
+	if u, err := s.deps.Store.Users.GetByID(ctx, userID); err == nil {
+		if n = u.DisplayName; n == "" {
+			n = u.Username
+		}
+	}
+	cache[userID] = n
+	return n
 }
 
 // accessibleConnections returns the connections a user owns or has a grant on.
@@ -145,6 +167,12 @@ func (s *Server) handleListCredentials(w http.ResponseWriter, r *http.Request) {
 	}
 	if summaries == nil {
 		summaries = []models.CredentialSummary{}
+	}
+	names := map[string]string{}
+	for i := range summaries {
+		if summaries[i].OwnerID != "" && summaries[i].OwnerID != user.ID {
+			summaries[i].OwnerName = s.displayName(r.Context(), summaries[i].OwnerID, names)
+		}
 	}
 	writeJSON(w, http.StatusOK, summaries)
 }

@@ -26,6 +26,7 @@ type CredentialSummary struct {
 	Name      string    `json:"name"`
 	Kind      string    `json:"kind"`
 	OwnerID   string    `json:"ownerId,omitempty"`
+	OwnerName string    `json:"ownerName,omitempty"`
 	Identity  string    `json:"identity,omitempty"`
 	Protocols []string  `json:"protocols,omitempty"`
 	UpdatedAt time.Time `json:"updatedAt,omitzero"`

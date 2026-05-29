@@ -96,6 +96,9 @@ type RecordingStore interface {
 	Update(ctx context.Context, r *models.Recording) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, f RecordingFilter) ([]models.Recording, error)
+	// CountByUser returns recording counts keyed by user id — an admin stat that
+	// exposes no recording content.
+	CountByUser(ctx context.Context) (map[string]int64, error)
 }
 
 // RecordingFilter narrows a recording query. Zero-value fields are ignored.

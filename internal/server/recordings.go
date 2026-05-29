@@ -349,9 +349,9 @@ func (s *Server) handleAbortRecording(w http.ResponseWriter, r *http.Request) {
 }
 
 // canAccessConnection reports whether the user may reach a connection at all
-// (owner, admin, or any grant) — the gate for recording its own session.
+// (owner or any grant) — the gate for recording its own session.
 func (s *Server) canAccessConnection(ctx context.Context, user models.User, conn models.Connection) bool {
-	if user.HasRole(models.RoleAdmin) || conn.OwnerID == user.ID {
+	if conn.OwnerID == user.ID {
 		return true
 	}
 	_, err := s.deps.Store.Grants.Get(ctx, conn.ID, user.ID)

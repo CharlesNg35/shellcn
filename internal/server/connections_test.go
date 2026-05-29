@@ -254,22 +254,27 @@ func TestConnectionUpdateAuthz(t *testing.T) {
 		}
 	}
 
-	// Admin may manage any connection.
+	// Admin has no implicit access — it cannot manage another user's connection.
 	resp = h.do(t, http.MethodPut, "/api/connections/"+id, "admin",
 		strings.NewReader(`{"name":"admin-edit","config":{"host":"h"}}`))
-	if resp.Status != http.StatusOK {
-		t.Errorf("admin update: want 200, got %d (%s)", resp.Status, resp.Body)
+	if resp.Status != http.StatusForbidden {
+		t.Errorf("admin update of another's connection: want 403, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 
 func TestDisconnectConnectionSessionClosesOnlyCurrentUserSession(t *testing.T) {
 	h := newHarness(t)
 
+	// op shares c-op with viewer so two distinct users can hold a session on it.
+	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/grants", "op",
+		strings.NewReader(`{"subjectId":"viewer","access":"use"}`)); resp.Status != http.StatusCreated {
+		t.Fatalf("share c-op: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil); resp.Status != http.StatusOK {
 		t.Fatalf("open op session: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "admin", nil); resp.Status != http.StatusOK {
-		t.Fatalf("open admin session: want 200, got %d (%s)", resp.Status, resp.Body)
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "viewer", nil); resp.Status != http.StatusOK {
+		t.Fatalf("open viewer session: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 	if got := h.pluginSessions.Stats().Sessions; got != 2 {
 		t.Fatalf("sessions before disconnect = %d, want 2", got)

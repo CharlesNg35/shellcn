@@ -823,6 +823,16 @@ type memRecordingStore struct {
 	m  map[string]models.Recording
 }
 
+func (s *memRecordingStore) CountByUser(_ context.Context) (map[string]int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := map[string]int64{}
+	for _, r := range s.m {
+		out[r.UserID]++
+	}
+	return out, nil
+}
+
 func (s *memRecordingStore) Create(_ context.Context, r *models.Recording) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

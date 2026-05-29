@@ -110,7 +110,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 	s.auditConnEvent(ctx, user, conn.ID, connCreateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
 	dto := s.toConnectionDTO(conn)
-	s.decorateConnectionAccess(ctx, user, conn, &dto)
+	s.decorateConnectionAccess(ctx, user, conn, &dto, map[string]string{})
 	writeJSON(w, http.StatusCreated, dto)
 }
 

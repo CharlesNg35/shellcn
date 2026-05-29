@@ -485,6 +485,22 @@ func (s *gormRecordingStore) Delete(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&models.Recording{}, "id = ?", id).Error
 }
 
+func (s *gormRecordingStore) CountByUser(ctx context.Context) (map[string]int64, error) {
+	var rows []struct {
+		UserID string
+		N      int64
+	}
+	if err := s.db.WithContext(ctx).Model(&models.Recording{}).
+		Select("user_id, count(*) as n").Group("user_id").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		out[r.UserID] = r.N
+	}
+	return out, nil
+}
+
 func (s *gormRecordingStore) List(ctx context.Context, f RecordingFilter) ([]models.Recording, error) {
 	q := s.db.WithContext(ctx).Model(&models.Recording{}).Order("started_at DESC")
 	if f.UserID != "" {

@@ -31,6 +31,9 @@ type adminUserDTO struct {
 	Roles       []models.Role `json:"roles"`
 	Disabled    bool          `json:"disabled"`
 	Protected   bool          `json:"protected"`
+	// RecordingCount is an admin stat — how many recordings the user owns, never
+	// the recordings themselves.
+	RecordingCount int64 `json:"recordingCount"`
 }
 
 func toAdminUserDTO(u models.User) adminUserDTO {
@@ -67,9 +70,16 @@ func (s *Server) handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
+	counts, err := s.deps.Store.Recordings.CountByUser(r.Context())
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
 	out := make([]adminUserDTO, 0, len(list))
 	for _, u := range list {
-		out = append(out, toAdminUserDTO(u))
+		dto := toAdminUserDTO(u)
+		dto.RecordingCount = counts[u.ID]
+		out = append(out, dto)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

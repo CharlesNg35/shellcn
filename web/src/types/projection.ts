@@ -531,6 +531,7 @@ export interface CredentialSummary {
   name: string;
   kind: CredentialKind;
   ownerId?: string;
+  ownerName?: string;
   identity?: string;
   protocols?: string[];
   updatedAt?: string;
@@ -579,8 +580,10 @@ export interface ConnectionSummary {
   online?: boolean;
   status?: "offline";
   canManage?: boolean;
+  canShare?: boolean;
   access?: "owner" | "admin" | GrantAccess;
   owned?: boolean;
+  ownerName?: string;
   sharedWithMe?: boolean;
   sharedByMe?: boolean;
   recording?: Record<string, string>;
@@ -634,6 +637,7 @@ export interface AdminUser {
   roles: string[];
   disabled: boolean;
   protected: boolean;
+  recordingCount?: number;
 }
 
 export interface InvitationSummary {
