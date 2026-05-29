@@ -1,6 +1,6 @@
 # ShellCN — Implementation Plans
 
-Step-by-step build plan. Architecture lives in [`../v2.md`](../v2.md); this folder
+Step-by-step build plan. Architecture lives in [`../project.md`](../project.md); this folder
 is the execution tracker. Work proceeds **UI-first**: Phase 1 (M0) proves the
 declarative renderer on fixtures, Phase 2 (M1) brings up the real core, Phase 3+
 add plugins.

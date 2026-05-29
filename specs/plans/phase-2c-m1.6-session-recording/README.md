@@ -1,7 +1,7 @@
 # Phase 2c — M1.6 · Session recording foundation
 
 **Status:** ✅ Done (2026-05-25) · **Milestone:** M1.6 · **Depends on:** Phase 2b (M1.5)
-**Spec refs:** [v2 §9.5](../../v2.md), [v2 §12.2](../../v2.md)
+**Spec refs:** [v2 §9.5](../../project.md), [v2 §12.2](../../project.md)
 
 M1 built the core stream wrapper; M1.5 makes the platform usable. **M1.6 adds
 recording as a generic, opt-in platform capability before the first real terminal

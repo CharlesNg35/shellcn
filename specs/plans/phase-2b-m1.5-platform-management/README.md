@@ -1,7 +1,7 @@
 # Phase 2b — M1.5 · Platform management
 
 **Status:** ✅ Done · **Milestone:** M1.5 · **Depends on:** Phase 2 (M1)
-**Spec ref:** [v2 §12.2](../../v2.md)
+**Spec ref:** [v2 §12.2](../../project.md)
 
 M0 built the manifest-driven renderer; M1 built the core runtime + plugin route
 dispatch. **M1.5 makes the platform usable end-to-end without fixtures:** a user

@@ -33,7 +33,7 @@ invariants, code style, verification rules) and applies here in full. Read it.
   (e.g. `(v2 §14)`), task/PR references, or narration of _what_ the code does in
   source files — that metadata rots and belongs in the PR/docs, not the code.
 - Work the plan in [`specs/plans/`](specs/plans/) **in phase order** (UI-first).
-  Architecture lives in [`specs/v2.md`](specs/v2.md).
+  Architecture lives in [`specs/project.md`](specs/project.md).
 - After each step: **update [`checklist.md`](checklist.md)** and set the step
   file's `Status`. **Tests gate every step** ([`specs/plans/TESTING.md`](specs/plans/TESTING.md)).
 - **After implementing anything, always run `make fmt`, then `make lint` and
