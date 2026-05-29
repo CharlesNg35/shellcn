@@ -43,7 +43,7 @@ func tableResource() plugin.ResourceType {
 				{Key: "ttl", Label: "TTL", Icon: icon("timer"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("ttl.read"), Params: tableParams()}},
 				{Key: "tags", Label: "Tags", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("tags.list"), Params: tableParams()}, Config: plugin.TableConfig{Columns: tagColumns(), Exportable: true}.Map()},
 				{Key: "backups", Label: "Backups", Icon: icon("archive"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("backups.list"), Params: tableParams()}, Config: plugin.TableConfig{Columns: backupColumns(), Exportable: true, ActionIDs: []string{rid("backup.create")}, RowActionIDs: []string{rid("backup.delete")}}.Map()},
-				{Key: "partiql", Label: "PartiQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("partiql"), Method: plugin.MethodWS, Params: tableParams()}, Config: queryConfig(`SELECT * FROM "${resource.name}" LIMIT 25`)},
+				{Key: "partiql", Label: "PartiQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("partiql"), Method: plugin.MethodWS, Params: tableParams()}, Config: queryConfig(`SELECT * FROM "${resource.name}"`)},
 			},
 		},
 	}

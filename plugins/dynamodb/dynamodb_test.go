@@ -106,6 +106,39 @@ func TestPartiQLSafetyStopsBeforeNetwork(t *testing.T) {
 	}
 }
 
+func TestNormalizePartiQLStatementLimit(t *testing.T) {
+	tests := []struct {
+		name      string
+		statement string
+		wantSQL   string
+		wantLimit int32
+		wantErr   bool
+	}{
+		{name: "no limit", statement: `SELECT * FROM "users"`, wantSQL: `SELECT * FROM "users"`, wantLimit: 100},
+		{name: "trailing limit", statement: `SELECT * FROM "users" LIMIT 25`, wantSQL: `SELECT * FROM "users"`, wantLimit: 25},
+		{name: "trailing semicolon", statement: `SELECT * FROM "users" LIMIT 25;`, wantSQL: `SELECT * FROM "users"`, wantLimit: 25},
+		{name: "quoted text", statement: `SELECT * FROM "users" WHERE note='keep LIMIT 25'`, wantSQL: `SELECT * FROM "users" WHERE note='keep LIMIT 25'`, wantLimit: 100},
+		{name: "bad limit", statement: `SELECT * FROM "users" LIMIT 0`, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotSQL, gotLimit, err := normalizePartiQLStatement(tt.statement, 100)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalize statement: %v", err)
+			}
+			if gotSQL != tt.wantSQL || gotLimit != tt.wantLimit {
+				t.Fatalf("got (%q, %d), want (%q, %d)", gotSQL, gotLimit, tt.wantSQL, tt.wantLimit)
+			}
+		})
+	}
+}
+
 func TestAttributeValueKeyRoundTrip(t *testing.T) {
 	key := map[string]types.AttributeValue{
 		"pk": &types.AttributeValueMemberS{Value: "user#1"},
