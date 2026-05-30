@@ -59,8 +59,7 @@ export const useAuthStore = defineStore("auth", () => {
     return bootstrapPromise;
   }
 
-  // login returns whether a second factor is still required; when it is, the
-  // caller collects a code and calls completeMfa.
+  // Returns mfaRequired; when true the caller collects a code and calls completeMfa.
   async function login(
     username: string,
     password: string,

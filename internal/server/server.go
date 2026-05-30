@@ -217,6 +217,7 @@ func (s *Server) routes() chi.Router {
 					ar.Put("/admin/users/{id}", s.handleAdminUpdateUser)
 					ar.Post("/admin/users/{id}/activate", s.handleAdminActivateUser)
 					ar.Post("/admin/users/{id}/deactivate", s.handleAdminDeactivateUser)
+					ar.Post("/admin/users/{id}/reset-2fa", s.handleAdminResetTwoFactor)
 					ar.Get("/admin/users/{id}/audit", s.handleAdminUserAudit)
 					ar.Get("/admin/users/{id}/connections", s.handleAdminUserConnections)
 					if s.deps.Invitations != nil {

@@ -22,16 +22,18 @@ const (
 	userDeactivateEvent = "user.deactivate"
 	inviteCreateEvent   = "invitation.create"
 	inviteRevokeEvent   = "invitation.revoke"
+	twoFactorResetEvent = "user.2fa.reset"
 )
 
 type adminUserDTO struct {
-	ID          string        `json:"id"`
-	Username    string        `json:"username"`
-	Email       string        `json:"email,omitempty"`
-	DisplayName string        `json:"displayName,omitempty"`
-	Roles       []models.Role `json:"roles"`
-	Disabled    bool          `json:"disabled"`
-	Protected   bool          `json:"protected"`
+	ID               string        `json:"id"`
+	Username         string        `json:"username"`
+	Email            string        `json:"email,omitempty"`
+	DisplayName      string        `json:"displayName,omitempty"`
+	Roles            []models.Role `json:"roles"`
+	Disabled         bool          `json:"disabled"`
+	Protected        bool          `json:"protected"`
+	TwoFactorEnabled bool          `json:"twoFactorEnabled"`
 }
 
 func toAdminUserDTO(u models.User) adminUserDTO {
@@ -41,7 +43,7 @@ func toAdminUserDTO(u models.User) adminUserDTO {
 	}
 	return adminUserDTO{
 		ID: u.ID, Username: u.Username, Email: u.Email, DisplayName: u.DisplayName,
-		Roles: roles, Disabled: u.Disabled, Protected: u.Protected,
+		Roles: roles, Disabled: u.Disabled, Protected: u.Protected, TwoFactorEnabled: u.TOTPEnabled,
 	}
 }
 
@@ -230,6 +232,49 @@ func (s *Server) setUserActive(w http.ResponseWriter, r *http.Request, active bo
 		return
 	}
 	s.auditAdminEvent(ctx, actor, event, models.AuditAllowed, map[string]string{"username": updated.Username}, nil)
+	writeJSON(w, http.StatusOK, toAdminUserDTO(updated))
+}
+
+// handleAdminResetTwoFactor clears a locked-out user's 2FA.
+func (s *Server) handleAdminResetTwoFactor(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	actor, _ := userFrom(ctx)
+	if s.deps.TwoFactor == nil {
+		writeError(w, s.deps.Logger, plugin.ErrNotFound)
+		return
+	}
+	target, err := s.deps.Users.Get(ctx, chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	deny := func(msg string) {
+		s.auditAdminEvent(ctx, actor, twoFactorResetEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, errForbidden(msg))
+	}
+	switch {
+	case target.Protected:
+		deny("the root admin's two-factor cannot be reset here")
+		return
+	case target.ID == actor.ID:
+		deny("reset your own two-factor from your profile")
+		return
+	case target.HasRole(models.RoleAdmin) && !actor.Protected:
+		deny("only the root admin may reset another admin's two-factor")
+		return
+	}
+
+	if err := s.deps.TwoFactor.Reset(ctx, target.ID); err != nil {
+		s.auditAdminEvent(ctx, actor, twoFactorResetEvent, models.AuditError, nil, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	s.auditAdminEvent(ctx, actor, twoFactorResetEvent, models.AuditAllowed, map[string]string{"username": target.Username}, nil)
+	updated, err := s.deps.Users.Get(ctx, target.ID)
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
 	writeJSON(w, http.StatusOK, toAdminUserDTO(updated))
 }
 

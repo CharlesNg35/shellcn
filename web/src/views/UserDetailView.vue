@@ -11,6 +11,7 @@ import Button from "primevue/button";
 import { adminUsersApi } from "../api/admin";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
+import { useConfirmAction } from "../composables/useConfirmAction";
 import AppIcon from "../components/AppIcon.vue";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
 import SkeletonList from "../components/SkeletonList.vue";
@@ -25,6 +26,7 @@ import type {
 const props = defineProps<{ id: string }>();
 const auth = useAuthStore();
 const notify = useNotify();
+const { confirmDanger } = useConfirmAction();
 
 const crumbs = computed(() => [
   { label: "Settings", to: { name: "settings" } },
@@ -120,6 +122,35 @@ async function setActive(active: boolean): Promise<void> {
   }
 }
 
+// Same authority as deactivation, and only when 2FA is actually on.
+const canResetTwoFactor = computed(
+  () => canDeactivate.value && Boolean(user.value?.twoFactorEnabled),
+);
+
+function askResetTwoFactor(): void {
+  const u = user.value;
+  if (!u) return;
+  confirmDanger({
+    header: "Reset two-factor",
+    message: `Turn off two-factor for "${u.username}"? They'll sign in with their password and can re-enroll.`,
+    acceptLabel: "Reset",
+    accept: () => resetTwoFactor(),
+  });
+}
+
+async function resetTwoFactor(): Promise<void> {
+  if (!user.value) return;
+  busy.value = true;
+  try {
+    user.value = await adminUsersApi.resetTwoFactor(user.value.id);
+    notify.success("Two-factor reset");
+  } catch (e) {
+    notify.error("Could not reset two-factor", (e as Error).message);
+  } finally {
+    busy.value = false;
+  }
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
@@ -175,9 +206,19 @@ function formatDate(iso: string): string {
             <dd :class="user.disabled ? 'text-amber-600' : 'text-emerald-600'">
               {{ user.disabled ? "Deactivated" : "Active" }}
             </dd>
+            <dt class="text-surface-400">Two-factor</dt>
+            <dd
+              :class="
+                user.twoFactorEnabled
+                  ? 'text-emerald-600'
+                  : 'text-surface-500 dark:text-surface-400'
+              "
+            >
+              {{ user.twoFactorEnabled ? "Enabled" : "Disabled" }}
+            </dd>
           </dl>
 
-          <div v-if="canDeactivate">
+          <div v-if="canDeactivate || canResetTwoFactor" class="flex gap-2">
             <Button
               v-if="user.disabled"
               type="button"
@@ -187,7 +228,7 @@ function formatDate(iso: string): string {
               Activate account
             </Button>
             <Button
-              v-else
+              v-else-if="canDeactivate"
               type="button"
               severity="danger"
               outlined
@@ -195,6 +236,16 @@ function formatDate(iso: string): string {
               @click="setActive(false)"
             >
               Deactivate account
+            </Button>
+            <Button
+              v-if="canResetTwoFactor"
+              type="button"
+              severity="secondary"
+              outlined
+              :loading="busy"
+              @click="askResetTwoFactor"
+            >
+              Reset two-factor
             </Button>
           </div>
         </TabPanel>

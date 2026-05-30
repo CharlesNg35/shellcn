@@ -289,6 +289,7 @@ function adminUsers(): Json[] {
         roles: ["viewer"],
         disabled: false,
         protected: false,
+        twoFactorEnabled: true,
       },
     ];
   }
@@ -560,11 +561,28 @@ function handleHTTP(
       send(res, 201, u);
     });
   }
+  const adminUserActionMatch = path.match(
+    /^\/api\/admin\/users\/([^/]+)\/([^/]+)$/,
+  );
+  if (adminUserActionMatch) {
+    const [, id, action] = adminUserActionMatch;
+    const u = adminUsers().find((x) => x.id === id);
+    if (method === "GET" && action === "connections") return send(res, 200, []);
+    if (method === "GET" && action === "audit")
+      return send(res, 200, { items: [], total: 0 });
+    if (method === "POST" && u) {
+      if (action === "activate") u.disabled = false;
+      if (action === "deactivate") u.disabled = true;
+      if (action === "reset-2fa") u.twoFactorEnabled = false;
+      return send(res, 200, u);
+    }
+  }
   const adminUserMatch = path.match(/^\/api\/admin\/users\/([^/]+)$/);
   if (adminUserMatch) {
     const id = adminUserMatch[1];
     const u = adminUsers().find((x) => x.id === id);
     if (!u) return send(res, 404, { error: "unknown user" });
+    if (method === "GET") return send(res, 200, u);
     if (method === "PUT") {
       return void readBody(req).then((raw) => {
         const body = raw as Json;

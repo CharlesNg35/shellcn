@@ -18,8 +18,7 @@ const props = defineProps<{
   description: string;
   confirmLabel: string;
   danger?: boolean;
-  // The parent supplies the verified action; the dialog owns the code, busy, and
-  // error state so the disable/regenerate callers stay small.
+  // The verified action; the dialog owns the code, busy, and error state.
   action: (code: string) => Promise<void>;
 }>();
 const emit = defineEmits<{ "update:visible": [value: boolean]; done: [] }>();

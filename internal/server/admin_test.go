@@ -121,6 +121,42 @@ func TestAdminUpdateUserRules(t *testing.T) {
 	}
 }
 
+func TestAdminResetTwoFactorRules(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	_ = h.store.Users.Create(ctx, &models.User{ID: "root", Username: "root", Roles: []models.Role{models.RoleAdmin}, Protected: true}, "")
+	_ = h.store.Users.Create(ctx, &models.User{ID: "admin2", Username: "admin2", Roles: []models.Role{models.RoleAdmin}}, "")
+	_ = h.store.Users.Create(ctx, &models.User{ID: "target", Username: "target", Roles: []models.Role{models.RoleViewer}}, "")
+	_ = h.store.Users.SetTwoFactor(ctx, "target", []byte("secret"), true, []string{"hash"})
+	h.sessions["root"] = h.sessionMgr.Create("root")
+
+	reset := func(id, as string) int {
+		return h.do(t, http.MethodPost, "/api/admin/users/"+id+"/reset-2fa", as, nil).Status
+	}
+
+	if s := reset("admin", "admin"); s != http.StatusForbidden {
+		t.Errorf("self reset: want 403, got %d", s)
+	}
+	if s := reset("root", "root"); s != http.StatusForbidden {
+		t.Errorf("reset protected root: want 403, got %d", s)
+	}
+	if s := reset("admin2", "admin"); s != http.StatusForbidden {
+		t.Errorf("non-root reset admin: want 403, got %d", s)
+	}
+	// A regular admin resets a non-admin, which clears the 2FA state.
+	if s := reset("target", "admin"); s != http.StatusOK {
+		t.Fatalf("admin reset non-admin: want 200, got %d", s)
+	}
+	if u, _ := h.store.Users.GetByID(ctx, "target"); u.TOTPEnabled || len(u.TOTPSecret) != 0 {
+		t.Errorf("reset did not clear 2FA: %+v", u)
+	}
+	// The root admin may reset another admin.
+	_ = h.store.Users.SetTwoFactor(ctx, "admin2", []byte("s"), true, nil)
+	if s := reset("admin2", "root"); s != http.StatusOK {
+		t.Errorf("root reset admin: want 200, got %d", s)
+	}
+}
+
 func TestInvitationFlow(t *testing.T) {
 	h := newHarness(t)
 

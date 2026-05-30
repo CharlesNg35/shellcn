@@ -29,6 +29,18 @@ test("enable two-factor authentication from the profile", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Disable 2FA" })).toBeVisible();
 });
 
+test("an admin resets a locked-out user's two-factor", async ({ page }) => {
+  await page.goto("/settings/users/u-bob");
+
+  await expect(page.getByText("Two-factor", { exact: true })).toBeVisible();
+  await expect(page.getByText("Enabled")).toBeVisible();
+
+  await page.getByRole("button", { name: "Reset two-factor" }).click();
+  await page.getByRole("button", { name: "Reset", exact: true }).click();
+
+  await expect(page.getByText("Disabled")).toBeVisible();
+});
+
 test("the secure-account reminder can be dismissed", async ({ page }) => {
   await page.goto("/secure-account");
 

@@ -639,6 +639,7 @@ export interface AdminUser {
   roles: Role[];
   disabled: boolean;
   protected: boolean;
+  twoFactorEnabled?: boolean;
 }
 
 // Metadata-only view of a user's connection (admin user-detail inventory) — never

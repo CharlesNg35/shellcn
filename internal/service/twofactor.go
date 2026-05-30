@@ -41,9 +41,7 @@ const (
 	remindInterval = 72 * time.Hour
 )
 
-// TOTPEnrollment carries everything the client needs to add the account to an
-// authenticator app: the otpauth URL (encoded as a QR), the raw base32 secret
-// for manual entry, and a ready-to-render QR data URL.
+// TOTPEnrollment is the provisioning material for an authenticator app.
 type TOTPEnrollment struct {
 	Secret      string
 	OTPAuthURL  string
@@ -52,8 +50,7 @@ type TOTPEnrollment struct {
 }
 
 // TwoFactorService owns TOTP enrollment, verification, and recovery codes. The
-// shared secret is encrypted at rest by the vault; only hashes of recovery codes
-// are stored.
+// secret is vault-encrypted at rest; only recovery-code hashes are stored.
 type TwoFactorService struct {
 	users  store.UserStore
 	vault  secrets.SecretStore
@@ -68,8 +65,7 @@ func NewTwoFactorService(users store.UserStore, vault secrets.SecretStore, issue
 	return &TwoFactorService{users: users, vault: vault, issuer: issuer, now: time.Now}
 }
 
-// BeginEnrollment generates a fresh secret, stores it encrypted as a pending
-// (not-yet-confirmed) enrollment, and returns the provisioning material.
+// BeginEnrollment stores a fresh, not-yet-confirmed secret and returns its QR.
 func (s *TwoFactorService) BeginEnrollment(ctx context.Context, user models.User) (TOTPEnrollment, error) {
 	// Re-enrolling must go through disable first; otherwise this would clear the
 	// active secret and recovery codes with no proof of possession.
@@ -94,8 +90,8 @@ func (s *TwoFactorService) BeginEnrollment(ctx context.Context, user models.User
 	return TOTPEnrollment{Secret: key.Secret(), OTPAuthURL: key.URL(), QRDataURL: qr, AccountName: user.Username}, nil
 }
 
-// ConfirmEnrollment validates the first code against the pending secret, marks
-// 2FA enabled, and returns one-time recovery codes (shown to the user once).
+// ConfirmEnrollment validates the first code, enables 2FA, and returns the
+// one-time recovery codes (shown once).
 func (s *TwoFactorService) ConfirmEnrollment(ctx context.Context, user models.User, code string) ([]string, error) {
 	secret, err := s.decryptSecret(ctx, user)
 	if err != nil {
@@ -114,8 +110,7 @@ func (s *TwoFactorService) ConfirmEnrollment(ctx context.Context, user models.Us
 	return codes, nil
 }
 
-// Disable turns off 2FA after verifying a current code (TOTP or recovery),
-// clearing the secret and recovery codes.
+// Disable turns off 2FA after verifying a current code.
 func (s *TwoFactorService) Disable(ctx context.Context, user models.User, code string) error {
 	if !user.TOTPEnabled {
 		return ErrTOTPNotEnabled
@@ -130,8 +125,7 @@ func (s *TwoFactorService) Disable(ctx context.Context, user models.User, code s
 	return s.users.SetTwoFactor(ctx, user.ID, nil, false, nil)
 }
 
-// RegenerateRecoveryCodes issues a fresh set after verifying a current code,
-// invalidating the previous codes.
+// RegenerateRecoveryCodes verifies a code, then replaces the recovery codes.
 func (s *TwoFactorService) RegenerateRecoveryCodes(ctx context.Context, user models.User, code string) ([]string, error) {
 	if !user.TOTPEnabled {
 		return nil, ErrTOTPNotEnabled
@@ -151,6 +145,11 @@ func (s *TwoFactorService) RegenerateRecoveryCodes(ctx context.Context, user mod
 		return nil, err
 	}
 	return codes, nil
+}
+
+// Reset clears a user's 2FA without a code (admin break-glass); callers gate it.
+func (s *TwoFactorService) Reset(ctx context.Context, userID string) error {
+	return s.users.SetTwoFactor(ctx, userID, nil, false, nil)
 }
 
 // Verify checks a login code against the user's TOTP secret, falling back to a
@@ -191,8 +190,7 @@ func (s *TwoFactorService) consumeRecoveryCode(ctx context.Context, user models.
 	return true, nil
 }
 
-// ShouldRemind reports whether to nudge the user to enable 2FA: only when it is
-// off and they have never been reminded or the reminder interval has elapsed.
+// ShouldRemind reports whether to nudge the user to enable 2FA.
 func (s *TwoFactorService) ShouldRemind(user models.User) bool {
 	if user.TOTPEnabled {
 		return false
@@ -200,8 +198,7 @@ func (s *TwoFactorService) ShouldRemind(user models.User) bool {
 	return user.MFARemindedAt == nil || s.now().Sub(*user.MFARemindedAt) >= remindInterval
 }
 
-// Remind records that the user was just nudged, so the next prompt waits out the
-// reminder interval.
+// Remind records that the user was just nudged.
 func (s *TwoFactorService) Remind(ctx context.Context, userID string) error {
 	at := s.now()
 	return s.users.SetMFARemindedAt(ctx, userID, &at)

@@ -33,6 +33,8 @@ export const adminUsersApi = {
   activate: (id: string) => api.post<AdminUser>(`/admin/users/${id}/activate`),
   deactivate: (id: string) =>
     api.post<AdminUser>(`/admin/users/${id}/deactivate`),
+  resetTwoFactor: (id: string) =>
+    api.post<AdminUser>(`/admin/users/${id}/reset-2fa`),
   connections: (id: string) =>
     api.get<UserConnectionSummary[]>(`/admin/users/${id}/connections`),
   audit: (id: string, limit: number, offset: number) =>
