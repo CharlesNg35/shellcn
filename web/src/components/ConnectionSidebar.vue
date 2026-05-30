@@ -69,6 +69,17 @@ const expanded = useStorage<Record<string, boolean>>(
 // When on, the list shows only connections with a live session. Kept in memory
 // only (not persisted) so every session starts showing the full list.
 const activeOnly = ref(false);
+
+// While filtering (search or active-only), every folder shows open so matches are
+// visible — but this is display-only and never written back, so clearing the
+// filter restores each folder's real open/closed state.
+const filtering = computed(
+  () => Boolean(props.query.trim()) || activeOnly.value,
+);
+const displayExpanded = computed<Record<string, boolean>>(() => {
+  if (!filtering.value) return expanded.value;
+  return Object.fromEntries(conns.folders.map((f) => [f.id, true]));
+});
 const showFolderDialog = ref(false);
 const editingFolder = ref<ConnectionFolder | null>(null);
 const savingLayout = ref(false);
@@ -180,10 +191,7 @@ function filterTree(items: ConnectionTreeItem[]): ConnectionTreeItem[] {
       continue;
     }
     const children = filterTree(item.children);
-    if (children.length) {
-      out.push({ ...item, children });
-      expanded.value = { ...expanded.value, [item.id]: true };
-    }
+    if (children.length) out.push({ ...item, children });
   }
   return out;
 }
@@ -431,7 +439,7 @@ function go(connection: ConnectionSummary): void {
           :key="treeRenderKey"
           v-model="rootItems"
           :active-id="activeId"
-          :expanded="expanded"
+          :expanded="displayExpanded"
           :disabled="Boolean(query.trim())"
           :dragging="hoverSuppressed"
           :dropped-id="droppedId"
