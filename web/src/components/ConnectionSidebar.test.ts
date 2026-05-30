@@ -5,6 +5,7 @@ import { createRouter, createMemoryHistory } from "vue-router";
 import { installFetch } from "../test/fetchMock";
 import { useConnectionsStore } from "../stores/connections";
 import ConnectionSidebar from "./ConnectionSidebar.vue";
+import ConnectionFolderBranch from "./ConnectionFolderBranch.vue";
 import type { ConnectionSummary } from "../types/projection";
 
 vi.mock("vue-draggable-plus", () => ({
@@ -130,6 +131,32 @@ describe("ConnectionSidebar", () => {
       f1: true,
       f2: true,
     });
+  });
+
+  it("locks drag-and-drop while searching", async () => {
+    installFetch(() => ({ body: { ok: true } }));
+    const conns = useConnectionsStore();
+    conns.loaded = true;
+    conns.folders = [
+      { id: "f2", name: "Databases", color: "teal", sortOrder: 0 },
+    ];
+    conns.connections = connections;
+
+    const wrapper = mount(ConnectionSidebar, {
+      props: { activeId: null, query: "prod" },
+      global: { plugins: [router()] },
+    });
+    await flushPromises();
+
+    const branch = wrapper.findComponent(ConnectionFolderBranch);
+    expect(branch.exists()).toBe(true);
+    expect(branch.props("disabled")).toBe(true);
+
+    await wrapper.setProps({ query: "" });
+    await flushPromises();
+    expect(
+      wrapper.findComponent(ConnectionFolderBranch).props("disabled"),
+    ).toBe(false);
   });
 
   it("reveals a top shadow after the connection list scrolls", async () => {
