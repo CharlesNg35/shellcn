@@ -66,17 +66,31 @@ const expanded = useStorage<Record<string, boolean>>(
   localStorage,
   { mergeDefaults: true },
 );
+// When on, the list shows only connections with a live session. Kept in memory
+// only (not persisted) so every session starts showing the full list.
+const activeOnly = ref(false);
 const showFolderDialog = ref(false);
 const editingFolder = ref<ConnectionFolder | null>(null);
 const savingLayout = ref(false);
 let pendingPersist = false;
 
 const emptyFiltered = computed(
-  () => conns.loaded && Boolean(props.query.trim()) && !rootItems.value.length,
+  () =>
+    conns.loaded &&
+    conns.connections.length > 0 &&
+    (Boolean(props.query.trim()) || activeOnly.value) &&
+    !rootItems.value.length,
 );
 
 watch(
-  () => [conns.connections, conns.folders, props.query] as const,
+  () =>
+    [
+      conns.connections,
+      conns.folders,
+      props.query,
+      activeOnly.value,
+      ws.connected,
+    ] as const,
   rebuildLists,
   { immediate: true, deep: true },
 );
@@ -122,6 +136,7 @@ function rebuildLists(): void {
     ) {
       continue;
     }
+    if (activeOnly.value && !ws.isConnected(connection.id)) continue;
     const item: ConnectionNode = { kind: "connection", connection };
     if (connection.folderId && folderIds.has(connection.folderId)) {
       nodeById.get(connection.folderId)?.children.push(item);
@@ -145,7 +160,7 @@ function rebuildLists(): void {
   };
 
   const tree = sortTree(roots);
-  rootItems.value = q ? filterTree(tree) : tree;
+  rootItems.value = q || activeOnly.value ? filterTree(tree) : tree;
 }
 
 function itemSortOrder(item: ConnectionTreeItem): number {
@@ -360,6 +375,26 @@ function go(connection: ConnectionSummary): void {
       </p>
       <div class="flex items-center gap-0.5">
         <Button
+          text
+          rounded
+          severity="secondary"
+          size="small"
+          :title="
+            activeOnly ? 'Showing active only' : 'Show active connections only'
+          "
+          :aria-label="
+            activeOnly ? 'Show all connections' : 'Show active connections only'
+          "
+          :aria-pressed="activeOnly"
+          @click="activeOnly = !activeOnly"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'activity' }"
+            :size="15"
+            :class="activeOnly ? 'text-primary-500' : ''"
+          />
+        </Button>
+        <Button
           v-if="auth.canCreate"
           text
           rounded
@@ -418,7 +453,11 @@ function go(connection: ConnectionSummary): void {
           v-else-if="emptyFiltered"
           class="px-2 py-6 text-center text-sm text-surface-400"
         >
-          No connections match "{{ query }}".
+          {{
+            query.trim()
+              ? `No connections match "${query}".`
+              : "No active connections."
+          }}
         </p>
         <div
           v-else-if="conns.loaded && !conns.connections.length"
