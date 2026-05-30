@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	shellImage        = "docker.io/bitnami/kubectl:latest"
+	shellImage        = "docker.io/dtzar/helm-kubectl:4.2.0"
 	shellContainer    = "shell"
 	shellPodName      = "shellcn-shell"
 	shellSAName       = "shellcn-shell"
@@ -126,11 +126,12 @@ func shellPod(useSA bool) *corev1.Pod {
 			RestartPolicy:                corev1.RestartPolicyAlways,
 			AutomountServiceAccountToken: &automount,
 			Containers: []corev1.Container{{
-				Name:    shellContainer,
-				Image:   shellImage,
-				Command: []string{"/bin/sh", "-c", shellKeepalive},
-				Stdin:   true,
-				TTY:     true,
+				Name:            shellContainer,
+				Image:           shellImage,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         []string{"/bin/sh", "-c", shellKeepalive},
+				Stdin:           true,
+				TTY:             true,
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("25m"),

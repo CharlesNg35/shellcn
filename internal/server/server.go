@@ -229,7 +229,14 @@ func (s *Server) routes() chi.Router {
 				})
 			}
 			pr.HandleFunc("/connections/{id}/x/{routeID}", s.handleRoute)
-			pr.HandleFunc("/connections/{id}/proxy/*", s.handleConnectionProxy)
+		})
+
+		// The connection web proxy is cookie-authenticated but CSRF-exempt: a
+		// proxied third-party app cannot send our CSRF token, and SameSite=Lax
+		// already blocks cross-site cookie use on non-GET requests.
+		api.Group(func(xr chi.Router) {
+			xr.Use(s.requireSession)
+			xr.HandleFunc("/connections/{id}/proxy/*", s.handleConnectionProxy)
 		})
 	})
 

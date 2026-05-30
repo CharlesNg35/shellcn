@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 
@@ -40,10 +41,11 @@ type Session struct {
 	transport plugin.Transport
 	net       plugin.NetTransport
 
-	mu      sync.Mutex
-	stopCh  chan struct{}
-	stopped bool
-	bridge  *loopbackBridge // lazy, agent transport only
+	mu           sync.Mutex
+	stopCh       chan struct{}
+	stopped      bool
+	bridge       *loopbackBridge            // lazy, agent transport only
+	pfTransports map[string]*http.Transport // lazy; pools port-forward tunnels per pod port
 }
 
 // Connect builds the REST config for the connection's transport and wires the
@@ -171,6 +173,10 @@ func (s *Session) Close() error {
 		_ = s.bridge.Close()
 		s.bridge = nil
 	}
+	for _, tr := range s.pfTransports {
+		tr.CloseIdleConnections()
+	}
+	s.pfTransports = nil
 	return nil
 }
 

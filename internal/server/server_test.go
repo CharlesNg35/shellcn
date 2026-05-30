@@ -424,6 +424,27 @@ func TestConnectionProxyLazilyAcquiresSession(t *testing.T) {
 	}
 }
 
+// A proxied third-party app cannot carry our CSRF token, so a state-changing
+// request through the proxy must not be rejected; the cookie + SameSite + route
+// authz still guard it.
+func TestConnectionProxyExemptFromCSRF(t *testing.T) {
+	h := newHarness(t)
+	req, err := http.NewRequest(http.MethodPost, h.ts.URL+"/api/connections/c-op/proxy/services/default/app/8080/api/items", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: h.sessions["op"].ID})
+	resp, err := h.ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("proxy POST without CSRF: want 200, got %d (%s)", resp.StatusCode, b)
+	}
+}
+
 func TestParamResolution(t *testing.T) {
 	h := newHarness(t)
 	resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.echoparam?p.name=resolved", "op", nil)

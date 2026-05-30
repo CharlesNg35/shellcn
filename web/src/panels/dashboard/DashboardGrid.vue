@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppIcon from "../../components/AppIcon.vue";
 import PanelHost from "../core/PanelHost.vue";
-import type { Action, DashboardCell } from "../../types/projection";
+import type { Action, DashboardCell, Row } from "../../types/projection";
 
 // Presentational, layout-only: a responsive grid of panel cards rendered at once.
 // Shared by the connection-level `dashboard` layout and the `dashboard` panel
@@ -19,7 +19,10 @@ const props = withDefaults(
   { actions: () => [], resolveConfig: undefined, emptyText: "No panels." },
 );
 
-const emit = defineEmits<{ actionDone: [action: Action] }>();
+const emit = defineEmits<{
+  actionDone: [action: Action];
+  select: [row: Row];
+}>();
 
 function spanClass(cell: DashboardCell): string {
   return (cell.span ?? 1) >= 2 ? "lg:col-span-2" : "";
@@ -60,6 +63,7 @@ function onCardAction(action: Action): void {
             :config="cellConfig(cell)"
             :actions="props.actions"
             @action-done="onCardAction"
+            @select="(row) => emit('select', row)"
           />
         </div>
       </section>

@@ -3,6 +3,7 @@ import DashboardGrid from "./DashboardGrid.vue";
 import type {
   Action,
   DashboardCell,
+  Row,
   Tab as TabDef,
 } from "../../types/projection";
 
@@ -16,7 +17,10 @@ const props = defineProps<{
   resolveConfig: (tab: TabDef) => Record<string, unknown>;
 }>();
 
-const emit = defineEmits<{ actionDone: [action: Action] }>();
+const emit = defineEmits<{
+  actionDone: [action: Action];
+  select: [row: Row];
+}>();
 
 function resolveCellConfig(cell: DashboardCell): Record<string, unknown> {
   return props.resolveConfig(cell as TabDef);
@@ -30,5 +34,6 @@ function resolveCellConfig(cell: DashboardCell): Record<string, unknown> {
     :actions="props.actions"
     :resolve-config="resolveCellConfig"
     @action-done="(action) => emit('actionDone', action)"
+    @select="(row) => emit('select', row)"
   />
 </template>

@@ -29,43 +29,64 @@ func sessionFrom(ctx context.Context) (auth.Session, bool) {
 	return s, ok
 }
 
-// requireAuth resolves the session cookie to a live user, enforces CSRF on
-// state-changing methods, and attaches the user + session to the context.
+// authenticate resolves the session cookie to a live user and returns a context
+// carrying the user + session. It writes the error response and reports false on
+// any failure. It does not enforce CSRF — that is the caller's choice.
+func (s *Server) authenticate(w http.ResponseWriter, r *http.Request) (context.Context, bool) {
+	cookie, err := r.Cookie(auth.SessionCookieName)
+	if err != nil {
+		writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
+		return nil, false
+	}
+	sess, ok := s.deps.SessionMgr.Get(cookie.Value)
+	if !ok {
+		writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
+		return nil, false
+	}
+	user, err := s.deps.Store.Users.GetByID(r.Context(), sess.UserID)
+	if err != nil {
+		writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
+		return nil, false
+	}
+	if user.Disabled || sess.SessionVersion != user.SessionVersion {
+		s.deps.SessionMgr.Destroy(sess.ID)
+		auth.ClearSessionCookie(w)
+		writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
+		return nil, false
+	}
+	ctx := context.WithValue(r.Context(), ctxUser, user)
+	ctx = context.WithValue(ctx, ctxSession, sess)
+	return ctx, true
+}
+
+// requireAuth authenticates the session and enforces CSRF on state-changing
+// methods. It guards every browser API route that carries our CSRF token.
 func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(auth.SessionCookieName)
-		if err != nil {
-			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
-			return
-		}
-		sess, ok := s.deps.SessionMgr.Get(cookie.Value)
+		ctx, ok := s.authenticate(w, r)
 		if !ok {
-			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
 			return
 		}
-		if isStateChanging(r.Method) && !sess.ValidateCSRF(r) {
-			writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		if isStateChanging(r.Method) {
+			if sess, _ := sessionFrom(ctx); !sess.ValidateCSRF(r) {
+				writeError(w, s.deps.Logger, plugin.ErrForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// requireSession authenticates the session without the CSRF-token check. It backs
+// the connection web proxy, where a proxied third-party app cannot carry our
+// token; cross-site forgery is still blocked by the SameSite=Lax session cookie,
+// and the route itself authorizes the connection.
+func (s *Server) requireSession(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, ok := s.authenticate(w, r)
+		if !ok {
 			return
 		}
-		user, err := s.deps.Store.Users.GetByID(r.Context(), sess.UserID)
-		if err != nil {
-			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
-			return
-		}
-		if user.Disabled {
-			s.deps.SessionMgr.Destroy(sess.ID)
-			auth.ClearSessionCookie(w)
-			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
-			return
-		}
-		if sess.SessionVersion != user.SessionVersion {
-			s.deps.SessionMgr.Destroy(sess.ID)
-			auth.ClearSessionCookie(w)
-			writeAuthRequired(w, s.deps.Logger, plugin.ErrUnauthorized)
-			return
-		}
-		ctx := context.WithValue(r.Context(), ctxUser, user)
-		ctx = context.WithValue(ctx, ctxSession, sess)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

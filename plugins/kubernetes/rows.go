@@ -22,6 +22,7 @@ func pageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 		return plugin.Page[Row]{}, err
 	}
 	rows = filterRows(rows, page.Search())
+	rows = plugin.SortRows(rows, sortKeys(page.Sort))
 	start := 0
 	if page.Cursor != "" {
 		start, err = strconv.Atoi(page.Cursor)
@@ -48,4 +49,18 @@ func pageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 // backing the table's filter box over the in-memory list the grid paginates.
 func filterRows(rows []Row, q string) []Row {
 	return plugin.FilterRows(rows, q)
+}
+
+// sortKeys remaps the human "age" column to its underlying creation timestamp
+// (inverted, so ascending age is youngest-first) — its displayed value is a
+// relative string that wouldn't compare correctly. Other columns sort as-is.
+func sortKeys(keys []plugin.SortKey) []plugin.SortKey {
+	out := make([]plugin.SortKey, len(keys))
+	for i, k := range keys {
+		if k.Field == "age" {
+			k.Field, k.Desc = "createdAt", !k.Desc
+		}
+		out[i] = k
+	}
+	return out
 }

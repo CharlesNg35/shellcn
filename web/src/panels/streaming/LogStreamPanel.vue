@@ -62,7 +62,7 @@ const downloadHref = computed(
 </script>
 
 <template>
-  <div class="flex h-full flex-col bg-surface-950">
+  <div class="flex h-full flex-col bg-surface-0 dark:bg-surface-950">
     <StreamStatusBar
       :status="status"
       :error="error"
@@ -71,7 +71,7 @@ const downloadHref = computed(
       @reconnect="onReconnect"
     />
     <div
-      class="flex flex-wrap items-center gap-2 border-b border-surface-800 bg-surface-950 px-3 py-2"
+      class="flex flex-wrap items-center gap-2 border-b border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950"
     >
       <InputText
         v-model="filterText"
@@ -106,7 +106,7 @@ const downloadHref = computed(
     </div>
     <div
       ref="viewport"
-      class="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-surface-200"
+      class="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
     >
       <div
         v-for="(line, i) in visibleLines"
