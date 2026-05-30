@@ -66,37 +66,99 @@ export interface CodeMirrorOptions {
   onChange?: (value: string) => void;
 }
 
-const lightHighlight = syntaxHighlighting(
-  HighlightStyle.define([
-    { tag: tags.keyword, color: "#1d4ed8" },
-    { tag: tags.atom, color: "#7c3aed" },
-    { tag: tags.number, color: "#b45309" },
-    { tag: tags.string, color: "#047857" },
-    { tag: tags.comment, color: "#64748b", fontStyle: "italic" },
-    { tag: tags.variableName, color: "#0f172a" },
-    { tag: tags.propertyName, color: "#0f766e" },
-    { tag: tags.operator, color: "#475569" },
-    { tag: tags.punctuation, color: "#475569" },
-    { tag: tags.invalid, color: "#dc2626" },
-  ]),
-  { fallback: true },
-);
+interface HighlightPalette {
+  keyword: string;
+  atom: string;
+  number: string;
+  string: string;
+  comment: string;
+  variable: string;
+  property: string;
+  type: string;
+  operator: string;
+  punct: string;
+  invalid: string;
+}
 
-const darkHighlight = syntaxHighlighting(
-  HighlightStyle.define([
-    { tag: tags.keyword, color: "#93c5fd" },
-    { tag: tags.atom, color: "#c4b5fd" },
-    { tag: tags.number, color: "#fbbf24" },
-    { tag: tags.string, color: "#86efac" },
-    { tag: tags.comment, color: "#94a3b8", fontStyle: "italic" },
-    { tag: tags.variableName, color: "#e2e8f0" },
-    { tag: tags.propertyName, color: "#5eead4" },
-    { tag: tags.operator, color: "#cbd5e1" },
-    { tag: tags.punctuation, color: "#cbd5e1" },
-    { tag: tags.invalid, color: "#f87171" },
-  ]),
-  { fallback: true },
-);
+// One style for every tag the supported devops formats emit (YAML/JSON/shell/
+// dockerfile/nginx/toml/ini/xml). Crucially this covers `content` — lang-yaml's
+// tag for plain scalar values — which the original palette missed, leaving most
+// of a YAML file uncolored.
+function buildHighlight(c: HighlightPalette): Extension {
+  return syntaxHighlighting(
+    HighlightStyle.define([
+      {
+        tag: [
+          tags.keyword,
+          tags.controlKeyword,
+          tags.operatorKeyword,
+          tags.moduleKeyword,
+          tags.modifier,
+          tags.tagName,
+        ],
+        color: c.keyword,
+      },
+      { tag: [tags.atom, tags.bool, tags.null], color: c.atom },
+      { tag: [tags.number, tags.escape], color: c.number },
+      {
+        tag: [
+          tags.string,
+          tags.content,
+          tags.attributeValue,
+          tags.regexp,
+          tags.character,
+        ],
+        color: c.string,
+      },
+      { tag: tags.comment, color: c.comment, fontStyle: "italic" },
+      { tag: [tags.variableName, tags.labelName], color: c.variable },
+      { tag: [tags.propertyName, tags.attributeName], color: c.property },
+      { tag: [tags.typeName, tags.className, tags.namespace], color: c.type },
+      { tag: tags.operator, color: c.operator },
+      {
+        tag: [
+          tags.punctuation,
+          tags.separator,
+          tags.brace,
+          tags.squareBracket,
+          tags.angleBracket,
+          tags.paren,
+          tags.meta,
+        ],
+        color: c.punct,
+      },
+      { tag: tags.invalid, color: c.invalid },
+    ]),
+  );
+}
+
+const lightHighlight = buildHighlight({
+  keyword: "#1d4ed8",
+  atom: "#7c3aed",
+  number: "#b45309",
+  string: "#047857",
+  comment: "#64748b",
+  variable: "#0f172a",
+  property: "#0f766e",
+  type: "#0e7490",
+  operator: "#475569",
+  punct: "#475569",
+  invalid: "#dc2626",
+});
+
+const darkHighlight = buildHighlight({
+  keyword: "#93c5fd",
+  atom: "#c4b5fd",
+  number: "#fbbf24",
+  string: "#86efac",
+  comment: "#94a3b8",
+  variable: "#e2e8f0",
+  property: "#5eead4",
+  type: "#67e8f9",
+  operator: "#cbd5e1",
+  punct: "#cbd5e1",
+  invalid: "#f87171",
+});
 
 const editorSetup: Extension = [
   lineNumbers(),

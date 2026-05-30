@@ -34,7 +34,8 @@ func applyYAMLAction() plugin.Action {
 	}
 }
 
-const applyStarter = `# Paste or edit a manifest, then Save to apply it to the cluster.
+const applyStarter = `# Paste or edit manifests, then Save to apply them to the cluster.
+# Separate multiple documents with "---".
 # apiVersion: v1
 # kind: ConfigMap
 # metadata:
