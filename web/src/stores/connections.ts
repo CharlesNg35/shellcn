@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { api } from "../api/client";
+import { connectionsApi, connectionFoldersApi } from "../api/connections";
+import { pluginsApi } from "../api/plugins";
 import type {
   ConnectionFolder,
   ConnectionSummary,
@@ -17,9 +18,9 @@ export const useConnectionsStore = defineStore("connections", () => {
 
   async function load(): Promise<void> {
     const [c, f, p] = await Promise.all([
-      api.get<ConnectionSummary[]>("/connections"),
-      api.get<ConnectionFolder[]>("/connection-folders"),
-      api.get<PluginSummary[]>("/plugins"),
+      connectionsApi.list(),
+      connectionFoldersApi.list(),
+      pluginsApi.list(),
     ]);
     connections.value = c;
     folders.value = f;
@@ -30,7 +31,7 @@ export const useConnectionsStore = defineStore("connections", () => {
   // Projections are fetched on demand and cached — the catalog is never bulk-loaded.
   async function projection(name: string): Promise<PluginProjection> {
     if (!projections.value[name]) {
-      const fetched = await api.get<PluginProjection>(`/plugins/${name}`);
+      const fetched = await pluginsApi.get(name);
       projections.value = { ...projections.value, [name]: fetched };
     }
     return projections.value[name];
@@ -43,8 +44,8 @@ export const useConnectionsStore = defineStore("connections", () => {
   // refresh re-fetches just the connection list after a control-plane mutation.
   async function refresh(): Promise<void> {
     const [c, f] = await Promise.all([
-      api.get<ConnectionSummary[]>("/connections"),
-      api.get<ConnectionFolder[]>("/connection-folders"),
+      connectionsApi.list(),
+      connectionFoldersApi.list(),
     ]);
     connections.value = c;
     folders.value = f;
@@ -55,10 +56,7 @@ export const useConnectionsStore = defineStore("connections", () => {
     color: ConnectionFolder["color"];
     parentId?: string;
   }): Promise<ConnectionFolder> {
-    const folder = await api.post<ConnectionFolder>(
-      "/connection-folders",
-      input,
-    );
+    const folder = await connectionFoldersApi.create(input);
     folders.value = [...folders.value, folder].sort(
       (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
     );
@@ -69,10 +67,7 @@ export const useConnectionsStore = defineStore("connections", () => {
     id: string,
     input: { name: string; color: ConnectionFolder["color"] },
   ): Promise<ConnectionFolder> {
-    const folder = await api.put<ConnectionFolder>(
-      `/connection-folders/${id}`,
-      input,
-    );
+    const folder = await connectionFoldersApi.update(id, input);
     folders.value = folders.value.map((f) => (f.id === id ? folder : f));
     return folder;
   }
@@ -80,7 +75,7 @@ export const useConnectionsStore = defineStore("connections", () => {
   async function deleteFolder(id: string): Promise<void> {
     const deleted = folders.value.find((f) => f.id === id);
     const targetParentId = deleted?.parentId;
-    await api.del(`/connection-folders/${id}`);
+    await connectionFoldersApi.remove(id);
     folders.value = folders.value.filter((f) => f.id !== id);
     folders.value = folders.value.map((f) =>
       f.parentId === id ? { ...f, parentId: targetParentId } : f,
@@ -102,7 +97,7 @@ export const useConnectionsStore = defineStore("connections", () => {
       sortOrder: number;
     }> = [],
   ): Promise<void> {
-    await api.put("/connections/layout", { items, folders: folderItems });
+    await connectionsApi.saveLayout(items, folderItems);
     const byId = new Map(items.map((i) => [i.connectionId, i]));
     connections.value = connections.value.map((c) => {
       const item = byId.get(c.id);

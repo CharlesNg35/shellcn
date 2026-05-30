@@ -6,7 +6,8 @@ import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 import Textarea from "primevue/textarea";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { credentialsApi } from "../api/credentials";
 import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
@@ -92,7 +93,7 @@ async function loadKindCatalog(): Promise<void> {
   catalogLoading.value = true;
   catalogError.value = null;
   try {
-    const catalog = await api.get<CredentialKindInfo[]>("/credential-kinds");
+    const catalog = await credentialsApi.kinds();
     kindCatalog.value = Array.isArray(catalog) ? catalog : [];
   } catch (e) {
     catalogError.value = (e as Error).message;
@@ -173,14 +174,11 @@ async function save(): Promise<void> {
   };
   try {
     if (isEdit.value && props.credential) {
-      const updated = await api.put<CredentialSummary>(
-        `/credentials/${props.credential.id}`,
-        body,
-      );
+      const updated = await credentialsApi.update(props.credential.id, body);
       notify.success("Credential updated", name.value);
       emit("saved", updated);
     } else {
-      const created = await api.post<CredentialSummary>("/credentials", body);
+      const created = await credentialsApi.create(body);
       notify.success("Credential created", name.value);
       emit("saved", created);
     }

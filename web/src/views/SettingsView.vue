@@ -3,7 +3,7 @@ import { onMounted, ref } from "vue";
 import Button from "primevue/button";
 import { useTheme } from "../composables/useTheme";
 import { useAuthStore } from "../stores/auth";
-import { api } from "../api/client";
+import { adminSettingsApi } from "../api/admin";
 import RoleGate from "../components/RoleGate.vue";
 import AppIcon from "../components/AppIcon.vue";
 
@@ -15,9 +15,7 @@ const emailEnabled = ref<boolean | null>(null);
 onMounted(async () => {
   if (!auth.isAdmin) return;
   try {
-    emailEnabled.value = (
-      await api.get<{ enabled: boolean }>("/admin/email")
-    ).enabled;
+    emailEnabled.value = (await adminSettingsApi.emailStatus()).enabled;
   } catch {
     emailEnabled.value = null;
   }

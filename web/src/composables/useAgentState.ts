@@ -5,8 +5,8 @@ import {
   toValue,
   type MaybeRefOrGetter,
 } from "vue";
-import { api } from "../api/client";
-import type { AgentState, AgentStatus } from "../types/projection";
+import { agentApi } from "../api/agent";
+import type { AgentStatus } from "../types/projection";
 
 // Owns polling an agent connection's tunnel state (pending → online → offline).
 // Shared by the connect gate and the enroll panel so the lifecycle lives in one
@@ -23,7 +23,7 @@ export function useAgentState(connectionId: MaybeRefOrGetter<string>) {
     const id = toValue(connectionId);
     const currentGeneration = generation;
     try {
-      const state = await api.get<AgentState>(`/connections/${id}/agent/state`);
+      const state = await agentApi.state(id);
       if (currentGeneration !== generation || id !== toValue(connectionId)) {
         return;
       }

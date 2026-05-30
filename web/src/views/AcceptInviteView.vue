@@ -4,7 +4,8 @@ import { useRoute, useRouter } from "vue-router";
 import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { inviteAcceptApi } from "../api/invitations";
 import AppIcon from "../components/AppIcon.vue";
 
 const route = useRoute();
@@ -21,7 +22,7 @@ const error = ref<string | null>(null);
 
 onMounted(async () => {
   try {
-    const inv = await api.get<{ email: string }>(`/invitations/${token}`);
+    const inv = await inviteAcceptApi.get(token);
     email.value = inv.email;
   } catch {
     invalid.value = true;
@@ -34,7 +35,7 @@ async function onSubmit(): Promise<void> {
   error.value = null;
   busy.value = true;
   try {
-    await api.post(`/invitations/${token}/accept`, {
+    await inviteAcceptApi.accept(token, {
       username: username.value.trim(),
       password: password.value,
     });

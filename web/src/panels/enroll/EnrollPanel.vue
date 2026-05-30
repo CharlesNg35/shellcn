@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, toRef, watch } from "vue";
 import Button from "primevue/button";
-import { api } from "../../api/client";
+import { agentApi } from "../../api/agent";
 import type { Enrollment, InstallArtifact } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import { useAgentState } from "../../composables/useAgentState";
@@ -69,9 +69,7 @@ watch(online, (isOnline) => {
 async function enroll(): Promise<void> {
   error.value = null;
   try {
-    enrollment.value = await api.post<Enrollment>(
-      `/connections/${props.connectionId}/agent/enrollments`,
-    );
+    enrollment.value = await agentApi.enroll(props.connectionId);
     void refresh();
   } catch (e) {
     error.value = (e as Error).message;

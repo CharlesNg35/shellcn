@@ -228,6 +228,7 @@ function connections(): Json[] {
     connectionsState = readJSON<Json[]>("connections.json").map((c) => ({
       ...c,
       canManage: true,
+      canShare: true,
     }));
   }
   return connectionsState;
@@ -472,7 +473,8 @@ function handleHTTP(
     return send(res, 200, readJSON(`${pluginMatch[1]}.json`));
   }
 
-  if (path === "/api/users" && method === "GET") {
+  // --- admin: users, invitations, email status ---
+  if (path === "/api/admin/users/search" && method === "GET") {
     const q = (url.searchParams.get("query") ?? "").toLowerCase();
     return send(
       res,
@@ -487,8 +489,6 @@ function handleHTTP(
       ),
     );
   }
-
-  // --- admin: users, invitations, email status ---
   if (path === "/api/admin/email" && method === "GET") {
     return send(res, 200, { enabled: false });
   }

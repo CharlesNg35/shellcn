@@ -6,7 +6,8 @@ import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 import ToggleSwitch from "primevue/toggleswitch";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { adminUsersApi } from "../api/admin";
 import { useNotify } from "../composables/useNotify";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import { Role, ROLE_OPTIONS } from "../constants/roles";
@@ -74,7 +75,7 @@ async function save(): Promise<void> {
   busy.value = true;
   try {
     if (isEdit.value && props.user) {
-      await api.put(`/admin/users/${props.user.id}`, {
+      await adminUsersApi.update(props.user.id, {
         email: email.value.trim(),
         displayName: displayName.value.trim(),
         role: role.value,
@@ -82,7 +83,7 @@ async function save(): Promise<void> {
       });
       notify.success("User updated", username.value);
     } else {
-      await api.post("/admin/users", {
+      await adminUsersApi.create({
         username: username.value.trim(),
         email: email.value.trim(),
         displayName: displayName.value.trim(),

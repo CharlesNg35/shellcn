@@ -3,7 +3,8 @@ import { computed, onMounted, ref } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { credentialsApi } from "../api/credentials";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
@@ -58,8 +59,8 @@ async function load(): Promise<void> {
   error.value = null;
   try {
     const [nextItems, nextKinds] = await Promise.all([
-      api.get<CredentialSummary[]>("/credentials"),
-      api.get<CredentialKindInfo[]>("/credential-kinds"),
+      credentialsApi.list(),
+      credentialsApi.kinds(),
     ]);
     items.value = nextItems;
     kinds.value = nextKinds;
@@ -93,7 +94,7 @@ function openDelete(c: CredentialSummary): void {
 
 async function onDelete(c: CredentialSummary): Promise<void> {
   try {
-    await api.del(`/credentials/${c.id}`);
+    await credentialsApi.remove(c.id);
     notify.success("Credential deleted", c.name);
     await load();
   } catch (e) {

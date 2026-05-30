@@ -3,8 +3,9 @@ import { ref } from "vue";
 import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
-import { useAuthStore, type AuthUser } from "../stores/auth";
+import { ApiError } from "../api/client";
+import { authApi } from "../api/auth";
+import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import { btnPrimary } from "../primevue/preset";
 
@@ -24,7 +25,7 @@ const savingPassword = ref(false);
 async function saveProfile(): Promise<void> {
   savingProfile.value = true;
   try {
-    const updated = await api.put<AuthUser>("/auth/me", {
+    const updated = await authApi.updateProfile({
       displayName: displayName.value.trim(),
       email: email.value.trim(),
     });

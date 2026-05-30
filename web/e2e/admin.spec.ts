@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
 
 test("admin creates a user from the Users view", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("link", { name: "Users" }).click();
-  await expect(page).toHaveURL(/\/users/);
+  await page.goto("/settings");
+  await page.getByRole("link", { name: "Users & access" }).click();
+  await expect(page).toHaveURL(/\/settings\/users/);
 
   await page.getByRole("button", { name: "New user" }).click();
   await page.locator("#user-username").fill("e2e-user");
@@ -18,7 +18,7 @@ test("admin creates a user from the Users view", async ({ page }) => {
 test("admin invites a user and the invitee accepts via the link", async ({
   page,
 }) => {
-  await page.goto("/users");
+  await page.goto("/settings/users");
   await page.getByRole("tab", { name: "Invitations" }).click();
 
   await page.getByRole("button", { name: "Invite user" }).click();

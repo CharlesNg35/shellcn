@@ -5,7 +5,8 @@ import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { connectionsApi } from "../api/connections";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useConnectionSessionsStore } from "../stores/connectionSessions";
@@ -62,7 +63,7 @@ function askDelete(): void {
 
 async function onDelete(): Promise<void> {
   try {
-    await api.del(`/connections/${props.id}`);
+    await connectionsApi.remove(props.id);
     await conns.refresh();
     notify.success("Connection deleted");
     await router.push({ name: "home" });

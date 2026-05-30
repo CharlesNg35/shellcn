@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import Select from "primevue/select";
 import Button from "primevue/button";
-import { api } from "../../api/client";
+import { credentialsApi } from "../../api/credentials";
 import CredentialFormDialog from "../../components/CredentialFormDialog.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import type {
@@ -44,18 +44,17 @@ function kindLabel(kind: string): string {
 async function load(): Promise<void> {
   loading.value = true;
   error.value = null;
-  const sp = new URLSearchParams();
-  if (props.selector.kinds.length)
-    sp.set("kind", props.selector.kinds.join(","));
-  if (requestProtocol.value) sp.set("protocol", requestProtocol.value);
   try {
     const [nextOptions, nextKinds] = await Promise.all([
-      api.get<CredentialSummary[]>(
-        `/credentials${sp.toString() ? `?${sp.toString()}` : ""}`,
-      ),
+      credentialsApi.list({
+        kind: props.selector.kinds.length
+          ? props.selector.kinds.join(",")
+          : undefined,
+        protocol: requestProtocol.value || undefined,
+      }),
       kindCatalog.value.length
         ? Promise.resolve(kindCatalog.value)
-        : api.get<CredentialKindInfo[]>("/credential-kinds"),
+        : credentialsApi.kinds(),
     ]);
     options.value = Array.isArray(nextOptions) ? nextOptions : [];
     kindCatalog.value = Array.isArray(nextKinds) ? nextKinds : [];

@@ -4,7 +4,8 @@ import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { connectionsApi } from "../api/connections";
 import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import SchemaForm from "../panels/form/SchemaForm.vue";
@@ -15,7 +16,6 @@ import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
 import { TRANSPORT_DIRECT } from "../types/projection";
 import type {
   ConnectionDetail,
-  ConnectionSummary,
   PluginProjection,
   RecordingClass,
   Transport,
@@ -114,7 +114,7 @@ function clearProtocol(): void {
 async function loadForEdit(id: string): Promise<void> {
   loading.value = true;
   try {
-    const detail = await api.get<ConnectionDetail>(`/connections/${id}`);
+    const detail = await connectionsApi.get(id);
     name.value = detail.name;
     transport.value = detail.transport;
     secretsSet.value = Object.fromEntries(
@@ -160,21 +160,18 @@ async function onConfig(
   busy.value = true;
   try {
     if (isEdit.value && props.connectionId) {
-      const updated = await api.put<ConnectionDetail>(
-        `/connections/${props.connectionId}`,
-        {
-          name: name.value.trim(),
-          transport: transport.value,
-          config,
-          preserveCredentials: meta.preserveCredentials ?? [],
-          recording: recordingModel.value,
-        },
-      );
+      const updated = await connectionsApi.update(props.connectionId, {
+        name: name.value.trim(),
+        transport: transport.value,
+        config,
+        preserveCredentials: meta.preserveCredentials ?? [],
+        recording: recordingModel.value,
+      });
       await conns.refresh();
       notify.success("Connection updated", updated.name);
       emit("saved", { id: props.connectionId, created: false });
     } else {
-      const created = await api.post<ConnectionSummary>("/connections", {
+      const created = await connectionsApi.create({
         name: name.value.trim(),
         protocol: protocol.value,
         transport: transport.value,

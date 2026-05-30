@@ -9,7 +9,8 @@ import TabPanel from "primevue/tabpanel";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
-import { api } from "../api/client";
+import { adminUsersApi } from "../api/admin";
+import { invitationsApi } from "../api/invitations";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import { useConfirmAction } from "../composables/useConfirmAction";
@@ -39,10 +40,10 @@ const editingUser = ref<AdminUser | null>(null);
 const showInvite = ref(false);
 
 async function loadUsers(): Promise<void> {
-  users.value = await api.get<AdminUser[]>("/admin/users");
+  users.value = await adminUsersApi.list();
 }
 async function loadInvitations(): Promise<void> {
-  invitations.value = await api.get<InvitationSummary[]>("/admin/invitations");
+  invitations.value = await invitationsApi.list();
 }
 onMounted(() => {
   void loadUsers();
@@ -79,7 +80,7 @@ function askRevoke(inv: InvitationSummary): void {
 }
 
 async function revokeInvite(inv: InvitationSummary): Promise<void> {
-  await api.del(`/admin/invitations/${inv.id}`);
+  await invitationsApi.remove(inv.id);
   notify.success("Invitation revoked");
   await loadInvitations();
 }

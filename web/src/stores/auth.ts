@@ -1,21 +1,10 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import { api, setCsrfToken } from "../api/client";
+import { setCsrfToken } from "../api/client";
+import { authApi, type AuthUser, type SessionDTO } from "../api/auth";
 import { Role } from "../constants/roles";
 
-export interface AuthUser {
-  id: string;
-  username: string;
-  displayName?: string;
-  email?: string;
-  roles: Role[];
-  protected?: boolean;
-}
-
-interface SessionDTO {
-  user: AuthUser;
-  csrfToken: string;
-}
+export type { AuthUser };
 
 export const useAuthStore = defineStore("auth", () => {
   const user = ref<AuthUser | null>(null);
@@ -43,7 +32,7 @@ export const useAuthStore = defineStore("auth", () => {
 
   async function bootstrap(): Promise<void> {
     try {
-      apply(await api.get<SessionDTO>("/auth/me"));
+      apply(await authApi.me());
     } catch {
       clear();
     } finally {
@@ -58,7 +47,7 @@ export const useAuthStore = defineStore("auth", () => {
   }
 
   async function login(username: string, password: string): Promise<void> {
-    apply(await api.post<SessionDTO>("/auth/login", { username, password }));
+    apply(await authApi.login(username, password));
     ready.value = true;
   }
 
@@ -66,18 +55,13 @@ export const useAuthStore = defineStore("auth", () => {
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
-    apply(
-      await api.post<SessionDTO>("/auth/me/password", {
-        currentPassword,
-        newPassword,
-      }),
-    );
+    apply(await authApi.changePassword(currentPassword, newPassword));
     ready.value = true;
   }
 
   async function logout(): Promise<void> {
     try {
-      await api.post("/auth/logout");
+      await authApi.logout();
     } finally {
       clear();
     }

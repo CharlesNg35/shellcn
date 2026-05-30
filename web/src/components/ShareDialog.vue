@@ -5,12 +5,15 @@ import Select from "primevue/select";
 import AutoComplete from "primevue/autocomplete";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { grantsApi } from "../api/grants";
+import { adminUsersApi } from "../api/admin";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { dialogRoot, btnPrimary } from "../primevue/preset";
+import type { GrantRequest } from "../api/grants";
 import type { GrantAccess, ShareGrant, UserSummary } from "../types/projection";
 
 const props = defineProps<{
@@ -42,7 +45,6 @@ const canAdd = computed(() =>
   auth.isAdmin ? Boolean(subject.value) : email.value.trim().length > 0,
 );
 
-const base = computed(() => `/${props.resource}/${props.resourceId}/grants`);
 const accessChoices = [
   { label: "Use", value: "use" },
   { label: "Manage", value: "manage" },
@@ -59,7 +61,7 @@ async function load(): Promise<void> {
   email.value = "";
   access.value = "use";
   try {
-    grants.value = await api.get<ShareGrant[]>(base.value);
+    grants.value = await grantsApi.list(props.resource, props.resourceId);
     if (auth.isAdmin) await searchUsers("");
   } finally {
     loading.value = false;
@@ -73,11 +75,7 @@ function userLabel(user: UserSummary): string {
 }
 
 async function searchUsers(query: string): Promise<void> {
-  const params = new URLSearchParams();
-  if (query.trim()) params.set("query", query.trim());
-  const found = await api.get<UserSummary[]>(
-    `/admin/users/search${params.toString() ? `?${params.toString()}` : ""}`,
-  );
+  const found = await adminUsersApi.search(query);
   users.value = found.map((u) => ({ ...u, label: userLabel(u) }));
 }
 
@@ -97,12 +95,16 @@ async function add(): Promise<void> {
   if (!canAdd.value) return;
   busy.value = true;
   try {
-    const body: Record<string, unknown> = {
+    const body: GrantRequest = {
       access: props.allowManage ? access.value : "use",
     };
     if (auth.isAdmin && subject.value) body.subjectId = subject.value.id;
     else body.email = email.value.trim();
-    const grant = await api.post<ShareGrant>(base.value, body);
+    const grant = await grantsApi.create(
+      props.resource,
+      props.resourceId,
+      body,
+    );
     grants.value = [...grants.value, grant];
     subject.value = null;
     email.value = "";
@@ -128,7 +130,7 @@ function requestRevoke(grant: ShareGrant): void {
 
 async function revoke(grant: ShareGrant): Promise<void> {
   try {
-    await api.del(`${base.value}/${grant.id}`);
+    await grantsApi.remove(props.resource, props.resourceId, grant.id);
     grants.value = grants.value.filter((g) => g.id !== grant.id);
     notify.success("Access revoked", grant.username);
     await searchUsers("");
