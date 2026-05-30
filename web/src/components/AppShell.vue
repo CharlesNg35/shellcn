@@ -161,6 +161,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
             v-show="sidebarMenuOpen"
             id="sidebar-utility-menu"
             :aria-hidden="!sidebarMenuOpen"
+            class="pt-1"
           >
             <RouterLink
               :to="{ name: 'credentials' }"

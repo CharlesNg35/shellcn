@@ -41,12 +41,13 @@ function formatTime(iso: string): string {
     :loading="loading"
     scrollable
     scroll-height="flex"
+    :pt="{ table: 'text-base' }"
     @page="onPage"
   >
     <Column header="Time">
       <template #body="{ data }">
         <span
-          class="text-sm whitespace-nowrap text-surface-600 dark:text-surface-300"
+          class="text-base whitespace-nowrap text-surface-600 dark:text-surface-300"
         >
           {{ formatTime((data as AuditEntry).time) }}
         </span>

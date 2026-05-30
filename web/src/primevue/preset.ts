@@ -244,8 +244,10 @@ function messageRoot(options: SeverityOptions): string {
   );
 }
 
+// The active page is flagged with data-p-active (not data-p-selected); it gets a
+// solid primary fill so the current page reads clearly.
 const paginatorButton =
-  "inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-surface-600 transition-colors hover:bg-surface-100 disabled:pointer-events-none disabled:opacity-40 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
+  "inline-flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-md px-2 text-sm text-surface-600 transition-colors hover:bg-surface-100 disabled:pointer-events-none disabled:opacity-40 data-[p-active=true]:bg-primary-600 data-[p-active=true]:font-medium data-[p-active=true]:text-white data-[p-active=true]:hover:bg-primary-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:data-[p-active=true]:bg-primary-500 dark:data-[p-active=true]:text-white dark:data-[p-active=true]:hover:bg-primary-400";
 const paginator = {
   root: "flex flex-wrap items-center justify-end gap-2 border-t border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950",
   content: "flex flex-wrap items-center gap-1",
