@@ -3,7 +3,6 @@ package kubernetes
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +14,7 @@ import (
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/termshell"
 )
 
 const (
@@ -29,20 +29,6 @@ const (
 	// attach to; it exits cleanly on the pod's termination signal.
 	shellKeepalive = "trap : TERM INT; sleep 2147483647 & wait"
 )
-
-// shellLaunch prefers an interactive bash (most kubectl images ship it) and falls
-// back to POSIX sh. It sets a sane TERM and, since these minimal images carry no
-// terminfo, aliases clear/reset to raw ANSI so screen-clearing works regardless.
-const shellLaunch = `export TERM="${TERM:-xterm-256color}"
-if command -v bash >/dev/null 2>&1; then
-rc="$(mktemp 2>/dev/null || echo /tmp/.shellcn_bashrc)"
-cat >"$rc" <<'SHRC'
-alias clear='printf "\033[H\033[2J\033[3J"'
-alias reset='printf "\033c"'
-SHRC
-exec bash --rcfile "$rc"
-fi
-exec sh`
 
 // ClusterShellStream attaches an interactive shell to a long-lived kubectl pod,
 // giving the operator cluster-scoped kubectl from inside the cluster. A single
@@ -59,7 +45,7 @@ func ClusterShellStream(rc *plugin.RequestContext, client plugin.ClientStream) e
 
 	exec, err := s.podExecutor(shellNamespace, shellPodName, &corev1.PodExecOptions{
 		Container: shellContainer,
-		Command:   shellExecCommand(rc),
+		Command:   interactiveShellCommand(rc, true),
 		Stdin:     true,
 		Stdout:    true,
 		TTY:       true,
@@ -70,11 +56,8 @@ func ClusterShellStream(rc *plugin.RequestContext, client plugin.ClientStream) e
 	return streamExec(client, exec, true, intParam(rc, "cols"), intParam(rc, "rows"))
 }
 
-func shellExecCommand(rc *plugin.RequestContext) []string {
-	if c := param(rc, "command"); c != "" {
-		return strings.Fields(c)
-	}
-	return []string{"/bin/sh", "-c", shellLaunch}
+func interactiveShellCommand(rc *plugin.RequestContext, tty bool) []string {
+	return termshell.Command(param(rc, "command"), tty)
 }
 
 // ensureShellPod reuses a healthy shell pod, recreating it only when missing or

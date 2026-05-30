@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"strings"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
@@ -29,13 +28,9 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 		return errors.New("pod name is required")
 	}
 	tty := boolParam(rc, "tty", true)
-	command := param(rc, "command")
-	if command == "" {
-		command = "/bin/sh"
-	}
 	exec, err := s.podExecutor(ns, pod, &corev1.PodExecOptions{
 		Container: param(rc, "container"),
-		Command:   strings.Fields(command),
+		Command:   interactiveShellCommand(rc, tty),
 		Stdin:     true,
 		Stdout:    true,
 		Stderr:    !tty,

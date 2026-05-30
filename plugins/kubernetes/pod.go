@@ -25,7 +25,7 @@ func podDetailTabs() []plugin.Tab {
 			Key: "terminal", Label: "Shell", Icon: lucide("terminal"), Panel: plugin.PanelTerminal,
 			Source: &plugin.DataSource{
 				RouteID: "kubernetes.pod.exec", Method: plugin.MethodWS,
-				Params: podRefParams(map[string]string{"command": "/bin/sh", "tty": "true", "cols": "80", "rows": "24"}),
+				Params: podRefParams(map[string]string{"tty": "true", "cols": "80", "rows": "24"}),
 			},
 			Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map(),
 		},

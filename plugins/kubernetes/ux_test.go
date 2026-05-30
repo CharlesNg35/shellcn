@@ -56,12 +56,15 @@ func TestHeaderActionsResolveToActions(t *testing.T) {
 	}
 }
 
-func TestClusterShellPrefersBash(t *testing.T) {
-	got := shellExecCommand(rc(nil, nil))
+func TestInteractiveShellCommand(t *testing.T) {
+	got := interactiveShellCommand(rc(nil, nil), true)
 	if len(got) != 3 || got[0] != "/bin/sh" || got[1] != "-c" || !strings.Contains(got[2], "exec bash") {
-		t.Errorf("default cluster shell should prefer bash, got %v", got)
+		t.Errorf("a TTY session should prefer bash, got %v", got)
 	}
-	if got := shellExecCommand(rc(nil, map[string]string{"command": "/bin/zsh"})); len(got) != 1 || got[0] != "/bin/zsh" {
+	if got := interactiveShellCommand(rc(nil, nil), false); len(got) != 1 || got[0] != "/bin/sh" {
+		t.Errorf("a non-TTY session should get a plain shell, got %v", got)
+	}
+	if got := interactiveShellCommand(rc(nil, map[string]string{"command": "/bin/zsh"}), true); len(got) != 1 || got[0] != "/bin/zsh" {
 		t.Errorf("an explicit command should override, got %v", got)
 	}
 }
