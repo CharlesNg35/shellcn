@@ -52,6 +52,8 @@ type Enrollment struct {
 	EnrollmentID string            `json:"enrollmentId"`
 	ExpiresAt    time.Time         `json:"expiresAt"`
 	Artifacts    []InstallArtifact `json:"artifacts"`
+	// DownloadURL is where host-run installs fetch the agent binary.
+	DownloadURL string `json:"downloadUrl"`
 }
 
 // AgentState is the polled status the UI shows in the enroll panel.
@@ -134,7 +136,7 @@ func (s *EnrollmentService) Create(ctx context.Context, connectionID, connectURL
 	if err != nil {
 		return Enrollment{}, err
 	}
-	return Enrollment{EnrollmentID: enr.ID, ExpiresAt: enr.ExpiresAt, Artifacts: artifacts}, nil
+	return Enrollment{EnrollmentID: enr.ID, ExpiresAt: enr.ExpiresAt, Artifacts: artifacts, DownloadURL: app.LatestReleaseURL}, nil
 }
 
 func randomToken() (string, error) {

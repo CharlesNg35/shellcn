@@ -12,6 +12,11 @@ const (
 	ServerImageLatest     = ServerImageRepository + ":latest"
 	AgentImageLatest      = AgentImageRepository + ":latest"
 
+	// Repository is the canonical GitHub repo; LatestReleaseURL points at the
+	// published server/agent binaries.
+	Repository       = "CharlesNg35/" + Name
+	LatestReleaseURL = "https://github.com/" + Repository + "/releases/latest"
+
 	DefaultDatabaseDSN = Name + ".db"
 	DefaultClientName  = Name
 

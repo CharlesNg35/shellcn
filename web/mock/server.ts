@@ -1001,6 +1001,7 @@ function handleHTTP(
     return send(res, 201, {
       enrollmentId: `enr-${Date.now()}`,
       expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(),
+      downloadUrl: "https://github.com/CharlesNg35/shellcn/releases/latest",
       artifacts: [
         {
           label: "Docker",
