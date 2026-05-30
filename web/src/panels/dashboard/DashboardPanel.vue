@@ -6,12 +6,16 @@ import type {
   Action,
   DashboardCell,
   DashboardPanelConfig,
+  Row,
 } from "../../types/projection";
 
 // `dashboard` panel type: a multi-panel grid usable as a detail/connection tab.
 // Cells come from the manifest config; rendering is delegated to DashboardGrid.
 const props = defineProps<PanelProps>();
-const emit = defineEmits<{ actionDone: [action: Action] }>();
+const emit = defineEmits<{
+  actionDone: [action: Action];
+  select: [row: Row];
+}>();
 
 const cells = computed<DashboardCell[]>(
   () => (props.config as DashboardPanelConfig | undefined)?.cells ?? [],
@@ -24,5 +28,6 @@ const cells = computed<DashboardCell[]>(
     :cells="cells"
     :actions="props.actions ?? []"
     @action-done="(action) => emit('actionDone', action)"
+    @select="(row) => emit('select', row)"
   />
 </template>
