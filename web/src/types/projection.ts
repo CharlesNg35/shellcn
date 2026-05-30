@@ -230,25 +230,27 @@ export interface FilterOption {
   label?: string;
 }
 
-// A list toolbar control that sets a route param (e.g. namespace) to a chosen
-// value; choices come from optionsSource rows or static options.
-export interface ResourceFilter {
-  key: string;
-  label: string;
+// A global header selector whose chosen value is injected as a route param into
+// every read/stream for the connection. `control` picks the input widget (open
+// vocabulary; unknown falls back to a select). Choices come from optionsSource
+// rows or static options; the empty value (allLabel) clears the scope.
+export interface ScopeFilter {
   param: string;
+  label: string;
+  icon?: Icon;
+  control?: string;
   optionsSource?: DataSource;
   options?: FilterOption[];
   valueField?: string;
   labelField?: string;
   allLabel?: string;
+  separator?: string; // joins a multiselect's values into the param string
 }
 
 export interface TablePanelConfig {
   columns?: Column[];
   columnsSource?: DataSource;
   watch?: DataSource;
-  // Toolbar filter selectors that scope the list by route param.
-  filters?: ResourceFilter[];
   // refreshIntervalMs re-fetches the current page on a cadence and replaces it
   // in place — used instead of `watch` for high-churn tables.
   refreshIntervalMs?: number;
@@ -453,6 +455,7 @@ export interface Action {
   panel?: PanelType;
   config?: Record<string, unknown>; // panel config for a dock/dialog-opened panel
   enabledWhen?: Condition; // gate on the active row's fields; false = disabled
+  iconOnly?: boolean; // render as the icon alone; label becomes the tooltip
 }
 
 export interface Stream {
@@ -537,7 +540,6 @@ export interface ResourceType {
   watch?: DataSource;
   columns: Column[];
   columnsSource?: DataSource; // runtime column defs when columns is empty (e.g. CRDs)
-  filters?: ResourceFilter[];
   actionIds: string[];
   listActionIds?: string[];
   rowActionIds?: string[];
@@ -591,6 +593,8 @@ export interface PluginProjection {
   // Action IDs shown centered in the connection workspace header (connection-wide
   // affordances not bound to a selected resource).
   headerActions?: string[];
+  // Global header selectors that scope every request.
+  scope?: ScopeFilter[];
   streams?: Stream[];
   recording?: RecordingCapability[];
 }

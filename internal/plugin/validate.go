@@ -79,6 +79,8 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 
 	routesByID := validateRoutes(routes, add)
 	actionIDs := validateActions(m, routesByID, collectTabKeys(m), add)
+	validateHeaderActions(m, actionIDs, add)
+	validateScope(m, routesByID, add)
 	streamsByID := validateStreams(m, routesByID, add)
 	validateLayout(m, routesByID, actionIDs, add)
 	validateRecording(m, streamsByID, add)
@@ -170,11 +172,69 @@ func validateActions(m Manifest, routes map[string]Route, tabs map[string]bool, 
 		if a.OnSuccess != nil && a.OnSuccess.SelectTab != "" && !tabs[a.OnSuccess.SelectTab] {
 			add("action %q onSuccess.selectTab references unknown tab %q", a.ID, a.OnSuccess.SelectTab)
 		}
+		if a.OnSuccess != nil && a.OnSuccess.Navigate != "" && a.OnSuccess.Navigate != NavigateList {
+			add("action %q onSuccess.navigate %q is not a known target", a.ID, a.OnSuccess.Navigate)
+		}
 		if (a.Open == OpenDock || a.Open == OpenDialog) && a.Panel == "" {
 			add("action %q opens a panel (%s) but declares no panel type", a.ID, a.Open)
 		}
 	}
 	return ids
+}
+
+// validateHeaderActions checks the header references existing actions.
+func validateHeaderActions(m Manifest, actionIDs map[string]bool, add func(string, ...any)) {
+	for _, id := range m.HeaderActions {
+		if !actionIDs[id] {
+			add("headerAction %q references unknown action", id)
+		}
+	}
+}
+
+// validateScope checks each scope filter is well-formed: unique param, a label,
+// a resolvable optionsSource, choices where the control needs them, and the
+// separator a multiselect's handler will split on.
+func validateScope(m Manifest, routes map[string]Route, add func(string, ...any)) {
+	seen := make(map[string]bool, len(m.Scope))
+	for _, s := range m.Scope {
+		if s.Param == "" {
+			add("a scope filter is missing a param")
+			continue
+		}
+		if seen[s.Param] {
+			add("duplicate scope filter param %q", s.Param)
+		}
+		seen[s.Param] = true
+		if s.Label == "" {
+			add("scope filter %q is missing a label", s.Param)
+		}
+		if s.OptionsSource != nil {
+			if _, ok := routes[s.OptionsSource.RouteID]; !ok {
+				add("scope filter %q optionsSource references unknown route %q", s.Param, s.OptionsSource.RouteID)
+			}
+		}
+		hasChoices := len(s.Options) > 0 || s.OptionsSource != nil
+		switch s.Control {
+		case ScopeSearch:
+			// free text — needs no choices.
+		case ScopeMultiSelect:
+			if s.Separator == "" {
+				add("scope filter %q is multiselect but declares no separator", s.Param)
+			}
+			if !hasChoices {
+				add("scope filter %q has no choices (set options or optionsSource)", s.Param)
+			}
+		case ScopeToggle:
+			if len(s.Options) == 0 {
+				add("scope filter %q is a toggle but declares no option for its on-value", s.Param)
+			}
+		default:
+			// select (and unknown controls, which fall back to select) need choices.
+			if !hasChoices {
+				add("scope filter %q has no choices (set options or optionsSource)", s.Param)
+			}
+		}
+	}
 }
 
 func collectTabKeys(m Manifest) map[string]bool {

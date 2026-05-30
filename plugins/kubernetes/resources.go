@@ -8,11 +8,11 @@ const customResourceKind = "customresource"
 
 func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
 
-// namespaceFilter is the list toolbar selector that scopes a namespaced kind to a
-// single namespace; options are the cluster's namespaces, empty means all.
-func namespaceFilter() plugin.ResourceFilter {
-	return plugin.ResourceFilter{
-		Key: "namespace", Label: "Namespace", Param: "namespace",
+// namespaceScope is the global header selector that scopes every namespaced list
+// to one namespace; options are the cluster's namespaces, empty means all.
+func namespaceScope() plugin.ScopeFilter {
+	return plugin.ScopeFilter{
+		Param: "namespace", Label: "Namespace", Icon: lucide("layers"),
 		OptionsSource: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "namespace"}},
 		ValueField:    "name",
 		AllLabel:      "All namespaces",
@@ -46,18 +46,12 @@ func resourceType(k kind) plugin.ResourceType {
 	tabs = append(tabs, k.detailTabs...)
 	tabs = append(tabs, eventsTab(k))
 
-	var filters []plugin.ResourceFilter
-	if k.namespaced {
-		filters = []plugin.ResourceFilter{namespaceFilter()}
-	}
-
 	return plugin.ResourceType{
 		Kind:          k.name,
 		Title:         k.title,
 		List:          plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": k.name}},
 		Watch:         &plugin.DataSource{RouteID: "kubernetes.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": k.name}},
 		Columns:       k.columns,
-		Filters:       filters,
 		ActionIDs:     rowActions,
 		ListActionIDs: []string{"kubernetes.create." + k.name},
 		Detail: plugin.DetailView{

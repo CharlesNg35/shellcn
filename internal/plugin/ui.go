@@ -727,6 +727,8 @@ type Action struct {
 	// EnabledWhen gates the button on the active row's fields (e.g. state ==
 	// "running"); false shows it disabled, not hidden. Empty = always enabled.
 	EnabledWhen *Condition `json:"enabledWhen,omitempty"`
+	// IconOnly renders the button as its icon alone; Label becomes the tooltip.
+	IconOnly bool `json:"iconOnly,omitempty"`
 }
 
 // NavigateTarget is where the UI moves after an action succeeds.
@@ -784,23 +786,35 @@ type ResourceType struct {
 	ListActionIDs []string    `json:"listActionIds,omitempty"`
 	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
 	Detail        DetailView  `json:"detail"`
-	// Filters are toolbar controls (e.g. a namespace selector) that scope the list
-	// by setting a list route param.
-	Filters []ResourceFilter `json:"filters,omitempty"`
 }
 
-// ResourceFilter is a list toolbar control that sets a route param (Param) to a
-// chosen value. Choices come from OptionsSource rows (ValueField/LabelField) or
-// static Options; an empty choice (AllLabel) clears the filter.
-type ResourceFilter struct {
-	Key           string         `json:"key"`
-	Label         string         `json:"label"`
+// ScopeControl names the scope filter's input widget. Open vocabulary: the
+// renderer falls back to a select for names it doesn't recognize.
+type ScopeControl string
+
+const (
+	ScopeSelect      ScopeControl = "select"      // default
+	ScopeMultiSelect ScopeControl = "multiselect" // joined by Separator
+	ScopeSearch      ScopeControl = "search"
+	ScopeToggle      ScopeControl = "toggle" // on sets the first Option's value
+)
+
+// ScopeFilter is a global header selector; the renderer injects its value as route
+// param Param into every read/stream. Choices come from OptionsSource rows
+// (ValueField/LabelField) or static Options; the empty choice (AllLabel) clears it.
+type ScopeFilter struct {
 	Param         string         `json:"param"`
+	Label         string         `json:"label"`
+	Icon          Icon           `json:"icon,omitzero"`
+	Control       ScopeControl   `json:"control,omitempty"`
 	OptionsSource *DataSource    `json:"optionsSource,omitempty"`
 	Options       []FilterOption `json:"options,omitempty"`
 	ValueField    string         `json:"valueField,omitempty"`
 	LabelField    string         `json:"labelField,omitempty"`
 	AllLabel      string         `json:"allLabel,omitempty"`
+	// Separator joins a multiselect's values into the single param string; the
+	// route handler splits on it. Required for ScopeMultiSelect.
+	Separator string `json:"separator,omitempty"`
 }
 
 type FilterOption struct {

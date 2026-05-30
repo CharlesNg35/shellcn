@@ -96,25 +96,13 @@ func TestDeleteActionNavigatesToList(t *testing.T) {
 	}
 }
 
-func hasNamespaceFilter(r plugin.ResourceType) bool {
-	for _, f := range r.Filters {
-		if f.Param == "namespace" {
-			return true
-		}
+func TestNamespaceIsAGlobalScope(t *testing.T) {
+	scope := namespaceScope()
+	if scope.Param != "namespace" {
+		t.Errorf("namespace scope should set the namespace param, got %q", scope.Param)
 	}
-	return false
-}
-
-func TestNamespaceFilterOnlyOnNamespacedKinds(t *testing.T) {
-	byKind := map[string]plugin.ResourceType{}
-	for _, r := range resources() {
-		byKind[r.Kind] = r
-	}
-	if !hasNamespaceFilter(byKind["pod"]) {
-		t.Error("namespaced kind (pod) should expose a namespace filter")
-	}
-	if hasNamespaceFilter(byKind["node"]) {
-		t.Error("cluster-scoped kind (node) should not expose a namespace filter")
+	if scope.OptionsSource == nil || scope.OptionsSource.Params["kind"] != "namespace" {
+		t.Errorf("namespace scope should source options from the namespace list, got %+v", scope.OptionsSource)
 	}
 }
 

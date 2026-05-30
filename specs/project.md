@@ -195,6 +195,7 @@ type Manifest struct {
     Resources     []ResourceType // managed object types: columns, actions, detail
     Actions       []Action       // declared actions (reference routes by ID)
     HeaderActions []string       // Action IDs pinned to the workspace header center (connection-wide)
+    Scope         []ScopeFilter  // global header selectors (e.g. namespace) injected into every request
     Streams       []Stream       // declared streams (reference WS routes by ID)
 }
 ```
@@ -334,6 +335,7 @@ type Action struct {
     Panel       PanelType  // panel to host when Open=dock/dialog (sourced from RouteID)
     Config      map[string]any // panel config for the hosted Panel (e.g. a code_editor's saveRouteId), so a dock/dialog action can open an *editable* panel
     EnabledWhen *Condition // optional: gate the button on the active resource's row
+    IconOnly    bool // render as the icon alone (Label becomes the tooltip) — presentation stays manifest-driven
 }
 
 type ActionSuccess struct {
@@ -364,6 +366,45 @@ shell that docks a terminal, or an "apply manifest" dialog. They reuse the same
 `Open` targets (`dock`/`dialog`/`url`/run-inline) as any action, so the feature is
 fully plugin-agnostic: the core renders whatever IDs the manifest declares and
 never special-cases a plugin. They show only once the session is connected.
+
+**Scope filters (global header selectors).** `Manifest.Scope` declares header
+selectors whose chosen value scopes **every** request for the connection — the
+Lens/Headlamp-style namespace picker, generalized.
+
+```go
+type ScopeFilter struct {
+    Param         string       // route param the value is injected as, e.g. "namespace"
+    Label         string
+    Icon          Icon
+    Control       ScopeControl // input widget: select (default) | multiselect | search | toggle | …
+    OptionsSource *DataSource    // route whose rows are the choices (ValueField/LabelField)
+    Options       []FilterOption // or static choices
+    ValueField    string
+    LabelField    string
+    AllLabel      string // label for the empty value that clears the scope
+    Separator     string // joins a multiselect's values into the one param string
+}
+```
+
+`Control` is an **open vocabulary**, not a fixed enum: the renderer maps known
+names (`select`, `multiselect`, `search`, `toggle`, …) to widgets and falls back
+to a select for anything it doesn't recognize, so a new control needs no core
+change. Every control encodes its value into the **single string** the param
+carries — a select stores one value, a multiselect joins members with `Separator`,
+a search stores free text, a toggle stores the first option's value when on — so
+the injection path stays identical regardless of widget. This keeps the feature
+**global**, not shaped around any one plugin's needs.
+
+The renderer shows the selectors in the header toolbar (next to header actions)
+and keeps the chosen values in a **per-connection scope state**. The data layer
+merges that state into every read and stream request as `p.<Param>` — under any
+explicit params, which always win — so lists, watches, detail docs, and streams
+all observe one scope without any panel knowing about it. Changing a selector
+re-fetches open lists and re-attaches their watches. It is **plugin-agnostic**:
+the core treats the params as opaque, and the route handlers read them where
+relevant (a cluster-scoped kind simply ignores its scope param). This is strictly
+better than a per-table filter: one selector, one source of truth, every resource
+consistently scoped.
 
 `Open: "url"` runs the action's route and opens the returned `{"url": "…"}` in a
 new browser tab. The route decides the URL — it may be any link (e.g. an external

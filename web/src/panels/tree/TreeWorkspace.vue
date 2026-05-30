@@ -285,7 +285,6 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
               columns: activeListResource.columns,
               columnsSource: activeColumnsSource,
               watch: activeListResource.watch,
-              filters: activeListResource.filters,
               actionIds: activeListResource.listActionIds ?? [],
               rowActionIds:
                 activeListResource.rowActionIds ?? activeListResource.actionIds,

@@ -251,6 +251,27 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"action success references unknown tab", "onSuccess.selectTab", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", OnSuccess: &plugin.ActionSuccess{SelectTab: "ghost"}}}
 		}},
+		{"action navigate unknown target", "is not a known target", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", OnSuccess: &plugin.ActionSuccess{Navigate: "sideways"}}}
+		}},
+		{"header action references unknown action", "headerAction \"ghost\" references unknown action", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.HeaderActions = []string{"ghost"}
+		}},
+		{"scope filter missing label", "is missing a label", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", OptionsSource: &plugin.DataSource{RouteID: "x.list"}}}
+		}},
+		{"scope select without choices", "has no choices", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace"}}
+		}},
+		{"scope optionsSource unknown route", "optionsSource references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", OptionsSource: &plugin.DataSource{RouteID: "ghost"}}}
+		}},
+		{"scope multiselect without separator", "declares no separator", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", Control: plugin.ScopeMultiSelect, Options: []plugin.FilterOption{{Value: "a"}}}}
+		}},
+		{"scope toggle without option", "declares no option", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "sys", Label: "System", Control: plugin.ScopeToggle}}
+		}},
 		{"action panel config references unknown save route", "saveRouteId references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{SaveRouteID: "ghost"}.Map()}}
 		}},

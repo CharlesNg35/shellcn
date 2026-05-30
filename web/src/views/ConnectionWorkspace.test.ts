@@ -232,6 +232,7 @@ describe("ConnectionWorkspace", () => {
           requiresConfirm: false,
           open: "dock",
           panel: "terminal",
+          iconOnly: true,
         },
       ],
       headerActions: ["k.shell"],
@@ -272,7 +273,9 @@ describe("ConnectionWorkspace", () => {
     await flushPromises();
 
     expect(
-      wrapper.findAll("button").some((b) => b.text().includes("Cluster Shell")),
+      wrapper
+        .findAll("button")
+        .some((b) => b.attributes("aria-label") === "Cluster Shell"),
     ).toBe(true);
   });
 

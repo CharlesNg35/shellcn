@@ -16,6 +16,7 @@ import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import PanelHost from "../panels/core/PanelHost.vue";
 import ActionBar from "../panels/shared/ActionBar.vue";
+import ScopeBar from "../panels/shared/ScopeBar.vue";
 import { provideNavigableKinds } from "../panels/core/navigable";
 import EnrollPanel from "../panels/enroll/EnrollPanel.vue";
 import ConnectPanel from "../panels/connect/ConnectPanel.vue";
@@ -171,6 +172,9 @@ function tabConfig(tab: TabDef): Record<string, unknown> {
   return rec ? { ...base, _recording: rec } : base;
 }
 
+// Global header selectors that scope every request.
+const scopeFilters = computed(() => projection.value?.scope ?? []);
+
 // Connection-wide actions the manifest pins to the header center. They need a
 // live session, so they show only once connected.
 const headerActions = computed<Action[]>(() => {
@@ -213,10 +217,20 @@ function onActionDone(action: Action): void {
       </div>
 
       <div
-        v-if="connected && headerActions.length"
-        class="flex shrink-0 items-center gap-2 rounded-lg border border-surface-200 bg-surface-50 px-2 py-1 shadow-sm dark:border-surface-700 dark:bg-surface-800/60"
+        v-if="connected && (scopeFilters.length || headerActions.length)"
+        class="flex shrink-0 items-center gap-3 rounded-lg border border-surface-200 bg-surface-50 px-2 py-1 shadow-sm dark:border-surface-700 dark:bg-surface-800/60"
       >
+        <ScopeBar
+          v-if="scopeFilters.length"
+          :connection-id="id"
+          :scope="scopeFilters"
+        />
+        <span
+          v-if="scopeFilters.length && headerActions.length"
+          class="h-5 w-px bg-surface-200 dark:bg-surface-700"
+        />
         <ActionBar
+          v-if="headerActions.length"
           :connection-id="id"
           :actions="headerActions"
           @done="onActionDone"

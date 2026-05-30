@@ -259,10 +259,12 @@ function onVisible(visible: boolean): void {
       type="button"
       :disabled="!isEnabled(action) || busyAction === action.id"
       :title="action.label"
+      :aria-label="action.label"
       size="small"
       :pt="{
         root: cn(
-          'inline-flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
+          'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
+          action.iconOnly ? 'p-1.5' : 'px-2.5 py-1',
           riskClass[action.risk],
         ),
       }"
@@ -270,10 +272,10 @@ function onVisible(visible: boolean): void {
     >
       <AppIcon
         :icon="action.icon"
-        :size="15"
+        :size="action.iconOnly ? 16 : 15"
         :loading="busyAction === action.id"
       />
-      {{ action.label }}
+      <span v-if="!action.iconOnly">{{ action.label }}</span>
     </Button>
 
     <Dialog

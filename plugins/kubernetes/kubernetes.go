@@ -59,6 +59,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Resources:     resources(),
 		Actions:       actions(),
 		HeaderActions: headerActionIDs(),
+		Scope:         []plugin.ScopeFilter{namespaceScope()},
 		Streams:       streams(),
 		Recording:     podRecording(),
 	}

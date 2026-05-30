@@ -34,9 +34,7 @@ import type {
   DataSource,
   Field,
   FieldType,
-  FilterOption,
   ResourceEvent,
-  ResourceFilter,
   ResourceRef,
   Row,
   TablePanelConfig,
@@ -53,6 +51,7 @@ import {
 } from "./mutation";
 import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
 import { useNavigableKinds } from "../core/navigable";
+import { useScopeStore } from "../../stores/scope";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
@@ -67,6 +66,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const scope = useScopeStore();
 
 // Framework-reserved row keys the grid never renders as data columns. Plugins
 // hide their own fields declaratively via config.hiddenColumns instead.
@@ -122,79 +122,7 @@ const tableConfig = computed(
 );
 const columnsSource = computed(() => tableConfig.value?.columnsSource);
 
-// Manifest-driven toolbar filters (e.g. a namespace selector). The chosen value
-// is merged into the list/watch route params so the table scopes server-side.
-const filters = computed(() => tableConfig.value?.filters ?? []);
-const filterValues = reactive<Record<string, string>>({});
-const filterOptions = reactive<Record<string, FilterOption[]>>({});
-
-function activeFilterParams(): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const f of filters.value) {
-    if (filterValues[f.param]) out[f.param] = filterValues[f.param];
-  }
-  return out;
-}
-
-const effectiveSource = computed<DataSource | undefined>(() => {
-  if (!props.source) return undefined;
-  const extra = activeFilterParams();
-  return Object.keys(extra).length
-    ? { ...props.source, params: { ...props.source.params, ...extra } }
-    : props.source;
-});
-
-const effectiveWatch = computed<DataSource | undefined>(() => {
-  const w = tableConfig.value?.watch;
-  if (!w) return undefined;
-  const extra = activeFilterParams();
-  return Object.keys(extra).length
-    ? { ...w, params: { ...w.params, ...extra } }
-    : w;
-});
-
-function filterSelectOptions(f: ResourceFilter): FilterOption[] {
-  return [
-    { value: "", label: f.allLabel ?? "All" },
-    ...(filterOptions[f.key] ?? []),
-  ];
-}
-
-async function loadFilterOptions(): Promise<void> {
-  for (const f of filters.value) {
-    if (f.options) {
-      filterOptions[f.key] = f.options;
-      continue;
-    }
-    if (!f.optionsSource) continue;
-    try {
-      const page = await fetchPage<Row>(props.connectionId, f.optionsSource, {
-        resource: props.resource,
-      });
-      const valueField = f.valueField ?? "name";
-      const labelField = f.labelField ?? valueField;
-      filterOptions[f.key] = page.items
-        .map((r) => {
-          const row = r as Record<string, unknown>;
-          return {
-            value: String(row[valueField] ?? ""),
-            label: String(row[labelField] ?? row[valueField] ?? ""),
-          };
-        })
-        .filter((o) => o.value);
-    } catch {
-      filterOptions[f.key] = [];
-    }
-  }
-}
-
-function onFilterChange(f: ResourceFilter, value: string | null): void {
-  if (value) filterValues[f.param] = value;
-  else delete filterValues[f.param];
-  first.value = 0;
-  void load(0);
-  startWatch();
-}
+const watchSource = computed(() => tableConfig.value?.watch);
 const dynamicColumns = ref<ColumnSpec[]>([]);
 const columnsLoading = ref(false);
 const actionIds = computed(() => tableConfig.value?.actionIds ?? []);
@@ -724,7 +652,7 @@ function cellClass(row: Row, col: ColumnSpec): string {
 }
 
 async function load(targetFirst = first.value): Promise<void> {
-  if (!effectiveSource.value) return;
+  if (!props.source) return;
   loading.value = true;
   error.value = null;
   selection.value = [];
@@ -732,7 +660,7 @@ async function load(targetFirst = first.value): Promise<void> {
   try {
     const page = await fetchPage<Row>(
       props.connectionId,
-      effectiveSource.value,
+      props.source,
       { resource: props.resource },
       {
         cursor: targetFirst > 0 ? String(targetFirst) : "",
@@ -958,7 +886,7 @@ let stopWatch: (() => void) | undefined;
 function startWatch(): void {
   stopWatch?.();
   // A live table uses either the interval poll or the watch socket, never both.
-  const ds = refreshMs.value > 0 ? undefined : effectiveWatch.value;
+  const ds = refreshMs.value > 0 ? undefined : watchSource.value;
   stopWatch = ds
     ? watchResource(
         props.connectionId,
@@ -980,14 +908,14 @@ onActivated(() => (active.value = true));
 onDeactivated(() => (active.value = false));
 
 async function refresh(): Promise<void> {
-  if (!effectiveSource.value || loading.value || committing.value) return;
+  if (!props.source || loading.value || committing.value) return;
   if (pendingCount.value > 0) return;
   if (showInsert.value || deleteTarget.value || actionOutput.value) return;
   if (detailRow.value) return;
   try {
     const page = await fetchPage<Row>(
       props.connectionId,
-      effectiveSource.value,
+      props.source,
       { resource: props.resource },
       {
         cursor: first.value > 0 ? String(first.value) : "",
@@ -1039,14 +967,23 @@ vueWatch(
   () => [props.connectionId, props.source?.routeId, props.resource?.uid],
   () => {
     filterText.value = "";
-    for (const k of Object.keys(filterValues)) delete filterValues[k];
     applyDefaultSort();
     first.value = 0;
-    void loadFilterOptions();
     load(0);
     startWatch();
   },
   { immediate: true },
+);
+
+// A change to the connection's global scope re-scopes every list: refetch and
+// reattach the watch with the new params.
+vueWatch(
+  () => JSON.stringify(scope.params(props.connectionId)),
+  () => {
+    first.value = 0;
+    load(0);
+    startWatch();
+  },
 );
 
 let debounce: ReturnType<typeof setTimeout> | undefined;
@@ -1075,16 +1012,6 @@ onUnmounted(() => {
           aria-label="Filter rows"
           :class="inputClass"
           @input="onFilter"
-        />
-      </div>
-      <div v-for="f in filters" :key="f.key" class="w-44">
-        <Select
-          :model-value="filterValues[f.param] ?? ''"
-          :options="filterSelectOptions(f)"
-          option-label="label"
-          option-value="value"
-          :aria-label="f.label"
-          @update:model-value="onFilterChange(f, $event)"
         />
       </div>
       <span v-if="total != null" class="text-xs text-surface-400"

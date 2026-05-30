@@ -122,9 +122,13 @@ type Manifest struct {
 	Streams   []Stream
 
 	// HeaderActions reference Actions by ID; the renderer shows them in the
-	// connection workspace header, centered, for connection-wide affordances
-	// (e.g. a shell or an apply dialog) that aren't tied to a selected resource.
+	// connection workspace header, centered, for connection-wide affordances that
+	// aren't tied to a selected resource.
 	HeaderActions []string
+
+	// Scope declares global header selectors whose chosen value the renderer
+	// injects into every request, so all resources share one scope.
+	Scope []ScopeFilter
 
 	// Recording declares which stream classes this plugin can record. Empty means
 	// the plugin supports no recording (the default).
