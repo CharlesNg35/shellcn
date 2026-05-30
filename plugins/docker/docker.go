@@ -30,7 +30,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Agent: &plugin.AgentProfile{
-			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: "/var/run/docker.sock", Risk: plugin.RiskPrivileged},
+			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: "/var/run/docker.sock", Risk: plugin.RiskPrivileged, Forward: true},
 			Install: []plugin.InstallArtifact{{
 				Label:      "Docker",
 				Kind:       "docker-run",
@@ -146,9 +146,9 @@ func containerResource() plugin.ResourceType {
 			"docker.container.create",
 			"docker.containers.prune",
 		},
-		ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"},
+		ActionIDs: []string{"docker.container.open", "docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"docker.container.open", "docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "docker.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24", "command": "/bin/sh"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
@@ -252,6 +252,7 @@ func composeResource() plugin.ResourceType {
 func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "docker.container.create", Label: "New container", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "plus"}, RouteID: "docker.container.create"},
+		{ID: "docker.container.open", Label: "Open", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "external-link"}, RouteID: "docker.container.open", Open: plugin.OpenURL, Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("running")},
 		{ID: "docker.container.start", Label: "Start", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "play"}, RouteID: "docker.container.start", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("created", "exited", "dead")},
 		{ID: "docker.container.stop", Label: "Stop", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "square"}, RouteID: "docker.container.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this container?", EnabledWhen: dockerengine.WhenState("running", "paused", "restarting")},
 		{ID: "docker.container.restart", Label: "Restart", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "refresh-cw"}, RouteID: "docker.container.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this container?", EnabledWhen: dockerengine.WhenState("running", "paused")},

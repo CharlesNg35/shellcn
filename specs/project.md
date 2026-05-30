@@ -1461,12 +1461,29 @@ type ProxyTarget struct {
     // and verifies the upstream's TLS with CAFile. Empty = none / system roots.
     TokenFile string // target-side path to a bearer token file
     CAFile    string // target-side path to a PEM CA bundle
+    Forward   bool   // let the gateway name each stream's dial target (see below)
 }
 
 type AgentProfile struct {
     Proxy   ProxyTarget
     Install []InstallArtifact // how the user launches the agent (§8.4)
 }
+```
+
+**Per-stream forwarding (`ProxyTarget.Forward`).** Normally the agent proxies every
+stream to its one declared `Address`. Some plugins need to reach *more* of the
+target's own network than a single endpoint — e.g. opening a Docker container's web
+port (the §8.1 browser proxy): the container's IP is reachable from the daemon host
+where the agent runs, but it isn't the daemon socket. With `Forward`, the gateway
+prefixes each L4 stream with a tiny target preamble (`network` + `address`) and the
+agent dials *that* instead of `Address`. It stays plugin-agnostic — the agent gains
+no protocol knowledge, just "dial what the gateway names." It is **negotiated and
+opt-in**: the agent advertises support in its hello and the gateway enables it only
+when the plugin set `Forward`, so older agents keep the single-endpoint behavior.
+Reach widens only within the same target the agent already fronts (a docker.sock
+agent can already run any container), so it adds no new trust boundary.
+
+```go
 
 type ArtifactDelivery string // "" (inline) | "url"
 

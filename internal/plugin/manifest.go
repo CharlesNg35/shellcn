@@ -60,6 +60,9 @@ type ProxyTarget struct {
 	Risk      RiskLevel
 	TokenFile string
 	CAFile    string
+	// Forward lets the gateway dial arbitrary target-side addresses through the
+	// agent per-stream (e.g. a container's network), not just Address. Opt-in.
+	Forward bool
 }
 
 // ArtifactDelivery selects how an install artifact reaches the target.

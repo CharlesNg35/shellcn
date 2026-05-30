@@ -48,7 +48,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Agent: &plugin.AgentProfile{
-			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: defaultSocket, Risk: plugin.RiskPrivileged},
+			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: defaultSocket, Risk: plugin.RiskPrivileged, Forward: true},
 			Install: []plugin.InstallArtifact{{
 				Label:      "Docker Swarm",
 				Kind:       "docker-run",

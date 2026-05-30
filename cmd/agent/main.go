@@ -160,7 +160,7 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, i
 
 	hctx, hcancel := context.WithTimeout(ctx, 10*time.Second)
 	defer hcancel()
-	if err := wsjson.Write(hctx, c, transport.AgentHello{Token: token}); err != nil {
+	if err := wsjson.Write(hctx, c, transport.AgentHello{Token: token, Forward: true}); err != nil {
 		return fmt.Errorf("handshake write: %w", err)
 	}
 	var resp transport.AgentConnectResponse
@@ -340,22 +340,47 @@ func (l yamuxListener) Close() error              { return l.sess.Close() }
 func (l yamuxListener) Addr() net.Addr            { return l.sess.Addr() }
 
 // proxyStream pipes one gateway stream to the declared local target.
+// streamTarget resolves where a stream is proxied: the per-stream preamble in
+// forward mode, else the agent's single declared Address.
+func streamTarget(logger *slog.Logger, stream net.Conn, target transport.AgentProxyTarget) (network, address string) {
+	if target.Forward {
+		netw, addr, err := transport.ReadStreamTarget(stream)
+		if err != nil {
+			logger.Warn("read stream target failed", "err", err)
+			return "", ""
+		}
+		network, address = netw, addr
+	} else {
+		network, address = modeNetwork(target.Mode), target.Address
+	}
+	if network != "tcp" && network != "unix" {
+		logger.Warn("refusing unsupported proxy network", "network", network)
+		return "", ""
+	}
+	return network, address
+}
+
+func modeNetwork(mode string) string {
+	switch mode {
+	case transport.AgentModeTCP:
+		return "tcp"
+	case transport.AgentModeUnix:
+		return "unix"
+	default:
+		return ""
+	}
+}
+
 func proxyStream(logger *slog.Logger, stream net.Conn, target transport.AgentProxyTarget) {
 	defer func() { _ = stream.Close() }()
 
-	var network string
-	switch target.Mode {
-	case transport.AgentModeTCP:
-		network = "tcp"
-	case transport.AgentModeUnix:
-		network = "unix"
-	default:
-		logger.Warn("refusing unsupported proxy mode", "mode", target.Mode)
+	network, address := streamTarget(logger, stream, target)
+	if network == "" {
 		return
 	}
-	up, err := net.DialTimeout(network, target.Address, 10*time.Second)
+	up, err := net.DialTimeout(network, address, 10*time.Second)
 	if err != nil {
-		logger.Warn("dial target failed", "address", target.Address, "err", err)
+		logger.Warn("dial target failed", "address", address, "err", err)
 		return
 	}
 	defer func() { _ = up.Close() }()

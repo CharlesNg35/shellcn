@@ -2,17 +2,22 @@ package transport
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
+	"strings"
 
 	"github.com/coder/websocket"
 	"github.com/hashicorp/yamux"
 )
 
 // AgentHello is the first message an agent sends on the connect WebSocket,
-// presenting its enrollment token (never in the URL or query).
+// presenting its enrollment token (never in the URL or query). Forward advertises
+// that the agent understands a per-stream target preamble (see WriteStreamTarget).
 type AgentHello struct {
-	Token string `json:"token"`
+	Token   string `json:"token"`
+	Forward bool   `json:"forward,omitempty"`
 }
 
 // Agent proxy mode wire values, mirroring plugin.AgentMode. They live here so
@@ -33,6 +38,42 @@ type AgentProxyTarget struct {
 	Address   string `json:"address"`
 	TokenFile string `json:"tokenFile,omitempty"`
 	CAFile    string `json:"caFile,omitempty"`
+	// Forward: each L4 stream begins with a target preamble the agent dials
+	// instead of Address. Set only when the plugin opted in and the agent supports it.
+	Forward bool `json:"forward,omitempty"`
+}
+
+// WriteStreamTarget prefixes a forward-mode stream with the address the agent
+// should dial: a 2-byte length then "network\x00addr".
+func WriteStreamTarget(w io.Writer, network, addr string) error {
+	payload := network + "\x00" + addr
+	if len(payload) > 0xffff {
+		return fmt.Errorf("stream target too long: %d bytes", len(payload))
+	}
+	var hdr [2]byte
+	binary.BigEndian.PutUint16(hdr[:], uint16(len(payload)))
+	if _, err := w.Write(hdr[:]); err != nil {
+		return err
+	}
+	_, err := io.WriteString(w, payload)
+	return err
+}
+
+// ReadStreamTarget reads a target preamble written by WriteStreamTarget.
+func ReadStreamTarget(r io.Reader) (network, addr string, err error) {
+	var hdr [2]byte
+	if _, err := io.ReadFull(r, hdr[:]); err != nil {
+		return "", "", err
+	}
+	buf := make([]byte, binary.BigEndian.Uint16(hdr[:]))
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return "", "", err
+	}
+	netw, addr, ok := strings.Cut(string(buf), "\x00")
+	if !ok {
+		return "", "", fmt.Errorf("malformed stream target")
+	}
+	return netw, addr, nil
 }
 
 // AgentConnectResponse is the gateway's reply to AgentHello. On OK the tunnel
@@ -50,7 +91,7 @@ type AgentConnectResponse struct {
 // registered for the lifetime of the tunnel and removed when it closes.
 //
 // It blocks until the tunnel is torn down.
-func ServeGatewayTunnel(c *websocket.Conn, connectionID string, reg *Registry) error {
+func ServeGatewayTunnel(c *websocket.Conn, connectionID string, reg *Registry, forward bool) error {
 	nc := websocket.NetConn(context.Background(), c, websocket.MessageBinary)
 
 	cfg := yamux.DefaultConfig()
@@ -62,8 +103,20 @@ func ServeGatewayTunnel(c *websocket.Conn, connectionID string, reg *Registry) e
 	}
 	defer func() { _ = sess.Close() }()
 
-	release := reg.Register(connectionID, func(_ context.Context, _, _ string) (net.Conn, error) {
-		return sess.Open()
+	// In forward mode each opened stream names its dial target; otherwise the
+	// agent proxies to its single declared Address.
+	release := reg.Register(connectionID, func(_ context.Context, network, addr string) (net.Conn, error) {
+		st, err := sess.Open()
+		if err != nil {
+			return nil, err
+		}
+		if forward {
+			if err := WriteStreamTarget(st, network, addr); err != nil {
+				_ = st.Close()
+				return nil, err
+			}
+		}
+		return st, nil
 	})
 	defer release()
 
