@@ -14,6 +14,7 @@ func Routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "kubernetes.tree.category", Method: plugin.MethodGet, Path: "/tree/category/{category}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.category", Handle: TreeCategory},
 		{ID: "kubernetes.tree.crds", Method: plugin.MethodGet, Path: "/tree/crds", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.crds", Handle: TreeCRDs},
+		{ID: "kubernetes.tree.crdgroup", Method: plugin.MethodGet, Path: "/tree/crd-group", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.crdgroup", Handle: TreeCRDGroup},
 		{ID: "kubernetes.tree.subgroup", Method: plugin.MethodGet, Path: "/tree/subgroup/{subgroup}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.subgroup", Handle: TreeSubgroup},
 		{ID: "kubernetes.tree.gatewayapi", Method: plugin.MethodGet, Path: "/tree/gatewayapi", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.gatewayapi", Handle: TreeGatewayAPI},
 
