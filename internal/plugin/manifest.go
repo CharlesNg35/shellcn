@@ -60,6 +60,9 @@ type ProxyTarget struct {
 	Risk      RiskLevel
 	TokenFile string
 	CAFile    string
+	// Forward lets the gateway dial arbitrary target-side addresses through the
+	// agent per-stream (e.g. a container's network), not just Address. Opt-in.
+	Forward bool
 }
 
 // ArtifactDelivery selects how an install artifact reaches the target.
@@ -120,6 +123,15 @@ type Manifest struct {
 	Resources []ResourceType
 	Actions   []Action
 	Streams   []Stream
+
+	// HeaderActions reference Actions by ID; the renderer shows them in the
+	// connection workspace header, centered, for connection-wide affordances that
+	// aren't tied to a selected resource.
+	HeaderActions []string
+
+	// Scope declares global header selectors whose chosen value the renderer
+	// injects into every request, so all resources share one scope.
+	Scope []ScopeFilter
 
 	// Recording declares which stream classes this plugin can record. Empty means
 	// the plugin supports no recording (the default).

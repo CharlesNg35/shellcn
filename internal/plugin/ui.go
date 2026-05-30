@@ -727,10 +727,22 @@ type Action struct {
 	// EnabledWhen gates the button on the active row's fields (e.g. state ==
 	// "running"); false shows it disabled, not hidden. Empty = always enabled.
 	EnabledWhen *Condition `json:"enabledWhen,omitempty"`
+	// IconOnly renders the button as its icon alone; Label becomes the tooltip.
+	IconOnly bool `json:"iconOnly,omitempty"`
 }
+
+// NavigateTarget is where the UI moves after an action succeeds.
+type NavigateTarget string
+
+// NavigateList returns from a resource detail to its list — e.g. after a delete,
+// so the now-gone resource's detail doesn't linger.
+const NavigateList NavigateTarget = "list"
 
 type ActionSuccess struct {
 	SelectTab string `json:"selectTab,omitempty"`
+	// Navigate moves the workbench after success (e.g. a deleted resource's detail
+	// returns to the list). Empty leaves the current view in place.
+	Navigate NavigateTarget `json:"navigate,omitempty"`
 }
 
 // Stream is a long-lived channel a panel binds to, pointing at a WS route.
@@ -774,4 +786,40 @@ type ResourceType struct {
 	ListActionIDs []string    `json:"listActionIds,omitempty"`
 	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
 	Detail        DetailView  `json:"detail"`
+}
+
+// ScopeControl names the scope filter's input widget. Open vocabulary: the
+// renderer falls back to a select for names it doesn't recognize.
+type ScopeControl string
+
+const (
+	ScopeSelect      ScopeControl = "select" // default
+	ScopeMultiSelect ScopeControl = "multiselect"
+	ScopeSearch      ScopeControl = "search"
+	ScopeToggle      ScopeControl = "toggle" // on sets the first Option's value
+)
+
+// ScopeSeparator joins a multiselect scope's values into the one param string.
+// It is a fixed wire convention (like the p.* param prefix), so plugins read the
+// list with rc.ParamList(param, ScopeSeparator) rather than inventing their own.
+const ScopeSeparator = ","
+
+// ScopeFilter is a global header selector; the renderer injects its value as route
+// param Param into every read/stream. Choices come from OptionsSource rows
+// (ValueField/LabelField) or static Options; the empty choice (AllLabel) clears it.
+type ScopeFilter struct {
+	Param         string         `json:"param"`
+	Label         string         `json:"label"`
+	Icon          Icon           `json:"icon,omitzero"`
+	Control       ScopeControl   `json:"control,omitempty"`
+	OptionsSource *DataSource    `json:"optionsSource,omitempty"`
+	Options       []FilterOption `json:"options,omitempty"`
+	ValueField    string         `json:"valueField,omitempty"`
+	LabelField    string         `json:"labelField,omitempty"`
+	AllLabel      string         `json:"allLabel,omitempty"`
+}
+
+type FilterOption struct {
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
 }

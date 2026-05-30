@@ -352,7 +352,9 @@ function onDragStart(): void {
 // Sortable-orphaned nodes left behind.
 function onDragEnd(dropped?: string): void {
   dragging.value = false;
-  if (props.query.trim()) return;
+  // A filtered view (search/active-only) shows a subset, so a reorder there must
+  // never be written back — the unfiltered order would be corrupted.
+  if (filtering.value) return;
   settling.value = true;
   droppedId.value = dropped;
   if (dropped) startDropFade();
@@ -436,11 +438,11 @@ function go(connection: ConnectionSummary): void {
         @scroll="updateScrollShadow"
       >
         <ConnectionFolderBranch
-          :key="treeRenderKey"
+          :key="`${treeRenderKey}:${filtering}`"
           v-model="rootItems"
           :active-id="activeId"
           :expanded="displayExpanded"
-          :disabled="Boolean(query.trim())"
+          :disabled="filtering"
           :dragging="hoverSuppressed"
           :dropped-id="droppedId"
           @toggle-folder="toggleFolder"

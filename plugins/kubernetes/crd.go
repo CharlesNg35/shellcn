@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -89,23 +90,71 @@ func (s *Session) crdNodes(rc *plugin.RequestContext, groupMatch func(string) bo
 	return nodes, nil
 }
 
-// TreeCRDs lists installed CRDs (plus a "Definitions" entry) under Custom Resources.
+// crdGroups returns the distinct API groups of installed CRDs that have a
+// servable resource, sorted — each becomes an expandable folder.
+func (s *Session) crdGroups(rc *plugin.RequestContext) ([]string, error) {
+	list, err := s.Dynamic().Resource(crdGVR).List(rc.Ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, apiErr(err)
+	}
+	seen := map[string]bool{}
+	groups := make([]string, 0)
+	for i := range list.Items {
+		o := list.Items[i].Object
+		if _, ok := crdNode(o); !ok {
+			continue
+		}
+		if g := str(o, "spec", "group"); g != "" && !seen[g] {
+			seen[g] = true
+			groups = append(groups, g)
+		}
+	}
+	sort.Strings(groups)
+	return groups, nil
+}
+
+// TreeCRDs groups installed CRDs by API group under Custom Resources: a flat
+// "Definitions" list of every CRD, then one expandable folder per group whose
+// children are that group's kinds.
 func TreeCRDs(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
 		return nil, err
 	}
-	nodes, err := s.crdNodes(rc, nil)
+	groups, err := s.crdGroups(rc)
 	if err != nil {
 		return nil, err
 	}
-	nodes = append([]plugin.TreeNode{{
+	nodes := make([]plugin.TreeNode, 0, len(groups)+1)
+	nodes = append(nodes, plugin.TreeNode{
 		Key:          "crd-definitions",
 		Label:        "Definitions",
 		Icon:         lucide("list"),
 		Leaf:         true,
 		ResourceKind: "customresourcedefinition",
-	}}, nodes...)
+	})
+	for _, g := range groups {
+		nodes = append(nodes, plugin.TreeNode{
+			Key:            "crdgroup:" + g,
+			Label:          g,
+			Icon:           lucide("folder"),
+			ChildrenSource: &plugin.DataSource{RouteID: "kubernetes.tree.crdgroup", Params: map[string]string{"group": g}},
+		})
+	}
+	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
+}
+
+// TreeCRDGroup lists the CRD kinds belonging to one API group.
+func TreeCRDGroup(rc *plugin.RequestContext) (any, error) {
+	s, err := sess(rc)
+	if err != nil {
+		return nil, err
+	}
+	group := rc.Param("group")
+	nodes, err := s.crdNodes(rc, func(g string) bool { return g == group })
+	if err != nil {
+		return nil, err
+	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: ptr(len(nodes))}, nil
 }
 

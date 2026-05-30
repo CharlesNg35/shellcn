@@ -36,6 +36,19 @@ func testSchema() *plugin.Schema {
 	}}}}
 }
 
+func TestParamListSplitsAndDropsBlanks(t *testing.T) {
+	rc := plugin.NewRequestContext(context.Background(), testUser(), nil,
+		map[string]string{"namespace": "ns1,,ns2", "empty": ""}, nil, nil)
+
+	got := rc.ParamList("namespace", ",")
+	if len(got) != 2 || got[0] != "ns1" || got[1] != "ns2" {
+		t.Errorf("ParamList split: want [ns1 ns2], got %v", got)
+	}
+	if rc.ParamList("empty", ",") != nil {
+		t.Error("an absent/blank param should yield nil, not an empty slice")
+	}
+}
+
 func TestValidateSchemaAcceptsValidJSON(t *testing.T) {
 	rc := plugin.NewRequestContext(context.Background(), testUser(), nil, nil, nil, []byte(`{
 		"name":"alpha",

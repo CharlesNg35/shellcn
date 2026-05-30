@@ -31,6 +31,10 @@ type Session struct {
 	cli      *dockerclient.Client
 	http     *http.Client
 	endpoint endpoint
+	connID   string
+	// net dials arbitrary addresses over the connection's transport — used to
+	// reach a container's web port for the browser proxy.
+	net plugin.NetTransport
 }
 
 // Client exposes the moby client so plugin-specific handlers (swarm services,
@@ -61,6 +65,8 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig, defaultSocket string
 	s := &Session{
 		cli:      cli,
 		endpoint: ep,
+		connID:   cfg.ConnectionID,
+		net:      cfg.Net,
 		http: &http.Client{Transport: &http.Transport{
 			DialContext: dial,
 		}},

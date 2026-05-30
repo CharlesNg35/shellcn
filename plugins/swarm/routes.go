@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
+	"github.com/charlesng35/shellcn/plugins/shared/webproxy"
 )
 
 const stackNamespaceLabel = "com.docker.stack.namespace"
@@ -34,6 +36,7 @@ func Routes() []plugin.Route {
 		{ID: "swarm.service.overview", Method: plugin.MethodGet, Path: "/services/{id}/overview", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.overview", Handle: serviceOverview},
 		{ID: "swarm.service.inspect", Method: plugin.MethodGet, Path: "/services/{id}/inspect", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.inspect", Handle: inspectService},
 		{ID: "swarm.service.tasks", Method: plugin.MethodGet, Path: "/services/{id}/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.tasks", Handle: serviceTasks},
+		{ID: "swarm.service.open", Method: plugin.MethodGet, Path: "/services/{id}/open", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.open", Handle: serviceProxyURL},
 		{ID: "swarm.node.overview", Method: plugin.MethodGet, Path: "/nodes/{id}/overview", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.node.overview", Handle: nodeOverview},
 		{ID: "swarm.node.inspect", Method: plugin.MethodGet, Path: "/nodes/{id}/inspect", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.node.inspect", Handle: inspectNode},
 		{ID: "swarm.node.tasks", Method: plugin.MethodGet, Path: "/nodes/{id}/tasks", Permission: "swarm.tasks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.node.tasks", Handle: nodeTasks},
@@ -588,6 +591,67 @@ func serviceMode(s swarm.Service) (mode, replicas string) {
 		return mode, fmt.Sprintf("0/%d", *s.Spec.Mode.Replicated.Replicas)
 	}
 	return mode, ""
+}
+
+// serviceProxyURL returns the gateway "open in browser" URL for a service,
+// proxying to its routing-mesh published port (reachable on the daemon host).
+func serviceProxyURL(rc *plugin.RequestContext) (any, error) {
+	s, err := dockerengine.Unwrap(rc.Session)
+	if err != nil {
+		return nil, err
+	}
+	id := rc.Param("id")
+	portSeg := rc.Param("port")
+	if portSeg == "" {
+		res, err := s.Client().ServiceInspect(rc.Ctx, id, dockerclient.ServiceInspectOptions{})
+		if err != nil {
+			return nil, dockerengine.DockerErr(err)
+		}
+		portSeg, err = pickServicePort(res.Service.Endpoint.Ports)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return map[string]any{"url": s.ProxyURL("service", id, portSeg)}, nil
+}
+
+// pickServicePort picks a service's published TCP port to open, preferring ingress
+// (routing-mesh) ports — host-mode ones live only on the task's node, not the
+// manager we dial — and a port that names a web protocol, else the lowest. The
+// segment is the published port; an https-named/443/8443 port proxies over TLS.
+func pickServicePort(ports []swarm.PortConfig) (string, error) {
+	var ingress, hostMode []swarm.PortConfig
+	for _, p := range ports {
+		if p.PublishedPort == 0 || strings.ToLower(string(p.Protocol)) != "tcp" {
+			continue
+		}
+		if p.PublishMode == swarm.PortConfigPublishModeHost {
+			hostMode = append(hostMode, p)
+		} else {
+			ingress = append(ingress, p)
+		}
+	}
+	cands := ingress
+	if len(cands) == 0 {
+		cands = hostMode
+	}
+	if len(cands) == 0 {
+		return "", fmt.Errorf("%w: service publishes no reachable TCP ports", plugin.ErrInvalidInput)
+	}
+	sort.Slice(cands, func(i, j int) bool { return cands[i].PublishedPort < cands[j].PublishedPort })
+
+	pick := cands[0]
+	for _, p := range cands {
+		if _, named := webproxy.WebSchemeFromName(p.Name); named {
+			pick = p
+			break
+		}
+	}
+	seg := strconv.Itoa(int(pick.PublishedPort))
+	if scheme, _ := webproxy.WebSchemeFromName(pick.Name); scheme == "https" || webproxy.IsTLSPort(int(pick.TargetPort)) {
+		return "https:" + seg, nil
+	}
+	return seg, nil
 }
 
 func servicePorts(ports []swarm.PortConfig) string {

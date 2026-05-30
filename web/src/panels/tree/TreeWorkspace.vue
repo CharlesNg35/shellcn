@@ -154,6 +154,17 @@ watch(
   },
 );
 
+// After an action asks to navigate "list" (e.g. a delete), close the now-stale
+// detail tab and surface the kind's list, which reloads fresh.
+function onDetailActionDone(action: Action): void {
+  if (action.onSuccess?.navigate !== "list") return;
+  const v = activeView.value;
+  if (v?.kind !== "detail" || !v.ref) return;
+  const kind = v.ref.kind;
+  ws.closeView(props.connectionId, v.id);
+  if (resourceByKind.value.has(kind)) onSelectList(kind);
+}
+
 function onSelectList(kind: string, params?: Record<string, string>): void {
   const res = resourceByKind.value.get(kind);
   if (!res) return;
@@ -263,6 +274,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             :row="activeView.row"
             :actions="actions"
             @select="openDetail"
+            @action-done="onDetailActionDone"
           />
           <TablePanel
             v-else-if="activeListResource && activeListSource"

@@ -38,6 +38,25 @@ func TestGetYAML(t *testing.T) {
 	}
 }
 
+func TestDecodeManifestsSplitsDocuments(t *testing.T) {
+	stream := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n" +
+		"---\n# a comment-only document is skipped\n" +
+		"---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
+	docs, err := decodeManifests(stream)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(docs) != 2 {
+		t.Fatalf("want 2 documents, got %d: %+v", len(docs), docs)
+	}
+	if docs[0]["kind"] != "ConfigMap" || docs[1]["kind"] != "Secret" {
+		t.Errorf("documents = %+v", docs)
+	}
+	if empty, _ := decodeManifests("\n---\n# nothing\n"); len(empty) != 0 {
+		t.Errorf("a stream of blanks should yield no documents, got %+v", empty)
+	}
+}
+
 func TestApplyYAMLRejectsInvalid(t *testing.T) {
 	sess := connectTo(t, http.NewServeMux())
 	apply := func(content string) error {

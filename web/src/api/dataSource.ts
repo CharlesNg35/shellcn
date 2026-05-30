@@ -8,6 +8,7 @@ import {
   reportApiError,
 } from "./client";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
+import { useScopeStore } from "../stores/scope";
 import type { SocketLike } from "../stores/streamChannels";
 import type {
   DataSource,
@@ -38,6 +39,16 @@ async function track<T>(connectionId: string, run: Promise<T>): Promise<T> {
 
 export interface ResolveContext {
   resource?: ResourceRef | null;
+}
+
+// Merge the connection's global scope (header selectors) under any explicit
+// params, which always win. Guarded for callers without an active Pinia.
+function withScope(
+  connectionId: string,
+  params: Record<string, string>,
+): Record<string, string> {
+  if (!getActivePinia()) return params;
+  return { ...useScopeStore().params(connectionId), ...params };
 }
 
 // Tiny, typed interpolation — NOT a scripting language. Supports only
@@ -141,7 +152,7 @@ export async function fetchPage<T = unknown>(
   ctx: ResolveContext = {},
   page?: PageRequest,
 ): Promise<Page<T>> {
-  const params = resolveParams(ds.params, ctx);
+  const params = withScope(connectionId, resolveParams(ds.params, ctx));
   const url = withQuery(
     routePath(connectionId, ds.routeId),
     queryParams(params, page),
@@ -157,7 +168,7 @@ export async function fetchDoc<T = unknown>(
   ds: DataSource,
   ctx: ResolveContext = {},
 ): Promise<T> {
-  const params = resolveParams(ds.params, ctx);
+  const params = withScope(connectionId, resolveParams(ds.params, ctx));
   const url = withQuery(
     routePath(connectionId, ds.routeId),
     queryParams(params),
@@ -386,7 +397,7 @@ export function channelKey(
   ds: DataSource,
   ctx: ResolveContext = {},
 ): string {
-  const params = resolveParams(ds.params, ctx);
+  const params = withScope(connectionId, resolveParams(ds.params, ctx));
   return `${connectionId}:${ds.routeId}:${new URLSearchParams(params).toString()}`;
 }
 
@@ -398,7 +409,7 @@ export async function prepareStream(
   ds: DataSource,
   ctx: ResolveContext = {},
 ): Promise<StreamHandle> {
-  const params = resolveParams(ds.params, ctx);
+  const params = withScope(connectionId, resolveParams(ds.params, ctx));
   const ticket = await requestTicket(connectionId, ds.routeId, params);
   const key = channelKey(connectionId, ds, ctx);
   return { key, url: streamUrl(connectionId, ds.routeId, params, ticket) };

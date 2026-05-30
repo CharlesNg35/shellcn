@@ -225,6 +225,27 @@ export interface FileBrowserConfig {
 
 export type RowClickAction = "navigate" | "detail" | "select" | "none";
 
+export interface FilterOption {
+  value: string;
+  label?: string;
+}
+
+// A global header selector whose chosen value is injected as a route param into
+// every read/stream for the connection. `control` picks the input widget (open
+// vocabulary; unknown falls back to a select). Choices come from optionsSource
+// rows or static options; the empty value (allLabel) clears the scope.
+export interface ScopeFilter {
+  param: string;
+  label: string;
+  icon?: Icon;
+  control?: string;
+  optionsSource?: DataSource;
+  options?: FilterOption[];
+  valueField?: string;
+  labelField?: string;
+  allLabel?: string;
+}
+
 export interface TablePanelConfig {
   columns?: Column[];
   columnsSource?: DataSource;
@@ -411,6 +432,8 @@ export interface ResourceRef {
 
 export interface ActionSuccess {
   selectTab?: string;
+  // "list" returns a resource detail to its list after the action (e.g. delete).
+  navigate?: "list";
 }
 
 export interface Action {
@@ -431,6 +454,7 @@ export interface Action {
   panel?: PanelType;
   config?: Record<string, unknown>; // panel config for a dock/dialog-opened panel
   enabledWhen?: Condition; // gate on the active row's fields; false = disabled
+  iconOnly?: boolean; // render as the icon alone; label becomes the tooltip
 }
 
 export interface Stream {
@@ -565,6 +589,11 @@ export interface PluginProjection {
   tree?: TreeGroup[];
   resources?: ResourceType[];
   actions?: Action[];
+  // Action IDs shown centered in the connection workspace header (connection-wide
+  // affordances not bound to a selected resource).
+  headerActions?: string[];
+  // Global header selectors that scope every request.
+  scope?: ScopeFilter[];
   streams?: Stream[];
   recording?: RecordingCapability[];
 }

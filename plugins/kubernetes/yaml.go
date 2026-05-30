@@ -1,12 +1,16 @@
 package kubernetes
 
 import (
+	"errors"
 	"fmt"
+	"io"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
 
 	"github.com/charlesng35/shellcn/internal/app"
@@ -84,8 +88,10 @@ type ApplyRequest struct {
 	DryRun  bool   `json:"dryRun"`
 }
 
-// ApplyYAML server-side-applies an arbitrary manifest (create or update). The
-// GVK/namespace come from the document; the RESTMapper resolves the resource.
+// ApplyYAML server-side-applies one or more manifests (a multi-document YAML
+// stream, like `kubectl apply -f`). Each document's GVK/namespace come from the
+// document; the RESTMapper resolves the resource. Documents apply in order; an
+// error stops the run, leaving earlier documents applied.
 func ApplyYAML(rc *plugin.RequestContext) (any, error) {
 	var req ApplyRequest
 	if err := rc.Bind(&req); err != nil {
@@ -95,11 +101,49 @@ func ApplyYAML(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var content map[string]any
-	if err := yaml.Unmarshal([]byte(req.Content), &content); err != nil {
-		return nil, fmt.Errorf("%w: parse YAML: %v", plugin.ErrInvalidInput, err)
+	docs, err := decodeManifests(req.Content)
+	if err != nil {
+		return nil, err
 	}
-	o := &unstructured.Unstructured{Object: content}
+	if len(docs) == 0 {
+		return nil, fmt.Errorf("%w: no manifests found", plugin.ErrInvalidInput)
+	}
+
+	results := make([]map[string]any, 0, len(docs))
+	for _, doc := range docs {
+		res, err := s.applyManifest(rc, &unstructured.Unstructured{Object: doc}, req.DryRun)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, res)
+	}
+	if len(results) == 1 {
+		return results[0], nil
+	}
+	return map[string]any{"ok": true, "dryRun": req.DryRun, "count": len(results), "applied": results}, nil
+}
+
+// decodeManifests splits a YAML/JSON stream into its documents, skipping blanks.
+func decodeManifests(content string) ([]map[string]any, error) {
+	dec := utilyaml.NewYAMLOrJSONDecoder(strings.NewReader(content), 4096)
+	var docs []map[string]any
+	for {
+		var doc map[string]any
+		if err := dec.Decode(&doc); err != nil {
+			if errors.Is(err, io.EOF) {
+				return docs, nil
+			}
+			return nil, fmt.Errorf("%w: parse YAML: %v", plugin.ErrInvalidInput, err)
+		}
+		if len(doc) > 0 {
+			docs = append(docs, doc)
+		}
+	}
+}
+
+// applyManifest server-side-applies a single object, defaulting a namespaced
+// object's namespace to the connection default.
+func (s *Session) applyManifest(rc *plugin.RequestContext, o *unstructured.Unstructured, dryRun bool) (map[string]any, error) {
 	gvk := o.GroupVersionKind()
 	if gvk.Kind == "" || o.GetName() == "" {
 		return nil, fmt.Errorf("%w: document needs apiVersion, kind, and metadata.name", plugin.ErrInvalidInput)
@@ -127,7 +171,7 @@ func ApplyYAML(rc *plugin.RequestContext) (any, error) {
 	}
 	force := true
 	opts := metav1.PatchOptions{FieldManager: app.DefaultClientName, Force: &force}
-	if req.DryRun {
+	if dryRun {
 		opts.DryRun = []string{metav1.DryRunAll}
 	}
 	applied, err := target.Patch(rc.Ctx, o.GetName(), types.ApplyPatchType, data, opts)
@@ -139,6 +183,6 @@ func ApplyYAML(rc *plugin.RequestContext) (any, error) {
 		"kind":      gvk.Kind,
 		"name":      applied.GetName(),
 		"namespace": applied.GetNamespace(),
-		"dryRun":    req.DryRun,
+		"dryRun":    dryRun,
 	}, nil
 }

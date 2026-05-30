@@ -247,6 +247,8 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Per-stream forwarding needs both the plugin to opt in and the agent to support it.
+	forward := proxy.Forward && hello.Forward
 	resp := transport.AgentConnectResponse{
 		OK: true,
 		Proxy: transport.AgentProxyTarget{
@@ -254,6 +256,7 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 			Address:   proxy.Address,
 			TokenFile: proxy.TokenFile,
 			CAFile:    proxy.CAFile,
+			Forward:   forward,
 		},
 	}
 	if err := wsjson.Write(handshakeCtx, c, resp); err != nil {
@@ -264,7 +267,7 @@ func (s *Server) handleAgentConnect(w http.ResponseWriter, r *http.Request) {
 	agentUser := models.User{ID: "agent", Username: app.AgentUsername}
 	s.auditAgentEvent(r.Context(), agentUser, connID, agentConnectEvent, models.AuditAllowed, nil)
 	s.deps.Logger.Info("agent tunnel online", "connection", connID, "mode", proxy.Mode)
-	tunnelErr := transport.ServeGatewayTunnel(c, connID, s.deps.Tunnels)
+	tunnelErr := transport.ServeGatewayTunnel(c, connID, s.deps.Tunnels, forward)
 	teardownCtx, teardownCancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
 	defer teardownCancel()
 	s.deps.Enrollments.MarkOffline(teardownCtx, connID)

@@ -14,6 +14,7 @@ func Routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "kubernetes.tree.category", Method: plugin.MethodGet, Path: "/tree/category/{category}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.category", Handle: TreeCategory},
 		{ID: "kubernetes.tree.crds", Method: plugin.MethodGet, Path: "/tree/crds", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.crds", Handle: TreeCRDs},
+		{ID: "kubernetes.tree.crdgroup", Method: plugin.MethodGet, Path: "/tree/crd-group", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.crdgroup", Handle: TreeCRDGroup},
 		{ID: "kubernetes.tree.subgroup", Method: plugin.MethodGet, Path: "/tree/subgroup/{subgroup}", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.subgroup", Handle: TreeSubgroup},
 		{ID: "kubernetes.tree.gatewayapi", Method: plugin.MethodGet, Path: "/tree/gatewayapi", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.tree.gatewayapi", Handle: TreeGatewayAPI},
 
@@ -36,6 +37,7 @@ func Routes() []plugin.Route {
 
 		{ID: "kubernetes.pod.logs", Method: plugin.MethodWS, Path: "/pods/logs", Permission: "kubernetes.pods.logs", Risk: plugin.RiskSafe, AuditEvent: "kubernetes.pod.logs", Stream: LogsStream},
 		{ID: "kubernetes.pod.exec", Method: plugin.MethodWS, Path: "/pods/exec", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.pod.exec", Stream: ExecStream},
+		{ID: "kubernetes.cluster.shell", Method: plugin.MethodWS, Path: "/cluster/shell", Permission: "kubernetes.pods.exec", Risk: plugin.RiskPrivileged, AuditEvent: "kubernetes.cluster.shell", Stream: ClusterShellStream},
 
 		{ID: "kubernetes.cluster.list", Method: plugin.MethodGet, Path: "/overview", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.list", Handle: ClusterList},
 		{ID: "kubernetes.cluster.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.cluster.metrics", Stream: ClusterMetrics},

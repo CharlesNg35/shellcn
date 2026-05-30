@@ -22,6 +22,7 @@ import (
 	dockerclient "github.com/moby/moby/client"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/termshell"
 )
 
 // Row is one generic record returned by the shared handlers. It is an alias so
@@ -1551,7 +1552,7 @@ func uintParam(params map[string]string, key string, fallback uint) uint {
 
 func execCommand(raw string) []string {
 	if strings.TrimSpace(raw) == "" {
-		return []string{"/bin/sh"}
+		return []string{"/bin/sh", "-c", termshell.Launch}
 	}
 	return []string{"/bin/sh", "-lc", raw}
 }

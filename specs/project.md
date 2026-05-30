@@ -189,12 +189,14 @@ type Manifest struct {
     SupportedTransports []Transport
     Agent               *AgentProfile // required iff TransportAgent is supported
 
-    Layout    Layout         // how the connection workspace is arranged
-    Tabs      []Tab          // connection-level tabs (LayoutTabs: one at a time; LayoutDashboard: all at once in a grid)
-    Tree      []TreeGroup    // connection-level sidebar (Layout == LayoutSidebarTree)
-    Resources []ResourceType // managed object types: columns, actions, detail
-    Actions   []Action       // declared actions (reference routes by ID)
-    Streams   []Stream       // declared streams (reference WS routes by ID)
+    Layout        Layout         // how the connection workspace is arranged
+    Tabs          []Tab          // connection-level tabs (LayoutTabs: one at a time; LayoutDashboard: all at once in a grid)
+    Tree          []TreeGroup    // connection-level sidebar (Layout == LayoutSidebarTree)
+    Resources     []ResourceType // managed object types: columns, actions, detail
+    Actions       []Action       // declared actions (reference routes by ID)
+    HeaderActions []string       // Action IDs pinned to the workspace header center (connection-wide)
+    Scope         []ScopeFilter  // global header selectors (e.g. namespace) injected into every request
+    Streams       []Stream       // declared streams (reference WS routes by ID)
 }
 ```
 
@@ -333,10 +335,12 @@ type Action struct {
     Panel       PanelType  // panel to host when Open=dock/dialog (sourced from RouteID)
     Config      map[string]any // panel config for the hosted Panel (e.g. a code_editor's saveRouteId), so a dock/dialog action can open an *editable* panel
     EnabledWhen *Condition // optional: gate the button on the active resource's row
+    IconOnly    bool // render as the icon alone (Label becomes the tooltip) — presentation stays manifest-driven
 }
 
 type ActionSuccess struct {
-    SelectTab string // switch to this declared tab after a successful action
+    SelectTab string         // switch to this declared tab after a successful action
+    Navigate  NavigateTarget // move the workbench after success, e.g. "list" — return a deleted resource's detail to its list so it doesn't linger
 }
 
 type StreamKind string // terminal, logs, desktop, metrics, file
@@ -350,7 +354,64 @@ type Stream struct {
 `risk`, `requiresConfirm`, and `onSuccess` are projected to the browser for UI
 styling and flow control; the **enforced** permission/risk live on the route and
 are checked server-side. `onSuccess.selectTab` must reference a declared tab key
-and is validated at registration.
+and is validated at registration. `onSuccess.navigate` is a generic post-action
+move — `"list"` returns a resource detail to its list, so a deleted resource's
+detail doesn't linger; the renderer applies it without knowing the resource type.
+
+**Header actions.** `Manifest.HeaderActions` lists `Action` IDs the renderer pins
+to the **center of the connection workspace header**, visually grouped and set
+apart from the connection's own controls (disconnect/share/edit/delete). They are
+connection-wide affordances **not bound to a selected resource** — e.g. a cluster
+shell that docks a terminal, or an "apply manifest" dialog. They reuse the same
+`Open` targets (`dock`/`dialog`/`url`/run-inline) as any action, so the feature is
+fully plugin-agnostic: the core renders whatever IDs the manifest declares and
+never special-cases a plugin. They show only once the session is connected.
+
+**Scope filters (global header selectors).** `Manifest.Scope` declares header
+selectors whose chosen value scopes **every** request for the connection — the
+Lens/Headlamp-style namespace picker, generalized.
+
+```go
+type ScopeFilter struct {
+    Param         string       // route param the value is injected as, e.g. "namespace"
+    Label         string
+    Icon          Icon
+    Control       ScopeControl // input widget: select (default) | multiselect | search | toggle | …
+    OptionsSource *DataSource    // route whose rows are the choices (ValueField/LabelField)
+    Options       []FilterOption // or static choices
+    ValueField    string
+    LabelField    string
+    AllLabel      string // label for the empty value that clears the scope
+}
+```
+
+`Control` is an **open vocabulary**, not a fixed enum: the renderer maps known
+names (`select`, `multiselect`, `search`, `toggle`, …) to widgets and falls back
+to a select for anything it doesn't recognize, so a new control needs no core
+change. Every control encodes its value into the **single string** the param
+carries — a select stores one value, a multiselect joins members with the fixed
+`ScopeSeparator` wire convention, a search stores free text, a toggle stores the
+first option's value when on — so the injection path stays identical regardless of
+widget. This keeps the feature **global**, not shaped around any one plugin's needs.
+
+**Consuming a scope.** The handler reads its scope param like any other:
+`rc.Param("namespace")` for single-valued controls. A multiselect arrives as the
+joined string, so the handler splits it with `rc.ParamList("namespace",
+ScopeSeparator)` — the separator is a framework constant (like the `p.*` prefix),
+not a per-plugin choice, so the renderer and handler never disagree. The core
+validates at registration that a select/multiselect has choices, so a malformed
+scope can't ship.
+
+The renderer shows the selectors in the header toolbar (next to header actions)
+and keeps the chosen values in a **per-connection scope state**. The data layer
+merges that state into every read and stream request as `p.<Param>` — under any
+explicit params, which always win — so lists, watches, detail docs, and streams
+all observe one scope without any panel knowing about it. Changing a selector
+re-fetches open lists and re-attaches their watches. It is **plugin-agnostic**:
+the core treats the params as opaque, and the route handlers read them where
+relevant (a cluster-scoped kind simply ignores its scope param). This is strictly
+better than a per-table filter: one selector, one source of truth, every resource
+consistently scoped.
 
 `Open: "url"` runs the action's route and opens the returned `{"url": "…"}` in a
 new browser tab. The route decides the URL — it may be any link (e.g. an external
@@ -1400,12 +1461,29 @@ type ProxyTarget struct {
     // and verifies the upstream's TLS with CAFile. Empty = none / system roots.
     TokenFile string // target-side path to a bearer token file
     CAFile    string // target-side path to a PEM CA bundle
+    Forward   bool   // let the gateway name each stream's dial target (see below)
 }
 
 type AgentProfile struct {
     Proxy   ProxyTarget
     Install []InstallArtifact // how the user launches the agent (§8.4)
 }
+```
+
+**Per-stream forwarding (`ProxyTarget.Forward`).** Normally the agent proxies every
+stream to its one declared `Address`. Some plugins need to reach *more* of the
+target's own network than a single endpoint — e.g. opening a Docker container's web
+port (the §8.1 browser proxy): the container's IP is reachable from the daemon host
+where the agent runs, but it isn't the daemon socket. With `Forward`, the gateway
+prefixes each L4 stream with a tiny target preamble (`network` + `address`) and the
+agent dials *that* instead of `Address`. It stays plugin-agnostic — the agent gains
+no protocol knowledge, just "dial what the gateway names." It is **negotiated and
+opt-in**: the agent advertises support in its hello and the gateway enables it only
+when the plugin set `Forward`, so older agents keep the single-endpoint behavior.
+Reach widens only within the same target the agent already fronts (a docker.sock
+agent can already run any container), so it adds no new trust boundary.
+
+```go
 
 type ArtifactDelivery string // "" (inline) | "url"
 

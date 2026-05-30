@@ -51,6 +51,7 @@ import {
 } from "./mutation";
 import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
 import { useNavigableKinds } from "../core/navigable";
+import { useScopeStore } from "../../stores/scope";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
@@ -65,6 +66,7 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const scope = useScopeStore();
 
 // Framework-reserved row keys the grid never renders as data columns. Plugins
 // hide their own fields declaratively via config.hiddenColumns instead.
@@ -119,6 +121,8 @@ const tableConfig = computed(
   () => props.config as TablePanelConfig | undefined,
 );
 const columnsSource = computed(() => tableConfig.value?.columnsSource);
+
+const watchSource = computed(() => tableConfig.value?.watch);
 const dynamicColumns = ref<ColumnSpec[]>([]);
 const columnsLoading = ref(false);
 const actionIds = computed(() => tableConfig.value?.actionIds ?? []);
@@ -859,7 +863,9 @@ function flushEvents(): void {
   for (const ev of batch) {
     const uid = ev.ref.uid;
     const idx = index.get(uid);
-    if (ev.type === "deleted") {
+    // Tolerate any casing a plugin sends (the contract is lowercase).
+    const type = String(ev.type).toLowerCase();
+    if (type === "deleted") {
       if (idx !== undefined) removed.add(idx);
       additions.delete(uid);
     } else if (idx !== undefined) {
@@ -868,7 +874,7 @@ function flushEvents(): void {
     } else if (additions.has(uid)) {
       if (ev.resource)
         additions.set(uid, { ...additions.get(uid)!, ...(ev.resource as Row) });
-    } else if (ev.type === "added" && ev.resource) {
+    } else if ((type === "added" || type === "updated") && ev.resource) {
       additions.set(uid, { ...(ev.resource as Row), ref: ev.ref });
     }
   }
@@ -880,10 +886,7 @@ let stopWatch: (() => void) | undefined;
 function startWatch(): void {
   stopWatch?.();
   // A live table uses either the interval poll or the watch socket, never both.
-  const ds =
-    refreshMs.value > 0
-      ? undefined
-      : (tableConfig.value?.watch as DataSource | undefined);
+  const ds = refreshMs.value > 0 ? undefined : watchSource.value;
   stopWatch = ds
     ? watchResource(
         props.connectionId,
@@ -970,6 +973,17 @@ vueWatch(
     startWatch();
   },
   { immediate: true },
+);
+
+// A change to the connection's global scope re-scopes every list: refetch and
+// reattach the watch with the new params.
+vueWatch(
+  () => JSON.stringify(scope.params(props.connectionId)),
+  () => {
+    first.value = 0;
+    load(0);
+    startWatch();
+  },
 );
 
 let debounce: ReturnType<typeof setTimeout> | undefined;

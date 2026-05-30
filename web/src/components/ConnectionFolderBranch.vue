@@ -66,6 +66,7 @@ const menuItems = computed(() => [
 // Folders live only at the root level: a folder may never be dropped inside
 // another folder, so the tree stays exactly two deep (folder → connections).
 function onMove(evt: { dragged?: HTMLElement; to?: HTMLElement }): boolean {
+  if (props.disabled) return false; // never reorder a filtered view
   const draggingFolder = evt.dragged?.hasAttribute("data-folder-id") ?? false;
   const intoFolder = Boolean(evt.to?.closest("[data-folder-id]"));
   return !(draggingFolder && intoFolder);

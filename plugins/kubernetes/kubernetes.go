@@ -54,12 +54,14 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Content:  k8sManifestContent,
 			}},
 		},
-		Layout:    plugin.LayoutSidebarTree,
-		Tree:      tree(),
-		Resources: resources(),
-		Actions:   actions(),
-		Streams:   streams(),
-		Recording: podRecording(),
+		Layout:        plugin.LayoutSidebarTree,
+		Tree:          tree(),
+		Resources:     resources(),
+		Actions:       actions(),
+		HeaderActions: headerActionIDs(),
+		Scope:         []plugin.ScopeFilter{namespaceScope()},
+		Streams:       streams(),
+		Recording:     podRecording(),
 	}
 }
 
@@ -69,14 +71,11 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 	return Connect(ctx, cfg)
 }
 
-// k8sManifestContent is the agent install manifest served (URL-delivered) from a
-// single-use signed ticket and applied with `kubectl apply -f <url>`. It deploys
-// the agent into a per-connection namespace ({{.Slug}}) — so multiple connections
-// targeting the same cluster get independent agents that never clobber each
-// other — with a ServiceAccount bound to cluster-admin (the cockpit acts on the
-// user's behalf — declared privileged). The cluster-scoped binding is uniquely
-// named per connection. The enrollment token is minted into the Secret body at
-// fetch time, never placed in a URL or path.
+// k8sManifestContent is the URL-delivered agent install manifest, applied with
+// `kubectl apply -f <url>`. It deploys the agent into a per-connection namespace
+// ({{.Slug}}) with a uniquely-named cluster-admin binding, so connections to the
+// same cluster stay independent. The enroll token is minted into the Secret at
+// fetch time, never into a URL or path.
 const k8sManifestContent = `apiVersion: v1
 kind: Namespace
 metadata:

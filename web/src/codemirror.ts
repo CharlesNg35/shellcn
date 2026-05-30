@@ -66,37 +66,129 @@ export interface CodeMirrorOptions {
   onChange?: (value: string) => void;
 }
 
-const lightHighlight = syntaxHighlighting(
-  HighlightStyle.define([
-    { tag: tags.keyword, color: "#1d4ed8" },
-    { tag: tags.atom, color: "#7c3aed" },
-    { tag: tags.number, color: "#b45309" },
-    { tag: tags.string, color: "#047857" },
-    { tag: tags.comment, color: "#64748b", fontStyle: "italic" },
-    { tag: tags.variableName, color: "#0f172a" },
-    { tag: tags.propertyName, color: "#0f766e" },
-    { tag: tags.operator, color: "#475569" },
-    { tag: tags.punctuation, color: "#475569" },
-    { tag: tags.invalid, color: "#dc2626" },
-  ]),
-  { fallback: true },
-);
+interface HighlightPalette {
+  keyword: string; // keywords, modifiers
+  func: string; // function names, labels
+  property: string; // YAML keys, object props, tags, attribute names
+  string: string; // strings + YAML plain scalar values
+  number: string; // numbers, booleans, null, constants
+  type: string; // type names, classes, namespaces
+  operator: string; // operators, regexp, escapes, URLs
+  comment: string; // comments, doc markers
+  variable: string; // identifiers, punctuation (≈ foreground)
+  invalid: string;
+}
 
-const darkHighlight = syntaxHighlighting(
-  HighlightStyle.define([
-    { tag: tags.keyword, color: "#93c5fd" },
-    { tag: tags.atom, color: "#c4b5fd" },
-    { tag: tags.number, color: "#fbbf24" },
-    { tag: tags.string, color: "#86efac" },
-    { tag: tags.comment, color: "#94a3b8", fontStyle: "italic" },
-    { tag: tags.variableName, color: "#e2e8f0" },
-    { tag: tags.propertyName, color: "#5eead4" },
-    { tag: tags.operator, color: "#cbd5e1" },
-    { tag: tags.punctuation, color: "#cbd5e1" },
-    { tag: tags.invalid, color: "#f87171" },
-  ]),
-  { fallback: true },
-);
+// Atom One Dark / One Light palette, mapped across every tag the supported devops
+// formats emit (YAML/JSON/shell/dockerfile/nginx/toml/ini/xml). Covers `content`
+// — lang-yaml's tag for plain scalar values — which earlier left YAML mostly
+// uncolored. In YAML this reads as red keys, green values, grey comments.
+function buildHighlight(c: HighlightPalette): Extension {
+  return syntaxHighlighting(
+    HighlightStyle.define([
+      {
+        tag: [
+          tags.keyword,
+          tags.controlKeyword,
+          tags.operatorKeyword,
+          tags.moduleKeyword,
+          tags.definitionKeyword,
+          tags.modifier,
+          tags.self,
+        ],
+        color: c.keyword,
+      },
+      {
+        tag: [tags.function(tags.variableName), tags.labelName],
+        color: c.func,
+      },
+      {
+        tag: [
+          tags.propertyName,
+          tags.attributeName,
+          tags.tagName,
+          tags.macroName,
+          tags.character,
+          tags.deleted,
+        ],
+        color: c.property,
+      },
+      {
+        tag: [
+          tags.string,
+          tags.content,
+          tags.attributeValue,
+          tags.inserted,
+          tags.special(tags.string),
+        ],
+        color: c.string,
+      },
+      { tag: [tags.number, tags.bool, tags.null, tags.atom], color: c.number },
+      {
+        tag: [
+          tags.typeName,
+          tags.className,
+          tags.namespace,
+          tags.annotation,
+          tags.changed,
+        ],
+        color: c.type,
+      },
+      {
+        tag: [
+          tags.operator,
+          tags.derefOperator,
+          tags.regexp,
+          tags.escape,
+          tags.url,
+          tags.link,
+        ],
+        color: c.operator,
+      },
+      { tag: tags.comment, color: c.comment, fontStyle: "italic" },
+      { tag: tags.meta, color: c.comment },
+      {
+        tag: [
+          tags.variableName,
+          tags.punctuation,
+          tags.separator,
+          tags.brace,
+          tags.squareBracket,
+          tags.angleBracket,
+          tags.paren,
+        ],
+        color: c.variable,
+      },
+      { tag: tags.invalid, color: c.invalid },
+    ]),
+  );
+}
+
+const lightHighlight = buildHighlight({
+  keyword: "#a626a4",
+  func: "#4078f2",
+  property: "#e45649",
+  string: "#50a14f",
+  number: "#986801",
+  type: "#c18401",
+  operator: "#0184bc",
+  comment: "#a0a1a7",
+  variable: "#383a42",
+  invalid: "#e45649",
+});
+
+const darkHighlight = buildHighlight({
+  keyword: "#c678dd",
+  func: "#61afef",
+  property: "#e06c75",
+  string: "#98c379",
+  number: "#d19a66",
+  type: "#e5c07b",
+  operator: "#56b6c2",
+  comment: "#7d8799",
+  variable: "#abb2bf",
+  invalid: "#e06c75",
+});
 
 const editorSetup: Extension = [
   lineNumbers(),

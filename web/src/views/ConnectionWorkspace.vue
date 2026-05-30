@@ -15,6 +15,8 @@ import { KEEP_ALIVE_TOP_LEVEL_PANELS_MAX } from "../stores/sessionLimits";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import PanelHost from "../panels/core/PanelHost.vue";
+import ActionBar from "../panels/shared/ActionBar.vue";
+import ScopeBar from "../panels/shared/ScopeBar.vue";
 import { provideNavigableKinds } from "../panels/core/navigable";
 import EnrollPanel from "../panels/enroll/EnrollPanel.vue";
 import ConnectPanel from "../panels/connect/ConnectPanel.vue";
@@ -170,6 +172,17 @@ function tabConfig(tab: TabDef): Record<string, unknown> {
   return rec ? { ...base, _recording: rec } : base;
 }
 
+// Global header selectors that scope every request.
+const scopeFilters = computed(() => projection.value?.scope ?? []);
+
+// Connection-wide actions the manifest pins to the header center. They need a
+// live session, so they show only once connected.
+const headerActions = computed<Action[]>(() => {
+  const ids = projection.value?.headerActions ?? [];
+  const byId = new Map((projection.value?.actions ?? []).map((a) => [a.id, a]));
+  return ids.map((id) => byId.get(id)).filter((a): a is Action => Boolean(a));
+});
+
 function onActionDone(action: Action): void {
   const tabKey = action.onSuccess?.selectTab;
   if (!tabKey || !projection.value?.tabs?.some((tab) => tab.key === tabKey)) {
@@ -184,22 +197,47 @@ function onActionDone(action: Action): void {
     <header
       class="flex items-center gap-3 border-b border-surface-200 px-5 py-3 dark:border-surface-800"
     >
-      <AppIcon
-        :icon="connection?.icon ?? projection?.icon"
-        :size="20"
-        class="text-surface-500"
-      />
-      <div class="min-w-0">
-        <h1 class="truncate font-semibold text-surface-900 dark:text-surface-0">
-          {{ connection?.name ?? id }}
-        </h1>
-        <p class="truncate text-xs text-surface-400">
-          {{ projection?.title ?? connection?.protocol }} ·
-          {{ connection?.transport }}
-        </p>
+      <div class="flex min-w-0 flex-1 items-center gap-3">
+        <AppIcon
+          :icon="connection?.icon ?? projection?.icon"
+          :size="20"
+          class="text-surface-500"
+        />
+        <div class="min-w-0">
+          <h1
+            class="truncate font-semibold text-surface-900 dark:text-surface-0"
+          >
+            {{ connection?.name ?? id }}
+          </h1>
+          <p class="truncate text-xs text-surface-400">
+            {{ projection?.title ?? connection?.protocol }} ·
+            {{ connection?.transport }}
+          </p>
+        </div>
       </div>
 
-      <div class="ml-auto flex items-center gap-1">
+      <div
+        v-if="connected && (scopeFilters.length || headerActions.length)"
+        class="flex shrink-0 items-center gap-3 rounded-lg border border-surface-200 bg-surface-50 px-2 py-1 shadow-sm dark:border-surface-700 dark:bg-surface-800/60"
+      >
+        <ScopeBar
+          v-if="scopeFilters.length"
+          :connection-id="id"
+          :scope="scopeFilters"
+        />
+        <span
+          v-if="scopeFilters.length && headerActions.length"
+          class="h-5 w-px bg-surface-200 dark:bg-surface-700"
+        />
+        <ActionBar
+          v-if="headerActions.length"
+          :connection-id="id"
+          :actions="headerActions"
+          @done="onActionDone"
+        />
+      </div>
+
+      <div class="flex flex-1 items-center justify-end gap-1">
         <Button
           v-if="connected"
           severity="secondary"

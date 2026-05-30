@@ -48,7 +48,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Agent: &plugin.AgentProfile{
-			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: defaultSocket, Risk: plugin.RiskPrivileged},
+			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: defaultSocket, Risk: plugin.RiskPrivileged, Forward: true},
 			Install: []plugin.InstallArtifact{{
 				Label:      "Docker Swarm",
 				Kind:       "docker-run",
@@ -128,9 +128,9 @@ func serviceResource() plugin.ResourceType {
 		List:      plugin.DataSource{RouteID: "swarm.services.list"},
 		Watch:     &plugin.DataSource{RouteID: "swarm.events.watch", Method: plugin.MethodWS},
 		Columns:   serviceColumns(),
-		ActionIDs: []string{"swarm.service.scale", "swarm.service.remove"},
+		ActionIDs: []string{"swarm.service.open", "swarm.service.scale", "swarm.service.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"swarm.service.scale", "swarm.service.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"swarm.service.open", "swarm.service.scale", "swarm.service.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.service.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}.Map()},
@@ -196,6 +196,7 @@ func taskResource() plugin.ResourceType {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
+		{ID: "swarm.service.open", Label: "Open", Icon: icon("external-link"), RouteID: "swarm.service.open", Open: plugin.OpenURL, Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
 		{ID: "swarm.service.scale", Label: "Scale", Icon: icon("move-vertical"), RouteID: "swarm.service.scale", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "mode", Op: plugin.OpEq, Value: "replicated"}}}},
 		{ID: "swarm.service.remove", Label: "Remove", Icon: icon("trash"), RouteID: "swarm.service.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this service?"},
 	}

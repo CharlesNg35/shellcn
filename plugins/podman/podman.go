@@ -32,7 +32,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Agent: &plugin.AgentProfile{
-			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: defaultSocket, Risk: plugin.RiskPrivileged},
+			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: defaultSocket, Risk: plugin.RiskPrivileged, Forward: true},
 			Install: []plugin.InstallArtifact{{
 				Label:      "Podman",
 				Kind:       "docker-run",
@@ -109,12 +109,12 @@ func containerResource() plugin.ResourceType {
 		Watch:         &plugin.DataSource{RouteID: "podman.events.watch", Method: plugin.MethodWS},
 		Columns:       containerColumns(),
 		ListActionIDs: []string{"podman.container.create", "podman.containers.prune"},
-		ActionIDs:     []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"},
+		ActionIDs:     []string{"podman.container.open", "podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"podman.container.open", "podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "terminal", Label: "Terminal", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "podman.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24", "command": "/bin/sh"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
+				{Key: "terminal", Label: "Terminal", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "podman.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
 				{Key: "logs", Label: "Logs", Icon: icon("scroll-text"), Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "podman.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "podman.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "env", Label: "Env", Icon: icon("list"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "podman.container.env", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "key", Label: "Key", Sortable: true}, {Key: "value", Label: "Value"}}}.Map()},
@@ -216,6 +216,7 @@ func networkResource() plugin.ResourceType {
 func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "podman.container.create", Label: "New container", Icon: icon("plus"), RouteID: "podman.container.create"},
+		{ID: "podman.container.open", Label: "Open", Icon: icon("external-link"), RouteID: "podman.container.open", Open: plugin.OpenURL, Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("running")},
 		{ID: "podman.container.start", Label: "Start", Icon: icon("play"), RouteID: "podman.container.start", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: dockerengine.WhenState("created", "configured", "exited", "stopped", "dead")},
 		{ID: "podman.container.stop", Label: "Stop", Icon: icon("square"), RouteID: "podman.container.stop", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Stop this container?", EnabledWhen: dockerengine.WhenState("running", "paused")},
 		{ID: "podman.container.restart", Label: "Restart", Icon: icon("refresh-cw"), RouteID: "podman.container.restart", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Restart this container?", EnabledWhen: dockerengine.WhenState("running", "paused")},

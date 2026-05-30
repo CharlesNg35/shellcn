@@ -33,6 +33,7 @@ type ProjectedAction struct {
 	Panel           PanelType         `json:"panel,omitempty"`
 	Config          map[string]any    `json:"config,omitempty"`
 	EnabledWhen     *Condition        `json:"enabledWhen,omitempty"`
+	IconOnly        bool              `json:"iconOnly,omitempty"`
 }
 
 // ProjectedRecording tells the browser which recording options a plugin offers
@@ -65,6 +66,8 @@ type Projection struct {
 	Tree                []TreeGroup            `json:"tree,omitempty"`
 	Resources           []ResourceType         `json:"resources,omitempty"`
 	Actions             []ProjectedAction      `json:"actions,omitempty"`
+	HeaderActions       []string               `json:"headerActions,omitempty"`
+	Scope               []ScopeFilter          `json:"scope,omitempty"`
 	Streams             []Stream               `json:"streams,omitempty"`
 	Recording           []ProjectedRecording   `json:"recording,omitempty"`
 }
@@ -88,6 +91,8 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 		Tabs:                m.Tabs,
 		Tree:                m.Tree,
 		Resources:           m.Resources,
+		HeaderActions:       m.HeaderActions,
+		Scope:               m.Scope,
 		Streams:             m.Streams,
 	}
 
@@ -126,6 +131,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 				Panel:           a.Panel,
 				Config:          a.Config,
 				EnabledWhen:     a.EnabledWhen,
+				IconOnly:        a.IconOnly,
 			}
 			if rt, ok := routes[a.RouteID]; ok {
 				pa.Method = rt.Method

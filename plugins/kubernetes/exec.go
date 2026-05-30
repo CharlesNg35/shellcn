@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"strings"
 	"sync"
 
 	corev1 "k8s.io/api/core/v1"
@@ -29,13 +28,9 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 		return errors.New("pod name is required")
 	}
 	tty := boolParam(rc, "tty", true)
-	command := param(rc, "command")
-	if command == "" {
-		command = "/bin/sh"
-	}
 	exec, err := s.podExecutor(ns, pod, &corev1.PodExecOptions{
 		Container: param(rc, "container"),
-		Command:   strings.Fields(command),
+		Command:   interactiveShellCommand(rc, tty),
 		Stdin:     true,
 		Stdout:    true,
 		Stderr:    !tty,
@@ -44,11 +39,16 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	if err != nil {
 		return err
 	}
+	return streamExec(client, exec, tty, intParam(rc, "cols"), intParam(rc, "rows"))
+}
 
+// streamExec bridges an exec executor to the terminal panel: stdin (with resize
+// control frames) flows in, multiplexed stdout/stderr flows out.
+func streamExec(client plugin.ClientStream, exec remotecommand.Executor, tty bool, cols, rows int) error {
 	stdinR, stdinW := io.Pipe()
 	sizes := &termSizeQueue{ch: make(chan remotecommand.TerminalSize, 4)}
-	if c, r := intParam(rc, "cols"), intParam(rc, "rows"); c > 0 && r > 0 {
-		sizes.push(c, r)
+	if cols > 0 && rows > 0 {
+		sizes.push(cols, rows)
 	}
 	go pipeTerminalInput(client, stdinW, sizes)
 
@@ -57,11 +57,10 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	if !tty {
 		opts.Stderr = out
 	}
-	err = exec.StreamWithContext(client.Context(), opts)
-	if errors.Is(err, io.EOF) {
-		return nil
+	if err := exec.StreamWithContext(client.Context(), opts); err != nil && !errors.Is(err, io.EOF) {
+		return err
 	}
-	return err
+	return nil
 }
 
 // podExecutor builds a fallback (WebSocket → SPDY) executor against the upgrade
