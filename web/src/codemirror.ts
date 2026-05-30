@@ -67,23 +67,22 @@ export interface CodeMirrorOptions {
 }
 
 interface HighlightPalette {
-  keyword: string;
-  atom: string;
-  number: string;
-  string: string;
-  comment: string;
-  variable: string;
-  property: string;
-  type: string;
-  operator: string;
-  punct: string;
+  keyword: string; // keywords, modifiers
+  func: string; // function names, labels
+  property: string; // YAML keys, object props, tags, attribute names
+  string: string; // strings + YAML plain scalar values
+  number: string; // numbers, booleans, null, constants
+  type: string; // type names, classes, namespaces
+  operator: string; // operators, regexp, escapes, URLs
+  comment: string; // comments, doc markers
+  variable: string; // identifiers, punctuation (≈ foreground)
   invalid: string;
 }
 
-// One style for every tag the supported devops formats emit (YAML/JSON/shell/
-// dockerfile/nginx/toml/ini/xml). Crucially this covers `content` — lang-yaml's
-// tag for plain scalar values — which the original palette missed, leaving most
-// of a YAML file uncolored.
+// Atom One Dark / One Light palette, mapped across every tag the supported devops
+// formats emit (YAML/JSON/shell/dockerfile/nginx/toml/ini/xml). Covers `content`
+// — lang-yaml's tag for plain scalar values — which earlier left YAML mostly
+// uncolored. In YAML this reads as red keys, green values, grey comments.
 function buildHighlight(c: HighlightPalette): Extension {
   return syntaxHighlighting(
     HighlightStyle.define([
@@ -93,39 +92,72 @@ function buildHighlight(c: HighlightPalette): Extension {
           tags.controlKeyword,
           tags.operatorKeyword,
           tags.moduleKeyword,
+          tags.definitionKeyword,
           tags.modifier,
-          tags.tagName,
+          tags.self,
         ],
         color: c.keyword,
       },
-      { tag: [tags.atom, tags.bool, tags.null], color: c.atom },
-      { tag: [tags.number, tags.escape], color: c.number },
+      {
+        tag: [tags.function(tags.variableName), tags.labelName],
+        color: c.func,
+      },
+      {
+        tag: [
+          tags.propertyName,
+          tags.attributeName,
+          tags.tagName,
+          tags.macroName,
+          tags.character,
+          tags.deleted,
+        ],
+        color: c.property,
+      },
       {
         tag: [
           tags.string,
           tags.content,
           tags.attributeValue,
-          tags.regexp,
-          tags.character,
+          tags.inserted,
+          tags.special(tags.string),
         ],
         color: c.string,
       },
-      { tag: tags.comment, color: c.comment, fontStyle: "italic" },
-      { tag: [tags.variableName, tags.labelName], color: c.variable },
-      { tag: [tags.propertyName, tags.attributeName], color: c.property },
-      { tag: [tags.typeName, tags.className, tags.namespace], color: c.type },
-      { tag: tags.operator, color: c.operator },
+      { tag: [tags.number, tags.bool, tags.null, tags.atom], color: c.number },
       {
         tag: [
+          tags.typeName,
+          tags.className,
+          tags.namespace,
+          tags.annotation,
+          tags.changed,
+        ],
+        color: c.type,
+      },
+      {
+        tag: [
+          tags.operator,
+          tags.derefOperator,
+          tags.regexp,
+          tags.escape,
+          tags.url,
+          tags.link,
+        ],
+        color: c.operator,
+      },
+      { tag: tags.comment, color: c.comment, fontStyle: "italic" },
+      { tag: tags.meta, color: c.comment },
+      {
+        tag: [
+          tags.variableName,
           tags.punctuation,
           tags.separator,
           tags.brace,
           tags.squareBracket,
           tags.angleBracket,
           tags.paren,
-          tags.meta,
         ],
-        color: c.punct,
+        color: c.variable,
       },
       { tag: tags.invalid, color: c.invalid },
     ]),
@@ -133,31 +165,29 @@ function buildHighlight(c: HighlightPalette): Extension {
 }
 
 const lightHighlight = buildHighlight({
-  keyword: "#1d4ed8",
-  atom: "#7c3aed",
-  number: "#b45309",
-  string: "#047857",
-  comment: "#64748b",
-  variable: "#0f172a",
-  property: "#0f766e",
-  type: "#0e7490",
-  operator: "#475569",
-  punct: "#475569",
-  invalid: "#dc2626",
+  keyword: "#a626a4",
+  func: "#4078f2",
+  property: "#e45649",
+  string: "#50a14f",
+  number: "#986801",
+  type: "#c18401",
+  operator: "#0184bc",
+  comment: "#a0a1a7",
+  variable: "#383a42",
+  invalid: "#e45649",
 });
 
 const darkHighlight = buildHighlight({
-  keyword: "#93c5fd",
-  atom: "#c4b5fd",
-  number: "#fbbf24",
-  string: "#86efac",
-  comment: "#94a3b8",
-  variable: "#e2e8f0",
-  property: "#5eead4",
-  type: "#67e8f9",
-  operator: "#cbd5e1",
-  punct: "#cbd5e1",
-  invalid: "#f87171",
+  keyword: "#c678dd",
+  func: "#61afef",
+  property: "#e06c75",
+  string: "#98c379",
+  number: "#d19a66",
+  type: "#e5c07b",
+  operator: "#56b6c2",
+  comment: "#7d8799",
+  variable: "#abb2bf",
+  invalid: "#e06c75",
 });
 
 const editorSetup: Extension = [
