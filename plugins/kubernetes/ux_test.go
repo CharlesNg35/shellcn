@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -52,6 +53,16 @@ func TestHeaderActionsResolveToActions(t *testing.T) {
 	}
 	if a := byID["kubernetes.cluster.apply"]; a.Open != plugin.OpenDialog || a.Panel != plugin.PanelCodeEditor {
 		t.Errorf("apply YAML should open a code-editor dialog, got open=%q panel=%q", a.Open, a.Panel)
+	}
+}
+
+func TestClusterShellPrefersBash(t *testing.T) {
+	got := shellExecCommand(rc(nil, nil))
+	if len(got) != 3 || got[0] != "/bin/sh" || got[1] != "-c" || !strings.Contains(got[2], "exec bash") {
+		t.Errorf("default cluster shell should prefer bash, got %v", got)
+	}
+	if got := shellExecCommand(rc(nil, map[string]string{"command": "/bin/zsh"})); len(got) != 1 || got[0] != "/bin/zsh" {
+		t.Errorf("an explicit command should override, got %v", got)
 	}
 }
 

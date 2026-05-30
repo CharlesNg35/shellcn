@@ -30,6 +30,20 @@ const (
 	shellKeepalive = "trap : TERM INT; sleep 2147483647 & wait"
 )
 
+// shellLaunch prefers an interactive bash (most kubectl images ship it) and falls
+// back to POSIX sh. It sets a sane TERM and, since these minimal images carry no
+// terminfo, aliases clear/reset to raw ANSI so screen-clearing works regardless.
+const shellLaunch = `export TERM="${TERM:-xterm-256color}"
+if command -v bash >/dev/null 2>&1; then
+rc="$(mktemp 2>/dev/null || echo /tmp/.shellcn_bashrc)"
+cat >"$rc" <<'SHRC'
+alias clear='printf "\033[H\033[2J\033[3J"'
+alias reset='printf "\033c"'
+SHRC
+exec bash --rcfile "$rc"
+fi
+exec sh`
+
 // ClusterShellStream attaches an interactive shell to a long-lived kubectl pod,
 // giving the operator cluster-scoped kubectl from inside the cluster. A single
 // fixed-name pod is reused across sessions, so reconnects are instant and never
@@ -60,7 +74,7 @@ func shellExecCommand(rc *plugin.RequestContext) []string {
 	if c := param(rc, "command"); c != "" {
 		return strings.Fields(c)
 	}
-	return []string{"/bin/sh"}
+	return []string{"/bin/sh", "-c", shellLaunch}
 }
 
 // ensureShellPod reuses a healthy shell pod, recreating it only when missing or
