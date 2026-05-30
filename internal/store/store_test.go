@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -115,6 +116,38 @@ func testUsers(t *testing.T, s *store.Store) {
 	reloaded, _ = s.Users.GetByID(ctx, "u1")
 	if reloaded.SessionVersion != 1 {
 		t.Errorf("session version after password rotation: want 1, got %d", reloaded.SessionVersion)
+	}
+
+	// Two-factor state round-trips: encrypted secret bytes, the enabled flag, and
+	// the JSON-serialized recovery code hashes.
+	secret := []byte{0x01, 0x02, 0x03, 0xff}
+	hashes := []string{"hash-a", "hash-b"}
+	if err := s.Users.SetTwoFactor(ctx, "u1", secret, true, hashes); err != nil {
+		t.Fatalf("set two-factor: %v", err)
+	}
+	reloaded, _ = s.Users.GetByID(ctx, "u1")
+	if !reloaded.TOTPEnabled || !bytes.Equal(reloaded.TOTPSecret, secret) ||
+		!slices.Equal(reloaded.RecoveryCodeHashes, hashes) {
+		t.Fatalf("two-factor not persisted: enabled=%v secret=%v hashes=%v",
+			reloaded.TOTPEnabled, reloaded.TOTPSecret, reloaded.RecoveryCodeHashes)
+	}
+
+	when := time.Now().UTC().Truncate(time.Second)
+	if err := s.Users.SetMFARemindedAt(ctx, "u1", &when); err != nil {
+		t.Fatalf("set reminded: %v", err)
+	}
+	reloaded, _ = s.Users.GetByID(ctx, "u1")
+	if reloaded.MFARemindedAt == nil || !reloaded.MFARemindedAt.UTC().Equal(when) {
+		t.Errorf("reminded-at not persisted: %v", reloaded.MFARemindedAt)
+	}
+
+	// Disabling clears the secret and recovery codes.
+	if err := s.Users.SetTwoFactor(ctx, "u1", nil, false, nil); err != nil {
+		t.Fatalf("clear two-factor: %v", err)
+	}
+	reloaded, _ = s.Users.GetByID(ctx, "u1")
+	if reloaded.TOTPEnabled || len(reloaded.TOTPSecret) != 0 || len(reloaded.RecoveryCodeHashes) != 0 {
+		t.Errorf("two-factor not cleared: %+v", reloaded)
 	}
 
 	if err := s.Users.Delete(ctx, "u1"); err != nil {

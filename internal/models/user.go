@@ -44,11 +44,6 @@ type User struct {
 	UpdatedAt time.Time
 }
 
-// TOTPPending reports an enrollment that has a secret but isn't confirmed yet.
-func (u User) TOTPPending() bool {
-	return len(u.TOTPSecret) > 0 && !u.TOTPEnabled
-}
-
 func (User) TableName() string { return "users" }
 
 // HasRole reports whether the user holds the given role.
