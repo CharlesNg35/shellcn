@@ -44,11 +44,16 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	if err != nil {
 		return err
 	}
+	return streamExec(client, exec, tty, intParam(rc, "cols"), intParam(rc, "rows"))
+}
 
+// streamExec bridges an exec executor to the terminal panel: stdin (with resize
+// control frames) flows in, multiplexed stdout/stderr flows out.
+func streamExec(client plugin.ClientStream, exec remotecommand.Executor, tty bool, cols, rows int) error {
 	stdinR, stdinW := io.Pipe()
 	sizes := &termSizeQueue{ch: make(chan remotecommand.TerminalSize, 4)}
-	if c, r := intParam(rc, "cols"), intParam(rc, "rows"); c > 0 && r > 0 {
-		sizes.push(c, r)
+	if cols > 0 && rows > 0 {
+		sizes.push(cols, rows)
 	}
 	go pipeTerminalInput(client, stdinW, sizes)
 
@@ -57,11 +62,10 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	if !tty {
 		opts.Stderr = out
 	}
-	err = exec.StreamWithContext(client.Context(), opts)
-	if errors.Is(err, io.EOF) {
-		return nil
+	if err := exec.StreamWithContext(client.Context(), opts); err != nil && !errors.Is(err, io.EOF) {
+		return err
 	}
-	return err
+	return nil
 }
 
 // podExecutor builds a fallback (WebSocket → SPDY) executor against the upgrade

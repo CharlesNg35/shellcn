@@ -121,6 +121,11 @@ type Manifest struct {
 	Actions   []Action
 	Streams   []Stream
 
+	// HeaderActions reference Actions by ID; the renderer shows them in the
+	// connection workspace header, centered, for connection-wide affordances
+	// (e.g. a shell or an apply dialog) that aren't tied to a selected resource.
+	HeaderActions []string
+
 	// Recording declares which stream classes this plugin can record. Empty means
 	// the plugin supports no recording (the default).
 	Recording []RecordingCapability

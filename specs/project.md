@@ -189,12 +189,13 @@ type Manifest struct {
     SupportedTransports []Transport
     Agent               *AgentProfile // required iff TransportAgent is supported
 
-    Layout    Layout         // how the connection workspace is arranged
-    Tabs      []Tab          // connection-level tabs (LayoutTabs: one at a time; LayoutDashboard: all at once in a grid)
-    Tree      []TreeGroup    // connection-level sidebar (Layout == LayoutSidebarTree)
-    Resources []ResourceType // managed object types: columns, actions, detail
-    Actions   []Action       // declared actions (reference routes by ID)
-    Streams   []Stream       // declared streams (reference WS routes by ID)
+    Layout        Layout         // how the connection workspace is arranged
+    Tabs          []Tab          // connection-level tabs (LayoutTabs: one at a time; LayoutDashboard: all at once in a grid)
+    Tree          []TreeGroup    // connection-level sidebar (Layout == LayoutSidebarTree)
+    Resources     []ResourceType // managed object types: columns, actions, detail
+    Actions       []Action       // declared actions (reference routes by ID)
+    HeaderActions []string       // Action IDs pinned to the workspace header center (connection-wide)
+    Streams       []Stream       // declared streams (reference WS routes by ID)
 }
 ```
 
@@ -336,7 +337,8 @@ type Action struct {
 }
 
 type ActionSuccess struct {
-    SelectTab string // switch to this declared tab after a successful action
+    SelectTab string         // switch to this declared tab after a successful action
+    Navigate  NavigateTarget // move the workbench after success, e.g. "list" — return a deleted resource's detail to its list so it doesn't linger
 }
 
 type StreamKind string // terminal, logs, desktop, metrics, file
@@ -350,7 +352,18 @@ type Stream struct {
 `risk`, `requiresConfirm`, and `onSuccess` are projected to the browser for UI
 styling and flow control; the **enforced** permission/risk live on the route and
 are checked server-side. `onSuccess.selectTab` must reference a declared tab key
-and is validated at registration.
+and is validated at registration. `onSuccess.navigate` is a generic post-action
+move — `"list"` returns a resource detail to its list, so a deleted resource's
+detail doesn't linger; the renderer applies it without knowing the resource type.
+
+**Header actions.** `Manifest.HeaderActions` lists `Action` IDs the renderer pins
+to the **center of the connection workspace header**, visually grouped and set
+apart from the connection's own controls (disconnect/share/edit/delete). They are
+connection-wide affordances **not bound to a selected resource** — e.g. a cluster
+shell that docks a terminal, or an "apply manifest" dialog. They reuse the same
+`Open` targets (`dock`/`dialog`/`url`/run-inline) as any action, so the feature is
+fully plugin-agnostic: the core renders whatever IDs the manifest declares and
+never special-cases a plugin. They show only once the session is connected.
 
 `Open: "url"` runs the action's route and opens the returned `{"url": "…"}` in a
 new browser tab. The route decides the URL — it may be any link (e.g. an external

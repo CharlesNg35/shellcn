@@ -38,6 +38,7 @@ func streams() []plugin.Stream {
 	return []plugin.Stream{
 		{ID: "kubernetes.pod.logs", Kind: plugin.StreamLogs, RouteID: "kubernetes.pod.logs"},
 		{ID: "kubernetes.pod.exec", Kind: plugin.StreamTerminal, RouteID: "kubernetes.pod.exec"},
+		{ID: "kubernetes.cluster.shell", Kind: plugin.StreamTerminal, RouteID: "kubernetes.cluster.shell"},
 		{ID: "kubernetes.cluster.metrics", Kind: plugin.StreamMetrics, RouteID: "kubernetes.cluster.metrics"},
 		{ID: "kubernetes.node.metrics", Kind: plugin.StreamMetrics, RouteID: "kubernetes.node.metrics"},
 	}
@@ -47,7 +48,7 @@ func podRecording() []plugin.RecordingCapability {
 	return []plugin.RecordingCapability{{
 		Class:         plugin.RecordingTerminal,
 		Formats:       []plugin.RecordingFormat{plugin.FormatAsciicastV2},
-		StreamIDs:     []string{"kubernetes.pod.exec"},
+		StreamIDs:     []string{"kubernetes.pod.exec", "kubernetes.cluster.shell"},
 		Authoritative: true,
 	}}
 }

@@ -65,6 +65,7 @@ type Projection struct {
 	Tree                []TreeGroup            `json:"tree,omitempty"`
 	Resources           []ResourceType         `json:"resources,omitempty"`
 	Actions             []ProjectedAction      `json:"actions,omitempty"`
+	HeaderActions       []string               `json:"headerActions,omitempty"`
 	Streams             []Stream               `json:"streams,omitempty"`
 	Recording           []ProjectedRecording   `json:"recording,omitempty"`
 }
@@ -88,6 +89,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 		Tabs:                m.Tabs,
 		Tree:                m.Tree,
 		Resources:           m.Resources,
+		HeaderActions:       m.HeaderActions,
 		Streams:             m.Streams,
 	}
 

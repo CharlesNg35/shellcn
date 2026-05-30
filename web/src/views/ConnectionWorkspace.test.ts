@@ -215,6 +215,67 @@ describe("ConnectionWorkspace", () => {
     ).toBe(true);
   });
 
+  it("renders manifest header actions in the workspace header when connected", async () => {
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    const withHeader: PluginProjection = {
+      ...projection,
+      actions: [
+        {
+          id: "k.shell",
+          label: "Cluster Shell",
+          icon: { type: "lucide", value: "terminal" },
+          routeId: "k.shell",
+          method: "GET",
+          risk: "privileged",
+          requiresConfirm: false,
+          open: "dock",
+          panel: "terminal",
+        },
+      ],
+      headerActions: ["k.shell"],
+    };
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "docker",
+              protocol: "docker",
+              transport: "direct",
+            },
+          ],
+        };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) return { body: withHeader };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: {
+          AppIcon: true,
+          DetailView: true,
+          ResourceTree: true,
+          TablePanel: TablePanelStub,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(
+      wrapper.findAll("button").some((b) => b.text().includes("Cluster Shell")),
+    ).toBe(true);
+  });
+
   it("opens the backend plugin session before entering the workspace", async () => {
     const ws = useWorkspaceStore();
 

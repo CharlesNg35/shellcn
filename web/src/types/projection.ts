@@ -588,6 +588,9 @@ export interface PluginProjection {
   tree?: TreeGroup[];
   resources?: ResourceType[];
   actions?: Action[];
+  // Action IDs shown centered in the connection workspace header (connection-wide
+  // affordances not bound to a selected resource).
+  headerActions?: string[];
   streams?: Stream[];
   recording?: RecordingCapability[];
 }
