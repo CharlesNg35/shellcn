@@ -233,7 +233,7 @@ func ContainerProxyURL(rc *plugin.RequestContext) (any, error) {
 			return nil, err
 		}
 	}
-	return map[string]any{"url": s.ProxyURL("container", id, portSeg)}, nil
+	return map[string]any{"url": s.ProxyURL("container", shortID(id), portSeg)}, nil
 }
 
 // pickWebPort picks the lowest reachable TCP port (Docker exposes only the

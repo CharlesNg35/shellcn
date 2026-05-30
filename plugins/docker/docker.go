@@ -35,7 +35,10 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Label:      "Docker",
 				Kind:       "docker-run",
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
-				Template: "docker run --rm --name " + app.AgentBinary + " " +
+				// Host networking lets the agent reach container/service IPs on every
+				// Docker network when proxying a web port; it mounts the socket (full
+				// daemon control) regardless, so it adds no meaningful privilege.
+				Template: "docker run --rm --name " + app.AgentBinary + " --network host " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 					`--group-add "$(stat -c '%g' /var/run/docker.sock)" ` +
 					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +
