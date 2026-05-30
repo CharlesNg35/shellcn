@@ -793,11 +793,16 @@ type ResourceType struct {
 type ScopeControl string
 
 const (
-	ScopeSelect      ScopeControl = "select"      // default
-	ScopeMultiSelect ScopeControl = "multiselect" // joined by Separator
+	ScopeSelect      ScopeControl = "select" // default
+	ScopeMultiSelect ScopeControl = "multiselect"
 	ScopeSearch      ScopeControl = "search"
 	ScopeToggle      ScopeControl = "toggle" // on sets the first Option's value
 )
+
+// ScopeSeparator joins a multiselect scope's values into the one param string.
+// It is a fixed wire convention (like the p.* param prefix), so plugins read the
+// list with rc.ParamList(param, ScopeSeparator) rather than inventing their own.
+const ScopeSeparator = ","
 
 // ScopeFilter is a global header selector; the renderer injects its value as route
 // param Param into every read/stream. Choices come from OptionsSource rows
@@ -812,9 +817,6 @@ type ScopeFilter struct {
 	ValueField    string         `json:"valueField,omitempty"`
 	LabelField    string         `json:"labelField,omitempty"`
 	AllLabel      string         `json:"allLabel,omitempty"`
-	// Separator joins a multiselect's values into the single param string; the
-	// route handler splits on it. Required for ScopeMultiSelect.
-	Separator string `json:"separator,omitempty"`
 }
 
 type FilterOption struct {

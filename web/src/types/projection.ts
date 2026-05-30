@@ -244,7 +244,6 @@ export interface ScopeFilter {
   valueField?: string;
   labelField?: string;
   allLabel?: string;
-  separator?: string; // joins a multiselect's values into the param string
 }
 
 export interface TablePanelConfig {

@@ -1,6 +1,10 @@
 import { reactive } from "vue";
 import { defineStore } from "pinia";
 
+// Wire convention that joins a multiselect scope's values into the one param
+// string; mirrors the backend plugin.ScopeSeparator so handlers split the same way.
+export const SCOPE_SEPARATOR = ",";
+
 // Global, per-connection request scope. A manifest-declared header selector
 // writes its chosen value here; the data layer merges these params into every
 // read/stream for that connection, so all resources share one scope. The store

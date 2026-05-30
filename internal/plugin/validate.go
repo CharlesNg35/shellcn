@@ -217,19 +217,13 @@ func validateScope(m Manifest, routes map[string]Route, add func(string, ...any)
 		switch s.Control {
 		case ScopeSearch:
 			// free text — needs no choices.
-		case ScopeMultiSelect:
-			if s.Separator == "" {
-				add("scope filter %q is multiselect but declares no separator", s.Param)
-			}
-			if !hasChoices {
-				add("scope filter %q has no choices (set options or optionsSource)", s.Param)
-			}
 		case ScopeToggle:
 			if len(s.Options) == 0 {
 				add("scope filter %q is a toggle but declares no option for its on-value", s.Param)
 			}
 		default:
-			// select (and unknown controls, which fall back to select) need choices.
+			// select/multiselect (and unknown controls, which fall back to a select)
+			// need choices.
 			if !hasChoices {
 				add("scope filter %q has no choices (set options or optionsSource)", s.Param)
 			}

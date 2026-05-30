@@ -166,6 +166,23 @@ func (rc *RequestContext) Param(name string) string {
 	return rc.params[name]
 }
 
+// ParamList splits a param that carries several values joined by sep — e.g. a
+// multiselect scope filter, read with sep = ScopeSeparator — dropping blanks. It
+// returns nil when the param is absent, so a handler treats "no scope" as "all".
+func (rc *RequestContext) ParamList(name, sep string) []string {
+	raw := rc.Param(name)
+	if raw == "" {
+		return nil
+	}
+	out := make([]string, 0, strings.Count(raw, sep)+1)
+	for _, p := range strings.Split(raw, sep) {
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // Query returns the raw query values (list controls + p.* params).
 func (rc *RequestContext) Query() url.Values {
 	if rc.query == nil {

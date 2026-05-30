@@ -5,7 +5,7 @@ import MultiSelect from "primevue/multiselect";
 import InputText from "primevue/inputtext";
 import ToggleSwitch from "primevue/toggleswitch";
 import { fetchPage } from "../../api/dataSource";
-import { useScopeStore } from "../../stores/scope";
+import { SCOPE_SEPARATOR, useScopeStore } from "../../stores/scope";
 import type { FilterOption, Row, ScopeFilter } from "../../types/projection";
 import AppIcon from "../../components/AppIcon.vue";
 
@@ -37,15 +37,14 @@ function set(f: ScopeFilter, v: string): void {
   store.set(props.connectionId, f.param, v);
 }
 
-// Members are joined by the manifest separator; the handler splits on it.
+// Members ride in one param string, joined by the shared scope separator.
 function members(f: ScopeFilter): string[] {
   const v = value(f);
-  if (!v) return [];
-  return f.separator ? v.split(f.separator).filter(Boolean) : [v];
+  return v ? v.split(SCOPE_SEPARATOR).filter(Boolean) : [];
 }
 
 function setMembers(f: ScopeFilter, vs: string[]): void {
-  set(f, f.separator ? vs.join(f.separator) : (vs[0] ?? ""));
+  set(f, vs.join(SCOPE_SEPARATOR));
 }
 
 // Toggle on = the first option's value; off clears the scope.

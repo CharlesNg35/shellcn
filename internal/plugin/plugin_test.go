@@ -266,8 +266,8 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"scope optionsSource unknown route", "optionsSource references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", OptionsSource: &plugin.DataSource{RouteID: "ghost"}}}
 		}},
-		{"scope multiselect without separator", "declares no separator", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", Control: plugin.ScopeMultiSelect, Options: []plugin.FilterOption{{Value: "a"}}}}
+		{"scope multiselect without choices", "has no choices", func(m *plugin.Manifest, _ *[]plugin.Route) {
+			m.Scope = []plugin.ScopeFilter{{Param: "ns", Label: "Namespace", Control: plugin.ScopeMultiSelect}}
 		}},
 		{"scope toggle without option", "declares no option", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Scope = []plugin.ScopeFilter{{Param: "sys", Label: "System", Control: plugin.ScopeToggle}}

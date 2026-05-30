@@ -382,7 +382,6 @@ type ScopeFilter struct {
     ValueField    string
     LabelField    string
     AllLabel      string // label for the empty value that clears the scope
-    Separator     string // joins a multiselect's values into the one param string
 }
 ```
 
@@ -390,10 +389,18 @@ type ScopeFilter struct {
 names (`select`, `multiselect`, `search`, `toggle`, …) to widgets and falls back
 to a select for anything it doesn't recognize, so a new control needs no core
 change. Every control encodes its value into the **single string** the param
-carries — a select stores one value, a multiselect joins members with `Separator`,
-a search stores free text, a toggle stores the first option's value when on — so
-the injection path stays identical regardless of widget. This keeps the feature
-**global**, not shaped around any one plugin's needs.
+carries — a select stores one value, a multiselect joins members with the fixed
+`ScopeSeparator` wire convention, a search stores free text, a toggle stores the
+first option's value when on — so the injection path stays identical regardless of
+widget. This keeps the feature **global**, not shaped around any one plugin's needs.
+
+**Consuming a scope.** The handler reads its scope param like any other:
+`rc.Param("namespace")` for single-valued controls. A multiselect arrives as the
+joined string, so the handler splits it with `rc.ParamList("namespace",
+ScopeSeparator)` — the separator is a framework constant (like the `p.*` prefix),
+not a per-plugin choice, so the renderer and handler never disagree. The core
+validates at registration that a select/multiselect has choices, so a malformed
+scope can't ship.
 
 The renderer shows the selectors in the header toolbar (next to header actions)
 and keeps the chosen values in a **per-connection scope state**. The data layer
