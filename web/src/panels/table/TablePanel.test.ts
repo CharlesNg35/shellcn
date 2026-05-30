@@ -116,6 +116,44 @@ describe("TablePanel", () => {
     expect(w.text()).toContain("beta");
   });
 
+  it("scopes the list by a manifest filter param", async () => {
+    const namespaceParams: string[] = [];
+    installFetch((url) => {
+      const u = new URL(url, "http://h");
+      if (u.pathname.includes("ns.list"))
+        return {
+          body: { items: [{ name: "ns-a" }, { name: "ns-b" }], total: 2 },
+        };
+      namespaceParams.push(u.searchParams.get("p.namespace") ?? "");
+      return { body: { items: [row("a", "alpha")], nextCursor: "", total: 1 } };
+    });
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "pod.list", params: { kind: "pod" } },
+        config: {
+          columns,
+          filters: [
+            {
+              key: "namespace",
+              label: "Namespace",
+              param: "namespace",
+              optionsSource: { routeId: "ns.list" },
+              valueField: "name",
+              allLabel: "All namespaces",
+            },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+    expect(namespaceParams[0]).toBe("");
+
+    w.findComponent({ name: "Select" }).vm.$emit("update:modelValue", "ns-b");
+    await flushPromises();
+    expect(namespaceParams.at(-1)).toBe("ns-b");
+  });
+
   it("emits the full row on click", async () => {
     const w = mount(TablePanel, {
       props: {

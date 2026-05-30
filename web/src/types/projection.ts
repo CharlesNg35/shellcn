@@ -225,10 +225,30 @@ export interface FileBrowserConfig {
 
 export type RowClickAction = "navigate" | "detail" | "select" | "none";
 
+export interface FilterOption {
+  value: string;
+  label?: string;
+}
+
+// A list toolbar control that sets a route param (e.g. namespace) to a chosen
+// value; choices come from optionsSource rows or static options.
+export interface ResourceFilter {
+  key: string;
+  label: string;
+  param: string;
+  optionsSource?: DataSource;
+  options?: FilterOption[];
+  valueField?: string;
+  labelField?: string;
+  allLabel?: string;
+}
+
 export interface TablePanelConfig {
   columns?: Column[];
   columnsSource?: DataSource;
   watch?: DataSource;
+  // Toolbar filter selectors that scope the list by route param.
+  filters?: ResourceFilter[];
   // refreshIntervalMs re-fetches the current page on a cadence and replaces it
   // in place — used instead of `watch` for high-churn tables.
   refreshIntervalMs?: number;
@@ -411,6 +431,8 @@ export interface ResourceRef {
 
 export interface ActionSuccess {
   selectTab?: string;
+  // "list" returns a resource detail to its list after the action (e.g. delete).
+  navigate?: "list";
 }
 
 export interface Action {
@@ -515,6 +537,7 @@ export interface ResourceType {
   watch?: DataSource;
   columns: Column[];
   columnsSource?: DataSource; // runtime column defs when columns is empty (e.g. CRDs)
+  filters?: ResourceFilter[];
   actionIds: string[];
   listActionIds?: string[];
   rowActionIds?: string[];

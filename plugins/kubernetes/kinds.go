@@ -107,7 +107,7 @@ var kinds = []kind{
 		gvr:        schema.GroupVersionResource{Version: "v1", Resource: "pods"},
 		columns:    []plugin.Column{nameCol(), nsCol(), col("ready", "Ready", notSort), col("status", "Status", statusBadge(podSeverities)), col("restarts", "Restarts", num), col("node", "Node"), col("podIP", "IP", notSort), ageCol()},
 		extra:      podRow,
-		actionIDs:  []string{"kubernetes.pod.open", "kubernetes.pod.logs", "kubernetes.pod.exec", "kubernetes.resource.delete"},
+		actionIDs:  []string{"kubernetes.pod.open", "kubernetes.resource.delete"},
 		detailTabs: podDetailTabs(),
 	},
 	{

@@ -729,8 +729,18 @@ type Action struct {
 	EnabledWhen *Condition `json:"enabledWhen,omitempty"`
 }
 
+// NavigateTarget is where the UI moves after an action succeeds.
+type NavigateTarget string
+
+// NavigateList returns from a resource detail to its list — e.g. after a delete,
+// so the now-gone resource's detail doesn't linger.
+const NavigateList NavigateTarget = "list"
+
 type ActionSuccess struct {
 	SelectTab string `json:"selectTab,omitempty"`
+	// Navigate moves the workbench after success (e.g. a deleted resource's detail
+	// returns to the list). Empty leaves the current view in place.
+	Navigate NavigateTarget `json:"navigate,omitempty"`
 }
 
 // Stream is a long-lived channel a panel binds to, pointing at a WS route.
@@ -774,4 +784,26 @@ type ResourceType struct {
 	ListActionIDs []string    `json:"listActionIds,omitempty"`
 	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
 	Detail        DetailView  `json:"detail"`
+	// Filters are toolbar controls (e.g. a namespace selector) that scope the list
+	// by setting a list route param.
+	Filters []ResourceFilter `json:"filters,omitempty"`
+}
+
+// ResourceFilter is a list toolbar control that sets a route param (Param) to a
+// chosen value. Choices come from OptionsSource rows (ValueField/LabelField) or
+// static Options; an empty choice (AllLabel) clears the filter.
+type ResourceFilter struct {
+	Key           string         `json:"key"`
+	Label         string         `json:"label"`
+	Param         string         `json:"param"`
+	OptionsSource *DataSource    `json:"optionsSource,omitempty"`
+	Options       []FilterOption `json:"options,omitempty"`
+	ValueField    string         `json:"valueField,omitempty"`
+	LabelField    string         `json:"labelField,omitempty"`
+	AllLabel      string         `json:"allLabel,omitempty"`
+}
+
+type FilterOption struct {
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
 }

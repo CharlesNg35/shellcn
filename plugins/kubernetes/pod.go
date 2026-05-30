@@ -32,22 +32,6 @@ func podDetailTabs() []plugin.Tab {
 	}
 }
 
-// podActions are the dock-opening pod actions (Logs/Shell) plus port-forward.
-func podActions() []plugin.Action {
-	return []plugin.Action{
-		{
-			ID: "kubernetes.pod.logs", Label: "Logs", Icon: lucide("scroll-text"),
-			RouteID: "kubernetes.pod.logs", Open: plugin.OpenDock, Panel: plugin.PanelLogStream,
-			Params: podRefParams(map[string]string{"follow": "true", "tail": "500", "timestamps": "true"}),
-		},
-		{
-			ID: "kubernetes.pod.exec", Label: "Shell", Icon: lucide("terminal"),
-			RouteID: "kubernetes.pod.exec", Open: plugin.OpenDock, Panel: plugin.PanelTerminal,
-			Params: podRefParams(map[string]string{"command": "/bin/sh", "tty": "true", "cols": "80", "rows": "24"}),
-		},
-	}
-}
-
 // streams declares the pod log/terminal streams plus the cluster/node metrics
 // streams the overview dashboards bind to.
 func streams() []plugin.Stream {

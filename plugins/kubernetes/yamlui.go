@@ -3,7 +3,7 @@ package kubernetes
 import "github.com/charlesng35/shellcn/internal/plugin"
 
 // yamlEditorConfig is the code_editor config that saves edits via server-side
-// apply (POST). Used by the YAML detail tab and the Edit/Create dock actions.
+// apply (POST). Used by the YAML detail tab and the Create dialog.
 func yamlEditorConfig() map[string]any {
 	return plugin.CodeEditorConfig{
 		Language:    "yaml",
@@ -40,22 +40,12 @@ func eventsTab(k kind) plugin.Tab {
 	}
 }
 
-// editAction opens the resource's YAML in the dock for editing.
-func editAction() plugin.Action {
-	return plugin.Action{
-		ID: "kubernetes.resource.edit", Label: "Edit YAML", Icon: lucide("file-code"),
-		RouteID: "kubernetes.resource.yaml", Open: plugin.OpenDock, Panel: plugin.PanelCodeEditor,
-		Params: map[string]string{"kind": "${resource.kind}", "namespace": "${resource.namespace}", "name": "${resource.name}"},
-		Config: yamlEditorConfig(),
-	}
-}
-
-// createAction opens a dynamically-generated starter manifest for kind in the
-// dock; saving applies it. One per kind so the list's "Create" knows its kind.
+// createAction opens a dynamically-generated starter manifest for kind in a
+// dialog; saving applies it. One per kind so the list's "Create" knows its kind.
 func createAction(k kind) plugin.Action {
 	return plugin.Action{
 		ID: "kubernetes.create." + k.name, Label: "Create " + k.title, Icon: lucide("plus"),
-		RouteID: "kubernetes.resource.template", Open: plugin.OpenDock, Panel: plugin.PanelCodeEditor,
+		RouteID: "kubernetes.resource.template", Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor,
 		Params: map[string]string{"kind": k.name},
 		Config: yamlEditorConfig(),
 	}
@@ -68,7 +58,7 @@ func createAction(k kind) plugin.Action {
 func createCustomResourceAction() plugin.Action {
 	return plugin.Action{
 		ID: "kubernetes.create.customresource", Label: "Create", Icon: lucide("plus"),
-		RouteID: "kubernetes.resource.template", Open: plugin.OpenDock, Panel: plugin.PanelCodeEditor,
+		RouteID: "kubernetes.resource.template", Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor,
 		Config: yamlEditorConfig(),
 	}
 }

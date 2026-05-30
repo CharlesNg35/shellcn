@@ -8,6 +8,17 @@ const customResourceKind = "customresource"
 
 func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
 
+// namespaceFilter is the list toolbar selector that scopes a namespaced kind to a
+// single namespace; options are the cluster's namespaces, empty means all.
+func namespaceFilter() plugin.ResourceFilter {
+	return plugin.ResourceFilter{
+		Key: "namespace", Label: "Namespace", Param: "namespace",
+		OptionsSource: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "namespace"}},
+		ValueField:    "name",
+		AllLabel:      "All namespaces",
+	}
+}
+
 func resources() []plugin.ResourceType {
 	out := make([]plugin.ResourceType, 0, len(kinds)+3)
 	out = append(out, clusterResourceType(), helmReleaseResourceType())
@@ -22,8 +33,8 @@ func resourceType(k kind) plugin.ResourceType {
 	if k.namespaced {
 		getParams["namespace"] = "${resource.namespace}"
 	}
-	// Every kind gets Edit YAML + its specific actions; the list gets Create.
-	rowActions := append([]string{"kubernetes.resource.edit"}, k.actionIDs...)
+	// Edit and create live in the YAML tab / a dialog, not as row buttons.
+	rowActions := append([]string(nil), k.actionIDs...)
 
 	tabs := []plugin.Tab{
 		{
@@ -35,12 +46,18 @@ func resourceType(k kind) plugin.ResourceType {
 	tabs = append(tabs, k.detailTabs...)
 	tabs = append(tabs, eventsTab(k))
 
+	var filters []plugin.ResourceFilter
+	if k.namespaced {
+		filters = []plugin.ResourceFilter{namespaceFilter()}
+	}
+
 	return plugin.ResourceType{
 		Kind:          k.name,
 		Title:         k.title,
 		List:          plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": k.name}},
 		Watch:         &plugin.DataSource{RouteID: "kubernetes.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": k.name}},
 		Columns:       k.columns,
+		Filters:       filters,
 		ActionIDs:     rowActions,
 		ListActionIDs: []string{"kubernetes.create." + k.name},
 		Detail: plugin.DetailView{
@@ -75,16 +92,14 @@ func customResourceType() plugin.ResourceType {
 func actions() []plugin.Action {
 	uid := map[string]string{"kind": "${resource.kind}", "namespace": "${resource.namespace}", "name": "${resource.name}"}
 	base := []plugin.Action{
-		{ID: "kubernetes.resource.delete", Label: "Delete", Icon: lucide("trash"), RouteID: "kubernetes.resource.delete", Params: uid, Confirm: true, ConfirmText: "Delete this resource?"},
+		{ID: "kubernetes.resource.delete", Label: "Delete", Icon: lucide("trash"), RouteID: "kubernetes.resource.delete", Params: uid, Confirm: true, ConfirmText: "Delete this resource?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "kubernetes.resource.scale", Label: "Scale", Icon: lucide("move-vertical"), RouteID: "kubernetes.resource.scale", Params: uid},
 		{ID: "kubernetes.resource.restart", Label: "Restart", Icon: lucide("refresh-cw"), RouteID: "kubernetes.resource.restart", Params: uid, Confirm: true, ConfirmText: "Roll out a restart?"},
 		{ID: "kubernetes.node.cordon", Label: "Cordon", Icon: lucide("ban"), RouteID: "kubernetes.node.cordon", Params: uid, Confirm: true, ConfirmText: "Mark this node unschedulable?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpNeq, Value: true}}}},
 		{ID: "kubernetes.node.uncordon", Label: "Uncordon", Icon: lucide("circle-check"), RouteID: "kubernetes.node.uncordon", Params: uid, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpEq, Value: true}}}},
 		{ID: "kubernetes.service.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.service.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
 		{ID: "kubernetes.pod.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.pod.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
-		editAction(),
 	}
-	base = append(base, podActions()...)
 	for _, k := range kinds {
 		base = append(base, createAction(k))
 	}
