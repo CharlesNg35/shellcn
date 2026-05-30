@@ -20,6 +20,26 @@ func pageRC(t *testing.T, filter string) *plugin.RequestContext {
 	return plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, nil, nil, q, nil)
 }
 
+func sortRC(t *testing.T, sort string) *plugin.RequestContext {
+	t.Helper()
+	q := url.Values{}
+	q.Set("sort", sort)
+	return plugin.NewRequestContext(context.Background(), models.User{ID: "u1"}, nil, nil, q, nil)
+}
+
+func TestPageRowsSorts(t *testing.T) {
+	rows := []row{{"name": "orders", "n": 3}, {"name": "events", "n": 1}, {"name": "Alerts", "n": 2}}
+
+	asc, _ := PageRows(sortRC(t, "name"), rows)
+	if asc.Items[0]["name"] != "Alerts" || asc.Items[2]["name"] != "orders" {
+		t.Fatalf("name asc = %v", asc.Items)
+	}
+	desc, _ := PageRows(sortRC(t, "-n"), rows)
+	if desc.Items[0]["n"] != 3 || desc.Items[2]["n"] != 1 {
+		t.Fatalf("numeric desc = %v", desc.Items)
+	}
+}
+
 func TestPageRowsFiltersMapRows(t *testing.T) {
 	rows := []row{{"name": "orders"}, {"name": "events"}, {"name": "order-dlq"}}
 

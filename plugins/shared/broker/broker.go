@@ -91,6 +91,7 @@ func PageRows[T ~map[string]any](rc *plugin.RequestContext, rows []T) (plugin.Pa
 		return plugin.Page[T]{}, err
 	}
 	rows = filterRows(rows, req.Search())
+	rows = plugin.SortRows(rows, req.Sort)
 	start := 0
 	if req.Cursor != "" {
 		i, err := strconv.Atoi(req.Cursor)
