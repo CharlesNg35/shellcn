@@ -13,6 +13,6 @@ export interface ConnectionNode {
 export type ConnectionTreeItem = ConnectionFolderNode | ConnectionNode;
 
 export interface ConnectionFolderMenuAction {
-  key: "new-child" | "rename" | "delete";
+  key: "rename" | "delete";
   folder: ConnectionFolder;
 }

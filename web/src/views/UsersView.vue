@@ -63,6 +63,37 @@ function viewUser(u: AdminUser): void {
   void router.push({ name: "user-detail", params: { id: u.id } });
 }
 
+// Mirrors the backend rule: never the protected root, never yourself, and only
+// the root admin may manage another admin.
+function canManageActive(u: AdminUser): boolean {
+  if (u.protected || u.id === auth.user?.id) return false;
+  if (u.roles.includes(Role.Admin) && !auth.user?.protected) return false;
+  return true;
+}
+
+async function setActive(u: AdminUser, active: boolean): Promise<void> {
+  try {
+    if (active) await adminUsersApi.activate(u.id);
+    else await adminUsersApi.deactivate(u.id);
+    notify.success(
+      active ? "Account activated" : "Account deactivated",
+      u.username,
+    );
+    await loadUsers();
+  } catch (e) {
+    notify.error("Could not update account", (e as Error).message);
+  }
+}
+
+function askDeactivate(u: AdminUser): void {
+  confirmDanger({
+    header: "Deactivate user",
+    message: `Deactivate "${u.username}"? They won't be able to sign in until reactivated.`,
+    acceptLabel: "Deactivate",
+    accept: () => setActive(u, false),
+  });
+}
+
 function openCreate(): void {
   editingUser.value = null;
   showUserForm.value = true;
@@ -98,8 +129,14 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
       @update:value="tab = String($event)"
     >
       <TabList>
-        <Tab value="users">Users</Tab>
-        <Tab value="invitations">Invitations</Tab>
+        <Tab value="users">
+          <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="14" />
+          Users
+        </Tab>
+        <Tab value="invitations">
+          <AppIcon :icon="{ type: 'lucide', value: 'mail' }" :size="14" />
+          Invitations
+        </Tab>
       </TabList>
       <TabPanels>
         <TabPanel value="users" class="flex h-full flex-col">
@@ -110,7 +147,12 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
             </Button>
           </div>
           <div class="min-h-0 flex-1">
-            <DataTable :value="users" scrollable scroll-height="flex">
+            <DataTable
+              :value="users"
+              scrollable
+              scroll-height="flex"
+              @row-click="viewUser($event.data as AdminUser)"
+            >
               <Column field="username" header="Username">
                 <template #body="{ data }">
                   <span class="flex items-center gap-1.5">
@@ -154,13 +196,46 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
                 <template #body="{ data }">
                   <div class="flex items-center justify-end gap-1">
                     <Button
+                      v-if="
+                        canManageActive(data as AdminUser) &&
+                        (data as AdminUser).disabled
+                      "
+                      text
+                      rounded
+                      severity="secondary"
+                      size="small"
+                      title="Activate"
+                      :aria-label="`Activate ${(data as AdminUser).username}`"
+                      @click.stop="setActive(data as AdminUser, true)"
+                    >
+                      <AppIcon
+                        :icon="{ type: 'lucide', value: 'user-check' }"
+                        :size="16"
+                      />
+                    </Button>
+                    <Button
+                      v-else-if="canManageActive(data as AdminUser)"
+                      text
+                      rounded
+                      severity="danger"
+                      size="small"
+                      title="Deactivate"
+                      :aria-label="`Deactivate ${(data as AdminUser).username}`"
+                      @click.stop="askDeactivate(data as AdminUser)"
+                    >
+                      <AppIcon
+                        :icon="{ type: 'lucide', value: 'user-x' }"
+                        :size="16"
+                      />
+                    </Button>
+                    <Button
                       text
                       rounded
                       severity="secondary"
                       size="small"
                       title="View details"
                       :aria-label="`View ${(data as AdminUser).username}`"
-                      @click="viewUser(data as AdminUser)"
+                      @click.stop="viewUser(data as AdminUser)"
                     >
                       <AppIcon
                         :icon="{ type: 'lucide', value: 'arrow-right' }"
@@ -175,7 +250,7 @@ async function revokeInvite(inv: InvitationSummary): Promise<void> {
                       size="small"
                       title="Edit"
                       :aria-label="`Edit ${(data as AdminUser).username}`"
-                      @click="openEdit(data as AdminUser)"
+                      @click.stop="openEdit(data as AdminUser)"
                     >
                       <AppIcon
                         :icon="{ type: 'lucide', value: 'pencil' }"

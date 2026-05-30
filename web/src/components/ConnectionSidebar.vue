@@ -68,7 +68,6 @@ const expanded = useStorage<Record<string, boolean>>(
 );
 const showFolderDialog = ref(false);
 const editingFolder = ref<ConnectionFolder | null>(null);
-const newFolderParentId = ref<string | null>(null);
 const savingLayout = ref(false);
 let pendingPersist = false;
 
@@ -131,12 +130,10 @@ function rebuildLists(): void {
     }
   }
 
+  // Two-level rule (frontend-enforced): every folder lives at the root and holds
+  // only connections — a folder is never nested inside another folder.
   for (const node of nodeById.values()) {
-    if (node.parentId && nodeById.has(node.parentId)) {
-      nodeById.get(node.parentId)?.children.push(node);
-    } else {
-      roots.push(node);
-    }
+    roots.push(node);
   }
 
   const sortTree = (items: ConnectionTreeItem[]): ConnectionTreeItem[] => {
@@ -187,24 +184,20 @@ function openFolderAncestors(folderId: string): void {
   expanded.value = next;
 }
 
-function openNewFolder(parentId?: string): void {
+function openNewFolder(): void {
   editingFolder.value = null;
-  newFolderParentId.value = parentId ?? null;
   showFolderDialog.value = true;
 }
 
 function editFolder(folder: ConnectionFolder): void {
   editingFolder.value = folder;
-  newFolderParentId.value = null;
   showFolderDialog.value = true;
 }
 
 function askDeleteFolder(folder: ConnectionFolder): void {
   confirmDanger({
     header: "Delete folder",
-    message: folder.parentId
-      ? `Delete "${folder.name}"? Its connections and subfolders will move up one level.`
-      : `Delete "${folder.name}"? Its connections and subfolders will move to the main list.`,
+    message: `Delete "${folder.name}"? Its connections will move to the main list.`,
     acceptLabel: "Delete",
     accept: async () => {
       await conns.deleteFolder(folder.id);
@@ -215,10 +208,7 @@ function askDeleteFolder(folder: ConnectionFolder): void {
 }
 
 function handleFolderMenu(action: ConnectionFolderMenuAction): void {
-  if (action.key === "new-child") {
-    expanded.value = { ...expanded.value, [action.folder.id]: true };
-    openNewFolder(action.folder.id);
-  } else if (action.key === "rename") {
+  if (action.key === "rename") {
     editFolder(action.folder);
   } else if (action.key === "delete") {
     askDeleteFolder(action.folder);
@@ -322,7 +312,8 @@ function collectLayout(
       });
       return;
     }
-    folders.push({ folderId: item.id, parentId, sortOrder: index });
+    // Folders persist only ever at the root, so any nesting can't be saved.
+    folders.push({ folderId: item.id, parentId: undefined, sortOrder: index });
     collectLayout(item.children, item.id, items, folders);
   });
 }
@@ -451,7 +442,6 @@ function go(connection: ConnectionSummary): void {
     <ConnectionFolderDialog
       v-model:visible="showFolderDialog"
       :folder="editingFolder"
-      :parent-id="newFolderParentId"
       @saved="rebuildLists"
     />
   </div>

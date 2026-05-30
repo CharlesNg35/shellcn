@@ -137,9 +137,24 @@ function formatDate(iso: string): string {
 
     <Tabs v-else-if="user" :value="tab" @update:value="tab = String($event)">
       <TabList>
-        <Tab value="overview">Overview</Tab>
-        <Tab value="connections">Connections</Tab>
-        <Tab value="audit">Audit</Tab>
+        <Tab value="overview">
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'circle-user' }"
+            :size="14"
+          />
+          Overview
+        </Tab>
+        <Tab value="connections">
+          <AppIcon :icon="{ type: 'lucide', value: 'server' }" :size="14" />
+          Connections
+        </Tab>
+        <Tab value="audit">
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'scroll-text' }"
+            :size="14"
+          />
+          Audit
+        </Tab>
       </TabList>
       <TabPanels>
         <TabPanel value="overview" class="flex flex-col gap-5 pt-2">

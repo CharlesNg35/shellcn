@@ -53,10 +53,6 @@ const colorClasses: Record<FolderColor, { icon: string }> = {
 
 const menuItems = computed(() => [
   {
-    label: "New subfolder",
-    command: () => emitMenuAction("new-child"),
-  },
-  {
     label: "Rename",
     command: () => emitMenuAction("rename"),
   },
@@ -66,6 +62,14 @@ const menuItems = computed(() => [
     command: () => emitMenuAction("delete"),
   },
 ]);
+
+// Folders live only at the root level: a folder may never be dropped inside
+// another folder, so the tree stays exactly two deep (folder → connections).
+function onMove(evt: { dragged?: HTMLElement; to?: HTMLElement }): boolean {
+  const draggingFolder = evt.dragged?.hasAttribute("data-folder-id") ?? false;
+  const intoFolder = Boolean(evt.to?.closest("[data-folder-id]"));
+  return !(draggingFolder && intoFolder);
+}
 
 function emitMenuAction(action: ConnectionFolderMenuAction["key"]): void {
   if (!menuFolder.value) return;
@@ -112,6 +116,7 @@ function onEnd(event: unknown): void {
       group="sidebar-items"
       handle=".connection-sidebar-drag-item"
       :disabled="disabled"
+      :on-move="onMove"
       :animation="150"
       chosen-class="connection-sidebar-sortable-chosen"
       drag-class="connection-sidebar-sortable-drag"
