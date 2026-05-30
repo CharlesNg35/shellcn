@@ -83,3 +83,40 @@ func TestEnrollmentCommandAdaptsLocalhostForContainer(t *testing.T) {
 		t.Fatalf("command missing quoted enrollment token: %s", cmd)
 	}
 }
+
+func TestEnrollmentOffersComposeFile(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewMemory()
+	reg := plugin.NewRegistry()
+	reg.MustRegister(New())
+	if err := st.Connections.Create(ctx, &models.Connection{
+		ID: "docker-agent", Name: "Docker", Protocol: "docker", OwnerID: "owner",
+		Transport: string(plugin.TransportAgent),
+	}); err != nil {
+		t.Fatalf("create connection: %v", err)
+	}
+	svc := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
+
+	enr, err := svc.Create(ctx, "docker-agent", "wss://shellcn.test/api/agent/connect", nil)
+	if err != nil {
+		t.Fatalf("create enrollment: %v", err)
+	}
+	var compose *service.InstallArtifact
+	for i := range enr.Artifacts {
+		if enr.Artifacts[i].Kind == "docker-compose" {
+			compose = &enr.Artifacts[i]
+		}
+	}
+	if compose == nil || compose.Filename != "shellcn-agent.compose.yml" {
+		t.Fatalf("compose artifact missing or unnamed: %+v", compose)
+	}
+	for _, want := range []string{
+		"network_mode: host",
+		`SHELLCN_CONNECT_URL: "wss://shellcn.test/api/agent/connect"`,
+		`SHELLCN_ENROLL_TOKEN: "`,
+	} {
+		if !strings.Contains(compose.Content, want) {
+			t.Fatalf("compose content missing %q:\n%s", want, compose.Content)
+		}
+	}
+}

@@ -45,6 +45,9 @@ type InstallArtifact struct {
 	Kind    string `json:"kind"`
 	Command string `json:"command,omitempty"`
 	URL     string `json:"url,omitempty"`
+	// Content is an inline file body shown in the panel; Filename names it.
+	Content  string `json:"content,omitempty"`
+	Filename string `json:"filename,omitempty"`
 }
 
 // Enrollment is the response to creating an enrollment.
@@ -189,7 +192,13 @@ func (s *EnrollmentService) renderArtifacts(specs []plugin.InstallArtifact, conn
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, InstallArtifact{Label: spec.Label, Kind: spec.Kind, Command: cmd})
+		art := InstallArtifact{Label: spec.Label, Kind: spec.Kind, Command: cmd, Filename: spec.Filename}
+		if spec.Content != "" {
+			if art.Content, err = renderTemplate(spec.Kind, spec.Content, data); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, art)
 	}
 	return out, nil
 }

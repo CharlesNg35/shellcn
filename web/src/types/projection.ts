@@ -802,6 +802,9 @@ export interface InstallArtifact {
   kind: string;
   command?: string;
   url?: string;
+  // content is an inline file body shown in the panel; filename names it.
+  content?: string;
+  filename?: string;
 }
 
 export interface Enrollment {

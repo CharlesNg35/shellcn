@@ -100,15 +100,29 @@ async function enroll(): Promise<void> {
 }
 
 async function copy(artifact: InstallArtifact): Promise<void> {
-  if (!artifact.command) return;
+  const text = artifact.content ?? artifact.command;
+  if (!text) return;
   try {
-    await navigator.clipboard?.writeText(artifact.command);
+    await navigator.clipboard?.writeText(text);
     copied.value = artifact.kind;
     clearCopiedTimer();
     copiedTimer = setTimeout(() => (copied.value = null), 1500);
   } catch {
     // clipboard unavailable
   }
+}
+
+function download(artifact: InstallArtifact): void {
+  if (!artifact.content) return;
+  const blob = new Blob([artifact.content], {
+    type: "text/yaml;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = artifact.filename || `${artifact.kind}.yml`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 watch(
@@ -169,22 +183,35 @@ onUnmounted(clearCopiedTimer);
       class="rounded-lg border border-surface-200 dark:border-surface-800"
     >
       <div
-        class="flex items-center justify-between border-b border-surface-200 px-3 py-2 text-sm font-medium dark:border-surface-800"
+        class="flex items-center justify-between gap-2 border-b border-surface-200 px-3 py-2 text-sm font-medium dark:border-surface-800"
       >
-        <span>{{ artifact.label }}</span>
-        <Button
-          type="button"
-          size="small"
-          variant="text"
-          @click="copy(artifact)"
-        >
-          <AppIcon :icon="{ type: 'lucide', value: 'copy' }" :size="13" />
-          {{ copied === artifact.kind ? "Copied" : "Copy" }}
-        </Button>
+        <span class="truncate">{{ artifact.label }}</span>
+        <div class="flex shrink-0 items-center gap-1">
+          <Button
+            v-if="artifact.content"
+            type="button"
+            size="small"
+            variant="text"
+            :title="`Download ${artifact.filename || artifact.kind}`"
+            @click="download(artifact)"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'download' }" :size="13" />
+            Download
+          </Button>
+          <Button
+            type="button"
+            size="small"
+            variant="text"
+            @click="copy(artifact)"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'copy' }" :size="13" />
+            {{ copied === artifact.kind ? "Copied" : "Copy" }}
+          </Button>
+        </div>
       </div>
       <pre
         class="m-0 overflow-auto p-3 font-mono text-xs text-surface-700 dark:text-surface-200"
-        >{{ artifact.command }}</pre
+        >{{ artifact.content || artifact.command }}</pre
       >
     </div>
   </div>

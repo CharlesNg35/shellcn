@@ -13,6 +13,23 @@ type Plugin struct{}
 
 func New() *Plugin { return &Plugin{} }
 
+// dockerComposeContent mirrors the docker-run recipe as an inline Compose file.
+// It runs as root since Compose can't add the socket's GID dynamically.
+const dockerComposeContent = `services:
+  shellcn-agent:
+    image: "{{.Image}}"
+    container_name: shellcn-agent
+    restart: unless-stopped
+    network_mode: host
+    user: "0:0"
+    environment:
+      SHELLCN_CONNECT_URL: "{{.GatewayConnectURL}}"
+      SHELLCN_ENROLL_TOKEN: "{{.Token}}"
+{{if .Insecure}}      SHELLCN_INSECURE: "1"
+{{end}}    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+`
+
 const dockerIconSVG = `<?xml version="1.0" encoding="UTF-8"?><svg id=Layer_1 version=1.1 viewBox="0 0 340 268"xmlns=http://www.w3.org/2000/svg xmlns:xlink=http://www.w3.org/1999/xlink><defs><style>.st0{fill:none}.st1{fill:#2560ff}.st2{clip-path:url(#clippath)}</style><clipPath id=clippath><rect class=st0 height=268 width=339.5 /></clipPath></defs><g class=st2><path class=st1 d=M334,110.1c-8.3-5.6-30.2-8-46.1-3.7-.9-15.8-9-29.2-24-40.8l-5.5-3.7-3.7,5.6c-7.2,11-10.3,25.7-9.2,39,.8,8.2,3.7,17.4,9.2,24.1-20.7,12-39.8,9.3-124.3,9.3H0c-.4,19.1,2.7,55.8,26,85.6,2.6,3.3,5.4,6.5,8.5,9.6,19,19,47.6,32.9,90.5,33,65.4,0,121.4-35.3,155.5-120.8,11.2.2,40.8,2,55.3-26,.4-.5,3.7-7.4,3.7-7.4l-5.5-3.7h0ZM85.2,92.7h-36.7v36.7h36.7v-36.7ZM132.6,92.7h-36.7v36.7h36.7v-36.7ZM179.9,92.7h-36.7v36.7h36.7v-36.7ZM227.3,92.7h-36.7v36.7h36.7v-36.7ZM37.8,92.7H1.1v36.7h36.7v-36.7ZM85.2,46.3h-36.7v36.7h36.7v-36.7ZM132.6,46.3h-36.7v36.7h36.7v-36.7ZM179.9,46.3h-36.7v36.7h36.7v-36.7ZM179.9,0h-36.7v36.7h36.7V0Z /></g></svg>`
 
 func (p *Plugin) Manifest() plugin.Manifest {
@@ -31,22 +48,29 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect, plugin.TransportAgent},
 		Agent: &plugin.AgentProfile{
 			Proxy: plugin.ProxyTarget{Mode: plugin.AgentUnix, Address: "/var/run/docker.sock", Risk: plugin.RiskPrivileged, Forward: true},
-			Install: []plugin.InstallArtifact{{
-				Label:      "Docker",
-				Kind:       "docker-run",
-				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
-				// Host networking lets the agent reach container/service IPs on every
-				// Docker network when proxying a web port; it mounts the socket (full
-				// daemon control) regardless, so it adds no meaningful privilege.
-				Template: "docker run --rm --name " + app.AgentBinary + " --network host " +
-					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
-					`--group-add "$(stat -c '%g' /var/run/docker.sock)" ` +
-					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +
-					"{{if .Insecure}}-e SHELLCN_INSECURE=1 {{end}}" +
-					"-e SHELLCN_ENROLL_TOKEN={{shellquote .Token}} " +
-					"-v {{shellquote \"/var/run/docker.sock:/var/run/docker.sock\"}} " +
-					"{{shellquote .Image}}",
-			}},
+			Install: []plugin.InstallArtifact{
+				{
+					Label:      "Docker",
+					Kind:       "docker-run",
+					ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
+					// Host networking lets the agent reach container IPs on every Docker
+					// network when proxying a web port.
+					Template: "docker run --rm --name " + app.AgentBinary + " --network host " +
+						"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
+						`--group-add "$(stat -c '%g' /var/run/docker.sock)" ` +
+						"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +
+						"{{if .Insecure}}-e SHELLCN_INSECURE=1 {{end}}" +
+						"-e SHELLCN_ENROLL_TOKEN={{shellquote .Token}} " +
+						"-v {{shellquote \"/var/run/docker.sock:/var/run/docker.sock\"}} " +
+						"{{shellquote .Image}}",
+				},
+				{
+					Label:    "Docker Compose",
+					Kind:     "docker-compose",
+					Filename: "shellcn-agent.compose.yml",
+					Content:  dockerComposeContent,
+				},
+			},
 		},
 		Layout:    plugin.LayoutSidebarTree,
 		Tree:      tree(),

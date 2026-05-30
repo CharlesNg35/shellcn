@@ -77,12 +77,15 @@ const (
 	DeliveryURL ArtifactDelivery = "url"
 )
 
-// InstallArtifact is a launch recipe shown to the user to start an agent.
+// InstallArtifact is a launch recipe shown to the user to start an agent. An
+// inline Content (e.g. a Compose YAML) renders directly in the panel to save/copy
+// under Filename; Template is the shown command instead.
 type InstallArtifact struct {
 	Label      string
 	Kind       string
 	Template   string
 	Content    string
+	Filename   string
 	Delivery   ArtifactDelivery
 	ConnectURL ArtifactConnectURL
 }
