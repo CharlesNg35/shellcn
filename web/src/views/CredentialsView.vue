@@ -164,6 +164,7 @@ const hasItems = computed(() => items.value.length > 0);
         <template #body="{ data }">
           <CredentialProtocolBadges
             :protocols="credentialProtocols(data as CredentialSummary)"
+            :max="3"
           />
         </template>
       </Column>
