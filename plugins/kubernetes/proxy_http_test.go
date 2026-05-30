@@ -1,7 +1,7 @@
 package kubernetes
 
 import (
-	"io"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,77 +10,88 @@ import (
 	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
-func TestProxyPaths(t *testing.T) {
-	s := connectTo(t, http.NewServeMux()).(*Session)
-	cases := map[string][3]string{
-		"/services/default/web/80/":      {"/api/v1/namespaces/default/services/web:80/proxy/", "/api/v1/namespaces/default/services/web:80/proxy", "/api/connections/c1/proxy/services/default/web/80"},
-		"/pods/default/api/8080/healthz": {"/api/v1/namespaces/default/pods/api:8080/proxy/healthz", "/api/v1/namespaces/default/pods/api:8080/proxy", "/api/connections/c1/proxy/pods/default/api/8080"},
-		"/services/mon/graf/https:8443/": {"/api/v1/namespaces/mon/services/https:graf:8443/proxy/", "/api/v1/namespaces/mon/services/https:graf:8443/proxy", "/api/connections/c1/proxy/services/mon/graf/https:8443"},
+func TestSplitProxyTarget(t *testing.T) {
+	cases := []struct {
+		in                            string
+		kind, ns, name, portSeg, rest string
+		ok                            bool
+	}{
+		{"/services/default/web/80/", "services", "default", "web", "80", "", true},
+		{"/pods/default/api/8080/healthz", "pods", "default", "api", "8080", "healthz", true},
+		{"/services/mon/graf/https:8443/x/y", "services", "mon", "graf", "https:8443", "x/y", true},
+		{"/configmaps/default/cm", "", "", "", "", "", false},
+		{"/services/default/web", "", "", "", "", "", false},
 	}
-	for in, want := range cases {
-		apiPath, apiPrefix, prefix, ok := s.proxyPaths(in)
-		if !ok || apiPath != want[0] || apiPrefix != want[1] || prefix != want[2] {
-			t.Errorf("proxyPaths(%q) = %q,%q,%q,%v; want %q,%q,%q", in, apiPath, apiPrefix, prefix, ok, want[0], want[1], want[2])
+	for _, c := range cases {
+		kind, ns, name, portSeg, rest, ok := splitProxyTarget(c.in)
+		if kind != c.kind || ns != c.ns || name != c.name || portSeg != c.portSeg || rest != c.rest || ok != c.ok {
+			t.Errorf("splitProxyTarget(%q) = %q,%q,%q,%q,%q,%v", c.in, kind, ns, name, portSeg, rest, ok)
 		}
 	}
-	if _, _, _, ok := s.proxyPaths("/configmaps/default/cm"); ok {
-		t.Error("non-proxyable kind should be rejected")
+}
+
+func TestSchemePort(t *testing.T) {
+	cases := []struct {
+		in     string
+		scheme string
+		port   int
+		ok     bool
+	}{
+		{"80", "http", 80, true},
+		{"https:8443", "https", 8443, true},
+		{"0", "", 0, false},
+		{"abc", "", 0, false},
+		{"99999", "", 0, false},
+	}
+	for _, c := range cases {
+		scheme, port, ok := schemePort(c.in)
+		if scheme != c.scheme || port != c.port || ok != c.ok {
+			t.Errorf("schemePort(%q) = %q,%d,%v", c.in, scheme, port, ok)
+		}
 	}
 }
 
-// The API server's proxy subresource rewrites the app's root-relative URLs to
-// its own proxy prefix; the gateway must map that back to the public prefix, not
-// prepend on top (which would double the path and 404 the assets).
-func TestServeHTTPProxyUndoesAPIServerPrefix(t *testing.T) {
+// A service resolves to a ready backing pod and the pod-side target port (so the
+// port-forward attaches to a pod); a pod resolves to itself.
+func TestProxyPodTarget(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/namespaces/default/services/web:80/proxy/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		// As an API-server-proxied app would emit it (already prefixed).
-		_, _ = io.WriteString(w, `<html><head></head><body><script src="/api/v1/namespaces/default/services/web:80/proxy/_next/app.js"></script><a href="/page">p</a></body></html>`)
+	mux.HandleFunc("/api/v1/namespaces/default/services/web", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "v1", "kind": "Service", "metadata": obj{"name": "web", "namespace": "default"},
+			"spec": obj{"ports": []any{obj{"name": "http", "port": int64(80), "targetPort": int64(8080)}}},
+		})
 	})
-	sess := connectTo(t, mux).(*Session)
-	rec := httptest.NewRecorder()
-	sess.ServeHTTPProxy(rec, httptest.NewRequest(http.MethodGet, "/services/default/web/80/", nil))
-
-	body := rec.Body.String()
-	prefix := "/api/connections/c1/proxy/services/default/web/80"
-	if !strings.Contains(body, `src="`+prefix+`/_next/app.js"`) {
-		t.Fatalf("api-server prefix not mapped to public prefix: %s", body)
-	}
-	if strings.Contains(body, "/proxy/api/v1/namespaces") {
-		t.Fatalf("double-prefixed asset URL leaked: %s", body)
-	}
-	if !strings.Contains(body, `href="`+prefix+`/page"`) {
-		t.Fatalf("bare root-relative link not prefixed: %s", body)
-	}
-}
-
-func TestServeHTTPProxyRewritesHTML(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/namespaces/default/services/web:80/proxy/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'")
-		_, _ = io.WriteString(w, `<html><head><title>x</title></head><body><a href="/dashboard">d</a></body></html>`)
+	mux.HandleFunc("/apis/discovery.k8s.io/v1/namespaces/default/endpointslices", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, obj{
+			"apiVersion": "discovery.k8s.io/v1", "kind": "EndpointSliceList",
+			"items": []any{obj{
+				"metadata": obj{"name": "web-abc", "namespace": "default", "labels": obj{"kubernetes.io/service-name": "web"}},
+				"ports":    []any{obj{"name": "http", "port": int64(8080)}},
+				"endpoints": []any{obj{
+					"addresses":  []any{"10.1.2.3"},
+					"conditions": obj{"ready": true},
+					"targetRef":  obj{"kind": "Pod", "name": "web-xyz", "namespace": "default"},
+				}},
+			}},
+		})
 	})
-	sess := connectTo(t, mux).(*Session)
-	rec := httptest.NewRecorder()
-	sess.ServeHTTPProxy(rec, httptest.NewRequest(http.MethodGet, "/services/default/web/80/", nil))
+	s := connectTo(t, mux).(*Session)
 
-	body := rec.Body.String()
-	prefix := "/api/connections/c1/proxy/services/default/web/80"
-	if !strings.Contains(body, `<base href="`+prefix+`/">`) {
-		t.Fatalf("missing rewritten <base>: %s", body)
+	podNS, podName, podPort, err := s.proxyPodTarget(context.Background(), "services", "default", "web", 80)
+	if err != nil {
+		t.Fatalf("resolve service: %v", err)
 	}
-	if !strings.Contains(body, `href="`+prefix+`/dashboard"`) {
-		t.Fatalf("root-relative link not rewritten: %s", body)
+	if podNS != "default" || podName != "web-xyz" || podPort != 8080 {
+		t.Fatalf("service resolve = %s/%s:%d; want default/web-xyz:8080", podNS, podName, podPort)
 	}
-	if rec.Header().Get("Content-Security-Policy") != "" {
-		t.Fatal("CSP should be dropped so the shim/assets load")
+
+	pn, pp, port, err := s.proxyPodTarget(context.Background(), "pods", "default", "api", 9090)
+	if err != nil || pn != "default" || pp != "api" || port != 9090 {
+		t.Fatalf("pod self-resolve = %s/%s:%d,%v", pn, pp, port, err)
 	}
-	// The shim must patch runtime-injected assets (bundler chunks/styles bypass
-	// fetch), so script/link src/href are rewritten under the prefix at runtime.
-	if !strings.Contains(body, "HTMLScriptElement.prototype") {
-		t.Fatalf("shim does not rewrite runtime-injected script URLs: %s", body)
+
+	if _, _, _, err := s.proxyPodTarget(context.Background(), "services", "default", "web", 12345); err == nil {
+		t.Error("an unexposed service port should error")
 	}
 }
 
@@ -154,22 +165,6 @@ func TestPodProxyURL(t *testing.T) {
 	}
 	if url, _ := out.(map[string]any)["url"].(string); url != "/api/connections/c1/proxy/pods/default/web/8080/" {
 		t.Fatalf("http container port should win: %q", url)
-	}
-}
-
-func TestServeHTTPProxyForwardsToServiceProxy(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/namespaces/default/services/web:80/proxy/hello", func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = io.WriteString(w, "hi from the service")
-	})
-	sess := connectTo(t, mux).(*Session)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/services/default/web/80/hello", nil)
-	sess.ServeHTTPProxy(rec, req)
-
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "hi from the service") {
-		t.Fatalf("proxy response = %d %q", rec.Code, rec.Body.String())
 	}
 }
 

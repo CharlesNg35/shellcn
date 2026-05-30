@@ -199,5 +199,5 @@ self.addEventListener("activate",function(e){e.waitUntil(self.clients.claim());}
 self.addEventListener("fetch",function(e){var u;try{u=new URL(e.request.url);}catch(_){return;}
 if(u.origin===self.location.origin&&u.pathname.charAt(0)==="/"&&u.pathname.indexOf(P+"/")!==0){
 u.pathname=P+u.pathname;
-e.respondWith(fetch(u.href,{method:e.request.method,headers:e.request.headers,credentials:"include"}));}});`)
+e.respondWith((async function(){var r=e.request;var init={method:r.method,headers:r.headers,credentials:"include"};if(r.method!=="GET"&&r.method!=="HEAD"){init.body=await r.blob();}return fetch(u.href,init);})());}});`)
 }

@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -9,77 +10,79 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/webproxy"
 )
 
-// ServeHTTPProxy reverse-proxies a browser request to an in-cluster Service or
-// Pod port via the API server's proxy subresource, using the session's REST
-// transport (so it works over both transports). The incoming path is
-// `/{services|pods}/{ns}/{name}/{port}/{rest...}`. The generic rewriting +
-// service worker live in the shared webproxy package; here we only resolve the
-// upstream (the API server proxy path) and the prefix it injects.
+// ServeHTTPProxy reverse-proxies a browser request to a Service or Pod port. It
+// reaches the workload through the pod port-forward subresource — an L4 tunnel —
+// so the app's own Authorization/cookies pass through to the backend, which the
+// API server's HTTP proxy would otherwise strip. The incoming path is
+// `/{services|pods}/{ns}/{name}/{port}/{rest...}`; generic HTML/redirect/cookie
+// rewriting and the service worker live in the shared webproxy package.
 func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
-	apiPath, apiPrefix, prefix, ok := s.proxyPaths(r.URL.Path)
+	kind, ns, name, portSeg, rest, ok := splitProxyTarget(r.URL.Path)
 	if !ok {
 		http.Error(w, "unsupported proxy target", http.StatusBadRequest)
 		return
 	}
-	if strings.HasSuffix(r.URL.Path, "/"+webproxy.SWFile) {
+	prefix := fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/%s", s.connID, kind, ns, name, portSeg)
+	if rest == webproxy.SWFile {
 		webproxy.ServeWorker(w, prefix)
 		return
 	}
-	base, err := url.Parse(s.rest.Host)
-	if err != nil || base.Host == "" {
-		http.Error(w, "bad upstream", http.StatusBadGateway)
+	scheme, port, ok := schemePort(portSeg)
+	if !ok {
+		http.Error(w, "bad proxy port", http.StatusBadRequest)
 		return
 	}
-	rt, err := rest.TransportFor(s.rest)
+	podNS, podName, podPort, err := s.proxyPodTarget(r.Context(), kind, ns, name, port)
 	if err != nil {
-		http.Error(w, "transport: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	// Preserve the original path encoding (Next.js route-group chunks carry
-	// %5B/%28 etc.) so the upstream receives the exact filename.
-	apiRawPath, _, _, _ := s.proxyPaths(r.URL.EscapedPath())
+	transport, err := s.proxyTransport(podNS, podName, podPort, scheme == "https")
+	if err != nil {
+		http.Error(w, "proxy transport: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	// Preserve the original path encoding (route-group chunks carry %5B/%28 etc.)
+	// so the upstream receives the exact filename.
+	_, _, _, _, rawRest, _ := splitProxyTarget(r.URL.EscapedPath())
 	webproxy.Serve(w, r, webproxy.Options{
-		Base:            base,
-		Transport:       rt,
-		UpstreamPath:    apiPath,
-		UpstreamRawPath: apiRawPath,
+		Base:            &url.URL{Scheme: scheme, Host: net.JoinHostPort(name, strconv.Itoa(port))},
+		Transport:       transport,
+		UpstreamPath:    "/" + rest,
+		UpstreamRawPath: "/" + rawRest,
 		PublicPrefix:    prefix,
-		SourcePrefix:    apiPrefix,
 	})
 }
 
-// proxyPaths maps the public sub-path to the API server proxy path, the prefix
-// the API server itself prepends when rewriting the app's links (apiPrefix), and
-// the public prefix the app is served under (for response rewriting). The port
-// segment may carry an "https:" marker to proxy over TLS to the target.
-func (s *Session) proxyPaths(sub string) (apiPath, apiPrefix, prefix string, ok bool) {
+// splitProxyTarget parses `/{services|pods}/{ns}/{name}/{port}/{rest...}`.
+func splitProxyTarget(sub string) (kind, ns, name, portSeg, rest string, ok bool) {
 	parts := strings.SplitN(strings.TrimPrefix(sub, "/"), "/", 5)
-	if len(parts) < 4 {
-		return "", "", "", false
+	if len(parts) < 4 || (parts[0] != "services" && parts[0] != "pods") {
+		return "", "", "", "", "", false
 	}
-	kind, ns, name, portSeg := parts[0], parts[1], parts[2], parts[3]
-	if kind != "services" && kind != "pods" {
-		return "", "", "", false
-	}
-	rest := ""
 	if len(parts) == 5 {
 		rest = parts[4]
 	}
-	// "https:8443" → the API server proxies over TLS; otherwise plain http.
-	target := name + ":" + portSeg
-	if realPort, https := strings.CutPrefix(portSeg, "https:"); https {
-		target = "https:" + name + ":" + realPort
+	return parts[0], parts[1], parts[2], parts[3], rest, true
+}
+
+// schemePort splits a port segment ("8080" or "https:8443") into scheme + port.
+func schemePort(portSeg string) (scheme string, port int, ok bool) {
+	seg := portSeg
+	scheme = "http"
+	if p, https := strings.CutPrefix(portSeg, "https:"); https {
+		seg, scheme = p, "https"
 	}
-	apiPrefix = fmt.Sprintf("/api/v1/namespaces/%s/%s/%s/proxy", ns, kind, target)
-	apiPath = apiPrefix + "/" + rest
-	prefix = fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/%s", s.connID, kind, ns, name, portSeg)
-	return apiPath, apiPrefix, prefix, true
+	n, err := strconv.Atoi(seg)
+	if err != nil || n <= 0 || n > 65535 {
+		return "", 0, false
+	}
+	return scheme, n, true
 }
 
 // ServiceProxyURL returns the gateway URL that proxies to a Service's web port
