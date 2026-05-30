@@ -19,6 +19,25 @@ import (
 // requests (bundler chunks, dynamic imports, CSS) under the proxy prefix.
 const SWFile = "__shellcn_sw.js"
 
+// IsTLSPort is a best-effort guess that a port serves TLS, by the conventional
+// "443" suffix (443, 8443, 9443, …). Used only when no protocol metadata exists.
+func IsTLSPort(port int) bool {
+	return strings.Contains(strconv.Itoa(port), "443")
+}
+
+// WebSchemeFromName reads "http"/"https" from a port's conventional name (a
+// Kubernetes/Swarm port name), reporting ok=false when it names no web protocol.
+func WebSchemeFromName(name string) (scheme string, ok bool) {
+	switch n := strings.ToLower(name); {
+	case strings.Contains(n, "https"):
+		return "https", true
+	case n == "http" || n == "web" || strings.HasPrefix(n, "http"):
+		return "http", true
+	default:
+		return "", false
+	}
+}
+
 // Options describes one proxied request.
 type Options struct {
 	// Base is the upstream's scheme://host; Transport dials it.

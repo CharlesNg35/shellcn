@@ -19,35 +19,26 @@ import (
 	"github.com/charlesng35/shellcn/plugins/shared/webproxy"
 )
 
-// ServeHTTPProxy reverse-proxies a browser request straight to a container's web
-// port — the Docker equivalent of opening a Kubernetes Service in the browser.
-// The incoming path is `/container/{id}/{port}/{rest...}`; we resolve the
-// container's network IP, dial it over the session transport, and hand the
-// response to the shared rewriter. The gateway must be able to route to the
-// container's network (a local daemon); remote/agent reach is a separate matter.
+// ServeHTTPProxy reverse-proxies a browser to a container's or swarm service's
+// web port, via `/{container|service}/{id}/{port}/{rest...}`.
 func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
-	id, portSeg, rest, ok := splitProxyPath(r.URL.Path)
+	kind, id, portSeg, rest, ok := splitProxyPath(r.URL.Path)
 	if !ok {
 		http.Error(w, "unsupported proxy target", http.StatusBadRequest)
 		return
 	}
-	prefix := fmt.Sprintf("/api/connections/%s/proxy/container/%s/%s", s.connID, id, portSeg)
+	prefix := fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s", s.connID, kind, id, portSeg)
 	if strings.HasSuffix(r.URL.Path, "/"+webproxy.SWFile) {
 		webproxy.ServeWorker(w, prefix)
-		return
-	}
-	res, err := s.cli.ContainerInspect(r.Context(), id, dockerclient.ContainerInspectOptions{})
-	if err != nil {
-		http.Error(w, "inspect: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	scheme, internalPort := "http", portSeg
 	if p, https := strings.CutPrefix(portSeg, "https:"); https {
 		scheme, internalPort = "https", p
 	}
-	host, dialPort, ok := s.proxyDialTarget(res.Container.NetworkSettings, internalPort)
+	host, dialPort, ok := s.proxyTarget(r.Context(), kind, id, internalPort)
 	if !ok {
-		http.Error(w, "container port is not reachable from the gateway", http.StatusBadGateway)
+		http.Error(w, "target is not reachable from the gateway", http.StatusBadGateway)
 		return
 	}
 	base := &url.URL{Scheme: scheme, Host: net.JoinHostPort(host, dialPort)}
@@ -61,16 +52,45 @@ func (s *Session) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// splitProxyPath parses `/container/{id}/{port}/{rest}`.
-func splitProxyPath(sub string) (id, port, rest string, ok bool) {
+// ProxyURL builds the gateway "open in browser" URL for a target.
+func (s *Session) ProxyURL(kind, id, port string) string {
+	return fmt.Sprintf("/api/connections/%s/proxy/%s/%s/%s/", url.PathEscape(s.connID), kind, url.PathEscape(id), port)
+}
+
+// proxyTarget resolves where to dial: a container via its network, a service via
+// the daemon host's routing-mesh port.
+func (s *Session) proxyTarget(ctx context.Context, kind, id, internalPort string) (host, port string, ok bool) {
+	if kind == "service" {
+		return s.daemonProxyHost(), internalPort, true
+	}
+	res, err := s.cli.ContainerInspect(ctx, id, dockerclient.ContainerInspectOptions{})
+	if err != nil {
+		return "", "", false
+	}
+	return s.proxyDialTarget(res.Container.NetworkSettings, internalPort)
+}
+
+// daemonProxyHost is where the daemon's routing mesh is reachable: the remote tcp
+// host, else loopback (local or agent).
+func (s *Session) daemonProxyHost() string {
+	if s.endpoint.network != "unix" {
+		if h, _, err := net.SplitHostPort(s.endpoint.address); err == nil {
+			return h
+		}
+	}
+	return "127.0.0.1"
+}
+
+// splitProxyPath parses `/{container|service}/{id}/{port}/{rest}`.
+func splitProxyPath(sub string) (kind, id, port, rest string, ok bool) {
 	parts := strings.SplitN(strings.TrimPrefix(sub, "/"), "/", 4)
-	if len(parts) < 3 || parts[0] != "container" {
-		return "", "", "", false
+	if len(parts) < 3 || (parts[0] != "container" && parts[0] != "service") {
+		return "", "", "", "", false
 	}
 	if len(parts) == 4 {
 		rest = parts[3]
 	}
-	return parts[1], parts[2], rest, true
+	return parts[0], parts[1], parts[2], rest, true
 }
 
 // proxyRest returns the escaped `{rest}` segment so chunk filenames keep their
@@ -95,10 +115,8 @@ func (s *Session) proxyTransport() http.RoundTripper {
 	}
 }
 
-// proxyDialTarget resolves where to dial for a container's internal port, honoring
-// the endpoint. A local (unix) daemon shares the host's network, so the container's
-// own IP is reachable; a remote (tcp) daemon is reached through the published host
-// port on the daemon host (the only container port routable from the gateway).
+// proxyDialTarget resolves a container's dial address: its own IP for a local
+// (unix) daemon, else the published host port on a remote (tcp) daemon.
 func (s *Session) proxyDialTarget(ns *container.NetworkSettings, internalPort string) (host, port string, ok bool) {
 	if s.endpoint.network == "unix" {
 		ip, ok := containerIP(ns)
@@ -115,9 +133,8 @@ func (s *Session) proxyDialTarget(ns *container.NetworkSettings, internalPort st
 	return daemonHost, hostPort, true
 }
 
-// proxyPortCandidates lists a container's reachable internal TCP ports: any
-// exposed port for a local (unix) daemon, but only published ports for a remote
-// (tcp) daemon, since unpublished bridge ports aren't routable from the gateway.
+// proxyPortCandidates lists a container's reachable TCP ports: exposed ports for a
+// local (unix) daemon, only published ports for a remote (tcp) one.
 func (s *Session) proxyPortCandidates(cfg *container.Config, ns *container.NetworkSettings) []int {
 	if s.endpoint.network == "unix" {
 		if cfg == nil {
@@ -216,36 +233,19 @@ func ContainerProxyURL(rc *plugin.RequestContext) (any, error) {
 			return nil, err
 		}
 	}
-	u := fmt.Sprintf("/api/connections/%s/proxy/container/%s/%s/", url.PathEscape(s.connID), url.PathEscape(id), portSeg)
-	return map[string]any{"url": u}, nil
+	return map[string]any{"url": s.ProxyURL("container", id, portSeg)}, nil
 }
 
-// pickWebPort chooses a container's web port from its reachable TCP ports: a
-// conventional web port if present, else the lowest. 443/8443 proxy over TLS.
+// pickWebPort picks the lowest reachable TCP port (Docker exposes only the
+// number, so this is best-effort). 443/8443 proxy over TLS.
 func pickWebPort(ports []int) (string, error) {
 	if len(ports) == 0 {
-		return "", fmt.Errorf("%w: container exposes no reachable TCP ports", plugin.ErrInvalidInput)
+		return "", fmt.Errorf("%w: no reachable TCP ports", plugin.ErrInvalidInput)
 	}
 	sort.Ints(ports)
-	pick := ports[0]
-	for _, want := range []int{80, 8080, 3000, 8000, 5000} {
-		if contains(ports, want) {
-			pick = want
-			break
-		}
-	}
-	seg := strconv.Itoa(pick)
-	if pick == 443 || pick == 8443 {
+	seg := strconv.Itoa(ports[0])
+	if webproxy.IsTLSPort(ports[0]) {
 		return "https:" + seg, nil
 	}
 	return seg, nil
-}
-
-func contains(xs []int, x int) bool {
-	for _, v := range xs {
-		if v == x {
-			return true
-		}
-	}
-	return false
 }

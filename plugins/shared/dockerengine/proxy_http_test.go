@@ -10,20 +10,21 @@ import (
 
 func TestSplitProxyPath(t *testing.T) {
 	cases := []struct {
-		in             string
-		id, port, rest string
-		ok             bool
+		in                   string
+		kind, id, port, rest string
+		ok                   bool
 	}{
-		{"/container/abc/80/foo/bar", "abc", "80", "foo/bar", true},
-		{"/container/abc/https:8443/", "abc", "https:8443", "", true},
-		{"/container/abc/80", "abc", "80", "", true},
-		{"/services/x/y/z", "", "", "", false},
-		{"/container/abc", "", "", "", false},
+		{"/container/abc/80/foo/bar", "container", "abc", "80", "foo/bar", true},
+		{"/service/web/8080/", "service", "web", "8080", "", true},
+		{"/container/abc/https:8443/", "container", "abc", "https:8443", "", true},
+		{"/container/abc/80", "container", "abc", "80", "", true},
+		{"/pods/x/y/z", "", "", "", "", false},
+		{"/container/abc", "", "", "", "", false},
 	}
 	for _, c := range cases {
-		id, port, rest, ok := splitProxyPath(c.in)
-		if id != c.id || port != c.port || rest != c.rest || ok != c.ok {
-			t.Errorf("splitProxyPath(%q) = %q,%q,%q,%v; want %q,%q,%q,%v", c.in, id, port, rest, ok, c.id, c.port, c.rest, c.ok)
+		kind, id, port, rest, ok := splitProxyPath(c.in)
+		if kind != c.kind || id != c.id || port != c.port || rest != c.rest || ok != c.ok {
+			t.Errorf("splitProxyPath(%q) = %q,%q,%q,%q,%v; want %q,%q,%q,%q,%v", c.in, kind, id, port, rest, ok, c.kind, c.id, c.port, c.rest, c.ok)
 		}
 	}
 }
@@ -35,9 +36,10 @@ func TestPickWebPort(t *testing.T) {
 		want  string
 		isErr bool
 	}{
-		{"prefers a conventional web port", []int{9000, 80}, "80", false},
-		{"falls back to the lowest", []int{9000, 7000}, "7000", false},
+		{"picks the lowest reachable port", []int{9000, 80}, "80", false},
+		{"lowest even when several", []int{9000, 7000}, "7000", false},
 		{"marks TLS ports", []int{443}, "https:443", false},
+		{"detects non-standard TLS ports", []int{9443}, "https:9443", false},
 		{"no ports", nil, "", true},
 	}
 	for _, c := range cases {

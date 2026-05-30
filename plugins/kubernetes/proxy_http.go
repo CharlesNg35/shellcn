@@ -146,11 +146,20 @@ func pickServicePort(ports []corev1.ServicePort) (string, error) {
 		}
 	}
 	first := ports[0]
-	scheme, _ := webScheme(first)
-	if scheme == "" {
-		scheme = "http"
+	scheme, ok := webScheme(first)
+	if !ok {
+		scheme = defaultScheme(int(first.Port))
 	}
 	return portSegment(first.Port, scheme), nil
+}
+
+// defaultScheme is the fallback when no appProtocol/name declares one: TLS by the
+// conventional port, else plain HTTP.
+func defaultScheme(port int) string {
+	if webproxy.IsTLSPort(port) {
+		return "https"
+	}
+	return "http"
 }
 
 func portSegment(port int32, scheme string) string {
@@ -174,19 +183,7 @@ func webScheme(p corev1.ServicePort) (string, bool) {
 			return "", false
 		}
 	}
-	return webSchemeName(p.Name)
-}
-
-// webSchemeName infers the scheme from a port's conventional name.
-func webSchemeName(name string) (string, bool) {
-	switch n := strings.ToLower(name); {
-	case strings.Contains(n, "https"):
-		return "https", true
-	case n == "http" || n == "web" || strings.HasPrefix(n, "http"):
-		return "http", true
-	default:
-		return "", false
-	}
+	return webproxy.WebSchemeFromName(p.Name)
 }
 
 // pickPodPort picks a pod's web container port (preferring a web-named TCP port,
@@ -199,7 +196,7 @@ func pickPodPort(containers []corev1.Container) (string, error) {
 			if p.Protocol != "" && p.Protocol != corev1.ProtocolTCP {
 				continue
 			}
-			if scheme, ok := webSchemeName(p.Name); ok {
+			if scheme, ok := webproxy.WebSchemeFromName(p.Name); ok {
 				return portSegment(p.ContainerPort, scheme), nil
 			}
 			if first == nil {
@@ -210,9 +207,9 @@ func pickPodPort(containers []corev1.Container) (string, error) {
 	if first == nil {
 		return "", fmt.Errorf("%w: pod exposes no TCP ports", plugin.ErrInvalidInput)
 	}
-	scheme, _ := webSchemeName(first.Name)
-	if scheme == "" {
-		scheme = "http"
+	scheme, ok := webproxy.WebSchemeFromName(first.Name)
+	if !ok {
+		scheme = defaultScheme(int(first.ContainerPort))
 	}
 	return portSegment(first.ContainerPort, scheme), nil
 }
