@@ -32,9 +32,16 @@ const linkClass =
     </h1>
 
     <div
-      class="flex items-center justify-between rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
+      class="flex items-center gap-3 rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
     >
-      <p class="font-medium text-surface-800 dark:text-surface-100">
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'palette' }"
+        :size="18"
+        class="text-surface-400"
+      />
+      <p
+        class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
+      >
         Appearance
       </p>
       <Button type="button" severity="secondary" outlined @click="toggle">
@@ -80,9 +87,18 @@ const linkClass =
       </RouterLink>
 
       <div
-        class="flex items-center justify-between rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
+        class="flex items-center gap-3 rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
       >
-        <p class="font-medium text-surface-800 dark:text-surface-100">Email</p>
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'mail' }"
+          :size="18"
+          class="text-surface-400"
+        />
+        <p
+          class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
+        >
+          Email
+        </p>
         <span
           v-if="emailEnabled !== null"
           class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium"

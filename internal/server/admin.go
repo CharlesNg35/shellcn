@@ -136,32 +136,29 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
-	isSelf := target.ID == actor.ID
-
-	// The root admin must stay an enabled admin (no self-lockout).
-	if target.Protected && (req.Disabled || role != models.RoleAdmin) {
+	// Self-management goes through the profile (PUT /auth/me), never the admin
+	// user list, so an admin can't change their own role or lock themselves out.
+	if target.ID == actor.ID {
 		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
-		writeError(w, s.deps.Logger, errForbidden("the root admin must remain an enabled admin"))
+		writeError(w, s.deps.Logger, errForbidden("update your own account from your profile"))
+		return
+	}
+	// The root admin is immutable here; it changes its own details from its profile.
+	if target.Protected {
+		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, errForbidden("the root admin can only be changed from their profile"))
 		return
 	}
 	// Only the root admin may edit other admins; a regular admin manages
-	// non-admin users (and their own account) only.
-	if target.HasRole(models.RoleAdmin) && !isSelf && !actor.Protected {
+	// non-admin users only.
+	if target.HasRole(models.RoleAdmin) && !actor.Protected {
 		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, errForbidden("only the root admin may edit another admin"))
 		return
 	}
 
-	roles := []models.Role{role}
-	disabled := req.Disabled
-	// A non-root admin editing their own account can't change their role or
-	// disable themselves (no self-escalation/lockout); profile fields still apply.
-	if isSelf && !actor.Protected {
-		roles = target.Roles
-		disabled = target.Disabled
-	}
 	updated, err := s.deps.Users.Update(ctx, target.ID, service.UpdateUserInput{
-		Email: req.Email, DisplayName: req.DisplayName, Roles: roles, Disabled: disabled,
+		Email: req.Email, DisplayName: req.DisplayName, Roles: []models.Role{role}, Disabled: req.Disabled,
 	})
 	if err != nil {
 		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditError, nil, err)

@@ -43,7 +43,7 @@ async function onSubmit(): Promise<void> {
   } catch (e) {
     error.value =
       e instanceof ApiError && e.status === 409
-        ? "That username is taken — choose another."
+        ? "That username is taken. Choose another."
         : (e as Error).message;
   } finally {
     busy.value = false;

@@ -103,7 +103,7 @@ const src = computed(() => props.streamSrc || props.content?.url || "");
         v-if="showTruncatedNotice"
         class="border-t border-surface-200 px-4 py-1.5 text-xs text-amber-500 dark:border-surface-800"
       >
-        Preview truncated — download for the full file.
+        Preview truncated. Download for the full file.
       </p>
     </template>
 

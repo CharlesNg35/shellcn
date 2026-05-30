@@ -92,6 +92,35 @@ func TestAdminDeactivateUserRules(t *testing.T) {
 	}
 }
 
+func TestAdminUpdateUserRules(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.Background()
+	_ = h.store.Users.Create(ctx, &models.User{ID: "root", Username: "root", Roles: []models.Role{models.RoleAdmin}, Protected: true}, "")
+	_ = h.store.Users.Create(ctx, &models.User{ID: "target", Username: "target", Roles: []models.Role{models.RoleViewer}}, "")
+	h.sessions["root"] = h.sessionMgr.Create("root")
+
+	update := func(id, as, body string) int {
+		return h.do(t, http.MethodPut, "/api/admin/users/"+id, as, strings.NewReader(body)).Status
+	}
+
+	// No one edits their own account from the admin list — not a regular admin…
+	if s := update("admin", "admin", `{"role":"admin"}`); s != http.StatusForbidden {
+		t.Errorf("admin self-edit: want 403, got %d", s)
+	}
+	// …and not the root admin (it uses its profile instead).
+	if s := update("root", "root", `{"role":"admin"}`); s != http.StatusForbidden {
+		t.Errorf("root self-edit: want 403, got %d", s)
+	}
+	// The root admin is immutable from here even for another admin.
+	if s := update("root", "admin", `{"role":"viewer"}`); s != http.StatusForbidden {
+		t.Errorf("edit protected root: want 403, got %d", s)
+	}
+	// A regular admin may still edit a non-admin user.
+	if s := update("target", "admin", `{"role":"operator"}`); s != http.StatusOK {
+		t.Errorf("admin edit non-admin: want 200, got %d", s)
+	}
+}
+
 func TestInvitationFlow(t *testing.T) {
 	h := newHarness(t)
 

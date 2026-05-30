@@ -137,7 +137,7 @@ onUnmounted(clearCopiedTimer);
         <span class="font-medium">{{ result.invitation.email }}</span
         >.
         <span v-if="result.emailSent">An email has been sent.</span>
-        <span v-else>Email is not configured — share this link:</span>
+        <span v-else>Email is not configured. Share this link:</span>
       </p>
       <div
         class="flex items-center gap-2 rounded-md border border-surface-200 bg-surface-50 px-2.5 py-1.5 dark:border-surface-700 dark:bg-surface-950"

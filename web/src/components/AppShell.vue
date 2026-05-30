@@ -7,9 +7,9 @@ import { useConnectionsStore } from "../stores/connections";
 import { useAuthStore } from "../stores/auth";
 import { useConnectionSessionsStore } from "../stores/connectionSessions";
 import { KEEP_ALIVE_CONNECTION_WORKSPACES_MAX } from "../stores/sessionLimits";
-import { useTheme } from "../composables/useTheme";
 import AppIcon from "./AppIcon.vue";
 import AppLogo from "./AppLogo.vue";
+import ThemeToggle from "./ThemeToggle.vue";
 import ConnectionFormDialog from "./ConnectionFormDialog.vue";
 import ConnectionSidebar from "./ConnectionSidebar.vue";
 import { searchInputClass } from "../primevue/preset";
@@ -19,7 +19,6 @@ const auth = useAuthStore();
 const connectionSessions = useConnectionSessionsStore();
 const route = useRoute();
 const router = useRouter();
-const { isDark, toggle: toggleTheme } = useTheme();
 
 const userLabel = computed(
   () => auth.user?.displayName || auth.user?.username || "",
@@ -89,19 +88,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
           <AppLogo :size="28" class="shrink-0 text-primary-600" />
           ShellCN
         </RouterLink>
-        <Button
-          text
-          rounded
-          severity="secondary"
-          size="small"
-          :title="isDark ? 'Switch to light' : 'Switch to dark'"
-          :aria-label="
-            isDark ? 'Switch to light theme' : 'Switch to dark theme'
-          "
-          @click="toggleTheme"
-        >
-          {{ isDark ? "☀" : "☾" }}
-        </Button>
+        <ThemeToggle size="small" :icon-size="16" />
       </div>
 
       <div class="px-3 pb-2">

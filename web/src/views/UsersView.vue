@@ -50,11 +50,13 @@ onMounted(() => {
   void loadInvitations();
 });
 
-// Root admin edits anyone; a regular admin edits non-admin users and their own
-// account, but not other admins (the backend enforces this too).
+// You manage your own account from your profile, and the root admin is immutable
+// here (it also uses its profile). Root edits any other user; a regular admin edits
+// only non-admin users. The backend enforces all of this too.
 function canEdit(u: AdminUser): boolean {
+  if (u.protected || u.id === auth.user?.id) return false;
   if (auth.user?.protected) return true;
-  return !u.roles.includes(Role.Admin) || u.id === auth.user?.id;
+  return !u.roles.includes(Role.Admin);
 }
 
 function viewUser(u: AdminUser): void {
