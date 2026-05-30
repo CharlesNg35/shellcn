@@ -50,7 +50,13 @@ onMounted(() => {
       }
       return;
     }
-    if (err.status === 403 || err.status === 0 || err.status >= 500) {
+    // 503 is a transient/unavailable state (e.g. an offline agent) surfaced
+    // inline by callers; toasting it would spam on every poll.
+    if (
+      err.status === 403 ||
+      err.status === 0 ||
+      (err.status >= 500 && err.status !== 503)
+    ) {
       toast.add({
         severity: "error",
         summary: err.status === 403 ? "Not allowed" : "Something went wrong",

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/session"
 	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/internal/transport"
 )
 
 type errorEnvelope struct {
@@ -40,7 +42,8 @@ func statusFor(err error) int {
 		return http.StatusNotFound
 	case errors.Is(err, plugin.ErrConflict), errors.Is(err, models.ErrConflict), errors.Is(err, plugin.ErrAlreadyExists):
 		return http.StatusConflict
-	case errors.Is(err, plugin.ErrUnavailable), errors.Is(err, session.ErrSessionLimit), errors.Is(err, session.ErrChannelLimit):
+	case errors.Is(err, plugin.ErrUnavailable), errors.Is(err, session.ErrSessionLimit),
+		errors.Is(err, session.ErrChannelLimit), errors.Is(err, transport.ErrAgentUnavailable):
 		return http.StatusServiceUnavailable
 	case errors.Is(err, plugin.ErrNotSupported):
 		return http.StatusNotImplemented
@@ -49,12 +52,23 @@ func statusFor(err error) int {
 	}
 }
 
-// writeError normalizes any error to a JSON envelope + status. Server (5xx)
-// errors are logged; their detail is not leaked to the client.
+// cleanAgentError replaces a noisy tunnel dial failure (internal URL +
+// "session shutdown") with a clear, client-safe message.
+func cleanAgentError(err error) error {
+	if errors.Is(err, transport.ErrAgentUnavailable) {
+		return fmt.Errorf("%w: the agent for this connection is offline", plugin.ErrUnavailable)
+	}
+	return err
+}
+
+// writeError normalizes any error to a JSON envelope + status. Genuine 5xx
+// detail is logged and hidden; 503 (unavailable) carries its message through, as
+// it is an expected, client-actionable state rather than a server fault.
 func writeError(w http.ResponseWriter, log *slog.Logger, err error) {
+	err = cleanAgentError(err)
 	status := statusFor(err)
 	msg := err.Error()
-	if status >= 500 {
+	if status >= 500 && status != http.StatusServiceUnavailable {
 		if log != nil {
 			log.Error("request failed", "err", err)
 		}

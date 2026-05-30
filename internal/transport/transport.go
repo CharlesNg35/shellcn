@@ -328,7 +328,13 @@ type agentNet struct {
 }
 
 func (a *agentNet) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	return a.dial(ctx, network, addr)
+	conn, err := a.dial(ctx, network, addr)
+	if err != nil {
+		// A dial failure through the tunnel means the agent path is gone (e.g.
+		// yamux "session shutdown" after the agent disconnected).
+		return nil, fmt.Errorf("%w: %w", ErrAgentUnavailable, err)
+	}
+	return conn, nil
 }
 
 // HTTP returns an L7 base URL + RoundTripper for http_proxy-style modes (else ok=false).
@@ -340,7 +346,7 @@ func (a *agentNet) HTTP() (string, http.RoundTripper, bool) {
 		return "", nil, false
 	}
 	rt := &http.Transport{
-		DialContext:           func(ctx context.Context, network, addr string) (net.Conn, error) { return a.dial(ctx, network, addr) },
+		DialContext:           a.DialContext,
 		ForceAttemptHTTP2:     false,
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
