@@ -13,20 +13,19 @@ projection — **adding a plugin requires zero frontend changes.**
 
 **Authoritative docs (read before coding):**
 
-- [`specs/v2.md`](specs/v2.md) — architecture (source of truth).
+- [`specs/project.md`](specs/project.md) — architecture (source of truth).
 - [`specs/plans/`](specs/plans/) — phased, numbered build steps (each with a
   sub-task checklist + Definition of Done).
 - [`specs/plans/TESTING.md`](specs/plans/TESTING.md) — testing standard.
 - [`specs/plugins.md`](specs/plugins.md) — plugin roadmap.
-- [`checklist.md`](checklist.md) — **living progress tracker.**
 
 ## How to work here
 
-1. Read `specs/v2.md` (relevant section) + the current phase's step files first.
+1. Read `specs/project.md` (relevant section) + the current phase's step files first.
 2. Follow the **phase order** (UI-first: M0 declarative UI on fixtures → M1 core →
    M2 SSH → …). Don't jump ahead.
 3. After finishing a step: tick its sub-tasks, set the step file's
-   **`Status: ✅ Done`**, and **update `checklist.md`**. Keep them in sync, always.
+   **`Status: ✅ Done`**
 4. A step is done only when its **tests pass**; a phase only when its e2e is green.
 5. **After implementing anything, always run `make fmt`, then `make lint` and
    `make test` — all must be green before you finish or hand off.** Never leave

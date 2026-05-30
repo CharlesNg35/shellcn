@@ -104,7 +104,7 @@ function write(data: string): void {
 // --- zoom ---------------------------------------------------------------
 const MIN_FONT = 8;
 const MAX_FONT = 28;
-const DEFAULT_FONT = 13;
+const DEFAULT_FONT = 14;
 const fontSize = ref(DEFAULT_FONT);
 
 function applyFontSize(): void {
@@ -344,7 +344,7 @@ onUnmounted(() => {
       can-reconnect
       @reconnect="onReconnect"
     />
-    <p v-if="failed" class="p-4 text-sm text-surface-400" role="alert">
+    <p v-if="failed" class="p-4 text-base text-surface-400" role="alert">
       Terminal preview unavailable in this environment.
     </p>
     <div class="relative min-h-0 flex-1">
@@ -388,7 +388,7 @@ onUnmounted(() => {
               :pt="{
                 root: 'h-6 min-w-7 px-1',
                 label:
-                  'text-[10px] tabular-nums text-surface-600 dark:text-surface-300',
+                  'text-[10px] tabular-nums text-surface-600 dark:text-surface-300 justify-center items-center flex',
               }"
               :label="`${fontSize}px`"
               @click="resetZoom"

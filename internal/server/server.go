@@ -42,6 +42,7 @@ type Deps struct {
 	Credentials       *service.CredentialService
 	Enrollments       *service.EnrollmentService
 	Users             *service.UserService
+	TwoFactor         *service.TwoFactorService
 	Invitations       *service.InvitationService
 	Tunnels           *transport.Registry
 	Recordings        *service.RecordingService
@@ -104,6 +105,7 @@ func (s *Server) routes() chi.Router {
 		// Auth (login is public; the rest require a session). Rate-limited per IP
 		// to blunt online brute force.
 		api.With(s.loginRateLimit).Post("/auth/login", s.handleLogin)
+		api.With(s.loginRateLimit).Post("/auth/login/mfa", s.handleLoginMFA)
 
 		// The agent connect endpoint authenticates with its enrollment token in
 		// the handshake (it is not a browser session), so it sits outside the
@@ -132,6 +134,15 @@ func (s *Server) routes() chi.Router {
 			pr.Put("/auth/me", s.handleUpdateProfile)
 			pr.Post("/auth/me/password", s.handleChangePassword)
 
+			// Two-factor authentication, self-service.
+			if s.deps.TwoFactor != nil {
+				pr.Post("/auth/totp/setup", s.handleTOTPSetup)
+				pr.Post("/auth/totp/enable", s.handleTOTPEnable)
+				pr.Post("/auth/totp/disable", s.handleTOTPDisable)
+				pr.Post("/auth/totp/recovery-codes", s.handleTOTPRecoveryCodes)
+				pr.Post("/auth/totp/remind", s.handleTOTPRemind)
+			}
+
 			pr.Get("/plugins", s.handleListPlugins)
 			pr.Get("/plugins/{name}", s.handleGetPlugin)
 
@@ -159,7 +170,7 @@ func (s *Server) routes() chi.Router {
 				pr.Delete("/credentials/{id}", s.handleDeleteCredential)
 			}
 
-			pr.Get("/users", s.handleListUsers)
+			pr.Get("/audit/me", s.handleMyAudit)
 			if s.deps.Connections != nil {
 				pr.Get("/connections/{id}/grants", s.handleListConnectionGrants)
 				pr.Post("/connections/{id}/grants", s.handleCreateConnectionGrant)
@@ -175,6 +186,7 @@ func (s *Server) routes() chi.Router {
 				pr.Get("/recordings", s.handleListRecordings)
 				pr.Get("/recordings/{id}", s.handleGetRecording)
 				pr.Get("/recordings/{id}/content", s.handleRecordingContent)
+				pr.Head("/recordings/{id}/content", s.handleRecordingContent)
 				pr.Delete("/recordings/{id}", s.handleDeleteRecording)
 				if s.deps.Connections != nil {
 					pr.Get("/connections/{id}/recordings", s.handleListConnectionRecordings)
@@ -199,9 +211,15 @@ func (s *Server) routes() chi.Router {
 				pr.Group(func(ar chi.Router) {
 					ar.Use(s.requireAdmin)
 					ar.Get("/admin/users", s.handleAdminListUsers)
+					ar.Get("/admin/users/search", s.handleSearchUsers)
 					ar.Post("/admin/users", s.handleAdminCreateUser)
+					ar.Get("/admin/users/{id}", s.handleAdminGetUser)
 					ar.Put("/admin/users/{id}", s.handleAdminUpdateUser)
-					ar.Delete("/admin/users/{id}", s.handleAdminDeleteUser)
+					ar.Post("/admin/users/{id}/activate", s.handleAdminActivateUser)
+					ar.Post("/admin/users/{id}/deactivate", s.handleAdminDeactivateUser)
+					ar.Post("/admin/users/{id}/reset-2fa", s.handleAdminResetTwoFactor)
+					ar.Get("/admin/users/{id}/audit", s.handleAdminUserAudit)
+					ar.Get("/admin/users/{id}/connections", s.handleAdminUserConnections)
 					if s.deps.Invitations != nil {
 						ar.Get("/admin/email", s.handleAdminEmailStatus)
 						ar.Get("/admin/invitations", s.handleAdminListInvitations)

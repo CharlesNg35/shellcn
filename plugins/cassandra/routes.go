@@ -446,6 +446,8 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	}
 	ctx, cancel := context.WithTimeout(rc.Ctx, s.opts.QueryTimeout)
 	defer cancel()
+	// No free-text data filter here: CQL can't LIKE/scan arbitrary columns without
+	// per-column SASI indexes, so the grid's search box is a no-op for CQL data.
 	iter := s.db.Query(fmt.Sprintf("SELECT * FROM %s LIMIT %d", qualified(keyspace, table), limit)).
 		WithContext(ctx).
 		Consistency(s.opts.Consistency).
@@ -1044,7 +1046,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if err != nil {
 		return plugin.Page[row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := offsetCursor(req.Cursor)
@@ -1307,20 +1309,7 @@ func cassandraErr(err error) error {
 }
 
 func filterRows(rows []row, query string) []row {
-	query = strings.ToLower(strings.TrimSpace(query))
-	if query == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, r := range rows {
-		for _, v := range r {
-			if strings.Contains(strings.ToLower(fmt.Sprint(v)), query) {
-				out = append(out, r)
-				break
-			}
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, query)
 }
 
 func sortRows(rows []row, sorts []plugin.SortKey) {

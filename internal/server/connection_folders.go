@@ -41,6 +41,11 @@ func (s *Server) handleListConnectionFolders(w http.ResponseWriter, r *http.Requ
 func (s *Server) handleCreateConnectionFolder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := userFrom(ctx)
+	if !canCreate(user) {
+		s.auditConnEvent(ctx, user, "", connFolderCreateEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		return
+	}
 	var req connectionFolderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
@@ -66,7 +71,7 @@ func (s *Server) handleUpdateConnectionFolder(w http.ResponseWriter, r *http.Req
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if folder.UserID != user.ID && !user.HasRole(models.RoleAdmin) {
+	if folder.UserID != user.ID {
 		s.auditConnEvent(ctx, user, "", connFolderUpdateEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return
@@ -96,7 +101,7 @@ func (s *Server) handleDeleteConnectionFolder(w http.ResponseWriter, r *http.Req
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if folder.UserID != user.ID && !user.HasRole(models.RoleAdmin) {
+	if folder.UserID != user.ID {
 		s.auditConnEvent(ctx, user, "", connFolderDeleteEvent, plugin.RiskDestructive, models.AuditDenied, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, plugin.ErrForbidden)
 		return

@@ -56,6 +56,18 @@ func (s *gormUserStore) GetByUsername(ctx context.Context, username string) (mod
 	return u, nil
 }
 
+func (s *gormUserStore) GetByEmail(ctx context.Context, email string) (models.User, error) {
+	if email == "" {
+		return models.User{}, ErrNotFound
+	}
+	var u models.User
+	if err := s.db.WithContext(ctx).First(&u, "email = ?", email).Error; err != nil {
+		return models.User{}, normNotFound(err)
+	}
+	u.PasswordHash = ""
+	return u, nil
+}
+
 func (s *gormUserStore) GetPasswordHash(ctx context.Context, userID string) (string, error) {
 	var u models.User
 	if err := s.db.WithContext(ctx).Select("password_hash").First(&u, "id = ?", userID).Error; err != nil {
@@ -74,7 +86,9 @@ func (s *gormUserStore) SetPasswordHash(ctx context.Context, userID, hash string
 
 func (s *gormUserStore) List(ctx context.Context) ([]models.User, error) {
 	var users []models.User
-	if err := s.db.WithContext(ctx).Omit("password_hash").Order("username").Find(&users).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Omit("password_hash", "totp_secret", "recovery_code_hashes").
+		Order("username").Find(&users).Error; err != nil {
 		return nil, err
 	}
 	return users, nil
@@ -83,6 +97,21 @@ func (s *gormUserStore) List(ctx context.Context) ([]models.User, error) {
 func (s *gormUserStore) Update(ctx context.Context, u *models.User) error {
 	res := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", u.ID).
 		Select("username", "email", "display_name", "roles", "disabled", "session_version").Updates(u)
+	return rowsOrNotFound(res)
+}
+
+func (s *gormUserStore) SetTwoFactor(ctx context.Context, userID string, secret []byte, enabled bool, recoveryHashes []string) error {
+	// Select forces these columns to persist even when zero (disabling clears them);
+	// the struct path lets the recovery-code serializer encode the slice.
+	res := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).
+		Select("totp_secret", "totp_enabled", "recovery_code_hashes").
+		Updates(&models.User{TOTPSecret: secret, TOTPEnabled: enabled, RecoveryCodeHashes: recoveryHashes})
+	return rowsOrNotFound(res)
+}
+
+func (s *gormUserStore) SetMFARemindedAt(ctx context.Context, userID string, at *time.Time) error {
+	res := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).
+		Update("mfa_reminded_at", at)
 	return rowsOrNotFound(res)
 }
 
@@ -319,11 +348,26 @@ func (s *gormAuditStore) List(ctx context.Context, f AuditFilter) ([]models.Audi
 	if f.Limit > 0 {
 		q = q.Limit(f.Limit)
 	}
+	if f.Offset > 0 {
+		q = q.Offset(f.Offset)
+	}
 	var list []models.AuditEntry
 	if err := q.Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil
+}
+
+func (s *gormAuditStore) Count(ctx context.Context, f AuditFilter) (int64, error) {
+	q := s.db.WithContext(ctx).Model(&models.AuditEntry{})
+	if f.UserID != "" {
+		q = q.Where("user_id = ?", f.UserID)
+	}
+	if f.ConnectionID != "" {
+		q = q.Where("connection_id = ?", f.ConnectionID)
+	}
+	var n int64
+	return n, q.Count(&n).Error
 }
 
 type gormSnippetStore struct{ db *gorm.DB }

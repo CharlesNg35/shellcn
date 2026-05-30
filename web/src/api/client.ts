@@ -79,7 +79,7 @@ export async function apiFetch(
   try {
     res = await fetch(input, { ...init, method, headers, body });
   } catch {
-    const err = new ApiError(0, "Network error — is the gateway reachable?");
+    const err = new ApiError(0, "Network error. Is the gateway reachable?");
     reportApiError(err);
     throw err;
   }

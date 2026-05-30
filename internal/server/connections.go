@@ -93,6 +93,11 @@ func (s *Server) auditConnEvent(ctx context.Context, user models.User, connID, e
 func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := userFrom(ctx)
+	if !canCreate(user) {
+		s.auditConnEvent(ctx, user, "", connCreateEvent, plugin.RiskWrite, models.AuditDenied, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, plugin.ErrForbidden)
+		return
+	}
 
 	var req connectionWriteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -110,7 +115,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 	s.auditConnEvent(ctx, user, conn.ID, connCreateEvent, plugin.RiskWrite, models.AuditAllowed, nil)
 	dto := s.toConnectionDTO(conn)
-	s.decorateConnectionAccess(ctx, user, conn, &dto)
+	s.decorateConnectionAccess(ctx, user, conn, &dto, map[string]string{})
 	writeJSON(w, http.StatusCreated, dto)
 }
 

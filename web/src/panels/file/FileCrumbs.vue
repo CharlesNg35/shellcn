@@ -18,7 +18,8 @@ function crumbs(path: string): { label: string; path: string }[] {
 </script>
 
 <template>
-  <div
+  <nav
+    aria-label="Breadcrumb"
     class="flex items-center gap-1 overflow-x-auto border-b border-surface-200 px-3 py-2 text-sm dark:border-surface-800"
   >
     <template v-for="(c, i) in crumbs(path)" :key="c.path">
@@ -28,7 +29,15 @@ function crumbs(path: string): { label: string; path: string }[] {
         :size="14"
         class="text-surface-300"
       />
+      <span
+        v-if="i === crumbs(path).length - 1"
+        aria-current="page"
+        class="truncate px-2 py-1 font-medium text-surface-700 dark:text-surface-200"
+      >
+        {{ c.label }}
+      </span>
       <Button
+        v-else
         text
         severity="secondary"
         size="small"
@@ -37,5 +46,5 @@ function crumbs(path: string): { label: string; path: string }[] {
         {{ c.label }}
       </Button>
     </template>
-  </div>
+  </nav>
 </template>

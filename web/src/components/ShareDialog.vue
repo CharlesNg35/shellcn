@@ -3,12 +3,17 @@ import { computed, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import AutoComplete from "primevue/autocomplete";
+import InputText from "primevue/inputtext";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { grantsApi } from "../api/grants";
+import { adminUsersApi } from "../api/admin";
+import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { dialogRoot, btnPrimary } from "../primevue/preset";
+import type { GrantRequest } from "../api/grants";
 import type { GrantAccess, ShareGrant, UserSummary } from "../types/projection";
 
 const props = defineProps<{
@@ -23,17 +28,23 @@ const props = defineProps<{
 const emit = defineEmits<{ "update:visible": [value: boolean] }>();
 
 const notify = useNotify();
+const auth = useAuthStore();
 
 const grants = ref<ShareGrant[]>([]);
 type UserOption = UserSummary & { label: string };
 const users = ref<UserOption[]>([]);
 const subject = ref<UserOption | null>(null);
+// Operators can't enumerate users; they share by exact email instead.
+const email = ref("");
 const access = ref<GrantAccess>("use");
 const loading = ref(false);
 const busy = ref(false);
 const { confirmDanger } = useConfirmAction();
 
-const base = computed(() => `/${props.resource}/${props.resourceId}/grants`);
+const canAdd = computed(() =>
+  auth.isAdmin ? Boolean(subject.value) : email.value.trim().length > 0,
+);
+
 const accessChoices = [
   { label: "Use", value: "use" },
   { label: "Manage", value: "manage" },
@@ -47,10 +58,11 @@ const subjectChoices = computed(() => {
 async function load(): Promise<void> {
   loading.value = true;
   subject.value = null;
+  email.value = "";
   access.value = "use";
   try {
-    grants.value = await api.get<ShareGrant[]>(base.value);
-    await searchUsers("");
+    grants.value = await grantsApi.list(props.resource, props.resourceId);
+    if (auth.isAdmin) await searchUsers("");
   } finally {
     loading.value = false;
   }
@@ -63,11 +75,7 @@ function userLabel(user: UserSummary): string {
 }
 
 async function searchUsers(query: string): Promise<void> {
-  const params = new URLSearchParams();
-  if (query.trim()) params.set("query", query.trim());
-  const found = await api.get<UserSummary[]>(
-    `/users${params.toString() ? `?${params.toString()}` : ""}`,
-  );
+  const found = await adminUsersApi.search(query);
   users.value = found.map((u) => ({ ...u, label: userLabel(u) }));
 }
 
@@ -84,18 +92,25 @@ watch(
 );
 
 async function add(): Promise<void> {
-  if (!subject.value) return;
+  if (!canAdd.value) return;
   busy.value = true;
   try {
-    const grant = await api.post<ShareGrant>(base.value, {
-      subjectId: subject.value.id,
+    const body: GrantRequest = {
       access: props.allowManage ? access.value : "use",
-    });
+    };
+    if (auth.isAdmin && subject.value) body.subjectId = subject.value.id;
+    else body.email = email.value.trim();
+    const grant = await grantsApi.create(
+      props.resource,
+      props.resourceId,
+      body,
+    );
     grants.value = [...grants.value, grant];
     subject.value = null;
+    email.value = "";
     access.value = "use";
     notify.success("Access granted", grant.username);
-    await searchUsers("");
+    if (auth.isAdmin) await searchUsers("");
   } catch (e) {
     if (e instanceof ApiError)
       notify.error("Could not grant access", e.message);
@@ -115,7 +130,7 @@ function requestRevoke(grant: ShareGrant): void {
 
 async function revoke(grant: ShareGrant): Promise<void> {
   try {
-    await api.del(`${base.value}/${grant.id}`);
+    await grantsApi.remove(props.resource, props.resourceId, grant.id);
     grants.value = grants.value.filter((g) => g.id !== grant.id);
     notify.success("Access revoked", grant.username);
     await searchUsers("");
@@ -148,9 +163,10 @@ async function revoke(grant: ShareGrant): Promise<void> {
           <label
             class="mb-1 block text-xs font-medium text-surface-500 dark:text-surface-400"
           >
-            User
+            {{ auth.isAdmin ? "User" : "Email" }}
           </label>
           <AutoComplete
+            v-if="auth.isAdmin"
             :model-value="subject"
             :suggestions="subjectChoices"
             option-label="label"
@@ -159,6 +175,15 @@ async function revoke(grant: ShareGrant): Promise<void> {
             input-class="w-full"
             @complete="completeUsers"
             @update:model-value="subject = $event"
+          />
+          <InputText
+            v-else
+            :model-value="email"
+            type="email"
+            placeholder="person@example.com"
+            class="w-full"
+            @update:model-value="email = $event ?? ''"
+            @keyup.enter="add"
           />
         </div>
         <div v-if="allowManage" class="w-28">
@@ -179,7 +204,7 @@ async function revoke(grant: ShareGrant): Promise<void> {
           type="button"
           label="Add"
           :loading="busy"
-          :disabled="busy || !subject"
+          :disabled="busy || !canAdd"
           :pt="{ root: btnPrimary }"
           @click="add"
         />

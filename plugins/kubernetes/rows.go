@@ -3,7 +3,6 @@ package kubernetes
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
 )
@@ -22,7 +21,7 @@ func pageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 	if err != nil {
 		return plugin.Page[Row]{}, err
 	}
-	rows = filterRows(rows, page.Filter["q"])
+	rows = filterRows(rows, page.Search())
 	start := 0
 	if page.Cursor != "" {
 		start, err = strconv.Atoi(page.Cursor)
@@ -48,18 +47,5 @@ func pageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 // filterRows keeps rows whose string fields contain the query (case-insensitive),
 // backing the table's filter box over the in-memory list the grid paginates.
 func filterRows(rows []Row, q string) []Row {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := make([]Row, 0, len(rows))
-	for _, r := range rows {
-		for _, v := range r {
-			if s, ok := v.(string); ok && strings.Contains(strings.ToLower(s), q) {
-				out = append(out, r)
-				break
-			}
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, q)
 }

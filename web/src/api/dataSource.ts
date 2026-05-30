@@ -337,7 +337,7 @@ function uploadForm(
       }
     };
     xhr.onerror = () => {
-      const err = new ApiError(0, "Network error — is the gateway reachable?");
+      const err = new ApiError(0, "Network error. Is the gateway reachable?");
       reportApiError(err);
       reject(err);
     };

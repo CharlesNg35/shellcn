@@ -3,7 +3,8 @@ import { computed, onMounted, ref } from "vue";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { credentialsApi } from "../api/credentials";
 import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
@@ -32,7 +33,7 @@ const shareTarget = ref<CredentialSummary | null>(null);
 const { confirmDanger } = useConfirmAction();
 
 function canManage(c: CredentialSummary): boolean {
-  return auth.isAdmin || c.ownerId === auth.user?.id;
+  return c.ownerId === auth.user?.id;
 }
 
 function kindInfo(kind: string): CredentialKindInfo | undefined {
@@ -58,8 +59,8 @@ async function load(): Promise<void> {
   error.value = null;
   try {
     const [nextItems, nextKinds] = await Promise.all([
-      api.get<CredentialSummary[]>("/credentials"),
-      api.get<CredentialKindInfo[]>("/credential-kinds"),
+      credentialsApi.list(),
+      credentialsApi.kinds(),
     ]);
     items.value = nextItems;
     kinds.value = nextKinds;
@@ -93,7 +94,7 @@ function openDelete(c: CredentialSummary): void {
 
 async function onDelete(c: CredentialSummary): Promise<void> {
   try {
-    await api.del(`/credentials/${c.id}`);
+    await credentialsApi.remove(c.id);
     notify.success("Credential deleted", c.name);
     await load();
   } catch (e) {
@@ -117,7 +118,7 @@ const hasItems = computed(() => items.value.length > 0);
           Credentials
         </h1>
       </div>
-      <Button type="button" @click="openCreate">
+      <Button v-if="auth.canCreate" type="button" @click="openCreate">
         <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="15" />
         New credential
       </Button>
@@ -135,8 +136,14 @@ const hasItems = computed(() => items.value.length > 0);
         :size="28"
         class="text-surface-400"
       />
-      <p class="text-surface-500">No credentials yet.</p>
-      <Button type="button" @click="openCreate">
+      <p class="text-surface-500">
+        {{
+          auth.canCreate
+            ? "No credentials yet."
+            : "No credentials shared with you yet."
+        }}
+      </p>
+      <Button v-if="auth.canCreate" type="button" @click="openCreate">
         Create your first credential
       </Button>
     </div>
@@ -157,6 +164,7 @@ const hasItems = computed(() => items.value.length > 0);
         <template #body="{ data }">
           <CredentialProtocolBadges
             :protocols="credentialProtocols(data as CredentialSummary)"
+            :max="3"
           />
         </template>
       </Column>
@@ -200,7 +208,18 @@ const hasItems = computed(() => items.value.length > 0);
               <AppIcon :icon="{ type: 'lucide', value: 'trash' }" :size="16" />
             </Button>
           </div>
-          <span v-else class="text-xs text-surface-400">shared with you</span>
+          <span
+            v-else
+            class="inline-flex items-center gap-1.5 rounded-full bg-surface-100 px-2 py-0.5 text-xs text-surface-500 dark:bg-surface-800 dark:text-surface-400"
+            :title="`Shared by ${(data as CredentialSummary).ownerName || 'another user'}`"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="12" />
+            Shared{{
+              (data as CredentialSummary).ownerName
+                ? ` · ${(data as CredentialSummary).ownerName}`
+                : ""
+            }}
+          </span>
         </template>
       </Column>
       <template #empty>No credentials.</template>

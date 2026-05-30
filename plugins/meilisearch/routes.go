@@ -260,7 +260,7 @@ func listDocuments(rc *plugin.RequestContext) (any, error) {
 	index := indexParam(rc)
 	limit := limitFor(s, req.Limit)
 	q := url.Values{"limit": []string{strconv.Itoa(limit)}, "offset": []string{cursorOffset(req.Cursor)}}
-	if filter := strings.TrimSpace(req.Filter["q"]); filter != "" {
+	if filter := req.Search(); filter != "" {
 		q.Set("filter", filter)
 	}
 	var out struct {

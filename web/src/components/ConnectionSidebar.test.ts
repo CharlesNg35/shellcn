@@ -325,15 +325,21 @@ describe("ConnectionSidebar", () => {
     wrapper.findComponent({ name: "VueDraggable" }).vm.$emit("end");
     await vi.waitFor(() => expect(saved).not.toBeNull());
 
+    // Folders flatten to the root: f2 keeps its connection but loses its parent.
     expect(saved).toMatchObject({
       folders: expect.arrayContaining([
-        { folderId: "f1", sortOrder: 0 },
-        { folderId: "f2", parentId: "f1", sortOrder: 0 },
+        { folderId: "f1", sortOrder: 1 },
+        { folderId: "f2", sortOrder: 0 },
       ]),
       items: expect.arrayContaining([
-        { connectionId: "c-root", sortOrder: 1 },
+        { connectionId: "c-root", sortOrder: 2 },
         { connectionId: "c-prod", folderId: "f2", sortOrder: 0 },
       ]),
     });
+    expect(
+      (saved!.folders as Array<{ parentId?: string }>).every(
+        (f) => f.parentId === undefined,
+      ),
+    ).toBe(true);
   });
 });

@@ -121,7 +121,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 		Host:     strings.TrimSpace(cfg.String("host")),
 		Port:     port,
 		Share:    strings.Trim(strings.TrimSpace(cfg.String("share")), `/\`),
-		RootPath: strings.TrimSpace(cfg.String("root_path")),
+		RootPath: normalizeRootPath(cfg.String("root_path")),
 		Domain:   strings.TrimSpace(cfg.String("domain")),
 		Auth:     strings.TrimSpace(cfg.String("auth")),
 		Username: strings.TrimSpace(cfg.String("username")),
@@ -160,10 +160,18 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	if opts.Auth != "guest" && opts.Password == "" {
 		return options{}, fmt.Errorf("%w: password is required", plugin.ErrInvalidInput)
 	}
-	if opts.RootPath == "" {
-		opts.RootPath = "/"
-	}
 	return opts, nil
+}
+
+func normalizeRootPath(raw string) string {
+	p := strings.TrimSpace(strings.ReplaceAll(raw, `\`, "/"))
+	if p == "" || p == "." {
+		return "/"
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return p
 }
 
 type Session struct {
@@ -177,7 +185,7 @@ func (s *Session) Filesystem() (filesystem.Client, error) {
 }
 
 func (s *Session) HealthCheck(context.Context) error {
-	_, err := s.fs.share.Stat(s.fs.root)
+	_, err := s.fs.share.Stat(smbPath(s.fs.root))
 	return err
 }
 
@@ -222,6 +230,14 @@ func (c *Client) Stat(_ context.Context, p string) (os.FileInfo, error) {
 
 func (c *Client) Open(_ context.Context, p string) (io.ReadCloser, error) {
 	return c.share.Open(smbPath(p))
+}
+
+func (c *Client) OpenSeeker(_ context.Context, p string) (io.ReadSeekCloser, error) {
+	f, err := c.share.Open(smbPath(p))
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 func (c *Client) Write(_ context.Context, p string, r io.Reader) error {

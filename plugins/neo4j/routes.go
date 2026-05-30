@@ -47,6 +47,7 @@ func routes() []plugin.Route {
 		{ID: rid("graph"), Method: plugin.MethodGet, Path: "/graph", Permission: "neo4j.graph.read", Risk: plugin.RiskSafe, AuditEvent: rid("graph"), Handle: graphRoute},
 		{ID: rid("label.graph"), Method: plugin.MethodGet, Path: "/labels/{database}/{label}/graph", Permission: "neo4j.graph.read", Risk: plugin.RiskSafe, AuditEvent: rid("label.graph"), Handle: labelGraph},
 		{ID: rid("relationship_type.graph"), Method: plugin.MethodGet, Path: "/relationship-types/{database}/{type}/graph", Permission: "neo4j.graph.read", Risk: plugin.RiskSafe, AuditEvent: rid("relationship_type.graph"), Handle: relationshipTypeGraph},
+		{ID: rid("node.graph"), Method: plugin.MethodGet, Path: "/graph/node", Permission: "neo4j.graph.read", Risk: plugin.RiskSafe, AuditEvent: rid("node.graph"), Handle: nodeGraph},
 		{ID: rid("node.create"), Method: plugin.MethodPost, Path: "/databases/{database}/nodes", Permission: "neo4j.nodes.write", Risk: plugin.RiskWrite, AuditEvent: rid("node.create"), Input: nodeCreateSchema(), Handle: nodeCreate},
 		{ID: rid("node.delete"), Method: plugin.MethodDelete, Path: "/nodes/{id}", Permission: "neo4j.nodes.delete", Risk: plugin.RiskDestructive, AuditEvent: rid("node.delete"), Handle: nodeDelete},
 		{ID: rid("relationship.create"), Method: plugin.MethodPost, Path: "/databases/{database}/relationships", Permission: "neo4j.relationships.write", Risk: plugin.RiskWrite, AuditEvent: rid("relationship.create"), Input: relationshipCreateSchema(), Handle: relationshipCreate},
@@ -97,17 +98,24 @@ func databasesList(rc *plugin.RequestContext) (any, error) {
 	rows, err := queryRows(rc.Ctx, s, "system", "SHOW DATABASES YIELD name, address, role, requestedStatus, currentStatus RETURN name, address, role, requestedStatus, currentStatus ORDER BY name", nil)
 	if err != nil {
 		rows = []row{{"name": s.opts.Database, "current_status": "unknown", "requested_status": "unknown", "role": "", "address": "", "ref": plugin.ResourceRef{Kind: "database", Name: s.opts.Database, UID: s.opts.Database}}}
-	} else {
-		for _, r := range rows {
-			name := fmt.Sprint(r["name"])
-			r["requested_status"] = r["requestedStatus"]
-			r["current_status"] = r["currentStatus"]
-			delete(r, "requestedStatus")
-			delete(r, "currentStatus")
-			r["ref"] = plugin.ResourceRef{Kind: "database", Name: name, UID: name}
-		}
+		return broker.PageRows(rc, rows)
 	}
-	return broker.PageRows(rc, rows)
+	// The administrative `system` database rejects data queries (MATCH), so it is
+	// not a browsable data database — leave it out of the catalogue.
+	out := make([]row, 0, len(rows))
+	for _, r := range rows {
+		name := fmt.Sprint(r["name"])
+		if name == "system" {
+			continue
+		}
+		r["requested_status"] = r["requestedStatus"]
+		r["current_status"] = r["currentStatus"]
+		delete(r, "requestedStatus")
+		delete(r, "currentStatus")
+		r["ref"] = plugin.ResourceRef{Kind: "database", Name: name, UID: name}
+		out = append(out, r)
+	}
+	return broker.PageRows(rc, out)
 }
 
 func databaseOverview(rc *plugin.RequestContext) (any, error) {
@@ -491,7 +499,7 @@ func nodeRelationships(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return relationshipRows(rc, db, "MATCH (a)-[r]-(b) WHERE elementId(a) = $id RETURN elementId(r) AS element_id, type(r) AS type, elementId(startNode(r)) AS start, elementId(endNode(r)) AS end, properties(r) AS properties ORDER BY element_id LIMIT $limit", map[string]any{"id": id})
+	return relationshipRows(rc, db, "MATCH (a)-[r]-(b) WHERE elementId(a) = $id RETURN elementId(r) AS element_id, type(r) AS type, elementId(startNode(r)) AS start, elementId(endNode(r)) AS end, properties(r) AS properties ORDER BY element_id SKIP $skip LIMIT $limit", map[string]any{"id": id})
 }
 
 func relationshipsList(rc *plugin.RequestContext) (any, error) {
@@ -557,17 +565,39 @@ func relationshipRead(rc *plugin.RequestContext) (any, error) {
 }
 
 func graphRoute(rc *plugin.RequestContext) (any, error) {
-	return graphQuery(rc, databaseName(rc), "MATCH p=(a)-[r]->(b) RETURN p LIMIT $limit", nil)
+	return graphQuery(rc, databaseName(rc), `
+MATCH (a)-[r]->(b)
+WITH a, r, b, count { (a)--() } + count { (b)--() } AS degree
+ORDER BY degree DESC
+RETURN a, r, b LIMIT $limit`, nil)
 }
 
 func labelGraph(rc *plugin.RequestContext) (any, error) {
 	db, label := databaseName(rc), rc.Param("label")
-	return graphQuery(rc, db, "MATCH p=(a:"+quoteCypherName(label)+")-[r]-(b) RETURN p LIMIT $limit", nil)
+	return graphQuery(rc, db, `
+MATCH (a:`+quoteCypherName(label)+`)-[r]-(b)
+WITH a, r, b, count { (a)--() } + count { (b)--() } AS degree
+ORDER BY degree DESC
+RETURN a, r, b LIMIT $limit`, nil)
 }
 
 func relationshipTypeGraph(rc *plugin.RequestContext) (any, error) {
 	db, typ := databaseName(rc), rc.Param("type")
-	return graphQuery(rc, db, "MATCH p=(a)-[r:"+quoteCypherName(typ)+"]->(b) RETURN p LIMIT $limit", nil)
+	return graphQuery(rc, db, `
+MATCH (a)-[r:`+quoteCypherName(typ)+`]->(b)
+WITH a, r, b, count { (a)--() } + count { (b)--() } AS degree
+ORDER BY degree DESC
+RETURN a, r, b LIMIT $limit`, nil)
+}
+
+// nodeGraph returns a node's immediate neighbourhood for click-to-expand: the
+// clicked node id is the element id carried by the graph node payload.
+func nodeGraph(rc *plugin.RequestContext) (any, error) {
+	id := strings.TrimSpace(paramOrQuery(rc, "node"))
+	if id == "" {
+		return nil, fmt.Errorf("%w: node is required", plugin.ErrInvalidInput)
+	}
+	return graphQuery(rc, databaseName(rc), "MATCH p=(a)-[r]-(b) WHERE elementId(a) = $id RETURN p LIMIT $limit", map[string]any{"id": id})
 }
 
 func graphQuery(rc *plugin.RequestContext, db, query string, params map[string]any) (any, error) {

@@ -362,6 +362,57 @@ describe("SchemaForm", () => {
     expect(payload).not.toHaveProperty("password");
   });
 
+  it("parses a JSON field's text into an object on submit", async () => {
+    const jsonSchema: Schema = {
+      groups: [
+        { name: "Doc", fields: [{ key: "body", label: "Body", type: "json" }] },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: { schema: jsonSchema, modelValue: { body: '{"a":1}' } },
+    });
+    await flushPromises();
+    (w.vm as unknown as { submit: () => void }).submit();
+    await flushPromises();
+    const payload = w.emitted("submit")?.[0][0] as Record<string, unknown>;
+    expect(payload.body).toEqual({ a: 1 });
+  });
+
+  it("blocks submit and surfaces an error on invalid JSON", async () => {
+    const jsonSchema: Schema = {
+      groups: [
+        { name: "Doc", fields: [{ key: "body", label: "Body", type: "json" }] },
+      ],
+    };
+    const w = mount(SchemaForm, {
+      props: { schema: jsonSchema, modelValue: { body: "{not json" } },
+    });
+    await flushPromises();
+    (w.vm as unknown as { submit: () => void }).submit();
+    await flushPromises();
+    expect(w.emitted("submit")).toBeUndefined();
+    expect(w.text()).toContain("valid JSON");
+  });
+
+  it("submits an object-valued JSON default unchanged", async () => {
+    const jsonSchema: Schema = {
+      groups: [
+        {
+          name: "Doc",
+          fields: [
+            { key: "body", label: "Body", type: "json", default: { x: true } },
+          ],
+        },
+      ],
+    };
+    const w = mount(SchemaForm, { props: { schema: jsonSchema } });
+    await flushPromises();
+    (w.vm as unknown as { submit: () => void }).submit();
+    await flushPromises();
+    const payload = w.emitted("submit")?.[0][0] as Record<string, unknown>;
+    expect(payload.body).toEqual({ x: true });
+  });
+
   it("uses ambient context for visibility", async () => {
     const contextual: Schema = {
       groups: [

@@ -76,12 +76,13 @@ func TestRecordingListScopeAndContent(t *testing.T) {
 	if ids := recordingIDs(t, h.do(t, http.MethodGet, "/api/recordings", "viewer", nil).Body); len(ids) != 0 {
 		t.Fatalf("stranger list: want none, got %v", ids)
 	}
-	// Admin sees all, and can drill into the owner via ?user.
-	if ids := recordingIDs(t, h.do(t, http.MethodGet, "/api/recordings", "admin", nil).Body); len(ids) != 1 {
-		t.Fatalf("admin list: want 1, got %v", ids)
+	// Admin has no special access: recordings are private to their creator, so
+	// admin sees only their own (none) and a ?user filter is ignored.
+	if ids := recordingIDs(t, h.do(t, http.MethodGet, "/api/recordings", "admin", nil).Body); len(ids) != 0 {
+		t.Fatalf("admin list: want none (own only), got %v", ids)
 	}
-	if ids := recordingIDs(t, h.do(t, http.MethodGet, "/api/recordings?user=op", "admin", nil).Body); len(ids) != 1 {
-		t.Fatalf("admin per-user drill-down: want 1, got %v", ids)
+	if ids := recordingIDs(t, h.do(t, http.MethodGet, "/api/recordings?user=op", "admin", nil).Body); len(ids) != 0 {
+		t.Fatalf("admin must not drill into another user's recordings, got %v", ids)
 	}
 
 	// Content is asciicast for the owner, forbidden for a stranger.
@@ -91,6 +92,10 @@ func TestRecordingListScopeAndContent(t *testing.T) {
 	}
 	if resp := h.do(t, http.MethodGet, "/api/recordings/"+recID+"/content", "viewer", nil); resp.Status != http.StatusForbidden {
 		t.Fatalf("stranger content: want 403, got %d", resp.Status)
+	}
+	// Admin is no exception — it cannot read another user's recording content.
+	if resp := h.do(t, http.MethodGet, "/api/recordings/"+recID+"/content", "admin", nil); resp.Status != http.StatusForbidden {
+		t.Fatalf("admin content of another's recording: want 403, got %d", resp.Status)
 	}
 
 	// Stranger cannot delete; owner can, and the delete is audited.

@@ -59,17 +59,17 @@ func TestRecordingAuthZScope(t *testing.T) {
 	_ = st.Connections.Create(ctx, &models.Connection{ID: "c-owned", OwnerID: "op"})
 	_ = st.Grants.Create(ctx, &models.Grant{ID: "g1", ConnectionID: "c-managed", SubjectID: "op", Access: models.AccessManage})
 
-	// Admin sees everything.
-	if all, _ := svc.List(ctx, admin, store.RecordingFilter{}); len(all) != 4 {
-		t.Fatalf("admin list: want 4, got %d", len(all))
+	// Admin has no special access: recordings are private to their creator, so an
+	// admin sees only their own (none) and a user filter is forced to self.
+	if all, _ := svc.List(ctx, admin, store.RecordingFilter{}); len(all) != 0 {
+		t.Fatalf("admin list: want 0 (own only), got %d", len(all))
 	}
-	// Admin can drill into a specific user.
-	if byUser, _ := svc.List(ctx, admin, store.RecordingFilter{UserID: "other"}); len(byUser) != 3 {
-		t.Fatalf("admin per-user list: want 3, got %d", len(byUser))
+	if byUser, _ := svc.List(ctx, admin, store.RecordingFilter{UserID: "other"}); len(byUser) != 0 {
+		t.Fatalf("admin must not drill into another user: want 0, got %d", len(byUser))
 	}
 
 	// op sees only their own recordings. Connection ownership and manage grants do
-	// not expose other users' recordings; only admins can view those.
+	// not expose other users' recordings.
 	got, _ := svc.List(ctx, op, store.RecordingFilter{})
 	ids := map[string]bool{}
 	for _, r := range got {
@@ -100,8 +100,8 @@ func TestRecordingAuthZScope(t *testing.T) {
 	if _, err := svc.Get(ctx, stranger, "r-other"); !errors.Is(err, plugin.ErrForbidden) {
 		t.Errorf("stranger get: want forbidden, got %v", err)
 	}
-	if _, err := svc.Get(ctx, admin, "r-other"); err != nil {
-		t.Errorf("admin get any: %v", err)
+	if _, err := svc.Get(ctx, admin, "r-other"); !errors.Is(err, plugin.ErrForbidden) {
+		t.Errorf("admin get another's recording: want forbidden, got %v", err)
 	}
 }
 

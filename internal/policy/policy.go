@@ -132,7 +132,10 @@ type AccessInput struct {
 
 // Authorize applies both gates (deny-by-default):
 //  1. the user's role must permit the route's permission/risk, and
-//  2. for connection routes, the user must own it, hold a grant, or be admin.
+//  2. for connection routes, the user must own it or hold a grant.
+//
+// Admin is a user-management role, not a super-user: it grants no implicit access
+// to other users' connections.
 func (en *Enforcer) Authorize(in AccessInput) error {
 	if in.User.Disabled {
 		return fmt.Errorf("%w: account disabled", ErrForbidden)
@@ -147,9 +150,6 @@ func (en *Enforcer) Authorize(in AccessInput) error {
 }
 
 func (en *Enforcer) canAccessConnection(in AccessInput) bool {
-	if in.User.HasRole(models.RoleAdmin) {
-		return true
-	}
 	if in.OwnerID != "" && in.OwnerID == in.User.ID {
 		return true
 	}

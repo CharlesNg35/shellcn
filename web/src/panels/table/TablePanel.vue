@@ -1,5 +1,14 @@
 <script setup lang="ts">
-import { computed, onUnmounted, reactive, ref, watch as vueWatch } from "vue";
+import {
+  computed,
+  onActivated,
+  onDeactivated,
+  onUnmounted,
+  reactive,
+  ref,
+  watch as vueWatch,
+} from "vue";
+import { useDocumentVisibility, useIntervalFn } from "@vueuse/core";
 import DataTable, {
   type DataTableCellEditCompleteEvent,
   type DataTablePageEvent,
@@ -40,6 +49,8 @@ import {
   updateMutation,
   type RowMutation,
 } from "./mutation";
+import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
+import { useNavigableKinds } from "../core/navigable";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
@@ -66,6 +77,7 @@ const RESERVED = new Set([
   "badge",
   "_key",
   "_links",
+  "_id",
   "__rid",
 ]);
 
@@ -585,10 +597,20 @@ function openLink(ref: ResourceRef): void {
   emit("select", { ref } as Row);
 }
 
+function formatNumber(v: number, col: ColumnSpec): string {
+  const n = col.precision != null ? v.toFixed(col.precision) : String(v);
+  return col.type === "percent" ? `${n}%` : n;
+}
+
 function display(row: Row, col: ColumnSpec): string {
   const v = row[col.key];
   if (v === undefined || v === null || v === "") return "—";
   if (col.type === "bytes" && typeof v === "number") return formatBytes(v);
+  if (
+    (col.type === "number" || col.type === "percent") &&
+    typeof v === "number"
+  )
+    return formatNumber(v, col);
   if (col.type === "datetime" && typeof v === "string")
     return new Date(v).toLocaleString();
   if (typeof v === "object") return JSON.stringify(v);
@@ -680,24 +702,114 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   );
 }
 
+// Row-click is automatic: a row whose ref is a navigable resource opens it,
+// everything else selects (when selectable). `RowClick` only overrides this —
+// `detail` for the field dialog, or an explicit navigate/select/none.
+const navigableKinds = useNavigableKinds();
+const rowClickMode = computed(() => tableConfig.value?.rowClick);
+const detailEnabled = computed(() => rowClickMode.value === "detail");
+const detailRow = ref<Row | null>(null);
+
+function navigates(row: Row): boolean {
+  return Boolean(row.ref && navigableKinds.value.has(row.ref.kind));
+}
+
+function toggleSelection(row: Row): void {
+  selection.value =
+    selection.value.length === 1 && rid(selection.value[0]) === rid(row)
+      ? []
+      : [row];
+}
+
+// Stable row identity for keying/diff/refresh: a behavior-free `_id`, or a
+// navigable `ref.uid`; the client-only `__rid` covers editable/selectable grids.
+const dataKeyField = computed(() => {
+  if (editable.value || selectable.value) return "__rid";
+  const r = rows.value[0] as (Row & { _id?: unknown }) | undefined;
+  if (r?.ref?.uid) return "ref.uid";
+  if (r?._id != null) return "_id";
+  return "__rid";
+});
+
 function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
   if (isInteractiveTarget(e.originalEvent?.target ?? null)) return;
-  if (selectable.value) {
-    selection.value =
-      selection.value.length === 1 && rid(selection.value[0]) === rid(row)
-        ? []
-        : [row];
+  if (editable.value) return; // body reserved for cell editing
+  switch (rowClickMode.value) {
+    case "none":
+      return;
+    case "detail":
+      detailRow.value = row;
+      return;
+    case "select":
+      toggleSelection(row);
+      return;
+    case "navigate":
+      if (row.ref) emit("select", row);
+      return;
   }
-  if (row.ref) emit("select", row);
+  // Default: navigate if the row is a navigable resource (or nothing else can
+  // handle the click); otherwise select. Selection is also available via the
+  // checkbox column.
+  if (navigates(row) || (row.ref && !selectable.value)) emit("select", row);
+  else if (selectable.value) toggleSelection(row);
+}
+
+function rowClickable(row: Row): boolean {
+  if (editable.value) return false;
+  const mode = rowClickMode.value;
+  if (mode) return mode !== "none";
+  return navigates(row) || Boolean(row.ref) || selectable.value;
 }
 
 function rowClass(row: Row): string {
   if (staged.value && isDeleted(row)) return "line-through opacity-50";
   if (staged.value && isInserted(row))
     return "bg-emerald-50 dark:bg-emerald-500/10";
-  return row.ref ? "cursor-pointer" : "";
+  return rowClickable(row) ? "cursor-pointer" : "";
 }
+
+function humanize(key: string): string {
+  const spaced = key
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z\d])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+const detailItems = computed<DetailItem[]>(() => {
+  const r = detailRow.value;
+  if (!r) return [];
+  const items: DetailItem[] = [];
+  const declared = new Set<string>();
+  for (const col of columns.value) {
+    declared.add(col.key);
+    items.push({
+      key: col.key,
+      label: col.label,
+      text: display(r, col),
+      badge: col.type === "badge" ? badgeClass(r, col) : undefined,
+    });
+  }
+  for (const key of Object.keys(r)) {
+    if (declared.has(key) || hidden.value.has(key)) continue;
+    const v = (r as Record<string, unknown>)[key];
+    if (v === undefined || v === null || v === "") continue;
+    items.push({
+      key,
+      label: humanize(key),
+      text: typeof v === "object" ? JSON.stringify(v) : String(v),
+    });
+  }
+  return items;
+});
+
+const detailTitle = computed(() => {
+  const r = detailRow.value;
+  if (!r) return "";
+  const raw =
+    r.label ?? r.name ?? r.ref?.name ?? r[columns.value[0]?.key ?? ""];
+  return raw != null && raw !== "" ? String(raw) : "Details";
+});
 
 function resolveActions(ids: string[]): Action[] {
   return ids
@@ -720,22 +832,58 @@ async function onActionDone(
   emit("actionDone", action, result);
 }
 
+// Watch events arrive one WS frame at a time; we buffer a burst and apply it in
+// a single pass per frame so a flood becomes one reactive update, not N.
+let pendingEvents: ResourceEvent[] = [];
+let flushHandle: number | undefined;
+
 function applyEvent(ev: ResourceEvent): void {
   if (pendingCount.value > 0) return; // don't clobber buffered staged edits
-  const idx = rows.value.findIndex((r) => r.ref?.uid === ev.ref.uid);
-  if (ev.type === "deleted") {
-    if (idx >= 0) rows.value.splice(idx, 1);
-  } else if (ev.type === "added" && idx < 0 && ev.resource) {
-    rows.value.unshift({ ...(ev.resource as Row), ref: ev.ref });
-  } else if (idx >= 0 && ev.resource) {
-    rows.value[idx] = { ...rows.value[idx], ...(ev.resource as Row) };
+  pendingEvents.push(ev);
+  if (flushHandle === undefined)
+    flushHandle = requestAnimationFrame(flushEvents);
+}
+
+function flushEvents(): void {
+  flushHandle = undefined;
+  const batch = pendingEvents;
+  pendingEvents = [];
+  if (!batch.length || pendingCount.value > 0) return;
+  const index = new Map<string, number>();
+  rows.value.forEach((r, i) => {
+    if (r.ref?.uid) index.set(r.ref.uid, i);
+  });
+  const next = rows.value.slice();
+  const additions = new Map<string, Row>();
+  const removed = new Set<number>();
+  for (const ev of batch) {
+    const uid = ev.ref.uid;
+    const idx = index.get(uid);
+    if (ev.type === "deleted") {
+      if (idx !== undefined) removed.add(idx);
+      additions.delete(uid);
+    } else if (idx !== undefined) {
+      removed.delete(idx);
+      if (ev.resource) next[idx] = { ...next[idx], ...(ev.resource as Row) };
+    } else if (additions.has(uid)) {
+      if (ev.resource)
+        additions.set(uid, { ...additions.get(uid)!, ...(ev.resource as Row) });
+    } else if (ev.type === "added" && ev.resource) {
+      additions.set(uid, { ...(ev.resource as Row), ref: ev.ref });
+    }
   }
+  const kept = removed.size ? next.filter((_, i) => !removed.has(i)) : next;
+  rows.value = additions.size ? [...additions.values(), ...kept] : kept;
 }
 
 let stopWatch: (() => void) | undefined;
 function startWatch(): void {
-  const ds = tableConfig.value?.watch as DataSource | undefined;
   stopWatch?.();
+  // A live table uses either the interval poll or the watch socket, never both.
+  const ds =
+    refreshMs.value > 0
+      ? undefined
+      : (tableConfig.value?.watch as DataSource | undefined);
   stopWatch = ds
     ? watchResource(
         props.connectionId,
@@ -746,11 +894,77 @@ function startWatch(): void {
     : undefined;
 }
 
+// Live poll: re-fetch the current page in place, leaving loading/selection/
+// staged state untouched so the view never flickers or loses the user's place.
+const refreshMs = computed(() => tableConfig.value?.refreshIntervalMs ?? 0);
+const visibility = useDocumentVisibility();
+// Under KeepAlive an off-screen tab stays mounted; pause its poll so a plugin
+// with many live tabs only refreshes the visible one. No-op when not kept alive.
+const active = ref(true);
+onActivated(() => (active.value = true));
+onDeactivated(() => (active.value = false));
+
+async function refresh(): Promise<void> {
+  if (!props.source || loading.value || committing.value) return;
+  if (pendingCount.value > 0) return;
+  if (showInsert.value || deleteTarget.value || actionOutput.value) return;
+  if (detailRow.value) return;
+  try {
+    const page = await fetchPage<Row>(
+      props.connectionId,
+      props.source,
+      { resource: props.resource },
+      {
+        cursor: first.value > 0 ? String(first.value) : "",
+        limit: pageSize.value,
+        filter: filterText.value ? { q: filterText.value } : undefined,
+        sort: sortField.value
+          ? [{ field: sortField.value, desc: sortOrder.value === -1 }]
+          : undefined,
+      },
+    );
+    page.items.forEach(assignRid);
+    const keep = new Set(selectedRefs.value.map((r) => r.uid));
+    rows.value = page.items;
+    if (keep.size)
+      selection.value = page.items.filter(
+        (r) => r.ref?.uid && keep.has(r.ref.uid),
+      );
+    total.value = page.total;
+  } catch {
+    // transient failure: keep the current rows rather than blanking the table
+  }
+}
+
+const { pause: pausePoll, resume: resumePoll } = useIntervalFn(
+  refresh,
+  () => refreshMs.value || 1000,
+  { immediate: false },
+);
+vueWatch(
+  () => refreshMs.value > 0 && active.value && visibility.value === "visible",
+  (on, was) => {
+    if (!on) {
+      pausePoll();
+      return;
+    }
+    if (was === false) void refresh(); // catch up after being paused
+    resumePoll();
+  },
+  { immediate: true },
+);
+
+function applyDefaultSort(): void {
+  const ds = tableConfig.value?.defaultSort;
+  sortField.value = ds?.field;
+  sortOrder.value = ds ? (ds.desc ? -1 : 1) : undefined;
+}
+
 vueWatch(
   () => [props.connectionId, props.source?.routeId, props.resource?.uid],
   () => {
     filterText.value = "";
-    sortField.value = undefined;
+    applyDefaultSort();
     first.value = 0;
     load(0);
     startWatch();
@@ -767,6 +981,7 @@ function onFilter(): void {
 onUnmounted(() => {
   stopWatch?.();
   if (debounce) clearTimeout(debounce);
+  if (flushHandle !== undefined) cancelAnimationFrame(flushHandle);
 });
 </script>
 
@@ -899,7 +1114,7 @@ onUnmounted(() => {
         v-else
         v-model:selection="selection"
         :value="rows"
-        :data-key="editable || selectable ? '__rid' : 'ref.uid'"
+        :data-key="dataKeyField"
         :edit-mode="editableCells ? 'cell' : undefined"
         lazy
         paginator
@@ -1015,6 +1230,28 @@ onUnmounted(() => {
                   value:
                     staged && isDeleted(data as Row) ? 'rotate-ccw' : 'trash-2',
                 }"
+                :size="15"
+              />
+            </Button>
+          </template>
+        </Column>
+        <Column
+          v-if="detailEnabled && !editable"
+          :header-style="{ width: '3rem' }"
+          :pt="{ bodyCell: 'w-12 text-right' }"
+        >
+          <template #body="{ data }">
+            <Button
+              type="button"
+              text
+              rounded
+              severity="secondary"
+              title="View details"
+              aria-label="View details"
+              @click.stop="detailRow = data as Row"
+            >
+              <AppIcon
+                :icon="{ type: 'lucide', value: 'panel-right-open' }"
                 :size="15"
               />
             </Button>
@@ -1139,5 +1376,12 @@ onUnmounted(() => {
         />
       </template>
     </Dialog>
+
+    <RowDetailDialog
+      :visible="!!detailRow"
+      :title="detailTitle"
+      :items="detailItems"
+      @update:visible="(v) => !v && (detailRow = null)"
+    />
   </div>
 </template>

@@ -6,9 +6,11 @@ import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 import ToggleSwitch from "primevue/toggleswitch";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { adminUsersApi } from "../api/admin";
 import { useNotify } from "../composables/useNotify";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
+import { Role, ROLE_OPTIONS } from "../constants/roles";
 import type { AdminUser } from "../types/projection";
 
 const props = defineProps<{ visible: boolean; user?: AdminUser | null }>();
@@ -19,11 +21,11 @@ const emit = defineEmits<{
 
 const notify = useNotify();
 
-const roleOptions = [
-  { label: "Admin", value: "admin" },
-  { label: "Operator", value: "operator" },
-  { label: "Viewer", value: "viewer" },
-];
+const roleOptions = ROLE_OPTIONS;
+
+const roleHint = computed(
+  () => roleOptions.find((o) => o.value === role.value)?.description ?? "",
+);
 
 const isEdit = computed(() => Boolean(props.user));
 const protectedUser = computed(() => props.user?.protected ?? false);
@@ -31,7 +33,7 @@ const protectedUser = computed(() => props.user?.protected ?? false);
 const username = ref("");
 const email = ref("");
 const displayName = ref("");
-const role = ref("viewer");
+const role = ref<Role>(Role.Viewer);
 const password = ref("");
 const disabled = ref(false);
 const errors = ref<Record<string, string>>({});
@@ -47,13 +49,13 @@ watch(
       username.value = props.user.username;
       email.value = props.user.email ?? "";
       displayName.value = props.user.displayName ?? "";
-      role.value = props.user.roles[0] ?? "viewer";
+      role.value = props.user.roles[0] ?? Role.Viewer;
       disabled.value = props.user.disabled;
     } else {
       username.value = "";
       email.value = "";
       displayName.value = "";
-      role.value = "viewer";
+      role.value = Role.Viewer;
       disabled.value = false;
     }
   },
@@ -73,7 +75,7 @@ async function save(): Promise<void> {
   busy.value = true;
   try {
     if (isEdit.value && props.user) {
-      await api.put(`/admin/users/${props.user.id}`, {
+      await adminUsersApi.update(props.user.id, {
         email: email.value.trim(),
         displayName: displayName.value.trim(),
         role: role.value,
@@ -81,7 +83,7 @@ async function save(): Promise<void> {
       });
       notify.success("User updated", username.value);
     } else {
-      await api.post("/admin/users", {
+      await adminUsersApi.create({
         username: username.value.trim(),
         email: email.value.trim(),
         displayName: displayName.value.trim(),
@@ -174,6 +176,7 @@ async function save(): Promise<void> {
           :disabled="protectedUser"
           @update:model-value="role = $event"
         />
+        <p class="text-xs text-surface-400">{{ roleHint }}</p>
       </div>
 
       <div v-if="!isEdit" class="flex min-w-0 flex-col gap-1.5">

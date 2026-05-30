@@ -69,6 +69,17 @@ func (s *memUserStore) GetByUsername(_ context.Context, username string) (models
 	return models.User{}, ErrNotFound
 }
 
+func (s *memUserStore) GetByEmail(_ context.Context, email string) (models.User, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, u := range s.users {
+		if u.Email != "" && u.Email == email {
+			return u, nil
+		}
+	}
+	return models.User{}, ErrNotFound
+}
+
 func (s *memUserStore) GetPasswordHash(_ context.Context, userID string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -109,6 +120,32 @@ func (s *memUserStore) Update(_ context.Context, u *models.User) error {
 		return ErrNotFound
 	}
 	s.users[u.ID] = *u
+	return nil
+}
+
+func (s *memUserStore) SetTwoFactor(_ context.Context, userID string, secret []byte, enabled bool, recoveryHashes []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.TOTPSecret = secret
+	u.TOTPEnabled = enabled
+	u.RecoveryCodeHashes = recoveryHashes
+	s.users[userID] = u
+	return nil
+}
+
+func (s *memUserStore) SetMFARemindedAt(_ context.Context, userID string, at *time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.MFARemindedAt = at
+	s.users[userID] = u
 	return nil
 }
 
@@ -500,16 +537,28 @@ func (s *memAuditStore) Append(_ context.Context, e *models.AuditEntry) error {
 	return nil
 }
 
+func (s *memAuditStore) matches(e models.AuditEntry, f AuditFilter) bool {
+	if f.UserID != "" && e.UserID != f.UserID {
+		return false
+	}
+	if f.ConnectionID != "" && e.ConnectionID != f.ConnectionID {
+		return false
+	}
+	return true
+}
+
 func (s *memAuditStore) List(_ context.Context, f AuditFilter) ([]models.AuditEntry, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var out []models.AuditEntry
+	skipped := 0
 	for i := len(s.entries) - 1; i >= 0; i-- {
 		e := s.entries[i]
-		if f.UserID != "" && e.UserID != f.UserID {
+		if !s.matches(e, f) {
 			continue
 		}
-		if f.ConnectionID != "" && e.ConnectionID != f.ConnectionID {
+		if f.Offset > 0 && skipped < f.Offset {
+			skipped++
 			continue
 		}
 		out = append(out, e)
@@ -518,6 +567,18 @@ func (s *memAuditStore) List(_ context.Context, f AuditFilter) ([]models.AuditEn
 		}
 	}
 	return out, nil
+}
+
+func (s *memAuditStore) Count(_ context.Context, f AuditFilter) (int64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var n int64
+	for _, e := range s.entries {
+		if s.matches(e, f) {
+			n++
+		}
+	}
+	return n, nil
 }
 
 type memSnippetStore struct {

@@ -36,6 +36,12 @@ type PageRequest struct {
 	Sort   []SortKey         `json:"sort,omitempty"`
 }
 
+// Search returns the table's free-text filter term (the grid's search box),
+// trimmed. The "q" key is the contract — read it through here, never by hand.
+func (p PageRequest) Search() string {
+	return strings.TrimSpace(p.Filter["q"])
+}
+
 // Page is one slice of a paginated list.
 type Page[T any] struct {
 	Items      []T    `json:"items"`

@@ -3,10 +3,12 @@ import { ref } from "vue";
 import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
-import { useAuthStore, type AuthUser } from "../stores/auth";
+import { ApiError } from "../api/client";
+import { authApi } from "../api/auth";
+import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import { btnPrimary } from "../primevue/preset";
+import TwoFactorSection from "../components/auth/TwoFactorSection.vue";
 
 const auth = useAuthStore();
 const notify = useNotify();
@@ -24,7 +26,7 @@ const savingPassword = ref(false);
 async function saveProfile(): Promise<void> {
   savingProfile.value = true;
   try {
-    const updated = await api.put<AuthUser>("/auth/me", {
+    const updated = await authApi.updateProfile({
       displayName: displayName.value.trim(),
       email: email.value.trim(),
     });
@@ -130,6 +132,8 @@ async function savePassword(): Promise<void> {
         />
       </div>
     </section>
+
+    <TwoFactorSection />
 
     <section
       class="flex min-w-0 flex-col gap-4 rounded-xl border border-surface-200 bg-surface-0 p-5 dark:border-surface-800 dark:bg-surface-900"

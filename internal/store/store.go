@@ -19,12 +19,19 @@ type UserStore interface {
 	Create(ctx context.Context, u *models.User, passwordHash string) error
 	GetByID(ctx context.Context, id string) (models.User, error)
 	GetByUsername(ctx context.Context, username string) (models.User, error)
+	GetByEmail(ctx context.Context, email string) (models.User, error)
 	GetPasswordHash(ctx context.Context, userID string) (string, error)
 	SetPasswordHash(ctx context.Context, userID, hash string) error
 	List(ctx context.Context) ([]models.User, error)
 	Update(ctx context.Context, u *models.User) error
 	Delete(ctx context.Context, id string) error
 	Count(ctx context.Context) (int64, error)
+
+	// SetTwoFactor persists the user's TOTP enrollment state atomically: the
+	// encrypted secret, the enabled flag, and the hashed recovery codes.
+	SetTwoFactor(ctx context.Context, userID string, secret []byte, enabled bool, recoveryHashes []string) error
+	// SetMFARemindedAt records when the user was last nudged to enable 2FA.
+	SetMFARemindedAt(ctx context.Context, userID string, at *time.Time) error
 }
 
 // ConnectionStore persists connections (with ciphertext for inline secrets).
@@ -87,6 +94,8 @@ type CredentialGrantStore interface {
 type AuditStore interface {
 	Append(ctx context.Context, e *models.AuditEntry) error
 	List(ctx context.Context, f AuditFilter) ([]models.AuditEntry, error)
+	// Count returns the number of entries matching the filter (Limit/Offset ignored).
+	Count(ctx context.Context, f AuditFilter) (int64, error)
 }
 
 // RecordingStore persists session-recording metadata (the blobs live elsewhere).
@@ -119,6 +128,7 @@ type AuditFilter struct {
 	UserID       string
 	ConnectionID string
 	Limit        int
+	Offset       int
 }
 
 // SnippetStore persists saved command/query snippets.

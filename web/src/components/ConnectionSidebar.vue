@@ -5,6 +5,7 @@ import { useEventListener, useStorage, useTimeoutFn } from "@vueuse/core";
 import Button from "primevue/button";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
+import { useAuthStore } from "../stores/auth";
 import { useNotify } from "../composables/useNotify";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import AppIcon from "./AppIcon.vue";
@@ -25,6 +26,7 @@ const props = defineProps<{
 
 const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
+const auth = useAuthStore();
 const router = useRouter();
 const notify = useNotify();
 const { confirmDanger } = useConfirmAction();
@@ -64,18 +66,42 @@ const expanded = useStorage<Record<string, boolean>>(
   localStorage,
   { mergeDefaults: true },
 );
+// When on, the list shows only connections with a live session. Kept in memory
+// only (not persisted) so every session starts showing the full list.
+const activeOnly = ref(false);
+
+// While filtering (search or active-only), every folder shows open so matches are
+// visible — but this is display-only and never written back, so clearing the
+// filter restores each folder's real open/closed state.
+const filtering = computed(
+  () => Boolean(props.query.trim()) || activeOnly.value,
+);
+const displayExpanded = computed<Record<string, boolean>>(() => {
+  if (!filtering.value) return expanded.value;
+  return Object.fromEntries(conns.folders.map((f) => [f.id, true]));
+});
 const showFolderDialog = ref(false);
 const editingFolder = ref<ConnectionFolder | null>(null);
-const newFolderParentId = ref<string | null>(null);
 const savingLayout = ref(false);
 let pendingPersist = false;
 
 const emptyFiltered = computed(
-  () => conns.loaded && Boolean(props.query.trim()) && !rootItems.value.length,
+  () =>
+    conns.loaded &&
+    conns.connections.length > 0 &&
+    (Boolean(props.query.trim()) || activeOnly.value) &&
+    !rootItems.value.length,
 );
 
 watch(
-  () => [conns.connections, conns.folders, props.query] as const,
+  () =>
+    [
+      conns.connections,
+      conns.folders,
+      props.query,
+      activeOnly.value,
+      ws.connected,
+    ] as const,
   rebuildLists,
   { immediate: true, deep: true },
 );
@@ -121,6 +147,7 @@ function rebuildLists(): void {
     ) {
       continue;
     }
+    if (activeOnly.value && !ws.isConnected(connection.id)) continue;
     const item: ConnectionNode = { kind: "connection", connection };
     if (connection.folderId && folderIds.has(connection.folderId)) {
       nodeById.get(connection.folderId)?.children.push(item);
@@ -129,12 +156,10 @@ function rebuildLists(): void {
     }
   }
 
+  // Two-level rule (frontend-enforced): every folder lives at the root and holds
+  // only connections — a folder is never nested inside another folder.
   for (const node of nodeById.values()) {
-    if (node.parentId && nodeById.has(node.parentId)) {
-      nodeById.get(node.parentId)?.children.push(node);
-    } else {
-      roots.push(node);
-    }
+    roots.push(node);
   }
 
   const sortTree = (items: ConnectionTreeItem[]): ConnectionTreeItem[] => {
@@ -146,7 +171,7 @@ function rebuildLists(): void {
   };
 
   const tree = sortTree(roots);
-  rootItems.value = q ? filterTree(tree) : tree;
+  rootItems.value = q || activeOnly.value ? filterTree(tree) : tree;
 }
 
 function itemSortOrder(item: ConnectionTreeItem): number {
@@ -166,10 +191,7 @@ function filterTree(items: ConnectionTreeItem[]): ConnectionTreeItem[] {
       continue;
     }
     const children = filterTree(item.children);
-    if (children.length) {
-      out.push({ ...item, children });
-      expanded.value = { ...expanded.value, [item.id]: true };
-    }
+    if (children.length) out.push({ ...item, children });
   }
   return out;
 }
@@ -185,24 +207,20 @@ function openFolderAncestors(folderId: string): void {
   expanded.value = next;
 }
 
-function openNewFolder(parentId?: string): void {
+function openNewFolder(): void {
   editingFolder.value = null;
-  newFolderParentId.value = parentId ?? null;
   showFolderDialog.value = true;
 }
 
 function editFolder(folder: ConnectionFolder): void {
   editingFolder.value = folder;
-  newFolderParentId.value = null;
   showFolderDialog.value = true;
 }
 
 function askDeleteFolder(folder: ConnectionFolder): void {
   confirmDanger({
     header: "Delete folder",
-    message: folder.parentId
-      ? `Delete "${folder.name}"? Its connections and subfolders will move up one level.`
-      : `Delete "${folder.name}"? Its connections and subfolders will move to the main list.`,
+    message: `Delete "${folder.name}"? Its connections will move to the main list.`,
     acceptLabel: "Delete",
     accept: async () => {
       await conns.deleteFolder(folder.id);
@@ -213,10 +231,7 @@ function askDeleteFolder(folder: ConnectionFolder): void {
 }
 
 function handleFolderMenu(action: ConnectionFolderMenuAction): void {
-  if (action.key === "new-child") {
-    expanded.value = { ...expanded.value, [action.folder.id]: true };
-    openNewFolder(action.folder.id);
-  } else if (action.key === "rename") {
+  if (action.key === "rename") {
     editFolder(action.folder);
   } else if (action.key === "delete") {
     askDeleteFolder(action.folder);
@@ -320,7 +335,8 @@ function collectLayout(
       });
       return;
     }
-    folders.push({ folderId: item.id, parentId, sortOrder: index });
+    // Folders persist only ever at the root, so any nesting can't be saved.
+    folders.push({ folderId: item.id, parentId: undefined, sortOrder: index });
     collectLayout(item.children, item.id, items, folders);
   });
 }
@@ -371,6 +387,27 @@ function go(connection: ConnectionSummary): void {
           rounded
           severity="secondary"
           size="small"
+          :title="
+            activeOnly ? 'Showing active only' : 'Show active connections only'
+          "
+          :aria-label="
+            activeOnly ? 'Show all connections' : 'Show active connections only'
+          "
+          :aria-pressed="activeOnly"
+          @click="activeOnly = !activeOnly"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'activity' }"
+            :size="15"
+            :class="activeOnly ? 'text-primary-500' : ''"
+          />
+        </Button>
+        <Button
+          v-if="auth.canCreate"
+          text
+          rounded
+          severity="secondary"
+          size="small"
           title="New folder"
           aria-label="New folder"
           @click="openNewFolder()"
@@ -402,7 +439,7 @@ function go(connection: ConnectionSummary): void {
           :key="treeRenderKey"
           v-model="rootItems"
           :active-id="activeId"
-          :expanded="expanded"
+          :expanded="displayExpanded"
           :disabled="Boolean(query.trim())"
           :dragging="hoverSuppressed"
           :dropped-id="droppedId"
@@ -424,7 +461,11 @@ function go(connection: ConnectionSummary): void {
           v-else-if="emptyFiltered"
           class="px-2 py-6 text-center text-sm text-surface-400"
         >
-          No connections match "{{ query }}".
+          {{
+            query.trim()
+              ? `No connections match "${query}".`
+              : "No active connections."
+          }}
         </p>
         <div
           v-else-if="conns.loaded && !conns.connections.length"
@@ -448,7 +489,6 @@ function go(connection: ConnectionSummary): void {
     <ConnectionFolderDialog
       v-model:visible="showFolderDialog"
       :folder="editingFolder"
-      :parent-id="newFolderParentId"
       @saved="rebuildLists"
     />
   </div>

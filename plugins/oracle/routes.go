@@ -271,7 +271,20 @@ func relationGraph(rc *plugin.RequestContext) (any, error) {
 		filter = " AND ac.owner = :1"
 		args = append(args, schema)
 	}
-	rows, err := queryRows(rc.Ctx, s, `
+	colFilter, colArgs := "", []any{}
+	if schema != "" {
+		colFilter = " AND owner = :1"
+		colArgs = append(colArgs, schema)
+	}
+	colRows, err := queryRows(rc.Ctx, s, `
+SELECT owner AS "table_schema", table_name AS "table_name", column_name AS "column_name", data_type AS "data_type"
+FROM all_tab_columns
+WHERE 1 = 1`+colFilter+`
+ORDER BY owner, table_name, column_id`, colArgs)
+	if err != nil {
+		return nil, err
+	}
+	fkRows, err := queryRows(rc.Ctx, s, `
 SELECT ac.constraint_name AS "constraint_name",
        ac.owner AS "child_schema", ac.table_name AS "child_table", acc.column_name AS "child_column",
        rc.owner AS "parent_schema", rc.table_name AS "parent_table", rcc.column_name AS "parent_column"
@@ -284,11 +297,15 @@ ORDER BY ac.constraint_name, acc.position`, args)
 	if err != nil {
 		return nil, err
 	}
-	fks := make([]sqldb.ForeignKey, 0, len(rows))
-	for _, r := range rows {
+	columns := make([]sqldb.TableColumn, 0, len(colRows))
+	for _, r := range colRows {
+		columns = append(columns, sqldb.TableColumnFromRow(r))
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(fkRows))
+	for _, r := range fkRows {
 		fks = append(fks, sqldb.ForeignKeyFromRow(r))
 	}
-	return sqldb.RelationGraph(fks), nil
+	return sqldb.RelationGraph(columns, fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -601,8 +618,21 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	filter := req.Search()
+	var cols []string
+	if filter != "" {
+		cols, err = columnNames(rc.Ctx, s, owner, name)
+		if err != nil {
+			return nil, err
+		}
+	}
+	countClause, countArgs := oracleSearchClause(cols, filter, 1)
+	countWhere := ""
+	if countClause != "" {
+		countWhere = " WHERE " + countClause
+	}
 	var total int
-	if err := s.db.QueryRowContext(rc.Ctx, "SELECT COUNT(*) FROM "+qualified(owner, name)).Scan(&total); err != nil {
+	if err := s.db.QueryRowContext(rc.Ctx, "SELECT COUNT(*) FROM "+qualified(owner, name)+countWhere, countArgs...).Scan(&total); err != nil {
 		return nil, oracleErr(err)
 	}
 	orderBy := " ORDER BY 1"
@@ -617,7 +647,17 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		}
 		orderBy = " ORDER BY " + quoteIdent(col) + " " + dir
 	}
-	rows, err := queryRows(rc.Ctx, s, fmt.Sprintf("SELECT * FROM %s%s OFFSET :1 ROWS FETCH NEXT :2 ROWS ONLY", qualified(owner, name), orderBy), []any{offset, limit})
+	// godror binds :N by order of appearance, so the WHERE clause (which precedes
+	// OFFSET in the text) must take the first placeholders and OFFSET/FETCH follow.
+	dataClause, dataSearch := oracleSearchClause(cols, filter, 1)
+	dataWhere := ""
+	if dataClause != "" {
+		dataWhere = " WHERE " + dataClause
+	}
+	offsetPh := dialect.Placeholder(len(dataSearch) + 1)
+	fetchPh := dialect.Placeholder(len(dataSearch) + 2)
+	dataArgs := append(append([]any{}, dataSearch...), offset, limit)
+	rows, err := queryRows(rc.Ctx, s, fmt.Sprintf("SELECT * FROM %s%s%s OFFSET %s ROWS FETCH NEXT %s ROWS ONLY", qualified(owner, name), dataWhere, orderBy, offsetPh, fetchPh), dataArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1120,6 +1160,51 @@ func keyedRowMutation(rc *plugin.RequestContext, del bool) (any, error) {
 
 // primaryKeyColumns returns the real (unquoted, Oracle-uppercase) primary-key
 // column names so the editable grid's UPDATE/DELETE match by quoted identifier.
+// oracleSearchClause builds a case-insensitive "contains" filter across cols.
+// It uses TO_CHAR rather than CAST(... AS VARCHAR2): casting a numeric column
+// trips ORA-01722 when compared to the '%term%' pattern.
+func oracleSearchClause(cols []string, term string, start int) (string, []any) {
+	term = strings.TrimSpace(term)
+	if term == "" || len(cols) == 0 {
+		return "", nil
+	}
+	pattern := "%" + term + "%"
+	parts := make([]string, 0, len(cols))
+	args := make([]any, 0, len(cols))
+	n := start
+	for _, c := range cols {
+		col, err := safeIdent(c)
+		if err != nil {
+			continue
+		}
+		parts = append(parts, "UPPER(TO_CHAR("+quoteIdent(col)+")) LIKE UPPER("+dialect.Placeholder(n)+")")
+		args = append(args, pattern)
+		n++
+	}
+	if len(parts) == 0 {
+		return "", nil
+	}
+	return "(" + strings.Join(parts, " OR ") + ")", args
+}
+
+// columnNames returns a table's column names in order, for the data grid's
+// free-text search across every column.
+func columnNames(ctx context.Context, s *Session, owner, table string) ([]string, error) {
+	rows, err := queryRows(ctx, s, `
+SELECT column_name AS name FROM all_tab_columns
+WHERE owner = :1 AND table_name = :2
+ORDER BY column_id`, []any{owner, table})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		normalizeRowKeys(r)
+		out = append(out, fmt.Sprint(r["name"]))
+	}
+	return out, nil
+}
+
 func primaryKeyColumns(ctx context.Context, s *Session, owner, table string) ([]string, error) {
 	rows, err := queryRows(ctx, s, `
 SELECT cc.column_name AS name
@@ -1448,7 +1533,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if err != nil {
 		return plugin.Page[row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := offsetCursor(req.Cursor)
@@ -1491,23 +1576,7 @@ func treeFromPage(rc *plugin.RequestContext, kind string, iconName string, label
 }
 
 func filterRows(rows []row, q string) []row {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, r := range rows {
-		for k, v := range r {
-			if k == "_key" || k == "ref" {
-				continue
-			}
-			if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {
-				out = append(out, r)
-				break
-			}
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, q)
 }
 
 func sortRows(rows []row, keys []plugin.SortKey) {

@@ -16,21 +16,24 @@ import (
 )
 
 const (
-	userCreateEvent   = "user.create"
-	userUpdateEvent   = "user.update"
-	userDeleteEvent   = "user.delete"
-	inviteCreateEvent = "invitation.create"
-	inviteRevokeEvent = "invitation.revoke"
+	userCreateEvent     = "user.create"
+	userUpdateEvent     = "user.update"
+	userActivateEvent   = "user.activate"
+	userDeactivateEvent = "user.deactivate"
+	inviteCreateEvent   = "invitation.create"
+	inviteRevokeEvent   = "invitation.revoke"
+	twoFactorResetEvent = "user.2fa.reset"
 )
 
 type adminUserDTO struct {
-	ID          string        `json:"id"`
-	Username    string        `json:"username"`
-	Email       string        `json:"email,omitempty"`
-	DisplayName string        `json:"displayName,omitempty"`
-	Roles       []models.Role `json:"roles"`
-	Disabled    bool          `json:"disabled"`
-	Protected   bool          `json:"protected"`
+	ID               string        `json:"id"`
+	Username         string        `json:"username"`
+	Email            string        `json:"email,omitempty"`
+	DisplayName      string        `json:"displayName,omitempty"`
+	Roles            []models.Role `json:"roles"`
+	Disabled         bool          `json:"disabled"`
+	Protected        bool          `json:"protected"`
+	TwoFactorEnabled bool          `json:"twoFactorEnabled"`
 }
 
 func toAdminUserDTO(u models.User) adminUserDTO {
@@ -40,7 +43,7 @@ func toAdminUserDTO(u models.User) adminUserDTO {
 	}
 	return adminUserDTO{
 		ID: u.ID, Username: u.Username, Email: u.Email, DisplayName: u.DisplayName,
-		Roles: roles, Disabled: u.Disabled, Protected: u.Protected,
+		Roles: roles, Disabled: u.Disabled, Protected: u.Protected, TwoFactorEnabled: u.TOTPEnabled,
 	}
 }
 
@@ -135,32 +138,29 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
 		return
 	}
-	isSelf := target.ID == actor.ID
-
-	// The root admin must stay an enabled admin (no self-lockout).
-	if target.Protected && (req.Disabled || role != models.RoleAdmin) {
+	// Self-management goes through the profile (PUT /auth/me), never the admin
+	// user list, so an admin can't change their own role or lock themselves out.
+	if target.ID == actor.ID {
 		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
-		writeError(w, s.deps.Logger, errForbidden("the root admin must remain an enabled admin"))
+		writeError(w, s.deps.Logger, errForbidden("update your own account from your profile"))
+		return
+	}
+	// The root admin is immutable here; it changes its own details from its profile.
+	if target.Protected {
+		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, errForbidden("the root admin can only be changed from their profile"))
 		return
 	}
 	// Only the root admin may edit other admins; a regular admin manages
-	// non-admin users (and their own account) only.
-	if target.HasRole(models.RoleAdmin) && !isSelf && !actor.Protected {
+	// non-admin users only.
+	if target.HasRole(models.RoleAdmin) && !actor.Protected {
 		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
 		writeError(w, s.deps.Logger, errForbidden("only the root admin may edit another admin"))
 		return
 	}
 
-	roles := []models.Role{role}
-	disabled := req.Disabled
-	// A non-root admin editing their own account can't change their role or
-	// disable themselves (no self-escalation/lockout); profile fields still apply.
-	if isSelf && !actor.Protected {
-		roles = target.Roles
-		disabled = target.Disabled
-	}
 	updated, err := s.deps.Users.Update(ctx, target.ID, service.UpdateUserInput{
-		Email: req.Email, DisplayName: req.DisplayName, Roles: roles, Disabled: disabled,
+		Email: req.Email, DisplayName: req.DisplayName, Roles: []models.Role{role}, Disabled: req.Disabled,
 	})
 	if err != nil {
 		s.auditAdminEvent(ctx, actor, userUpdateEvent, models.AuditError, nil, err)
@@ -171,32 +171,149 @@ func (s *Server) handleAdminUpdateUser(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toAdminUserDTO(updated))
 }
 
-func (s *Server) handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAdminGetUser(w http.ResponseWriter, r *http.Request) {
+	user, err := s.deps.Users.Get(r.Context(), chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAdminUserDTO(user))
+}
+
+// Accounts are deactivated, never hard-deleted: the audit trail and any owned
+// resources stay intact. A deactivated user cannot sign in.
+func (s *Server) handleAdminDeactivateUser(w http.ResponseWriter, r *http.Request) {
+	s.setUserActive(w, r, false)
+}
+
+func (s *Server) handleAdminActivateUser(w http.ResponseWriter, r *http.Request) {
+	s.setUserActive(w, r, true)
+}
+
+func (s *Server) setUserActive(w http.ResponseWriter, r *http.Request, active bool) {
 	ctx := r.Context()
 	actor, _ := userFrom(ctx)
+	event := userActivateEvent
+	if !active {
+		event = userDeactivateEvent
+	}
+	deny := func(msg string) {
+		s.auditAdminEvent(ctx, actor, event, models.AuditDenied, nil, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, errForbidden(msg))
+	}
+
 	target, err := s.deps.Users.Get(ctx, chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	if target.Protected {
-		s.auditAdminEvent(ctx, actor, userDeleteEvent, models.AuditDenied, nil, plugin.ErrForbidden)
-		writeError(w, s.deps.Logger, errForbidden("the root admin cannot be deleted"))
+	if !active {
+		if target.ID == actor.ID {
+			deny("you cannot deactivate your own account")
+			return
+		}
+		if target.Protected {
+			deny("the root admin cannot be deactivated")
+			return
+		}
+	}
+	// Only the root admin may manage another admin's account.
+	if target.HasRole(models.RoleAdmin) && target.ID != actor.ID && !actor.Protected {
+		deny("only the root admin may manage another admin")
 		return
 	}
-	// Only the root admin may delete other admins.
-	if target.HasRole(models.RoleAdmin) && !actor.Protected {
-		s.auditAdminEvent(ctx, actor, userDeleteEvent, models.AuditDenied, nil, plugin.ErrForbidden)
-		writeError(w, s.deps.Logger, errForbidden("only the root admin may delete an admin"))
-		return
-	}
-	if err := s.deps.Users.Delete(ctx, target.ID); err != nil {
-		s.auditAdminEvent(ctx, actor, userDeleteEvent, models.AuditError, nil, err)
+
+	updated, err := s.deps.Users.Update(ctx, target.ID, service.UpdateUserInput{
+		Email: target.Email, DisplayName: target.DisplayName, Roles: target.Roles, Disabled: !active,
+	})
+	if err != nil {
+		s.auditAdminEvent(ctx, actor, event, models.AuditError, nil, err)
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	s.auditAdminEvent(ctx, actor, userDeleteEvent, models.AuditAllowed, map[string]string{"username": target.Username}, nil)
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	s.auditAdminEvent(ctx, actor, event, models.AuditAllowed, map[string]string{"username": updated.Username}, nil)
+	writeJSON(w, http.StatusOK, toAdminUserDTO(updated))
+}
+
+// handleAdminResetTwoFactor clears a locked-out user's 2FA.
+func (s *Server) handleAdminResetTwoFactor(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	actor, _ := userFrom(ctx)
+	if s.deps.TwoFactor == nil {
+		writeError(w, s.deps.Logger, plugin.ErrNotFound)
+		return
+	}
+	target, err := s.deps.Users.Get(ctx, chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	deny := func(msg string) {
+		s.auditAdminEvent(ctx, actor, twoFactorResetEvent, models.AuditDenied, map[string]string{"username": target.Username}, plugin.ErrForbidden)
+		writeError(w, s.deps.Logger, errForbidden(msg))
+	}
+	switch {
+	case target.Protected:
+		deny("the root admin's two-factor cannot be reset here")
+		return
+	case target.ID == actor.ID:
+		deny("reset your own two-factor from your profile")
+		return
+	case target.HasRole(models.RoleAdmin) && !actor.Protected:
+		deny("only the root admin may reset another admin's two-factor")
+		return
+	}
+
+	if err := s.deps.TwoFactor.Reset(ctx, target.ID); err != nil {
+		s.auditAdminEvent(ctx, actor, twoFactorResetEvent, models.AuditError, nil, err)
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	s.auditAdminEvent(ctx, actor, twoFactorResetEvent, models.AuditAllowed, map[string]string{"username": target.Username}, nil)
+	updated, err := s.deps.Users.Get(ctx, target.ID)
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toAdminUserDTO(updated))
+}
+
+// ---- search users by username or email (admin) --------------------------------
+
+type userSummary struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName,omitempty"`
+}
+
+const userSearchLimit = 20
+
+// handleSearchUsers returns non-secret user summaries matching ?query=, backing
+// the admin-only share-picker autocomplete. It is admin-gated by its route group;
+// operators share by exact email instead of enumerating accounts.
+func (s *Server) handleSearchUsers(w http.ResponseWriter, r *http.Request) {
+	q := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("query")))
+	users, err := s.deps.Store.Users.List(r.Context())
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	out := make([]userSummary, 0, userSearchLimit)
+	for _, u := range users {
+		if len(out) >= userSearchLimit {
+			break
+		}
+		if q != "" && !matchesUser(u, q) {
+			continue
+		}
+		out = append(out, userSummary{ID: u.ID, Username: u.Username, DisplayName: u.DisplayName})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func matchesUser(u models.User, q string) bool {
+	return strings.Contains(strings.ToLower(u.Username), q) ||
+		strings.Contains(strings.ToLower(u.DisplayName), q)
 }
 
 // --- invitations (admin) ----------------------------------------------------

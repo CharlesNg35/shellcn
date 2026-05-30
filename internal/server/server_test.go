@@ -277,6 +277,7 @@ func newHarness(t *testing.T) *harness {
 	authMgr := auth.NewSessionManager(time.Hour)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 	users := service.NewUserService(st.Users)
+	twoFactor := service.NewTwoFactorService(st.Users, vault, "ShellCN")
 	invitations := service.NewInvitationService(st.Invitations, users, email.New(email.SMTP{}))
 
 	srv := server.New(server.Deps{
@@ -285,7 +286,7 @@ func newHarness(t *testing.T) *harness {
 		Tickets: auth.NewTicketStore(time.Minute), Policy: pol,
 		Connector: connector, Connections: connections, Credentials: creds, Audit: audit.NewWriter(st.Audit),
 		Enrollments: enrollments, Tunnels: tunnels,
-		Users: users, Invitations: invitations,
+		Users: users, TwoFactor: twoFactor, Invitations: invitations,
 		Recording: recEngine, Recordings: recordings,
 	})
 
@@ -298,7 +299,7 @@ func newHarness(t *testing.T) *harness {
 	for _, u := range []struct {
 		id   string
 		role models.Role
-	}{{"admin", models.RoleAdmin}, {"op", models.RoleOperator}, {"viewer", models.RoleViewer}} {
+	}{{"admin", models.RoleAdmin}, {"op", models.RoleOperator}, {"op2", models.RoleOperator}, {"viewer", models.RoleViewer}} {
 		_ = st.Users.Create(ctx, &models.User{ID: u.id, Username: u.id, Roles: []models.Role{u.role}}, "")
 		h.sessions[u.id] = authMgr.Create(u.id)
 	}
@@ -635,11 +636,12 @@ func TestAgentStateTreatsTunnelRegistryAsAuthoritative(t *testing.T) {
 	}
 }
 
-func TestAdminCanAccessAnyConnection(t *testing.T) {
+func TestAdminCannotAccessOthersConnection(t *testing.T) {
 	h := newHarness(t)
-	// admin owns nothing, but may act on op's connection.
-	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "admin", nil); resp.Status != http.StatusOK {
-		t.Errorf("admin on another's connection: want 200, got %d", resp.Status)
+	// Admin is a user-management role, not a super-user: no implicit access to
+	// another user's connection.
+	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "admin", nil); resp.Status != http.StatusForbidden {
+		t.Errorf("admin on another's connection: want 403, got %d", resp.Status)
 	}
 }
 
@@ -775,11 +777,13 @@ func TestAuthLoginFlow(t *testing.T) {
 	if !strings.Contains(string(body), `"csrfToken"`) || !strings.Contains(string(body), "loginuser") {
 		t.Errorf("login response missing csrf/user: %s", body)
 	}
-	var loginSession struct {
-		CSRFToken string `json:"csrfToken"`
+	var loginResp struct {
+		Session struct {
+			CSRFToken string `json:"csrfToken"`
+		} `json:"session"`
 	}
-	if err := json.Unmarshal(body, &loginSession); err != nil || loginSession.CSRFToken == "" {
-		t.Fatalf("login csrf decode: csrf=%q err=%v body=%s", loginSession.CSRFToken, err, body)
+	if err := json.Unmarshal(body, &loginResp); err != nil || loginResp.Session.CSRFToken == "" {
+		t.Fatalf("login csrf decode: csrf=%q err=%v body=%s", loginResp.Session.CSRFToken, err, body)
 	}
 
 	// The cookie authorizes /api/auth/me.
@@ -809,7 +813,7 @@ func TestAuthLoginFlow(t *testing.T) {
 
 	logoutReq, _ = http.NewRequest(http.MethodPost, h.ts.URL+"/api/auth/logout", nil)
 	logoutReq.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: cookieVal})
-	logoutReq.Header.Set(auth.CSRFHeader, loginSession.CSRFToken)
+	logoutReq.Header.Set(auth.CSRFHeader, loginResp.Session.CSRFToken)
 	logoutResp, err = h.ts.Client().Do(logoutReq)
 	if err != nil {
 		t.Fatalf("logout with csrf: %v", err)
@@ -850,7 +854,9 @@ func TestPasswordChangeInvalidatesOldSessionAndReturnsNewSession(t *testing.T) {
 		t.Fatalf("login: want 200, got %d (%s)", resp.StatusCode, body)
 	}
 	var loginBody struct {
-		CSRFToken string `json:"csrfToken"`
+		Session struct {
+			CSRFToken string `json:"csrfToken"`
+		} `json:"session"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&loginBody); err != nil {
 		t.Fatalf("decode login: %v", err)
@@ -863,13 +869,13 @@ func TestPasswordChangeInvalidatesOldSessionAndReturnsNewSession(t *testing.T) {
 			oldCookie = &copied
 		}
 	}
-	if oldCookie == nil || loginBody.CSRFToken == "" {
+	if oldCookie == nil || loginBody.Session.CSRFToken == "" {
 		t.Fatal("login missing session cookie or csrf token")
 	}
 
 	changeReq, _ := http.NewRequest(http.MethodPost, h.ts.URL+"/api/auth/me/password", strings.NewReader(`{"currentPassword":"old-secret","newPassword":"new-secret"}`))
 	changeReq.AddCookie(oldCookie)
-	changeReq.Header.Set(auth.CSRFHeader, loginBody.CSRFToken)
+	changeReq.Header.Set(auth.CSRFHeader, loginBody.Session.CSRFToken)
 	changeResp, err := h.ts.Client().Do(changeReq)
 	if err != nil {
 		t.Fatalf("change password: %v", err)
@@ -893,8 +899,8 @@ func TestPasswordChangeInvalidatesOldSessionAndReturnsNewSession(t *testing.T) {
 			newCookie = &copied
 		}
 	}
-	if newCookie == nil || changeBody.CSRFToken == "" || changeBody.CSRFToken == loginBody.CSRFToken {
-		t.Fatalf("password change did not return a fresh session: cookie=%v oldCSRF=%q newCSRF=%q", newCookie, loginBody.CSRFToken, changeBody.CSRFToken)
+	if newCookie == nil || changeBody.CSRFToken == "" || changeBody.CSRFToken == loginBody.Session.CSRFToken {
+		t.Fatalf("password change did not return a fresh session: cookie=%v oldCSRF=%q newCSRF=%q", newCookie, loginBody.Session.CSRFToken, changeBody.CSRFToken)
 	}
 
 	oldMe, _ := http.NewRequest(http.MethodGet, h.ts.URL+"/api/auth/me", nil)

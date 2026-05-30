@@ -228,6 +228,7 @@ function connections(): Json[] {
     connectionsState = readJSON<Json[]>("connections.json").map((c) => ({
       ...c,
       canManage: true,
+      canShare: true,
     }));
   }
   return connectionsState;
@@ -288,12 +289,33 @@ function adminUsers(): Json[] {
         roles: ["viewer"],
         disabled: false,
         protected: false,
+        twoFactorEnabled: true,
       },
     ];
   }
   return adminUsersState;
 }
 let invitationsState: Json[] = [];
+const twoFactorState = { enabled: false };
+
+// 1x1 transparent PNG, stands in for a real TOTP QR code in the mock.
+const TRANSPARENT_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+function mockRecoveryCodes(): string[] {
+  return [
+    "aaaa-bbbb",
+    "cccc-dddd",
+    "eeee-ffff",
+    "gggg-hhhh",
+    "iiii-jjjj",
+    "kkkk-llll",
+    "mmmm-nnnn",
+    "oooo-pppp",
+    "qqqq-rrrr",
+    "ssss-tttt",
+  ];
+}
 
 function uid(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
@@ -306,6 +328,7 @@ function resetControlPlaneState(): void {
   recordingsState = null;
   adminUsersState = null;
   invitationsState = [];
+  twoFactorState.enabled = false;
   for (const key of Object.keys(grantsState)) delete grantsState[key];
   for (const key of Object.keys(recordingBlobs)) delete recordingBlobs[key];
   agentOnlineAt.clear();
@@ -418,14 +441,42 @@ function handleHTTP(
       displayName: "Demo User",
       email: "demo@example.com",
       roles: ["admin"],
+      twoFactorEnabled: twoFactorState.enabled,
     },
     csrfToken: "mock-csrf-token",
+    mfaReminder: false,
   });
   if (path === "/api/auth/me" && method === "GET") {
     return send(res, 200, mockSession());
   }
   if (path === "/api/auth/login" && method === "POST") {
-    return send(res, 200, mockSession());
+    return send(res, 200, { mfaRequired: false, session: mockSession() });
+  }
+  if (path === "/api/auth/login/mfa" && method === "POST") {
+    return send(res, 200, { mfaRequired: false, session: mockSession() });
+  }
+  // Two-factor (TOTP), self-service. The mock skips real code validation.
+  if (path === "/api/auth/totp/setup" && method === "POST") {
+    return send(res, 200, {
+      secret: "JBSWY3DPEHPK3PXP",
+      otpauthUrl:
+        "otpauth://totp/ShellCN:demo?secret=JBSWY3DPEHPK3PXP&issuer=ShellCN",
+      qr: TRANSPARENT_PNG,
+    });
+  }
+  if (path === "/api/auth/totp/enable" && method === "POST") {
+    twoFactorState.enabled = true;
+    return send(res, 200, { recoveryCodes: mockRecoveryCodes() });
+  }
+  if (path === "/api/auth/totp/recovery-codes" && method === "POST") {
+    return send(res, 200, { recoveryCodes: mockRecoveryCodes() });
+  }
+  if (path === "/api/auth/totp/disable" && method === "POST") {
+    twoFactorState.enabled = false;
+    return send(res, 200, { ok: true });
+  }
+  if (path === "/api/auth/totp/remind" && method === "POST") {
+    return send(res, 200, { ok: true });
   }
   if (path === "/api/auth/logout" && method === "POST") {
     return send(res, 200, { ok: true });
@@ -472,7 +523,8 @@ function handleHTTP(
     return send(res, 200, readJSON(`${pluginMatch[1]}.json`));
   }
 
-  if (path === "/api/users" && method === "GET") {
+  // --- admin: users, invitations, email status ---
+  if (path === "/api/admin/users/search" && method === "GET") {
     const q = (url.searchParams.get("query") ?? "").toLowerCase();
     return send(
       res,
@@ -487,8 +539,6 @@ function handleHTTP(
       ),
     );
   }
-
-  // --- admin: users, invitations, email status ---
   if (path === "/api/admin/email" && method === "GET") {
     return send(res, 200, { enabled: false });
   }
@@ -511,11 +561,28 @@ function handleHTTP(
       send(res, 201, u);
     });
   }
+  const adminUserActionMatch = path.match(
+    /^\/api\/admin\/users\/([^/]+)\/([^/]+)$/,
+  );
+  if (adminUserActionMatch) {
+    const [, id, action] = adminUserActionMatch;
+    const u = adminUsers().find((x) => x.id === id);
+    if (method === "GET" && action === "connections") return send(res, 200, []);
+    if (method === "GET" && action === "audit")
+      return send(res, 200, { items: [], total: 0 });
+    if (method === "POST" && u) {
+      if (action === "activate") u.disabled = false;
+      if (action === "deactivate") u.disabled = true;
+      if (action === "reset-2fa") u.twoFactorEnabled = false;
+      return send(res, 200, u);
+    }
+  }
   const adminUserMatch = path.match(/^\/api\/admin\/users\/([^/]+)$/);
   if (adminUserMatch) {
     const id = adminUserMatch[1];
     const u = adminUsers().find((x) => x.id === id);
     if (!u) return send(res, 404, { error: "unknown user" });
+    if (method === "GET") return send(res, 200, u);
     if (method === "PUT") {
       return void readBody(req).then((raw) => {
         const body = raw as Json;

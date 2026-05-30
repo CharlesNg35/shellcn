@@ -304,9 +304,21 @@ func relationGraph(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	columns := []sqldb.TableColumn{}
 	fks := []sqldb.ForeignKey{}
 	for _, database := range databases {
-		rows, err := queryRows(rc.Ctx, s, fmt.Sprintf(`
+		colRows, err := queryRows(rc.Ctx, s, fmt.Sprintf(`
+SELECT TABLE_SCHEMA AS table_schema, TABLE_NAME AS table_name, COLUMN_NAME AS column_name, DATA_TYPE AS data_type
+FROM %[1]s.INFORMATION_SCHEMA.COLUMNS
+WHERE (@p1 = '' OR TABLE_SCHEMA = @p1)
+ORDER BY TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION`, quoteIdent(database)), []any{schema})
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range colRows {
+			columns = append(columns, sqldb.TableColumnFromRow(r))
+		}
+		fkRows, err := queryRows(rc.Ctx, s, fmt.Sprintf(`
 SELECT fk.name AS constraint_name,
        cs.name AS child_schema, ct.name AS child_table, cc.name AS child_column,
        ps.name AS parent_schema, pt.name AS parent_table, pc.name AS parent_column
@@ -323,11 +335,11 @@ ORDER BY fk.name, fkc.constraint_column_id`, quoteIdent(database)), []any{schema
 		if err != nil {
 			return nil, err
 		}
-		for _, r := range rows {
+		for _, r := range fkRows {
 			fks = append(fks, sqldb.ForeignKeyFromRow(r))
 		}
 	}
-	return sqldb.RelationGraph(fks), nil
+	return sqldb.RelationGraph(columns, fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -518,8 +530,21 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	filter := req.Search()
+	var cols []string
+	if filter != "" {
+		cols, err = columnNames(rc.Ctx, s, database, schema, table)
+		if err != nil {
+			return nil, err
+		}
+	}
+	countClause, countArgs := dialect.SearchClause("NVARCHAR(MAX)", cols, filter, 1)
+	countWhere := ""
+	if countClause != "" {
+		countWhere = " WHERE " + countClause
+	}
 	var total64 int64
-	if err := s.db.QueryRowContext(rc.Ctx, "SELECT COUNT_BIG(*) FROM "+qualified(database, schema, table)).Scan(&total64); err != nil {
+	if err := s.db.QueryRowContext(rc.Ctx, "SELECT COUNT_BIG(*) FROM "+qualified(database, schema, table)+countWhere, countArgs...).Scan(&total64); err != nil {
 		return nil, mssqlErr(err)
 	}
 	orderBy := " ORDER BY (SELECT NULL)"
@@ -534,7 +559,14 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		}
 		orderBy = " ORDER BY " + quoteIdent(col) + " " + dir
 	}
-	rows, err := queryRows(rc.Ctx, s, fmt.Sprintf("SELECT * FROM %s%s OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY", qualified(database, schema, table), orderBy), []any{offset, limit})
+	// Pagination keeps @p1/@p2; the search clause is numbered after it (@p3…).
+	dataClause, dataSearch := dialect.SearchClause("NVARCHAR(MAX)", cols, filter, 3)
+	dataWhere := ""
+	if dataClause != "" {
+		dataWhere = " WHERE " + dataClause
+	}
+	dataArgs := append([]any{offset, limit}, dataSearch...)
+	rows, err := queryRows(rc.Ctx, s, fmt.Sprintf("SELECT * FROM %s%s%s OFFSET @p1 ROWS FETCH NEXT @p2 ROWS ONLY", qualified(database, schema, table), dataWhere, orderBy), dataArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1002,6 +1034,26 @@ func keyedRowMutation(rc *plugin.RequestContext, del bool) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+// columnNames returns a table's column names in order, for the data grid's
+// free-text search across every column.
+func columnNames(ctx context.Context, s *Session, database, schema, table string) ([]string, error) {
+	rows, err := queryRows(ctx, s, fmt.Sprintf(`
+SELECT c.name AS name
+FROM %s.sys.columns c
+JOIN %s.sys.objects o ON o.object_id = c.object_id
+JOIN %s.sys.schemas sc ON sc.schema_id = o.schema_id
+WHERE sc.name = @p1 AND o.name = @p2
+ORDER BY c.column_id`, quoteIdent(database), quoteIdent(database), quoteIdent(database)), []any{schema, table})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, fmt.Sprint(r["name"]))
+	}
+	return out, nil
+}
+
 func primaryKeyColumns(ctx context.Context, s *Session, database, schema, table string) ([]string, error) {
 	rows, err := queryRows(ctx, s, fmt.Sprintf(`
 SELECT c.name AS name
@@ -1324,7 +1376,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if err != nil {
 		return plugin.Page[row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := offsetCursor(req.Cursor)
@@ -1371,23 +1423,7 @@ func treeFromPage(rc *plugin.RequestContext, kind string, iconName string, label
 }
 
 func filterRows(rows []row, q string) []row {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, r := range rows {
-		for k, v := range r {
-			if k == "_key" || k == "ref" {
-				continue
-			}
-			if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {
-				out = append(out, r)
-				break
-			}
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, q)
 }
 
 func sortRows(rows []row, keys []plugin.SortKey) {

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { defineComponent, h, KeepAlive } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
@@ -33,7 +34,10 @@ beforeEach(() => {
     };
   });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 function bodyButton(text: string): HTMLButtonElement | undefined {
   return [...document.body.querySelectorAll("button")].find(
@@ -412,7 +416,10 @@ describe("TablePanel staged edits", () => {
     });
   }
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it("buffers a cell edit and commits it through the update route", async () => {
     const { w, calls } = mountStaged();
@@ -468,6 +475,197 @@ describe("TablePanel staged edits", () => {
     await flushPromises();
     const del = calls.find((c) => c.url.includes("db.row.delete"));
     expect(del?.body).toEqual({ key: { name: "alpha" } });
+    w.unmount();
+  });
+
+  it("requests the declared defaultSort on first load", async () => {
+    const fetchFn = installFetch(() => ({
+      body: { items: [row("a", "alpha")], nextCursor: "", total: 1 },
+    }));
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: { columns, defaultSort: { field: "cpuPct", desc: true } },
+      },
+    });
+    await flushPromises();
+    const url = fetchFn.mock.calls[0]?.[0] as string;
+    expect(url).toContain("sort=-cpuPct");
+    w.unmount();
+  });
+
+  it("formats percent columns with fixed precision", async () => {
+    installFetch(() => ({
+      body: {
+        items: [{ ref: { kind: "p", name: "x", uid: "x" }, cpuPct: 12.3456 }],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: {
+          columns: [
+            { key: "cpuPct", label: "CPU", type: "percent", precision: 1 },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+    expect(w.find('[data-test="table-cell-value"]').text()).toBe("12.3%");
+    w.unmount();
+  });
+
+  it("polls the current page on refreshIntervalMs and replaces rows in place", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    installFetch(() => {
+      calls += 1;
+      return {
+        body: {
+          items: [row("a", calls === 1 ? "alpha" : "alpha-refreshed")],
+          nextCursor: "",
+          total: 1,
+        },
+      };
+    });
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: { columns, refreshIntervalMs: 1000 },
+      },
+    });
+    await flushPromises();
+    expect(calls).toBe(1);
+    expect(w.text()).toContain("alpha");
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toBe(2);
+    expect(w.text()).toContain("alpha-refreshed");
+    w.unmount();
+  });
+
+  it("opens the detail dialog from the details icon when rowClick is detail", async () => {
+    installFetch(() => ({
+      body: {
+        items: [{ _id: "p1", name: "nginx", cpuPct: 12.34 }],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: {
+          columns: [
+            { key: "name", label: "Name" },
+            { key: "cpuPct", label: "CPU", type: "percent", precision: 1 },
+          ],
+          rowClick: "detail",
+        },
+      },
+    });
+    await flushPromises();
+    const detailsBtn = [...document.body.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "View details",
+    ) as HTMLButtonElement;
+    expect(detailsBtn).toBeTruthy();
+    detailsBtn.click();
+    await flushPromises();
+    expect(document.body.textContent).toContain("12.3%");
+    w.unmount();
+  });
+
+  it("opens the dialog on row-body click when rowClick is detail", async () => {
+    installFetch(() => ({
+      body: {
+        items: [{ _id: "p1", name: "nginx", cpuPct: 5 }],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+    const w = mount(TablePanel, {
+      attachTo: document.body,
+      props: {
+        connectionId: "c1",
+        source: { routeId: "server_monitor.processes" },
+        config: {
+          columns: [{ key: "name", label: "Name" }],
+          rowClick: "detail",
+        },
+      },
+    });
+    await flushPromises();
+    await w.find("tbody tr").trigger("click");
+    await flushPromises();
+    expect(w.emitted("select")).toBeFalsy();
+    expect(document.body.textContent).toContain("nginx");
+    w.unmount();
+  });
+
+  it("pauses live polling while deactivated under KeepAlive", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    installFetch(() => {
+      calls += 1;
+      return {
+        body: { items: [{ _id: "a", name: "x" }], nextCursor: "", total: 1 },
+      };
+    });
+    const Parent = defineComponent({
+      props: { show: { type: Boolean, default: true } },
+      setup(p) {
+        return () =>
+          h(KeepAlive, () =>
+            p.show
+              ? h(TablePanel, {
+                  connectionId: "c1",
+                  source: { routeId: "server_monitor.processes" },
+                  config: {
+                    columns: [{ key: "name", label: "Name" }],
+                    refreshIntervalMs: 1000,
+                  },
+                })
+              : null,
+          );
+      },
+    });
+    const w = mount(Parent, { props: { show: true } });
+    await flushPromises();
+    expect(calls).toBe(1); // initial load
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toBe(2); // polls while visible/active
+
+    await w.setProps({ show: false }); // deactivate (kept alive, not unmounted)
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(calls).toBe(2); // paused — no background polling
+
+    await w.setProps({ show: true }); // reactivate
+    await flushPromises();
+    expect(calls).toBe(3); // immediate catch-up refresh
+    w.unmount();
+  });
+
+  it("navigates on row-click when rowClick is navigate", async () => {
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "docker.container.list" },
+        config: { columns, rowClick: "navigate" },
+      },
+    });
+    await flushPromises();
+    // Rows carry a ref → navigate; the detail dialog stays closed.
+    await w.find("tbody tr").trigger("click");
+    expect(w.emitted("select")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("Close");
     w.unmount();
   });
 });

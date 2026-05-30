@@ -181,7 +181,7 @@ func (l *Local) Processes(ctx context.Context) ([]Row, error) {
 			rss, vms = mi.RSS, mi.VMS
 		}
 		rows = append(rows, Row{
-			"ref":       ref("process", strconv.Itoa(int(p.Pid)), name),
+			"_id":       strconv.Itoa(int(p.Pid)),
 			"pid":       p.Pid,
 			"name":      name,
 			"status":    strings.Join(status, ","),
@@ -239,7 +239,7 @@ func linuxServices(ctx context.Context) ([]Row, error) {
 			desc = strings.Join(fields[4:], " ")
 		}
 		rows = append(rows, Row{
-			"ref":         ref("service", fields[0], fields[0]),
+			"_id":         fields[0],
 			"unit":        fields[0],
 			"name":        strings.TrimSuffix(fields[0], ".service"),
 			"load":        fields[1],
@@ -274,7 +274,7 @@ func darwinServices(ctx context.Context) ([]Row, error) {
 			active = "running"
 		}
 		rows = append(rows, Row{
-			"ref":         ref("service", fields[2], fields[2]),
+			"_id":         fields[2],
 			"unit":        fields[2],
 			"name":        fields[2],
 			"load":        "loaded",
@@ -311,7 +311,7 @@ func windowsServices(ctx context.Context) ([]Row, error) {
 		if name, ok := strings.CutPrefix(line, "SERVICE_NAME:"); ok {
 			flush()
 			name = strings.TrimSpace(name)
-			cur = Row{"ref": ref("service", name, name), "unit": name, "name": name, "load": "loaded"}
+			cur = Row{"_id": name, "unit": name, "name": name, "load": "loaded"}
 			continue
 		}
 		if cur == nil {
@@ -342,7 +342,7 @@ func (l *Local) Disks(ctx context.Context) ([]Row, error) {
 	rows := make([]Row, 0, len(parts))
 	for _, part := range parts {
 		row := Row{
-			"ref":        ref("disk", part.Mountpoint, part.Mountpoint),
+			"_id":        part.Mountpoint,
 			"device":     part.Device,
 			"mountpoint": part.Mountpoint,
 			"fstype":     part.Fstype,
@@ -370,7 +370,7 @@ func (l *Local) DiskIO(ctx context.Context) ([]Row, error) {
 	rows := make([]Row, 0, len(ios))
 	for name, io := range ios {
 		rows = append(rows, Row{
-			"ref":        ref("disk_io", name, name),
+			"_id":        name,
 			"name":       name,
 			"readCount":  io.ReadCount,
 			"writeCount": io.WriteCount,
@@ -405,7 +405,7 @@ func (l *Local) Networks(ctx context.Context) ([]Row, error) {
 		}
 		io := byName[iface.Name]
 		rows = append(rows, Row{
-			"ref":         ref("network", iface.Name, iface.Name),
+			"_id":         iface.Name,
 			"name":        iface.Name,
 			"mtu":         iface.MTU,
 			"hardware":    iface.HardwareAddr,
@@ -433,7 +433,7 @@ func (l *Local) Connections(ctx context.Context) ([]Row, error) {
 	for _, c := range conns {
 		uid := fmt.Sprintf("%d:%s:%d:%s:%d:%s", c.Pid, c.Laddr.IP, c.Laddr.Port, c.Raddr.IP, c.Raddr.Port, c.Status)
 		rows = append(rows, Row{
-			"ref":        ref("connection", uid, uid),
+			"_id":        uid,
 			"pid":        c.Pid,
 			"family":     c.Family,
 			"type":       c.Type,
@@ -461,7 +461,7 @@ func (l *Local) Users(ctx context.Context) ([]Row, error) {
 	for _, u := range users {
 		uid := strings.Join([]string{u.User, u.Terminal, u.Host, strconv.Itoa(u.Started)}, "|")
 		rows = append(rows, Row{
-			"ref":       ref("user_session", uid, u.User),
+			"_id":       uid,
 			"user":      u.User,
 			"terminal":  u.Terminal,
 			"host":      u.Host,
@@ -483,7 +483,7 @@ func (l *Local) Sensors(ctx context.Context) ([]Row, error) {
 			uid = strconv.FormatFloat(t.Temperature, 'f', 2, 64)
 		}
 		rows = append(rows, Row{
-			"ref":         ref("sensor", uid, uid),
+			"_id":         uid,
 			"sensor":      t.SensorKey,
 			"temperature": t.Temperature,
 			"high":        t.High,
@@ -502,7 +502,7 @@ func (l *Local) CPUInfo(ctx context.Context) ([]Row, error) {
 	for _, info := range infos {
 		uid := strconv.Itoa(int(info.CPU))
 		rows = append(rows, Row{
-			"ref":       ref("cpu", uid, "CPU "+uid),
+			"_id":       uid,
 			"cpu":       info.CPU,
 			"vendor":    info.VendorID,
 			"family":    info.Family,
@@ -671,13 +671,6 @@ func numeric(v any) float64 {
 	default:
 		return 0
 	}
-}
-
-func ref(kind, uid, name string) map[string]string {
-	if name == "" {
-		name = uid
-	}
-	return map[string]string{"kind": kind, "uid": uid, "name": name}
 }
 
 func endpoint(ip string, port uint32) string {

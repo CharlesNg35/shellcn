@@ -144,6 +144,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	recEngine.Register(plugin.FormatAsciicastV2, recording.NewAsciicastRecorder)
 	recordings := service.NewRecordingService(st.Recordings, recBlobs)
 	users := service.NewUserService(st.Users)
+	twoFactor := service.NewTwoFactorService(st.Users, vault, app.DisplayName)
 	mailer := email.New(email.SMTP{
 		Enabled:  cfg.Email.Enabled,
 		Host:     cfg.Email.Host,
@@ -228,6 +229,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		Credentials:       creds,
 		Enrollments:       enrollments,
 		Users:             users,
+		TwoFactor:         twoFactor,
 		Invitations:       invitations,
 		Tunnels:           tunnels,
 		Recording:         recEngine,

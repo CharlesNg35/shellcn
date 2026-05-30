@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsdynamodb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -701,6 +703,10 @@ func executePartiQL(ctx context.Context, s *Session, req sqldb.QueryRequest) (sq
 	if statement == "" {
 		return sqldb.QueryResult{}, fmt.Errorf("%w: statement is empty", plugin.ErrInvalidInput)
 	}
+	statement, limit, err := normalizePartiQLStatement(statement, int32(s.opts.PageLimit))
+	if err != nil {
+		return sqldb.QueryResult{}, err
+	}
 	if s.opts.ReadOnly && !sqldb.IsReadOnlyStatement(statement) {
 		return sqldb.QueryResult{}, fmt.Errorf("%w: read-only mode blocks write statements", plugin.ErrForbidden)
 	}
@@ -712,7 +718,7 @@ func executePartiQL(ctx context.Context, s *Session, req sqldb.QueryRequest) (sq
 	defer cancel()
 	out, err := s.client.ExecuteStatement(ctx, &awsdynamodb.ExecuteStatementInput{
 		Statement:              aws.String(statement),
-		Limit:                  aws.Int32(int32(s.opts.PageLimit)),
+		Limit:                  aws.Int32(limit),
 		ReturnConsumedCapacity: types.ReturnConsumedCapacityTotal,
 	})
 	if err != nil {
@@ -732,11 +738,83 @@ func executePartiQL(ctx context.Context, s *Session, req sqldb.QueryRequest) (sq
 
 func completionRoute(_ *plugin.RequestContext) (any, error) {
 	return []sqldb.CompletionItem{
-		{Label: "SELECT", Type: "keyword", Apply: `SELECT * FROM "table" LIMIT 25`},
+		{Label: "SELECT", Type: "keyword", Apply: `SELECT * FROM "table"`},
 		{Label: "INSERT", Type: "keyword", Apply: `INSERT INTO "table" VALUE {'pk':'id-1','name':'Ada'}`},
 		{Label: "UPDATE", Type: "keyword", Apply: `UPDATE "table" SET name='Ada' WHERE pk='id-1'`},
 		{Label: "DELETE", Type: "keyword", Apply: `DELETE FROM "table" WHERE pk='id-1'`},
 	}, nil
+}
+
+func normalizePartiQLStatement(statement string, defaultLimit int32) (string, int32, error) {
+	trimmed := strings.TrimSpace(statement)
+	trimmed = strings.TrimSpace(strings.TrimSuffix(trimmed, ";"))
+	start, rawLimit, ok := trailingLimitClause(trimmed)
+	if !ok {
+		return trimmed, defaultLimit, nil
+	}
+	limit64, err := strconv.ParseInt(rawLimit, 10, 32)
+	if err != nil || limit64 <= 0 {
+		return "", 0, fmt.Errorf("%w: LIMIT must be a positive integer", plugin.ErrInvalidInput)
+	}
+	return strings.TrimSpace(trimmed[:start]), int32(limit64), nil
+}
+
+func trailingLimitClause(statement string) (int, string, bool) {
+	i := len(statement) - 1
+	for i >= 0 && unicode.IsSpace(rune(statement[i])) {
+		i--
+	}
+	endDigits := i + 1
+	for i >= 0 && statement[i] >= '0' && statement[i] <= '9' {
+		i--
+	}
+	if endDigits == i+1 {
+		return 0, "", false
+	}
+	rawLimit := statement[i+1 : endDigits]
+	for i >= 0 && unicode.IsSpace(rune(statement[i])) {
+		i--
+	}
+	endWord := i + 1
+	for i >= 0 && ((statement[i] >= 'a' && statement[i] <= 'z') || (statement[i] >= 'A' && statement[i] <= 'Z')) {
+		i--
+	}
+	startWord := i + 1
+	if !strings.EqualFold(statement[startWord:endWord], "limit") {
+		return 0, "", false
+	}
+	if i >= 0 && !unicode.IsSpace(rune(statement[i])) {
+		return 0, "", false
+	}
+	if !outsideQuotedText(statement, startWord) {
+		return 0, "", false
+	}
+	return startWord, rawLimit, true
+}
+
+func outsideQuotedText(statement string, index int) bool {
+	inSingle, inDouble := false, false
+	for i := 0; i < index; i++ {
+		switch statement[i] {
+		case '\'':
+			if inSingle && i+1 < index && statement[i+1] == '\'' {
+				i++
+				continue
+			}
+			if !inDouble {
+				inSingle = !inSingle
+			}
+		case '"':
+			if inDouble && i+1 < index && statement[i+1] == '"' {
+				i++
+				continue
+			}
+			if !inSingle {
+				inDouble = !inDouble
+			}
+		}
+	}
+	return !inSingle && !inDouble
 }
 
 func ensureWritable(s *Session) error {

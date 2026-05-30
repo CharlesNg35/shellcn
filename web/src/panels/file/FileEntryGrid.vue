@@ -3,14 +3,18 @@ import AppIcon from "../../components/AppIcon.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import PanelError from "../shared/PanelError.vue";
 import type { FileEntry } from "../../types/projection";
-import { formatBytes } from "./fileTypes";
+import { formatBytes, formatDate, iconFor } from "./fileTypes";
 
-defineProps<{
-  entries: FileEntry[];
-  selectedPath?: string;
-  loading: boolean;
-  error?: string | null;
-}>();
+withDefaults(
+  defineProps<{
+    entries: FileEntry[];
+    selectedPath?: string;
+    loading: boolean;
+    error?: string | null;
+    emptyText?: string;
+  }>(),
+  { selectedPath: undefined, error: null, emptyText: "This folder is empty." },
+);
 const emit = defineEmits<{
   select: [entry: FileEntry];
   open: [entry: FileEntry];
@@ -31,7 +35,7 @@ const emit = defineEmits<{
       v-else-if="!entries.length"
       class="py-12 text-center text-sm text-surface-400"
     >
-      This folder is empty.
+      {{ emptyText }}
     </p>
     <div
       v-else
@@ -47,6 +51,7 @@ const emit = defineEmits<{
             ? 'border-primary-400 bg-primary-50 dark:border-primary-500 dark:bg-primary-500/10'
             : ''
         "
+        :aria-current="selectedPath === entry.path || undefined"
         :aria-label="
           entry.isDir ? `Open ${entry.name}` : `Select ${entry.name}`
         "
@@ -55,9 +60,14 @@ const emit = defineEmits<{
         @dblclick="emit('open', entry)"
       >
         <AppIcon
-          :icon="{ type: 'lucide', value: entry.isDir ? 'folder' : 'code' }"
+          :icon="{ type: 'lucide', value: iconFor(entry.name, entry.isDir) }"
           :size="28"
-          class="mb-2 text-surface-400"
+          class="mb-2"
+          :class="
+            entry.isDir
+              ? 'text-amber-500 dark:text-amber-400'
+              : 'text-surface-400'
+          "
         />
         <span
           class="block truncate text-sm font-medium text-surface-800 dark:text-surface-100"
@@ -67,6 +77,12 @@ const emit = defineEmits<{
         </span>
         <span class="mt-1 block truncate text-xs text-surface-400">
           {{ entry.isDir ? "Folder" : formatBytes(entry.size) }}
+        </span>
+        <span
+          v-if="entry.modTime"
+          class="mt-0.5 block truncate text-xs text-surface-400/80 tabular-nums"
+        >
+          {{ formatDate(entry.modTime) }}
         </span>
       </button>
     </div>

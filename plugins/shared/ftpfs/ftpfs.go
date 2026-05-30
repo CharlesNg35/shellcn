@@ -80,13 +80,42 @@ type Client struct {
 	root string
 }
 
+type ftpControlConn struct {
+	net.Conn
+}
+
+func (c ftpControlConn) SetDeadline(t time.Time) error {
+	return c.SetReadDeadline(t)
+}
+
+func (c ftpControlConn) Write(b []byte) (int, error) {
+	_ = c.Conn.SetDeadline(time.Time{})
+	return c.Conn.Write(b)
+}
+
 func Connect(ctx context.Context, cfg plugin.ConnectConfig, opts Options) (plugin.Session, error) {
 	if err := normalizeOptions(cfg, &opts); err != nil {
 		return nil, err
 	}
 	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
+	var tlsConfig *tls.Config
+	if opts.TLSMode != TLSNone {
+		tlsConfig = &tls.Config{ServerName: opts.Host, InsecureSkipVerify: !opts.VerifyTLS}
+	}
 	dial := func(network, address string) (net.Conn, error) {
-		return cfg.Net.DialContext(ctx, network, address)
+		dialCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+		defer cancel()
+		conn, err := cfg.Net.DialContext(dialCtx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		if tlsConfig != nil && (opts.TLSMode == TLSImplicit || address != addr) {
+			conn = tls.Client(conn, tlsConfig)
+		}
+		if address == addr {
+			return ftpControlConn{Conn: conn}, nil
+		}
+		return conn, nil
 	}
 	ftpOpts := []ftplib.DialOption{
 		ftplib.DialWithContext(ctx),
@@ -95,7 +124,6 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig, opts Options) (plugi
 		ftplib.DialWithShutTimeout(10 * time.Second),
 	}
 	if opts.TLSMode != TLSNone {
-		tlsConfig := &tls.Config{ServerName: opts.Host, InsecureSkipVerify: !opts.VerifyTLS}
 		if opts.TLSMode == TLSImplicit {
 			ftpOpts = append(ftpOpts, ftplib.DialWithTLS(tlsConfig))
 		} else {
@@ -213,6 +241,21 @@ func (c *Client) Stat(_ context.Context, p string) (os.FileInfo, error) {
 func (c *Client) Open(_ context.Context, p string) (io.ReadCloser, error) {
 	c.mu.Lock()
 	r, err := c.conn.Retr(p)
+	if err != nil {
+		c.mu.Unlock()
+		return nil, err
+	}
+	return &lockedReadCloser{ReadCloser: r, unlock: c.mu.Unlock}, nil
+}
+
+// OpenRange reads from offset via REST/RETR; the single connection is held until
+// Close, so ranged reads serialize.
+func (c *Client) OpenRange(_ context.Context, p string, offset, _ int64) (io.ReadCloser, error) {
+	if offset < 0 {
+		offset = 0
+	}
+	c.mu.Lock()
+	r, err := c.conn.RetrFrom(p, uint64(offset))
 	if err != nil {
 		c.mu.Unlock()
 		return nil, err

@@ -123,6 +123,10 @@ function panelButton(w: ReturnType<typeof mount>, text: string) {
   return w.findAll("button").find((b) => b.text().trim() === text)!;
 }
 
+function panelButtonByLabel(w: ReturnType<typeof mount>, label: string) {
+  return w.findAll("button").find((b) => b.attributes("aria-label") === label)!;
+}
+
 async function setBodyInput(placeholder: string, value: string): Promise<void> {
   const input = document.body.querySelector(
     `input[placeholder="${placeholder}"]`,
@@ -153,6 +157,120 @@ describe("FileBrowserPanel", () => {
     await vi.waitFor(() =>
       expect(w.find(".shellcn-codemirror-host").exists()).toBe(true),
     );
+  });
+
+  it("filters the listing by name and shows a no-match empty state", async () => {
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: { pathParam: "path", readRouteId: "ssh.sftp.read" },
+      },
+    });
+    await flushPromises();
+    expect(w.text()).toContain("etc");
+    expect(w.text()).toContain("README.md");
+
+    const filter = w.get('input[aria-label="Filter files"]');
+    await filter.setValue("readme");
+    expect(w.text()).toContain("README.md");
+    expect(w.text()).not.toContain("etc");
+
+    await filter.setValue("zzz-nomatch");
+    expect(w.text()).toContain("No items match your filter.");
+  });
+
+  it("disables Rename until the name actually changes", async () => {
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: writableConfig(),
+      },
+    });
+    await flushPromises();
+
+    await w
+      .findAll("li button")
+      .find((b) => b.text().includes("README.md"))!
+      .trigger("click");
+    await flushPromises();
+    await panelButtonByLabel(w, "Rename selected item").trigger("click");
+    await flushPromises();
+
+    // Pre-filled with the current name → no change → disabled.
+    expect(bodyButton("Rename")!.disabled).toBe(true);
+
+    await setBodyInput("Name", "NOTES.md");
+    expect(bodyButton("Rename")!.disabled).toBe(false);
+
+    // Reverting to the original name disables it again.
+    await setBodyInput("Name", "README.md");
+    expect(bodyButton("Rename")!.disabled).toBe(true);
+  });
+
+  it("shows the selected file's metadata and a download action in the preview header", async () => {
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: writableConfig(),
+      },
+    });
+    await flushPromises();
+    await w
+      .findAll("li button")
+      .find((b) => b.text().includes("README.md"))!
+      .trigger("click");
+    await flushPromises();
+    // Header download link points at the download route for the selected path.
+    const dl = w
+      .findAll("a")
+      .find((a) => a.attributes("href")?.includes("ssh.sftp.download"));
+    expect(dl?.attributes("href")).toContain("p.path=%2FREADME.md");
+  });
+
+  it("streams media via an inline URL and skips the read fetch", async () => {
+    const calls: string[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      calls.push(url);
+      if (url.includes("sftp.list"))
+        return {
+          body: {
+            items: [
+              {
+                name: "clip.mp4",
+                path: "/clip.mp4",
+                isDir: false,
+                size: 999,
+                mime: "video/mp4",
+              },
+            ],
+            nextCursor: "",
+          },
+        };
+      return { body: {} };
+    });
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: writableConfig(),
+      },
+    });
+    await flushPromises();
+    await w
+      .findAll("li button")
+      .find((b) => b.text().includes("clip.mp4"))!
+      .trigger("click");
+    await flushPromises();
+
+    const video = w.find("video");
+    expect(video.exists()).toBe(true);
+    expect(video.attributes("src")).toContain("ssh.sftp.download");
+    expect(video.attributes("src")).toContain("inline=1");
+    expect(calls.some((u) => u.includes("sftp.read"))).toBe(false);
   });
 
   it("shows an inline file preview error with retry", async () => {
@@ -328,7 +446,7 @@ describe("FileBrowserPanel", () => {
       "/api/connections/c1/x/ssh.sftp.download?p.path=%2FREADME.md",
     );
 
-    await panelButton(w, "Rename").trigger("click");
+    await panelButtonByLabel(w, "Rename selected item").trigger("click");
     await setBodyInput("Name", "NOTES.md");
     bodyButton("Rename")!.click();
     await flushPromises();
@@ -362,7 +480,7 @@ describe("FileBrowserPanel", () => {
       .findAll("li button")
       .find((b) => b.text().includes("README.md"));
     await fileForDelete!.trigger("click");
-    await panelButton(w, "Delete").trigger("click");
+    await panelButtonByLabel(w, "Delete selected item").trigger("click");
     bodyButton("Delete")!.click();
     await flushPromises();
 

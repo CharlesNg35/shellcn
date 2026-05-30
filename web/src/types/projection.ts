@@ -2,6 +2,8 @@
 // Mirrors the Go manifest projection. Carries no server-only fields
 // (handlers, raw mount paths, permission keys, audit-event names).
 
+import type { Role } from "../constants/roles";
+
 export type IconType = "lucide" | "url" | "base64" | "emoji" | "svg";
 
 export interface Icon {
@@ -221,10 +223,17 @@ export interface FileBrowserConfig {
   uploadFieldName?: string;
 }
 
+export type RowClickAction = "navigate" | "detail" | "select" | "none";
+
 export interface TablePanelConfig {
   columns?: Column[];
   columnsSource?: DataSource;
   watch?: DataSource;
+  // refreshIntervalMs re-fetches the current page on a cadence and replaces it
+  // in place — used instead of `watch` for high-churn tables.
+  refreshIntervalMs?: number;
+  // defaultSort is the column the table sorts by on first load.
+  defaultSort?: SortKey;
   actionIds?: string[];
   rowActionIds?: string[];
   // Inline data-grid editing (plugin-agnostic). When `editable` is set and
@@ -244,6 +253,9 @@ export interface TablePanelConfig {
   hiddenColumns?: string[];
   // Opt-in: show the generic CSV/JSON export control for loaded rows.
   exportable?: boolean;
+  // Overrides the automatic row-body click (navigate a navigable row, else
+  // select); empty uses that default.
+  rowClick?: RowClickAction;
 }
 
 export interface FormPanelConfig {
@@ -282,6 +294,11 @@ export interface QueryEditorConfig {
 export interface GraphPanelConfig {
   layout?: "grid" | "manual";
   fitView?: boolean;
+  // When set, nodes are expandable: the panel fetches a node's neighbourhood
+  // from this read route (passing the node id as expandParam, default "node")
+  // and merges the result into the graph.
+  expandRouteId?: string;
+  expandParam?: string;
 }
 
 export interface TracePanelConfig {
@@ -351,6 +368,7 @@ export type ColumnType =
   | "bytes"
   | "datetime"
   | "number"
+  | "percent"
   | "bool"
   | "json";
 
@@ -364,6 +382,8 @@ export interface Column {
   // nullable lets the inline editor clear the cell to an empty/null value.
   readOnly?: boolean;
   nullable?: boolean;
+  // precision fixes fraction digits for number/percent cells.
+  precision?: number;
   // Maps a lower-cased badge value to a severity for color (e.g. running →
   // success); unmapped values render neutral.
   severities?: Record<string, Severity>;
@@ -513,6 +533,7 @@ export interface CredentialSummary {
   name: string;
   kind: CredentialKind;
   ownerId?: string;
+  ownerName?: string;
   identity?: string;
   protocols?: string[];
   updatedAt?: string;
@@ -561,8 +582,10 @@ export interface ConnectionSummary {
   online?: boolean;
   status?: "offline";
   canManage?: boolean;
+  canShare?: boolean;
   access?: "owner" | "admin" | GrantAccess;
   owned?: boolean;
+  ownerName?: string;
   sharedWithMe?: boolean;
   sharedByMe?: boolean;
   recording?: Record<string, string>;
@@ -613,9 +636,36 @@ export interface AdminUser {
   username: string;
   email?: string;
   displayName?: string;
-  roles: string[];
+  roles: Role[];
   disabled: boolean;
   protected: boolean;
+  twoFactorEnabled?: boolean;
+}
+
+// Metadata-only view of a user's connection (admin user-detail inventory) — never
+// config, secrets, or access.
+export interface UserConnectionSummary {
+  id: string;
+  name: string;
+  protocol: string;
+  icon?: Icon;
+  createdAt: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  time: string;
+  event: string;
+  risk?: string;
+  result: string;
+  connectionId?: string;
+  error?: string;
+  remoteAddr?: string;
+}
+
+export interface AuditPage {
+  items: AuditEntry[];
+  total: number;
 }
 
 export interface InvitationSummary {
@@ -701,7 +751,7 @@ export interface FileEntry {
 export interface FileContent {
   path: string;
   mime?: string;
-  encoding?: "utf8" | "base64" | "url";
+  encoding?: "utf8" | "base64" | "url" | "binary";
   content?: string;
   url?: string;
   size?: number;

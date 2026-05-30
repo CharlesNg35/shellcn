@@ -110,6 +110,23 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		t.Fatalf("expected redacted table data, got %#v", page.Items)
 	}
 
+	// Free-text search filters the data grid server-side (per-column).
+	chPeople := map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}
+	chMatch, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, chPeople, url.Values{"filter": {"alice"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows: %v", err)
+	}
+	if len(chMatch.(plugin.Page[row]).Items) != 1 {
+		t.Fatalf("filter 'alice' should match 1 row, got %#v", chMatch.(plugin.Page[row]).Items)
+	}
+	chMiss, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, chPeople, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows (miss): %v", err)
+	}
+	if len(chMiss.(plugin.Page[row]).Items) != 0 {
+		t.Fatalf("filter 'zzz-nomatch' should match 0 rows, got %#v", chMiss.(plugin.Page[row]).Items)
+	}
+
 	result, err := executeQueryRequest(ctx, s, sqldb.QueryRequest{Query: `SELECT name, access_token FROM shellcn_people`})
 	if err != nil {
 		t.Fatalf("query: %v", err)
@@ -149,19 +166,24 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		}
 	}
 
-	// Column/index management via declarative DDL actions.
+	// Column/index management via declarative DDL actions. The drop handlers read
+	// the target identifier from params (the action sends it as the "name" param),
+	// not the body.
 	db := cfg["database"].(string)
-	ddlRC := func(body map[string]any) *plugin.RequestContext {
-		raw, _ := json.Marshal(body)
-		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": db, "table": "shellcn_people"}, nil, raw)
+	ddlRC := func(params map[string]string) *plugin.RequestContext {
+		full := map[string]string{"database": db, "table": "shellcn_people"}
+		for k, v := range params {
+			full[k] = v
+		}
+		return plugin.NewRequestContext(ctx, models.User{}, s, full, nil, nil)
 	}
 	if _, err := s.db.ExecContext(ctx, "ALTER TABLE shellcn_people ADD INDEX ix_name name TYPE set(0) GRANULARITY 1"); err != nil {
 		t.Fatalf("seed index: %v", err)
 	}
-	if _, err := dropIndex(ddlRC(map[string]any{"name": "ix_name"})); err != nil {
+	if _, err := dropIndex(ddlRC(map[string]string{"name": "ix_name"})); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
-	if _, err := dropColumn(ddlRC(map[string]any{"column": "access_token"})); err != nil {
+	if _, err := dropColumn(ddlRC(map[string]string{"name": "access_token"})); err != nil {
 		t.Fatalf("drop column: %v", err)
 	}
 	var cols int

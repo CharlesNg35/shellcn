@@ -390,7 +390,7 @@ func listDocuments(rc *plugin.RequestContext) (any, error) {
 		limit = s.opts.PageLimit
 	}
 	body := map[string]any{"query": map[string]any{"match_all": map[string]any{}}, "from": from, "size": limit}
-	if q := strings.TrimSpace(req.Filter["q"]); q != "" {
+	if q := req.Search(); q != "" {
 		body["query"] = map[string]any{"query_string": map[string]any{"query": q}}
 	}
 	result, err := executeSearch(rc.Ctx, s, indexParam(rc), body)

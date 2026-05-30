@@ -4,10 +4,12 @@ import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { invitationsApi } from "../api/invitations";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "./AppIcon.vue";
 import { dialogRoot, btnPrimary, btnGhost } from "../primevue/preset";
+import { Role, ROLE_OPTIONS } from "../constants/roles";
 import type { InviteResult } from "../types/projection";
 
 const props = defineProps<{ visible: boolean }>();
@@ -18,14 +20,8 @@ const emit = defineEmits<{
 
 const notify = useNotify();
 
-const roleOptions = [
-  { label: "Admin", value: "admin" },
-  { label: "Operator", value: "operator" },
-  { label: "Viewer", value: "viewer" },
-];
-
 const email = ref("");
-const role = ref("viewer");
+const role = ref<Role>(Role.Viewer);
 const result = ref<InviteResult | null>(null);
 const error = ref<string | null>(null);
 const busy = ref(false);
@@ -46,7 +42,7 @@ watch(
       return;
     }
     email.value = "";
-    role.value = "viewer";
+    role.value = Role.Viewer;
     result.value = null;
     error.value = null;
     copied.value = false;
@@ -62,7 +58,7 @@ async function invite(): Promise<void> {
   }
   busy.value = true;
   try {
-    result.value = await api.post<InviteResult>("/admin/invitations", {
+    result.value = await invitationsApi.create({
       email: email.value.trim(),
       role: role.value,
     });
@@ -125,7 +121,7 @@ onUnmounted(clearCopiedTimer);
         </label>
         <Select
           :model-value="role"
-          :options="roleOptions"
+          :options="ROLE_OPTIONS"
           option-label="label"
           option-value="value"
           @update:model-value="role = $event"
@@ -141,7 +137,7 @@ onUnmounted(clearCopiedTimer);
         <span class="font-medium">{{ result.invitation.email }}</span
         >.
         <span v-if="result.emailSent">An email has been sent.</span>
-        <span v-else>Email is not configured — share this link:</span>
+        <span v-else>Email is not configured. Share this link:</span>
       </p>
       <div
         class="flex items-center gap-2 rounded-md border border-surface-200 bg-surface-50 px-2.5 py-1.5 dark:border-surface-700 dark:bg-surface-950"

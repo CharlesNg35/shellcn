@@ -61,11 +61,17 @@ func (d *Direct) HTTP() (string, http.RoundTripper, bool) {
 }
 
 type targetAllowlist struct {
-	enabled bool
-	hosts   map[string]bool
-	addrs   map[string]bool
-	unix    map[string]bool
-	ports   map[string]bool
+	enabled    bool
+	hosts      map[string]bool
+	addrs      map[string]bool
+	unix       map[string]bool
+	ports      map[string]bool
+	portRanges []portRange
+}
+
+type portRange struct {
+	start int
+	end   int
 }
 
 func newTargetAllowlist(config map[string]any) targetAllowlist {
@@ -76,9 +82,18 @@ func newTargetAllowlist(config map[string]any) targetAllowlist {
 		unix:    map[string]bool{},
 		ports:   map[string]bool{},
 	}
+	rangeStarts := map[string]int{}
+	rangeEnds := map[string]int{}
 	for key, value := range config {
-		if port, ok := portValue(value); ok && strings.Contains(strings.ToLower(key), "port") {
-			t.ports[port] = true
+		key = strings.ToLower(key)
+		if port, ok := portValue(value); ok && strings.Contains(key, "port") {
+			t.ports[strconv.Itoa(port)] = true
+			if base, ok := rangeStartKey(key); ok {
+				rangeStarts[base] = port
+			}
+			if base, ok := rangeEndKey(key); ok {
+				rangeEnds[base] = port
+			}
 			continue
 		}
 		s, ok := value.(string)
@@ -86,6 +101,11 @@ func newTargetAllowlist(config map[string]any) targetAllowlist {
 			continue
 		}
 		t.addString(s)
+	}
+	for base, start := range rangeStarts {
+		if end, ok := rangeEnds[base]; ok {
+			t.addPortRange(start, end)
+		}
 	}
 	return t
 }
@@ -131,6 +151,16 @@ func (t targetAllowlist) addAddr(host, port string) {
 	}
 }
 
+func (t *targetAllowlist) addPortRange(start, end int) {
+	if start < 1 || end < 1 || start > 65535 || end > 65535 {
+		return
+	}
+	if end < start {
+		start, end = end, start
+	}
+	t.portRanges = append(t.portRanges, portRange{start: start, end: end})
+}
+
 func loopbackAliases(host string) []string {
 	switch strings.ToLower(strings.Trim(host, "[]")) {
 	case "localhost", "127.0.0.1", "::1":
@@ -161,22 +191,63 @@ func (t targetAllowlist) allow(network, addr string) error {
 		if t.addrs[net.JoinHostPort(host, port)] {
 			return nil
 		}
-		if t.hosts[host] && (len(t.ports) == 0 || t.ports[port]) {
+		if t.hosts[host] && (len(t.ports) == 0 || t.portAllowed(port)) {
 			return nil
 		}
 		return fmt.Errorf("transport: direct dial to %q is outside connection target", addr)
 	}
 }
 
-func portValue(value any) (string, bool) {
+func (t targetAllowlist) portAllowed(port string) bool {
+	if t.ports[port] {
+		return true
+	}
+	n, err := strconv.Atoi(port)
+	if err != nil {
+		return false
+	}
+	for _, r := range t.portRanges {
+		if n >= r.start && n <= r.end {
+			return true
+		}
+	}
+	return false
+}
+
+func portValue(value any) (int, bool) {
 	switch v := value.(type) {
 	case int:
-		return strconv.Itoa(v), true
+		return v, true
 	case int64:
-		return strconv.FormatInt(v, 10), true
+		if v >= 1 && v <= 65535 {
+			return int(v), true
+		}
 	case float64:
 		if v == float64(int(v)) {
-			return strconv.Itoa(int(v)), true
+			return int(v), true
+		}
+	case string:
+		n, err := strconv.Atoi(strings.TrimSpace(v))
+		if err == nil && n >= 1 && n <= 65535 {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+func rangeStartKey(key string) (string, bool) {
+	for _, suffix := range []string{"_start", "_min"} {
+		if strings.HasSuffix(key, suffix) {
+			return strings.TrimSuffix(key, suffix), true
+		}
+	}
+	return "", false
+}
+
+func rangeEndKey(key string) (string, bool) {
+	for _, suffix := range []string{"_end", "_max"} {
+		if strings.HasSuffix(key, suffix) {
+			return strings.TrimSuffix(key, suffix), true
 		}
 	}
 	return "", false

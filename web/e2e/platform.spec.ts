@@ -70,12 +70,11 @@ test("view the recordings index", async ({ page }) => {
   await page.goto("/recordings");
 
   await expect(
-    page.getByRole("heading", { name: "All Recordings" }),
+    page.getByRole("heading", { name: "My Recordings" }),
   ).toBeVisible();
   await expect(page.getByRole("cell", { name: "prod-web-01" })).toBeVisible();
   await expect(page.getByText("Terminal", { exact: true })).toBeVisible();
   await expect(page.getByText("Desktop", { exact: true })).toBeVisible();
-  await expect(page.getByText("demo", { exact: true }).first()).toBeVisible();
 });
 
 test("create a credential and select it from a connection credential_ref", async ({

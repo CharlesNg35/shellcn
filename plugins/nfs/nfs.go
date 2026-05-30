@@ -178,6 +178,14 @@ func (c *Client) Open(_ context.Context, p string) (io.ReadCloser, error) {
 	return c.target.Open(p)
 }
 
+func (c *Client) OpenSeeker(_ context.Context, p string) (io.ReadSeekCloser, error) {
+	f, err := c.target.Open(p)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
 func (c *Client) Write(_ context.Context, p string, r io.Reader) error {
 	f, err := c.target.OpenFile(p, 0o644)
 	if err != nil {

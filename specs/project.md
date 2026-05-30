@@ -499,6 +499,19 @@ validators (single source of truth, enforced server-side too) and `Step` sets th
 increment. Adding a field type is a renderer concern only; plugins just declare
 the type, options, default, and validators.
 
+**Structured (`json`) fields.** A `json` field renders as the same CodeMirror
+editor used by `PanelCodeEditor` (syntax highlight, JSON validation), not a plain
+textarea — `textarea` stays a plain multiline control for free text. The renderer
+pretty-prints an object `Default` for editing and **parses the text back into an
+object on submit** (a parse failure blocks submit with a field error), so a `json`
+field always binds server-side as a JSON object/array — never a string. This is
+the in-form counterpart to `CodeEditorConfig.SaveBodyKey`: a single `json` blob
+that fills one whole resource (a mapping, an index's settings) is better as an
+action that opens `PanelCodeEditor` in a dialog; a `json` field is for structured
+input that lives **alongside other fields** in a form (e.g. a _Create table_ form's
+`columns` next to its `name`). Both paths are plugin-agnostic — the plugin only
+declares the field/config; the renderer owns the editor and the round-trip.
+
 **Route-sourced choices.** A `select`/`radio`/`multiselect` field may set
 `OptionsSource` instead of (or in addition to) static `Options`: the renderer
 fetches it when the form opens and maps each row to `{value,label}`. Its params
@@ -536,6 +549,64 @@ use directly and return only per-field state. A manager may keep that hidden
 credential via `preserveCredentials` or replace it with a credential they can
 use. Credential grants remain managed from the credentials surface, not from a
 connection form.
+
+**Three roles (`models.Role` — never hardcode the strings; the frontend mirrors
+them in `constants/roles.ts`).**
+
+- **viewer** — consumes only resources shared to it; creates nothing. Every create
+  route (`POST /connections|/credentials|/connection-folders`) is gated by
+  `canCreate` (operator/admin) **server-side**; the UI also hides those affordances
+  when `!auth.canCreate`, but the check is enforced regardless of the UI.
+- **operator** — full self-service over its own connections/credentials/recordings.
+- **admin** — manages user accounts only (see below).
+
+**Sharing the picker.** Only admins may enumerate users
+(`GET /admin/users/search`, the autocomplete). Operators, who can't enumerate
+accounts, share by the recipient's **exact email**: a grant request carries either
+`subjectId` (admin picked) or `email` (resolved server-side via
+`Users.GetByEmail`). The ShareDialog shows an autocomplete for admins and a plain
+email field otherwise.
+
+**Admin is a user-management role, not a super-user.** Admin grants the right to
+manage users (create/role/deactivate/invite, email status) — it confers **no
+implicit access** to other users' connections, credentials, or recordings.
+Resource access is purely ownership + grants: the role/risk policy (Casbin) decides
+*what risk tier* a role may perform on resources it can reach, while
+ownership/grants decide *which* resources. `canAccessConnection`,
+`canManageConnection`, `canManageCredential`, and connection/credential sharing are
+all owner/grant-based with no admin bypass.
+
+**Accounts are deactivated, never hard-deleted.** Deactivating sets `Disabled`
+(the account can't sign in) while keeping its audit trail and owned resources. No
+admin may deactivate themselves; the **protected** root admin (created on first run)
+can never be deactivated or demoted; only the root admin manages other admins.
+
+**Sharing visibility & re-share rule.** Connection/credential lists return the
+viewer's owned **plus** shared-with-me resources; each carries the owner's display
+name (name only, no email) so the UI shows a "Shared" badge and "Shared by {name}".
+Only the **owner** may share (create/list/revoke grants) — a connection
+`manage`-grantee can edit/delete it but **cannot re-share**. The list DTO exposes
+`canShare` (owner) distinct from `canManage` (owner||manage-grant); the frontend
+gates the Share affordance on `canShare` and the backend enforces it.
+
+**Recordings are private to their creator.** Every user — admin included — sees
+only their own recordings (`RecordingService.List` is always scoped to the actor;
+`canView` is owner-only). Admins never view another user's recordings or content.
+
+**Admin management lives in Settings.** The Settings page is a hub of navigable,
+breadcrumbed links (`AppBreadcrumb` wraps PrimeVue `Breadcrumb`, styled in the
+preset). Admin-only links (Users) are gated by a generic `RoleGate` (client gate;
+the admin APIs enforce server-side). `Settings → Users` (`/settings/users`) lists
+users + invitations; opening one goes to `Settings → Users → {name}`
+(`/settings/users/:id`) with three tabs: **Overview** (name, email, status, role +
+deactivate), **Connections** (a metadata-only inventory — name, protocol, icon,
+created date; never config, secrets, or access), and **Audit** (the user's
+paginated audit trail, `GET /admin/users/:id/audit`). These are the only cross-user
+views an admin gets, and none expose another user's resources.
+
+**My activity.** Every user has `Settings → My activity` (`/settings/activity`),
+their own paginated audit trail via `GET /audit/me` — the self-service counterpart
+to the admin Audit tab, reusing the same `AuditTable`.
 
 The schema renderer resolves choices for a `credential_ref` field through a core
 API, not through plugin routes: `GET /api/credentials?kind=...&protocol=...`
@@ -641,6 +712,8 @@ type Tab struct {
 type TableConfig struct {
     Columns      []Column
     Watch        *DataSource
+    RefreshIntervalMs int      // live view: re-fetch the current page on this cadence (alternative to Watch)
+    DefaultSort       *SortKey // column to sort by on first load
     ActionIDs    []string // toolbar actions; references Manifest.Actions
     RowActionIDs []string // selected-row actions; references Manifest.Actions
     // Declaring RowActionIDs makes the table's rows selectable (checkbox column,
@@ -660,6 +733,7 @@ type TableConfig struct {
     StagedEdits   bool        // opt-in: buffer edits/inserts/deletes; commit or discard as a batch
     HiddenColumns []string    // field keys to omit from auto-derived columns
     Exportable    bool        // opt-in: show the generic CSV/JSON export of loaded rows
+    RowClick      RowClickAction // override; empty → auto (navigate navigable rows, else select)
 }
 
 type RowMutation struct {
@@ -669,10 +743,16 @@ type RowMutation struct {
 ```
 
 The grid is fully generic: it has no notion of databases, keys, or links beyond
-three reserved row fields a route may attach, and renders nothing plugin-specific
+a few reserved row fields a route may attach, and renders nothing plugin-specific
 on its own:
 
-- `ref` — the row's own resource identity (row-click navigation).
+- `ref` — a **navigable** resource identity: rows that carry it can open that
+  resource's DetailView. Present only when there is a real destination.
+- `_id` — a **stable, opaque** row identity used for keying, diffing, live
+  refresh, and selection. Behavior-free: it never implies a row is navigable.
+  Rows that aren't resources (a process, a metric sample) use `_id`; navigable
+  rows may reuse `ref.uid` as their identity. This separation keeps identity
+  distinct from navigation, so a flat table needn't fake a `ref` just to be keyed.
 - `_key` — an **opaque** key map identifying the row for inline update/delete;
   when absent the row is read-only. Mutation bodies are uniform across plugins
   (`{values}` / `{key,values}` / `{key}`), so the renderer ships zero per-plugin
@@ -710,6 +790,19 @@ by default, so a plugin opts into the review-then-apply workflow deliberately.
 config) are off by default; a plugin must declare them, so data never leaves a
 panel unless the manifest allows it. Export is client-side (the loaded rows) and
 fully generic — every panel that sets the flag gets CSV + JSON for free.
+
+**Row-click is automatic; selection is the checkbox.** The renderer learns which
+resource **kinds are navigable** from the projection (those with a detail view)
+and decides per row, with no per-table declaration: a row whose `ref` is a
+navigable kind **opens it**; otherwise, on a selectable table, the body click
+**selects** the row (selection is also always available via the checkbox column).
+So a database's _tables_ list navigates on row-click while its _columns_ list
+selects — automatically, because `table` is a resource kind and `column` is not.
+`RowClick` exists only to **override** this: `detail` (open a dialog of every
+field — for field-rich flat tables like processes — and show a per-row details
+icon), or an explicit `navigate` / `select` / `none`. Editable grids always
+reserve the body for cell editing; interactive cells (link cells, action buttons,
+the details icon) work regardless.
 
 ```go
 
@@ -841,9 +934,19 @@ plugin-neutral:
 
 ```go
 type GraphConfig struct {
-    Layout  GraphLayout // "grid" or "manual"
-    FitView bool
+    Layout        GraphLayout // legacy hint; the panel auto-lays out with dagre
+    FitView       bool
+    ExpandRouteID string // optional; nodes become expandable — the panel fetches a
+                         // node's neighbourhood from this read route and merges it
+    ExpandParam   string // node-id param name for ExpandRouteID (default "node")
 }
+
+// The graph payload is plugin-emitted JSON the renderer treats generically:
+//   nodes: [{ id, label, group?, summary?, properties?, fields?[] }]
+//   edges: [{ id?, source, target, label?, sourceField?, targetField? }]
+// A node with `fields` ([{name,type?,key?}]) renders as a record/ERD table box
+// (relational schemas); a node without renders as a plain node (graph DBs). The
+// panel auto-lays out (dagre), colours edges by label, and filters by edge type.
 
 type TraceConfig struct {
     ServiceField string // optional span field used as service label
@@ -925,6 +1028,10 @@ create/run/delete actions once, the validator ensures the IDs exist, and the
 generic table renderer places toolbar or selected-row affordances without
 plugin-specific frontend code.
 
+**Number formatting.** A `Column` of type `number` or `percent` may set
+`Precision` to fix its fraction digits, so volatile metrics (CPU %, load) render
+as stable values rather than long floats; `percent` also appends `%`.
+
 **Badge color by value.** A `Column` of type `badge` may declare
 `Severities map[string]Severity`, mapping a lower-cased cell value to a severity
 (success/warn/danger/info/secondary) so the renderer colors it (e.g. a pod's
@@ -965,7 +1072,14 @@ type FileBrowserConfig struct {
 
 - **Listing.** The `Source` returns `Page[FileEntry]` for the current directory.
   Navigating into a directory re-fetches the same route with the `pathParam`
-  updated (breadcrumb-driven); directories sort before files.
+  updated (breadcrumb-driven); directories always group before files. A toolbar
+  filter narrows the current listing by name (client-side, case-insensitive)
+  with a distinct "no match" empty state and resets on navigation; a sort
+  control orders by name / size / modified in either direction. List and grid
+  rows show an extension-aware icon plus size and modified time, and the list is
+  keyboard-navigable (arrow keys, `aria-current` on the selection). Breadcrumbs
+  are a `<nav>` with the current folder marked `aria-current="page"`. All of this
+  lives in the panel, not the manifest — identical for every fs plugin.
 
   ```go
   type FileEntry struct {
@@ -980,9 +1094,12 @@ type FileBrowserConfig struct {
   }
   ```
 
-- **Preview, popular types by default.** Selecting a file fetches it via
-  `readRouteId` and renders it with a viewer chosen by MIME/extension. The
-  default, built-in viewer set (no plugin code, size-bounded, sandboxed):
+- **Preview, popular types by default.** Selecting a file renders it with a
+  viewer chosen by MIME/extension. Text/code is fetched inline via `readRouteId`
+  (size-capped utf8); binary viewers (image/pdf/audio/video) **stream the bytes
+  from `downloadRouteId`** (served inline) rather than an inline base64 payload —
+  so arbitrarily large media works and never buffers in memory. The default,
+  built-in viewer set (no plugin code):
   - **text / code / config** (`.txt .log .md .json .yaml .toml .sh .py .go .ts
 .js .sql .conf …`) → code viewer (reuses the CodeMirror `code_editor`; plain
     `<pre>` fallback). Markdown may render or show source.
@@ -1004,10 +1121,28 @@ type FileBrowserConfig struct {
   small validated request bodies (`{name}` for mkdir/rename, delete body optional
   because the path param is authoritative). Upload uses `multipart/form-data`,
   appending selected browser `File` objects under `uploadFieldName` and leaving
-  the browser to set the content boundary.
+  the browser to set the content boundary. Files can be added via the upload
+  button **or dropped onto the panel** (a drop overlay appears while dragging
+  when uploads are enabled); rename/mkdir submit is disabled until the value is
+  non-empty and actually changed, so a no-op can't be triggered.
 
-- **Safety.** Read is range/size-bounded; previews are sandboxed (images/pdf via
-  bounded elements, never executed); path traversal is validated server-side;
+- **Selected-file pane.** Selecting a file opens a pane with a header (name,
+  size, modified time, permissions, symlink target, download) above the
+  viewer/editor; writable UTF-8 files are editable in place via the CodeMirror
+  editor with a dirty-gated Save.
+
+- **Streaming & Range.** Downloads/previews stream over HTTP with constant memory.
+  The core serves a `Download` whose handler supplies one byte source — a seekable
+  handle (full `Range`/conditional/HEAD via `http.ServeContent`), an offset opener
+  (single-range `206` for object-store/WebDAV/FTP-style backends), or a plain body
+  (full `200`). `HEAD` is allowed on `GET` routes for range probing. Backends opt
+  into Range by implementing the optional `Seekable`/`RangeOpener` capabilities;
+  this is generic — no per-plugin serving code. Auth is the session cookie, so a
+  bare media-element `src` loads a protected stream.
+
+- **Safety.** Read is size-bounded; inline responses send `X-Content-Type-Options:
+  nosniff` and `Content-Security-Policy: sandbox` (neutralizing inline SVG/HTML);
+  ranges are clamped to the file size; path traversal is validated server-side;
   every read/download is audited.
 
 ---
@@ -1076,7 +1211,14 @@ type ResourceEvent struct {
 }
 ```
 
-Plugins without a watch API fall back to core-driven interval refresh.
+`Watch` suits low-churn lists (containers, pods) where state changes
+occasionally and per-row diffs are cheap. For **high-churn** tables — process or
+connection lists where nearly every row changes every tick — a plugin instead
+sets `TableConfig.RefreshIntervalMs`: the renderer re-fetches the current page
+(same sort/filter/cursor) on that cadence and replaces it in place. This bounds
+work to one page per tick and reuses pagination/sort/filter, where streaming a
+per-row diff of the whole table would flood the client. Plugins with neither
+rely on manual refresh.
 
 ### 7.4 WebSocket authentication (browsers can't set Authorization)
 
@@ -1407,10 +1549,11 @@ Two recording classes are first-class:
   Plugins declare capability only and do not implement their own recording
   providers.
 
-Admins may list/view all recordings. Normal users may list/view only recordings
-they created; sharing grants and connection ownership never expose another
-person's recordings. Recording read/delete operations are audited separately from
-the original stream route.
+Recordings are private to their creator: every user — admin included — may
+list/view/delete only recordings they created. Sharing grants and connection
+ownership never expose another person's recordings, and admin (a user-management
+role) gets no exception. Recording read/delete operations are audited separately
+from the original stream route.
 
 ### 9.6 Per-protocol safety (non-negotiable defaults)
 

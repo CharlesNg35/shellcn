@@ -55,7 +55,6 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.queries.list", Method: plugin.MethodGet, Path: "/queries", Permission: "cockroachdb.queries.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.queries.list", Handle: listQueries},
 		{ID: "cockroachdb.query.overview", Method: plugin.MethodGet, Path: "/queries/{query}/overview", Permission: "cockroachdb.queries.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.query.overview", Handle: queryOverview},
 		{ID: "cockroachdb.schemas.tree", Method: plugin.MethodGet, Path: "/tree/schemas", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schemas.tree", Handle: schemaTree},
-		{ID: "cockroachdb.schema.children", Method: plugin.MethodGet, Path: "/tree/schemas/{schema}", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schema.children", Handle: schemaChildren},
 		{ID: "cockroachdb.schemas.list", Method: plugin.MethodGet, Path: "/schemas", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schemas.list", Handle: listSchemas},
 		{ID: "cockroachdb.schema.overview", Method: plugin.MethodGet, Path: "/schemas/{schema}/overview", Permission: "cockroachdb.schemas.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.schema.overview", Handle: schemaOverview},
 		{ID: "cockroachdb.tables.tree", Method: plugin.MethodGet, Path: "/tree/tables", Permission: "cockroachdb.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.tables.tree", Handle: treeTables},
@@ -358,49 +357,10 @@ func schemaTree(rc *plugin.RequestContext) (any, error) {
 			Label:          name,
 			Icon:           icon("folder"),
 			Ref:            &plugin.ResourceRef{Kind: "schema", Name: name, UID: name},
-			ChildrenSource: &plugin.DataSource{RouteID: "cockroachdb.schema.children", Params: map[string]string{"schema": name}},
+			ChildrenSource: &plugin.DataSource{RouteID: "cockroachdb.tables.tree", Params: map[string]string{"schema": name}},
 		})
 	}
 	return plugin.Page[plugin.TreeNode]{Items: nodes, NextCursor: schemas.NextCursor, Total: schemas.Total}, nil
-}
-
-func schemaChildren(rc *plugin.RequestContext) (any, error) {
-	schema, err := sqldb.SafeIdentifier(rc.Param("schema"))
-	if err != nil {
-		return nil, err
-	}
-	nodes := []plugin.TreeNode{
-		{
-			Key:   "schema:" + schema + ":tables",
-			Label: "Tables",
-			Icon:  icon("table-2"),
-			Leaf:  true,
-			Ref:   &plugin.ResourceRef{Kind: "schema", Name: schema, UID: schema},
-		},
-		{
-			Key:   "schema:" + schema + ":views",
-			Label: "Views",
-			Icon:  icon("panel-top"),
-			Leaf:  true,
-			Ref:   &plugin.ResourceRef{Kind: "schema", Name: schema, UID: schema},
-		},
-		{
-			Key:   "schema:" + schema + ":functions",
-			Label: "Functions",
-			Icon:  icon("function-square"),
-			Leaf:  true,
-			Ref:   &plugin.ResourceRef{Kind: "schema", Name: schema, UID: schema},
-		},
-		{
-			Key:   "schema:" + schema + ":sequences",
-			Label: "Sequences",
-			Icon:  icon("list-ordered"),
-			Leaf:  true,
-			Ref:   &plugin.ResourceRef{Kind: "schema", Name: schema, UID: schema},
-		},
-	}
-	total := len(nodes)
-	return plugin.Page[plugin.TreeNode]{Items: nodes, Total: &total}, nil
 }
 
 func listSchemas(rc *plugin.RequestContext) (any, error) {
@@ -474,6 +434,13 @@ WHERE kcu.table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_extension
   AND ($1::STRING = '' OR kcu.table_schema = $1)
 ORDER BY rc.constraint_name, kcu.ordinal_position`
 
+const relationColumnsSQL = `
+SELECT table_schema, table_name, column_name, data_type
+FROM information_schema.columns
+WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'pg_extension', 'crdb_internal')
+  AND ($1::STRING = '' OR table_schema = $1)
+ORDER BY table_schema, table_name, ordinal_position`
+
 func relationGraph(rc *plugin.RequestContext) (any, error) {
 	s, err := cockroachSession(rc)
 	if err != nil {
@@ -483,15 +450,23 @@ func relationGraph(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{schema})
+	colRows, err := queryRows(rc.Ctx, s, relationColumnsSQL, []any{schema})
 	if err != nil {
 		return nil, err
 	}
-	fks := make([]sqldb.ForeignKey, 0, len(rows))
-	for _, r := range rows {
+	fkRows, err := queryRows(rc.Ctx, s, relationGraphSQL, []any{schema})
+	if err != nil {
+		return nil, err
+	}
+	columns := make([]sqldb.TableColumn, 0, len(colRows))
+	for _, r := range colRows {
+		columns = append(columns, sqldb.TableColumnFromRow(r))
+	}
+	fks := make([]sqldb.ForeignKey, 0, len(fkRows))
+	for _, r := range fkRows {
 		fks = append(fks, sqldb.ForeignKeyFromRow(r))
 	}
-	return sqldb.RelationGraph(fks), nil
+	return sqldb.RelationGraph(columns, fks), nil
 }
 
 func listViews(rc *plugin.RequestContext) (any, error) {
@@ -597,9 +572,16 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	countSQL := fmt.Sprintf("SELECT COUNT(*) FROM %s", sqldb.Qualified(schema, table))
+	qualified := sqldb.Qualified(schema, table)
+	filter := req.Search()
+	countSQL := "SELECT COUNT(*) FROM " + qualified + " AS t"
+	countArgs := []any{}
+	if filter != "" {
+		countSQL += " WHERE t::string ILIKE $1"
+		countArgs = append(countArgs, "%"+filter+"%")
+	}
 	var total int
-	if err := s.pool.QueryRow(rc.Ctx, countSQL).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(rc.Ctx, countSQL, countArgs...).Scan(&total); err != nil {
 		return nil, cockroachErr(err)
 	}
 	orderBy := ""
@@ -614,8 +596,14 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 		}
 		orderBy = " ORDER BY " + sqldb.QuoteIdent(col) + " " + dir
 	}
-	sqlText := fmt.Sprintf("SELECT * FROM %s%s LIMIT $1 OFFSET $2", sqldb.Qualified(schema, table), orderBy)
-	rows, err := queryRows(rc.Ctx, s, sqlText, []any{limit, offset})
+	dataArgs := []any{limit, offset}
+	where := ""
+	if filter != "" {
+		where = " WHERE t::string ILIKE $3"
+		dataArgs = append(dataArgs, "%"+filter+"%")
+	}
+	sqlText := "SELECT * FROM " + qualified + " AS t" + where + orderBy + " LIMIT $1 OFFSET $2"
+	rows, err := queryRows(rc.Ctx, s, sqlText, dataArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1453,7 +1441,7 @@ func pageRows(rc *plugin.RequestContext, rows []row) (plugin.Page[row], error) {
 	if err != nil {
 		return plugin.Page[row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start, err := cursorOffset(req.Cursor)
@@ -1613,23 +1601,7 @@ func boolFromAny(value any) bool {
 }
 
 func filterRows(rows []row, q string) []row {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, r := range rows {
-		for k, v := range r {
-			if k == "_key" || k == "ref" {
-				continue
-			}
-			if strings.Contains(strings.ToLower(fmt.Sprint(v)), q) {
-				out = append(out, r)
-				break
-			}
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, q)
 }
 
 func sortRows(rows []row, keys []plugin.SortKey) {

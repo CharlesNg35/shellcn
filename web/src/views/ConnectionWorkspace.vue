@@ -5,7 +5,8 @@ import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import Button from "primevue/button";
-import { api, ApiError } from "../api/client";
+import { ApiError } from "../api/client";
+import { connectionsApi } from "../api/connections";
 import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useConnectionSessionsStore } from "../stores/connectionSessions";
@@ -14,6 +15,7 @@ import { KEEP_ALIVE_TOP_LEVEL_PANELS_MAX } from "../stores/sessionLimits";
 import { useNotify } from "../composables/useNotify";
 import AppIcon from "../components/AppIcon.vue";
 import PanelHost from "../panels/core/PanelHost.vue";
+import { provideNavigableKinds } from "../panels/core/navigable";
 import EnrollPanel from "../panels/enroll/EnrollPanel.vue";
 import ConnectPanel from "../panels/connect/ConnectPanel.vue";
 import PanelError from "../panels/shared/PanelError.vue";
@@ -48,6 +50,8 @@ const showShare = ref(false);
 const { confirmDanger } = useConfirmAction();
 
 const canManage = computed(() => connection.value?.canManage ?? false);
+// Only the owner (or an admin) may share; a manage-grantee can edit but not re-share.
+const canShare = computed(() => connection.value?.canShare ?? false);
 
 function askDelete(): void {
   confirmDanger({
@@ -59,7 +63,7 @@ function askDelete(): void {
 
 async function onDelete(): Promise<void> {
   try {
-    await api.del(`/connections/${props.id}`);
+    await connectionsApi.remove(props.id);
     await conns.refresh();
     notify.success("Connection deleted");
     await router.push({ name: "home" });
@@ -71,6 +75,15 @@ async function onDelete(): Promise<void> {
 }
 
 const projection = ref<PluginProjection | null>(null);
+
+// Resource kinds the connection can open a detail view for. The generic table
+// uses this to decide row-click = navigate (resource) vs select (everything
+// else), so no table has to declare it.
+provideNavigableKinds(
+  computed(
+    () => new Set((projection.value?.resources ?? []).map((r) => r.kind)),
+  ),
+);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const sessionConnecting = ref(false);
@@ -198,17 +211,18 @@ function onActionDone(action: Action): void {
           <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           Disconnect
         </Button>
+        <Button
+          v-if="canShare"
+          text
+          rounded
+          severity="secondary"
+          title="Share"
+          aria-label="Share connection"
+          @click="showShare = true"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="17" />
+        </Button>
         <template v-if="canManage">
-          <Button
-            text
-            rounded
-            severity="secondary"
-            title="Share"
-            aria-label="Share connection"
-            @click="showShare = true"
-          >
-            <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="17" />
-          </Button>
           <Button
             text
             rounded

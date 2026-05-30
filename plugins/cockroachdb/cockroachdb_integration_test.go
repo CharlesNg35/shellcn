@@ -125,6 +125,22 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		t.Fatalf("created table was not listed: %#v", list)
 	}
 
+	// A schema tree node expands to its real tables (not detail-tab categories).
+	treeRC := plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.schema": {"public"}}, nil)
+	treeNodes, err := treeTables(treeRC)
+	if err != nil {
+		t.Fatalf("schema tree children: %v", err)
+	}
+	foundTable := false
+	for _, n := range treeNodes.(plugin.Page[plugin.TreeNode]).Items {
+		if n.Ref != nil && n.Ref.Kind == "table" && strings.Contains(n.Label, "shellcn_people") {
+			foundTable = true
+		}
+	}
+	if !foundTable {
+		t.Fatalf("schema tree should list real tables, got %#v", treeNodes)
+	}
+
 	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)
@@ -132,6 +148,22 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 	page := rows.(plugin.Page[row])
 	if len(page.Items) != 1 || page.Items[0]["access_token"] != sqldb.RedactedValue {
 		t.Fatalf("expected redacted table data, got %#v", page.Items)
+	}
+
+	// Free-text search filters the data grid server-side.
+	matched, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, url.Values{"filter": {"alice"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows: %v", err)
+	}
+	if len(matched.(plugin.Page[row]).Items) != 1 {
+		t.Fatalf("filter 'alice' should match 1 row, got %#v", matched.(plugin.Page[row]).Items)
+	}
+	missed, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, url.Values{"filter": {"zzz-nomatch"}}, nil))
+	if err != nil {
+		t.Fatalf("filtered rows (miss): %v", err)
+	}
+	if len(missed.(plugin.Page[row]).Items) != 0 {
+		t.Fatalf("filter 'zzz-nomatch' should match 0 rows, got %#v", missed.(plugin.Page[row]).Items)
 	}
 
 	result, err := executeQueryRequest(ctx, s, sqldb.QueryRequest{Query: `SELECT name, access_token FROM public.shellcn_people`})

@@ -30,21 +30,15 @@ func (s *RecordingService) Create(ctx context.Context, r *models.Recording) erro
 	return s.recs.Create(ctx, r)
 }
 
-// canView reports whether actor may see a recording. Admins may view all
-// recordings; non-admins may only view recordings they created.
-func (s *RecordingService) canView(ctx context.Context, actor models.User, r models.Recording) bool {
-	_ = ctx
-	return actor.HasRole(models.RoleAdmin) || r.UserID == actor.ID
+// canView reports whether actor may see a recording: only its creator. A
+// recording is private to the user who produced it — admin never sees another
+// user's recordings.
+func (s *RecordingService) canView(_ context.Context, actor models.User, r models.Recording) bool {
+	return r.UserID == actor.ID
 }
 
-// List returns recordings the actor may see. Admins get the unfiltered query
-// (including the optional user filter for per-user drill-down); everyone else is
-// always scoped to their own recordings.
+// List returns the actor's own recordings; the query is always scoped to them.
 func (s *RecordingService) List(ctx context.Context, actor models.User, f store.RecordingFilter) ([]models.Recording, error) {
-	if actor.HasRole(models.RoleAdmin) {
-		return s.recs.List(ctx, f)
-	}
-
 	f.UserID = actor.ID
 	return s.recs.List(ctx, f)
 }

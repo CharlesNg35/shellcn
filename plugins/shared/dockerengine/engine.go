@@ -1027,7 +1027,7 @@ func PageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 	if err != nil {
 		return plugin.Page[Row]{}, err
 	}
-	rows = filterRows(rows, req.Filter["q"])
+	rows = filterRows(rows, req.Search())
 	sortRows(rows, req.Sort)
 	total := len(rows)
 	start := 0
@@ -1052,17 +1052,7 @@ func PageRows(rc *plugin.RequestContext, rows []Row) (plugin.Page[Row], error) {
 }
 
 func filterRows(rows []Row, q string) []Row {
-	q = strings.ToLower(strings.TrimSpace(q))
-	if q == "" {
-		return rows
-	}
-	out := rows[:0]
-	for _, r := range rows {
-		if strings.Contains(strings.ToLower(fmt.Sprint(r)), q) {
-			out = append(out, r)
-		}
-	}
-	return out
+	return plugin.FilterRows(rows, q)
 }
 
 func sortRows(rows []Row, sortKeys []plugin.SortKey) {

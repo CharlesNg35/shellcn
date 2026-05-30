@@ -7,9 +7,9 @@ import { useConnectionsStore } from "../stores/connections";
 import { useAuthStore } from "../stores/auth";
 import { useConnectionSessionsStore } from "../stores/connectionSessions";
 import { KEEP_ALIVE_CONNECTION_WORKSPACES_MAX } from "../stores/sessionLimits";
-import { useTheme } from "../composables/useTheme";
 import AppIcon from "./AppIcon.vue";
 import AppLogo from "./AppLogo.vue";
+import ThemeToggle from "./ThemeToggle.vue";
 import ConnectionFormDialog from "./ConnectionFormDialog.vue";
 import ConnectionSidebar from "./ConnectionSidebar.vue";
 import { searchInputClass } from "../primevue/preset";
@@ -19,7 +19,6 @@ const auth = useAuthStore();
 const connectionSessions = useConnectionSessionsStore();
 const route = useRoute();
 const router = useRouter();
-const { isDark, toggle: toggleTheme } = useTheme();
 
 const userLabel = computed(
   () => auth.user?.displayName || auth.user?.username || "",
@@ -89,19 +88,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
           <AppLogo :size="28" class="shrink-0 text-primary-600" />
           ShellCN
         </RouterLink>
-        <Button
-          text
-          rounded
-          severity="secondary"
-          size="small"
-          :title="isDark ? 'Switch to light' : 'Switch to dark'"
-          :aria-label="
-            isDark ? 'Switch to light theme' : 'Switch to dark theme'
-          "
-          @click="toggleTheme"
-        >
-          {{ isDark ? "☀" : "☾" }}
-        </Button>
+        <ThemeToggle size="small" :icon-size="16" />
       </div>
 
       <div class="px-3 pb-2">
@@ -126,6 +113,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
         <ConnectionSidebar v-else :active-id="activeId" :query="query">
           <template #create>
             <Button
+              v-if="auth.canCreate"
               text
               rounded
               severity="secondary"
@@ -173,23 +161,11 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
             v-show="sidebarMenuOpen"
             id="sidebar-utility-menu"
             :aria-hidden="!sidebarMenuOpen"
+            class="pt-1"
           >
             <RouterLink
-              v-if="auth.isAdmin"
-              :to="{ name: 'users' }"
-              class="mx-2 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
-              :class="
-                route.name === 'users'
-                  ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'
-                  : ''
-              "
-            >
-              <AppIcon :icon="{ type: 'lucide', value: 'users' }" :size="16" />
-              Users
-            </RouterLink>
-            <RouterLink
               :to="{ name: 'credentials' }"
-              class="mx-2 mt-1 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
+              class="mx-2 flex items-center gap-2.5 rounded-md px-2 py-2 text-sm text-surface-500 transition-colors hover:bg-surface-200 dark:hover:bg-surface-800"
               :class="
                 route.name === 'credentials'
                   ? 'bg-primary-50 font-medium text-primary-700 ring-1 ring-primary-200/70 dark:bg-primary-950/40 dark:text-primary-200 dark:ring-primary-900/60'

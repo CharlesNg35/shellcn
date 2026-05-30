@@ -32,10 +32,10 @@ const (
 	artifactTicketRoute = "agent.artifact"
 )
 
-// canManageConnection reports whether the user may enroll/operate an agent for a
-// connection: owner, admin, or a holder of a manage grant.
+// canManageConnection reports whether the user may edit/operate a connection:
+// its owner or a holder of a manage grant. Admin confers no implicit access.
 func (s *Server) canManageConnection(ctx context.Context, user models.User, conn models.Connection) bool {
-	if user.HasRole(models.RoleAdmin) || conn.OwnerID == user.ID {
+	if conn.OwnerID == user.ID {
 		return true
 	}
 	g, err := s.deps.Store.Grants.Get(ctx, conn.ID, user.ID)

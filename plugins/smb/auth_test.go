@@ -44,3 +44,31 @@ func TestParseOptionsValidatesAuthFields(t *testing.T) {
 		}
 	})
 }
+
+func TestNormalizeRootPath(t *testing.T) {
+	for name, tc := range map[string]struct {
+		raw  string
+		want string
+	}{
+		"empty":        {raw: "", want: "/"},
+		"dot":          {raw: ".", want: "/"},
+		"slash":        {raw: "/", want: "/"},
+		"backslash":    {raw: `\`, want: "/"},
+		"nested slash": {raw: "projects/reports", want: "/projects/reports"},
+		"nested smb":   {raw: `projects\reports`, want: "/projects/reports"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := normalizeRootPath(tc.raw); got != tc.want {
+				t.Fatalf("normalizeRootPath(%q) = %q, want %q", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSMBPathRoot(t *testing.T) {
+	for _, raw := range []string{"/", `\`} {
+		if got := smbPath(normalizeRootPath(raw)); got != "." {
+			t.Fatalf("smbPath(normalizeRootPath(%q)) = %q, want .", raw, got)
+		}
+	}
+}

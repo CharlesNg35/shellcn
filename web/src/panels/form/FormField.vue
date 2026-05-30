@@ -23,6 +23,7 @@ import type {
 import { fetchPage } from "../../api/dataSource";
 import AppIcon from "../../components/AppIcon.vue";
 import CredentialSelect from "./CredentialSelect.vue";
+import CodeTextEditor from "../shared/CodeTextEditor.vue";
 
 const props = defineProps<{
   field: Field;
@@ -104,6 +105,19 @@ function update(value: unknown): void {
   emit("update:modelValue", value);
 }
 
+// JSON fields edit as text; an object default is pretty-printed for display and
+// re-parsed on submit (SchemaForm), so the editor always holds a string.
+const jsonText = computed(() => {
+  const v = props.modelValue;
+  if (v === undefined || v === null) return "";
+  if (typeof v === "string") return v;
+  try {
+    return JSON.stringify(v, null, 2);
+  } catch {
+    return String(v);
+  }
+});
+
 function startReplace(): void {
   editingSecret.value = true;
   update("");
@@ -181,8 +195,20 @@ function updateFiles(event: FileUploadSelectEvent): void {
       @select="updateFiles"
     />
 
+    <div
+      v-else-if="field.type === 'json'"
+      class="h-56 overflow-hidden rounded-md border border-surface-300 dark:border-surface-700"
+    >
+      <CodeTextEditor
+        :value="jsonText"
+        language="json"
+        :aria-label="field.label"
+        @update:value="update"
+      />
+    </div>
+
     <Textarea
-      v-else-if="field.type === 'textarea' || field.type === 'json'"
+      v-else-if="field.type === 'textarea'"
       :model-value="(modelValue as string) ?? ''"
       rows="4"
       :placeholder="field.placeholder"

@@ -7,12 +7,16 @@ import CodeTextEditor from "../shared/CodeTextEditor.vue";
 import PanelError from "../shared/PanelError.vue";
 import { formatBytes, languageFor, viewerFor } from "./fileTypes";
 
-const props = defineProps<{
-  name: string;
-  content: FileContent | null;
-  loading?: boolean;
-  error?: string | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    name: string;
+    content: FileContent | null;
+    streamSrc?: string;
+    loading?: boolean;
+    error?: string | null;
+  }>(),
+  { streamSrc: "", loading: false, error: null },
+);
 
 const emit = defineEmits<{ retry: [] }>();
 
@@ -22,17 +26,7 @@ const showTruncatedNotice = computed(
   () => props.content?.truncated === true && viewer.value === "code",
 );
 
-const src = computed(() => {
-  const c = props.content;
-  if (!c) return "";
-  if (c.encoding === "url" && c.url) return c.url;
-  if (c.encoding === "base64" && c.content)
-    return `data:${c.mime ?? "application/octet-stream"};base64,${c.content}`;
-  if (c.encoding === "utf8" && c.content && c.mime?.startsWith("image/")) {
-    return `data:${c.mime};charset=utf-8,${encodeURIComponent(c.content)}`;
-  }
-  return c.url ?? "";
-});
+const src = computed(() => props.streamSrc || props.content?.url || "");
 </script>
 
 <template>
@@ -109,7 +103,7 @@ const src = computed(() => {
         v-if="showTruncatedNotice"
         class="border-t border-surface-200 px-4 py-1.5 text-xs text-amber-500 dark:border-surface-800"
       >
-        Preview truncated — download for the full file.
+        Preview truncated. Download for the full file.
       </p>
     </template>
 

@@ -300,14 +300,14 @@ func read(rc *plugin.RequestContext) (any, error) {
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
-	content := FileContent{Path: p, MIME: mimeType, Size: info.Size(), Truncated: info.Size() > int64(n)}
+	content := FileContent{Path: p, MIME: mimeType, Size: info.Size()}
 	if isText(mimeType, buf) {
 		content.Encoding = "utf8"
 		content.Content = string(buf)
+		content.Truncated = info.Size() > int64(n)
 		return content, nil
 	}
-	content.Encoding = "base64"
-	content.Content = base64.StdEncoding.EncodeToString(buf)
+	content.Encoding = "binary"
 	return content, nil
 }
 
@@ -336,7 +336,8 @@ func download(rc *plugin.RequestContext) (any, error) {
 		MIME:    mimeFor(p),
 		Size:    info.Size(),
 		ModTime: info.ModTime(),
-		Body:    f,
+		Inline:  rc.Param("inline") == "1",
+		Seeker:  f,
 	}, nil
 }
 

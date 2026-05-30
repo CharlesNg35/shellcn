@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mount } from "@vue/test-utils";
+import { mount, type VueWrapper } from "@vue/test-utils";
 import DetailView from "./DetailView.vue";
 
 class FakeResizeObserver {
@@ -9,16 +9,26 @@ class FakeResizeObserver {
 }
 
 describe("DetailView", () => {
+  let wrapper: VueWrapper | undefined;
+
   beforeEach(() => {
+    // PrimeVue's TabList schedules an unguarded setTimeout(updateInkBar, 150) on
+    // mount; fake timers keep it from firing after this file's jsdom is torn
+    // down (which would throw "HTMLElement is not defined").
+    vi.useFakeTimers();
     vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   });
 
   afterEach(() => {
+    wrapper?.unmount();
+    wrapper = undefined;
+    vi.clearAllTimers();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
   it("opens the declared default tab first", () => {
-    const w = mount(DetailView, {
+    wrapper = mount(DetailView, {
       props: {
         connectionId: "c1",
         row: {
@@ -46,6 +56,6 @@ describe("DetailView", () => {
       },
     });
 
-    expect(w.get('[data-test="panel"]').text()).toBe("code_editor");
+    expect(wrapper.get('[data-test="panel"]').text()).toBe("code_editor");
   });
 });

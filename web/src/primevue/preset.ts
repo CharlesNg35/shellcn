@@ -44,6 +44,11 @@ export const btnPrimary =
   "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50";
 export const btnGhost =
   "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800";
+export const btnDanger =
+  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md bg-rose-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50";
+// A full-width primary call-to-action (auth forms, single-button dialogs).
+export const btnPrimaryBlock =
+  "flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-700 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:opacity-50";
 
 const buttonBase =
   "inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-50";
@@ -244,8 +249,10 @@ function messageRoot(options: SeverityOptions): string {
   );
 }
 
+// The active page is flagged with data-p-active (not data-p-selected); it gets a
+// solid primary fill so the current page reads clearly.
 const paginatorButton =
-  "inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 text-sm text-surface-600 transition-colors hover:bg-surface-100 disabled:pointer-events-none disabled:opacity-40 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
+  "inline-flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-md px-2 text-sm text-surface-600 transition-colors hover:bg-surface-100 disabled:pointer-events-none disabled:opacity-40 data-[p-active=true]:bg-primary-600 data-[p-active=true]:font-medium data-[p-active=true]:text-white data-[p-active=true]:hover:bg-primary-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:data-[p-active=true]:bg-primary-500 dark:data-[p-active=true]:text-white dark:data-[p-active=true]:hover:bg-primary-400";
 const paginator = {
   root: "flex flex-wrap items-center justify-end gap-2 border-t border-surface-200 bg-surface-0 px-3 py-2 dark:border-surface-800 dark:bg-surface-950",
   content: "flex flex-wrap items-center gap-1",
@@ -278,6 +285,13 @@ const paginator = {
 
 export const primeVuePassthrough = {
   inputtext: { root: inputBase },
+  breadcrumb: {
+    root: "w-full",
+    list: "flex flex-wrap items-center gap-1 text-sm",
+    item: "inline-flex items-center",
+    separator:
+      "mx-0.5 inline-flex items-center text-surface-300 dark:text-surface-600",
+  },
   // Chart (chart.js) renders a canvas; the pass-through only sizes its wrapper —
   // colors come from theme-aware chart options, not classes.
   chart: { root: "relative h-full w-full" },
@@ -427,16 +441,11 @@ export const primeVuePassthrough = {
   },
 
   toast: {
+    // AppToast renders each message through the #container slot, so the message
+    // wrapper stays a bare layout element — the card lives in AppToast, avoiding
+    // a card-in-a-card.
     root: "fixed z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2",
-    message: messageRoot,
-    messageContent: "flex min-w-0 flex-1 items-start gap-2",
-    messageIcon: "mt-0.5 h-4 w-4 shrink-0",
-    messageText: "min-w-0 flex-1",
-    summary: "font-medium",
-    detail: "text-current/80",
-    closeButton:
-      "ml-auto shrink-0 rounded p-0.5 text-current/60 transition-colors hover:bg-black/5 hover:text-current dark:hover:bg-white/10",
-    closeIcon: "h-4 w-4",
+    message: "",
   },
 
   menu: {

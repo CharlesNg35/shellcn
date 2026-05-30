@@ -15,6 +15,11 @@ const router = createRouter({
       component: () => import("../views/AcceptInviteView.vue"),
     },
     {
+      path: "/secure-account",
+      name: "secure-account",
+      component: () => import("../views/SecureAccountView.vue"),
+    },
+    {
       path: "/",
       component: () => import("../components/AppShell.vue"),
       children: [
@@ -23,10 +28,23 @@ const router = createRouter({
           name: "home",
           component: () => import("../views/HomeView.vue"),
         },
+        { path: "users", redirect: { name: "settings" } },
         {
-          path: "users",
+          path: "settings/activity",
+          name: "activity",
+          component: () => import("../views/MyActivityView.vue"),
+        },
+        {
+          path: "settings/users",
           name: "users",
           component: () => import("../views/UsersView.vue"),
+          meta: { admin: true },
+        },
+        {
+          path: "settings/users/:id",
+          name: "user-detail",
+          component: () => import("../views/UserDetailView.vue"),
+          props: true,
           meta: { admin: true },
         },
         {

@@ -51,6 +51,7 @@ const (
 	ColumnBytes    ColumnType = "bytes"
 	ColumnDateTime ColumnType = "datetime"
 	ColumnNumber   ColumnType = "number"
+	ColumnPercent  ColumnType = "percent"
 	ColumnBool     ColumnType = "bool"
 	ColumnJSON     ColumnType = "json"
 )
@@ -66,11 +67,23 @@ type Column struct {
 	// cell to an empty/null value rather than an empty string.
 	ReadOnly bool `json:"readOnly,omitempty"`
 	Nullable bool `json:"nullable,omitempty"`
+	// Precision fixes fraction digits for number/percent cells.
+	Precision *int `json:"precision,omitempty"`
 	// Severities colors a badge column by value: it maps a lower-cased cell value
 	// to a Severity (e.g. "running" -> success). Unmapped values stay neutral;
 	// ignored for non-badge columns.
 	Severities map[string]Severity `json:"severities,omitempty"`
 }
+
+// RowClickAction declares what a click on a table row's body does.
+type RowClickAction string
+
+const (
+	RowClickNavigate RowClickAction = "navigate" // open the row's ref resource
+	RowClickDetail   RowClickAction = "detail"   // open the per-row details dialog
+	RowClickSelect   RowClickAction = "select"   // toggle row selection
+	RowClickNone     RowClickAction = "none"
+)
 
 // TableConfig is the declarative config consumed by the generic table panel.
 //
@@ -86,6 +99,13 @@ type TableConfig struct {
 	Watch         *DataSource `json:"watch,omitempty"`
 	ActionIDs     []string    `json:"actionIds,omitempty"`
 	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
+
+	// RefreshIntervalMs re-fetches the current page on a cadence and replaces it
+	// in place — preferred over Watch for high-churn tables where per-row diffs
+	// would flood the client.
+	RefreshIntervalMs int `json:"refreshIntervalMs,omitempty"`
+	// DefaultSort is the column the table sorts by on first load.
+	DefaultSort *SortKey `json:"defaultSort,omitempty"`
 
 	Editable  bool        `json:"editable,omitempty"`
 	RowKey    []string    `json:"rowKey,omitempty"`
@@ -107,6 +127,10 @@ type TableConfig struct {
 	// Exportable opts the table into the generic CSV/JSON export of loaded rows.
 	// Off by default so a plugin must deliberately allow data to leave the grid.
 	Exportable bool `json:"exportable,omitempty"`
+
+	// RowClick overrides the automatic row-body click (navigate a navigable row,
+	// else select); empty uses that default.
+	RowClick RowClickAction `json:"rowClick,omitempty"`
 }
 
 func (c TableConfig) Map() map[string]any {
@@ -119,6 +143,12 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if c.Watch != nil {
 		out["watch"] = c.Watch
+	}
+	if c.RefreshIntervalMs > 0 {
+		out["refreshIntervalMs"] = c.RefreshIntervalMs
+	}
+	if c.DefaultSort != nil {
+		out["defaultSort"] = c.DefaultSort
 	}
 	if len(c.ActionIDs) > 0 {
 		out["actionIds"] = c.ActionIDs
@@ -152,6 +182,9 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if c.Exportable {
 		out["exportable"] = true
+	}
+	if c.RowClick != "" {
+		out["rowClick"] = c.RowClick
 	}
 	return out
 }
@@ -325,6 +358,11 @@ const (
 type GraphConfig struct {
 	Layout  GraphLayout `json:"layout,omitempty"`
 	FitView bool        `json:"fitView,omitempty"`
+	// ExpandRouteID, when set, makes nodes expandable: the panel fetches a node's
+	// neighbourhood from this read route (passing the node id as ExpandParam,
+	// default "node") and merges the result into the graph.
+	ExpandRouteID string `json:"expandRouteId,omitempty"`
+	ExpandParam   string `json:"expandParam,omitempty"`
 }
 
 func (c GraphConfig) Map() map[string]any {
@@ -334,6 +372,12 @@ func (c GraphConfig) Map() map[string]any {
 	}
 	if c.FitView {
 		out["fitView"] = c.FitView
+	}
+	if c.ExpandRouteID != "" {
+		out["expandRouteId"] = c.ExpandRouteID
+	}
+	if c.ExpandParam != "" {
+		out["expandParam"] = c.ExpandParam
 	}
 	return out
 }
