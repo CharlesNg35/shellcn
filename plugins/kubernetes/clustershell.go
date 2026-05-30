@@ -7,6 +7,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +21,7 @@ const (
 	shellImage        = "docker.io/bitnami/kubectl:latest"
 	shellContainer    = "shell"
 	shellPodName      = "shellcn-shell"
+	shellSAName       = "shellcn-shell"
 	shellNamespace    = "default"
 	shellPodLabel     = "shellcn.io/cluster-shell"
 	shellStartTimeout = 90 * time.Second
@@ -37,8 +39,7 @@ func ClusterShellStream(rc *plugin.RequestContext, client plugin.ClientStream) e
 	if err != nil {
 		return err
 	}
-	pods := s.clientset.CoreV1().Pods(shellNamespace)
-	if err := ensureShellPod(rc.Ctx, client.Context(), pods); err != nil {
+	if err := ensureShellPod(rc.Ctx, client.Context(), s); err != nil {
 		return err
 	}
 
@@ -64,7 +65,9 @@ func shellExecCommand(rc *plugin.RequestContext) []string {
 
 // ensureShellPod reuses a healthy shell pod, recreating it only when missing or
 // dead, then blocks until it is ready to exec into.
-func ensureShellPod(ctx, waitCtx context.Context, pods corev1client.PodInterface) error {
+func ensureShellPod(ctx, waitCtx context.Context, s *Session) error {
+	pods := s.clientset.CoreV1().Pods(shellNamespace)
+	useSA := ensureShellRBAC(ctx, s)
 	if p, err := pods.Get(ctx, shellPodName, metav1.GetOptions{}); err == nil && p.DeletionTimestamp == nil {
 		switch {
 		case podReady(p):
@@ -76,22 +79,52 @@ func ensureShellPod(ctx, waitCtx context.Context, pods corev1client.PodInterface
 			return waitPodRunning(waitCtx, pods, shellPodName)
 		}
 	}
-	if _, err := pods.Create(ctx, shellPod(), metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+	if _, err := pods.Create(ctx, shellPod(useSA), metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
 		return apiErr(err)
 	}
 	return waitPodRunning(waitCtx, pods, shellPodName)
 }
 
-func shellPod() *corev1.Pod {
+// ensureShellRBAC idempotently provisions a cluster-admin service account for the
+// shell, so its kubectl can actually reach the cluster (matching how the agent
+// install binds cluster-admin). It reports whether the dedicated SA is usable;
+// if it can't be created the caller falls back to the namespace default SA.
+func ensureShellRBAC(ctx context.Context, s *Session) bool {
+	sa := s.clientset.CoreV1().ServiceAccounts(shellNamespace)
+	if _, err := sa.Create(ctx, shellServiceAccount(), metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return false
+	}
+	// A missing binding only narrows what the shell can do; the SA is still usable.
+	crb := s.clientset.RbacV1().ClusterRoleBindings()
+	_, _ = crb.Create(ctx, shellClusterRoleBinding(), metav1.CreateOptions{})
+	return true
+}
+
+func shellLabels() map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/managed-by": "shellcn",
+		shellPodLabel:                  "true",
+	}
+}
+
+func shellServiceAccount() *corev1.ServiceAccount {
+	return &corev1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{Name: shellSAName, Namespace: shellNamespace, Labels: shellLabels()},
+	}
+}
+
+func shellClusterRoleBinding() *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: shellSAName, Labels: shellLabels()},
+		RoleRef:    rbacv1.RoleRef{APIGroup: "rbac.authorization.k8s.io", Kind: "ClusterRole", Name: "cluster-admin"},
+		Subjects:   []rbacv1.Subject{{Kind: "ServiceAccount", Name: shellSAName, Namespace: shellNamespace}},
+	}
+}
+
+func shellPod(useSA bool) *corev1.Pod {
 	automount := true
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: shellPodName,
-			Labels: map[string]string{
-				"app.kubernetes.io/managed-by": "shellcn",
-				shellPodLabel:                  "true",
-			},
-		},
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: shellPodName, Labels: shellLabels()},
 		Spec: corev1.PodSpec{
 			RestartPolicy:                corev1.RestartPolicyAlways,
 			AutomountServiceAccountToken: &automount,
@@ -110,6 +143,10 @@ func shellPod() *corev1.Pod {
 			}},
 		},
 	}
+	if useSA {
+		pod.Spec.ServiceAccountName = shellSAName
+	}
+	return pod
 }
 
 func podReady(p *corev1.Pod) bool {

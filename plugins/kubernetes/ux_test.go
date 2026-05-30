@@ -56,12 +56,28 @@ func TestHeaderActionsResolveToActions(t *testing.T) {
 }
 
 func TestShellPodIsFixedAndReusable(t *testing.T) {
-	p := shellPod()
+	p := shellPod(true)
 	if p.Name != shellPodName {
 		t.Errorf("shell pod needs a fixed name for reuse, got %q", p.Name)
 	}
 	if p.Labels[shellPodLabel] != "true" {
 		t.Error("shell pod should be labelled as a managed cluster shell")
+	}
+	if p.Spec.ServiceAccountName != shellSAName {
+		t.Errorf("shell pod should run as the dedicated SA, got %q", p.Spec.ServiceAccountName)
+	}
+	if shellPod(false).Spec.ServiceAccountName != "" {
+		t.Error("without a usable SA the shell pod should fall back to the namespace default")
+	}
+}
+
+func TestShellRBACGrantsClusterAdmin(t *testing.T) {
+	crb := shellClusterRoleBinding()
+	if crb.RoleRef.Name != "cluster-admin" {
+		t.Errorf("shell binding should grant cluster-admin, got %q", crb.RoleRef.Name)
+	}
+	if len(crb.Subjects) != 1 || crb.Subjects[0].Name != shellSAName || crb.Subjects[0].Namespace != shellNamespace {
+		t.Errorf("shell binding should target the shell SA, got %+v", crb.Subjects)
 	}
 }
 
