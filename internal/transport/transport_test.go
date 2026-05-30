@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/models"
@@ -165,8 +166,9 @@ func TestRegistryRegisterResolveRemove(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build agent with registered tunnel: %v", err)
 	}
-	if _, derr := nt.DialContext(context.Background(), "tcp", "x"); derr == nil || derr.Error() != "via tunnel" {
-		t.Errorf("expected dial through tunnel, got %v", derr)
+	_, derr := nt.DialContext(context.Background(), "tcp", "x")
+	if derr == nil || !errors.Is(derr, transport.ErrAgentUnavailable) || !strings.Contains(derr.Error(), "via tunnel") {
+		t.Errorf("expected dial through tunnel flagged unavailable, got %v", derr)
 	}
 
 	reg.Remove("c1")
@@ -183,7 +185,10 @@ func TestBuildAgentWithTunnel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build agent: %v", err)
 	}
-	if _, err := nt.DialContext(context.Background(), "tcp", "x"); err == nil || err.Error() != "dialed" {
+	// The dialer is reached ("dialed"), and a failure through it is flagged so the
+	// boundary can report the agent as offline rather than a generic 500.
+	_, err = nt.DialContext(context.Background(), "tcp", "x")
+	if err == nil || !errors.Is(err, transport.ErrAgentUnavailable) || !strings.Contains(err.Error(), "dialed") {
 		t.Errorf("agent transport should route through the tunnel dialer, got %v", err)
 	}
 }

@@ -10,6 +10,8 @@ import AppIcon from "../../components/AppIcon.vue";
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{ online: [] }>();
 
+const releasesUrl = "https://github.com/CharlesNg35/shellcn/releases/latest";
+
 const enrollment = ref<Enrollment | null>(null);
 const error = ref<string | null>(null);
 const copied = ref<string | null>(null);
@@ -47,6 +49,28 @@ const heading = computed(() => {
       return "Connect the agent";
   }
 });
+
+// The binary download only helps for host-run installs (a shell/PowerShell
+// command); container or orchestrator installs (docker, compose, k8s) pull the
+// image themselves, so the link would just be noise.
+const hostInstallKinds = [
+  "shell",
+  "powershell",
+  "bash",
+  "terminal",
+  "script",
+  "binary",
+  "native",
+];
+const showAgentDownload = computed(
+  () =>
+    status.value !== "online" &&
+    (enrollment.value?.artifacts ?? []).some((artifact) =>
+      hostInstallKinds.some((kind) =>
+        artifact.kind.toLowerCase().includes(kind),
+      ),
+    ),
+);
 
 const guidance = computed(() => {
   switch (status.value) {
@@ -113,6 +137,17 @@ onUnmounted(clearCopiedTimer);
     </div>
 
     <p v-if="guidance" class="text-sm text-surface-500">{{ guidance }}</p>
+    <p v-if="showAgentDownload" class="text-sm text-surface-500">
+      Don't have the agent yet?
+      <a
+        :href="releasesUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="font-medium text-primary-600 hover:underline dark:text-primary-400"
+      >
+        Download the latest release</a
+      >.
+    </p>
     <p v-if="message" class="text-sm text-surface-400">{{ message }}</p>
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
 
