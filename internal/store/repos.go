@@ -86,7 +86,9 @@ func (s *gormUserStore) SetPasswordHash(ctx context.Context, userID, hash string
 
 func (s *gormUserStore) List(ctx context.Context) ([]models.User, error) {
 	var users []models.User
-	if err := s.db.WithContext(ctx).Omit("password_hash").Order("username").Find(&users).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Omit("password_hash", "totp_secret", "recovery_code_hashes").
+		Order("username").Find(&users).Error; err != nil {
 		return nil, err
 	}
 	return users, nil

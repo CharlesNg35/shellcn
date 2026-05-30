@@ -30,6 +30,9 @@ var (
 	ErrTOTPNotEnrolled = errors.New("twofactor: no enrollment in progress")
 	// ErrTOTPNotEnabled is returned when an action requires active 2FA.
 	ErrTOTPNotEnabled = errors.New("twofactor: not enabled")
+	// ErrTOTPAlreadyEnabled is returned when enrolling over active 2FA, which would
+	// otherwise silently drop the existing protection without verification.
+	ErrTOTPAlreadyEnabled = errors.New("twofactor: already enabled")
 )
 
 const (
@@ -68,6 +71,11 @@ func NewTwoFactorService(users store.UserStore, vault secrets.SecretStore, issue
 // BeginEnrollment generates a fresh secret, stores it encrypted as a pending
 // (not-yet-confirmed) enrollment, and returns the provisioning material.
 func (s *TwoFactorService) BeginEnrollment(ctx context.Context, user models.User) (TOTPEnrollment, error) {
+	// Re-enrolling must go through disable first; otherwise this would clear the
+	// active secret and recovery codes with no proof of possession.
+	if user.TOTPEnabled {
+		return TOTPEnrollment{}, ErrTOTPAlreadyEnabled
+	}
 	key, err := totp.Generate(totp.GenerateOpts{Issuer: s.issuer, AccountName: user.Username})
 	if err != nil {
 		return TOTPEnrollment{}, err

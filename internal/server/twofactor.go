@@ -40,6 +40,8 @@ func mapTwoFactorErr(err error) error {
 		return fmt.Errorf("%w: invalid code", plugin.ErrInvalidInput)
 	case errors.Is(err, service.ErrTOTPNotEnrolled), errors.Is(err, service.ErrTOTPNotEnabled):
 		return fmt.Errorf("%w: two-factor authentication is not set up", plugin.ErrInvalidInput)
+	case errors.Is(err, service.ErrTOTPAlreadyEnabled):
+		return fmt.Errorf("%w: two-factor authentication is already enabled", plugin.ErrInvalidInput)
 	default:
 		return err
 	}
@@ -56,7 +58,7 @@ func (s *Server) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(ctx)
 	enrollment, err := s.deps.TwoFactor.BeginEnrollment(ctx, user)
 	if err != nil {
-		writeError(w, s.deps.Logger, err)
+		writeError(w, s.deps.Logger, mapTwoFactorErr(err))
 		return
 	}
 	writeJSON(w, http.StatusOK, totpSetupResponse{

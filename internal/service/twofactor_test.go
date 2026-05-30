@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -97,6 +98,30 @@ func TestTwoFactorEnrollVerifyDisable(t *testing.T) {
 	user, _ = st.Users.GetByID(ctx, "u1")
 	if user.TOTPEnabled || len(user.TOTPSecret) != 0 {
 		t.Fatal("disable should clear 2FA state")
+	}
+}
+
+func TestTwoFactorReEnrollRejected(t *testing.T) {
+	ctx := context.Background()
+	tf, st := newTwoFactor(t)
+	_ = st.Users.Create(ctx, &models.User{ID: "u1", Username: "alice", Roles: []models.Role{models.RoleViewer}}, "")
+
+	secret := enroll(t, tf, st, "u1")
+	code, _ := totp.GenerateCode(secret, time.Now())
+	user, _ := st.Users.GetByID(ctx, "u1")
+	if _, err := tf.ConfirmEnrollment(ctx, user, code); err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+
+	// Re-enrolling over active 2FA must be rejected and leave the secret and
+	// recovery codes untouched (no silent drop of protection).
+	user, _ = st.Users.GetByID(ctx, "u1")
+	if _, err := tf.BeginEnrollment(ctx, user); !errors.Is(err, service.ErrTOTPAlreadyEnabled) {
+		t.Fatalf("re-enroll: want ErrTOTPAlreadyEnabled, got %v", err)
+	}
+	user, _ = st.Users.GetByID(ctx, "u1")
+	if !user.TOTPEnabled || len(user.RecoveryCodeHashes) == 0 || len(user.TOTPSecret) == 0 {
+		t.Fatal("existing 2FA must remain intact after a rejected re-enroll")
 	}
 }
 
