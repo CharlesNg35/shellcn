@@ -10,8 +10,6 @@ import AppIcon from "../../components/AppIcon.vue";
 const props = defineProps<PanelProps>();
 const emit = defineEmits<{ online: [] }>();
 
-const releasesUrl = "https://github.com/CharlesNg35/shellcn/releases/latest";
-
 const enrollment = ref<Enrollment | null>(null);
 const error = ref<string | null>(null);
 const copied = ref<string | null>(null);
@@ -65,6 +63,7 @@ const hostInstallKinds = [
 const showAgentDownload = computed(
   () =>
     status.value !== "online" &&
+    Boolean(enrollment.value?.downloadUrl) &&
     (enrollment.value?.artifacts ?? []).some((artifact) =>
       hostInstallKinds.some((kind) =>
         artifact.kind.toLowerCase().includes(kind),
@@ -140,7 +139,7 @@ onUnmounted(clearCopiedTimer);
     <p v-if="showAgentDownload" class="text-sm text-surface-500">
       Don't have the agent yet?
       <a
-        :href="releasesUrl"
+        :href="enrollment?.downloadUrl"
         target="_blank"
         rel="noopener noreferrer"
         class="font-medium text-primary-600 hover:underline dark:text-primary-400"

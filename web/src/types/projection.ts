@@ -779,6 +779,7 @@ export interface Enrollment {
   enrollmentId: string;
   expiresAt: string;
   artifacts: InstallArtifact[];
+  downloadUrl: string;
 }
 
 export type AgentStatus = "pending" | "online" | "offline" | "error";
