@@ -21,7 +21,11 @@ const (
 	CSRFHeader = "X-CSRF-Token"
 	// DefaultSessionTTL is how long a platform session lives.
 	DefaultSessionTTL = 24 * time.Hour
-	sessionIssuer     = app.SessionIssuer
+	// MFAChallengeTTL bounds how long a password-verified user has to complete the
+	// second factor before they must sign in again.
+	MFAChallengeTTL = 5 * time.Minute
+	sessionIssuer   = app.SessionIssuer
+	purposeMFA      = "mfa"
 )
 
 // Session is one authenticated browser session.
@@ -134,6 +138,49 @@ func (m *SessionManager) Get(tokenString string) (Session, bool) {
 		SessionVersion: claims.SessionVersion,
 		ExpiresAt:      claims.ExpiresAt.Time,
 	}, true
+}
+
+type mfaClaims struct {
+	Purpose string `json:"purpose"`
+	jwt.RegisteredClaims
+}
+
+// CreateMFAChallenge issues a short-lived token proving a user passed the
+// password step; it carries no CSRF token, so it can never be used as a session.
+func (m *SessionManager) CreateMFAChallenge(userID string) (string, time.Time) {
+	now := time.Now()
+	expiresAt := now.Add(MFAChallengeTTL)
+	claims := mfaClaims{
+		Purpose: purposeMFA,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    sessionIssuer,
+			Subject:   userID,
+			ID:        randomToken(),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+		},
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(m.key)
+	if err != nil {
+		panic("auth: sign MFA challenge: " + err.Error())
+	}
+	return token, expiresAt
+}
+
+// ParseMFAChallenge validates a challenge token and returns the pending user id.
+func (m *SessionManager) ParseMFAChallenge(tokenString string) (string, bool) {
+	claims := &mfaClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (any, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return m.key, nil
+	}, jwt.WithIssuer(sessionIssuer))
+	if err != nil || !token.Valid || claims.Purpose != purposeMFA || claims.Subject == "" {
+		return "", false
+	}
+	return claims.Subject, true
 }
 
 // Destroy revokes one browser session token for the remainder of its lifetime.

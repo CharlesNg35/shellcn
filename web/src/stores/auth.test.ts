@@ -39,16 +39,37 @@ describe("auth store", () => {
 
   it("logs in and out", async () => {
     installFetch((url) => {
-      if (url.endsWith("/api/auth/login")) return { body: session };
+      if (url.endsWith("/api/auth/login"))
+        return { body: { mfaRequired: false, session } };
       if (url.endsWith("/api/auth/logout")) return { body: { ok: true } };
       return { status: 404, body: {} };
     });
     const auth = useAuthStore();
-    await auth.login("alice", "pw");
+    const result = await auth.login("alice", "pw");
+    expect(result.mfaRequired).toBe(false);
     expect(auth.isAuthenticated).toBe(true);
     expect(auth.isAdmin).toBe(false);
     await auth.logout();
     expect(auth.isAuthenticated).toBe(false);
+  });
+
+  it("completes a two-step login when 2FA is required", async () => {
+    installFetch((url) => {
+      if (url.endsWith("/api/auth/login"))
+        return { body: { mfaRequired: true, mfaToken: "challenge-token" } };
+      if (url.endsWith("/api/auth/login/mfa"))
+        return { body: { mfaRequired: false, session } };
+      return { status: 404, body: {} };
+    });
+    const auth = useAuthStore();
+    const result = await auth.login("alice", "pw");
+    expect(result.mfaRequired).toBe(true);
+    expect(auth.awaitingMfa).toBe(true);
+    expect(auth.isAuthenticated).toBe(false);
+
+    await auth.completeMfa("123456");
+    expect(auth.isAuthenticated).toBe(true);
+    expect(auth.awaitingMfa).toBe(false);
   });
 
   it("bootstraps only once across concurrent callers", async () => {

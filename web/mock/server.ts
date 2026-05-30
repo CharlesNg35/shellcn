@@ -295,6 +295,26 @@ function adminUsers(): Json[] {
   return adminUsersState;
 }
 let invitationsState: Json[] = [];
+const twoFactorState = { enabled: false };
+
+// 1x1 transparent PNG, stands in for a real TOTP QR code in the mock.
+const TRANSPARENT_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+function mockRecoveryCodes(): string[] {
+  return [
+    "aaaa-bbbb",
+    "cccc-dddd",
+    "eeee-ffff",
+    "gggg-hhhh",
+    "iiii-jjjj",
+    "kkkk-llll",
+    "mmmm-nnnn",
+    "oooo-pppp",
+    "qqqq-rrrr",
+    "ssss-tttt",
+  ];
+}
 
 function uid(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
@@ -307,6 +327,7 @@ function resetControlPlaneState(): void {
   recordingsState = null;
   adminUsersState = null;
   invitationsState = [];
+  twoFactorState.enabled = false;
   for (const key of Object.keys(grantsState)) delete grantsState[key];
   for (const key of Object.keys(recordingBlobs)) delete recordingBlobs[key];
   agentOnlineAt.clear();
@@ -419,14 +440,42 @@ function handleHTTP(
       displayName: "Demo User",
       email: "demo@example.com",
       roles: ["admin"],
+      twoFactorEnabled: twoFactorState.enabled,
     },
     csrfToken: "mock-csrf-token",
+    mfaReminder: false,
   });
   if (path === "/api/auth/me" && method === "GET") {
     return send(res, 200, mockSession());
   }
   if (path === "/api/auth/login" && method === "POST") {
-    return send(res, 200, mockSession());
+    return send(res, 200, { mfaRequired: false, session: mockSession() });
+  }
+  if (path === "/api/auth/login/mfa" && method === "POST") {
+    return send(res, 200, { mfaRequired: false, session: mockSession() });
+  }
+  // Two-factor (TOTP), self-service. The mock skips real code validation.
+  if (path === "/api/auth/totp/setup" && method === "POST") {
+    return send(res, 200, {
+      secret: "JBSWY3DPEHPK3PXP",
+      otpauthUrl:
+        "otpauth://totp/ShellCN:demo?secret=JBSWY3DPEHPK3PXP&issuer=ShellCN",
+      qr: TRANSPARENT_PNG,
+    });
+  }
+  if (path === "/api/auth/totp/enable" && method === "POST") {
+    twoFactorState.enabled = true;
+    return send(res, 200, { recoveryCodes: mockRecoveryCodes() });
+  }
+  if (path === "/api/auth/totp/recovery-codes" && method === "POST") {
+    return send(res, 200, { recoveryCodes: mockRecoveryCodes() });
+  }
+  if (path === "/api/auth/totp/disable" && method === "POST") {
+    twoFactorState.enabled = false;
+    return send(res, 200, { ok: true });
+  }
+  if (path === "/api/auth/totp/remind" && method === "POST") {
+    return send(res, 200, { ok: true });
   }
   if (path === "/api/auth/logout" && method === "POST") {
     return send(res, 200, { ok: true });

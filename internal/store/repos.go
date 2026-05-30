@@ -98,6 +98,21 @@ func (s *gormUserStore) Update(ctx context.Context, u *models.User) error {
 	return rowsOrNotFound(res)
 }
 
+func (s *gormUserStore) SetTwoFactor(ctx context.Context, userID string, secret []byte, enabled bool, recoveryHashes []string) error {
+	// Select forces these columns to persist even when zero (disabling clears them);
+	// the struct path lets the recovery-code serializer encode the slice.
+	res := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).
+		Select("totp_secret", "totp_enabled", "recovery_code_hashes").
+		Updates(&models.User{TOTPSecret: secret, TOTPEnabled: enabled, RecoveryCodeHashes: recoveryHashes})
+	return rowsOrNotFound(res)
+}
+
+func (s *gormUserStore) SetMFARemindedAt(ctx context.Context, userID string, at *time.Time) error {
+	res := s.db.WithContext(ctx).Model(&models.User{}).Where("id = ?", userID).
+		Update("mfa_reminded_at", at)
+	return rowsOrNotFound(res)
+}
+
 func (s *gormUserStore) Delete(ctx context.Context, id string) error {
 	return s.db.WithContext(ctx).Delete(&models.User{}, "id = ?", id).Error
 }

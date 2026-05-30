@@ -123,6 +123,32 @@ func (s *memUserStore) Update(_ context.Context, u *models.User) error {
 	return nil
 }
 
+func (s *memUserStore) SetTwoFactor(_ context.Context, userID string, secret []byte, enabled bool, recoveryHashes []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.TOTPSecret = secret
+	u.TOTPEnabled = enabled
+	u.RecoveryCodeHashes = recoveryHashes
+	s.users[userID] = u
+	return nil
+}
+
+func (s *memUserStore) SetMFARemindedAt(_ context.Context, userID string, at *time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	u, ok := s.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.MFARemindedAt = at
+	s.users[userID] = u
+	return nil
+}
+
 func (s *memUserStore) Delete(_ context.Context, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

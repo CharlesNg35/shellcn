@@ -1,31 +1,51 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import InputText from "primevue/inputtext";
-import Password from "primevue/password";
-import Button from "primevue/button";
 import { useAuthStore } from "../stores/auth";
 import { ApiError } from "../api/client";
 import AppLogo from "../components/AppLogo.vue";
-import AppIcon from "../components/AppIcon.vue";
 import ThemeToggle from "../components/ThemeToggle.vue";
+import LoginPasswordForm from "../components/auth/LoginPasswordForm.vue";
+import LoginOtpForm from "../components/auth/LoginOtpForm.vue";
 
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 
-const username = ref("");
-const password = ref("");
+const step = ref<"password" | "otp">("password");
 const error = ref<string | null>(null);
 const busy = ref(false);
 
-async function onSubmit(): Promise<void> {
+const highlights = ["Self-hosted", "39+ protocols"];
+
+// After a completed sign-in, send users who haven't enabled 2FA to the nudge
+// page; everyone else continues to their original destination.
+async function finishLogin(): Promise<void> {
+  const redirect = route.query.redirect;
+  const dest = typeof redirect === "string" ? redirect : "/";
+  if (auth.mfaReminder) {
+    await router.replace({ name: "secure-account", query: { redirect: dest } });
+  } else {
+    await router.replace(dest);
+  }
+}
+
+async function onPassword(credentials: {
+  username: string;
+  password: string;
+}): Promise<void> {
   error.value = null;
   busy.value = true;
   try {
-    await auth.login(username.value.trim(), password.value);
-    const redirect = route.query.redirect;
-    await router.replace(typeof redirect === "string" ? redirect : "/");
+    const { mfaRequired } = await auth.login(
+      credentials.username,
+      credentials.password,
+    );
+    if (mfaRequired) {
+      step.value = "otp";
+      return;
+    }
+    await finishLogin();
   } catch (e) {
     error.value =
       e instanceof ApiError && e.status === 401
@@ -34,6 +54,28 @@ async function onSubmit(): Promise<void> {
   } finally {
     busy.value = false;
   }
+}
+
+async function onOtp(code: string): Promise<void> {
+  error.value = null;
+  busy.value = true;
+  try {
+    await auth.completeMfa(code);
+    await finishLogin();
+  } catch (e) {
+    error.value =
+      e instanceof ApiError && e.status === 401
+        ? "Invalid code. Try again, or use a recovery code."
+        : (e as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
+
+function backToPassword(): void {
+  auth.cancelMfa();
+  step.value = "password";
+  error.value = null;
 }
 </script>
 
@@ -84,14 +126,11 @@ async function onSubmit(): Promise<void> {
         class="relative flex flex-wrap items-center gap-2 text-xs font-medium text-white/80"
       >
         <span
+          v-for="item in highlights"
+          :key="item"
           class="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/15 ring-inset"
         >
-          Self-hosted
-        </span>
-        <span
-          class="rounded-full bg-white/10 px-3 py-1 ring-1 ring-white/15 ring-inset"
-        >
-          39+ protocols
+          {{ item }}
         </span>
       </div>
     </aside>
@@ -108,74 +147,30 @@ async function onSubmit(): Promise<void> {
           <h1
             class="text-2xl font-semibold tracking-tight text-surface-900 dark:text-surface-0"
           >
-            Welcome back
+            {{ step === "otp" ? "Two-factor authentication" : "Welcome back" }}
           </h1>
           <p class="mt-1.5 text-sm text-surface-500 dark:text-surface-400">
-            Sign in to continue to your cockpit.
+            {{
+              step === "otp"
+                ? "Enter the code from your authenticator app, or a recovery code."
+                : "Sign in to continue to your cockpit."
+            }}
           </p>
         </div>
 
-        <form class="flex flex-col gap-5" @submit.prevent="onSubmit">
-          <div class="flex flex-col gap-1.5">
-            <label
-              for="login-username"
-              class="text-sm font-medium text-surface-700 dark:text-surface-200"
-            >
-              Username
-            </label>
-            <InputText
-              id="login-username"
-              v-model="username"
-              autocomplete="username"
-              placeholder="Enter your username"
-              autofocus
-              required
-            />
-          </div>
-
-          <div class="flex flex-col gap-1.5">
-            <label
-              for="login-password"
-              class="text-sm font-medium text-surface-700 dark:text-surface-200"
-            >
-              Password
-            </label>
-            <Password
-              v-model="password"
-              input-id="login-password"
-              placeholder="Enter your password"
-              :feedback="false"
-              toggle-mask
-              :input-props="{
-                autocomplete: 'current-password',
-                required: true,
-              }"
-            />
-          </div>
-
-          <p
-            v-if="error"
-            class="flex items-center gap-2 rounded-md bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300"
-            role="alert"
-          >
-            <AppIcon
-              :icon="{ type: 'lucide', value: 'circle-alert' }"
-              :size="15"
-              class="shrink-0"
-            />
-            {{ error }}
-          </p>
-
-          <Button
-            type="submit"
-            label="Sign in"
-            :loading="busy"
-            :disabled="busy"
-            :pt="{
-              root: 'mt-1 flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-700 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:opacity-50',
-            }"
-          />
-        </form>
+        <LoginPasswordForm
+          v-if="step === 'password'"
+          :busy="busy"
+          :error="error"
+          @submit="onPassword"
+        />
+        <LoginOtpForm
+          v-else
+          :busy="busy"
+          :error="error"
+          @submit="onOtp"
+          @back="backToPassword"
+        />
       </div>
     </main>
   </div>

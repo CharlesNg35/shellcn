@@ -15,6 +15,10 @@ const (
 	DefaultDatabaseDSN = Name + ".db"
 	DefaultClientName  = Name
 
+	// DisplayName is the human-facing product name (e.g. the 2FA issuer shown in
+	// authenticator apps), as opposed to the lowercase slug Name.
+	DisplayName = "ShellCN"
+
 	SessionIssuer     = Name
 	JWTSigningContext = Name + " auth jwt:"
 

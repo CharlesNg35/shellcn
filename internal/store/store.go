@@ -26,6 +26,12 @@ type UserStore interface {
 	Update(ctx context.Context, u *models.User) error
 	Delete(ctx context.Context, id string) error
 	Count(ctx context.Context) (int64, error)
+
+	// SetTwoFactor persists the user's TOTP enrollment state atomically: the
+	// encrypted secret, the enabled flag, and the hashed recovery codes.
+	SetTwoFactor(ctx context.Context, userID string, secret []byte, enabled bool, recoveryHashes []string) error
+	// SetMFARemindedAt records when the user was last nudged to enable 2FA.
+	SetMFARemindedAt(ctx context.Context, userID string, at *time.Time) error
 }
 
 // ConnectionStore persists connections (with ciphertext for inline secrets).

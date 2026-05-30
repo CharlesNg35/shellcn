@@ -98,12 +98,19 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig, opts Options) (plugi
 		return nil, err
 	}
 	addr := net.JoinHostPort(opts.Host, strconv.Itoa(opts.Port))
+	var tlsConfig *tls.Config
+	if opts.TLSMode != TLSNone {
+		tlsConfig = &tls.Config{ServerName: opts.Host, InsecureSkipVerify: !opts.VerifyTLS}
+	}
 	dial := func(network, address string) (net.Conn, error) {
 		dialCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
 		defer cancel()
 		conn, err := cfg.Net.DialContext(dialCtx, network, address)
 		if err != nil {
 			return nil, err
+		}
+		if tlsConfig != nil && (opts.TLSMode == TLSImplicit || address != addr) {
+			conn = tls.Client(conn, tlsConfig)
 		}
 		if address == addr {
 			return ftpControlConn{Conn: conn}, nil
@@ -117,7 +124,6 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig, opts Options) (plugi
 		ftplib.DialWithShutTimeout(10 * time.Second),
 	}
 	if opts.TLSMode != TLSNone {
-		tlsConfig := &tls.Config{ServerName: opts.Host, InsecureSkipVerify: !opts.VerifyTLS}
 		if opts.TLSMode == TLSImplicit {
 			ftpOpts = append(ftpOpts, ftplib.DialWithTLS(tlsConfig))
 		} else {

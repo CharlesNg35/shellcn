@@ -15,6 +15,11 @@ const router = createRouter({
       component: () => import("../views/AcceptInviteView.vue"),
     },
     {
+      path: "/secure-account",
+      name: "secure-account",
+      component: () => import("../views/SecureAccountView.vue"),
+    },
+    {
       path: "/",
       component: () => import("../components/AppShell.vue"),
       children: [

@@ -30,8 +30,23 @@ type User struct {
 	Disabled       bool
 	// Protected marks the root admin, which can never be deleted.
 	Protected bool
+
+	// Two-factor authentication (TOTP). TOTPSecret holds the encrypted shared
+	// secret and never serializes to clients. A non-empty secret with
+	// TOTPEnabled=false is an in-progress enrollment awaiting code confirmation.
+	TOTPSecret         []byte   `gorm:"column:totp_secret" json:"-"`
+	TOTPEnabled        bool     `gorm:"column:totp_enabled"`
+	RecoveryCodeHashes []string `gorm:"serializer:json" json:"-"`
+	// MFARemindedAt is when the user was last nudged to enable 2FA (nil = never).
+	MFARemindedAt *time.Time
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+// TOTPPending reports an enrollment that has a secret but isn't confirmed yet.
+func (u User) TOTPPending() bool {
+	return len(u.TOTPSecret) > 0 && !u.TOTPEnabled
 }
 
 func (User) TableName() string { return "users" }

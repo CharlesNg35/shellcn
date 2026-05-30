@@ -33,12 +33,23 @@ func NewLocalAuthenticator(users store.UserStore) *LocalAuthenticator {
 	return &LocalAuthenticator{users: users}
 }
 
+// dummyHash equalizes the cost of the user-not-found path with a real password
+// verification, so login response timing can't be used to enumerate usernames.
+var dummyHash = func() string {
+	h, err := HashPassword(randomToken())
+	if err != nil {
+		panic("auth: precompute dummy hash: " + err.Error())
+	}
+	return h
+}()
+
 // Authenticate looks up the user, verifies the password, and rejects disabled
 // accounts. It returns ErrInvalidCredentials for both unknown users and wrong
 // passwords (no user-enumeration signal).
 func (a *LocalAuthenticator) Authenticate(ctx context.Context, username, password string) (models.User, error) {
 	user, err := a.users.GetByUsername(ctx, username)
 	if errors.Is(err, store.ErrNotFound) {
+		_, _ = VerifyPassword(dummyHash, password)
 		return models.User{}, ErrInvalidCredentials
 	}
 	if err != nil {
