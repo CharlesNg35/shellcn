@@ -110,7 +110,7 @@ func schemaResource() plugin.ResourceType {
 		Columns: schemaColumns(),
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mssql.schema.overview", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}},
-			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.tables.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"mssql.table.create"}}},
+			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.tables.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"mssql.table.create"}, RowActionIDs: []string{"mssql.table.truncate", "mssql.table.drop"}}},
 			{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.views.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"mssql.view.drop"}}},
 			{Key: "procedures", Label: "Procedures", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.procedures.list", Params: map[string]string{"database": "${resource.namespace}", "schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: procedureColumns()}},
 		}},
@@ -123,7 +123,7 @@ func tableResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "mssql.tables.list"},
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{"mssql.column.add", "mssql.table.truncate", "mssql.table.drop"},
+			Row:    []string{"mssql.table.truncate", "mssql.table.drop"},
 			Detail: []string{"mssql.table.truncate", "mssql.table.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{

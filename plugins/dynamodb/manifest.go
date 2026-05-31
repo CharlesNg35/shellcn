@@ -32,8 +32,9 @@ func tableResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: rid("tables.list")},
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{rid("table.delete"), rid("backup.create")},
-			Detail: []string{rid("table.create"), rid("table.delete")},
+			Toolbar: []string{rid("table.create")},
+			Row:     []string{rid("table.delete"), rid("backup.create")},
+			Detail:  []string{rid("table.delete"), rid("ttl.update")},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},

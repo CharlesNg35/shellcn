@@ -97,7 +97,7 @@ func keyspaceResource() plugin.ResourceType {
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.keyspace.overview", Params: map[string]string{"keyspace": "${resource.uid}"}}},
-			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.tables.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"cassandra.table.create"}}},
+			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.tables.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"cassandra.table.create"}, RowActionIDs: []string{"cassandra.table.truncate", "cassandra.table.drop"}}},
 			{Key: "views", Label: "Materialized Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.views.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"cassandra.view.drop"}}},
 			{Key: "types", Label: "Types", Icon: icon("braces"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.types.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: typeColumns()}},
 			{Key: "functions", Label: "Functions", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.functions.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: functionColumns()}},
@@ -112,7 +112,7 @@ func tableResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "cassandra.tables.list"},
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{"cassandra.column.add", "cassandra.table.truncate", "cassandra.table.drop"},
+			Row:    []string{"cassandra.table.truncate", "cassandra.table.drop"},
 			Detail: []string{"cassandra.table.truncate", "cassandra.table.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{

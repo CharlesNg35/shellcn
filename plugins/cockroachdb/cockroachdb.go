@@ -183,7 +183,7 @@ func schemaResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cockroachdb.schema.overview", Params: map[string]string{"schema": "${resource.uid}"}}},
-				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.tables.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"cockroachdb.table.create"}}},
+				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.tables.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"cockroachdb.table.create"}, RowActionIDs: []string{"cockroachdb.table.truncate", "cockroachdb.table.drop"}}},
 				{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.views.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"cockroachdb.view.drop"}}},
 				{Key: "functions", Label: "Functions", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.functions.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: functionColumns()}},
 				{Key: "sequences", Label: "Sequences", Icon: icon("list-ordered"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.sequences.list", Params: map[string]string{"schema": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: sequenceColumns()}},
@@ -198,7 +198,7 @@ func tableResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "cockroachdb.tables.list"},
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{"cockroachdb.column.add", "cockroachdb.table.truncate", "cockroachdb.table.drop"},
+			Row:    []string{"cockroachdb.table.truncate", "cockroachdb.table.drop"},
 			Detail: []string{"cockroachdb.table.truncate", "cockroachdb.table.drop"},
 		},
 		Detail: plugin.DetailView{

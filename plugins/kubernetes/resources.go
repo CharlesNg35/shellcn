@@ -54,6 +54,7 @@ func resourceType(k kind) plugin.ResourceType {
 		Columns: k.columns,
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{"kubernetes.create." + k.name},
+			Row:     []string{"kubernetes.resource.delete"},
 			Detail:  rowActions,
 		},
 		Detail: plugin.DetailView{
@@ -74,6 +75,8 @@ func customResourceType() plugin.ResourceType {
 		ColumnsSource: &plugin.DataSource{RouteID: "kubernetes.resource.columns"},
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{"kubernetes.create.customresource"},
+			Row:     []string{"kubernetes.resource.delete"},
+			Detail:  []string{"kubernetes.resource.delete"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},

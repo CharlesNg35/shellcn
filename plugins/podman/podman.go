@@ -128,9 +128,9 @@ func containerResource() plugin.ResourceType {
 		Watch:   &plugin.DataSource{RouteID: "podman.events.watch", Method: plugin.MethodWS},
 		Columns: containerColumns(),
 		Actions: plugin.ResourceActions{
-			Toolbar:    []string{"podman.container.create", "podman.containers.prune"},
-			Detail:     []string{"podman.container.open", "podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"},
-			Selectable: true,
+			Toolbar: []string{"podman.container.create", "podman.containers.prune"},
+			Row:     []string{"podman.container.remove"},
+			Detail:  []string{"podman.container.open", "podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities()},
@@ -159,8 +159,8 @@ func podResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "pod", Title: "Pods", List: plugin.DataSource{RouteID: "podman.pods.list"}, Columns: columns,
 		Actions: plugin.ResourceActions{
-			Detail:     []string{"podman.pod.start", "podman.pod.stop", "podman.pod.restart", "podman.pod.remove"},
-			Selectable: true,
+			Row:    []string{"podman.pod.remove"},
+			Detail: []string{"podman.pod.start", "podman.pod.stop", "podman.pod.restart", "podman.pod.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: dockerengine.StateSeverities()},
@@ -184,9 +184,9 @@ func imageResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "image", Title: "Images", List: plugin.DataSource{RouteID: "podman.images.list"}, Columns: columns,
 		Actions: plugin.ResourceActions{
-			Toolbar:    []string{"podman.image.pull", "podman.images.prune"},
-			Detail:     []string{"podman.image.remove"},
-			Selectable: true,
+			Toolbar: []string{"podman.image.pull", "podman.images.prune"},
+			Row:     []string{"podman.image.remove"},
+			Detail:  []string{"podman.image.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
@@ -209,9 +209,9 @@ func volumeResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "volume", Title: "Volumes", List: plugin.DataSource{RouteID: "podman.volumes.list"}, Columns: columns,
 		Actions: plugin.ResourceActions{
-			Toolbar:    []string{"podman.volume.create", "podman.volumes.prune"},
-			Detail:     []string{"podman.volume.remove"},
-			Selectable: true,
+			Toolbar: []string{"podman.volume.create", "podman.volumes.prune"},
+			Row:     []string{"podman.volume.remove"},
+			Detail:  []string{"podman.volume.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
@@ -233,9 +233,9 @@ func networkResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "network", Title: "Networks", List: plugin.DataSource{RouteID: "podman.networks.list"}, Columns: columns,
 		Actions: plugin.ResourceActions{
-			Toolbar:    []string{"podman.network.create", "podman.networks.prune"},
-			Detail:     []string{"podman.network.remove"},
-			Selectable: true,
+			Toolbar: []string{"podman.network.create", "podman.networks.prune"},
+			Row:     []string{"podman.network.remove"},
+			Detail:  []string{"podman.network.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},

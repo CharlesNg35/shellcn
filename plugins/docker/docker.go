@@ -219,9 +219,9 @@ func imageResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "image", Title: "Images", List: plugin.DataSource{RouteID: "docker.images.list"}, Columns: columns,
 		Actions: plugin.ResourceActions{
-			Toolbar:    []string{"docker.image.pull", "docker.images.prune"},
-			Detail:     []string{"docker.image.remove"},
-			Selectable: true,
+			Toolbar: []string{"docker.image.pull", "docker.images.prune"},
+			Row:     []string{"docker.image.remove"},
+			Detail:  []string{"docker.image.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
@@ -245,9 +245,9 @@ func volumeResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "volume", Title: "Volumes", List: plugin.DataSource{RouteID: "docker.volumes.list"}, Columns: columns,
 		Actions: plugin.ResourceActions{
-			Toolbar:    []string{"docker.volume.create", "docker.volumes.prune"},
-			Detail:     []string{"docker.volume.remove"},
-			Selectable: true,
+			Toolbar: []string{"docker.volume.create", "docker.volumes.prune"},
+			Row:     []string{"docker.volume.remove"},
+			Detail:  []string{"docker.volume.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
@@ -271,9 +271,9 @@ func networkResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "network", Title: "Networks", List: plugin.DataSource{RouteID: "docker.networks.list"}, Columns: columns,
 		Actions: plugin.ResourceActions{
-			Toolbar:    []string{"docker.network.create", "docker.networks.prune"},
-			Detail:     []string{"docker.network.remove"},
-			Selectable: true,
+			Toolbar: []string{"docker.network.create", "docker.networks.prune"},
+			Row:     []string{"docker.network.remove"},
+			Detail:  []string{"docker.network.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},

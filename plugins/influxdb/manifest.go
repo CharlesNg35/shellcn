@@ -28,7 +28,7 @@ func resources() []plugin.ResourceType {
 			Columns: namespaceColumns(),
 			Actions: plugin.ResourceActions{
 				Toolbar: []string{rid("namespace.create")},
-				Row:     []string{rid("write.namespace"), rid("namespace.delete")},
+				Row:     []string{rid("namespace.delete")},
 				Detail:  []string{rid("write.namespace"), rid("namespace.delete")},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
@@ -41,7 +41,6 @@ func resources() []plugin.ResourceType {
 			Kind: "measurement", Title: "Measurements", List: plugin.DataSource{RouteID: rid("measurements.list")},
 			Columns: measurementColumns(),
 			Actions: plugin.ResourceActions{
-				Row:    []string{rid("write.measurement")},
 				Detail: []string{rid("write.measurement")},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{

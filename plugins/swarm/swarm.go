@@ -158,6 +158,7 @@ func serviceResource() plugin.ResourceType {
 		Watch:   &plugin.DataSource{RouteID: "swarm.events.watch", Method: plugin.MethodWS},
 		Columns: serviceColumns(),
 		Actions: plugin.ResourceActions{
+			Row:    []string{"swarm.service.remove"},
 			Detail: []string{"swarm.service.open", "swarm.service.scale", "swarm.service.remove"},
 		},
 		Detail: plugin.DetailView{

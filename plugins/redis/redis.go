@@ -37,7 +37,6 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		},
 		Streams: []plugin.Stream{
 			{ID: "redis.terminal", Kind: plugin.StreamTerminal, RouteID: "redis.terminal"},
-			{ID: "redis.command", Kind: plugin.StreamLogs, RouteID: "redis.command"},
 		},
 	}
 }

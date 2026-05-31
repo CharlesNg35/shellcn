@@ -103,7 +103,7 @@ func databaseResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
-				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"clickhouse.table.create"}}},
+				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"clickhouse.table.create"}, RowActionIDs: []string{"clickhouse.table.truncate", "clickhouse.table.drop"}}},
 				{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.views.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"clickhouse.view.drop"}}},
 				{Key: "dictionaries", Label: "Dictionaries", Icon: icon("book-open"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.dictionaries.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: dictionaryColumns()}},
 				{Key: "mutations", Label: "Mutations", Icon: icon("git-compare-arrows"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.mutations.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: mutationColumns()}},
@@ -119,7 +119,7 @@ func tableResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "clickhouse.tables.list"},
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{"clickhouse.column.add", "clickhouse.table.truncate", "clickhouse.table.drop"},
+			Row:    []string{"clickhouse.table.truncate", "clickhouse.table.drop"},
 			Detail: []string{"clickhouse.table.truncate", "clickhouse.table.drop"},
 		},
 		Detail: plugin.DetailView{

@@ -76,7 +76,7 @@ func databaseResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
-				{Key: "collections", Label: "Collections", Icon: icon("folders"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: collectionColumns(), ActionIDs: []string{"mongodb.collection.create"}}},
+				{Key: "collections", Label: "Collections", Icon: icon("folders"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: collectionColumns(), ActionIDs: []string{"mongodb.collection.create"}, RowActionIDs: []string{"mongodb.collection.drop"}}},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: commandConfig(`{"serverStatus": 1}`)},
 			},
 		},

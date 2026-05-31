@@ -92,7 +92,7 @@ func schemaResource() plugin.ResourceType {
 		Columns: schemaColumns(),
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.schema.overview", Params: map[string]string{"schema": "${resource.name}"}}},
-			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.tables.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"oracle.table.create"}}},
+			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.tables.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"oracle.table.create"}, RowActionIDs: []string{"oracle.table.truncate", "oracle.table.drop"}}},
 			{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Type: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "oracle.relations.graph", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
 			{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.views.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"oracle.view.drop"}}},
 			{Key: "procedures", Label: "Procedures", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.procedures.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: procedureColumns()}},
@@ -108,7 +108,7 @@ func tableResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "oracle.tables.list"},
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{"oracle.column.add", "oracle.table.truncate", "oracle.table.drop"},
+			Row:    []string{"oracle.table.truncate", "oracle.table.drop"},
 			Detail: []string{"oracle.table.truncate", "oracle.table.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{

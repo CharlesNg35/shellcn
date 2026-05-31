@@ -59,14 +59,14 @@ func entryResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "ldap.entries.search"},
 		Columns: entryColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{"ldap.entry.rename", "ldap.entry.delete"},
+			Row:    []string{"ldap.entry.delete"},
 			Detail: []string{"ldap.entry.add", "ldap.entry.rename", "ldap.entry.delete"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "attributes", Label: "Attributes", Icon: icon("table"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.attributes", Params: dnParams}, Config: attributeGridConfig(dnParams)},
-				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.rename", "ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true}},
+				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true}},
 				{Key: "subtree", Label: "Subtree", Icon: icon("search"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entries.search", Params: map[string]string{"base": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: entryColumns(), EmptyText: "No matching entries. Type an LDAP filter to search.", Exportable: true}},
 				{Key: "ldif", Label: "LDIF", Icon: icon("file-text"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "ldap.entry.ldif", Params: dnParams}},
 			},

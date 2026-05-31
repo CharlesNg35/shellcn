@@ -506,6 +506,12 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		checkActionIDs(fmt.Sprintf("resource %q toolbar", rt.Kind), rt.Actions.Toolbar)
 		checkActionIDs(fmt.Sprintf("resource %q row", rt.Kind), rt.Actions.Row)
 		checkActionIDs(fmt.Sprintf("resource %q detail", rt.Kind), rt.Actions.Detail)
+		// Selectable without Row actions = checkboxes that can never trigger an
+		// action (dead selection). Row implies selectable, so Selectable is only
+		// meaningful with Row — otherwise it is a bug.
+		if rt.Actions.Selectable && len(rt.Actions.Row) == 0 {
+			add("resource %q is Selectable but declares no Row actions (dead selection)", rt.Kind)
+		}
 		if rt.Detail.DefaultTab != "" {
 			found := false
 			for _, tab := range rt.Detail.Tabs {

@@ -100,7 +100,7 @@ func databaseResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mysql.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
-				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"mysql.table.create"}}},
+				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"mysql.table.create"}, RowActionIDs: []string{"mysql.table.truncate", "mysql.table.drop"}}},
 				{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Type: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "mysql.relations.graph", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
 				{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.views.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"mysql.view.drop"}}},
 				{Key: "routines", Label: "Routines", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.routines.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: routineColumns()}},
@@ -116,7 +116,7 @@ func tableResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "mysql.tables.list"},
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{"mysql.column.add", "mysql.table.truncate", "mysql.table.drop"},
+			Row:    []string{"mysql.table.truncate", "mysql.table.drop"},
 			Detail: []string{"mysql.table.truncate", "mysql.table.drop"},
 		},
 		Detail: plugin.DetailView{

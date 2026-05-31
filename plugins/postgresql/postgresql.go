@@ -108,6 +108,7 @@ func schemaResource() plugin.ResourceType {
 		Kind: "schema", Title: "Schemas",
 		List:    plugin.DataSource{RouteID: "postgresql.schemas.list"},
 		Columns: schemaColumns(),
+		Actions: plugin.ResourceActions{Row: []string{"postgresql.schema.drop"}},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
@@ -128,7 +129,7 @@ func tableResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "postgresql.tables.list"},
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{"postgresql.column.add", "postgresql.table.truncate", "postgresql.table.drop"},
+			Row:    []string{"postgresql.table.truncate", "postgresql.table.drop"},
 			Detail: []string{"postgresql.table.truncate", "postgresql.table.drop"},
 		},
 		Detail: plugin.DetailView{
