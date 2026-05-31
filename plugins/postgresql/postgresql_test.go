@@ -3,6 +3,7 @@ package postgresql
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/models"
@@ -176,6 +177,44 @@ func TestTableDataGridIsEditable(t *testing.T) {
 		if ds == nil {
 			t.Fatalf("Data tab missing %q mutation source: %#v", key, data.Config)
 		}
+	}
+}
+
+func TestDatabaseTablesTabHasCreate(t *testing.T) {
+	m := New().Manifest()
+	var tab plugin.Panel
+	for _, res := range m.Resources {
+		if res.Kind != "database" {
+			continue
+		}
+		for _, t := range res.Detail.Tabs {
+			if t.Key == "tables" {
+				tab = t
+			}
+		}
+	}
+	tc, ok := tab.Config.(plugin.TableConfig)
+	if !ok || !slices.Contains(tc.ActionIDs, "postgresql.table.create.in_database") {
+		t.Fatalf("database Tables tab must offer a create action: %#v", tab.Config)
+	}
+
+	var input *plugin.Schema
+	for _, r := range New().Routes() {
+		if r.ID == "postgresql.table.create.in_database" {
+			input = r.Input
+		}
+	}
+	if input == nil {
+		t.Fatal("missing postgresql.table.create.in_database route")
+	}
+	var schema plugin.Field
+	for _, f := range input.Groups[0].Fields {
+		if f.Key == "schema" {
+			schema = f
+		}
+	}
+	if schema.Type != plugin.FieldSelect || schema.OptionsSource == nil {
+		t.Fatalf("database-level create form needs a schema picker: %#v", schema)
 	}
 }
 

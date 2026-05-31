@@ -69,6 +69,26 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		t.Fatalf("created table was not listed: %#v", list)
 	}
 
+	// Database-level create: the schema is chosen in the form (body), not the path.
+	t.Cleanup(func() {
+		cctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, _ = pool.Exec(cctx, `DROP TABLE IF EXISTS public.shellcn_dbcreate`)
+	})
+	if _, err := createTable(rowMutationRC(ctx, s, nil, map[string]any{
+		"schema": "public", "name": "shellcn_dbcreate",
+		"columns": []map[string]any{{"name": "id", "type": "bigint", "primary": true}},
+	})); err != nil {
+		t.Fatalf("database-level create table: %v", err)
+	}
+	dbList, err := listTables(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public"}, nil, nil))
+	if err != nil {
+		t.Fatalf("list tables after database-level create: %v", err)
+	}
+	if !pageHasName(dbList.(plugin.Page[row]), "shellcn_dbcreate") {
+		t.Fatalf("database-level created table was not listed: %#v", dbList)
+	}
+
 	rows, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "table": "shellcn_people"}, nil, nil))
 	if err != nil {
 		t.Fatalf("table rows: %v", err)

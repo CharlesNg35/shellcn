@@ -78,6 +78,7 @@ func routes() []plugin.Route {
 		{ID: "postgresql.schema.create", Method: plugin.MethodPost, Path: "/schemas", Permission: "postgresql.schemas.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.schema.create", Input: schemaCreateSchema(), Handle: createSchema},
 		{ID: "postgresql.schema.drop", Method: plugin.MethodDelete, Path: "/schemas/{schema}", Permission: "postgresql.schemas.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.schema.drop", Handle: dropSchema},
 		{ID: "postgresql.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.table.create", Input: tableCreateSchema(), Handle: createTable},
+		{ID: "postgresql.table.create.in_database", Method: plugin.MethodPost, Path: "/databases/{database}/tables", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.table.create", Input: tableCreateInDatabaseSchema(), Handle: createTable},
 		{ID: "postgresql.column.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "postgresql.column.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.column.drop", Handle: dropColumn},
 		{ID: "postgresql.column.rename", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/rename", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.column.rename", Input: columnRenameSchema(), Handle: renameColumn},
@@ -142,6 +143,15 @@ func tableCreateSchema() *plugin.Schema {
 		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "bigserial", TypeSuggestions: []string{"bigint", "bigserial", "integer", "serial", "smallint", "boolean", "text", "varchar(255)", "char(1)", "numeric(10,2)", "real", "double precision", "date", "timestamptz", "timestamp", "time", "uuid", "jsonb", "json", "bytea", "inet"}, Default: true, Primary: true, Unique: true}),
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
+}
+
+// tableCreateInDatabaseSchema is the create-table form for the database-level
+// table list: a Schema picker (the database's schemas) plus the table fields.
+func tableCreateInDatabaseSchema() *plugin.Schema {
+	fields := append([]plugin.Field{
+		{Key: "schema", Label: "Schema", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "postgresql.schemas.list", Params: map[string]string{"database": "${resource.uid}"}}},
+	}, tableCreateSchema().Groups[0].Fields...)
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: fields}}}
 }
 
 func columnAddSchema() *plugin.Schema {
@@ -1075,16 +1085,23 @@ func createTable(rc *plugin.RequestContext) (any, error) {
 	if err := ensureWritable(s); err != nil {
 		return nil, err
 	}
-	schema, err := sqldb.SafeIdentifier(paramOf(rc, "schema"))
-	if err != nil {
-		return nil, err
-	}
 	var req struct {
+		Schema      string `json:"schema"`
 		Name        string `json:"name" validate:"required"`
 		Columns     any    `json:"columns" validate:"required"`
 		IfNotExists bool   `json:"if_not_exists"`
 	}
 	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	// Schema comes from the path when creating within a schema, else from the
+	// body (database-level create, where the form picks the schema).
+	schemaName := paramOf(rc, "schema")
+	if schemaName == "" {
+		schemaName = req.Schema
+	}
+	schema, err := sqldb.SafeIdentifier(schemaName)
+	if err != nil {
 		return nil, err
 	}
 	table, err := sqldb.SafeIdentifier(req.Name)
