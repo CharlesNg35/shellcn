@@ -174,10 +174,12 @@ const editable = computed(
     Boolean(insertSource.value || updateSource.value || deleteSource.value),
 );
 const editableCells = computed(() => editable.value && !!updateSource.value);
-// Row selection (checkboxes) is offered when a table declares row actions and
-// isn't an inline-editable grid (which has its own row controls).
+// Row selection (checkboxes) is offered when a table declares row actions or is
+// explicitly Selectable, and isn't an inline-editable grid (own row controls).
 const selectable = computed(
-  () => rowActions.value.length > 0 && !editable.value,
+  () =>
+    (rowActions.value.length > 0 || tableConfig.value?.selectable === true) &&
+    !editable.value,
 );
 const selectedRefs = computed(() =>
   selection.value.map((r) => r.ref).filter((r): r is ResourceRef => Boolean(r)),

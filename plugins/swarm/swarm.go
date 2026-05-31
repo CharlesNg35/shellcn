@@ -8,6 +8,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 )
 
 type Plugin struct{}
@@ -83,6 +84,7 @@ func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide,
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
+		{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Ref: dockerengine.OverviewRef()},
 		{Key: "services", Label: "Services", Icon: icon("workflow"), Source: plugin.DataSource{RouteID: "swarm.services.tree"}, ResourceKind: "service"},
 		{Key: "stacks", Label: "Stacks", Icon: icon("layers"), Source: plugin.DataSource{RouteID: "swarm.stacks.tree"}, ResourceKind: "stack"},
 		{Key: "nodes", Label: "Nodes", Icon: icon("server"), Source: plugin.DataSource{RouteID: "swarm.nodes.tree"}, ResourceKind: "node"},
@@ -92,11 +94,38 @@ func tree() []plugin.TreeGroup {
 
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
+		overviewResource(),
 		serviceResource(),
 		stackResource(),
 		nodeResource(),
 		taskResource(),
 	}
+}
+
+func overviewResource() plugin.ResourceType {
+	dash := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
+		{Key: "stats", Label: "Cluster", Panel: plugin.PanelMetrics, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.overview.metrics", Method: plugin.MethodWS}, Config: overviewMetricsConfig()},
+		{Key: "services", Label: "Services", Panel: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.services.list"}, Config: plugin.TableConfig{Columns: serviceColumns()}.Map()},
+		{Key: "nodes", Label: "Nodes", Panel: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.nodes.list"}, Config: plugin.TableConfig{Columns: nodeResource().Columns}.Map()},
+	}}
+	return plugin.ResourceType{
+		Kind: dockerengine.OverviewKind, Title: "Overview",
+		List:    plugin.DataSource{RouteID: "swarm.overview.list"},
+		Columns: []plugin.Column{{Key: "name", Label: "Name"}},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "Overview"},
+			Tabs:   []plugin.Tab{{Key: "dashboard", Label: "Overview", Icon: icon("layout-dashboard"), Panel: plugin.PanelDashboard, Config: dash.Map()}},
+		},
+	}
+}
+
+func overviewMetricsConfig() map[string]any {
+	return plugin.MetricsConfig{Stats: []plugin.MetricStat{
+		{Key: "services", Label: "Services"},
+		{Key: "nodes", Label: "Nodes"},
+		{Key: "tasks", Label: "Tasks"},
+		{Key: "stacks", Label: "Stacks"},
+	}}.Map()
 }
 
 func serviceColumns() []plugin.Column {

@@ -63,6 +63,9 @@ func TestServeRewritesHTMLUnderPrefix(t *testing.T) {
 	if !strings.Contains(body, "HTMLScriptElement.prototype") {
 		t.Fatalf("shim does not rewrite runtime-injected asset URLs: %s", body)
 	}
+	if !strings.Contains(body, "Location.prototype") {
+		t.Fatalf("shim does not keep JS location navigations under the prefix: %s", body)
+	}
 }
 
 // A redirect Location is mapped back under the prefix whether it is root-relative

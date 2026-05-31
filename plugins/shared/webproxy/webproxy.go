@@ -238,9 +238,10 @@ func rewriteCookiePath(cookie, prefix string) string {
 	return strings.Join(parts, ";")
 }
 
-// injectShim inserts a script that keeps the app's runtime requests under the
-// prefix — fetch/XHR, WebSocket/EventSource/Worker, dynamically-set asset
-// attributes, history, and form actions — plus the in-scope service worker.
+// injectShim inserts a script that keeps the app's runtime requests and
+// navigations under the prefix — fetch/XHR, WebSocket/EventSource/Worker,
+// history, location (assign/replace/href), dynamically-set asset attributes, and
+// form actions — plus the in-scope service worker.
 func injectShim(html, prefix string) string {
 	shim := `<script>(function(){var p=` + jsString(prefix) + `;
 function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=location.origin;if(u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);return u;}
@@ -252,6 +253,8 @@ function patch(proto,prop){var d=Object.getOwnPropertyDescriptor(proto,prop);if(
 try{patch(HTMLScriptElement.prototype,"src");patch(HTMLLinkElement.prototype,"href");patch(HTMLImageElement.prototype,"src");}catch(e){}
 var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){return sa.call(this,n,(typeof v==="string"&&/^(src|href|action|formaction|poster)$/i.test(n))?fix(v):v);};
 ["pushState","replaceState"].forEach(function(m){var o=history[m];if(o)history[m]=function(s,t,u){return o.call(this,s,t,typeof u==="string"?fix(u):u);};});
+["assign","replace"].forEach(function(m){var o=location[m];if(o)try{location[m]=function(u){return o.call(location,fix(u));};}catch(e){}});
+try{var lh=Object.getOwnPropertyDescriptor(Location.prototype,"href");if(lh&&lh.set)Object.defineProperty(location,"href",{configurable:true,get:function(){return lh.get.call(location);},set:function(v){lh.set.call(location,fix(v));}});}catch(e){}
 document.addEventListener("submit",function(e){var f=e.target;if(!f||f.tagName!=="FORM")return;var raw=f.getAttribute("action");if(!raw)return;var g=fix(raw);if(g!==raw)f.setAttribute("action",g);},true);
 if(navigator.serviceWorker){try{navigator.serviceWorker.register(p+"/` + SWFile + `").then(function(){if(!navigator.serviceWorker.controller){var k="scnsw:"+p;if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");navigator.serviceWorker.ready.then(function(){location.reload();});}}});}catch(e){}}
 })();</script>`

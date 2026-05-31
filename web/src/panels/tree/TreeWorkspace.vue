@@ -286,8 +286,8 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
               columnsSource: activeColumnsSource,
               watch: activeListResource.watch,
               actionIds: activeListResource.listActionIds ?? [],
-              rowActionIds:
-                activeListResource.rowActionIds ?? activeListResource.actionIds,
+              rowActionIds: activeListResource.rowActionIds ?? [],
+              selectable: activeListResource.selectable,
             }"
             :actions="actions"
             @select="openDetail"

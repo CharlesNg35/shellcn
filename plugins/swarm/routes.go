@@ -25,6 +25,8 @@ const stackNamespaceLabel = "com.docker.stack.namespace"
 // Routes wires Swarm-namespaced route IDs to the orchestration handlers.
 func Routes() []plugin.Route {
 	return []plugin.Route{
+		{ID: "swarm.overview.list", Method: plugin.MethodGet, Path: "/overview", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.overview.list", Handle: dockerengine.OverviewList},
+		{ID: "swarm.overview.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.overview.metrics", Stream: overviewMetrics},
 		{ID: "swarm.services.tree", Method: plugin.MethodGet, Path: "/tree/services", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.services.tree", Handle: treeServices},
 		{ID: "swarm.stacks.tree", Method: plugin.MethodGet, Path: "/tree/stacks", Permission: "swarm.stacks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stacks.tree", Handle: treeStacks},
 		{ID: "swarm.nodes.tree", Method: plugin.MethodGet, Path: "/tree/nodes", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.nodes.tree", Handle: treeSwarmNodes},
@@ -57,6 +59,33 @@ func client(rc *plugin.RequestContext) (*dockerclient.Client, error) {
 		return nil, err
 	}
 	return s.Client(), nil
+}
+
+func overviewMetrics(rc *plugin.RequestContext, stream plugin.ClientStream) error {
+	return dockerengine.MetricsLoop(rc, stream, func(context.Context) map[string]any {
+		return swarmFrame(rc)
+	})
+}
+
+func swarmFrame(rc *plugin.RequestContext) map[string]any {
+	frame := map[string]any{}
+	cli, err := client(rc)
+	if err != nil {
+		return frame
+	}
+	if res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{}); err == nil {
+		frame["services"] = len(res.Items)
+	}
+	if res, err := cli.NodeList(rc.Ctx, dockerclient.NodeListOptions{}); err == nil {
+		frame["nodes"] = len(res.Items)
+	}
+	if res, err := cli.TaskList(rc.Ctx, dockerclient.TaskListOptions{}); err == nil {
+		frame["tasks"] = len(res.Items)
+	}
+	if rows, err := stackRows(rc); err == nil {
+		frame["stacks"] = len(rows)
+	}
+	return frame
 }
 
 func listServices(rc *plugin.RequestContext) (any, error) {
