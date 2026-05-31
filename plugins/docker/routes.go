@@ -47,8 +47,8 @@ func Routes() []plugin.Route {
 		{ID: "docker.images.prune", Method: plugin.MethodPost, Path: "/images/prune", Permission: "docker.images.delete", Risk: plugin.RiskDestructive, AuditEvent: "docker.images.prune", Handle: dockerengine.PruneImages},
 		{ID: "docker.volumes.prune", Method: plugin.MethodPost, Path: "/volumes/prune", Permission: "docker.volumes.delete", Risk: plugin.RiskDestructive, AuditEvent: "docker.volumes.prune", Handle: dockerengine.PruneVolumes},
 		{ID: "docker.networks.prune", Method: plugin.MethodPost, Path: "/networks/prune", Permission: "docker.networks.delete", Risk: plugin.RiskDestructive, AuditEvent: "docker.networks.prune", Handle: dockerengine.PruneNetworks},
-		{ID: "docker.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "docker.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "docker.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
-		{ID: "docker.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec/ws/{cols}/{rows}/{command}", Permission: "docker.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "docker.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
+		{ID: "docker.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs", Permission: "docker.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "docker.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
+		{ID: "docker.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec", Permission: "docker.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "docker.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
 		{ID: "docker.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "docker.events.read", Risk: plugin.RiskSafe, AuditEvent: "docker.events.watch", Stream: dockerengine.WatchEvents},
 	}
 }

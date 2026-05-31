@@ -52,8 +52,8 @@ func Routes() []plugin.Route {
 		{ID: "podman.images.prune", Method: plugin.MethodPost, Path: "/images/prune", Permission: "podman.images.delete", Risk: plugin.RiskDestructive, AuditEvent: "podman.images.prune", Handle: dockerengine.PruneImages},
 		{ID: "podman.volumes.prune", Method: plugin.MethodPost, Path: "/volumes/prune", Permission: "podman.volumes.delete", Risk: plugin.RiskDestructive, AuditEvent: "podman.volumes.prune", Handle: dockerengine.PruneVolumes},
 		{ID: "podman.networks.prune", Method: plugin.MethodPost, Path: "/networks/prune", Permission: "podman.networks.delete", Risk: plugin.RiskDestructive, AuditEvent: "podman.networks.prune", Handle: dockerengine.PruneNetworks},
-		{ID: "podman.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "podman.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "podman.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
-		{ID: "podman.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec/ws/{cols}/{rows}/{command}", Permission: "podman.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "podman.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
+		{ID: "podman.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs", Permission: "podman.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "podman.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
+		{ID: "podman.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec", Permission: "podman.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "podman.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
 		{ID: "podman.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "podman.events.read", Risk: plugin.RiskSafe, AuditEvent: "podman.events.watch", Stream: dockerengine.WatchEvents},
 	}
 }
