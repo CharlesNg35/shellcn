@@ -238,6 +238,69 @@ describe("ActionBar", () => {
     stopped.unmount();
   });
 
+  it("clusters same-group actions into one dropdown and keeps ungrouped ones as buttons", () => {
+    const grouped: Action[] = [
+      {
+        id: "open",
+        label: "Open",
+        routeId: "r.open",
+        risk: "safe",
+        requiresConfirm: false,
+      },
+      {
+        id: "start",
+        label: "Start",
+        routeId: "r.start",
+        risk: "write",
+        requiresConfirm: false,
+        group: "Lifecycle",
+      },
+      {
+        id: "stop",
+        label: "Stop",
+        routeId: "r.stop",
+        risk: "destructive",
+        requiresConfirm: false,
+        group: "Lifecycle",
+      },
+    ];
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: { connectionId: "c1", actions: grouped },
+    });
+    // One "Lifecycle" dropdown trigger + the standalone "Open" button; the
+    // grouped actions are not rendered as their own bar buttons.
+    expect(bodyButton("Lifecycle")).toBeTruthy();
+    expect(bodyButton("Open")).toBeTruthy();
+    expect(bodyButton("Start")).toBeUndefined();
+    expect(bodyButton("Stop")).toBeUndefined();
+    w.unmount();
+  });
+
+  it("collapses overflow buttons past the limit into a More menu", () => {
+    const many: Action[] = Array.from({ length: 7 }, (_, i) => ({
+      id: `a${i}`,
+      label: `Act${i}`,
+      routeId: `r.a${i}`,
+      risk: "safe" as const,
+      requiresConfirm: false,
+    }));
+    const w = mount(ActionBar, {
+      attachTo: document.body,
+      props: { connectionId: "c1", actions: many },
+    });
+    const more = [...document.body.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label") === "More actions",
+    );
+    expect(more).toBeTruthy();
+    // 4 inline action buttons + the More trigger = 5 chips; the rest move into
+    // the overflow menu (not rendered until opened).
+    expect(bodyButton("Act0")).toBeTruthy();
+    expect(bodyButton("Act3")).toBeTruthy();
+    expect(bodyButton("Act4")).toBeUndefined();
+    w.unmount();
+  });
+
   it("uses declarative action params when provided", async () => {
     const action: Action = {
       ...snapshot,

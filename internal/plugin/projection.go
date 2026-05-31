@@ -34,6 +34,7 @@ type ProjectedAction struct {
 	Config          PanelConfig       `json:"config,omitempty"`
 	EnabledWhen     *Condition        `json:"enabledWhen,omitempty"`
 	IconOnly        bool              `json:"iconOnly,omitempty"`
+	Group           string            `json:"group,omitempty"`
 }
 
 // ProjectedRecording tells the browser which recording options a plugin offers
@@ -132,6 +133,7 @@ func BuildProjection(m Manifest, routes map[string]Route) Projection {
 				Config:          a.Config,
 				EnabledWhen:     a.EnabledWhen,
 				IconOnly:        a.IconOnly,
+				Group:           a.Group,
 			}
 			if rt, ok := routes[a.RouteID]; ok {
 				pa.Method = rt.Method

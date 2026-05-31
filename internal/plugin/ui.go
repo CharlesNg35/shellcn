@@ -431,6 +431,10 @@ type Action struct {
 	EnabledWhen *Condition `json:"enabledWhen,omitempty"`
 	// IconOnly renders the button as its icon alone; Label becomes the tooltip.
 	IconOnly bool `json:"iconOnly,omitempty"`
+	// Group clusters actions on a surface into one labeled dropdown menu (the
+	// label is the group string); empty renders the action as a standalone
+	// button. The renderer also collapses overflow buttons into a "More" menu.
+	Group string `json:"group,omitempty"`
 }
 
 // NavigateTarget is where the UI moves after an action succeeds.

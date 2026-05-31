@@ -458,6 +458,7 @@ export interface Action {
   config?: Record<string, unknown>; // panel config for a dock/dialog-opened panel
   enabledWhen?: Condition; // gate on the active row's fields; false = disabled
   iconOnly?: boolean; // render as the icon alone; label becomes the tooltip
+  group?: string; // cluster same-group actions into one labeled dropdown menu
 }
 
 export interface Stream {
