@@ -119,7 +119,7 @@ func tabs() []plugin.Tab {
 					Source: &plugin.DataSource{RouteID: "server_monitor.disks"},
 					Config: liveTableConfig(diskColumns(), 10000, sortBy("usedPct")),
 				},
-			}}.Map(),
+			}},
 		},
 		{Key: "processes", Label: "Processes", Icon: lucide("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.processes"}, Config: liveTableConfig(processColumns(), 3000, sortBy("cpuPct"))},
 		{Key: "services", Label: "Services", Icon: lucide("settings"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "server_monitor.services"}, Config: liveTableConfig(serviceColumns(), 10000, nil)},
@@ -139,7 +139,7 @@ func lucide(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucid
 // summaryConfig is the full-width header card: the CPU/Mem/Swap gauges plus the
 // process/load stats. The line charts live in their own cells (below) so they
 // can sit in a grid.
-func summaryConfig() map[string]any {
+func summaryConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Gauges: []plugin.MetricGauge{
 			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
@@ -151,24 +151,24 @@ func summaryConfig() map[string]any {
 			{Key: "load1", Label: "Load 1m"},
 			{Key: "load5", Label: "Load 5m"},
 		},
-	}.Map()
+	}
 }
 
 // cpuMemConfig charts CPU and Memory over time on one shared 0–100 axis.
-func cpuMemConfig() map[string]any {
+func cpuMemConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Series: []plugin.MetricSeries{
 			{Key: "cpuPct", Label: "CPU", Unit: "%"},
 			{Key: "memPct", Label: "Memory", Unit: "%"},
 		},
 		History: 120,
-	}.Map()
+	}
 }
 
 // throughputConfig charts network and disk I/O as per-second rates (derived in
 // the metrics stream), kept off the percentage chart so their byte scale doesn't
 // flatten it.
-func throughputConfig() map[string]any {
+func throughputConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Series: []plugin.MetricSeries{
 			{Key: "netRecvRate", Label: "Net in", Unit: "bytes"},
@@ -177,21 +177,21 @@ func throughputConfig() map[string]any {
 			{Key: "diskWriteRate", Label: "Disk write", Unit: "bytes"},
 		},
 		History: 120,
-	}.Map()
+	}
 }
 
-func tableConfig(columns []plugin.Column) map[string]any {
-	return plugin.TableConfig{Columns: columns, Exportable: true, RowClick: plugin.RowClickDetail}.Map()
+func tableConfig(columns []plugin.Column) plugin.TableConfig {
+	return plugin.TableConfig{Columns: columns, Exportable: true, RowClick: plugin.RowClickDetail}
 }
 
-func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortKey) map[string]any {
+func liveTableConfig(columns []plugin.Column, intervalMs int, sort *plugin.SortKey) plugin.TableConfig {
 	return plugin.TableConfig{
 		Columns:           columns,
 		RefreshIntervalMs: intervalMs,
 		DefaultSort:       sort,
 		Exportable:        true,
 		RowClick:          plugin.RowClickDetail,
-	}.Map()
+	}
 }
 
 func sortBy(field string) *plugin.SortKey { return &plugin.SortKey{Field: field, Desc: true} }

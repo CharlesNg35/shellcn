@@ -117,7 +117,7 @@ func clusterResourceType() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Cluster Overview"},
 			Tabs: []plugin.Tab{
-				{Key: "dashboard", Label: "Overview", Icon: lucide("layout-dashboard"), Panel: plugin.PanelDashboard, Config: dash.Map()},
+				{Key: "dashboard", Label: "Overview", Icon: lucide("layout-dashboard"), Panel: plugin.PanelDashboard, Config: dash},
 			},
 		},
 	}
@@ -125,18 +125,18 @@ func clusterResourceType() plugin.ResourceType {
 
 // kindColumnsConfig reuses a catalog kind's declared columns for an embedded
 // dashboard table, so it matches the full list view (badges and all).
-func kindColumnsConfig(name string) map[string]any {
+func kindColumnsConfig(name string) plugin.TableConfig {
 	if k, ok := kindByName(name); ok {
-		return plugin.TableConfig{Columns: k.columns}.Map()
+		return plugin.TableConfig{Columns: k.columns}
 	}
-	return nil
+	return plugin.TableConfig{}
 }
 
-func podsTableConfig() map[string]any {
+func podsTableConfig() plugin.TableConfig {
 	return plugin.TableConfig{Columns: []plugin.Column{
 		col("name", "Name"), col("ready", "Ready", notSort), col("status", "Status", statusBadge(podSeverities)),
 		col("restarts", "Restarts", num), col("node", "Node"), ageCol(),
-	}}.Map()
+	}}
 }
 
 // nodeDetailTabs adds live Metrics + scheduled Pods to a node's detail.
@@ -164,7 +164,7 @@ func workloadPodsTab(kindName string) plugin.Tab {
 	}
 }
 
-func clusterMetricsConfig() map[string]any {
+func clusterMetricsConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Gauges: []plugin.MetricGauge{
 			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
@@ -179,10 +179,10 @@ func clusterMetricsConfig() map[string]any {
 			{Key: "mem", Label: "Memory", Unit: "bytes"},
 		},
 		History: 60,
-	}.Map()
+	}
 }
 
-func nodeMetricsConfig() map[string]any {
+func nodeMetricsConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Gauges: []plugin.MetricGauge{
 			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
@@ -193,5 +193,5 @@ func nodeMetricsConfig() map[string]any {
 			{Key: "mem", Label: "Memory", Unit: "bytes"},
 		},
 		History: 60,
-	}.Map()
+	}
 }

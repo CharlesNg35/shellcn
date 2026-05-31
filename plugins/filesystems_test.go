@@ -21,10 +21,10 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 		if len(proj.Tabs) != 1 || proj.Tabs[0].Panel != plugin.PanelFileBrowser {
 			t.Fatalf("%s should expose one file browser tab: %+v", name, proj.Tabs)
 		}
-		for _, key := range []string{"readRouteId", "downloadRouteId", "uploadRouteId", "mkdirRouteId", "renameRouteId", "deleteRouteId"} {
-			if proj.Tabs[0].Config[key] == "" {
-				t.Fatalf("%s files config missing %s", name, key)
-			}
+		fb, ok := proj.Tabs[0].Config.(plugin.FileBrowserConfig)
+		if !ok || fb.ReadRouteID == "" || fb.DownloadRouteID == "" || fb.UploadRouteID == "" ||
+			fb.MkdirRouteID == "" || fb.RenameRouteID == "" || fb.DeleteRouteID == "" {
+			t.Fatalf("%s files config missing route ids: %#v", name, proj.Tabs[0].Config)
 		}
 	}
 }

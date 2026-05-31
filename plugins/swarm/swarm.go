@@ -105,8 +105,8 @@ func resources() []plugin.ResourceType {
 func overviewResource() plugin.ResourceType {
 	dash := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
 		{Key: "stats", Label: "Cluster", Panel: plugin.PanelMetrics, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.overview.metrics", Method: plugin.MethodWS}, Config: overviewMetricsConfig()},
-		{Key: "services", Label: "Services", Panel: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.services.list"}, Config: plugin.TableConfig{Columns: serviceColumns()}.Map()},
-		{Key: "nodes", Label: "Nodes", Panel: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.nodes.list"}, Config: plugin.TableConfig{Columns: nodeResource().Columns}.Map()},
+		{Key: "services", Label: "Services", Panel: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.services.list"}, Config: plugin.TableConfig{Columns: serviceColumns()}},
+		{Key: "nodes", Label: "Nodes", Panel: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "swarm.nodes.list"}, Config: plugin.TableConfig{Columns: nodeResource().Columns}},
 	}}
 	return plugin.ResourceType{
 		Kind: dockerengine.OverviewKind, Title: "Overview",
@@ -114,18 +114,18 @@ func overviewResource() plugin.ResourceType {
 		Columns: []plugin.Column{{Key: "name", Label: "Name"}},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Overview"},
-			Tabs:   []plugin.Tab{{Key: "dashboard", Label: "Overview", Icon: icon("layout-dashboard"), Panel: plugin.PanelDashboard, Config: dash.Map()}},
+			Tabs:   []plugin.Tab{{Key: "dashboard", Label: "Overview", Icon: icon("layout-dashboard"), Panel: plugin.PanelDashboard, Config: dash}},
 		},
 	}
 }
 
-func overviewMetricsConfig() map[string]any {
+func overviewMetricsConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{Stats: []plugin.MetricStat{
 		{Key: "services", Label: "Services"},
 		{Key: "nodes", Label: "Nodes"},
 		{Key: "tasks", Label: "Tasks"},
 		{Key: "stacks", Label: "Stacks"},
-	}}.Map()
+	}}
 }
 
 func serviceColumns() []plugin.Column {
@@ -162,7 +162,7 @@ func serviceResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"swarm.service.open", "swarm.service.scale", "swarm.service.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.service.overview", Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}.Map()},
+				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}},
 				{Key: "logs", Label: "Logs", Icon: icon("scroll-text"), Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "swarm.service.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.service.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
@@ -181,7 +181,7 @@ func stackResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.stack.overview", Params: map[string]string{"stack": "${resource.uid}"}}},
-				{Key: "services", Label: "Services", Icon: icon("workflow"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.stack.services", Params: map[string]string{"stack": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}.Map()},
+				{Key: "services", Label: "Services", Icon: icon("workflow"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.stack.services", Params: map[string]string{"stack": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}},
 			},
 		},
 	}
@@ -203,7 +203,7 @@ func nodeResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.node.overview", Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.node.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}.Map()},
+				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.node.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}},
 				{Key: "inspect", Label: "Inspect", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.node.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},

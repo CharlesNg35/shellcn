@@ -178,7 +178,8 @@ func TestDatabaseCreateActionsAreDeclaredAtCollectionLevel(t *testing.T) {
 			break
 		}
 	}
-	if !stringSliceContains(stringConfigList(collections.Config, "actionIds"), "mongodb.collection.create") {
+	collCfg, _ := collections.Config.(plugin.TableConfig)
+	if !stringSliceContains(collCfg.ActionIDs, "mongodb.collection.create") {
 		t.Fatalf("mongodb collections tab actions = %#v, want collection create", collections.Config)
 	}
 	if !manifestHasAction(m, "mongodb.collection.create", "mongodb.collection.create") {
@@ -218,10 +219,11 @@ func TestEditableDatabaseTablesDeclareColumnMetadataSource(t *testing.T) {
 				break
 			}
 		}
-		source, ok := data.Config["columnsSource"].(*plugin.DataSource)
-		if !ok {
+		tbl, ok := data.Config.(plugin.TableConfig)
+		if !ok || tbl.ColumnsSource == nil {
 			t.Fatalf("%s data grid should declare columnsSource: %#v", tc.protocol, data.Config)
 		}
+		source := tbl.ColumnsSource
 		if source.RouteID != tc.routeID {
 			t.Fatalf("%s columnsSource = %q, want %q", tc.protocol, source.RouteID, tc.routeID)
 		}
@@ -258,11 +260,6 @@ func manifestHasAction(m plugin.Manifest, actionID string, routeID string) bool 
 		}
 	}
 	return false
-}
-
-func stringConfigList(config map[string]any, key string) []string {
-	raw, _ := config[key].([]string)
-	return raw
 }
 
 func stringSliceContains(values []string, want string) bool {

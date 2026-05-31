@@ -26,10 +26,10 @@ func TestManifestExposesTerminalAndFiles(t *testing.T) {
 	if files.Panel != plugin.PanelFileBrowser {
 		t.Fatalf("files tab panel: got %q", files.Panel)
 	}
-	for _, key := range []string{"readRouteId", "downloadRouteId", "uploadRouteId", "mkdirRouteId", "renameRouteId", "deleteRouteId"} {
-		if files.Config[key] == "" {
-			t.Fatalf("files config missing %s", key)
-		}
+	fb, ok := files.Config.(plugin.FileBrowserConfig)
+	if !ok || fb.ReadRouteID == "" || fb.DownloadRouteID == "" || fb.UploadRouteID == "" ||
+		fb.MkdirRouteID == "" || fb.RenameRouteID == "" || fb.DeleteRouteID == "" {
+		t.Fatalf("files config missing route ids: %#v", files.Config)
 	}
 	if len(m.Recording) != 1 || m.Recording[0].Class != plugin.RecordingTerminal {
 		t.Fatalf("ssh should declare terminal recording: %+v", m.Recording)

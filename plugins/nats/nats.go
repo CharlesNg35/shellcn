@@ -57,8 +57,8 @@ func resources() []plugin.ResourceType {
 			RowActionIDs:  []string{"nats.stream.purge", "nats.stream.delete"},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"nats.message.publish", "nats.stream.purge", "nats.stream.delete"}}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "nats.stream.overview", Params: map[string]string{"stream": "${resource.name}"}}},
-				{Key: "messages", Label: "Messages", Icon: icon("mail"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "nats.messages.list", Params: map[string]string{"stream": "${resource.name}"}}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"nats.message.publish"}, RowActionIDs: []string{"nats.message.delete"}, Exportable: true}.Map()},
-				{Key: "consumers", Label: "Consumers", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "nats.consumers.list", Params: map[string]string{"stream": "${resource.name}"}}, Config: plugin.TableConfig{Columns: consumerColumns(), ActionIDs: []string{"nats.consumer.create"}, RowActionIDs: []string{"nats.consumer.delete"}, Exportable: true}.Map()},
+				{Key: "messages", Label: "Messages", Icon: icon("mail"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "nats.messages.list", Params: map[string]string{"stream": "${resource.name}"}}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"nats.message.publish"}, RowActionIDs: []string{"nats.message.delete"}, Exportable: true}},
+				{Key: "consumers", Label: "Consumers", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "nats.consumers.list", Params: map[string]string{"stream": "${resource.name}"}}, Config: plugin.TableConfig{Columns: consumerColumns(), ActionIDs: []string{"nats.consumer.create"}, RowActionIDs: []string{"nats.consumer.delete"}, Exportable: true}},
 			}},
 		},
 		{

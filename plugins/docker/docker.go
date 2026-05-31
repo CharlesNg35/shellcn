@@ -145,7 +145,7 @@ func resources() []plugin.ResourceType {
 func overviewResource() plugin.ResourceType {
 	dash := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
 		{Key: "stats", Label: "Environment", Panel: plugin.PanelMetrics, Span: 2, Source: &plugin.DataSource{RouteID: "docker.overview.metrics", Method: plugin.MethodWS}, Config: dockerengine.OverviewMetricsConfig()},
-		{Key: "containers", Label: "Containers", Panel: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "docker.containers.list"}, Config: plugin.TableConfig{Columns: containerColumns()}.Map()},
+		{Key: "containers", Label: "Containers", Panel: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "docker.containers.list"}, Config: plugin.TableConfig{Columns: containerColumns()}},
 	}}
 	return plugin.ResourceType{
 		Kind: dockerengine.OverviewKind, Title: "Overview",
@@ -153,7 +153,7 @@ func overviewResource() plugin.ResourceType {
 		Columns: []plugin.Column{{Key: "name", Label: "Name"}},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Overview"},
-			Tabs:   []plugin.Tab{{Key: "dashboard", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "layout-dashboard"}, Panel: plugin.PanelDashboard, Config: dash.Map()}},
+			Tabs:   []plugin.Tab{{Key: "dashboard", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "layout-dashboard"}, Panel: plugin.PanelDashboard, Config: dash}},
 		},
 	}
 }
@@ -191,16 +191,16 @@ func containerResource() plugin.ResourceType {
 			"docker.container.create",
 			"docker.containers.prune",
 		},
-		ActionIDs:  []string{"docker.container.open", "docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"},
-		Selectable: true,
+		ActionIDs:    []string{"docker.container.open", "docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"},
+		RowActionIDs: []string{"docker.container.remove"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"docker.container.open", "docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "docker.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map()},
+				{Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "docker.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
 				{Key: "logs", Label: "Logs", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "scroll-text"}, Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "docker.container.logs", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "tail": "200", "follow": "true", "timestamps": "true"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "env", Label: "Env", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "list"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.container.env", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "key", Label: "Key", Sortable: true}, {Key: "value", Label: "Value"}}}.Map()},
+				{Key: "env", Label: "Env", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "list"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.container.env", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: []plugin.Column{{Key: "key", Label: "Key", Sortable: true}, {Key: "value", Label: "Value"}}}},
 			},
 		},
 	}
@@ -291,8 +291,8 @@ func composeResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.compose.overview", Params: map[string]string{"project": "${resource.uid}"}}},
-				{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "box"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.containers", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: containerColumns()}.Map()},
-				{Key: "services", Label: "Services", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "workflow"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.services", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}.Map()},
+				{Key: "containers", Label: "Containers", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "box"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.containers", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: containerColumns()}},
+				{Key: "services", Label: "Services", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "workflow"}, Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "docker.compose.services", Params: map[string]string{"project": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: serviceColumns()}},
 			},
 		},
 	}

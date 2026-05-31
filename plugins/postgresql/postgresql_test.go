@@ -117,12 +117,8 @@ func TestManifestReferencesResolve(t *testing.T) {
 			t.Fatalf("referenced action %q is not declared", id)
 		}
 	}
-	checkSourceMap := func(cfg map[string]any, key string) {
-		ds, ok := cfg[key].(*plugin.DataSource)
-		if !ok {
-			return
-		}
-		if !routeIDs[ds.RouteID] {
+	checkSource := func(key string, ds *plugin.DataSource) {
+		if ds != nil && !routeIDs[ds.RouteID] {
 			t.Fatalf("config %q points at missing route %q", key, ds.RouteID)
 		}
 	}
@@ -145,9 +141,11 @@ func TestManifestReferencesResolve(t *testing.T) {
 			if tab.Source != nil && !routeIDs[tab.Source.RouteID] {
 				t.Fatalf("resource %q tab %q points at missing route %q", res.Kind, tab.Key, tab.Source.RouteID)
 			}
-			checkSourceMap(tab.Config, "insert")
-			checkSourceMap(tab.Config, "update")
-			checkSourceMap(tab.Config, "delete")
+			if tc, ok := tab.Config.(plugin.TableConfig); ok {
+				checkSource("insert", tc.Insert)
+				checkSource("update", tc.Update)
+				checkSource("delete", tc.Delete)
+			}
 		}
 	}
 }
@@ -170,11 +168,12 @@ func TestTableDataGridIsEditable(t *testing.T) {
 	if data.Key == "" {
 		t.Fatal("table resource is missing a Data tab")
 	}
-	if data.Config["editable"] != true {
+	tc, ok := data.Config.(plugin.TableConfig)
+	if !ok || !tc.Editable {
 		t.Fatalf("Data tab must be editable: %#v", data.Config)
 	}
-	for _, key := range []string{"insert", "update", "delete"} {
-		if _, ok := data.Config[key].(*plugin.DataSource); !ok {
+	for key, ds := range map[string]*plugin.DataSource{"insert": tc.Insert, "update": tc.Update, "delete": tc.Delete} {
+		if ds == nil {
 			t.Fatalf("Data tab missing %q mutation source: %#v", key, data.Config)
 		}
 	}

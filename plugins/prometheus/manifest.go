@@ -45,9 +45,9 @@ func resources() []plugin.ResourceType {
 				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
 				{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("overview")}},
 				{Key: "live", Label: "Live", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: rid("metrics.live"), Method: plugin.MethodWS}, Config: liveMetricsConfig()},
-				{Key: "targets", Label: "Targets", Icon: icon("crosshair"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("targets.list")}, Config: plugin.TableConfig{Columns: targetColumns(), Exportable: true}.Map()},
-				{Key: "alerts", Label: "Alerts", Icon: icon("bell"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("alerts.list")}, Config: plugin.TableConfig{Columns: alertColumns(), Exportable: true}.Map()},
-				{Key: "rules", Label: "Rules", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("rules.list")}, Config: plugin.TableConfig{Columns: ruleColumns(), Exportable: true}.Map()},
+				{Key: "targets", Label: "Targets", Icon: icon("crosshair"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("targets.list")}, Config: plugin.TableConfig{Columns: targetColumns(), Exportable: true}},
+				{Key: "alerts", Label: "Alerts", Icon: icon("bell"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("alerts.list")}, Config: plugin.TableConfig{Columns: alertColumns(), Exportable: true}},
+				{Key: "rules", Label: "Rules", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("rules.list")}, Config: plugin.TableConfig{Columns: ruleColumns(), Exportable: true}},
 			}},
 		},
 		{
@@ -62,7 +62,7 @@ func resources() []plugin.ResourceType {
 			Columns: targetColumns(),
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("crosshair"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("target.read"), Params: targetParams()}},
-				{Key: "metadata", Label: "Metadata", Icon: icon("database-zap"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("target.metadata"), Params: targetParams()}, Config: plugin.TableConfig{Columns: targetMetadataColumns(), Exportable: true}.Map()},
+				{Key: "metadata", Label: "Metadata", Icon: icon("database-zap"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("target.metadata"), Params: targetParams()}, Config: plugin.TableConfig{Columns: targetMetadataColumns(), Exportable: true}},
 			}},
 		},
 		{
@@ -84,7 +84,7 @@ func resources() []plugin.ResourceType {
 			Columns: metricColumns(),
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("series.delete")}}, Tabs: []plugin.Tab{
 				{Key: "metadata", Label: "Metadata", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("metric.read"), Params: metricParams()}},
-				{Key: "series", Label: "Series", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("metric.series"), Params: metricParams()}, Config: plugin.TableConfig{Columns: seriesColumns(), Exportable: true}.Map()},
+				{Key: "series", Label: "Series", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("metric.series"), Params: metricParams()}, Config: plugin.TableConfig{Columns: seriesColumns(), Exportable: true}},
 				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: metricQueryConfig()},
 			}},
 		},
@@ -92,7 +92,7 @@ func resources() []plugin.ResourceType {
 			Kind: "label", Title: "Labels", List: plugin.DataSource{RouteID: rid("labels.list")},
 			Columns: labelColumns(),
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "values", Label: "Values", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("label.values"), Params: labelParams()}, Config: plugin.TableConfig{Columns: labelValueColumns(), Exportable: true}.Map()},
+				{Key: "values", Label: "Values", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("label.values"), Params: labelParams()}, Config: plugin.TableConfig{Columns: labelValueColumns(), Exportable: true}},
 			}},
 		},
 	}
@@ -107,7 +107,7 @@ func actions() []plugin.Action {
 	}
 }
 
-func liveMetricsConfig() map[string]any {
+func liveMetricsConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Stats: []plugin.MetricStat{
 			{Key: "targets", Label: "Targets"},
@@ -122,10 +122,10 @@ func liveMetricsConfig() map[string]any {
 			{Key: "queries", Label: "Queries"},
 		},
 		History: 120,
-	}.Map()
+	}
 }
 
-func queryConfig() map[string]any {
+func queryConfig() plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "plaintext",
 		Label:             "PromQL",
@@ -135,10 +135,10 @@ func queryConfig() map[string]any {
 		InitialQuery:      "up",
 		CompletionRouteID: rid("completion"),
 		Exportable:        true,
-	}.Map()
+	}
 }
 
-func metricQueryConfig() map[string]any {
+func metricQueryConfig() plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "plaintext",
 		Label:             "PromQL",
@@ -148,7 +148,7 @@ func metricQueryConfig() map[string]any {
 		InitialQuery:      "${resource.name}",
 		CompletionRouteID: rid("completion"),
 		Exportable:        true,
-	}.Map()
+	}
 }
 
 func statusParams() map[string]string { return map[string]string{"status": "${resource.name}"} }

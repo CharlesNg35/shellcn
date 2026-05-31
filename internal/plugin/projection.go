@@ -31,7 +31,7 @@ type ProjectedAction struct {
 	OnSuccess       *ActionSuccess    `json:"onSuccess,omitempty"`
 	Open            OpenTarget        `json:"open,omitempty"`
 	Panel           PanelType         `json:"panel,omitempty"`
-	Config          map[string]any    `json:"config,omitempty"`
+	Config          PanelConfig       `json:"config,omitempty"`
 	EnabledWhen     *Condition        `json:"enabledWhen,omitempty"`
 	IconOnly        bool              `json:"iconOnly,omitempty"`
 }

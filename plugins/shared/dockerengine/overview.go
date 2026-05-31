@@ -47,7 +47,7 @@ func MetricsLoop(rc *plugin.RequestContext, stream plugin.ClientStream, frame fu
 }
 
 // OverviewMetricsConfig declares the environment count tiles.
-func OverviewMetricsConfig() map[string]any {
+func OverviewMetricsConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{Stats: []plugin.MetricStat{
 		{Key: "containers", Label: "Containers"},
 		{Key: "running", Label: "Running"},
@@ -55,7 +55,7 @@ func OverviewMetricsConfig() map[string]any {
 		{Key: "images", Label: "Images"},
 		{Key: "volumes", Label: "Volumes"},
 		{Key: "networks", Label: "Networks"},
-	}}.Map()
+	}}
 }
 
 // OverviewMetrics streams live counts of the engine's containers, images,

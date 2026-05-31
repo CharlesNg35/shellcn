@@ -178,13 +178,9 @@ func fieldMap(schema plugin.Schema) map[string]bool {
 	return out
 }
 
-func actionIDs(config map[string]any) []string {
-	if config == nil {
-		return nil
+func actionIDs(config plugin.PanelConfig) []string {
+	if tc, ok := config.(plugin.TableConfig); ok {
+		return append(append([]string{}, tc.ActionIDs...), tc.RowActionIDs...)
 	}
-	raw, ok := config["actionIds"].([]string)
-	if !ok {
-		return nil
-	}
-	return raw
+	return nil
 }

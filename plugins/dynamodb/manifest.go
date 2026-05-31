@@ -37,12 +37,12 @@ func tableResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("table.delete")}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("table.read"), Params: tableParams()}},
-				{Key: "items", Label: "Items", Icon: icon("braces"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("items.list"), Params: tableParams()}, Config: plugin.TableConfig{Exportable: true, ActionIDs: []string{rid("item.put")}, RowActionIDs: []string{rid("item.delete")}, EmptyText: "No items found."}.Map()},
-				{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("indexes.list"), Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), Exportable: true, ActionIDs: []string{rid("gsi.create")}, RowActionIDs: []string{rid("gsi.delete")}}.Map()},
+				{Key: "items", Label: "Items", Icon: icon("braces"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("items.list"), Params: tableParams()}, Config: plugin.TableConfig{Exportable: true, ActionIDs: []string{rid("item.put")}, RowActionIDs: []string{rid("item.delete")}, EmptyText: "No items found."}},
+				{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("indexes.list"), Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), Exportable: true, ActionIDs: []string{rid("gsi.create")}, RowActionIDs: []string{rid("gsi.delete")}}},
 				{Key: "capacity", Label: "Capacity", Icon: icon("gauge"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("table.capacity"), Params: tableParams()}},
 				{Key: "ttl", Label: "TTL", Icon: icon("timer"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("ttl.read"), Params: tableParams()}},
-				{Key: "tags", Label: "Tags", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("tags.list"), Params: tableParams()}, Config: plugin.TableConfig{Columns: tagColumns(), Exportable: true}.Map()},
-				{Key: "backups", Label: "Backups", Icon: icon("archive"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("backups.list"), Params: tableParams()}, Config: plugin.TableConfig{Columns: backupColumns(), Exportable: true, ActionIDs: []string{rid("backup.create")}, RowActionIDs: []string{rid("backup.delete")}}.Map()},
+				{Key: "tags", Label: "Tags", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("tags.list"), Params: tableParams()}, Config: plugin.TableConfig{Columns: tagColumns(), Exportable: true}},
+				{Key: "backups", Label: "Backups", Icon: icon("archive"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("backups.list"), Params: tableParams()}, Config: plugin.TableConfig{Columns: backupColumns(), Exportable: true, ActionIDs: []string{rid("backup.create")}, RowActionIDs: []string{rid("backup.delete")}}},
 				{Key: "partiql", Label: "PartiQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("partiql"), Method: plugin.MethodWS, Params: tableParams()}, Config: queryConfig(`SELECT * FROM "${resource.name}"`)},
 			},
 		},
@@ -74,7 +74,7 @@ func itemResource() plugin.ResourceType {
 			DefaultTab: "editor",
 			Tabs: []plugin.Tab{
 				{Key: "document", Label: "Item", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("item.read"), Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("item.read"), Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("item.update"), SaveMethod: plugin.MethodPut, SaveParams: map[string]string{"id": "${resource.uid}"}}.Map()},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("item.read"), Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("item.update"), SaveMethod: plugin.MethodPut, SaveParams: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
 	}
@@ -99,7 +99,7 @@ func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: rid("table.create"), Label: "Create table", Icon: icon("plus"), RouteID: rid("table.create"), Confirm: true},
 		{ID: rid("table.delete"), Label: "Delete table", Icon: icon("trash-2"), RouteID: rid("table.delete"), Params: tableParams(), Confirm: true, ConfirmText: "Delete this DynamoDB table and all items?"},
-		{ID: rid("item.put"), Label: "Put item", Icon: icon("plus"), RouteID: rid("item.put"), Params: tableParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"pk\": \"example\"\n}", SaveRouteID: rid("item.put"), SaveMethod: plugin.MethodPost, SaveParams: tableParams(), SaveBodyKey: "item"}.Map(), OnSuccess: &plugin.ActionSuccess{SelectTab: "items"}},
+		{ID: rid("item.put"), Label: "Put item", Icon: icon("plus"), RouteID: rid("item.put"), Params: tableParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"pk\": \"example\"\n}", SaveRouteID: rid("item.put"), SaveMethod: plugin.MethodPost, SaveParams: tableParams(), SaveBodyKey: "item"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "items"}},
 		{ID: rid("item.delete"), Label: "Delete item", Icon: icon("trash"), RouteID: rid("item.delete"), Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this item?"},
 		{ID: rid("gsi.create"), Label: "Create GSI", Icon: icon("plus"), RouteID: rid("gsi.create"), Params: tableParams(), Confirm: true, OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: rid("gsi.delete"), Label: "Delete GSI", Icon: icon("trash"), RouteID: rid("gsi.delete"), Params: indexParams(), Confirm: true, ConfirmText: "Delete this global secondary index?"},
@@ -109,7 +109,7 @@ func actions() []plugin.Action {
 	}
 }
 
-func queryConfig(initial string) map[string]any {
+func queryConfig(initial string) plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "sql",
 		Label:             "PartiQL",
@@ -119,7 +119,7 @@ func queryConfig(initial string) map[string]any {
 		InitialQuery:      initial,
 		CompletionRouteID: rid("completion"),
 		Exportable:        true,
-	}.Map()
+	}
 }
 
 func tableParams() map[string]string { return map[string]string{"table": "${resource.name}"} }

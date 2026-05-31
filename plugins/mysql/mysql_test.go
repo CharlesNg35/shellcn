@@ -132,24 +132,23 @@ func TestTableDataGridIsEditable(t *testing.T) {
 			}
 		}
 	}
-	if data.Key == "" || data.Config["editable"] != true {
+	tc, ok := data.Config.(plugin.TableConfig)
+	if data.Key == "" || !ok || !tc.Editable {
 		t.Fatalf("table Data tab must be an editable grid: %#v", data.Config)
 	}
-	for _, key := range []string{"insert", "update", "delete"} {
-		ds, ok := data.Config[key].(*plugin.DataSource)
-		if !ok {
+	for key, ds := range map[string]*plugin.DataSource{"insert": tc.Insert, "update": tc.Update, "delete": tc.Delete} {
+		if ds == nil {
 			t.Fatalf("Data tab missing %q mutation source", key)
 		}
 		if !routeIDs[ds.RouteID] {
 			t.Fatalf("Data tab %q points at missing route %q", key, ds.RouteID)
 		}
 	}
-	columnsSource, ok := data.Config["columnsSource"].(*plugin.DataSource)
-	if !ok {
+	if tc.ColumnsSource == nil {
 		t.Fatal("Data tab missing columnsSource for empty editable tables")
 	}
-	if columnsSource.RouteID != "mysql.table.columns" {
-		t.Fatalf("unexpected columnsSource route: %q", columnsSource.RouteID)
+	if tc.ColumnsSource.RouteID != "mysql.table.columns" {
+		t.Fatalf("unexpected columnsSource route: %q", tc.ColumnsSource.RouteID)
 	}
 }
 

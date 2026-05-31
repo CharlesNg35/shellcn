@@ -78,7 +78,7 @@ func serverResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Schemas"},
 			Tabs: []plugin.Tab{
-				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.schemas.list"}, Config: plugin.TableConfig{Columns: schemaColumns()}.Map()},
+				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.schemas.list"}, Config: plugin.TableConfig{Columns: schemaColumns()}},
 				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT SYSDATE AS now FROM dual")},
 			},
 		},
@@ -92,11 +92,11 @@ func schemaResource() plugin.ResourceType {
 		Columns: schemaColumns(),
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.schema.overview", Params: map[string]string{"schema": "${resource.name}"}}},
-			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.tables.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"oracle.table.create"}}.Map()},
-			{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "oracle.relations.graph", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}.Map()},
-			{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.views.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"oracle.view.drop"}}.Map()},
-			{Key: "procedures", Label: "Procedures", Icon: icon("function-square"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.procedures.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: procedureColumns()}.Map()},
-			{Key: "packages", Label: "Packages", Icon: icon("package"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.packages.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: packageColumns()}.Map()},
+			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.tables.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"oracle.table.create"}}},
+			{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "oracle.relations.graph", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
+			{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.views.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"oracle.view.drop"}}},
+			{Key: "procedures", Label: "Procedures", Icon: icon("function-square"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.procedures.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: procedureColumns()}},
+			{Key: "packages", Label: "Packages", Icon: icon("package"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.packages.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: packageColumns()}},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.name}"}}, Config: queryConfig("SELECT SYSDATE AS now FROM dual")},
 		}},
 	}
@@ -110,9 +110,9 @@ func tableResource() plugin.ResourceType {
 		RowActionIDs: []string{"oracle.column.add", "oracle.table.truncate", "oracle.table.drop"},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"oracle.table.truncate", "oracle.table.drop"}}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.rows", Params: objectParams()}, Config: dataGridConfig()},
-			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"oracle.column.add"}, RowActionIDs: []string{"oracle.column.drop"}}.Map()},
-			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"oracle.index.create"}, RowActionIDs: []string{"oracle.index.drop"}}.Map()},
-			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.constraints", Params: objectParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}.Map()},
+			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"oracle.column.add"}, RowActionIDs: []string{"oracle.column.drop"}}},
+			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"oracle.index.create"}, RowActionIDs: []string{"oracle.index.drop"}}},
+			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.constraints", Params: objectParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}},
 			{Key: "sql", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.namespace}"}}, Config: queryConfig("SELECT * FROM ${resource.name} FETCH FIRST 100 ROWS ONLY")},
 		}},
 	}
@@ -200,7 +200,7 @@ func objectParams() map[string]string {
 	return map[string]string{"id": "${resource.uid}"}
 }
 
-func dataGridConfig() map[string]any {
+func dataGridConfig() plugin.TableConfig {
 	return plugin.TableConfig{
 		Editable:      true,
 		StagedEdits:   true,
@@ -210,10 +210,10 @@ func dataGridConfig() map[string]any {
 		Update:        &plugin.DataSource{RouteID: "oracle.table.row.update", Method: plugin.MethodPatch, Params: objectParams()},
 		Delete:        &plugin.DataSource{RouteID: "oracle.table.row.delete", Method: plugin.MethodDelete, Params: objectParams()},
 		ColumnsSource: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()},
-	}.Map()
+	}
 }
 
-func queryConfig(initial string) map[string]any {
+func queryConfig(initial string) plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "sql",
 		Label:             "Oracle SQL",
@@ -225,7 +225,7 @@ func queryConfig(initial string) map[string]any {
 		CancelRouteID:     "oracle.query.cancel",
 		CompletionRouteID: "oracle.completion",
 		Exportable:        true,
-	}.Map()
+	}
 }
 
 func schemaColumns() []plugin.Column {

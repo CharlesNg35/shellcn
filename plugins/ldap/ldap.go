@@ -63,15 +63,15 @@ func entryResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"ldap.entry.add", "ldap.entry.rename", "ldap.entry.delete"}},
 			Tabs: []plugin.Tab{
 				{Key: "attributes", Label: "Attributes", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.attributes", Params: dnParams}, Config: attributeGridConfig(dnParams)},
-				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.rename", "ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true}.Map()},
-				{Key: "subtree", Label: "Subtree", Icon: icon("search"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entries.search", Params: map[string]string{"base": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: entryColumns(), EmptyText: "No matching entries. Type an LDAP filter to search.", Exportable: true}.Map()},
+				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.rename", "ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true}},
+				{Key: "subtree", Label: "Subtree", Icon: icon("search"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entries.search", Params: map[string]string{"base": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: entryColumns(), EmptyText: "No matching entries. Type an LDAP filter to search.", Exportable: true}},
 				{Key: "ldif", Label: "LDIF", Icon: icon("file-text"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "ldap.entry.ldif", Params: dnParams}},
 			},
 		},
 	}
 }
 
-func attributeGridConfig(dnParams map[string]string) map[string]any {
+func attributeGridConfig(dnParams map[string]string) plugin.TableConfig {
 	return plugin.TableConfig{
 		Columns:     attributeColumns(),
 		Editable:    true,
@@ -82,7 +82,7 @@ func attributeGridConfig(dnParams map[string]string) map[string]any {
 		Insert:      &plugin.DataSource{RouteID: "ldap.entry.attr.add", Method: plugin.MethodPost, Params: dnParams},
 		Update:      &plugin.DataSource{RouteID: "ldap.entry.attr.update", Method: plugin.MethodPatch, Params: dnParams},
 		Delete:      &plugin.DataSource{RouteID: "ldap.entry.attr.delete", Method: plugin.MethodDelete, Params: dnParams},
-	}.Map()
+	}
 }
 
 func entryColumns() []plugin.Column {

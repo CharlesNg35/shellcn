@@ -79,6 +79,6 @@ func filesTab() plugin.Tab {
 			MultipleUpload:  true,
 			MaxUploadBytes:  52428800,
 			UploadFieldName: "files",
-		}.Map(),
+		},
 	}
 }

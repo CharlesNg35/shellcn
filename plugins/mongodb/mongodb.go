@@ -73,7 +73,7 @@ func databaseResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"mongodb.collection.create"}},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
-				{Key: "collections", Label: "Collections", Icon: icon("folders"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: collectionColumns(), ActionIDs: []string{"mongodb.collection.create"}}.Map()},
+				{Key: "collections", Label: "Collections", Icon: icon("folders"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: collectionColumns(), ActionIDs: []string{"mongodb.collection.create"}}},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: commandConfig(`{"serverStatus": 1}`)},
 			},
 		},
@@ -89,8 +89,8 @@ func collectionResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mongodb.collection.drop"}},
 			Tabs: []plugin.Tab{
-				{Key: "documents", Label: "Documents", Icon: icon("braces"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.documents.list", Params: collectionParams()}, Config: plugin.TableConfig{Exportable: true, ActionIDs: []string{"mongodb.document.create"}, RowActionIDs: []string{"mongodb.document.delete"}}.Map()},
-				{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.indexes.list", Params: collectionParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mongodb.index.create"}, RowActionIDs: []string{"mongodb.index.drop"}}.Map()},
+				{Key: "documents", Label: "Documents", Icon: icon("braces"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.documents.list", Params: collectionParams()}, Config: plugin.TableConfig{Exportable: true, ActionIDs: []string{"mongodb.document.create"}, RowActionIDs: []string{"mongodb.document.delete"}}},
+				{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.indexes.list", Params: collectionParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mongodb.index.create"}, RowActionIDs: []string{"mongodb.index.drop"}}},
 				{Key: "stats", Label: "Stats", Icon: icon("bar-chart-3"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.collection.stats", Params: collectionParams()}},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mongodb.command", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.namespace}"}}, Config: commandConfig(`{"find": "${resource.name}", "filter": {}, "limit": 50}`)},
 			},
@@ -107,7 +107,7 @@ func documentResource() plugin.ResourceType {
 			DefaultTab: "editor",
 			Tabs: []plugin.Tab{
 				{Key: "document", Label: "Document", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.document.read", Params: map[string]string{"id": "${resource.uid}"}}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "mongodb.document.read", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: "mongodb.document.update", SaveMethod: plugin.MethodPut, SaveParams: map[string]string{"id": "${resource.uid}"}}.Map()},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "mongodb.document.read", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: "mongodb.document.update", SaveMethod: plugin.MethodPut, SaveParams: map[string]string{"id": "${resource.uid}"}}},
 			},
 		},
 	}
@@ -117,7 +117,7 @@ func collectionParams() map[string]string {
 	return map[string]string{"database": "${resource.namespace}", "collection": "${resource.name}"}
 }
 
-func commandConfig(initial string) map[string]any {
+func commandConfig(initial string) plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "json",
 		Label:             "MongoDB command",
@@ -127,7 +127,7 @@ func commandConfig(initial string) map[string]any {
 		InitialQuery:      initial,
 		CompletionRouteID: "mongodb.completion",
 		Exportable:        true,
-	}.Map()
+	}
 }
 
 func collectionColumns() []plugin.Column {
@@ -156,7 +156,7 @@ func actions() []plugin.Action {
 		{ID: "mongodb.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "mongodb.index.create", Params: collectionParams()},
 		{ID: "mongodb.index.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mongodb.index.drop", Params: map[string]string{"database": "${resource.scope}", "collection": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?"},
 		{ID: "mongodb.collection.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mongodb.collection.drop", Params: collectionParams(), Confirm: true, ConfirmText: "Drop this collection and every document in it?"},
-		{ID: "mongodb.document.create", Label: "Create document", Icon: icon("plus"), RouteID: "mongodb.document.create", Params: collectionParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"_id\": \"example\"\n}", SaveRouteID: "mongodb.document.create", SaveMethod: plugin.MethodPost, SaveParams: collectionParams(), SaveBodyKey: "document"}.Map(), OnSuccess: &plugin.ActionSuccess{SelectTab: "documents"}},
+		{ID: "mongodb.document.create", Label: "Create document", Icon: icon("plus"), RouteID: "mongodb.document.create", Params: collectionParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"_id\": \"example\"\n}", SaveRouteID: "mongodb.document.create", SaveMethod: plugin.MethodPost, SaveParams: collectionParams(), SaveBodyKey: "document"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "documents"}},
 		{ID: "mongodb.document.delete", Label: "Delete", Icon: icon("trash"), RouteID: "mongodb.document.delete", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this document?"},
 	}
 }

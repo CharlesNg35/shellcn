@@ -37,14 +37,12 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 
 func TestAttributesTabIsStagedEditableGrid(t *testing.T) {
 	tab := attributesTab(t)
-	for _, key := range []string{"editable", "stagedEdits"} {
-		if tab.Config[key] != true {
-			t.Fatalf("attributes grid %q = %#v, want true", key, tab.Config[key])
-		}
+	tc, ok := tab.Config.(plugin.TableConfig)
+	if !ok || !tc.Editable || !tc.StagedEdits {
+		t.Fatalf("attributes grid must be an editable staged grid: %#v", tab.Config)
 	}
-	rowKey, _ := tab.Config["rowKey"].([]string)
-	if len(rowKey) != 1 || rowKey[0] != "attribute" {
-		t.Fatalf("attributes grid rowKey = %#v, want [attribute]", tab.Config["rowKey"])
+	if len(tc.RowKey) != 1 || tc.RowKey[0] != "attribute" {
+		t.Fatalf("attributes grid rowKey = %#v, want [attribute]", tc.RowKey)
 	}
 }
 

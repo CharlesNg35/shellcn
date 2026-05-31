@@ -43,11 +43,11 @@ func databaseResource() plugin.ResourceType {
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("database.overview"), Params: map[string]string{"database": "${resource.uid}"}}},
-			{Key: "graph", Label: "Graph", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: rid("graph"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{FitView: true, ExpandRouteID: rid("node.graph")}.Map()},
-			{Key: "labels", Label: "Labels", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("labels.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: labelColumns(), ActionIDs: []string{rid("node.create")}, Exportable: true}.Map()},
-			{Key: "relationship_types", Label: "Relationship Types", Icon: icon("git-branch"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("relationship_types.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: relationshipTypeColumns(), ActionIDs: []string{rid("relationship.create")}, Exportable: true}.Map()},
-			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("indexes.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{rid("index.create")}, RowActionIDs: []string{rid("schema.drop")}, Exportable: true}.Map()},
-			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("constraints.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: constraintColumns(), RowActionIDs: []string{rid("schema.drop")}, Exportable: true}.Map()},
+			{Key: "graph", Label: "Graph", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: rid("graph"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.GraphConfig{FitView: true, ExpandRouteID: rid("node.graph")}},
+			{Key: "labels", Label: "Labels", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("labels.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: labelColumns(), ActionIDs: []string{rid("node.create")}, Exportable: true}},
+			{Key: "relationship_types", Label: "Relationship Types", Icon: icon("git-branch"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("relationship_types.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: relationshipTypeColumns(), ActionIDs: []string{rid("relationship.create")}, Exportable: true}},
+			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("indexes.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{rid("index.create")}, RowActionIDs: []string{rid("schema.drop")}, Exportable: true}},
+			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("constraints.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: constraintColumns(), RowActionIDs: []string{rid("schema.drop")}, Exportable: true}},
 			{Key: "cypher", Label: "Cypher", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: queryConfig("MATCH (n) RETURN n LIMIT 25")},
 		}},
 	}
@@ -60,8 +60,8 @@ func labelResource() plugin.ResourceType {
 		Columns: labelColumns(),
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: ":${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("label.overview"), Params: map[string]string{"database": "${resource.namespace}", "label": "${resource.name}"}}},
-			{Key: "graph", Label: "Graph", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: rid("label.graph"), Params: map[string]string{"database": "${resource.namespace}", "label": "${resource.name}"}}, Config: plugin.GraphConfig{FitView: true, ExpandRouteID: rid("node.graph")}.Map()},
-			{Key: "nodes", Label: "Nodes", Icon: icon("circle-dot"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("nodes.list"), Params: map[string]string{"database": "${resource.namespace}", "label": "${resource.name}"}}, Config: plugin.TableConfig{Columns: nodeColumns(), ActionIDs: []string{rid("node.create")}, RowActionIDs: []string{rid("node.delete")}, Exportable: true}.Map()},
+			{Key: "graph", Label: "Graph", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: rid("label.graph"), Params: map[string]string{"database": "${resource.namespace}", "label": "${resource.name}"}}, Config: plugin.GraphConfig{FitView: true, ExpandRouteID: rid("node.graph")}},
+			{Key: "nodes", Label: "Nodes", Icon: icon("circle-dot"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("nodes.list"), Params: map[string]string{"database": "${resource.namespace}", "label": "${resource.name}"}}, Config: plugin.TableConfig{Columns: nodeColumns(), ActionIDs: []string{rid("node.create")}, RowActionIDs: []string{rid("node.delete")}, Exportable: true}},
 			{Key: "cypher", Label: "Cypher", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.namespace}"}}, Config: queryConfig("MATCH (n:" + "`${resource.name}`" + ") RETURN n LIMIT 25")},
 		}},
 	}
@@ -74,8 +74,8 @@ func relationshipTypeResource() plugin.ResourceType {
 		Columns: relationshipTypeColumns(),
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "[:${resource.name}]"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("relationship_type.overview"), Params: map[string]string{"database": "${resource.namespace}", "type": "${resource.name}"}}},
-			{Key: "graph", Label: "Graph", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: rid("relationship_type.graph"), Params: map[string]string{"database": "${resource.namespace}", "type": "${resource.name}"}}, Config: plugin.GraphConfig{FitView: true, ExpandRouteID: rid("node.graph")}.Map()},
-			{Key: "relationships", Label: "Relationships", Icon: icon("git-branch"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("relationships.list"), Params: map[string]string{"database": "${resource.namespace}", "type": "${resource.name}"}}, Config: plugin.TableConfig{Columns: relationshipColumns(), ActionIDs: []string{rid("relationship.create")}, RowActionIDs: []string{rid("relationship.delete")}, Exportable: true}.Map()},
+			{Key: "graph", Label: "Graph", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: rid("relationship_type.graph"), Params: map[string]string{"database": "${resource.namespace}", "type": "${resource.name}"}}, Config: plugin.GraphConfig{FitView: true, ExpandRouteID: rid("node.graph")}},
+			{Key: "relationships", Label: "Relationships", Icon: icon("git-branch"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("relationships.list"), Params: map[string]string{"database": "${resource.namespace}", "type": "${resource.name}"}}, Config: plugin.TableConfig{Columns: relationshipColumns(), ActionIDs: []string{rid("relationship.create")}, RowActionIDs: []string{rid("relationship.delete")}, Exportable: true}},
 			{Key: "cypher", Label: "Cypher", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.namespace}"}}, Config: queryConfig("MATCH p=()-[r:" + "`${resource.name}`" + "]->() RETURN p LIMIT 25")},
 		}},
 	}
@@ -89,7 +89,7 @@ func nodeResource() plugin.ResourceType {
 		RowActionIDs: []string{rid("node.delete")},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("node.delete")}}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("node.read"), Params: map[string]string{"id": "${resource.uid}"}}},
-			{Key: "relationships", Label: "Relationships", Icon: icon("git-branch"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("node.relationships"), Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: relationshipColumns(), RowActionIDs: []string{rid("relationship.delete")}, Exportable: true}.Map()},
+			{Key: "relationships", Label: "Relationships", Icon: icon("git-branch"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("node.relationships"), Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: relationshipColumns(), RowActionIDs: []string{rid("relationship.delete")}, Exportable: true}},
 		}},
 	}
 }
@@ -136,7 +136,7 @@ func actions() []plugin.Action {
 	}
 }
 
-func queryConfig(initial string) map[string]any {
+func queryConfig(initial string) plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "cypher",
 		Label:             "Cypher",
@@ -146,7 +146,7 @@ func queryConfig(initial string) map[string]any {
 		InitialQuery:      initial,
 		CompletionRouteID: rid("completion"),
 		Exportable:        true,
-	}.Map()
+	}
 }
 
 func labelColumns() []plugin.Column {

@@ -36,7 +36,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 					Method:  plugin.MethodWS,
 					Params:  map[string]string{"cols": "80", "rows": "24"},
 				},
-				Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map(),
+				Config: plugin.TerminalConfig{Zoom: true, Search: true},
 			},
 			filesTab("ssh"),
 			snippetsTab(),
@@ -78,7 +78,7 @@ func snippetsTab() plugin.Tab {
 			},
 			ActionIDs:    []string{"ssh.snippet.create"},
 			RowActionIDs: []string{"ssh.snippet.run", "ssh.snippet.delete"},
-		}.Map(),
+		},
 	}
 }
 
@@ -131,6 +131,6 @@ func filesTab(prefix string) plugin.Tab {
 			MultipleUpload:  true,
 			MaxUploadBytes:  52428800,
 			UploadFieldName: "files",
-		}.Map(),
+		},
 	}
 }

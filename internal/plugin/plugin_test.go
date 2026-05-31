@@ -2,6 +2,7 @@ package plugin_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/url"
 	"testing"
@@ -88,13 +89,9 @@ func TestDashboardConfigMapAndPanelValidate(t *testing.T) {
 	cfg := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
 		{Key: "a", Label: "A", Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "x.overview"}, Span: 2},
 		{Key: "b", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}},
-	}}.Map()
-	cells, ok := cfg["cells"].([]plugin.DashboardCell)
-	if !ok || len(cells) != 2 || cells[0].Span != 2 {
-		t.Fatalf("DashboardConfig.Map cells = %#v", cfg["cells"])
-	}
-	if (plugin.DashboardConfig{}).Map()["cells"] != nil {
-		t.Fatal("empty DashboardConfig should omit cells")
+	}}
+	if len(cfg.Cells) != 2 || cfg.Cells[0].Span != 2 {
+		t.Fatalf("DashboardConfig cells = %#v", cfg.Cells)
 	}
 
 	// A dashboard-panel tab carries its cells in config and needs no tab source.
@@ -120,12 +117,9 @@ func TestMetricsConfigMap(t *testing.T) {
 		Gauges:  []plugin.MetricGauge{{Key: "cpu", Label: "CPU", Unit: "%", Max: 100}},
 		Series:  []plugin.MetricSeries{{Key: "cpu", Label: "CPU"}},
 		History: 120,
-	}.Map()
-	if full["stats"] == nil || full["gauges"] == nil || full["series"] == nil || full["history"] != 120 {
-		t.Fatalf("MetricsConfig.Map = %#v", full)
 	}
-	if len((plugin.MetricsConfig{}).Map()) != 0 {
-		t.Fatal("empty MetricsConfig should serialize to an empty map")
+	if len(full.Stats) == 0 || len(full.Gauges) == 0 || len(full.Series) == 0 || full.History != 120 {
+		t.Fatalf("MetricsConfig = %#v", full)
 	}
 }
 
@@ -154,7 +148,6 @@ func TestDockActionRequiresPanel(t *testing.T) {
 
 func TestValidateRejectsBadManifests(t *testing.T) {
 	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
-	stream := func(_ *plugin.RequestContext, _ plugin.ClientStream) error { return nil }
 	base := func() (plugin.Manifest, []plugin.Route) {
 		return plugin.Manifest{
 				APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
@@ -199,51 +192,47 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			m.Tabs = []plugin.Tab{{Key: "table", Label: "Table", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.TableConfig{
 				Editable: true,
 				Insert:   &plugin.DataSource{RouteID: "x.list"},
-			}.Map()}}
+			}}}
 		}},
 		{"table watch source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Tab{{Key: "table", Label: "Table", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.TableConfig{
 				Watch: &plugin.DataSource{RouteID: "x.list"},
-			}.Map()}}
+			}}}
 		}},
 		{"dashboard cell source must validate", "cell \"logs\" source references route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Tabs = []plugin.Tab{{Key: "overview", Label: "Overview", Panel: plugin.PanelDashboard, Config: plugin.DashboardConfig{Cells: []plugin.DashboardCell{{
 				Key: "logs", Label: "Logs", Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "x.list"},
-			}}}.Map()}}
+			}}}}}
 		}},
 		{"file browser config references unknown route", "uploadRouteId references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "files", Label: "Files", Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"uploadRouteId": "ghost"}}}
+			m.Tabs = []plugin.Tab{{Key: "files", Label: "Files", Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{UploadRouteID: "ghost"}}}
 		}},
 		{"file browser upload route requires file input", "without a file input schema", func(m *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.upload", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
-			m.Tabs = []plugin.Tab{{Key: "files", Label: "Files", Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"uploadRouteId": "x.upload"}}}
+			m.Tabs = []plugin.Tab{{Key: "files", Label: "Files", Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{UploadRouteID: "x.upload"}}}
 		}},
 		{"form submit route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"submitRouteId": "x.list"}}}
+			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.list"}}}
 		}},
 		{"form submit method must be write method", "submitMethod has invalid write method", func(m *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.write", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
-			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.write", SubmitMethod: plugin.MethodGet}.Map()}}
+			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.write", SubmitMethod: plugin.MethodGet}}}
 		}},
 		{"code editor save method must be write method", "saveMethod has invalid write method", func(m *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.write", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
-			m.Tabs = []plugin.Tab{{Key: "editor", Label: "Editor", Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.CodeEditorConfig{SaveRouteID: "x.write", SaveMethod: plugin.MethodWS}.Map()}}
+			m.Tabs = []plugin.Tab{{Key: "editor", Label: "Editor", Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.CodeEditorConfig{SaveRouteID: "x.write", SaveMethod: plugin.MethodWS}}}
 		}},
 		{"kv write route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "kv", Label: "KV", Panel: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"writeRouteId": "x.list"}}}
+			m.Tabs = []plugin.Tab{{Key: "kv", Label: "KV", Panel: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.KVConfig{WriteRouteID: "x.list"}}}
 		}},
 		{"http client execute route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "http", Label: "HTTP", Panel: plugin.PanelHTTPClient, Source: &plugin.DataSource{RouteID: "x.list"}, Config: map[string]any{"executeRouteId": "x.list"}}}
+			m.Tabs = []plugin.Tab{{Key: "http", Label: "HTTP", Panel: plugin.PanelHTTPClient, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.HTTPClientConfig{ExecuteRouteID: "x.list"}}}
 		}},
 		{"remote desktop requires source", "missing a source", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Config: plugin.RemoteDesktopConfig{}.Map()}}
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Config: plugin.RemoteDesktopConfig{}}}
 		}},
 		{"remote desktop source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.RemoteDesktopConfig{}.Map()}}
-		}},
-		{"remote desktop rejects stale engine selector", "no longer accepts remote desktop engine", func(m *plugin.Manifest, r *[]plugin.Route) {
-			*r = append(*r, plugin.Route{ID: "x.desktop", Method: plugin.MethodWS, Permission: "x.desktop", Risk: plugin.RiskPrivileged, Stream: stream})
-			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.desktop"}, Config: map[string]any{"engine": "novnc"}}}
+			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.RemoteDesktopConfig{}}}
 		}},
 		{"action references unknown route", "references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "ghost"}}
@@ -273,7 +262,7 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			m.Scope = []plugin.ScopeFilter{{Param: "sys", Label: "System", Control: plugin.ScopeToggle}}
 		}},
 		{"action panel config references unknown save route", "saveRouteId references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{SaveRouteID: "ghost"}.Map()}}
+			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "x.list", Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{SaveRouteID: "ghost"}}}
 		}},
 		{"stream references non-ws route", "non-WS route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Streams = []plugin.Stream{{ID: "s", Kind: plugin.StreamLogs, RouteID: "x.list"}}
@@ -357,7 +346,7 @@ func TestValidateAcceptsRemoteDesktopConfig(t *testing.T) {
 		Tabs: []plugin.Tab{{
 			Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop,
 			Source: &plugin.DataSource{RouteID: "desktop.stream", Method: plugin.MethodWS},
-			Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true}.Map(),
+			Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true},
 		}},
 		Streams: []plugin.Stream{{ID: "desktop.stream", Kind: plugin.StreamDesktop, RouteID: "desktop.stream"}},
 	}
@@ -370,76 +359,31 @@ func TestValidateAcceptsRemoteDesktopConfig(t *testing.T) {
 	}
 }
 
-func TestSpecializedPanelConfigMaps(t *testing.T) {
+// TestPanelConfigWireFormat locks the JSON the browser receives for a panel
+// config: typed structs serialize to the same camelCase keys the renderer reads,
+// and zero-value fields are omitted.
+func TestPanelConfigWireFormat(t *testing.T) {
 	files := plugin.FileBrowserConfig{
-		PathParam: "path", ReadRouteID: "sftp.read", DownloadRouteID: "sftp.download",
-		WriteRouteID: "sftp.write", UploadRouteID: "sftp.upload", MkdirRouteID: "sftp.mkdir",
-		RenameRouteID: "sftp.rename", DeleteRouteID: "sftp.delete", Writable: true,
-		MultipleUpload: true, MaxUploadBytes: 1024, UploadFieldName: "files",
-	}.Map()
-	if files["readRouteId"] != "sftp.read" || files["writable"] != true || files["uploadFieldName"] != "files" {
-		t.Fatalf("file browser config map unexpected: %#v", files)
+		ReadRouteID: "sftp.read", Writable: true, UploadFieldName: "files",
+	}
+	b, err := json.Marshal(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["readRouteId"] != "sftp.read" || got["writable"] != true || got["uploadFieldName"] != "files" {
+		t.Fatalf("file browser wire format unexpected: %s", b)
+	}
+	if _, ok := got["downloadRouteId"]; ok {
+		t.Fatalf("zero-value fields should be omitted: %s", b)
 	}
 
-	form := plugin.FormPanelConfig{
-		SubmitRouteID: "form.save", SubmitMethod: plugin.MethodPatch,
-		SubmitLabel: "Apply", Params: map[string]string{"id": "${resource.uid}"},
-	}.Map()
-	if form["submitRouteId"] != "form.save" || form["submitMethod"] != plugin.MethodPatch || form["submitLabel"] != "Apply" {
-		t.Fatalf("form config map unexpected: %#v", form)
-	}
-
-	query := plugin.QueryEditorConfig{
-		Language: "sql", Label: "SQL", ExecuteLabel: "Run", CancelLabel: "Cancel",
-		RunningLabel: "Running...", EmptyText: "Run a query.", InitialQuery: "select 1",
-		CancelRouteID: "query.cancel", CompletionRouteID: "query.complete", Exportable: true,
-	}.Map()
-	if query["initialQuery"] != "select 1" || query["cancelRouteId"] != "query.cancel" || query["exportable"] != true {
-		t.Fatalf("query editor config map unexpected: %#v", query)
-	}
-
-	kv := plugin.KVConfig{
-		CreateRouteID: "redis.key.create", ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write",
-		DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,
-	}.Map()
-	if kv["createRouteId"] != "redis.key.create" || kv["readRouteId"] != "redis.key.read" || kv["writable"] != true {
-		t.Fatalf("kv config map unexpected: %#v", kv)
-	}
-
-	http := plugin.HTTPClientConfig{
-		ExecuteRouteID: "http.execute", Methods: []string{"GET", "POST"},
-		DefaultMethod: "GET", DefaultURL: "/health",
-		DefaultHeaders: []plugin.HeaderDefault{{Key: "Accept", Value: "application/json"}},
-	}.Map()
-	if http["executeRouteId"] != "http.execute" || len(http["methods"].([]string)) != 2 {
-		t.Fatalf("http config map unexpected: %#v", http)
-	}
-
-	graph := plugin.GraphConfig{Layout: plugin.GraphLayoutManual, FitView: true}.Map()
-	if graph["layout"] != plugin.GraphLayoutManual || graph["fitView"] != true {
-		t.Fatalf("graph config map unexpected: %#v", graph)
-	}
-
-	trace := plugin.TraceConfig{ServiceField: "process.serviceName"}.Map()
-	if trace["serviceField"] != "process.serviceName" {
-		t.Fatalf("trace config map unexpected: %#v", trace)
-	}
-
-	desktop := plugin.RemoteDesktopConfig{
-		Resize:     true,
-		Clipboard:  true,
-		RepeaterID: "console-1",
-	}.Map()
-	if desktop["engine"] != nil || desktop["resize"] != true || desktop["repeaterID"] != "console-1" {
-		t.Fatalf("remote desktop config map unexpected: %#v", desktop)
-	}
-
-	if off := (plugin.TerminalConfig{}).Map(); len(off) != 0 {
-		t.Fatalf("terminal config map should omit disabled controls: %#v", off)
-	}
-	term := plugin.TerminalConfig{Zoom: true, Search: true}.Map()
-	if term["zoom"] != true || term["search"] != true {
-		t.Fatalf("terminal config map unexpected: %#v", term)
+	// A disabled terminal config serializes to an empty object (all omitempty).
+	if b, _ := json.Marshal(plugin.TerminalConfig{}); string(b) != "{}" {
+		t.Fatalf("empty terminal config = %s, want {}", b)
 	}
 }
 

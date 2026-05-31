@@ -79,7 +79,7 @@ func serverResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Databases"},
 			Tabs: []plugin.Tab{
-				{Key: "databases", Label: "Databases", Icon: icon("database"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.databases.list"}, Config: plugin.TableConfig{ActionIDs: []string{"clickhouse.database.create"}}.Map()},
+				{Key: "databases", Label: "Databases", Icon: icon("database"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.databases.list"}, Config: plugin.TableConfig{ActionIDs: []string{"clickhouse.database.create"}}},
 				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "clickhouse.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT version();")},
 			},
 		},
@@ -103,10 +103,10 @@ func databaseResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
-				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"clickhouse.table.create"}}.Map()},
-				{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.views.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"clickhouse.view.drop"}}.Map()},
-				{Key: "dictionaries", Label: "Dictionaries", Icon: icon("book-open"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.dictionaries.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: dictionaryColumns()}.Map()},
-				{Key: "mutations", Label: "Mutations", Icon: icon("git-compare-arrows"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.mutations.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: mutationColumns()}.Map()},
+				{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.tables.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"clickhouse.table.create"}}},
+				{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.views.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"clickhouse.view.drop"}}},
+				{Key: "dictionaries", Label: "Dictionaries", Icon: icon("book-open"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.dictionaries.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: dictionaryColumns()}},
+				{Key: "mutations", Label: "Mutations", Icon: icon("git-compare-arrows"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.mutations.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: mutationColumns()}},
 				{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "clickhouse.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT version();")},
 			},
 		},
@@ -122,11 +122,11 @@ func tableResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"clickhouse.table.truncate", "clickhouse.table.drop"}},
 			Tabs: []plugin.Tab{
-				{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}.Map()},
-				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"clickhouse.column.add"}, RowActionIDs: []string{"clickhouse.column.drop"}}.Map()},
-				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), RowActionIDs: []string{"clickhouse.index.drop"}}.Map()},
-				{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.constraints", Params: tableParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}.Map()},
-				{Key: "mutations", Label: "Mutations", Icon: icon("git-compare-arrows"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.mutations.list", Params: tableParams()}, Config: plugin.TableConfig{Columns: mutationColumns()}.Map()},
+				{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}},
+				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"clickhouse.column.add"}, RowActionIDs: []string{"clickhouse.column.drop"}}},
+				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), RowActionIDs: []string{"clickhouse.index.drop"}}},
+				{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.constraints", Params: tableParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}},
+				{Key: "mutations", Label: "Mutations", Icon: icon("git-compare-arrows"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.mutations.list", Params: tableParams()}, Config: plugin.TableConfig{Columns: mutationColumns()}},
 				{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.table.definition", Params: tableParams()}},
 				{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "clickhouse.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM `${resource.namespace}`.`${resource.name}` LIMIT 100;")},
 			},
@@ -140,7 +140,7 @@ func viewResource() plugin.ResourceType {
 		List: plugin.DataSource{RouteID: "clickhouse.views.list"}, Columns: viewColumns(),
 		RowActionIDs: []string{"clickhouse.view.drop"},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"clickhouse.view.drop"}}, Tabs: []plugin.Tab{
-			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.view.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}.Map()},
+			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.view.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.view.definition", Params: tableParams()}},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "clickhouse.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM `${resource.namespace}`.`${resource.name}` LIMIT 100;")},
 		}},
@@ -210,7 +210,7 @@ func tableParams() map[string]string {
 	return map[string]string{"database": "${resource.namespace}", "table": "${resource.name}"}
 }
 
-func queryConfig(initial string) map[string]any {
+func queryConfig(initial string) plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "sql",
 		Label:             "SQL",
@@ -222,7 +222,7 @@ func queryConfig(initial string) map[string]any {
 		CancelRouteID:     "clickhouse.query.cancel",
 		CompletionRouteID: "clickhouse.completion",
 		Exportable:        true,
-	}.Map()
+	}
 }
 
 func tableColumns() []plugin.Column {

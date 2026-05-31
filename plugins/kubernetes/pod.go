@@ -27,7 +27,7 @@ func podDetailTabs() []plugin.Tab {
 				RouteID: "kubernetes.pod.exec", Method: plugin.MethodWS,
 				Params: podRefParams(map[string]string{"tty": "true", "cols": "80", "rows": "24"}),
 			},
-			Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map(),
+			Config: plugin.TerminalConfig{Zoom: true, Search: true},
 		},
 	}
 }
