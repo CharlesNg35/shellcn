@@ -78,7 +78,7 @@ func collectionCreateSchema() *plugin.Schema {
 
 func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
-		{Key: "keys", Label: "Keys", Type: plugin.FieldJSON, Required: true, Help: `Field-to-direction map, e.g. {"email":1,"createdAt":-1}.`},
+		{Key: "keys", Label: "Keys", Type: plugin.FieldMap, Required: true, KeyPlaceholder: "fieldName", AddLabel: "Add key", Item: &plugin.Field{Type: plugin.FieldSelect, Default: 1, Options: []plugin.Option{{Label: "Ascending", Value: 1}, {Label: "Descending", Value: -1}}}},
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Help: "Optional; derived from the keys when blank."},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
 		{Key: "sparse", Label: "Sparse", Type: plugin.FieldToggle},

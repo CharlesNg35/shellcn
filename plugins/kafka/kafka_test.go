@@ -94,6 +94,40 @@ func TestValidateConfigEntry(t *testing.T) {
 	}
 }
 
+func TestStructuredMapFields(t *testing.T) {
+	p := New()
+	for _, tc := range []struct{ routeID, fieldKey string }{
+		{"kafka.topic.create", "config"},
+		{"kafka.message.produce", "headers"},
+	} {
+		field := routeField(t, p, tc.routeID, tc.fieldKey)
+		if field.Type != plugin.FieldMap {
+			t.Fatalf("%s.%s is %q, want map", tc.routeID, tc.fieldKey, field.Type)
+		}
+		if field.Item == nil || field.Item.Type != plugin.FieldText {
+			t.Fatalf("%s.%s value item is not text", tc.routeID, tc.fieldKey)
+		}
+	}
+}
+
+func routeField(t *testing.T, p plugin.Plugin, routeID, fieldKey string) *plugin.Field {
+	t.Helper()
+	for _, r := range p.Routes() {
+		if r.ID != routeID || r.Input == nil {
+			continue
+		}
+		for _, g := range r.Input.Groups {
+			for i := range g.Fields {
+				if g.Fields[i].Key == fieldKey {
+					return &g.Fields[i]
+				}
+			}
+		}
+	}
+	t.Fatalf("route %q has no field %q", routeID, fieldKey)
+	return nil
+}
+
 func fieldMap(schema plugin.Schema) map[string]bool {
 	out := map[string]bool{}
 	for _, group := range schema.Groups {

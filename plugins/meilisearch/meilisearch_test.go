@@ -213,3 +213,61 @@ func fieldMap(schema plugin.Schema) map[string]bool {
 	}
 	return fields
 }
+
+func TestStructuredArrayFields(t *testing.T) {
+	p := New()
+	assertArrayItemKeys(t, p, "meilisearch.key.create", "actions", nil)
+	assertArrayItemKeys(t, p, "meilisearch.key.create", "indexes", nil)
+}
+
+func assertArrayItemKeys(t *testing.T, p plugin.Plugin, routeID, fieldKey string, wantKeys []string) {
+	t.Helper()
+	var schema *plugin.Schema
+	for _, r := range p.Routes() {
+		if r.ID == routeID {
+			schema = r.Input
+			break
+		}
+	}
+	if schema == nil {
+		t.Fatalf("route %q has no input schema", routeID)
+	}
+	var field *plugin.Field
+	for _, g := range schema.Groups {
+		for i := range g.Fields {
+			if g.Fields[i].Key == fieldKey {
+				field = &g.Fields[i]
+			}
+		}
+	}
+	if field == nil {
+		t.Fatalf("%s: no %q field", routeID, fieldKey)
+	}
+	if field.Type != plugin.FieldArray {
+		t.Fatalf("%s.%s is %q, want array", routeID, fieldKey, field.Type)
+	}
+	if field.Item == nil {
+		t.Fatalf("%s.%s has no item", routeID, fieldKey)
+	}
+	if len(wantKeys) == 0 {
+		if field.Item.Type != plugin.FieldText {
+			t.Fatalf("%s.%s item is %q, want text", routeID, fieldKey, field.Item.Type)
+		}
+		return
+	}
+	if field.Item.Type != plugin.FieldObject {
+		t.Fatalf("%s.%s item is %q, want object", routeID, fieldKey, field.Item.Type)
+	}
+	got := make([]string, 0, len(field.Item.Fields))
+	for _, f := range field.Item.Fields {
+		got = append(got, f.Key)
+	}
+	if len(got) != len(wantKeys) {
+		t.Fatalf("%s.%s item keys = %v, want %v", routeID, fieldKey, got, wantKeys)
+	}
+	for i, k := range wantKeys {
+		if got[i] != k {
+			t.Fatalf("%s.%s item keys = %v, want %v", routeID, fieldKey, got, wantKeys)
+		}
+	}
+}

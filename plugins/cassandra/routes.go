@@ -91,7 +91,7 @@ func keyspaceCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Keyspace name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "replication_class", Label: "Replication class", Type: plugin.FieldSelect, Required: true, Default: "SimpleStrategy", Options: []plugin.Option{{Label: "SimpleStrategy", Value: "SimpleStrategy"}, {Label: "NetworkTopologyStrategy", Value: "NetworkTopologyStrategy"}}},
 		{Key: "replication_factor", Label: "Replication factor", Type: plugin.FieldNumber, Default: 1, VisibleWhen: &simpleStrategy, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 20}}},
-		{Key: "datacenter_replication", Label: "Datacenter replication", Type: plugin.FieldJSON, Required: true, VisibleWhen: &networkTopology, Help: `Object of datacenter name to replication factor, for example {"dc1":3,"dc2":3}.`},
+		{Key: "datacenter_replication", Label: "Datacenter replication", Type: plugin.FieldMap, Required: true, VisibleWhen: &networkTopology, KeyPlaceholder: "datacenter", AddLabel: "Add datacenter", Item: &plugin.Field{Type: plugin.FieldNumber, Default: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 20}}}},
 		{Key: "durable_writes", Label: "Durable writes", Type: plugin.FieldToggle, Default: true},
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
@@ -100,7 +100,10 @@ func keyspaceCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"id","type":"uuid","primary":true}`},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldArray, Required: true, MinItems: 1, ItemLabel: "Column", Item: &plugin.Field{Type: plugin.FieldObject, Fields: []plugin.Field{
+			{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+			{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Placeholder: "text"},
+		}}},
 		{Key: "primary_key", Label: "Primary key", Type: plugin.FieldText, Required: true, Help: "CQL primary key expression, for example id or (tenant_id, id)."},
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
@@ -123,7 +126,10 @@ func indexCreateSchema() *plugin.Schema {
 func typeCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Type", Fields: []plugin.Field{
 		{Key: "name", Label: "Type name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "fields", Label: "Fields", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"street","type":"text"}`},
+		{Key: "fields", Label: "Fields", Type: plugin.FieldArray, Required: true, MinItems: 1, ItemLabel: "Field", Item: &plugin.Field{Type: plugin.FieldObject, Fields: []plugin.Field{
+			{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+			{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Placeholder: "text"},
+		}}},
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
 }

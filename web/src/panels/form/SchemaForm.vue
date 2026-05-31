@@ -70,9 +70,14 @@ function seed(resetTouched = true): void {
 function modelMatchesValues(model?: Record<string, unknown>): boolean {
   for (const group of groups.value) {
     for (const field of group.fields ?? []) {
-      // Composite values are objects/arrays; re-seeding them on identity would
-      // loop, so they don't drive the match check.
-      if (field.type === "object" || field.type === "array") continue;
+      // Composite values are objects/arrays/maps; re-seeding them on identity
+      // would loop, so they don't drive the match check.
+      if (
+        field.type === "object" ||
+        field.type === "array" ||
+        field.type === "map"
+      )
+        continue;
       const incoming = model?.[field.key];
       const expected = incoming !== undefined ? incoming : field.default;
       if (values[field.key] !== expected) return false;

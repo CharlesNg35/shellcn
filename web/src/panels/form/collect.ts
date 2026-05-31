@@ -17,6 +17,8 @@ export function collectField(field: Field, value: unknown): Collected {
       return collectObject(field, value);
     case "array":
       return collectArray(field, value);
+    case "map":
+      return collectMap(field, value);
     default: {
       const msg = validateField(field, value);
       return msg ? { error: msg } : { value };
@@ -53,6 +55,24 @@ function collectObject(field: Field, value: unknown): Collected {
       ? { error: `${field.label} is required.` }
       : { value: undefined };
   }
+  return { value: out };
+}
+
+function collectMap(field: Field, value: unknown): Collected {
+  const record = (value ?? {}) as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (field.required && keys.length === 0)
+    return { error: `${field.label} is required.` };
+  const out: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (key.trim() === "") return { error: `${field.label}: empty key.` };
+    const r = field.item
+      ? collectField(field.item, record[key])
+      : { value: record[key] };
+    if (r.error) return { error: `${field.label} "${key}": ${r.error}` };
+    out[key] = r.value;
+  }
+  if (keys.length === 0 && !field.required) return { value: undefined };
   return { value: out };
 }
 

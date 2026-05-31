@@ -139,7 +139,7 @@ func schemaCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"id","type":"bigserial","primary":true,"nullable":false}`},
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "bigserial", TypeSuggestions: []string{"bigint", "bigserial", "integer", "serial", "smallint", "boolean", "text", "varchar(255)", "char(1)", "numeric(10,2)", "real", "double precision", "date", "timestamptz", "timestamp", "time", "uuid", "jsonb", "json", "bytea", "inet"}, Default: true, Primary: true, Unique: true}),
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
 }

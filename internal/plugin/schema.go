@@ -24,6 +24,13 @@ const (
 	// FieldObject nests a sub-form (Fields); FieldArray is a repeatable list of Item.
 	FieldObject FieldType = "object"
 	FieldArray  FieldType = "array"
+	// FieldAutocomplete is a free-text input with Options/OptionsSource suggestions
+	// (e.g. a DB column type: pick a common one or type a parameterized custom).
+	FieldAutocomplete FieldType = "autocomplete"
+	// FieldMap is repeatable key/value rows whose value type is Item; it submits
+	// an object {key: value} (e.g. config entries, labels), so a handler binding
+	// a map is unchanged.
+	FieldMap FieldType = "map"
 )
 
 const (
@@ -127,6 +134,9 @@ type Field struct {
 	MaxItems  int     `json:"maxItems,omitempty"`
 	ItemLabel string  `json:"itemLabel,omitempty"`
 	AddLabel  string  `json:"addLabel,omitempty"`
+	// KeyLabel/KeyPlaceholder label the key input of a map field.
+	KeyLabel       string `json:"keyLabel,omitempty"`
+	KeyPlaceholder string `json:"keyPlaceholder,omitempty"`
 }
 
 type Group struct {

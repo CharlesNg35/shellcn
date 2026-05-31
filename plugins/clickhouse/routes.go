@@ -108,7 +108,7 @@ func databaseCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"event_time","type":"DateTime","nullable":false}`},
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "DateTime", TypeSuggestions: []string{"UInt64", "UInt32", "UInt8", "Int64", "Int32", "Int8", "Float64", "Float32", "Decimal(10,2)", "String", "FixedString(16)", "Date", "DateTime", "DateTime64(3)", "Bool", "UUID", "Nullable(String)", "Array(String)", "LowCardinality(String)", "JSON"}, Default: true}),
 		{Key: "engine", Label: "Engine", Type: plugin.FieldText, Required: true, Default: "MergeTree"},
 		{Key: "order_by", Label: "ORDER BY", Type: plugin.FieldText, Required: true, Default: "tuple()"},
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},

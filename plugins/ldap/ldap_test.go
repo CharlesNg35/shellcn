@@ -189,3 +189,35 @@ func TestIconForEntry(t *testing.T) {
 		}
 	}
 }
+
+func TestEntryAddAttributesIsMapOfTextArray(t *testing.T) {
+	var schema *plugin.Schema
+	for _, r := range New().Routes() {
+		if r.ID == "ldap.entry.add" {
+			schema = r.Input
+		}
+	}
+	if schema == nil {
+		t.Fatal("ldap.entry.add has no input schema")
+	}
+	var field *plugin.Field
+	for _, g := range schema.Groups {
+		for i := range g.Fields {
+			if g.Fields[i].Key == "attributes" {
+				field = &g.Fields[i]
+			}
+		}
+	}
+	if field == nil {
+		t.Fatal("no attributes field")
+	}
+	if field.Type != plugin.FieldMap {
+		t.Fatalf("attributes is %q, want map", field.Type)
+	}
+	if field.Item == nil || field.Item.Type != plugin.FieldArray {
+		t.Fatalf("attributes value item is not an array")
+	}
+	if field.Item.Item == nil || field.Item.Item.Type != plugin.FieldText {
+		t.Fatalf("attributes value array element is not text")
+	}
+}

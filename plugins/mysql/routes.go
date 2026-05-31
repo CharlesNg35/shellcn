@@ -96,7 +96,7 @@ func databaseCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"id","type":"bigint unsigned auto_increment","primary":true,"nullable":false}`},
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "bigint unsigned auto_increment", TypeSuggestions: []string{"int", "bigint", "bigint unsigned auto_increment", "tinyint", "smallint", "decimal(10,2)", "float", "double", "boolean", "varchar(255)", "char(1)", "text", "mediumtext", "longtext", "date", "datetime", "timestamp", "time", "json", "blob"}, Default: true, Primary: true, Unique: true}),
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 		{Key: "engine", Label: "Engine", Type: plugin.FieldText, Default: "InnoDB"},
 	}}}}

@@ -104,7 +104,7 @@ func databaseCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"id","type":"bigint","primary":true,"nullable":false}`},
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "bigint", TypeSuggestions: []string{"int", "bigint", "smallint", "tinyint", "bit", "decimal(18,2)", "money", "float", "real", "char(1)", "varchar(255)", "varchar(max)", "nvarchar(255)", "nvarchar(max)", "text", "date", "datetime2", "datetime", "time", "uniqueidentifier", "varbinary(max)"}, Default: true, Primary: true, Unique: true}),
 	}}}}
 }
 

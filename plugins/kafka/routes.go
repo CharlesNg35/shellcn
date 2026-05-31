@@ -48,7 +48,7 @@ func topicCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Topic name", Type: plugin.FieldText, Required: true},
 		{Key: "partitions", Label: "Partitions", Type: plugin.FieldNumber, Required: true, Default: 3, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}}},
 		{Key: "replication_factor", Label: "Replication factor", Type: plugin.FieldNumber, Required: true, Default: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}}},
-		{Key: "config", Label: "Config entries", Type: plugin.FieldJSON},
+		{Key: "config", Label: "Config entries", Type: plugin.FieldMap, KeyPlaceholder: "retention.ms", AddLabel: "Add config", Item: &plugin.Field{Type: plugin.FieldText, Placeholder: "604800000"}},
 	}}}}
 }
 
@@ -71,7 +71,7 @@ func produceSchema() *plugin.Schema {
 		{Key: "value", Label: "Value", Type: plugin.FieldTextarea, Required: true},
 		{Key: "encoding", Label: "Encoding", Type: plugin.FieldSelect, Required: true, Default: "string", Options: []plugin.Option{{Label: "String", Value: "string"}, {Label: "Base64", Value: "base64"}}},
 		{Key: "partition", Label: "Partition", Type: plugin.FieldNumber},
-		{Key: "headers", Label: "Headers", Type: plugin.FieldJSON},
+		{Key: "headers", Label: "Headers", Type: plugin.FieldMap, KeyPlaceholder: "header-name", Item: &plugin.Field{Type: plugin.FieldText}},
 	}}}}
 }
 

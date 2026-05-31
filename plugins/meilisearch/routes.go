@@ -86,8 +86,8 @@ func keyCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Key", Fields: []plugin.Field{
 		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
 		{Key: "description", Label: "Description", Type: plugin.FieldTextarea},
-		{Key: "actions", Label: "Actions", Type: plugin.FieldJSON, Required: true, Default: []any{"search"}},
-		{Key: "indexes", Label: "Indexes", Type: plugin.FieldJSON, Required: true, Default: []any{"*"}},
+		{Key: "actions", Label: "Actions", Type: plugin.FieldArray, Required: true, MinItems: 1, ItemLabel: "Action", Default: []any{"search"}, Item: &plugin.Field{Type: plugin.FieldText}},
+		{Key: "indexes", Label: "Indexes", Type: plugin.FieldArray, Required: true, MinItems: 1, ItemLabel: "Index", Default: []any{"*"}, Item: &plugin.Field{Type: plugin.FieldText}},
 		{Key: "expiresAt", Label: "Expires at", Type: plugin.FieldText, Placeholder: "2027-01-01T00:00:00Z or null"},
 	}}}}
 }

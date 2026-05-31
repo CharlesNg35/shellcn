@@ -228,3 +228,106 @@ func TestValidateRowKeyRejectsNonPrimaryKey(t *testing.T) {
 		t.Fatalf("exact primary key rejected: %v", err)
 	}
 }
+
+func TestStructuredArrayFields(t *testing.T) {
+	p := New()
+	assertArrayItemKeys(t, p, "cassandra.table.create", "columns", []string{"name", "type"})
+	assertArrayItemKeys(t, p, "cassandra.type.create", "fields", []string{"name", "type"})
+}
+
+func TestReplicationMapNetworkTopologyAcceptsNumberMap(t *testing.T) {
+	// The bound body is `any`; after JSON binding a {dc: number} object is a
+	// map[string]any with float64 values — the shape the FieldNumber map submits.
+	got, err := replicationMap("NetworkTopologyStrategy", 1, map[string]any{"dc1": float64(3), "dc2": float64(2)})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "{'class': 'NetworkTopologyStrategy', 'dc1': 3, 'dc2': 2}"
+	if got != want {
+		t.Fatalf("replicationMap = %q, want %q", got, want)
+	}
+	if _, err := replicationMap("NetworkTopologyStrategy", 1, map[string]any{"dc1": float64(21)}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("out-of-range factor: want ErrInvalidInput, got %v", err)
+	}
+}
+
+func TestKeyspaceDatacenterReplicationIsNumberMap(t *testing.T) {
+	var schema *plugin.Schema
+	for _, r := range New().Routes() {
+		if r.ID == "cassandra.keyspace.create" {
+			schema = r.Input
+		}
+	}
+	if schema == nil {
+		t.Fatal("cassandra.keyspace.create has no input schema")
+	}
+	var field *plugin.Field
+	for _, g := range schema.Groups {
+		for i := range g.Fields {
+			if g.Fields[i].Key == "datacenter_replication" {
+				field = &g.Fields[i]
+			}
+		}
+	}
+	if field == nil {
+		t.Fatal("no datacenter_replication field")
+	}
+	if field.Type != plugin.FieldMap {
+		t.Fatalf("datacenter_replication is %q, want map", field.Type)
+	}
+	if field.Item == nil || field.Item.Type != plugin.FieldNumber {
+		t.Fatalf("datacenter_replication value item is not a number")
+	}
+}
+
+func assertArrayItemKeys(t *testing.T, p plugin.Plugin, routeID, fieldKey string, wantKeys []string) {
+	t.Helper()
+	var schema *plugin.Schema
+	for _, r := range p.Routes() {
+		if r.ID == routeID {
+			schema = r.Input
+			break
+		}
+	}
+	if schema == nil {
+		t.Fatalf("route %q has no input schema", routeID)
+	}
+	var field *plugin.Field
+	for _, g := range schema.Groups {
+		for i := range g.Fields {
+			if g.Fields[i].Key == fieldKey {
+				field = &g.Fields[i]
+			}
+		}
+	}
+	if field == nil {
+		t.Fatalf("%s: no %q field", routeID, fieldKey)
+	}
+	if field.Type != plugin.FieldArray {
+		t.Fatalf("%s.%s is %q, want array", routeID, fieldKey, field.Type)
+	}
+	if field.Item == nil {
+		t.Fatalf("%s.%s has no item", routeID, fieldKey)
+	}
+	if len(wantKeys) == 0 {
+		if field.Item.Type != plugin.FieldText {
+			t.Fatalf("%s.%s item is %q, want text", routeID, fieldKey, field.Item.Type)
+		}
+		return
+	}
+	if field.Item.Type != plugin.FieldObject {
+		t.Fatalf("%s.%s item is %q, want object", routeID, fieldKey, field.Item.Type)
+	}
+	got := make([]string, 0, len(field.Item.Fields))
+	for _, f := range field.Item.Fields {
+		got = append(got, f.Key)
+	}
+	if len(got) != len(wantKeys) {
+		t.Fatalf("%s.%s item keys = %v, want %v", routeID, fieldKey, got, wantKeys)
+	}
+	for i, k := range wantKeys {
+		if got[i] != k {
+			t.Fatalf("%s.%s item keys = %v, want %v", routeID, fieldKey, got, wantKeys)
+		}
+	}
+}

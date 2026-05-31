@@ -242,3 +242,50 @@ func TestTableDataGridIsEditable(t *testing.T) {
 		}
 	}
 }
+
+func TestTableCreateColumnsIsStructuredArray(t *testing.T) {
+	assertColumnsArray(t, New(), "mssql.table.create", []string{"name", "type", "nullable", "primary", "unique", "default"})
+}
+
+func assertColumnsArray(t *testing.T, p plugin.Plugin, routeID string, wantKeys []string) {
+	t.Helper()
+	var schema *plugin.Schema
+	for _, r := range p.Routes() {
+		if r.ID == routeID {
+			schema = r.Input
+			break
+		}
+	}
+	if schema == nil {
+		t.Fatalf("route %q has no input schema", routeID)
+	}
+	var columns *plugin.Field
+	for _, g := range schema.Groups {
+		for i := range g.Fields {
+			if g.Fields[i].Key == "columns" {
+				columns = &g.Fields[i]
+			}
+		}
+	}
+	if columns == nil {
+		t.Fatalf("%s: no columns field", routeID)
+	}
+	if columns.Type != plugin.FieldArray {
+		t.Fatalf("%s: columns is %q, want array", routeID, columns.Type)
+	}
+	if columns.Item == nil || columns.Item.Type != plugin.FieldObject {
+		t.Fatalf("%s: columns item is not an object", routeID)
+	}
+	got := make([]string, 0, len(columns.Item.Fields))
+	for _, f := range columns.Item.Fields {
+		got = append(got, f.Key)
+	}
+	if len(got) != len(wantKeys) {
+		t.Fatalf("%s: columns item keys = %v, want %v", routeID, got, wantKeys)
+	}
+	for i, k := range wantKeys {
+		if got[i] != k {
+			t.Fatalf("%s: columns item keys = %v, want %v", routeID, got, wantKeys)
+		}
+	}
+}

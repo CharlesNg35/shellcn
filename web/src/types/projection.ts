@@ -123,7 +123,9 @@ export type FieldType =
   | "duration"
   | "credential_ref"
   | "object"
-  | "array";
+  | "array"
+  | "autocomplete"
+  | "map";
 
 export interface Option {
   label: string;
@@ -199,6 +201,8 @@ export interface Field {
   maxItems?: number;
   itemLabel?: string;
   addLabel?: string;
+  keyLabel?: string;
+  keyPlaceholder?: string;
 }
 
 export interface Group {

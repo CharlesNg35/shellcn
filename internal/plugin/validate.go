@@ -152,6 +152,12 @@ func validateSchemaShape(ctx string, schema Schema, add func(string, ...any)) {
 					add("%s: array field %q has minItems > maxItems", ctx, where)
 				}
 				check(where+"[]", []Field{*f.Item})
+			case FieldMap:
+				if f.Item == nil {
+					add("%s: map field %q declares no value item", ctx, where)
+					continue
+				}
+				check(where+"{}", []Field{*f.Item})
 			default:
 				if len(f.Fields) > 0 || f.Item != nil {
 					add("%s: field %q is %q but declares composite sub-fields", ctx, where, f.Type)

@@ -95,3 +95,45 @@ func TestDisplayValueFormatsBSONIDs(t *testing.T) {
 		t.Fatalf("non-id array should stay JSON: got %#v", got)
 	}
 }
+
+func TestIndexCreateKeysIsMapOfDirectionSelect(t *testing.T) {
+	var schema *plugin.Schema
+	for _, r := range New().Routes() {
+		if r.ID == "mongodb.index.create" {
+			schema = r.Input
+		}
+	}
+	if schema == nil {
+		t.Fatal("mongodb.index.create has no input schema")
+	}
+	var field *plugin.Field
+	for _, g := range schema.Groups {
+		for i := range g.Fields {
+			if g.Fields[i].Key == "keys" {
+				field = &g.Fields[i]
+			}
+		}
+	}
+	if field == nil {
+		t.Fatal("no keys field")
+	}
+	if field.Type != plugin.FieldMap {
+		t.Fatalf("keys is %q, want map", field.Type)
+	}
+	if field.Item == nil || field.Item.Type != plugin.FieldSelect {
+		t.Fatalf("keys value item is not a select")
+	}
+	values := make([]any, 0, len(field.Item.Options))
+	for _, o := range field.Item.Options {
+		values = append(values, o.Value)
+	}
+	want := []any{1, -1}
+	if len(values) != len(want) {
+		t.Fatalf("keys select options = %#v, want %#v", values, want)
+	}
+	for i := range want {
+		if values[i] != want[i] {
+			t.Fatalf("keys select option %d = %#v (%T), want %#v", i, values[i], values[i], want[i])
+		}
+	}
+}

@@ -161,7 +161,7 @@ func createSchema(rc *plugin.RequestContext) (any, error) {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"id","type":"INT8 DEFAULT unique_rowid()","primary":true,"nullable":false}`},
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "INT8", TypeSuggestions: []string{"INT8", "INT8 DEFAULT unique_rowid()", "INT4", "INT2", "SERIAL", "DECIMAL(10,2)", "FLOAT8", "BOOL", "STRING", "VARCHAR(255)", "BYTES", "DATE", "TIMESTAMPTZ", "TIMESTAMP", "TIME", "UUID", "JSONB", "INTERVAL", "INET"}, Default: true, Primary: true, Unique: true}),
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
 }

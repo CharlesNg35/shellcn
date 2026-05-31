@@ -22,6 +22,22 @@ describe("collectField", () => {
       value: { mode: "basic" },
     });
   });
+  it("collects a map field as an object, validating value items", () => {
+    const m: Field = {
+      key: "config",
+      label: "Config",
+      type: "map",
+      item: { key: "v", label: "Value", type: "text" },
+    };
+    expect(collectField(m, { "retention.ms": "3600000" })).toEqual({
+      value: { "retention.ms": "3600000" },
+    });
+    expect(collectField(m, {})).toEqual({ value: undefined });
+    expect(collectField({ ...m, required: true }, {}).error).toContain(
+      "required",
+    );
+  });
+
   it("validates array bounds and row required", () => {
     const arr: Field = {
       key: "c",

@@ -17,6 +17,9 @@ export function defaultForField(field: Field): unknown {
       ? Array.from({ length: n }, () => defaultForField(field.item as Field))
       : [];
   }
+  if (field.type === "map") {
+    return field.default ?? {};
+  }
   return field.default;
 }
 

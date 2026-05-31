@@ -516,7 +516,8 @@ type Group struct {
 type FieldType string // text, email, url, tel, number, stepper, slider,
                       // password, select, radio, multiselect, file, toggle,
                       // textarea, json, duration, credential_ref,
-                      // object (nested sub-form), array (repeatable rows)
+                      // object (nested sub-form), array (repeatable rows),
+                      // autocomplete (free text + Options/OptionsSource suggestions)
 
 type Field struct {
     Key         string
