@@ -541,6 +541,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 			s.auditEventParams(ctx, res, result, params, err)
 		})
 	if err := res.route.Stream(rc, client); err != nil {
+		s.deps.Logger.Warn("stream failed", "route", res.route.ID, "connection", res.conn.ID, "err", err)
 		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
 		return
 	}

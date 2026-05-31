@@ -20,6 +20,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/loopback"
 )
 
 // Session is a live connection to one Kubernetes cluster. It holds every
@@ -44,7 +45,7 @@ type Session struct {
 	mu           sync.Mutex
 	stopCh       chan struct{}
 	stopped      bool
-	bridge       *loopbackBridge            // lazy, agent transport only
+	bridge       *loopback.Bridge           // lazy, agent transport only
 	pfTransports map[string]*http.Transport // lazy; pools port-forward tunnels per pod port
 }
 
@@ -195,7 +196,7 @@ func (s *Session) upgradeConfig() (*rest.Config, error) {
 		return nil, fmt.Errorf("%w: session closed", plugin.ErrUnavailable)
 	}
 	if s.bridge == nil {
-		b, err := newLoopbackBridge(func(ctx context.Context) (net.Conn, error) {
+		b, err := loopback.New(func(ctx context.Context) (net.Conn, error) {
 			return s.net.DialContext(ctx, "tcp", agentUpgradeAddr)
 		})
 		if err != nil {
@@ -203,7 +204,7 @@ func (s *Session) upgradeConfig() (*rest.Config, error) {
 		}
 		s.bridge = b
 	}
-	return &rest.Config{Host: s.bridge.host()}, nil
+	return &rest.Config{Host: s.bridge.Host()}, nil
 }
 
 // agentUpgradeAddr is a placeholder address the agent tunnel dialer ignores.
