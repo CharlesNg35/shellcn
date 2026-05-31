@@ -31,12 +31,13 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"filesystem", "object_storage"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
-		Tabs:                []plugin.Panel{filesystem.FilesTab(protocolName)},
+		Tabs:                []plugin.Panel{filesystem.FilesTab(protocolName), s3compat.BucketTab(protocolName)},
+		Actions:             s3compat.Actions(protocolName),
 	}
 }
 
 func (p *Plugin) Routes() []plugin.Route {
-	return filesystem.Routes(protocolName, protocolName)
+	return append(filesystem.Routes(protocolName, protocolName), s3compat.AdminRoutes(protocolName)...)
 }
 
 func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {

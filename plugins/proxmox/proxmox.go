@@ -266,22 +266,22 @@ func whenStatus(statuses ...string) *plugin.Condition {
 func lifecycleActions(kind string) []plugin.Action {
 	gp := guestParams()
 	acts := []plugin.Action{
-		{ID: "act." + kind + ".start", Label: "Start", Icon: icon("play"), RouteID: "proxmox." + kind + ".start", Params: gp, EnabledWhen: whenStatus("stopped")},
-		{ID: "act." + kind + ".shutdown", Label: "Shutdown", Icon: icon("power"), RouteID: "proxmox." + kind + ".shutdown", Params: gp, Confirm: true, ConfirmText: "Gracefully shut down this guest?", EnabledWhen: whenStatus("running")},
-		{ID: "act." + kind + ".reboot", Label: "Reboot", Icon: icon("rotate-cw"), RouteID: "proxmox." + kind + ".reboot", Params: gp, Confirm: true, ConfirmText: "Reboot this guest?", EnabledWhen: whenStatus("running")},
-		{ID: "act." + kind + ".stop", Label: "Stop", Icon: icon("square"), RouteID: "proxmox." + kind + ".stop", Params: gp, Confirm: true, ConfirmText: "Force stop this guest? Unsaved state is lost.", EnabledWhen: whenStatus("running")},
-		{ID: "act." + kind + ".migrate", Label: "Migrate", Icon: icon("route"), RouteID: "proxmox." + kind + ".migrate", Params: gp},
-		{ID: "act." + kind + ".snapshot.create", Label: "Snapshot", Icon: icon("camera"), RouteID: "proxmox." + kind + ".snapshot.create", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "snapshots"}},
-		{ID: "act." + kind + ".backup", Label: "Backup", Icon: icon("save"), RouteID: "proxmox." + kind + ".backup", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "backups"}},
-		{ID: "act." + kind + ".clone", Label: "Clone", Icon: icon("copy"), RouteID: "proxmox." + kind + ".clone", Params: gp},
-		{ID: "act." + kind + ".restore", Label: "Restore", Icon: icon("upload"), RouteID: "proxmox." + kind + ".restore", Params: map[string]string{"node": "${resource.namespace}"}, Confirm: true, ConfirmText: "Restore a guest from a backup archive?"},
+		{ID: "act." + kind + ".start", Label: "Start", Icon: icon("play"), RouteID: "proxmox." + kind + ".start", Params: gp, EnabledWhen: whenStatus("stopped"), Group: "Power"},
+		{ID: "act." + kind + ".shutdown", Label: "Shutdown", Icon: icon("power"), RouteID: "proxmox." + kind + ".shutdown", Params: gp, Confirm: true, ConfirmText: "Gracefully shut down this guest?", EnabledWhen: whenStatus("running"), Group: "Power"},
+		{ID: "act." + kind + ".reboot", Label: "Reboot", Icon: icon("rotate-cw"), RouteID: "proxmox." + kind + ".reboot", Params: gp, Confirm: true, ConfirmText: "Reboot this guest?", EnabledWhen: whenStatus("running"), Group: "Power"},
+		{ID: "act." + kind + ".stop", Label: "Stop", Icon: icon("square"), RouteID: "proxmox." + kind + ".stop", Params: gp, Confirm: true, ConfirmText: "Force stop this guest? Unsaved state is lost.", EnabledWhen: whenStatus("running"), Group: "Power"},
+		{ID: "act." + kind + ".migrate", Label: "Migrate", Icon: icon("route"), RouteID: "proxmox." + kind + ".migrate", Params: gp, Group: "Manage"},
+		{ID: "act." + kind + ".snapshot.create", Label: "Snapshot", Icon: icon("camera"), RouteID: "proxmox." + kind + ".snapshot.create", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "snapshots"}, Group: "Snapshots"},
+		{ID: "act." + kind + ".backup", Label: "Backup", Icon: icon("save"), RouteID: "proxmox." + kind + ".backup", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "backups"}, Group: "Snapshots"},
+		{ID: "act." + kind + ".clone", Label: "Clone", Icon: icon("copy"), RouteID: "proxmox." + kind + ".clone", Params: gp, Group: "Manage"},
+		{ID: "act." + kind + ".restore", Label: "Restore", Icon: icon("upload"), RouteID: "proxmox." + kind + ".restore", Params: map[string]string{"node": "${resource.namespace}"}, Confirm: true, ConfirmText: "Restore a guest from a backup archive?", Group: "Manage"},
 		{ID: "act." + kind + ".destroy", Label: "Destroy", Icon: icon("trash-2"), RouteID: "proxmox." + kind + ".destroy", Params: gp, Confirm: true, ConfirmText: "Destroy this guest and all its disks? This cannot be undone.", EnabledWhen: whenStatus("stopped")},
 	}
 	if kind == "qemu" {
 		acts = append(acts,
-			plugin.Action{ID: "act.qemu.suspend", Label: "Suspend", Icon: icon("power-off"), RouteID: "proxmox.qemu.suspend", Params: gp, Confirm: true, ConfirmText: "Suspend this VM to disk?", EnabledWhen: whenStatus("running")},
-			plugin.Action{ID: "act.qemu.resume", Label: "Resume", Icon: icon("play"), RouteID: "proxmox.qemu.resume", Params: gp},
-			plugin.Action{ID: "act.qemu.resize", Label: "Resize disk", Icon: icon("scaling"), RouteID: "proxmox.qemu.resize", Params: gp},
+			plugin.Action{ID: "act.qemu.suspend", Label: "Suspend", Icon: icon("power-off"), RouteID: "proxmox.qemu.suspend", Params: gp, Confirm: true, ConfirmText: "Suspend this VM to disk?", EnabledWhen: whenStatus("running"), Group: "Power"},
+			plugin.Action{ID: "act.qemu.resume", Label: "Resume", Icon: icon("play"), RouteID: "proxmox.qemu.resume", Params: gp, Group: "Power"},
+			plugin.Action{ID: "act.qemu.resize", Label: "Resize disk", Icon: icon("scaling"), RouteID: "proxmox.qemu.resize", Params: gp, Group: "Manage"},
 		)
 	}
 	snapParams := map[string]string{"node": "${resource.namespace}", "vmid": "${resource.name}", "snapname": "${resource.uid}"}

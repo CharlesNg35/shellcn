@@ -18,8 +18,13 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 		if proj.Category.Key != plugin.CategoryFiles {
 			t.Fatalf("%s category: got %q want %q", name, proj.Category.Key, plugin.CategoryFiles)
 		}
-		if len(proj.Tabs) != 1 || proj.Tabs[0].Type != plugin.PanelFileBrowser {
-			t.Fatalf("%s should expose one file browser tab: %+v", name, proj.Tabs)
+		// Every filesystem plugin leads with a file browser. Pure transfer
+		// protocols expose exactly that; object stores (s3/minio) add bucket
+		// management tabs alongside it.
+		objectStore := name == "s3" || name == "minio"
+		if proj.Tabs[0].Type != plugin.PanelFileBrowser ||
+			(objectStore && len(proj.Tabs) < 1) || (!objectStore && len(proj.Tabs) != 1) {
+			t.Fatalf("%s should lead with a file browser tab: %+v", name, proj.Tabs)
 		}
 		fb, ok := proj.Tabs[0].Config.(plugin.FileBrowserConfig)
 		if !ok || fb.ReadRouteID == "" || fb.DownloadRouteID == "" || fb.UploadRouteID == "" ||

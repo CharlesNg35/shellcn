@@ -236,9 +236,9 @@ func taskResource() plugin.ResourceType {
 func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "swarm.service.open", Label: "Open", Icon: icon("external-link"), RouteID: "swarm.service.open", Open: plugin.OpenURL, Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
-		{ID: "swarm.service.scale", Label: "Scale", Icon: icon("move-vertical"), RouteID: "swarm.service.scale", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "mode", Op: plugin.OpEq, Value: "replicated"}}}},
-		{ID: "swarm.service.update", Label: "Update", Icon: icon("pencil"), RouteID: "swarm.service.update", Params: map[string]string{"id": "${resource.uid}"}},
-		{ID: "swarm.service.rollback", Label: "Rollback", Icon: icon("undo-2"), RouteID: "swarm.service.rollback", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Roll this service back to its previous spec?"},
+		{ID: "swarm.service.scale", Label: "Scale", Icon: icon("move-vertical"), RouteID: "swarm.service.scale", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "mode", Op: plugin.OpEq, Value: "replicated"}}}, Group: "Manage"},
+		{ID: "swarm.service.update", Label: "Update", Icon: icon("pencil"), RouteID: "swarm.service.update", Params: map[string]string{"id": "${resource.uid}"}, Group: "Manage"},
+		{ID: "swarm.service.rollback", Label: "Rollback", Icon: icon("undo-2"), RouteID: "swarm.service.rollback", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Roll this service back to its previous spec?", Group: "Manage"},
 		{ID: "swarm.service.remove", Label: "Remove", Icon: icon("trash"), RouteID: "swarm.service.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this service?"},
 		{ID: "swarm.node.update", Label: "Update", Icon: icon("settings"), RouteID: "swarm.node.update", Params: map[string]string{"id": "${resource.uid}"}},
 		{ID: "swarm.stack.deploy", Label: "Deploy stack", Icon: icon("upload"), RouteID: "swarm.stack.deploy"},
