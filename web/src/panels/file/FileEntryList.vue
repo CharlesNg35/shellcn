@@ -60,7 +60,16 @@ function moveFocus(event: KeyboardEvent, dir: 1 | -1): void {
       {{ emptyText }}
     </p>
     <ul v-else class="divide-y divide-surface-100 dark:divide-surface-800/70">
-      <li v-for="entry in entries" :key="entry.path" class="flex items-center">
+      <li
+        v-for="entry in entries"
+        :key="entry.path"
+        class="group flex items-center transition-colors hover:bg-surface-100 dark:hover:bg-surface-800"
+        :class="
+          selectedPath === entry.path
+            ? 'bg-primary-50 dark:bg-primary-500/10'
+            : ''
+        "
+      >
         <span
           v-if="selectable"
           class="flex shrink-0 items-center pl-3"
@@ -75,10 +84,10 @@ function moveFocus(event: KeyboardEvent, dir: 1 | -1): void {
         </span>
         <button
           type="button"
-          class="group flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-100 focus-visible:bg-surface-100 focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none focus-visible:ring-inset dark:hover:bg-surface-800 dark:focus-visible:bg-surface-800"
+          class="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none focus-visible:ring-inset"
           :class="
             selectedPath === entry.path
-              ? 'bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-200'
+              ? 'text-primary-700 dark:text-primary-200'
               : ''
           "
           :aria-current="selectedPath === entry.path || undefined"

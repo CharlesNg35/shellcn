@@ -532,6 +532,37 @@ describe("FileBrowserPanel", () => {
     ).toBe(true);
   });
 
+  it("hides the toolbar single-delete while a multi-selection is active (no double delete)", async () => {
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: bulkConfig(),
+      },
+    });
+    await flushPromises();
+
+    // Focus an entry so the toolbar's single-delete would otherwise show.
+    await w
+      .findAll('input[type="checkbox"]')
+      .find((c) => c.attributes("aria-label") === "Select README.md")!
+      .trigger("change");
+    await flushPromises();
+
+    const deleteButtons = w
+      .findAll("button")
+      .filter(
+        (b) =>
+          b.attributes("aria-label") === "Delete selected item" ||
+          b.text().trim() === "Delete",
+      );
+    expect(deleteButtons).toHaveLength(1);
+    // The remaining one is the selection bar's bulk delete.
+    expect(
+      w.findAll("button").some((b) => b.attributes("aria-label") === "Delete selected item"),
+    ).toBe(false);
+  });
+
   it("hides a bulk button when its route id is absent", async () => {
     const config = bulkConfig();
     delete (config as { moveRouteId?: string }).moveRouteId;

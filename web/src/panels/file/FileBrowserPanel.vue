@@ -715,7 +715,9 @@ watch(
       :can-rename="canRename"
       :can-delete="canDelete"
       :can-show-rename="writable && Boolean(renameRouteId)"
-      :can-show-delete="writable && Boolean(deleteRouteId)"
+      :can-show-delete="
+        writable && Boolean(deleteRouteId) && !(selectable && hasSelection)
+      "
       :download-href="downloadHref"
       :download-name="selected?.name"
       :multiple-upload="multipleUpload"
