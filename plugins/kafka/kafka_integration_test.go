@@ -50,6 +50,27 @@ func TestKafkaPluginIntegration(t *testing.T) {
 		t.Fatalf("topic config: %v", err)
 	}
 
+	alter, _ := json.Marshal(map[string]any{"key": "retention.ms", "value": "86400000"})
+	if _, err := alterTopicConfig(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, alter)); err != nil {
+		t.Fatalf("alter topic config: %v", err)
+	}
+	if got := kafkaConfigValue(ctx, t, sess, topic, "retention.ms"); got != "86400000" {
+		t.Fatalf("retention.ms after alter: got %q want %q", got, "86400000")
+	}
+
+	addParts, _ := json.Marshal(map[string]any{"count": 3})
+	if _, err := addPartitions(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, addParts)); err != nil {
+		t.Fatalf("add partitions: %v", err)
+	}
+	if n := kafkaPartitionCount(ctx, t, sess, topic); n != 3 {
+		t.Fatalf("partition count after add: got %d want 3", n)
+	}
+
+	decrease, _ := json.Marshal(map[string]any{"count": 2})
+	if _, err := addPartitions(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, decrease)); err == nil {
+		t.Fatal("expected error decreasing partition count")
+	}
+
 	produce, _ := json.Marshal(map[string]any{"key": "k1", "value": "hello", "encoding": "string"})
 	if _, err := produceMessage(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, produce)); err != nil {
 		t.Fatalf("produce: %v", err)
@@ -126,6 +147,45 @@ func waitKafkaMessages(ctx context.Context, t *testing.T, sess plugin.Session, t
 		}
 		if time.Now().After(deadline) {
 			return items
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+func kafkaConfigValue(ctx context.Context, t *testing.T, sess plugin.Session, topic, key string) string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	last := ""
+	for {
+		res, err := topicConfig(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, nil))
+		if err != nil {
+			t.Fatalf("topic config: %v", err)
+		}
+		for _, r := range res.(plugin.Page[row]).Items {
+			if r["name"] == key {
+				last, _ = r["value"].(string)
+			}
+		}
+		if last == "86400000" || time.Now().After(deadline) {
+			return last
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+func kafkaPartitionCount(ctx context.Context, t *testing.T, sess plugin.Session, topic string) int {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		s := sess.(*Session)
+		_ = s.client.RefreshMetadata(topic)
+		res, err := listPartitions(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"topic": topic}, nil, nil))
+		if err != nil {
+			t.Fatalf("partitions: %v", err)
+		}
+		n := len(res.(plugin.Page[row]).Items)
+		if n >= 3 || time.Now().After(deadline) {
+			return n
 		}
 		time.Sleep(250 * time.Millisecond)
 	}

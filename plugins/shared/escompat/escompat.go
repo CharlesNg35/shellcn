@@ -358,6 +358,19 @@ func pathDoc(index, id string) string {
 	return "/" + url.PathEscape(index) + "/_doc/" + url.PathEscape(id)
 }
 
+// validateIndex rejects empty names and the wildcard/all selectors so a
+// destructive operation can never fan out across every index by mistake.
+func validateIndex(index string) (string, error) {
+	index = strings.TrimSpace(index)
+	if index == "" {
+		return "", fmt.Errorf("%w: index is required", plugin.ErrInvalidInput)
+	}
+	if strings.ContainsAny(index, "*,") || index == "_all" {
+		return "", fmt.Errorf("%w: index must name a single index", plugin.ErrInvalidInput)
+	}
+	return index, nil
+}
+
 func numericString(v any) int64 {
 	switch t := v.(type) {
 	case int64:

@@ -31,6 +31,8 @@ func routes() []plugin.Route {
 		{ID: "kafka.topic.config", Method: plugin.MethodGet, Path: "/topics/{topic}/config", Permission: "kafka.topics.read", Risk: plugin.RiskSafe, AuditEvent: "kafka.topic.config", Handle: topicConfig},
 		{ID: "kafka.messages.list", Method: plugin.MethodGet, Path: "/topics/{topic}/messages", Permission: "kafka.messages.read", Risk: plugin.RiskSafe, AuditEvent: "kafka.messages.list", Handle: listMessages},
 		{ID: "kafka.topic.create", Method: plugin.MethodPost, Path: "/topics", Permission: "kafka.topics.write", Risk: plugin.RiskWrite, AuditEvent: "kafka.topic.create", Input: topicCreateSchema(), Handle: createTopic},
+		{ID: "kafka.topic.alter_config", Method: plugin.MethodPost, Path: "/topics/{topic}/config", Permission: "kafka.topics.write", Risk: plugin.RiskWrite, AuditEvent: "kafka.topic.alter_config", Input: alterConfigSchema(), Handle: alterTopicConfig},
+		{ID: "kafka.topic.add_partitions", Method: plugin.MethodPost, Path: "/topics/{topic}/partitions", Permission: "kafka.partitions.write", Risk: plugin.RiskDestructive, AuditEvent: "kafka.topic.add_partitions", Input: addPartitionsSchema(), Handle: addPartitions},
 		{ID: "kafka.topic.delete", Method: plugin.MethodDelete, Path: "/topics/{topic}", Permission: "kafka.topics.delete", Risk: plugin.RiskDestructive, AuditEvent: "kafka.topic.delete", Handle: deleteTopic},
 		{ID: "kafka.message.produce", Method: plugin.MethodPost, Path: "/topics/{topic}/messages", Permission: "kafka.messages.write", Risk: plugin.RiskWrite, AuditEvent: "kafka.message.produce", Input: produceSchema(), Handle: produceMessage},
 		{ID: "kafka.groups.list", Method: plugin.MethodGet, Path: "/groups", Permission: "kafka.groups.read", Risk: plugin.RiskSafe, AuditEvent: "kafka.groups.list", Handle: listGroups},
@@ -47,6 +49,19 @@ func topicCreateSchema() *plugin.Schema {
 		{Key: "partitions", Label: "Partitions", Type: plugin.FieldNumber, Required: true, Default: 3, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}}},
 		{Key: "replication_factor", Label: "Replication factor", Type: plugin.FieldNumber, Required: true, Default: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}}},
 		{Key: "config", Label: "Config entries", Type: plugin.FieldJSON},
+	}}}}
+}
+
+func alterConfigSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Alter config", Fields: []plugin.Field{
+		{Key: "key", Label: "Config key", Type: plugin.FieldText, Required: true, Placeholder: "retention.ms", Help: "Topic-level config name, e.g. retention.ms or cleanup.policy."},
+		{Key: "value", Label: "Value", Type: plugin.FieldText, Required: true},
+	}}}}
+}
+
+func addPartitionsSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Add partitions", Fields: []plugin.Field{
+		{Key: "count", Label: "New partition count", Type: plugin.FieldNumber, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}}, Help: "Total partitions after the increase. Must be greater than the current count; partitions can only be added, never removed."},
 	}}}}
 }
 
@@ -235,6 +250,78 @@ func createTopic(rc *plugin.RequestContext) (any, error) {
 		entries[k] = &value
 	}
 	err = s.admin.CreateTopic(req.Name, &sarama.TopicDetail{NumPartitions: req.Partitions, ReplicationFactor: req.ReplicationFactor, ConfigEntries: entries}, false)
+	return actionResult{OK: err == nil}, kafkaErr(err)
+}
+
+func validateConfigEntry(key, value string) error {
+	if strings.TrimSpace(key) == "" {
+		return fmt.Errorf("%w: config key is required", plugin.ErrInvalidInput)
+	}
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%w: config value is required", plugin.ErrInvalidInput)
+	}
+	return nil
+}
+
+func validatePartitionCount(topic string, count, current int32) error {
+	if strings.TrimSpace(topic) == "" {
+		return fmt.Errorf("%w: topic is required", plugin.ErrInvalidInput)
+	}
+	if count <= current {
+		return fmt.Errorf("%w: new partition count %d must be greater than current count %d", plugin.ErrInvalidInput, count, current)
+	}
+	return nil
+}
+
+func alterTopicConfig(rc *plugin.RequestContext) (any, error) {
+	s, err := kafkaSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	if err := validateConfigEntry(req.Key, req.Value); err != nil {
+		return nil, err
+	}
+	value := req.Value
+	entries := map[string]sarama.IncrementalAlterConfigsEntry{
+		req.Key: {Operation: sarama.IncrementalAlterConfigsOperationSet, Value: &value},
+	}
+	err = s.admin.IncrementalAlterConfig(sarama.TopicResource, topicParam(rc), entries, false)
+	return actionResult{OK: err == nil}, kafkaErr(err)
+}
+
+func addPartitions(rc *plugin.RequestContext) (any, error) {
+	s, err := kafkaSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Count int32 `json:"count"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	topic := topicParam(rc)
+	current, err := s.client.Partitions(topic)
+	if err != nil {
+		return nil, kafkaErr(err)
+	}
+	if err := validatePartitionCount(topic, req.Count, int32(len(current))); err != nil {
+		return nil, err
+	}
+	err = s.admin.CreatePartitions(topic, req.Count, nil, false)
 	return actionResult{OK: err == nil}, kafkaErr(err)
 }
 

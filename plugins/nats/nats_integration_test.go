@@ -46,6 +46,18 @@ func TestNATSPluginIntegration(t *testing.T) {
 		t.Fatalf("stream overview: %v", err)
 	}
 
+	update, _ := json.Marshal(map[string]any{"max_msgs": 250})
+	if _, err := updateStream(plugin.NewRequestContext(ctx, models.User{}, sess, map[string]string{"stream": stream}, nil, update)); err != nil {
+		t.Fatalf("update stream: %v", err)
+	}
+	updatedInfo, err := sess.(*Session).js.StreamInfo(stream)
+	if err != nil {
+		t.Fatalf("read back stream: %v", err)
+	}
+	if updatedInfo.Config.MaxMsgs != 250 {
+		t.Fatalf("max_msgs after update: got %d want 250", updatedInfo.Config.MaxMsgs)
+	}
+
 	pub, _ := json.Marshal(map[string]any{"subject": subject, "data": "hello", "encoding": "string", "jetstream": true})
 	if _, err := publishMessage(plugin.NewRequestContext(ctx, models.User{}, sess, nil, nil, pub)); err != nil {
 		t.Fatalf("publish: %v", err)

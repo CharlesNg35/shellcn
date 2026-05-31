@@ -87,6 +87,52 @@ func TestElasticsearchPluginIntegration(t *testing.T) {
 	updateBody, _ := json.Marshal(map[string]any{"content": `{"name":"ada","age":38}`})
 	call(ctx, t, routes["elasticsearch.document.update"], sess, map[string]string{"index": index, "id": "ada"}, nil, updateBody)
 	call(ctx, t, routes["elasticsearch.document.delete"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil)
+
+	settingsBody, _ := json.Marshal(map[string]any{"settings": map[string]any{"index": map[string]any{"refresh_interval": "30s"}}})
+	call(ctx, t, routes["elasticsearch.settings.update"], sess, map[string]string{"index": index}, nil, settingsBody)
+	if got := indexSetting(call(ctx, t, routes["elasticsearch.settings.read"], sess, map[string]string{"index": index}, nil, nil), index, "refresh_interval"); got != "30s" {
+		t.Fatalf("refresh_interval after update: got %q want %q", got, "30s")
+	}
+
+	for _, id := range []string{"keep-1", "drop-1", "drop-2", "drop-3"} {
+		group := "keep"
+		if strings.HasPrefix(id, "drop") {
+			group = "drop"
+		}
+		seedBody, _ := json.Marshal(map[string]any{"id": id, "document": map[string]any{"group": group}})
+		call(ctx, t, routes["elasticsearch.document.create"], sess, map[string]string{"index": index}, nil, seedBody)
+	}
+	call(ctx, t, routes["elasticsearch.index.refresh"], sess, map[string]string{"index": index}, nil, nil)
+	dbqBody, _ := json.Marshal(map[string]any{"query": map[string]any{"term": map[string]any{"group": "drop"}}})
+	dbqRes := call(ctx, t, routes["elasticsearch.documents.delete_by_query"], sess, map[string]string{"index": index}, nil, dbqBody).(map[string]any)
+	if deleted := numericValue(dbqRes["deleted"]); deleted != 3 {
+		t.Fatalf("delete_by_query deleted: got %v want 3 (%#v)", dbqRes["deleted"], dbqRes)
+	}
+	call(ctx, t, routes["elasticsearch.index.refresh"], sess, map[string]string{"index": index}, nil, nil)
+	remaining := pageItems(call(ctx, t, routes["elasticsearch.documents.list"], sess, map[string]string{"index": index}, url.Values{"limit": []string{"10"}}, nil))
+	if len(remaining) != 1 || remaining[0]["_id"] != "keep-1" {
+		t.Fatalf("after delete_by_query expected only keep-1, got %#v", remaining)
+	}
+}
+
+func indexSetting(raw any, index, key string) string {
+	data, _ := json.Marshal(raw)
+	var settings map[string]struct {
+		Settings struct {
+			Index map[string]any `json:"index"`
+		} `json:"settings"`
+	}
+	if json.Unmarshal(data, &settings) != nil {
+		return ""
+	}
+	return fmt.Sprint(settings[index].Settings.Index[key])
+}
+
+func numericValue(v any) float64 {
+	if f, ok := v.(float64); ok {
+		return f
+	}
+	return -1
 }
 
 func elasticsearchIntegrationConfig(ctx context.Context, t *testing.T) map[string]any {

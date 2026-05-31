@@ -34,7 +34,7 @@ func resources() []plugin.ResourceType {
 				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("documents.list"), Params: coreParams()}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{rid("document.upsert"), rid("documents.delete_query")}, RowActionIDs: []string{rid("document.delete")}, Exportable: true}},
 				{Key: "search", Label: "Search", Icon: icon("search"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("search.query"), Method: plugin.MethodWS, Params: coreParams()}, Config: searchConfig()},
 				{Key: "schema", Label: "Schema", Icon: icon("braces"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("schema.read"), Params: coreParams()}},
-				{Key: "fields", Label: "Fields", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("schema.fields"), Params: coreParams()}, Config: plugin.TableConfig{Columns: fieldColumns(), ActionIDs: []string{rid("schema.field.add")}, RowActionIDs: []string{rid("schema.field.delete")}, Exportable: true}},
+				{Key: "fields", Label: "Fields", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("schema.fields"), Params: coreParams()}, Config: plugin.TableConfig{Columns: fieldColumns(), ActionIDs: []string{rid("schema.field.add")}, RowActionIDs: []string{rid("schema.field.replace"), rid("schema.field.delete")}, Exportable: true}},
 				{Key: "config", Label: "Config", Icon: icon("settings"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("config.read"), Params: coreParams()}},
 				{Key: "ping", Label: "Ping", Icon: icon("activity"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("core.ping"), Params: coreParams()}},
 			}},
@@ -55,8 +55,8 @@ func resources() []plugin.ResourceType {
 			Kind: "field", Title: "Fields", List: plugin.DataSource{RouteID: rid("schema.fields")},
 			Columns: fieldColumns(),
 			Actions: plugin.ResourceActions{
-				Row:    []string{rid("schema.field.delete")},
-				Detail: []string{rid("schema.field.delete")},
+				Row:    []string{rid("schema.field.replace"), rid("schema.field.delete")},
+				Detail: []string{rid("schema.field.replace"), rid("schema.field.delete")},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("columns-3"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("schema.field.read"), Params: fieldParams()}},
@@ -76,6 +76,7 @@ func actions() []plugin.Action {
 		{ID: rid("document.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("document.delete"), Params: documentParams(), Confirm: true, ConfirmText: "Delete this document?"},
 		{ID: rid("documents.delete_query"), Label: "Delete by query", Icon: icon("eraser"), RouteID: rid("documents.delete_query"), Params: coreParams(), Confirm: true, ConfirmText: "Delete all Solr documents matching this query?"},
 		{ID: rid("schema.field.add"), Label: "Add field", Icon: icon("columns-3"), RouteID: rid("schema.field.add"), Params: coreParams(), Confirm: true, ConfirmText: "Add this field to the managed schema?"},
+		{ID: rid("schema.field.replace"), Label: "Edit field", Icon: icon("pencil"), RouteID: rid("schema.field.replace"), Params: fieldParams(), Confirm: true, ConfirmText: "Replace this field's definition? Solr requires the full definition and reindexing may be needed for existing documents."},
 		{ID: rid("schema.field.delete"), Label: "Delete field", Icon: icon("trash"), RouteID: rid("schema.field.delete"), Params: fieldParams(), Confirm: true, ConfirmText: "Delete this field from the managed schema?"},
 	}
 }

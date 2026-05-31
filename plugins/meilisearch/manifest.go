@@ -43,7 +43,7 @@ func resources() []plugin.ResourceType {
 				{Key: "search", Label: "Search", Icon: icon("search"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("search.query"), Method: plugin.MethodWS, Params: indexParams()}, Config: searchConfig()},
 				{Key: "settings", Label: "Settings", Icon: icon("settings"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("settings.read"), Params: indexParams()}},
 				{Key: "stats", Label: "Stats", Icon: icon("chart-column"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("index.stats"), Params: indexParams()}},
-				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("tasks.list"), Params: indexParams()}, Config: plugin.TableConfig{Columns: taskColumns(), RowActionIDs: []string{rid("task.cancel")}, Exportable: true}},
+				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("tasks.list"), Params: indexParams()}, Config: plugin.TableConfig{Columns: taskColumns(), RowActionIDs: []string{rid("task.cancel"), rid("task.delete")}, Exportable: true}},
 			}},
 		},
 		{
@@ -62,8 +62,8 @@ func resources() []plugin.ResourceType {
 			Kind: "task", Title: "Tasks", List: plugin.DataSource{RouteID: rid("tasks.list")},
 			Columns: taskColumns(),
 			Actions: plugin.ResourceActions{
-				Row:    []string{rid("task.cancel")},
-				Detail: []string{rid("task.cancel")},
+				Row:    []string{rid("task.cancel"), rid("task.delete")},
+				Detail: []string{rid("task.cancel"), rid("task.delete")},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Task ${resource.name}", StatusField: "status", Severities: taskStatusSeverities}, Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("task.read"), Params: taskParams()}},
@@ -74,8 +74,8 @@ func resources() []plugin.ResourceType {
 			Columns: keyColumns(),
 			Actions: plugin.ResourceActions{
 				Toolbar: []string{rid("key.create")},
-				Row:     []string{rid("key.delete")},
-				Detail:  []string{rid("key.delete")},
+				Row:     []string{rid("key.update"), rid("key.delete")},
+				Detail:  []string{rid("key.update"), rid("key.delete")},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("key-round"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("key.read"), Params: keyParams()}},
@@ -94,7 +94,9 @@ func actions() []plugin.Action {
 		{ID: rid("document.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("document.delete"), Params: documentParams(), Confirm: true, ConfirmText: "Delete this document?"},
 		{ID: rid("documents.delete_all"), Label: "Delete all documents", Icon: icon("eraser"), RouteID: rid("documents.delete_all"), Params: indexParams(), Confirm: true, ConfirmText: "Delete every document in this index?"},
 		{ID: rid("task.cancel"), Label: "Cancel", Icon: icon("ban"), RouteID: rid("task.cancel"), Params: taskParams(), Confirm: true, ConfirmText: "Cancel matching enqueued or processing tasks?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpIn, Value: []string{"enqueued", "processing"}}}}},
+		{ID: rid("task.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("task.delete"), Params: taskParams(), Confirm: true, ConfirmText: "Delete this finished task from history?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpIn, Value: []string{"succeeded", "failed", "canceled"}}}}},
 		{ID: rid("key.create"), Label: "Create key", Icon: icon("plus"), RouteID: rid("key.create")},
+		{ID: rid("key.update"), Label: "Edit", Icon: icon("pencil"), RouteID: rid("key.update"), Params: keyParams()},
 		{ID: rid("key.delete"), Label: "Delete", Icon: icon("trash"), RouteID: rid("key.delete"), Params: keyParams(), Confirm: true, ConfirmText: "Delete this API key?"},
 		{ID: rid("dump.create"), Label: "Create dump", Icon: icon("archive"), RouteID: rid("dump.create"), Confirm: true, ConfirmText: "Create a Meilisearch dump?"},
 		{ID: rid("snapshot.create"), Label: "Create snapshot", Icon: icon("camera"), RouteID: rid("snapshot.create"), Confirm: true, ConfirmText: "Create a Meilisearch snapshot?"},

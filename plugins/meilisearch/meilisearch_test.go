@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/models"
@@ -93,6 +94,113 @@ func TestManifest(t *testing.T) {
 		if fields[key] {
 			t.Fatalf("unexpected field %q", key)
 		}
+	}
+}
+
+func TestValidTaskUID(t *testing.T) {
+	for _, in := range []string{"0", "42", " 7 "} {
+		if _, err := validTaskUID(in); err != nil {
+			t.Fatalf("validTaskUID(%q) unexpected error: %v", in, err)
+		}
+	}
+	for _, in := range []string{"", "-1", "abc", "1.5", "0x10"} {
+		if _, err := validTaskUID(in); err == nil {
+			t.Fatalf("validTaskUID(%q) should reject", in)
+		}
+	}
+}
+
+func TestValidKeyUID(t *testing.T) {
+	if got, err := validKeyUID(" 6062abda-a5aa-4414-ac91-ecd7944c0f8d "); err != nil || got != "6062abda-a5aa-4414-ac91-ecd7944c0f8d" {
+		t.Fatalf("validKeyUID valid: got %q err %v", got, err)
+	}
+	for _, in := range []string{"", "not-a-uuid", "6062abda-a5aa-4414-ac91", "default"} {
+		if _, err := validKeyUID(in); err == nil {
+			t.Fatalf("validKeyUID(%q) should reject", in)
+		}
+	}
+}
+
+func TestKeyUpdateBody(t *testing.T) {
+	name := " Renamed "
+	desc := " new desc "
+	body, err := keyUpdateBody(&name, &desc)
+	if err != nil {
+		t.Fatalf("keyUpdateBody: %v", err)
+	}
+	if body["name"] != "Renamed" || body["description"] != "new desc" {
+		t.Fatalf("body trimmed wrong: %#v", body)
+	}
+	only := "x"
+	if body, err := keyUpdateBody(&only, nil); err != nil || len(body) != 1 || body["name"] != "x" {
+		t.Fatalf("name-only body: %#v err %v", body, err)
+	}
+	if _, err := keyUpdateBody(nil, nil); err == nil {
+		t.Fatalf("empty payload should be rejected")
+	}
+}
+
+func TestUpdateKeyPatchesNameAndDescription(t *testing.T) {
+	var gotMethod, gotPath, gotBody string
+	s, closeSrv := newMockSession(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath = r.Method, r.URL.Path
+		buf := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(buf)
+		gotBody = string(buf)
+		_, _ = w.Write([]byte(`{"uid":"6062abda-a5aa-4414-ac91-ecd7944c0f8d","name":"Renamed"}`))
+	})
+	defer closeSrv()
+
+	body := []byte(`{"name":"Renamed","description":"d"}`)
+	rc := plugin.NewRequestContext(context.Background(), models.User{}, s, map[string]string{"key": "6062abda-a5aa-4414-ac91-ecd7944c0f8d"}, url.Values{}, body)
+	if _, err := updateKey(rc); err != nil {
+		t.Fatalf("updateKey: %v", err)
+	}
+	if gotMethod != http.MethodPatch || gotPath != "/keys/6062abda-a5aa-4414-ac91-ecd7944c0f8d" {
+		t.Fatalf("request = %s %s", gotMethod, gotPath)
+	}
+	if !strings.Contains(gotBody, `"name":"Renamed"`) || !strings.Contains(gotBody, `"description":"d"`) {
+		t.Fatalf("body = %s", gotBody)
+	}
+}
+
+func TestUpdateKeyRejectsBadUID(t *testing.T) {
+	s, closeSrv := newMockSession(t, func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("should not reach server")
+		w.WriteHeader(http.StatusOK)
+	})
+	defer closeSrv()
+	rc := plugin.NewRequestContext(context.Background(), models.User{}, s, map[string]string{"key": "bad"}, url.Values{}, []byte(`{"name":"x"}`))
+	if _, err := updateKey(rc); err == nil {
+		t.Fatalf("expected invalid uid error")
+	}
+}
+
+func TestDeleteTaskFiltersByUID(t *testing.T) {
+	var gotMethod, gotPath, gotQuery string
+	s, closeSrv := newMockSession(t, func(w http.ResponseWriter, r *http.Request) {
+		gotMethod, gotPath, gotQuery = r.Method, r.URL.Path, r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"taskUid":99,"status":"enqueued","type":"taskDeletion"}`))
+	})
+	defer closeSrv()
+	rc := plugin.NewRequestContext(context.Background(), models.User{}, s, map[string]string{"task": "12"}, url.Values{}, nil)
+	if _, err := deleteTask(rc); err != nil {
+		t.Fatalf("deleteTask: %v", err)
+	}
+	if gotMethod != http.MethodDelete || gotPath != "/tasks" || gotQuery != "uids=12" {
+		t.Fatalf("request = %s %s ?%s", gotMethod, gotPath, gotQuery)
+	}
+}
+
+func TestDeleteTaskRejectsBadUID(t *testing.T) {
+	s, closeSrv := newMockSession(t, func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("should not reach server")
+		w.WriteHeader(http.StatusOK)
+	})
+	defer closeSrv()
+	rc := plugin.NewRequestContext(context.Background(), models.User{}, s, map[string]string{"task": "abc"}, url.Values{}, nil)
+	if _, err := deleteTask(rc); err == nil {
+		t.Fatalf("expected invalid uid error")
 	}
 }
 

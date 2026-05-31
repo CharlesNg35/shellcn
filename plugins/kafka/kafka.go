@@ -63,14 +63,14 @@ func resources() []plugin.ResourceType {
 			Columns: topicColumns(),
 			Actions: plugin.ResourceActions{
 				Toolbar: []string{"kafka.topic.create"},
-				Row:     []string{"kafka.topic.delete"},
-				Detail:  []string{"kafka.message.produce", "kafka.topic.delete"},
+				Row:     []string{"kafka.topic.add_partitions", "kafka.topic.delete"},
+				Detail:  []string{"kafka.message.produce", "kafka.topic.alter_config", "kafka.topic.add_partitions", "kafka.topic.delete"},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "kafka.topic.overview", Params: map[string]string{"topic": "${resource.name}"}}},
-				{Key: "partitions", Label: "Partitions", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.partitions.list", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: partitionColumns(), Exportable: true}},
+				{Key: "partitions", Label: "Partitions", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.partitions.list", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: partitionColumns(), ActionIDs: []string{"kafka.topic.add_partitions"}, Exportable: true}},
 				{Key: "messages", Label: "Messages", Icon: icon("mail"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.messages.list", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"kafka.message.produce"}, Exportable: true}},
-				{Key: "config", Label: "Config", Icon: icon("settings"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.topic.config", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: configColumns(), Exportable: true}},
+				{Key: "config", Label: "Config", Icon: icon("settings"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.topic.config", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: configColumns(), ActionIDs: []string{"kafka.topic.alter_config"}, Exportable: true}},
 			}},
 		},
 		{
@@ -91,6 +91,8 @@ func resources() []plugin.ResourceType {
 func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "kafka.topic.create", Label: "Create topic", Icon: icon("plus"), RouteID: "kafka.topic.create"},
+		{ID: "kafka.topic.alter_config", Label: "Alter config", Icon: icon("settings-2"), RouteID: "kafka.topic.alter_config", Params: map[string]string{"topic": "${resource.name}"}},
+		{ID: "kafka.topic.add_partitions", Label: "Add partitions", Icon: icon("columns-3"), RouteID: "kafka.topic.add_partitions", Params: map[string]string{"topic": "${resource.name}"}, Confirm: true, ConfirmText: "Add partitions? Increasing partitions is irreversible and can change key-to-partition routing."},
 		{ID: "kafka.topic.delete", Label: "Delete", Icon: icon("trash-2"), RouteID: "kafka.topic.delete", Params: map[string]string{"topic": "${resource.name}"}, Confirm: true, ConfirmText: "Delete this topic?"},
 		{ID: "kafka.message.produce", Label: "Produce", Icon: icon("send"), RouteID: "kafka.message.produce", Params: map[string]string{"topic": "${resource.name}"}, Confirm: true, ConfirmText: "Produce this record?"},
 		{ID: "kafka.group.delete", Label: "Delete", Icon: icon("trash-2"), RouteID: "kafka.group.delete", Params: map[string]string{"group": "${resource.name}"}, Confirm: true, ConfirmText: "Delete this consumer group?"},

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +17,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 func Routes() []plugin.Route {
 	return []plugin.Route{
@@ -40,9 +43,11 @@ func Routes() []plugin.Route {
 		{ID: rid("tasks.list"), Method: plugin.MethodGet, Path: "/tasks", Permission: "meilisearch.tasks.read", Risk: plugin.RiskSafe, AuditEvent: rid("tasks.list"), Handle: listTasks},
 		{ID: rid("task.read"), Method: plugin.MethodGet, Path: "/tasks/{task}", Permission: "meilisearch.tasks.read", Risk: plugin.RiskSafe, AuditEvent: rid("task.read"), Handle: readTask},
 		{ID: rid("task.cancel"), Method: plugin.MethodPost, Path: "/tasks/{task}/cancel", Permission: "meilisearch.tasks.write", Risk: plugin.RiskWrite, AuditEvent: rid("task.cancel"), Handle: cancelTask},
+		{ID: rid("task.delete"), Method: plugin.MethodDelete, Path: "/tasks/{task}", Permission: "meilisearch.tasks.delete", Risk: plugin.RiskDestructive, AuditEvent: rid("task.delete"), Handle: deleteTask},
 		{ID: rid("keys.list"), Method: plugin.MethodGet, Path: "/keys", Permission: "meilisearch.keys.read", Risk: plugin.RiskSafe, AuditEvent: rid("keys.list"), Handle: listKeys},
 		{ID: rid("key.read"), Method: plugin.MethodGet, Path: "/keys/{key}", Permission: "meilisearch.keys.read", Risk: plugin.RiskSafe, AuditEvent: rid("key.read"), Handle: readKey},
 		{ID: rid("key.create"), Method: plugin.MethodPost, Path: "/keys", Permission: "meilisearch.keys.write", Risk: plugin.RiskWrite, AuditEvent: rid("key.create"), Input: keyCreateSchema(), Handle: createKey},
+		{ID: rid("key.update"), Method: plugin.MethodPatch, Path: "/keys/{key}", Permission: "meilisearch.keys.write", Risk: plugin.RiskWrite, AuditEvent: rid("key.update"), Input: keyUpdateSchema(), Handle: updateKey},
 		{ID: rid("key.delete"), Method: plugin.MethodDelete, Path: "/keys/{key}", Permission: "meilisearch.keys.delete", Risk: plugin.RiskDestructive, AuditEvent: rid("key.delete"), Handle: deleteKey},
 		{ID: rid("dump.create"), Method: plugin.MethodPost, Path: "/dumps", Permission: "meilisearch.dumps.write", Risk: plugin.RiskWrite, AuditEvent: rid("dump.create"), Handle: createDump},
 		{ID: rid("snapshot.create"), Method: plugin.MethodPost, Path: "/snapshots", Permission: "meilisearch.snapshots.write", Risk: plugin.RiskWrite, AuditEvent: rid("snapshot.create"), Handle: createSnapshot},
@@ -84,6 +89,13 @@ func keyCreateSchema() *plugin.Schema {
 		{Key: "actions", Label: "Actions", Type: plugin.FieldJSON, Required: true, Default: []any{"search"}},
 		{Key: "indexes", Label: "Indexes", Type: plugin.FieldJSON, Required: true, Default: []any{"*"}},
 		{Key: "expiresAt", Label: "Expires at", Type: plugin.FieldText, Placeholder: "2027-01-01T00:00:00Z or null"},
+	}}}}
+}
+
+func keyUpdateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Key", Fields: []plugin.Field{
+		{Key: "name", Label: "Name", Type: plugin.FieldText},
+		{Key: "description", Label: "Description", Type: plugin.FieldTextarea},
 	}}}}
 }
 
@@ -430,8 +442,29 @@ func cancelTask(rc *plugin.RequestContext) (any, error) {
 	if err := ensureWritable(s); err != nil {
 		return nil, err
 	}
+	uid, err := validTaskUID(taskParam(rc))
+	if err != nil {
+		return nil, err
+	}
 	var out row
-	err = s.client.Do(rc.Ctx, http.MethodPost, "/tasks/cancel", url.Values{"uids": []string{taskParam(rc)}}, nil, &out)
+	err = s.client.Do(rc.Ctx, http.MethodPost, "/tasks/cancel", url.Values{"uids": []string{uid}}, nil, &out)
+	return out, err
+}
+
+func deleteTask(rc *plugin.RequestContext) (any, error) {
+	s, err := session(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	uid, err := validTaskUID(taskParam(rc))
+	if err != nil {
+		return nil, err
+	}
+	var out row
+	err = s.client.Do(rc.Ctx, http.MethodDelete, "/tasks", url.Values{"uids": []string{uid}}, nil, &out)
 	return out, err
 }
 
@@ -507,6 +540,34 @@ func createKey(rc *plugin.RequestContext) (any, error) {
 	}
 	var out row
 	err = s.client.Do(rc.Ctx, http.MethodPost, "/keys", nil, body, &out)
+	return out, err
+}
+
+func updateKey(rc *plugin.RequestContext) (any, error) {
+	s, err := session(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	uid, err := validKeyUID(keyParam(rc))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	body, err := keyUpdateBody(req.Name, req.Description)
+	if err != nil {
+		return nil, err
+	}
+	var out row
+	err = s.client.Do(rc.Ctx, http.MethodPatch, "/keys/"+url.PathEscape(uid), nil, body, &out)
 	return out, err
 }
 
@@ -708,6 +769,40 @@ func keyParam(rc *plugin.RequestContext) string {
 		return v
 	}
 	return strings.TrimSpace(rc.Query().Get("p.key"))
+}
+
+// validTaskUID accepts Meilisearch task uids, which are non-negative integers.
+func validTaskUID(uid string) (string, error) {
+	uid = strings.TrimSpace(uid)
+	if n, err := strconv.ParseInt(uid, 10, 64); err != nil || n < 0 {
+		return "", fmt.Errorf("%w: task uid must be a non-negative integer", plugin.ErrInvalidInput)
+	}
+	return uid, nil
+}
+
+// validKeyUID accepts Meilisearch API key uids, which are UUIDs.
+func validKeyUID(uid string) (string, error) {
+	uid = strings.TrimSpace(uid)
+	if !uuidPattern.MatchString(uid) {
+		return "", fmt.Errorf("%w: key uid must be a UUID", plugin.ErrInvalidInput)
+	}
+	return uid, nil
+}
+
+// keyUpdateBody builds the PATCH /keys body; Meilisearch only allows updating
+// name and description, and rejects an empty payload.
+func keyUpdateBody(name, description *string) (row, error) {
+	body := row{}
+	if name != nil {
+		body["name"] = strings.TrimSpace(*name)
+	}
+	if description != nil {
+		body["description"] = strings.TrimSpace(*description)
+	}
+	if len(body) == 0 {
+		return nil, fmt.Errorf("%w: provide a name or description to update", plugin.ErrInvalidInput)
+	}
+	return body, nil
 }
 
 func pathIndex(index string) string { return "/indexes/" + url.PathEscape(index) }

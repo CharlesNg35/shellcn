@@ -70,7 +70,10 @@ func runSolrScenario(ctx context.Context, t *testing.T, cfg map[string]any) {
 	fieldBody, _ := json.Marshal(map[string]any{"name": field, "type": "string", "indexed": true, "stored": true})
 	call(ctx, t, routes["solr.schema.field.add"], sess, map[string]string{"core": core}, nil, fieldBody)
 	call(ctx, t, routes["solr.schema.fields"], sess, map[string]string{"core": core}, nil, nil)
-	call(ctx, t, routes["solr.schema.field.read"], sess, map[string]string{"core": core, "field": field}, nil, nil)
+	added := call(ctx, t, routes["solr.schema.field.read"], sess, map[string]string{"core": core, "field": field}, nil, nil)
+	if got := schemaFieldProp(added, "stored"); got != true {
+		t.Fatalf("added field stored: got %#v want true", got)
+	}
 
 	docBody, _ := json.Marshal(map[string]any{"document": map[string]any{"id": "ada", field: "Ada Lovelace", "age_i": 37}, "commit": true})
 	call(ctx, t, routes["solr.document.upsert"], sess, map[string]string{"core": core}, nil, docBody)
@@ -99,6 +102,20 @@ func runSolrScenario(ctx context.Context, t *testing.T, cfg map[string]any) {
 	deleteQueryBody, _ := json.Marshal(map[string]any{"query": "id:temp", "commit": true})
 	call(ctx, t, routes["solr.documents.delete_query"], sess, map[string]string{"core": core}, nil, deleteQueryBody)
 	call(ctx, t, routes["solr.document.delete"], sess, map[string]string{"core": core, "id": "ada"}, nil, nil)
+
+	replaceBody, _ := json.Marshal(map[string]any{"type": "strings", "indexed": true, "stored": false, "multi_valued": true})
+	call(ctx, t, routes["solr.schema.field.replace"], sess, map[string]string{"core": core, "field": field}, nil, replaceBody)
+	replaced := call(ctx, t, routes["solr.schema.field.read"], sess, map[string]string{"core": core, "field": field}, nil, nil)
+	if got := schemaFieldProp(replaced, "stored"); got != false {
+		t.Fatalf("replaced field stored: got %#v want false", got)
+	}
+	if got := schemaFieldProp(replaced, "multiValued"); got != true {
+		t.Fatalf("replaced field multiValued: got %#v want true", got)
+	}
+	if got := schemaFieldProp(replaced, "type"); got != "strings" {
+		t.Fatalf("replaced field type: got %#v want strings", got)
+	}
+
 	call(ctx, t, routes["solr.schema.field.delete"], sess, map[string]string{"core": core, "field": field}, nil, nil)
 	call(ctx, t, routes["solr.core.reload"], sess, map[string]string{"core": core}, nil, nil)
 }
@@ -223,6 +240,15 @@ func run(ctx context.Context, t *testing.T, name string, args ...string) string 
 		t.Fatalf("%s %s: %v\n%s", name, strings.Join(args, " "), err, out)
 	}
 	return string(out)
+}
+
+func schemaFieldProp(v any, key string) any {
+	data, _ := json.Marshal(v)
+	var decoded struct {
+		Field map[string]any `json:"field"`
+	}
+	_ = json.Unmarshal(data, &decoded)
+	return decoded.Field[key]
 }
 
 func fieldValue(v any, key string) any {

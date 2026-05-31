@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	natsclient "github.com/nats-io/nats.go"
 
@@ -26,6 +27,7 @@ func routes() []plugin.Route {
 		{ID: "nats.streams.list", Method: plugin.MethodGet, Path: "/streams", Permission: "nats.streams.read", Risk: plugin.RiskSafe, AuditEvent: "nats.streams.list", Handle: listStreams},
 		{ID: "nats.stream.overview", Method: plugin.MethodGet, Path: "/streams/{stream}", Permission: "nats.streams.read", Risk: plugin.RiskSafe, AuditEvent: "nats.stream.overview", Handle: streamOverview},
 		{ID: "nats.stream.create", Method: plugin.MethodPost, Path: "/streams", Permission: "nats.streams.write", Risk: plugin.RiskWrite, AuditEvent: "nats.stream.create", Input: streamCreateSchema(), Handle: createStream},
+		{ID: "nats.stream.update", Method: plugin.MethodPut, Path: "/streams/{stream}", Permission: "nats.streams.write", Risk: plugin.RiskWrite, AuditEvent: "nats.stream.update", Input: streamUpdateSchema(), Handle: updateStream},
 		{ID: "nats.stream.purge", Method: plugin.MethodDelete, Path: "/streams/{stream}/messages", Permission: "nats.streams.delete", Risk: plugin.RiskDestructive, AuditEvent: "nats.stream.purge", Handle: purgeStream},
 		{ID: "nats.stream.delete", Method: plugin.MethodDelete, Path: "/streams/{stream}", Permission: "nats.streams.delete", Risk: plugin.RiskDestructive, AuditEvent: "nats.stream.delete", Handle: deleteStream},
 		{ID: "nats.consumers.list", Method: plugin.MethodGet, Path: "/consumers", Permission: "nats.consumers.read", Risk: plugin.RiskSafe, AuditEvent: "nats.consumers.list", Handle: listConsumers},
@@ -46,6 +48,16 @@ func streamCreateSchema() *plugin.Schema {
 		{Key: "replicas", Label: "Replicas", Type: plugin.FieldNumber, Default: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 5}}},
 		{Key: "max_msgs", Label: "Max messages", Type: plugin.FieldNumber, Default: -1},
 		{Key: "max_bytes", Label: "Max bytes", Type: plugin.FieldNumber, Default: -1},
+	}}}}
+}
+
+func streamUpdateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Stream", Fields: []plugin.Field{
+		{Key: "subjects", Label: "Subjects", Type: plugin.FieldTextarea, Placeholder: "orders.*\npayments.>", Help: "Leave blank to keep the current subjects."},
+		{Key: "replicas", Label: "Replicas", Type: plugin.FieldNumber, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 5}}},
+		{Key: "max_msgs", Label: "Max messages", Type: plugin.FieldNumber, Help: "-1 for unlimited."},
+		{Key: "max_bytes", Label: "Max bytes", Type: plugin.FieldNumber, Help: "-1 for unlimited."},
+		{Key: "max_age", Label: "Max age", Type: plugin.FieldDuration, Placeholder: "24h", Help: "Empty or 0 keeps messages forever."},
 	}}}}
 }
 
@@ -162,6 +174,90 @@ func createStream(rc *plugin.RequestContext) (any, error) {
 	}
 	_, err = s.js.AddStream(&natsclient.StreamConfig{Name: req.Name, Subjects: splitSubjects(req.Subjects), Storage: storage, Replicas: req.Replicas, MaxMsgs: req.MaxMsgs, MaxBytes: req.MaxBytes})
 	return actionResult{OK: err == nil}, natsErr(err)
+}
+
+type streamUpdateRequest struct {
+	Subjects *string `json:"subjects"`
+	Replicas *int    `json:"replicas"`
+	MaxMsgs  *int64  `json:"max_msgs"`
+	MaxBytes *int64  `json:"max_bytes"`
+	MaxAge   *string `json:"max_age"`
+}
+
+func updateStream(rc *plugin.RequestContext) (any, error) {
+	s, err := natsSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	name := streamParam(rc)
+	if name == "" {
+		return nil, fmt.Errorf("%w: stream name is required", plugin.ErrInvalidInput)
+	}
+	var req streamUpdateRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	info, err := s.js.StreamInfo(name)
+	if err != nil {
+		return nil, natsErr(err)
+	}
+	cfg, err := applyStreamUpdate(info.Config, req)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.js.UpdateStream(&cfg)
+	return actionResult{OK: err == nil}, natsErr(err)
+}
+
+// applyStreamUpdate overlays the provided changes onto the stream's current
+// config so unspecified fields are preserved and immutable fields untouched.
+func applyStreamUpdate(current natsclient.StreamConfig, req streamUpdateRequest) (natsclient.StreamConfig, error) {
+	cfg := current
+	if req.Subjects != nil {
+		subjects := splitSubjects(*req.Subjects)
+		if len(subjects) == 0 {
+			return natsclient.StreamConfig{}, fmt.Errorf("%w: at least one subject is required", plugin.ErrInvalidInput)
+		}
+		cfg.Subjects = subjects
+	}
+	if req.Replicas != nil {
+		if *req.Replicas < 1 || *req.Replicas > 5 {
+			return natsclient.StreamConfig{}, fmt.Errorf("%w: replicas must be between 1 and 5", plugin.ErrInvalidInput)
+		}
+		cfg.Replicas = *req.Replicas
+	}
+	if req.MaxMsgs != nil {
+		cfg.MaxMsgs = *req.MaxMsgs
+	}
+	if req.MaxBytes != nil {
+		cfg.MaxBytes = *req.MaxBytes
+	}
+	if req.MaxAge != nil {
+		age, err := parseMaxAge(*req.MaxAge)
+		if err != nil {
+			return natsclient.StreamConfig{}, err
+		}
+		cfg.MaxAge = age
+	}
+	return cfg, nil
+}
+
+func parseMaxAge(raw string) (time.Duration, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "0" {
+		return 0, nil
+	}
+	age, err := time.ParseDuration(trimmed)
+	if err != nil {
+		return 0, fmt.Errorf("%w: max_age must be a duration (e.g. 24h)", plugin.ErrInvalidInput)
+	}
+	if age < 0 {
+		return 0, fmt.Errorf("%w: max_age cannot be negative", plugin.ErrInvalidInput)
+	}
+	return age, nil
 }
 
 func purgeStream(rc *plugin.RequestContext) (any, error) {

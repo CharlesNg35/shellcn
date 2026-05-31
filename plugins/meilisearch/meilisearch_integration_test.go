@@ -78,7 +78,33 @@ func TestMeilisearchPluginIntegration(t *testing.T) {
 	key := call(ctx, t, routes["meilisearch.key.create"], sess, nil, nil, keyBody)
 	if uid := strings.TrimSpace(toString(field(key, "uid"))); uid != "" {
 		call(ctx, t, routes["meilisearch.key.read"], sess, map[string]string{"key": uid}, nil, nil)
+		keyUpdateBody, _ := json.Marshal(map[string]any{"name": "shellcn-it-renamed", "description": "updated"})
+		updated := call(ctx, t, routes["meilisearch.key.update"], sess, map[string]string{"key": uid}, nil, keyUpdateBody)
+		if toString(field(updated, "name")) != "shellcn-it-renamed" || toString(field(updated, "description")) != "updated" {
+			t.Fatalf("key update did not persist: %#v", updated)
+		}
+		readBack := call(ctx, t, routes["meilisearch.key.read"], sess, map[string]string{"key": uid}, nil, nil)
+		if toString(field(readBack, "name")) != "shellcn-it-renamed" || toString(field(readBack, "description")) != "updated" {
+			t.Fatalf("key update not reflected on read: %#v", readBack)
+		}
 		call(ctx, t, routes["meilisearch.key.delete"], sess, map[string]string{"key": uid}, nil, nil)
+	}
+
+	// Cancel an enqueued/processing task, then delete a finished one by uid.
+	cancelDoc, _ := json.Marshal(map[string]any{"document": map[string]any{"id": "cancel-target", "name": "Cancel", "age": 2}})
+	enqueued := call(ctx, t, routes["meilisearch.document.upsert"], sess, map[string]string{"index": index}, nil, cancelDoc)
+	cancelUID := toString(field(enqueued, "taskUid"))
+	cancelRes := call(ctx, t, routes["meilisearch.task.cancel"], sess, map[string]string{"task": cancelUID}, nil, nil)
+	waitTask(ctx, t, routes, sess, field(cancelRes, "taskUid"))
+	waitTaskFinished(ctx, t, routes, sess, cancelUID)
+	delTask := call(ctx, t, routes["meilisearch.task.delete"], sess, map[string]string{"task": cancelUID}, nil, nil)
+	delUID := toString(field(delTask, "taskUid"))
+	waitTask(ctx, t, routes, sess, delUID)
+	gone := call(ctx, t, routes["meilisearch.task.read"], sess, map[string]string{"task": delUID}, nil, nil)
+	if details, ok := field(gone, "details").(map[string]any); ok {
+		if toString(details["deletedTasks"]) == "0" {
+			t.Fatalf("task deletion removed nothing: %#v", gone)
+		}
 	}
 	waitTask(ctx, t, routes, sess, field(call(ctx, t, routes["meilisearch.document.delete"], sess, map[string]string{"index": index, "id": "ada"}, nil, nil), "taskUid"))
 	docBody, _ = json.Marshal(map[string]any{"document": map[string]any{"id": "temp", "name": "Temporary", "age": 1}})
@@ -153,6 +179,24 @@ func waitTask(ctx context.Context, t *testing.T, routes map[string]plugin.Route,
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("task %s did not finish: %#v", id, task)
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+// waitTaskFinished waits until a task reaches any terminal state (it may be
+// canceled rather than succeeded), so it can then be deleted from history.
+func waitTaskFinished(ctx context.Context, t *testing.T, routes map[string]plugin.Route, sess plugin.Session, uid string) {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for {
+		task := call(ctx, t, routes["meilisearch.task.read"], sess, map[string]string{"task": uid}, nil, nil)
+		switch toString(field(task, "status")) {
+		case "succeeded", "failed", "canceled":
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("task %s did not finish: %#v", uid, task)
 		}
 		time.Sleep(250 * time.Millisecond)
 	}

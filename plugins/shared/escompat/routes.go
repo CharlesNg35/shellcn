@@ -34,6 +34,7 @@ func Routes(provider Provider) []plugin.Route {
 		{ID: routeID(provider, "mapping.read"), Method: plugin.MethodGet, Path: "/indexes/{index}/mapping", Permission: provider.Protocol + ".mappings.read", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "mapping.read"), Handle: readMapping},
 		{ID: routeID(provider, "mapping.update"), Method: plugin.MethodPut, Path: "/indexes/{index}/mapping", Permission: provider.Protocol + ".mappings.write", Risk: plugin.RiskWrite, AuditEvent: routeID(provider, "mapping.update"), Input: mappingUpdateSchema(), Handle: updateMapping},
 		{ID: routeID(provider, "settings.read"), Method: plugin.MethodGet, Path: "/indexes/{index}/settings", Permission: provider.Protocol + ".settings.read", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "settings.read"), Handle: readSettings},
+		{ID: routeID(provider, "settings.update"), Method: plugin.MethodPut, Path: "/indexes/{index}/settings", Permission: provider.Protocol + ".settings.write", Risk: plugin.RiskWrite, AuditEvent: routeID(provider, "settings.update"), Input: settingsUpdateSchema(), Handle: updateSettings},
 		{ID: routeID(provider, "aliases.list"), Method: plugin.MethodGet, Path: "/indexes/{index}/aliases", Permission: provider.Protocol + ".aliases.read", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "aliases.list"), Handle: listAliases},
 		{ID: routeID(provider, "alias.create"), Method: plugin.MethodPost, Path: "/indexes/{index}/aliases", Permission: provider.Protocol + ".aliases.write", Risk: plugin.RiskWrite, AuditEvent: routeID(provider, "alias.create"), Input: aliasCreateSchema(), Handle: createAlias},
 		{ID: routeID(provider, "alias.delete"), Method: plugin.MethodDelete, Path: "/indexes/{index}/aliases/{alias}", Permission: provider.Protocol + ".aliases.delete", Risk: plugin.RiskDestructive, AuditEvent: routeID(provider, "alias.delete"), Handle: deleteAlias},
@@ -43,6 +44,7 @@ func Routes(provider Provider) []plugin.Route {
 		{ID: routeID(provider, "document.create"), Method: plugin.MethodPost, Path: "/indexes/{index}/documents", Permission: provider.Protocol + ".documents.write", Risk: plugin.RiskWrite, AuditEvent: routeID(provider, "document.create"), Input: documentCreateSchema(), Handle: createDocument},
 		{ID: routeID(provider, "document.update"), Method: plugin.MethodPut, Path: "/indexes/{index}/documents/{id}", Permission: provider.Protocol + ".documents.write", Risk: plugin.RiskWrite, AuditEvent: routeID(provider, "document.update"), Handle: updateDocument},
 		{ID: routeID(provider, "document.delete"), Method: plugin.MethodDelete, Path: "/indexes/{index}/documents/{id}", Permission: provider.Protocol + ".documents.delete", Risk: plugin.RiskDestructive, AuditEvent: routeID(provider, "document.delete"), Handle: deleteDocument},
+		{ID: routeID(provider, "documents.delete_by_query"), Method: plugin.MethodPost, Path: "/indexes/{index}/delete_by_query", Permission: provider.Protocol + ".documents.delete", Risk: plugin.RiskDestructive, AuditEvent: routeID(provider, "documents.delete_by_query"), Input: deleteByQuerySchema(), Handle: deleteByQuery},
 		{ID: routeID(provider, "reindex"), Method: plugin.MethodPost, Path: "/reindex", Permission: provider.Protocol + ".indexes.write", Risk: plugin.RiskWrite, AuditEvent: routeID(provider, "reindex"), Input: reindexSchema(), Handle: reindex},
 		{ID: routeID(provider, "search.query"), Method: plugin.MethodWS, Path: "/search", Permission: provider.Protocol + ".search.execute", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "search.query"), Stream: searchStream},
 		{ID: routeID(provider, "completion"), Method: plugin.MethodGet, Path: "/completion", Permission: provider.Protocol + ".read", Risk: plugin.RiskSafe, AuditEvent: routeID(provider, "completion"), Handle: completionRoute},
@@ -282,25 +284,119 @@ func readSettings(rc *plugin.RequestContext) (any, error) {
 	return out, err
 }
 
+func settingsUpdateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Settings", Fields: []plugin.Field{
+		{Key: "settings", Label: "Settings", Type: plugin.FieldJSON, Required: true, Help: "Dynamic index settings to apply, e.g. {\"index\":{\"number_of_replicas\":1,\"refresh_interval\":\"30s\"}}."},
+	}}}}
+}
+
+func updateSettings(rc *plugin.RequestContext) (any, error) {
+	s, err := searchSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	index, err := validateIndex(indexParam(rc))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Settings map[string]any `json:"settings"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	if len(req.Settings) == 0 {
+		return nil, fmt.Errorf("%w: settings body is required", plugin.ErrInvalidInput)
+	}
+	err = s.client.Do(rc.Ctx, http.MethodPut, pathIndex(index)+"/_settings", nil, req.Settings, nil)
+	return actionResult{OK: err == nil}, err
+}
+
+func deleteByQuerySchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Delete by query", Fields: []plugin.Field{
+		{Key: "query", Label: "Query", Type: plugin.FieldJSON, Required: true, Help: "Query DSL selecting the documents to delete, e.g. {\"match\":{\"status\":\"archived\"}}."},
+	}}}}
+}
+
+func deleteByQuery(rc *plugin.RequestContext) (any, error) {
+	s, err := searchSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	index, err := validateIndex(indexParam(rc))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Query map[string]any `json:"query"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	if len(req.Query) == 0 {
+		return nil, fmt.Errorf("%w: a query is required to delete by query", plugin.ErrInvalidInput)
+	}
+	body := map[string]any{"query": req.Query}
+	q := url.Values{"refresh": []string{"true"}, "conflicts": []string{"proceed"}}
+	var out map[string]any
+	err = s.client.Do(rc.Ctx, http.MethodPost, pathIndex(index)+"/_delete_by_query", q, body, &out)
+	return out, err
+}
+
 func listAliases(rc *plugin.RequestContext) (any, error) {
 	s, err := searchSession(rc)
 	if err != nil {
 		return nil, err
 	}
-	var rows []row
-	err = s.client.Do(rc.Ctx, http.MethodGet, "/_cat/aliases/"+url.PathEscape(indexParam(rc)), url.Values{"format": []string{"json"}}, nil, &rows)
-	if err != nil {
+	index := indexParam(rc)
+	var raw map[string]struct {
+		Aliases map[string]aliasDefinition `json:"aliases"`
+	}
+	if err := s.client.Do(rc.Ctx, http.MethodGet, pathIndex(index)+"/_alias", nil, nil, &raw); err != nil {
 		if isMissing(err) {
 			return plugin.Page[row]{Items: []row{}, Total: ptr(0)}, nil
 		}
 		return nil, err
 	}
-	for _, r := range rows {
-		alias := strings.TrimSpace(fmt.Sprint(r["alias"]))
-		idx := strings.TrimSpace(fmt.Sprint(r["index"]))
-		r["ref"] = plugin.ResourceRef{Kind: "alias", Namespace: idx, Name: alias, UID: idx + "/" + alias}
+	rows := make([]row, 0)
+	for idx, entry := range raw {
+		for alias, def := range entry.Aliases {
+			rows = append(rows, aliasRow(idx, alias, def))
+		}
 	}
+	sort.Slice(rows, func(i, j int) bool { return fmt.Sprint(rows[i]["alias"]) < fmt.Sprint(rows[j]["alias"]) })
 	return broker.PageRows(rc, rows)
+}
+
+type aliasDefinition struct {
+	Filter        map[string]any `json:"filter"`
+	IndexRouting  string         `json:"index_routing"`
+	SearchRouting string         `json:"search_routing"`
+	IsWriteIndex  bool           `json:"is_write_index"`
+}
+
+func aliasRow(index, alias string, def aliasDefinition) row {
+	filter := "-"
+	if len(def.Filter) > 0 {
+		if data, err := json.Marshal(def.Filter); err == nil {
+			filter = string(data)
+		}
+	}
+	return row{
+		"alias":          alias,
+		"index":          index,
+		"filter":         filter,
+		"routing.index":  def.IndexRouting,
+		"routing.search": def.SearchRouting,
+		"is_write_index": def.IsWriteIndex,
+		"ref":            plugin.ResourceRef{Kind: "alias", Namespace: index, Name: alias, UID: index + "/" + alias},
+	}
 }
 
 func createAlias(rc *plugin.RequestContext) (any, error) {
