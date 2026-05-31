@@ -93,9 +93,9 @@ func databaseColumns() []plugin.Column {
 func databaseResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "database", Title: "Databases",
-		List:          plugin.DataSource{RouteID: "mysql.databases.list"},
-		ListActionIDs: []string{"mysql.database.create"},
-		Columns:       databaseColumns(),
+		List:    plugin.DataSource{RouteID: "mysql.databases.list"},
+		Columns: databaseColumns(),
+		Actions: plugin.ResourceActions{Toolbar: []string{"mysql.database.create"}},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
@@ -113,11 +113,14 @@ func databaseResource() plugin.ResourceType {
 func tableResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "table", Title: "Tables",
-		List:         plugin.DataSource{RouteID: "mysql.tables.list"},
-		Columns:      tableColumns(),
-		RowActionIDs: []string{"mysql.column.add", "mysql.table.truncate", "mysql.table.drop"},
+		List:    plugin.DataSource{RouteID: "mysql.tables.list"},
+		Columns: tableColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"mysql.column.add", "mysql.table.truncate", "mysql.table.drop"},
+			Detail: []string{"mysql.table.truncate", "mysql.table.drop"},
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mysql.table.truncate", "mysql.table.drop"}},
+			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.table.rows", Params: tableParams()}, Config: dataGridConfig()},
 				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"mysql.column.add"}, RowActionIDs: []string{"mysql.column.drop"}}},
@@ -133,8 +136,11 @@ func viewResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "view", Title: "Views",
 		List: plugin.DataSource{RouteID: "mysql.views.list"}, Columns: viewColumns(),
-		RowActionIDs: []string{"mysql.view.drop"},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mysql.view.drop"}}, Tabs: []plugin.Tab{
+		Actions: plugin.ResourceActions{
+			Row:    []string{"mysql.view.drop"},
+			Detail: []string{"mysql.view.drop"},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mysql.view.rows", Params: tableParams()}},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mysql.view.definition", Params: tableParams()}},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mysql.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM `${resource.namespace}`.`${resource.name}` LIMIT 100;")},

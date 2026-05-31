@@ -25,8 +25,13 @@ func resources() []plugin.ResourceType {
 		},
 		{
 			Kind: "namespace", Title: "Databases / Buckets", List: plugin.DataSource{RouteID: rid("namespaces.list")},
-			Columns: namespaceColumns(), ListActionIDs: []string{rid("namespace.create")}, RowActionIDs: []string{rid("write.namespace"), rid("namespace.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("write.namespace"), rid("namespace.delete")}}, Tabs: []plugin.Tab{
+			Columns: namespaceColumns(),
+			Actions: plugin.ResourceActions{
+				Toolbar: []string{rid("namespace.create")},
+				Row:     []string{rid("write.namespace"), rid("namespace.delete")},
+				Detail:  []string{rid("write.namespace"), rid("namespace.delete")},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("namespace.read"), Params: namespaceParams()}},
 				{Key: "measurements", Label: "Measurements", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurements.list"), Params: namespaceParams()}, Config: plugin.TableConfig{Columns: measurementColumns(), Exportable: true}},
 				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: namespaceParams()}, Config: queryConfig()},
@@ -34,8 +39,12 @@ func resources() []plugin.ResourceType {
 		},
 		{
 			Kind: "measurement", Title: "Measurements", List: plugin.DataSource{RouteID: rid("measurements.list")},
-			Columns: measurementColumns(), RowActionIDs: []string{rid("write.measurement")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{rid("write.measurement")}}, Tabs: []plugin.Tab{
+			Columns: measurementColumns(),
+			Actions: plugin.ResourceActions{
+				Row:    []string{rid("write.measurement")},
+				Detail: []string{rid("write.measurement")},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
 				{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.rows"), Params: measurementParams()}, Config: plugin.TableConfig{Exportable: true, EmptyText: "No points in the selected range."}},
 				{Key: "fields", Label: "Fields", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.fields"), Params: measurementParams()}, Config: plugin.TableConfig{Columns: fieldColumns(), Exportable: true}},
 				{Key: "tags", Label: "Tags", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.tags"), Params: measurementParams()}, Config: plugin.TableConfig{Columns: tagColumns(), Exportable: true}},

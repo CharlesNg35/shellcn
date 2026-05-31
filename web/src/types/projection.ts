@@ -526,7 +526,14 @@ export interface HeaderSpec {
   statusField?: string;
   // Colors the status badge by value (same value->severity map as a badge column).
   severities?: Record<string, Severity>;
-  actionIds?: string[];
+}
+
+// ResourceActions groups a resource's action IDs by render surface.
+export interface ResourceActions {
+  toolbar?: string[]; // list toolbar (create, prune)
+  row?: string[]; // bulk over selected rows (delete); implies selectable
+  detail?: string[]; // the one open resource, in its detail header
+  selectable?: boolean; // row checkboxes without a row bar; row implies it
 }
 
 export interface DetailView {
@@ -542,10 +549,8 @@ export interface ResourceType {
   watch?: DataSource;
   columns: Column[];
   columnsSource?: DataSource; // runtime column defs when columns is empty (e.g. CRDs)
-  actionIds: string[];
-  listActionIds?: string[];
-  rowActionIds?: string[];
-  selectable?: boolean; // row checkboxes without row actions (actions in detail)
+  // Actions grouped by render surface (toolbar / row / detail).
+  actions?: ResourceActions;
   detail: DetailView;
 }
 

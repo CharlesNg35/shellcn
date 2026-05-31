@@ -108,9 +108,9 @@ func qemuResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "qemu", Title: "Virtual Machines",
 		List: plugin.DataSource{RouteID: "proxmox.qemu.list"}, Columns: cols,
-		ActionIDs: lifecycle,
+		Actions: plugin.ResourceActions{Detail: lifecycle},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities, ActionIDs: lifecycle},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.qemu.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics()},
 				{Key: "console", Label: "Console", Icon: icon("monitor"), Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "proxmox.qemu.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true}},
@@ -128,9 +128,9 @@ func lxcResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "lxc", Title: "Containers",
 		List: plugin.DataSource{RouteID: "proxmox.lxc.list"}, Columns: cols,
-		ActionIDs: lifecycle,
+		Actions: plugin.ResourceActions{Detail: lifecycle},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities, ActionIDs: lifecycle},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.lxc.metrics", Method: plugin.MethodWS, Params: guestParams()}, Config: cpuMemMetrics()},
 				{Key: "console", Label: "Console", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.lxc.console", Method: plugin.MethodWS, Params: guestParams()}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},

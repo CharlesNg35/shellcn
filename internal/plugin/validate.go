@@ -503,10 +503,9 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 		if rt.ColumnsSource != nil {
 			checkReadSource(fmt.Sprintf("resource %q columnsSource", rt.Kind), *rt.ColumnsSource)
 		}
-		checkActionIDs(fmt.Sprintf("resource %q", rt.Kind), rt.ActionIDs)
-		checkActionIDs(fmt.Sprintf("resource %q list", rt.Kind), rt.ListActionIDs)
-		checkActionIDs(fmt.Sprintf("resource %q row", rt.Kind), rt.RowActionIDs)
-		checkActionIDs(fmt.Sprintf("resource %q header", rt.Kind), rt.Detail.Header.ActionIDs)
+		checkActionIDs(fmt.Sprintf("resource %q toolbar", rt.Kind), rt.Actions.Toolbar)
+		checkActionIDs(fmt.Sprintf("resource %q row", rt.Kind), rt.Actions.Row)
+		checkActionIDs(fmt.Sprintf("resource %q detail", rt.Kind), rt.Actions.Detail)
 		if rt.Detail.DefaultTab != "" {
 			found := false
 			for _, tab := range rt.Detail.Tabs {

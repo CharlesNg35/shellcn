@@ -85,8 +85,8 @@ func serverResource() plugin.ResourceType {
 func databaseResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "database", Title: "Databases",
-		List:          plugin.DataSource{RouteID: "mssql.databases.list"},
-		ListActionIDs: []string{"mssql.database.create"},
+		List:    plugin.DataSource{RouteID: "mssql.databases.list"},
+		Actions: plugin.ResourceActions{Toolbar: []string{"mssql.database.create"}},
 		Columns: []plugin.Column{
 			{Key: "name", Label: "Database", Sortable: true},
 			{Key: "state", Label: "State", Sortable: true},
@@ -120,10 +120,13 @@ func schemaResource() plugin.ResourceType {
 func tableResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "table", Title: "Tables",
-		List:         plugin.DataSource{RouteID: "mssql.tables.list"},
-		Columns:      tableColumns(),
-		RowActionIDs: []string{"mssql.column.add", "mssql.table.truncate", "mssql.table.drop"},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mssql.table.truncate", "mssql.table.drop"}}, Tabs: []plugin.Tab{
+		List:    plugin.DataSource{RouteID: "mssql.tables.list"},
+		Columns: tableColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"mssql.column.add", "mssql.table.truncate", "mssql.table.drop"},
+			Detail: []string{"mssql.table.truncate", "mssql.table.drop"},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.rows", Params: objectParams()}, Config: dataGridConfig()},
 			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"mssql.column.add"}, RowActionIDs: []string{"mssql.column.drop"}}},
 			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mssql.index.create"}, RowActionIDs: []string{"mssql.index.drop"}}},
@@ -137,8 +140,11 @@ func viewResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "view", Title: "Views",
 		List: plugin.DataSource{RouteID: "mssql.views.list"}, Columns: viewColumns(),
-		RowActionIDs: []string{"mssql.view.drop"},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mssql.view.drop"}}, Tabs: []plugin.Tab{
+		Actions: plugin.ResourceActions{
+			Row:    []string{"mssql.view.drop"},
+			Detail: []string{"mssql.view.drop"},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mssql.view.rows", Params: objectParams()}},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mssql.view.definition", Params: objectParams()}},
 			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "mssql.query", Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.namespace}"}}, Config: queryConfig("SELECT TOP (100) * FROM ${resource.name};")},

@@ -154,12 +154,14 @@ func taskColumns() []plugin.Column {
 func serviceResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "service", Title: "Services",
-		List:      plugin.DataSource{RouteID: "swarm.services.list"},
-		Watch:     &plugin.DataSource{RouteID: "swarm.events.watch", Method: plugin.MethodWS},
-		Columns:   serviceColumns(),
-		ActionIDs: []string{"swarm.service.open", "swarm.service.scale", "swarm.service.remove"},
+		List:    plugin.DataSource{RouteID: "swarm.services.list"},
+		Watch:   &plugin.DataSource{RouteID: "swarm.events.watch", Method: plugin.MethodWS},
+		Columns: serviceColumns(),
+		Actions: plugin.ResourceActions{
+			Detail: []string{"swarm.service.open", "swarm.service.scale", "swarm.service.remove"},
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"swarm.service.open", "swarm.service.scale", "swarm.service.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "swarm.service.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "tasks", Label: "Tasks", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "swarm.service.tasks", Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: taskColumns()}},

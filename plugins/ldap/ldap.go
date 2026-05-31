@@ -56,11 +56,14 @@ func entryResource() plugin.ResourceType {
 	dnParams := map[string]string{"dn": "${resource.uid}"}
 	return plugin.ResourceType{
 		Kind: "entry", Title: "Entries",
-		List:         plugin.DataSource{RouteID: "ldap.entries.search"},
-		Columns:      entryColumns(),
-		RowActionIDs: []string{"ldap.entry.rename", "ldap.entry.delete"},
+		List:    plugin.DataSource{RouteID: "ldap.entries.search"},
+		Columns: entryColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"ldap.entry.rename", "ldap.entry.delete"},
+			Detail: []string{"ldap.entry.add", "ldap.entry.rename", "ldap.entry.delete"},
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"ldap.entry.add", "ldap.entry.rename", "ldap.entry.delete"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "attributes", Label: "Attributes", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.attributes", Params: dnParams}, Config: attributeGridConfig(dnParams)},
 				{Key: "children", Label: "Children", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ldap.entry.children", Params: dnParams}, Config: plugin.TableConfig{Columns: entryColumns(), RowActionIDs: []string{"ldap.entry.rename", "ldap.entry.delete"}, EmptyText: "No child entries.", Exportable: true}},

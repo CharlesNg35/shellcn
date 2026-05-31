@@ -19,10 +19,9 @@ func resourceActionIDs() map[string]bool {
 		}
 	}
 	for _, r := range resources() {
-		add(r.ActionIDs)
-		add(r.RowActionIDs)
-		add(r.ListActionIDs)
-		add(r.Detail.Header.ActionIDs)
+		add(r.Actions.Detail)
+		add(r.Actions.Row)
+		add(r.Actions.Toolbar)
 	}
 	return ids
 }

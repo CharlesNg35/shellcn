@@ -61,7 +61,11 @@ function validate(name: string, raw: unknown): PluginProjection {
     assertDataSource(r.list, `${name}.resource ${r.kind}.list`);
     if (r.watch) assertDataSource(r.watch, `${name}.resource ${r.kind}.watch`);
     expect(r.columns.length).toBeGreaterThan(0);
-    for (const id of r.actionIds) {
+    for (const id of [
+      ...(r.actions?.toolbar ?? []),
+      ...(r.actions?.row ?? []),
+      ...(r.actions?.detail ?? []),
+    ]) {
       expect(
         actionIds.has(id),
         `${name}.resource ${r.kind} references undeclared action ${id}`,

@@ -268,7 +268,7 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			m.Streams = []plugin.Stream{{ID: "s", Kind: plugin.StreamLogs, RouteID: "x.list"}}
 		}},
 		{"resource references unknown action", "references unknown action", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Resources = []plugin.ResourceType{{Kind: "k", Title: "K", List: plugin.DataSource{RouteID: "x.list"}, ActionIDs: []string{"ghost"}}}
+			m.Resources = []plugin.ResourceType{{Kind: "k", Title: "K", List: plugin.DataSource{RouteID: "x.list"}, Actions: plugin.ResourceActions{Detail: []string{"ghost"}}}}
 		}},
 		{"detail default tab references unknown tab", "defaultTab references unknown tab", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Resources = []plugin.ResourceType{{

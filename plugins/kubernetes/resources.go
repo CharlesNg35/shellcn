@@ -47,15 +47,17 @@ func resourceType(k kind) plugin.ResourceType {
 	tabs = append(tabs, eventsTab(k))
 
 	return plugin.ResourceType{
-		Kind:          k.name,
-		Title:         k.title,
-		List:          plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": k.name}},
-		Watch:         &plugin.DataSource{RouteID: "kubernetes.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": k.name}},
-		Columns:       k.columns,
-		ActionIDs:     rowActions,
-		ListActionIDs: []string{"kubernetes.create." + k.name},
+		Kind:    k.name,
+		Title:   k.title,
+		List:    plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": k.name}},
+		Watch:   &plugin.DataSource{RouteID: "kubernetes.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": k.name}},
+		Columns: k.columns,
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"kubernetes.create." + k.name},
+			Detail:  rowActions,
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: columnSeverities(k.columns, "status"), ActionIDs: rowActions},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: columnSeverities(k.columns, "status")},
 			Tabs:   tabs,
 		},
 	}
@@ -70,7 +72,9 @@ func customResourceType() plugin.ResourceType {
 		List:  plugin.DataSource{RouteID: "kubernetes.resource.list"},
 		// No static columns: the CRD's own printer columns are fetched at runtime.
 		ColumnsSource: &plugin.DataSource{RouteID: "kubernetes.resource.columns"},
-		ListActionIDs: []string{"kubernetes.create.customresource"},
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"kubernetes.create.customresource"},
+		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{

@@ -84,10 +84,13 @@ func relationshipTypeResource() plugin.ResourceType {
 func nodeResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "node", Title: "Nodes",
-		List:         plugin.DataSource{RouteID: rid("nodes.list")},
-		Columns:      nodeColumns(),
-		RowActionIDs: []string{rid("node.delete")},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("node.delete")}}, Tabs: []plugin.Tab{
+		List:    plugin.DataSource{RouteID: rid("nodes.list")},
+		Columns: nodeColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{rid("node.delete")},
+			Detail: []string{rid("node.delete")},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("node.read"), Params: map[string]string{"id": "${resource.uid}"}}},
 			{Key: "relationships", Label: "Relationships", Icon: icon("git-branch"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("node.relationships"), Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: relationshipColumns(), RowActionIDs: []string{rid("relationship.delete")}, Exportable: true}},
 		}},
@@ -97,10 +100,13 @@ func nodeResource() plugin.ResourceType {
 func relationshipResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "relationship", Title: "Relationships",
-		List:         plugin.DataSource{RouteID: rid("relationships.list")},
-		Columns:      relationshipColumns(),
-		RowActionIDs: []string{rid("relationship.delete")},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("relationship.delete")}}, Tabs: []plugin.Tab{
+		List:    plugin.DataSource{RouteID: rid("relationships.list")},
+		Columns: relationshipColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{rid("relationship.delete")},
+			Detail: []string{rid("relationship.delete")},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("relationship.read"), Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
 	}
@@ -118,8 +124,11 @@ func schemaItemResource() plugin.ResourceType {
 			{Key: "labels_or_types", Label: "Labels / Types"},
 			{Key: "properties", Label: "Properties"},
 		},
-		RowActionIDs: []string{rid("schema.drop")},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("schema.drop")}}, Tabs: []plugin.Tab{
+		Actions: plugin.ResourceActions{
+			Row:    []string{rid("schema.drop")},
+			Detail: []string{rid("schema.drop")},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("schema.read"), Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
 	}

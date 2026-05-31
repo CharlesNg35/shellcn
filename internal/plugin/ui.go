@@ -467,14 +467,24 @@ type Stream struct {
 	RouteID string     `json:"routeId"`
 }
 
-// HeaderSpec configures a resource DetailView header.
+// HeaderSpec configures a resource DetailView header. Detail actions live in
+// ResourceActions.Detail, not here.
 type HeaderSpec struct {
 	Title       string `json:"title,omitempty"`
 	StatusField string `json:"statusField,omitempty"`
 	// Severities colors the status badge by value (same value->severity map as a
 	// badge Column); unmapped values stay neutral.
 	Severities map[string]Severity `json:"severities,omitempty"`
-	ActionIDs  []string            `json:"actionIds,omitempty"`
+}
+
+// ResourceActions groups a resource's action IDs by where the renderer shows
+// them — the single, non-overlapping action contract for a resource. Each ID
+// references Manifest.Actions.
+type ResourceActions struct {
+	Toolbar    []string `json:"toolbar,omitempty"`    // list toolbar, no row context (create, prune)
+	Row        []string `json:"row,omitempty"`        // bulk over selected rows (delete); implies Selectable
+	Detail     []string `json:"detail,omitempty"`     // the one open resource, in its detail header
+	Selectable bool     `json:"selectable,omitempty"` // row checkboxes without a row bar; Row implies it
 }
 
 // DetailView is opened when a resource row is clicked.
@@ -497,13 +507,10 @@ type ResourceType struct {
 	// name/label) for lists whose columns are only known at runtime. The list's
 	// scoping params are merged in, so one generic type can serve many shapes.
 	ColumnsSource *DataSource `json:"columnsSource,omitempty"`
-	ActionIDs     []string    `json:"actionIds"`
-	ListActionIDs []string    `json:"listActionIds,omitempty"`
-	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
-	// Selectable makes the list rows selectable (checkboxes) without declaring
-	// RowActionIDs — a browse table whose actions live in the detail view.
-	Selectable bool       `json:"selectable,omitempty"`
-	Detail     DetailView `json:"detail"`
+	// Actions groups this resource's actions by render surface (toolbar / row /
+	// detail). The single action contract for a resource.
+	Actions ResourceActions `json:"actions,omitzero"`
+	Detail  DetailView      `json:"detail"`
 }
 
 // ScopeControl names the scope filter's input widget. Open vocabulary: the

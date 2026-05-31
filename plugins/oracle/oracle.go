@@ -105,10 +105,13 @@ func schemaResource() plugin.ResourceType {
 func tableResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "table", Title: "Tables",
-		List:         plugin.DataSource{RouteID: "oracle.tables.list"},
-		Columns:      tableColumns(),
-		RowActionIDs: []string{"oracle.column.add", "oracle.table.truncate", "oracle.table.drop"},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"oracle.table.truncate", "oracle.table.drop"}}, Tabs: []plugin.Tab{
+		List:    plugin.DataSource{RouteID: "oracle.tables.list"},
+		Columns: tableColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"oracle.column.add", "oracle.table.truncate", "oracle.table.drop"},
+			Detail: []string{"oracle.table.truncate", "oracle.table.drop"},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.rows", Params: objectParams()}, Config: dataGridConfig()},
 			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"oracle.column.add"}, RowActionIDs: []string{"oracle.column.drop"}}},
 			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"oracle.index.create"}, RowActionIDs: []string{"oracle.index.drop"}}},
@@ -122,8 +125,11 @@ func viewResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "view", Title: "Views",
 		List: plugin.DataSource{RouteID: "oracle.views.list"}, Columns: viewColumns(),
-		RowActionIDs: []string{"oracle.view.drop"},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"oracle.view.drop"}}, Tabs: []plugin.Tab{
+		Actions: plugin.ResourceActions{
+			Row:    []string{"oracle.view.drop"},
+			Detail: []string{"oracle.view.drop"},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.view.rows", Params: objectParams()}},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.view.definition", Params: objectParams()}},
 			{Key: "sql", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.namespace}"}}, Config: queryConfig("SELECT * FROM ${resource.name} FETCH FIRST 100 ROWS ONLY")},

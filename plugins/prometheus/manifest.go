@@ -40,8 +40,9 @@ func resources() []plugin.ResourceType {
 			Kind: "server", Title: "Prometheus",
 			// List satisfies the manifest contract; the server is only ever opened
 			// via the Overview tree group's Ref, which goes straight to Detail.
-			List: plugin.DataSource{RouteID: rid("overview")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("snapshot.create"), rid("tombstones.clean"), rid("config.reload")}}, Tabs: []plugin.Tab{
+			List:    plugin.DataSource{RouteID: rid("overview")},
+			Actions: plugin.ResourceActions{Detail: []string{rid("snapshot.create"), rid("tombstones.clean"), rid("config.reload")}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
 				{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("overview")}},
 				{Key: "live", Label: "Live", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: rid("metrics.live"), Method: plugin.MethodWS}, Config: liveMetricsConfig()},
@@ -82,7 +83,8 @@ func resources() []plugin.ResourceType {
 		{
 			Kind: "metric", Title: "Metrics", List: plugin.DataSource{RouteID: rid("metrics.list")},
 			Columns: metricColumns(),
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("series.delete")}}, Tabs: []plugin.Tab{
+			Actions: plugin.ResourceActions{Detail: []string{rid("series.delete")}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 				{Key: "metadata", Label: "Metadata", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("metric.read"), Params: metricParams()}},
 				{Key: "series", Label: "Series", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("metric.series"), Params: metricParams()}, Config: plugin.TableConfig{Columns: seriesColumns(), Exportable: true}},
 				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: metricQueryConfig()},

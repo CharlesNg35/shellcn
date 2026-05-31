@@ -29,12 +29,14 @@ func resources() []plugin.ResourceType {
 func tableResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "table", Title: "Tables",
-		List:         plugin.DataSource{RouteID: rid("tables.list")},
-		Columns:      tableColumns(),
-		ActionIDs:    []string{rid("table.create")},
-		RowActionIDs: []string{rid("table.delete"), rid("backup.create")},
+		List:    plugin.DataSource{RouteID: rid("tables.list")},
+		Columns: tableColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{rid("table.delete"), rid("backup.create")},
+			Detail: []string{rid("table.create"), rid("table.delete")},
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("table.delete")}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("table.read"), Params: tableParams()}},
 				{Key: "items", Label: "Items", Icon: icon("braces"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("items.list"), Params: tableParams()}, Config: plugin.TableConfig{Exportable: true, ActionIDs: []string{rid("item.put")}, RowActionIDs: []string{rid("item.delete")}, EmptyText: "No items found."}},
@@ -52,11 +54,14 @@ func tableResource() plugin.ResourceType {
 func indexResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "index", Title: "Indexes",
-		List:         plugin.DataSource{RouteID: rid("indexes.list")},
-		Columns:      indexColumns(),
-		RowActionIDs: []string{rid("gsi.delete")},
+		List:    plugin.DataSource{RouteID: rid("indexes.list")},
+		Columns: indexColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{rid("gsi.delete")},
+			Detail: []string{rid("gsi.delete")},
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{rid("gsi.delete")}},
+			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("index.read"), Params: indexParams()}},
 			},
@@ -67,10 +72,13 @@ func indexResource() plugin.ResourceType {
 func itemResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "item", Title: "Items",
-		List:         plugin.DataSource{RouteID: rid("items.list")},
-		RowActionIDs: []string{rid("item.delete")},
+		List: plugin.DataSource{RouteID: rid("items.list")},
+		Actions: plugin.ResourceActions{
+			Row:    []string{rid("item.delete")},
+			Detail: []string{rid("item.delete")},
+		},
 		Detail: plugin.DetailView{
-			Header:     plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("item.delete")}},
+			Header:     plugin.HeaderSpec{Title: "${resource.name}"},
 			DefaultTab: "editor",
 			Tabs: []plugin.Tab{
 				{Key: "document", Label: "Item", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("item.read"), Params: map[string]string{"id": "${resource.uid}"}}},
@@ -83,11 +91,14 @@ func itemResource() plugin.ResourceType {
 func backupResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "backup", Title: "Backups",
-		List:         plugin.DataSource{RouteID: rid("backups.list")},
-		Columns:      backupColumns(),
-		RowActionIDs: []string{rid("backup.delete")},
+		List:    plugin.DataSource{RouteID: rid("backups.list")},
+		Columns: backupColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{rid("backup.delete")},
+			Detail: []string{rid("backup.delete")},
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("backup.delete")}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("backup.read"), Params: map[string]string{"backup": "${resource.uid}"}}},
 			},

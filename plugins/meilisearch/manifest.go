@@ -29,12 +29,15 @@ func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
 		{
 			Kind: "index", Title: "Indexes", List: plugin.DataSource{RouteID: rid("indexes.list")},
-			Columns:       indexColumns(),
-			ListActionIDs: []string{rid("index.create"), rid("dump.create"), rid("snapshot.create")},
-			RowActionIDs:  []string{rid("index.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{
-				rid("settings.update"), rid("index.update"), rid("documents.delete_all"), rid("index.delete"),
-			}}, Tabs: []plugin.Tab{
+			Columns: indexColumns(),
+			Actions: plugin.ResourceActions{
+				Toolbar: []string{rid("index.create"), rid("dump.create"), rid("snapshot.create")},
+				Row:     []string{rid("index.delete")},
+				Detail: []string{
+					rid("settings.update"), rid("index.update"), rid("documents.delete_all"), rid("index.delete"),
+				},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("index.overview"), Params: indexParams()}},
 				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("documents.list"), Params: indexParams()}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{rid("document.upsert")}, RowActionIDs: []string{rid("document.delete")}, Exportable: true}},
 				{Key: "search", Label: "Search", Icon: icon("search"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("search.query"), Method: plugin.MethodWS, Params: indexParams()}, Config: searchConfig()},
@@ -45,27 +48,36 @@ func resources() []plugin.ResourceType {
 		},
 		{
 			Kind: "document", Title: "Documents", List: plugin.DataSource{RouteID: rid("documents.list")},
-			Columns:      documentColumns(),
-			RowActionIDs: []string{rid("document.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{rid("document.delete")}}, DefaultTab: "editor", Tabs: []plugin.Tab{
+			Columns: documentColumns(),
+			Actions: plugin.ResourceActions{
+				Row:    []string{rid("document.delete")},
+				Detail: []string{rid("document.delete")},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, DefaultTab: "editor", Tabs: []plugin.Tab{
 				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}},
 				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("document.update"), SaveMethod: plugin.MethodPut, SaveParams: documentParams()}},
 			}},
 		},
 		{
 			Kind: "task", Title: "Tasks", List: plugin.DataSource{RouteID: rid("tasks.list")},
-			Columns:      taskColumns(),
-			RowActionIDs: []string{rid("task.cancel")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Task ${resource.name}", StatusField: "status", Severities: taskStatusSeverities, ActionIDs: []string{rid("task.cancel")}}, Tabs: []plugin.Tab{
+			Columns: taskColumns(),
+			Actions: plugin.ResourceActions{
+				Row:    []string{rid("task.cancel")},
+				Detail: []string{rid("task.cancel")},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Task ${resource.name}", StatusField: "status", Severities: taskStatusSeverities}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("task.read"), Params: taskParams()}},
 			}},
 		},
 		{
 			Kind: "key", Title: "API keys", List: plugin.DataSource{RouteID: rid("keys.list")},
-			Columns:       keyColumns(),
-			ListActionIDs: []string{rid("key.create")},
-			RowActionIDs:  []string{rid("key.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("key.delete")}}, Tabs: []plugin.Tab{
+			Columns: keyColumns(),
+			Actions: plugin.ResourceActions{
+				Toolbar: []string{rid("key.create")},
+				Row:     []string{rid("key.delete")},
+				Detail:  []string{rid("key.delete")},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("key-round"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("key.read"), Params: keyParams()}},
 			}},
 		},

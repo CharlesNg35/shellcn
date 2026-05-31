@@ -68,10 +68,8 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 		}},
 		Resources: []plugin.ResourceType{{
 			Kind: "container", Title: "Containers", List: plugin.DataSource{RouteID: "sample.list"},
-			Columns:   []plugin.Column{{Key: "name", Label: "Name", Sortable: true, Type: plugin.ColumnText}},
-			ActionIDs: []string{"sample.start"},
-			Detail: plugin.DetailView{
-				Header:     plugin.HeaderSpec{Title: "Container", ActionIDs: []string{"sample.start"}},
+			Columns: []plugin.Column{{Key: "name", Label: "Name", Sortable: true, Type: plugin.ColumnText}}, Actions: plugin.ResourceActions{Detail: []string{"sample.start"}}, Detail: plugin.DetailView{
+				Header:     plugin.HeaderSpec{Title: "Container"},
 				DefaultTab: "editor",
 				Tabs: []plugin.Tab{
 					{Key: "logs", Label: "Logs", Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "sample.logs", Method: plugin.MethodWS}},

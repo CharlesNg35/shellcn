@@ -68,9 +68,12 @@ func databaseResource() plugin.ResourceType {
 			{Key: "size", Label: "Size", Type: plugin.ColumnBytes, Sortable: true},
 			{Key: "empty", Label: "Empty", Type: plugin.ColumnBool, Sortable: true},
 		},
-		ListActionIDs: []string{"mongodb.database.create"},
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"mongodb.database.create"},
+			Detail:  []string{"mongodb.collection.create"},
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"mongodb.collection.create"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.database.overview", Params: map[string]string{"database": "${resource.uid}"}}},
 				{Key: "collections", Label: "Collections", Icon: icon("folders"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.collections.list", Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: collectionColumns(), ActionIDs: []string{"mongodb.collection.create"}}},
@@ -83,11 +86,14 @@ func databaseResource() plugin.ResourceType {
 func collectionResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "collection", Title: "Collections",
-		List:         plugin.DataSource{RouteID: "mongodb.collections.list"},
-		Columns:      collectionColumns(),
-		RowActionIDs: []string{"mongodb.collection.drop"},
+		List:    plugin.DataSource{RouteID: "mongodb.collections.list"},
+		Columns: collectionColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"mongodb.collection.drop"},
+			Detail: []string{"mongodb.collection.drop"},
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"mongodb.collection.drop"}},
+			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "documents", Label: "Documents", Icon: icon("braces"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.documents.list", Params: collectionParams()}, Config: plugin.TableConfig{Exportable: true, ActionIDs: []string{"mongodb.document.create"}, RowActionIDs: []string{"mongodb.document.delete"}}},
 				{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "mongodb.indexes.list", Params: collectionParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"mongodb.index.create"}, RowActionIDs: []string{"mongodb.index.drop"}}},
@@ -101,9 +107,10 @@ func collectionResource() plugin.ResourceType {
 func documentResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "document", Title: "Documents",
-		List: plugin.DataSource{RouteID: "mongodb.documents.list"},
+		List:    plugin.DataSource{RouteID: "mongodb.documents.list"},
+		Actions: plugin.ResourceActions{Detail: []string{"mongodb.document.delete"}},
 		Detail: plugin.DetailView{
-			Header:     plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"mongodb.document.delete"}},
+			Header:     plugin.HeaderSpec{Title: "${resource.name}"},
 			DefaultTab: "editor",
 			Tabs: []plugin.Tab{
 				{Key: "document", Label: "Document", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mongodb.document.read", Params: map[string]string{"id": "${resource.uid}"}}},

@@ -152,8 +152,8 @@ func TestDatabaseCreateActionsAreDeclaredAtCollectionLevel(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s should expose resource %q", tc.protocol, tc.kind)
 		}
-		if !stringSliceContains(res.ListActionIDs, tc.actionID) {
-			t.Fatalf("%s %s list actions = %#v, want %s", tc.protocol, tc.kind, res.ListActionIDs, tc.actionID)
+		if !stringSliceContains(res.Actions.Toolbar, tc.actionID) {
+			t.Fatalf("%s %s list actions = %#v, want %s", tc.protocol, tc.kind, res.Actions.Toolbar, tc.actionID)
 		}
 		if !manifestHasAction(m, tc.actionID, tc.routeID) {
 			t.Fatalf("%s action %s should route to %s", tc.protocol, tc.actionID, tc.routeID)

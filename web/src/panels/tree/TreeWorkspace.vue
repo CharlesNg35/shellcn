@@ -271,6 +271,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             :key="activeView.id"
             :connection-id="connectionId"
             :detail="activeDetailResource.detail"
+            :detail-action-ids="activeDetailResource.actions?.detail ?? []"
             :row="activeView.row"
             :actions="actions"
             @select="openDetail"
@@ -285,9 +286,9 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
               columns: activeListResource.columns,
               columnsSource: activeColumnsSource,
               watch: activeListResource.watch,
-              actionIds: activeListResource.listActionIds ?? [],
-              rowActionIds: activeListResource.rowActionIds ?? [],
-              selectable: activeListResource.selectable,
+              actionIds: activeListResource.actions?.toolbar ?? [],
+              rowActionIds: activeListResource.actions?.row ?? [],
+              selectable: activeListResource.actions?.selectable,
             }"
             :actions="actions"
             @select="openDetail"

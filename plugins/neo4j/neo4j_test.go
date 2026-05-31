@@ -183,7 +183,7 @@ func TestManifestReferencesResolve(t *testing.T) {
 		if !routeIDs[res.List.RouteID] {
 			t.Fatalf("resource %q list points at missing route %q", res.Kind, res.List.RouteID)
 		}
-		for _, id := range append(append([]string{}, res.ActionIDs...), append(res.ListActionIDs, res.RowActionIDs...)...) {
+		for _, id := range append(append([]string{}, res.Actions.Detail...), append(res.Actions.Toolbar, res.Actions.Row...)...) {
 			if _, ok := actions[id]; !ok {
 				t.Fatalf("resource %q references missing action %q", res.Kind, id)
 			}

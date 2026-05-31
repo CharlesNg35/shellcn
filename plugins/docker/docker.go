@@ -187,14 +187,16 @@ func containerResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "docker.containers.list"},
 		Watch:   &plugin.DataSource{RouteID: "docker.events.watch", Method: plugin.MethodWS},
 		Columns: columns,
-		ListActionIDs: []string{
-			"docker.container.create",
-			"docker.containers.prune",
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{
+				"docker.container.create",
+				"docker.containers.prune",
+			},
+			Row:    []string{"docker.container.remove"},
+			Detail: []string{"docker.container.open", "docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"},
 		},
-		ActionIDs:    []string{"docker.container.open", "docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"},
-		RowActionIDs: []string{"docker.container.remove"},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"docker.container.open", "docker.container.start", "docker.container.stop", "docker.container.restart", "docker.container.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities()},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.container.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"}, Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "docker.container.exec", Method: plugin.MethodWS, Params: map[string]string{"id": "${resource.uid}", "cols": "80", "rows": "24"}}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
@@ -216,11 +218,13 @@ func imageResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "image", Title: "Images", List: plugin.DataSource{RouteID: "docker.images.list"}, Columns: columns,
-		ActionIDs:     []string{"docker.image.remove"},
-		Selectable:    true,
-		ListActionIDs: []string{"docker.image.pull", "docker.images.prune"},
+		Actions: plugin.ResourceActions{
+			Toolbar:    []string{"docker.image.pull", "docker.images.prune"},
+			Detail:     []string{"docker.image.remove"},
+			Selectable: true,
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"docker.image.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.image.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.image.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
@@ -240,11 +244,13 @@ func volumeResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "volume", Title: "Volumes", List: plugin.DataSource{RouteID: "docker.volumes.list"}, Columns: columns,
-		ActionIDs:     []string{"docker.volume.remove"},
-		Selectable:    true,
-		ListActionIDs: []string{"docker.volume.create", "docker.volumes.prune"},
+		Actions: plugin.ResourceActions{
+			Toolbar:    []string{"docker.volume.create", "docker.volumes.prune"},
+			Detail:     []string{"docker.volume.remove"},
+			Selectable: true,
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"docker.volume.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.volume.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.volume.inspect", Params: map[string]string{"id": "${resource.uid}"}}},
@@ -264,11 +270,13 @@ func networkResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "network", Title: "Networks", List: plugin.DataSource{RouteID: "docker.networks.list"}, Columns: columns,
-		ActionIDs:     []string{"docker.network.remove"},
-		Selectable:    true,
-		ListActionIDs: []string{"docker.network.create", "docker.networks.prune"},
+		Actions: plugin.ResourceActions{
+			Toolbar:    []string{"docker.network.create", "docker.networks.prune"},
+			Detail:     []string{"docker.network.remove"},
+			Selectable: true,
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"docker.network.remove"}},
+			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "info"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.network.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 				{Key: "inspect", Label: "Inspect", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"}, Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "docker.network.inspect", Params: map[string]string{"id": "${resource.uid}"}}},

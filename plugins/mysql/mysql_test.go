@@ -53,8 +53,8 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 			break
 		}
 	}
-	if !contains(database.ListActionIDs, "mysql.database.create") {
-		t.Fatalf("database list actions = %#v, want create database", database.ListActionIDs)
+	if !contains(database.Actions.Toolbar, "mysql.database.create") {
+		t.Fatalf("database list actions = %#v, want create database", database.Actions.Toolbar)
 	}
 }
 

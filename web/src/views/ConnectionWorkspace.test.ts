@@ -40,7 +40,6 @@ const projection: PluginProjection = {
       title: "Containers",
       list: { routeId: "docker.container.list" },
       columns: [],
-      actionIds: [],
       detail: { header: {}, tabs: [] },
     },
   ],

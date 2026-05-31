@@ -34,18 +34,21 @@ func resources(provider Provider) []plugin.ResourceType {
 	return []plugin.ResourceType{
 		{
 			Kind: "index", Title: "Indexes", List: plugin.DataSource{RouteID: routeID(provider, "indexes.list")},
-			Columns:       indexColumns(),
-			ListActionIDs: []string{routeID(provider, "index.create")},
-			RowActionIDs:  []string{routeID(provider, "index.refresh"), routeID(provider, "index.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "health", Severities: healthSeverities, ActionIDs: []string{
-				routeID(provider, "mapping.update"),
-				routeID(provider, "index.refresh"),
-				routeID(provider, "index.flush"),
-				routeID(provider, "index.close"),
-				routeID(provider, "index.open"),
-				routeID(provider, "reindex"),
-				routeID(provider, "index.delete"),
-			}}, Tabs: []plugin.Tab{
+			Columns: indexColumns(),
+			Actions: plugin.ResourceActions{
+				Toolbar: []string{routeID(provider, "index.create")},
+				Row:     []string{routeID(provider, "index.refresh"), routeID(provider, "index.delete")},
+				Detail: []string{
+					routeID(provider, "mapping.update"),
+					routeID(provider, "index.refresh"),
+					routeID(provider, "index.flush"),
+					routeID(provider, "index.close"),
+					routeID(provider, "index.open"),
+					routeID(provider, "reindex"),
+					routeID(provider, "index.delete"),
+				},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "health", Severities: healthSeverities}, Tabs: []plugin.Tab{
 				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "index.overview"), Params: map[string]string{"index": "${resource.name}"}}},
 				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "documents.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{routeID(provider, "document.create")}, RowActionIDs: []string{routeID(provider, "document.delete")}, Exportable: true}},
 				{Key: "search", Label: "Search", Icon: icon("search"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "search.query"), Method: plugin.MethodWS, Params: map[string]string{"index": "${resource.name}"}}, Config: searchConfig(provider)},
@@ -57,9 +60,12 @@ func resources(provider Provider) []plugin.ResourceType {
 		},
 		{
 			Kind: "document", Title: "Documents", List: plugin.DataSource{RouteID: routeID(provider, "documents.list")},
-			Columns:      documentColumns(),
-			RowActionIDs: []string{routeID(provider, "document.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{routeID(provider, "document.delete")}}, DefaultTab: "editor", Tabs: []plugin.Tab{
+			Columns: documentColumns(),
+			Actions: plugin.ResourceActions{
+				Row:    []string{routeID(provider, "document.delete")},
+				Detail: []string{routeID(provider, "document.delete")},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, DefaultTab: "editor", Tabs: []plugin.Tab{
 				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}},
 				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: routeID(provider, "document.update"), SaveMethod: plugin.MethodPut, SaveParams: documentParams()}},
 			}},
