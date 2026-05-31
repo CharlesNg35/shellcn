@@ -20,6 +20,7 @@ class FakeSocket implements SocketLike {
   constructor(url: string) {
     this.url = url;
   }
+  readyState: number = 1; // OPEN
   send(): void {}
   close(): void {
     this.closed = true;

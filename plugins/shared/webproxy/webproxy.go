@@ -70,32 +70,49 @@ func Serve(w http.ResponseWriter, r *http.Request, o Options) {
 		Transport:     o.Transport,
 		FlushInterval: -1,
 		//nolint:bodyclose // body is read+closed in the HTML branch; otherwise the ReverseProxy owns it.
-		ModifyResponse: rewriteResponse(o.SourcePrefix, o.PublicPrefix),
+		ModifyResponse: rewriteResponse(o.Base, o.SourcePrefix, o.PublicPrefix),
 	}
 	proxy.ServeHTTP(w, r)
 }
 
-var rootRelAttr = regexp.MustCompile(`(\s(?:href|src|action)=")(/[^"/][^"]*)"`)
+// URL-bearing HTML attributes whose root-relative value (incl. a bare "/") needs
+// prefixing; protocol-relative "//host" is excluded.
+var (
+	rootRelAttr = regexp.MustCompile(`(\s(?:href|src|action|formaction|poster)=")(/(?:[^"/][^"]*)?)"`)
+	srcsetAttr  = regexp.MustCompile(`(\ssrcset=")([^"]*)"`)
+	metaRefresh = regexp.MustCompile(`(?i)(content="\s*\d+\s*;\s*url=)(/[^"/][^"]*)"`)
+	metaCSP     = regexp.MustCompile(`(?i)<meta[^>]+http-equiv="content-security-policy"[^>]*>`)
+	cssURL      = regexp.MustCompile(`url\(\s*(['"]?)(/[^'")\s]*)(['"]?)\s*\)`)
+)
 
-// rewriteResponse adjusts an upstream response so it works under prefix. When the
-// upstream injects its own sourcePrefix (the API server proxy), root-relative URLs
-// are mapped from it back to prefix; otherwise (a direct upstream) bare
-// root-relative URLs are prefixed. It also rewrites redirect Location + Set-Cookie
-// paths, drops framing/CSP, and for HTML injects a <base> + fetch/XHR shim.
-func rewriteResponse(sourcePrefix, prefix string) func(*http.Response) error {
+// rewriteResponse adapts an upstream response to live under prefix: Location +
+// Set-Cookie paths, framing/CSP headers, and HTML/CSS bodies. sourcePrefix is a
+// path the upstream injects (API server proxy); upstreamOrigin is the scheme://host
+// the app was told it has — both map back to prefix.
+func rewriteResponse(base *url.URL, sourcePrefix, prefix string) func(*http.Response) error {
+	upstreamOrigin := ""
+	if base != nil {
+		upstreamOrigin = base.Scheme + "://" + base.Host
+	}
 	return func(resp *http.Response) error {
 		switch loc := resp.Header.Get("Location"); {
+		case upstreamOrigin != "" && strings.HasPrefix(loc, upstreamOrigin):
+			resp.Header.Set("Location", prefix+strings.TrimPrefix(loc, upstreamOrigin))
 		case sourcePrefix != "" && strings.HasPrefix(loc, sourcePrefix):
 			resp.Header.Set("Location", prefix+strings.TrimPrefix(loc, sourcePrefix))
 		case strings.HasPrefix(loc, "/") && !strings.HasPrefix(loc, "//") && !strings.HasPrefix(loc, prefix):
 			resp.Header.Set("Location", prefix+loc)
 		}
 		rewriteCookiePaths(resp.Header, prefix)
-		// Allow embedding + inline shim by relaxing framing/CSP.
+		// Allow embedding + the inline shim by relaxing framing/CSP.
 		resp.Header.Del("Content-Security-Policy")
+		resp.Header.Del("Content-Security-Policy-Report-Only")
 		resp.Header.Del("X-Frame-Options")
 
-		if !strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
+		ct := resp.Header.Get("Content-Type")
+		isHTML := strings.Contains(ct, "text/html")
+		isCSS := strings.Contains(ct, "text/css")
+		if !isHTML && !isCSS {
 			return nil
 		}
 		body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
@@ -103,29 +120,91 @@ func rewriteResponse(sourcePrefix, prefix string) func(*http.Response) error {
 		if err != nil {
 			return err
 		}
-		html := string(body)
-		// Map the upstream's injected prefix back to ours (when present), then
-		// prefix any root-relative URLs left bare (skipping ones already prefixed),
-		// and inject our base+shim so they aren't re-prefixed.
-		if sourcePrefix != "" {
-			html = strings.ReplaceAll(html, sourcePrefix, prefix)
+		out := string(body)
+		if isHTML {
+			out = rewriteHTML(out, sourcePrefix, upstreamOrigin, prefix)
+		} else {
+			out = rewriteCSS(out, upstreamOrigin, prefix)
 		}
-		html = rootRelAttr.ReplaceAllStringFunc(html, func(m string) string {
-			g := rootRelAttr.FindStringSubmatch(m)
-			if strings.HasPrefix(g[2], prefix) {
-				return m
-			}
-			return g[1] + prefix + g[2] + `"`
-		})
-		// The PWA manifest is fetched without credentials by default, which the
-		// authenticated proxy rejects; ask the browser to send them.
-		html = strings.ReplaceAll(html, `rel="manifest"`, `rel="manifest" crossorigin="use-credentials"`)
-		html = injectShim(html, prefix)
-		resp.Body = io.NopCloser(strings.NewReader(html))
-		resp.ContentLength = int64(len(html))
-		resp.Header.Set("Content-Length", strconv.Itoa(len(html)))
+		resp.Body = io.NopCloser(strings.NewReader(out))
+		resp.ContentLength = int64(len(out))
+		resp.Header.Set("Content-Length", strconv.Itoa(len(out)))
 		return nil
 	}
+}
+
+// rewriteHTML prefixes the app's URLs and injects the runtime shim. No <base> is
+// added: relative URLs resolve naturally against the current path, so forms and
+// fragments behave as un-proxied.
+func rewriteHTML(html, sourcePrefix, upstreamOrigin, prefix string) string {
+	if sourcePrefix != "" {
+		html = strings.ReplaceAll(html, sourcePrefix, prefix)
+	}
+	if upstreamOrigin != "" {
+		html = strings.ReplaceAll(html, upstreamOrigin, prefix)
+	}
+	html = metaCSP.ReplaceAllString(html, "")
+	html = rootRelAttr.ReplaceAllStringFunc(html, func(m string) string {
+		g := rootRelAttr.FindStringSubmatch(m)
+		return g[1] + prefixRootRel(g[2], prefix) + `"`
+	})
+	html = srcsetAttr.ReplaceAllStringFunc(html, func(m string) string {
+		g := srcsetAttr.FindStringSubmatch(m)
+		return g[1] + rewriteSrcset(g[2], prefix) + `"`
+	})
+	html = metaRefresh.ReplaceAllStringFunc(html, func(m string) string {
+		g := metaRefresh.FindStringSubmatch(m)
+		return g[1] + prefixRootRel(g[2], prefix) + `"`
+	})
+	html = rewriteInlineCSS(html, prefix)
+	// The PWA manifest is fetched without credentials by default, which the
+	// authenticated proxy rejects; ask the browser to send them.
+	html = strings.ReplaceAll(html, `rel="manifest"`, `rel="manifest" crossorigin="use-credentials"`)
+	return injectShim(html, prefix)
+}
+
+// prefixRootRel prefixes a not-yet-prefixed root-relative URL (incl. bare "/").
+func prefixRootRel(u, prefix string) string {
+	if strings.HasPrefix(u, "/") && !strings.HasPrefix(u, "//") && !strings.HasPrefix(u, prefix) {
+		return prefix + u
+	}
+	return u
+}
+
+// rewriteSrcset prefixes each candidate URL in a srcset value (`url 1x, url 2x`).
+func rewriteSrcset(srcset, prefix string) string {
+	parts := strings.Split(srcset, ",")
+	for i, part := range parts {
+		fields := strings.Fields(part)
+		if len(fields) == 0 {
+			continue
+		}
+		fields[0] = prefixRootRel(fields[0], prefix)
+		parts[i] = strings.Join(fields, " ")
+	}
+	return strings.Join(parts, ", ")
+}
+
+var styleBlock = regexp.MustCompile(`(?is)(<style[^>]*>)(.*?)(</style>)`)
+
+// rewriteInlineCSS prefixes url() targets inside <style> blocks.
+func rewriteInlineCSS(html, prefix string) string {
+	return styleBlock.ReplaceAllStringFunc(html, func(m string) string {
+		g := styleBlock.FindStringSubmatch(m)
+		return g[1] + rewriteCSS(g[2], "", prefix) + g[3]
+	})
+}
+
+// rewriteCSS prefixes root-relative url() targets in a stylesheet and maps any
+// absolute upstream-origin ones back under prefix.
+func rewriteCSS(css, upstreamOrigin, prefix string) string {
+	if upstreamOrigin != "" {
+		css = strings.ReplaceAll(css, upstreamOrigin, prefix)
+	}
+	return cssURL.ReplaceAllStringFunc(css, func(m string) string {
+		g := cssURL.FindStringSubmatch(m)
+		return "url(" + g[1] + prefixRootRel(g[2], prefix) + g[3] + ")"
+	})
 }
 
 func rewriteCookiePaths(h http.Header, prefix string) {
@@ -139,30 +218,41 @@ func rewriteCookiePaths(h http.Header, prefix string) {
 	}
 }
 
+// rewriteCookiePath scopes a cookie to the prefix. A __Host- cookie is left as-is:
+// its spec requires Path=/, so narrowing it would void the cookie.
 func rewriteCookiePath(cookie, prefix string) string {
+	if name := strings.TrimSpace(strings.SplitN(cookie, "=", 2)[0]); strings.HasPrefix(name, "__Host-") {
+		return cookie
+	}
 	parts := strings.Split(cookie, ";")
+	hasPath := false
 	for i, p := range parts {
-		kv := strings.SplitN(strings.TrimSpace(p), "=", 2)
-		if strings.EqualFold(kv[0], "Path") {
+		if kv := strings.SplitN(strings.TrimSpace(p), "=", 2); strings.EqualFold(kv[0], "Path") {
 			parts[i] = " Path=" + prefix
+			hasPath = true
 		}
+	}
+	if !hasPath {
+		parts = append(parts, " Path="+prefix)
 	}
 	return strings.Join(parts, ";")
 }
 
-// injectShim adds a <base> and a shim after <head> so the app's requests stay
-// under the proxy prefix. It rewrites root-absolute URLs in fetch/XHR and, crucially,
-// in runtime-injected assets — script/link/img src/href and setAttribute — so
-// bundler-loaded chunks and styles (which bypass fetch) resolve under the prefix.
+// injectShim inserts a script that keeps the app's runtime requests under the
+// prefix — fetch/XHR, WebSocket/EventSource/Worker, dynamically-set asset
+// attributes, history, and form actions — plus the in-scope service worker.
 func injectShim(html, prefix string) string {
-	shim := `<base href="` + prefix + `/"><script>(function(){var p=` + jsString(prefix) + `;
-function fix(u){return (typeof u==="string"&&u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)?p+u:u;}
+	shim := `<script>(function(){var p=` + jsString(prefix) + `;
+function fix(u){if(typeof u!=="string")return u;if(u.charAt(0)==="/"&&u.charAt(1)!=="/"&&u.indexOf(p)!==0)return p+u;var o=location.origin;if(u.indexOf(o+"/")===0&&u.slice(o.length).indexOf(p)!==0)return o+p+u.slice(o.length);return u;}
 var of=window.fetch;if(of){window.fetch=function(i,o){try{if(typeof i==="string")i=fix(i);else if(i&&i.url)i=new Request(fix(i.url),i);}catch(e){}return of.call(this,i,o);};}
 var ox=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){return ox.apply(this,[m,fix(u)].concat([].slice.call(arguments,2)));};
+function wrap(C){if(!C)return C;function W(){var a=[].slice.call(arguments);if(a.length)a[0]=fix(a[0]);return new (Function.prototype.bind.apply(C,[null].concat(a)))();}W.prototype=C.prototype;["CONNECTING","OPEN","CLOSING","CLOSED"].forEach(function(k){if(k in C)W[k]=C[k];});return W;}
+try{window.WebSocket=wrap(window.WebSocket);window.EventSource=wrap(window.EventSource);window.Worker=wrap(window.Worker);}catch(e){}
 function patch(proto,prop){var d=Object.getOwnPropertyDescriptor(proto,prop);if(d&&d.set)Object.defineProperty(proto,prop,{configurable:true,enumerable:d.enumerable,get:function(){return d.get.call(this);},set:function(v){d.set.call(this,fix(v));}});}
 try{patch(HTMLScriptElement.prototype,"src");patch(HTMLLinkElement.prototype,"href");patch(HTMLImageElement.prototype,"src");}catch(e){}
-var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){return sa.call(this,n,(n==="src"||n==="href")&&typeof v==="string"?fix(v):v);};
+var sa=Element.prototype.setAttribute;Element.prototype.setAttribute=function(n,v){return sa.call(this,n,(typeof v==="string"&&/^(src|href|action|formaction|poster)$/i.test(n))?fix(v):v);};
 ["pushState","replaceState"].forEach(function(m){var o=history[m];if(o)history[m]=function(s,t,u){return o.call(this,s,t,typeof u==="string"?fix(u):u);};});
+document.addEventListener("submit",function(e){var f=e.target;if(!f||f.tagName!=="FORM")return;var raw=f.getAttribute("action");if(!raw)return;var g=fix(raw);if(g!==raw)f.setAttribute("action",g);},true);
 if(navigator.serviceWorker){try{navigator.serviceWorker.register(p+"/` + SWFile + `").then(function(){if(!navigator.serviceWorker.controller){var k="scnsw:"+p;if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,"1");navigator.serviceWorker.ready.then(function(){location.reload();});}}});}catch(e){}}
 })();</script>`
 	if i := headInsertIndex(html); i >= 0 {

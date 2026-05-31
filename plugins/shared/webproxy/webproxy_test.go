@@ -29,13 +29,18 @@ func TestIsTLSPort(t *testing.T) {
 // Serve proxying straight to the app (no SourcePrefix) must prefix bare
 // root-relative URLs, inject the base + runtime-asset shim, and drop framing/CSP.
 func TestServeRewritesHTMLUnderPrefix(t *testing.T) {
+	var base *url.URL
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'")
-		_, _ = io.WriteString(w, `<html><head><title>x</title></head><body><a href="/dashboard">d</a></body></html>`)
+		// A bare "/" home link, a deep link, and a form whose action is an absolute
+		// URL built from the host we gave the app.
+		_, _ = io.WriteString(w, `<html><head><title>x</title></head><body>`+
+			`<a href="/">home</a><a href="/dashboard">d</a>`+
+			`<form action="`+base.String()+`/web/login" method="post"></form></body></html>`)
 	}))
 	defer upstream.Close()
-	base, _ := url.Parse(upstream.URL)
+	base, _ = url.Parse(upstream.URL)
 
 	rec := httptest.NewRecorder()
 	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
@@ -43,17 +48,51 @@ func TestServeRewritesHTMLUnderPrefix(t *testing.T) {
 	})
 
 	body := rec.Body.String()
-	if !strings.Contains(body, `<base href="/proxy/x/">`) {
-		t.Fatalf("missing rewritten <base>: %s", body)
-	}
 	if !strings.Contains(body, `href="/proxy/x/dashboard"`) {
 		t.Fatalf("root-relative link not prefixed: %s", body)
+	}
+	if !strings.Contains(body, `href="/proxy/x/"`) {
+		t.Fatalf("bare root link not prefixed: %s", body)
+	}
+	if !strings.Contains(body, `action="/proxy/x/web/login"`) {
+		t.Fatalf("absolute upstream form action not mapped to prefix: %s", body)
 	}
 	if rec.Header().Get("Content-Security-Policy") != "" {
 		t.Fatal("CSP should be dropped so the shim/assets load")
 	}
 	if !strings.Contains(body, "HTMLScriptElement.prototype") {
 		t.Fatalf("shim does not rewrite runtime-injected asset URLs: %s", body)
+	}
+}
+
+// A redirect Location is mapped back under the prefix whether it is root-relative
+// (incl. bare "/") or an absolute URL on the host the app was told to use.
+func TestServeRewritesRedirectLocation(t *testing.T) {
+	cases := map[string]string{
+		"/web":               "/proxy/x/web",
+		"/":                  "/proxy/x/",
+		"UPSTREAM/web/login": "/proxy/x/web/login",
+	}
+	for loc, want := range cases {
+		var base *url.URL
+		upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			target := loc
+			if strings.HasPrefix(loc, "UPSTREAM") {
+				target = base.String() + strings.TrimPrefix(loc, "UPSTREAM")
+			}
+			w.Header().Set("Location", target)
+			w.WriteHeader(http.StatusFound)
+		}))
+		base, _ = url.Parse(upstream.URL)
+
+		rec := httptest.NewRecorder()
+		webproxy.Serve(rec, httptest.NewRequest(http.MethodPost, "/", nil), webproxy.Options{
+			Base: base, Transport: http.DefaultTransport, UpstreamPath: "/web/login", PublicPrefix: "/proxy/x",
+		})
+		if got := rec.Header().Get("Location"); got != want {
+			t.Errorf("Location %q rewritten to %q, want %q", loc, got, want)
+		}
+		upstream.Close()
 	}
 }
 
@@ -81,6 +120,59 @@ func TestServeMapsSourcePrefix(t *testing.T) {
 	}
 	if !strings.Contains(body, `href="/proxy/x/page"`) {
 		t.Fatalf("bare root-relative link not prefixed: %s", body)
+	}
+}
+
+func TestServeRewritesCSSAndSrcset(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".css") {
+			w.Header().Set("Content-Type", "text/css")
+			_, _ = io.WriteString(w, `a{background:url(/img/bg.png)}b{background:url("//cdn/x.png")}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, `<html><head></head><body><img srcset="/a.png 1x, /b.png 2x"></body></html>`)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	css := httptest.NewRecorder()
+	webproxy.Serve(css, httptest.NewRequest(http.MethodGet, "/x.css", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/x.css", PublicPrefix: "/proxy/x",
+	})
+	if b := css.Body.String(); !strings.Contains(b, "url(/proxy/x/img/bg.png)") || !strings.Contains(b, `url("//cdn/x.png")`) {
+		t.Fatalf("css url() rewrite wrong: %s", b)
+	}
+
+	html := httptest.NewRecorder()
+	webproxy.Serve(html, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+	if b := html.Body.String(); !strings.Contains(b, `srcset="/proxy/x/a.png 1x, /proxy/x/b.png 2x"`) {
+		t.Fatalf("srcset rewrite wrong: %s", b)
+	}
+}
+
+func TestServeRewritesCookiePath(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Add("Set-Cookie", "sid=abc; Path=/; HttpOnly")
+		w.Header().Add("Set-Cookie", "__Host-sec=z; Path=/; Secure")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+
+	rec := httptest.NewRecorder()
+	webproxy.Serve(rec, httptest.NewRequest(http.MethodGet, "/", nil), webproxy.Options{
+		Base: base, Transport: http.DefaultTransport, UpstreamPath: "/", PublicPrefix: "/proxy/x",
+	})
+	got := rec.Result().Header.Values("Set-Cookie")
+	joined := strings.Join(got, "\n")
+	if !strings.Contains(joined, "sid=abc; Path=/proxy/x; HttpOnly") {
+		t.Fatalf("normal cookie path not scoped: %q", got)
+	}
+	if !strings.Contains(joined, "__Host-sec=z; Path=/; Secure") {
+		t.Fatalf("__Host- cookie path must stay /: %q", got)
 	}
 }
 

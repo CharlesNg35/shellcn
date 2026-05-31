@@ -6,6 +6,7 @@ import { useConnectionStatusStore } from "./connectionStatus";
 class FakeSocket implements SocketLike {
   sent: string[] = [];
   closed = false;
+  readyState = 1; // OPEN
   private handlers: Record<string, ((ev: unknown) => void)[]> = {};
 
   send(data: string): void {
@@ -13,6 +14,7 @@ class FakeSocket implements SocketLike {
   }
   close(): void {
     this.closed = true;
+    this.readyState = 3; // CLOSED
   }
   addEventListener(type: string, listener: (ev: unknown) => void): void {
     (this.handlers[type] ??= []).push(listener);
@@ -77,6 +79,19 @@ describe("stream channels store", () => {
     store.close("conn:k");
     expect(socket.closed).toBe(true);
     expect(store.status("conn:k")).toBeUndefined();
+  });
+
+  it("drops sends on a socket that is not open", () => {
+    const store = useStreamChannelsStore();
+    const socket = new FakeSocket();
+    socket.readyState = 0; // CONNECTING
+    store.ensure("conn:k", () => socket);
+    store.send("conn:k", "early");
+    expect(socket.sent).toEqual([]);
+
+    socket.readyState = 1; // OPEN
+    store.send("conn:k", "now");
+    expect(socket.sent).toEqual(["now"]);
   });
 
   it("closeWhere tears down matching channels only", () => {
