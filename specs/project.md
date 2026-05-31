@@ -777,11 +777,14 @@ type TableConfig struct {
     DefaultSort       *SortKey // column to sort by on first load
     ActionIDs    []string // toolbar actions; references Manifest.Actions
     RowActionIDs []string // selected-row actions; references Manifest.Actions
+    Selectable   bool     // row checkboxes WITHOUT a row-action bar (actions in detail); implied by RowActionIDs
     // Declaring RowActionIDs makes the table's rows selectable (checkbox column,
     // multi-select). The row-action bar then operates on the selection: a route
     // action runs once per selected row (bulk), gated by Action.EnabledWhen
     // across every selected row. A row's ResourceRef supplies each target's
-    // params. Inline-editable grids keep their own row controls instead.
+    // params. Set Selectable instead to keep checkboxes but no row bar (a browse
+    // table whose actions live in the detail). Inline-editable grids keep their
+    // own row controls instead.
 
     // Editable data grid — plugin-agnostic; the renderer assumes nothing about
     // what the data represents.
@@ -1049,7 +1052,10 @@ type ResourceType struct {
     Watch         *DataSource  // optional WS route → stream of ResourceEvent (§7.3)
     Columns       []Column     // static columns
     ColumnsSource *DataSource  // optional: route → Page[Row] of column defs {name,label} when columns are only known at runtime (leave Columns empty). The list's scoping params are merged in.
-    ActionIDs     []string     // references Manifest.Actions
+    ActionIDs     []string     // the resource's actions — shown in the detail header (mirror into DetailView.Header.ActionIDs); NOT list-row actions
+    ListActionIDs []string     // list toolbar actions (no row context, e.g. create/prune); inherit the list's scope params
+    RowActionIDs  []string     // selected-row actions; declaring any makes the list's rows selectable. Omit → rows aren't selectable and a row click opens the detail.
+    Selectable    bool         // makes rows selectable (checkboxes) WITHOUT a row-action bar — a browse table whose actions live in the detail view. Implied by RowActionIDs.
     Detail        DetailView   // opened when a row is clicked
 }
 
@@ -1062,6 +1068,25 @@ type DetailView struct {
 
 This single model expresses K8s, Proxmox, Docker, and SQL schema browsers
 identically — the data differs, the renderer does not.
+
+**Three action render sites, three fields.** Each set lands in exactly one place,
+generically: `ListActionIDs` → the list **toolbar** (no row context); `RowActionIDs`
+→ the **selected-row** bar — and declaring any is what makes the rows selectable
+(checkbox/multi-select); `ActionIDs` → the resource's **detail header**. Row actions
+are opt-in: a resource that omits `RowActionIDs` has non-selectable rows, so a row
+click opens the detail rather than selecting it. A resource's lifecycle actions
+(start/stop/restart/open/remove) therefore belong in `ActionIDs` (mirrored into
+`DetailView.Header.ActionIDs`), **not** in `RowActionIDs` — they surface in the
+detail view, not on list selection. The renderer never infers row actions from
+`ActionIDs`; the three fields stay independent so the same manifest reads the same
+everywhere.
+
+**Selectable without a row-action bar.** A browse table that wants row checkboxes
+but keeps its actions in the detail view sets `Selectable: true` (also on
+`TableConfig`). It decouples selectability from `RowActionIDs`: rows get checkboxes
+and a row-body click still opens the detail, but no selected-row action bar
+appears. `RowActionIDs` implies it. This is the default for the container/engine
+browse tables (docker/podman/swarm) — select to focus, act in the detail.
 
 `DefaultTab` lets a plugin choose which tab a resource detail opens first while
 keeping the tab list fully declarative. It is a view preference only: users can
@@ -1239,6 +1264,17 @@ This makes plugin paths refactorable, gives audit a stable operation id, and
 keeps permission checks keyed to the route — without the frontend ever building a
 path.
 
+**Path-template params are required identity only.** Every `{name}` in a route's
+path template is **mandatory**: a request missing it is rejected (400) before the
+handler runs. So a path template carries only **resource identity** (`{id}`,
+`{kind}`, `{namespace}`). Optional/config values (terminal `cols`/`rows`/
+`command`/`tty`, log `tail`/`follow`/`timestamps`, …) must **not** be path
+params — they ride the same `p.*` query and the handler reads them with a default
+when absent. Baking config into the path makes a route brittle: dropping that
+param from a manifest source silently breaks the route. A matched-but-rejected
+route (missing param, authz denial) is logged server-side so a 4xx is never
+silent.
+
 ### 7.2 Pagination, filter, sort (lists must scale)
 
 A flat list that returns everything will choke on a 10k-pod cluster. All list
@@ -1257,6 +1293,13 @@ type Page[T any] struct {
     Total      *int   // optional/approximate
 }
 ```
+
+A plugin honors `Sort` itself: DB plugins push it into `ORDER BY`; plugins that
+fetch a whole list and paginate in memory use the shared, generic helpers
+`plugin.FilterRows` / `plugin.SortRows` (numeric cells compare numerically, others
+case-insensitively) so every `Sortable` column actually sorts. A column whose
+displayed value isn't directly comparable can sort by an underlying field (e.g. a
+relative "age" sorts by its `createdAt` timestamp).
 
 ### 7.3 Live updates (no blind polling)
 
@@ -1329,9 +1372,19 @@ type Session interface {
 
 // Optional: a Session may also reverse-proxy browser HTTP to an upstream it
 // reaches, powering generated "open in browser" links (with Open:"url"). The
-// core mounts GET|POST|… /api/connections/{id}/proxy/* (authenticated,
+// core mounts GET|POST|… /api/connections/{id}/proxy/* (cookie-authenticated,
 // authorized, audited, privileged), strips the prefix, and delegates; the plugin
 // maps the remaining path to its upstream and streams (incl. WebSocket upgrades).
+//
+// The proxy subtree is CSRF-exempt (a proxied third-party app can't carry our
+// token; SameSite=Lax already blocks cross-site cookie use on non-GET). Generic
+// HTML/CSS/redirect/cookie rewriting + the in-scope service worker live in the
+// shared `plugins/shared/webproxy`; a plugin only resolves how to reach the
+// upstream: Docker/Swarm/Podman dial the container/service port (over the agent
+// when applicable); Kubernetes proxies via the pod **port-forward** subresource —
+// an L4 tunnel, so the app's own Authorization/cookies survive (the API server's
+// HTTP proxy strips them). Web ports are picked best-effort (no hardcoded lists);
+// HTTPS is inferred from a "443" suffix or a port name.
 type HTTPProxy interface {
     ServeHTTPProxy(w http.ResponseWriter, r *http.Request)
 }
@@ -1481,18 +1534,30 @@ no protocol knowledge, just "dial what the gateway names." It is **negotiated an
 opt-in**: the agent advertises support in its hello and the gateway enables it only
 when the plugin set `Forward`, so older agents keep the single-endpoint behavior.
 Reach widens only within the same target the agent already fronts (a docker.sock
-agent can already run any container), so it adds no new trust boundary.
+agent can already run any container), so it adds no new trust boundary. A Docker
+agent must run with **host networking** to route to container IPs across networks.
+
+**Upgrades/hijacks over the agent use a loopback bridge.** Connection *upgrades* —
+client-go's SPDY/WebSocket executor (k8s exec, attach, port-forward) and moby's
+HTTP **hijack** (Docker/Podman exec) — bypass a custom `DialContext` and require a
+real socket. So for agent transport the tunnel is fronted by a tiny **loopback
+bridge** (`127.0.0.1`, session-lived): the client dials the bridge, the bridge
+pipes each connection to a fresh tunnel stream. Plain request/response (logs,
+listing) rides the tunnel directly; only the upgrade/hijack needs the bridge. This
+is why exec over the agent works the same as a direct connection — and the bridge
+is shared (`plugins/shared/loopback`) by both the k8s and Docker engines.
 
 ```go
 
-type ArtifactDelivery string // "" (inline) | "url"
+type ArtifactDelivery string // "" (inline) | "url" | "file"
 
 type InstallArtifact struct {
     Label    string // "Docker", "Kubernetes manifest", "Shell"
-    Kind     string // "docker-run" | "k8s-manifest" | "shell"
-    Delivery ArtifactDelivery // inline (default): Template → a copyable command with the token injected. url: Template is the fetch command ({{.ArtifactURL}}) and Content is served from a single-use signed URL with the token minted into the body (§8.4).
+    Kind     string // "docker-run" | "docker-compose" | "k8s-manifest" | "shell"
+    Delivery ArtifactDelivery // inline (default): Template → a copyable command with the token injected. url: Template is the fetch command ({{.ArtifactURL}}) and Content is served from a single-use signed URL with the token minted into the body. file: Content (token injected) renders directly in the panel as a copyable/downloadable file (e.g. a Compose YAML); Filename names it (§8.4).
     Template string // rendered with generic context + funcs: .ConnectURL, .GatewayConnectURL, .ArtifactURL, .Token, .Slug, .Image, .Insecure, .LocalhostHost, .LocalhostHostRequired, shellquote
-    Content  string // url delivery only: the artifact body, rendered with the same context (token minted at fetch)
+    Content  string // url/file delivery: the artifact body, rendered with the same context
+    Filename string // file delivery: suggested save name
     ConnectURL ArtifactConnectURL
 }
 type ArtifactConnectURL struct {
@@ -1513,7 +1578,7 @@ binds to is determined server-side by the enrollment token, never by the URL.
    fetch (for `kubectl apply -f`), e.g.:
    ```jsonc
    { "kind": "docker-run",
-    "command": "docker run --rm --name shellcn-agent --add-host=host.docker.internal:host-gateway --group-add \"$(stat -c '%g' /var/run/docker.sock)\" -e SHELLCN_CONNECT_URL=wss://host/api/agent/connect -e SHELLCN_ENROLL_TOKEN=… -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/charlesng35/shellcn-agent:latest" }
+    "command": "docker run --rm --name shellcn-agent --network host --group-add \"$(stat -c '%g' /var/run/docker.sock)\" -e SHELLCN_CONNECT_URL=wss://host/api/agent/connect -e SHELLCN_ENROLL_TOKEN=… -v /var/run/docker.sock:/var/run/docker.sock ghcr.io/charlesng35/shellcn-agent:latest" }
    { "kind": "k8s-manifest",
      "url": "https://host/api/connections/{connectionID}/agent/enrollments/{enrollmentId}/artifacts/k8s-manifest?ticket=…" }
    ```

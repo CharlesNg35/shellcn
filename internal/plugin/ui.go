@@ -99,6 +99,10 @@ type TableConfig struct {
 	Watch         *DataSource `json:"watch,omitempty"`
 	ActionIDs     []string    `json:"actionIds,omitempty"`
 	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
+	// Selectable makes rows selectable (checkboxes) even without RowActionIDs —
+	// for a browse table where actions live in the detail view, not a row bar.
+	// Declaring RowActionIDs implies it.
+	Selectable bool `json:"selectable,omitempty"`
 
 	// RefreshIntervalMs re-fetches the current page on a cadence and replaces it
 	// in place — preferred over Watch for high-churn tables where per-row diffs
@@ -155,6 +159,9 @@ func (c TableConfig) Map() map[string]any {
 	}
 	if len(c.RowActionIDs) > 0 {
 		out["rowActionIds"] = c.RowActionIDs
+	}
+	if c.Selectable {
+		out["selectable"] = true
 	}
 	if c.Editable {
 		out["editable"] = true
@@ -785,7 +792,10 @@ type ResourceType struct {
 	ActionIDs     []string    `json:"actionIds"`
 	ListActionIDs []string    `json:"listActionIds,omitempty"`
 	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
-	Detail        DetailView  `json:"detail"`
+	// Selectable makes the list rows selectable (checkboxes) without declaring
+	// RowActionIDs — a browse table whose actions live in the detail view.
+	Selectable bool       `json:"selectable,omitempty"`
+	Detail     DetailView `json:"detail"`
 }
 
 // ScopeControl names the scope filter's input widget. Open vocabulary: the

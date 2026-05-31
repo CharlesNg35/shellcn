@@ -257,6 +257,9 @@ export interface TablePanelConfig {
   defaultSort?: SortKey;
   actionIds?: string[];
   rowActionIds?: string[];
+  // selectable offers row checkboxes without row actions (browse table whose
+  // actions live in the detail view). Implied when rowActionIds is set.
+  selectable?: boolean;
   // Inline data-grid editing (plugin-agnostic). When `editable` is set and
   // `rowKey` names the identifying columns, the grid offers cell editing,
   // add-row, and delete-row wired to these mutation routes. Bodies are uniform:
@@ -542,6 +545,7 @@ export interface ResourceType {
   actionIds: string[];
   listActionIds?: string[];
   rowActionIds?: string[];
+  selectable?: boolean; // row checkboxes without row actions (actions in detail)
   detail: DetailView;
 }
 

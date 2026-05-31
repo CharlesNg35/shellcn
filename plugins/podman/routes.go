@@ -15,6 +15,8 @@ func Routes() []plugin.Route {
 		{ID: "podman.images.tree", Method: plugin.MethodGet, Path: "/tree/images", Permission: "podman.images.read", Risk: plugin.RiskSafe, AuditEvent: "podman.images.tree", Handle: dockerengine.TreeImages},
 		{ID: "podman.volumes.tree", Method: plugin.MethodGet, Path: "/tree/volumes", Permission: "podman.volumes.read", Risk: plugin.RiskSafe, AuditEvent: "podman.volumes.tree", Handle: dockerengine.TreeVolumes},
 		{ID: "podman.networks.tree", Method: plugin.MethodGet, Path: "/tree/networks", Permission: "podman.networks.read", Risk: plugin.RiskSafe, AuditEvent: "podman.networks.tree", Handle: dockerengine.TreeNetworks},
+		{ID: "podman.overview.list", Method: plugin.MethodGet, Path: "/overview", Permission: "podman.containers.read", Risk: plugin.RiskSafe, AuditEvent: "podman.overview.list", Handle: dockerengine.OverviewList},
+		{ID: "podman.overview.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: "podman.containers.read", Risk: plugin.RiskSafe, AuditEvent: "podman.overview.metrics", Stream: dockerengine.OverviewMetrics},
 		{ID: "podman.containers.list", Method: plugin.MethodGet, Path: "/containers", Permission: "podman.containers.read", Risk: plugin.RiskSafe, AuditEvent: "podman.containers.list", Handle: dockerengine.ListContainers},
 		{ID: "podman.pods.list", Method: plugin.MethodGet, Path: "/pods", Permission: "podman.pods.read", Risk: plugin.RiskSafe, AuditEvent: "podman.pods.list", Handle: listPods},
 		{ID: "podman.images.list", Method: plugin.MethodGet, Path: "/images", Permission: "podman.images.read", Risk: plugin.RiskSafe, AuditEvent: "podman.images.list", Handle: dockerengine.ListImages},
@@ -52,8 +54,8 @@ func Routes() []plugin.Route {
 		{ID: "podman.images.prune", Method: plugin.MethodPost, Path: "/images/prune", Permission: "podman.images.delete", Risk: plugin.RiskDestructive, AuditEvent: "podman.images.prune", Handle: dockerengine.PruneImages},
 		{ID: "podman.volumes.prune", Method: plugin.MethodPost, Path: "/volumes/prune", Permission: "podman.volumes.delete", Risk: plugin.RiskDestructive, AuditEvent: "podman.volumes.prune", Handle: dockerengine.PruneVolumes},
 		{ID: "podman.networks.prune", Method: plugin.MethodPost, Path: "/networks/prune", Permission: "podman.networks.delete", Risk: plugin.RiskDestructive, AuditEvent: "podman.networks.prune", Handle: dockerengine.PruneNetworks},
-		{ID: "podman.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "podman.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "podman.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
-		{ID: "podman.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec/ws/{cols}/{rows}/{command}", Permission: "podman.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "podman.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
+		{ID: "podman.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs", Permission: "podman.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "podman.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
+		{ID: "podman.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec", Permission: "podman.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "podman.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
 		{ID: "podman.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "podman.events.read", Risk: plugin.RiskSafe, AuditEvent: "podman.events.watch", Stream: dockerengine.WatchEvents},
 	}
 }

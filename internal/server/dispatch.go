@@ -215,8 +215,10 @@ func (s *Server) auditEventParams(ctx context.Context, res resolved, result mode
 func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 	res, err := s.resolve(r)
 	if err != nil {
-		// A denied authorization is audited; lookups that 404 are not (no route).
+		// A matched-but-rejected route (bad param, authz) is audited and logged so
+		// a 4xx isn't silent; a pure 404 (no route) stays quiet.
 		if res.route.ID != "" {
+			s.deps.Logger.Warn("route rejected", "route", res.route.ID, "connection", res.conn.ID, "err", err)
 			s.auditEvent(r.Context(), res, models.AuditDenied, err)
 			s.incAuthzFailure(err)
 		}
@@ -541,7 +543,6 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 			s.auditEventParams(ctx, res, result, params, err)
 		})
 	if err := res.route.Stream(rc, client); err != nil {
-		s.deps.Logger.Warn("stream failed", "route", res.route.ID, "connection", res.conn.ID, "err", err)
 		_ = c.Close(websocket.StatusInternalError, streamCloseReason(err))
 		return
 	}

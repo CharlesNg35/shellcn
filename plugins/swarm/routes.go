@@ -25,6 +25,8 @@ const stackNamespaceLabel = "com.docker.stack.namespace"
 // Routes wires Swarm-namespaced route IDs to the orchestration handlers.
 func Routes() []plugin.Route {
 	return []plugin.Route{
+		{ID: "swarm.overview.list", Method: plugin.MethodGet, Path: "/overview", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.overview.list", Handle: dockerengine.OverviewList},
+		{ID: "swarm.overview.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.overview.metrics", Stream: overviewMetrics},
 		{ID: "swarm.services.tree", Method: plugin.MethodGet, Path: "/tree/services", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.services.tree", Handle: treeServices},
 		{ID: "swarm.stacks.tree", Method: plugin.MethodGet, Path: "/tree/stacks", Permission: "swarm.stacks.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stacks.tree", Handle: treeStacks},
 		{ID: "swarm.nodes.tree", Method: plugin.MethodGet, Path: "/tree/nodes", Permission: "swarm.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.nodes.tree", Handle: treeSwarmNodes},
@@ -46,7 +48,7 @@ func Routes() []plugin.Route {
 		{ID: "swarm.stack.services", Method: plugin.MethodGet, Path: "/stacks/{stack}/services", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stack.services", Handle: stackServices},
 		{ID: "swarm.service.remove", Method: plugin.MethodDelete, Path: "/services/{id}", Permission: "swarm.services.delete", Risk: plugin.RiskDestructive, AuditEvent: "swarm.service.remove", Handle: removeService},
 		{ID: "swarm.service.scale", Method: plugin.MethodPost, Path: "/services/{id}/scale", Permission: "swarm.services.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.service.scale", Input: scaleSchema(), Handle: scaleService},
-		{ID: "swarm.service.logs", Method: plugin.MethodWS, Path: "/services/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "swarm.services.logs", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.logs", Input: dockerengine.LogsSchema(), Stream: serviceLogsStream},
+		{ID: "swarm.service.logs", Method: plugin.MethodWS, Path: "/services/{id}/logs", Permission: "swarm.services.logs", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.logs", Input: dockerengine.LogsSchema(), Stream: serviceLogsStream},
 		{ID: "swarm.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.watch", Stream: watchServiceEvents},
 	}
 }
@@ -57,6 +59,33 @@ func client(rc *plugin.RequestContext) (*dockerclient.Client, error) {
 		return nil, err
 	}
 	return s.Client(), nil
+}
+
+func overviewMetrics(rc *plugin.RequestContext, stream plugin.ClientStream) error {
+	return dockerengine.MetricsLoop(rc, stream, func(context.Context) map[string]any {
+		return swarmFrame(rc)
+	})
+}
+
+func swarmFrame(rc *plugin.RequestContext) map[string]any {
+	frame := map[string]any{}
+	cli, err := client(rc)
+	if err != nil {
+		return frame
+	}
+	if res, err := cli.ServiceList(rc.Ctx, dockerclient.ServiceListOptions{}); err == nil {
+		frame["services"] = len(res.Items)
+	}
+	if res, err := cli.NodeList(rc.Ctx, dockerclient.NodeListOptions{}); err == nil {
+		frame["nodes"] = len(res.Items)
+	}
+	if res, err := cli.TaskList(rc.Ctx, dockerclient.TaskListOptions{}); err == nil {
+		frame["tasks"] = len(res.Items)
+	}
+	if rows, err := stackRows(rc); err == nil {
+		frame["stacks"] = len(rows)
+	}
+	return frame
 }
 
 func listServices(rc *plugin.RequestContext) (any, error) {

@@ -33,8 +33,8 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 	if m.Agent.Proxy.Address != "/run/podman/podman.sock" {
 		t.Fatalf("agent proxy address = %q, want podman socket", m.Agent.Proxy.Address)
 	}
-	if len(m.Tree) != 5 || len(m.Resources) != 5 {
-		t.Fatalf("tree=%d resources=%d, want 5/5", len(m.Tree), len(m.Resources))
+	if len(m.Tree) != 6 || len(m.Resources) != 6 {
+		t.Fatalf("tree=%d resources=%d, want 6/6", len(m.Tree), len(m.Resources))
 	}
 	var hasPods bool
 	for _, g := range m.Tree {

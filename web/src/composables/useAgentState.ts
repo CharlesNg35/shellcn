@@ -15,6 +15,9 @@ export function useAgentState(connectionId: MaybeRefOrGetter<string>) {
   const status = ref<AgentStatus>("pending");
   const message = ref<string | undefined>();
   const online = computed(() => status.value === "online");
+  // false until the first state resolves, so callers can show a neutral "checking"
+  // state instead of flashing "waiting → connected" for an already-online agent.
+  const ready = ref(false);
 
   let timer: ReturnType<typeof setInterval> | undefined;
   let generation = 0;
@@ -29,6 +32,7 @@ export function useAgentState(connectionId: MaybeRefOrGetter<string>) {
       }
       status.value = state.status;
       message.value = state.message;
+      ready.value = true;
     } catch {
       // transient; the next tick retries
     }
@@ -44,11 +48,12 @@ export function useAgentState(connectionId: MaybeRefOrGetter<string>) {
     stop();
     status.value = "pending";
     message.value = undefined;
+    ready.value = false;
     void refresh();
     timer = setInterval(() => void refresh(), intervalMs);
   }
 
   onUnmounted(stop);
 
-  return { status, message, online, refresh, start, stop };
+  return { status, message, online, ready, refresh, start, stop };
 }

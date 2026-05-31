@@ -97,6 +97,62 @@ describe("TreeWorkspace", () => {
     expect(tab.get("span").classes()).toContain("min-w-0");
   });
 
+  it("keeps a resource's actionIds out of row actions (rows are selectable only when RowActionIDs is declared)", async () => {
+    let captured: Record<string, unknown> | null = null;
+    const wrapper = mount(TreeWorkspace, {
+      props: {
+        connectionId: "c1",
+        tree: [],
+        resources: [
+          {
+            kind: "container",
+            title: "Containers",
+            list: { routeId: "docker.containers.list" },
+            columns: [],
+            actionIds: ["docker.container.start", "docker.container.stop"],
+            listActionIds: ["docker.container.create"],
+            selectable: true,
+            detail: { header: { title: "x" }, tabs: [] },
+          },
+        ] as never,
+        actions: [],
+      },
+      global: {
+        stubs: {
+          AppIcon: true,
+          Button: { template: "<button><slot /></button>" },
+          ResourceTree: true,
+          VueDraggable: { template: "<div><slot /></div>" },
+          TablePanel: {
+            props: ["config", "source", "connectionId", "actions"],
+            template: "<div data-test='table' />",
+            created() {
+              captured = (this as { config: Record<string, unknown> }).config;
+            },
+          },
+        },
+      },
+    });
+    const ws = useWorkspaceStore();
+    ws.openView("c1", {
+      id: "list:container",
+      title: "Containers",
+      kind: "list",
+      resourceKind: "container",
+    });
+    await nextTick();
+    await flushPromises();
+
+    expect(captured).toBeTruthy();
+    // Toolbar actions come from listActionIds; row actions are NOT inherited
+    // from the resource's actionIds (those surface only in the detail header).
+    expect(captured!.actionIds).toEqual(["docker.container.create"]);
+    expect(captured!.rowActionIds).toEqual([]);
+    // Selectable still makes the rows selectable (checkboxes) without row actions.
+    expect(captured!.selectable).toBe(true);
+    wrapper.unmount();
+  });
+
   it("pins a preview tab on double-click", async () => {
     const wrapper = mountWorkspace();
     const ws = useWorkspaceStore();

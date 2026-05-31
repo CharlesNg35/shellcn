@@ -30,8 +30,8 @@ func TestManifestDeclaresSwarmWorkspace(t *testing.T) {
 	if !m.SupportsTransport(plugin.TransportAgent) || m.Agent == nil {
 		t.Fatal("swarm must declare agent transport and profile")
 	}
-	if len(m.Tree) != 4 || len(m.Resources) != 4 {
-		t.Fatalf("tree=%d resources=%d, want 4/4", len(m.Tree), len(m.Resources))
+	if len(m.Tree) != 5 || len(m.Resources) != 5 {
+		t.Fatalf("tree=%d resources=%d, want 5/5", len(m.Tree), len(m.Resources))
 	}
 	for _, res := range m.Resources {
 		for _, tab := range res.Detail.Tabs {

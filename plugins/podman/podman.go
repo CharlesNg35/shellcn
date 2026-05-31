@@ -74,6 +74,7 @@ func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide,
 
 func tree() []plugin.TreeGroup {
 	return []plugin.TreeGroup{
+		{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Ref: dockerengine.OverviewRef()},
 		{Key: "containers", Label: "Containers", Icon: icon("box"), Source: plugin.DataSource{RouteID: "podman.containers.tree"}, ResourceKind: "container"},
 		{Key: "pods", Label: "Pods", Icon: icon("boxes"), Source: plugin.DataSource{RouteID: "podman.pods.tree"}, ResourceKind: "pod"},
 		{Key: "images", Label: "Images", Icon: icon("layers"), Source: plugin.DataSource{RouteID: "podman.images.tree"}, ResourceKind: "image"},
@@ -84,11 +85,28 @@ func tree() []plugin.TreeGroup {
 
 func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
+		overviewResource(),
 		containerResource(),
 		podResource(),
 		imageResource(),
 		volumeResource(),
 		networkResource(),
+	}
+}
+
+func overviewResource() plugin.ResourceType {
+	dash := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
+		{Key: "stats", Label: "Environment", Panel: plugin.PanelMetrics, Span: 2, Source: &plugin.DataSource{RouteID: "podman.overview.metrics", Method: plugin.MethodWS}, Config: dockerengine.OverviewMetricsConfig()},
+		{Key: "containers", Label: "Containers", Panel: plugin.PanelTable, Span: 2, Source: &plugin.DataSource{RouteID: "podman.containers.list"}, Config: plugin.TableConfig{Columns: containerColumns()}.Map()},
+	}}
+	return plugin.ResourceType{
+		Kind: dockerengine.OverviewKind, Title: "Overview",
+		List:    plugin.DataSource{RouteID: "podman.overview.list"},
+		Columns: []plugin.Column{{Key: "name", Label: "Name"}},
+		Detail: plugin.DetailView{
+			Header: plugin.HeaderSpec{Title: "Overview"},
+			Tabs:   []plugin.Tab{{Key: "dashboard", Label: "Overview", Icon: icon("layout-dashboard"), Panel: plugin.PanelDashboard, Config: dash.Map()}},
+		},
 	}
 }
 
@@ -111,6 +129,7 @@ func containerResource() plugin.ResourceType {
 		Columns:       containerColumns(),
 		ListActionIDs: []string{"podman.container.create", "podman.containers.prune"},
 		ActionIDs:     []string{"podman.container.open", "podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"},
+		Selectable:    true,
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"podman.container.open", "podman.container.start", "podman.container.stop", "podman.container.restart", "podman.container.remove"}},
 			Tabs: []plugin.Tab{
@@ -137,7 +156,8 @@ func podResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "pod", Title: "Pods", List: plugin.DataSource{RouteID: "podman.pods.list"}, Columns: columns,
-		ActionIDs: []string{"podman.pod.start", "podman.pod.stop", "podman.pod.restart", "podman.pod.remove"},
+		ActionIDs:  []string{"podman.pod.start", "podman.pod.stop", "podman.pod.restart", "podman.pod.remove"},
+		Selectable: true,
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: dockerengine.StateSeverities(), ActionIDs: []string{"podman.pod.start", "podman.pod.stop", "podman.pod.restart", "podman.pod.remove"}},
 			Tabs: []plugin.Tab{
@@ -160,6 +180,7 @@ func imageResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "image", Title: "Images", List: plugin.DataSource{RouteID: "podman.images.list"}, Columns: columns,
 		ActionIDs:     []string{"podman.image.remove"},
+		Selectable:    true,
 		ListActionIDs: []string{"podman.image.pull", "podman.images.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"podman.image.remove"}},
@@ -182,6 +203,7 @@ func volumeResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "volume", Title: "Volumes", List: plugin.DataSource{RouteID: "podman.volumes.list"}, Columns: columns,
 		ActionIDs:     []string{"podman.volume.remove"},
+		Selectable:    true,
 		ListActionIDs: []string{"podman.volume.create", "podman.volumes.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"podman.volume.remove"}},
@@ -203,6 +225,7 @@ func networkResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "network", Title: "Networks", List: plugin.DataSource{RouteID: "podman.networks.list"}, Columns: columns,
 		ActionIDs:     []string{"podman.network.remove"},
+		Selectable:    true,
 		ListActionIDs: []string{"podman.network.create", "podman.networks.prune"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"podman.network.remove"}},

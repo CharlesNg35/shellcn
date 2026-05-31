@@ -9,11 +9,8 @@ import (
 // permissions, and audit events. All behaviour lives in dockerengine.
 func Routes() []plugin.Route {
 	return []plugin.Route{
-		{ID: "docker.containers.tree", Method: plugin.MethodGet, Path: "/tree/containers", Permission: "docker.containers.read", Risk: plugin.RiskSafe, AuditEvent: "docker.containers.tree", Handle: dockerengine.TreeContainers},
-		{ID: "docker.images.tree", Method: plugin.MethodGet, Path: "/tree/images", Permission: "docker.images.read", Risk: plugin.RiskSafe, AuditEvent: "docker.images.tree", Handle: dockerengine.TreeImages},
-		{ID: "docker.volumes.tree", Method: plugin.MethodGet, Path: "/tree/volumes", Permission: "docker.volumes.read", Risk: plugin.RiskSafe, AuditEvent: "docker.volumes.tree", Handle: dockerengine.TreeVolumes},
-		{ID: "docker.networks.tree", Method: plugin.MethodGet, Path: "/tree/networks", Permission: "docker.networks.read", Risk: plugin.RiskSafe, AuditEvent: "docker.networks.tree", Handle: dockerengine.TreeNetworks},
-		{ID: "docker.compose.tree", Method: plugin.MethodGet, Path: "/tree/compose", Permission: "docker.compose.read", Risk: plugin.RiskSafe, AuditEvent: "docker.compose.tree", Handle: dockerengine.TreeCompose},
+		{ID: "docker.overview.list", Method: plugin.MethodGet, Path: "/overview", Permission: "docker.containers.read", Risk: plugin.RiskSafe, AuditEvent: "docker.overview.list", Handle: dockerengine.OverviewList},
+		{ID: "docker.overview.metrics", Method: plugin.MethodWS, Path: "/overview/metrics", Permission: "docker.containers.read", Risk: plugin.RiskSafe, AuditEvent: "docker.overview.metrics", Stream: dockerengine.OverviewMetrics},
 		{ID: "docker.containers.list", Method: plugin.MethodGet, Path: "/containers", Permission: "docker.containers.read", Risk: plugin.RiskSafe, AuditEvent: "docker.containers.list", Handle: dockerengine.ListContainers},
 		{ID: "docker.images.list", Method: plugin.MethodGet, Path: "/images", Permission: "docker.images.read", Risk: plugin.RiskSafe, AuditEvent: "docker.images.list", Handle: dockerengine.ListImages},
 		{ID: "docker.volumes.list", Method: plugin.MethodGet, Path: "/volumes", Permission: "docker.volumes.read", Risk: plugin.RiskSafe, AuditEvent: "docker.volumes.list", Handle: dockerengine.ListVolumes},
@@ -47,8 +44,8 @@ func Routes() []plugin.Route {
 		{ID: "docker.images.prune", Method: plugin.MethodPost, Path: "/images/prune", Permission: "docker.images.delete", Risk: plugin.RiskDestructive, AuditEvent: "docker.images.prune", Handle: dockerengine.PruneImages},
 		{ID: "docker.volumes.prune", Method: plugin.MethodPost, Path: "/volumes/prune", Permission: "docker.volumes.delete", Risk: plugin.RiskDestructive, AuditEvent: "docker.volumes.prune", Handle: dockerengine.PruneVolumes},
 		{ID: "docker.networks.prune", Method: plugin.MethodPost, Path: "/networks/prune", Permission: "docker.networks.delete", Risk: plugin.RiskDestructive, AuditEvent: "docker.networks.prune", Handle: dockerengine.PruneNetworks},
-		{ID: "docker.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs/{tail}/{follow}/{timestamps}", Permission: "docker.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "docker.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
-		{ID: "docker.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec/ws/{cols}/{rows}/{command}", Permission: "docker.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "docker.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
+		{ID: "docker.container.logs", Method: plugin.MethodWS, Path: "/containers/{id}/logs", Permission: "docker.containers.logs", Risk: plugin.RiskSafe, AuditEvent: "docker.container.logs", Input: dockerengine.LogsSchema(), Stream: dockerengine.LogsStream},
+		{ID: "docker.container.exec", Method: plugin.MethodWS, Path: "/containers/{id}/exec", Permission: "docker.containers.exec", Risk: plugin.RiskPrivileged, AuditEvent: "docker.container.exec", Input: dockerengine.ExecSchema(), Stream: dockerengine.ExecStream},
 		{ID: "docker.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "docker.events.read", Risk: plugin.RiskSafe, AuditEvent: "docker.events.watch", Stream: dockerengine.WatchEvents},
 	}
 }

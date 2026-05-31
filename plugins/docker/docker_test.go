@@ -27,11 +27,11 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if m.Agent.Proxy.Mode != plugin.AgentUnix || m.Agent.Proxy.Address != "/var/run/docker.sock" || m.Agent.Proxy.Risk != plugin.RiskPrivileged {
 		t.Fatalf("agent proxy mismatch: %+v", m.Agent.Proxy)
 	}
-	if len(m.Tree) != 5 {
-		t.Fatalf("tree groups = %d, want 5", len(m.Tree))
+	if len(m.Tree) != 6 {
+		t.Fatalf("tree groups = %d, want 6", len(m.Tree))
 	}
-	if len(m.Resources) != 5 {
-		t.Fatalf("resources = %d, want 5", len(m.Resources))
+	if len(m.Resources) != 6 {
+		t.Fatalf("resources = %d, want 6", len(m.Resources))
 	}
 	var containerRes *plugin.ResourceType
 	for i := range m.Resources {
