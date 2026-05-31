@@ -733,9 +733,10 @@ from the selected kind.
 ```go
 type Layout string
 const (
-    LayoutTabs        Layout = "tabs"         // flat: SSH, Redis, VNC
+    LayoutTabs        Layout = "tabs"         // flat: SSH, Redis (a top tab bar)
     LayoutSidebarTree Layout = "sidebar_tree" // hierarchical: Docker, K8s, Proxmox, SQL
     LayoutDashboard   Layout = "dashboard"    // grid: every Tab panel shown at once
+    LayoutSingle      Layout = "single"       // one full-bleed panel, no tab bar: VNC, RDP, SFTP, Telnet
 )
 
 // Workbench primitives (all generic / cross-plugin — no per-plugin frontend):

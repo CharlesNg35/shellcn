@@ -447,4 +447,52 @@ describe("ConnectionWorkspace", () => {
     // The span=2 panel fills the row.
     expect(cards[1].classes()).toContain("lg:col-span-2");
   });
+
+  it("renders a single full-bleed panel with no tab bar in the single layout", async () => {
+    const single: PluginProjection = {
+      ...projection,
+      layout: "single",
+      tree: [],
+      resources: [],
+      tabs: [
+        {
+          key: "desktop",
+          label: "Desktop",
+          panel: "remote_desktop",
+          source: { routeId: "x.desktop" },
+        },
+      ],
+    };
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return {
+          body: [
+            { id: "c1", name: "vnc", protocol: "docker", transport: "direct" },
+          ],
+        };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) return { body: single };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: { AppIcon: true, PanelHost: true },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find("panel-host-stub").exists()).toBe(true);
+    // No tab bar chrome for a single screen.
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false);
+  });
 });

@@ -30,6 +30,7 @@ const (
 	LayoutTabs        Layout = "tabs"         // flat top tab bar, one panel at a time
 	LayoutSidebarTree Layout = "sidebar_tree" // left resource tree + detail pane
 	LayoutDashboard   Layout = "dashboard"    // grid of panels (from Tabs) shown at once
+	LayoutSingle      Layout = "single"       // one full-bleed panel, no tab bar (a desktop/terminal/file screen)
 )
 
 // Transport is how a session reaches its target (orthogonal to protocol).

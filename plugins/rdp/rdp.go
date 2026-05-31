@@ -33,7 +33,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"remote_desktop"},
 		CredentialKinds:     credentialKinds(),
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutTabs,
+		Layout:              plugin.LayoutSingle,
 		Tabs: []plugin.Panel{{
 			Key:    "console",
 			Label:  "Console",

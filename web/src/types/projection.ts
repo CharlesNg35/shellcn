@@ -27,7 +27,7 @@ export type Transport = "direct" | "agent";
 export const TRANSPORT_DIRECT: Transport = "direct";
 export const TRANSPORT_AGENT: Transport = "agent";
 
-export type Layout = "tabs" | "sidebar_tree" | "dashboard";
+export type Layout = "tabs" | "sidebar_tree" | "dashboard" | "single";
 
 export type KnownPanelType =
   | "terminal"

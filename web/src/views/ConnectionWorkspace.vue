@@ -344,6 +344,23 @@ function onActionDone(action: Action): void {
             </div>
           </div>
 
+          <!-- Single-panel layout: one full-bleed screen (desktop/terminal/files),
+             no tab bar. -->
+          <div
+            v-else-if="projection.layout === 'single' && activeTab"
+            class="h-full min-h-0 overflow-hidden"
+          >
+            <PanelHost
+              :key="`${id}:${activeTab.key}`"
+              :panel="activeTab.panel"
+              :connection-id="id"
+              :source="activeTab.source"
+              :config="tabConfig(activeTab)"
+              :actions="projection.actions ?? []"
+              @action-done="onActionDone"
+            />
+          </div>
+
           <!-- Dashboard layout: every panel rendered at once in a grid. -->
           <DashboardWorkspace
             v-else-if="projection.layout === 'dashboard'"

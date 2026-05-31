@@ -24,7 +24,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Config:              configSchema(),
 		Capabilities:        []plugin.Capability{"terminal"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutTabs,
+		Layout:              plugin.LayoutSingle,
 		Tabs: []plugin.Panel{{
 			Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
 			Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "telnet.shell", Method: plugin.MethodWS, Params: map[string]string{"cols": "80", "rows": "24"}},

@@ -63,6 +63,10 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 	}
 	switch m.Layout {
 	case LayoutTabs, LayoutSidebarTree, LayoutDashboard:
+	case LayoutSingle:
+		if len(m.Tabs) == 0 {
+			add("Layout %q requires one panel in Tabs", m.Layout)
+		}
 	default:
 		add("Layout %q is not a valid layout", m.Layout)
 	}

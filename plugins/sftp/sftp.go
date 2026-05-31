@@ -25,7 +25,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Config:              configSchema(),
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutTabs,
+		Layout:              plugin.LayoutSingle,
 		Tabs:                []plugin.Panel{filesTab()},
 	}
 }
