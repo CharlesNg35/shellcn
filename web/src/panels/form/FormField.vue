@@ -24,6 +24,8 @@ import { fetchPage } from "../../api/dataSource";
 import AppIcon from "../../components/AppIcon.vue";
 import CredentialSelect from "./CredentialSelect.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
+import ObjectField from "./ObjectField.vue";
+import ArrayField from "./ArrayField.vue";
 
 const props = defineProps<{
   field: Field;
@@ -283,6 +285,24 @@ function updateFiles(event: FileUploadSelectEvent): void {
         <span>{{ opt.label }}</span>
       </label>
     </div>
+
+    <ObjectField
+      v-else-if="field.type === 'object'"
+      :field="field"
+      :model-value="modelValue"
+      :connection-id="connectionId"
+      :resource="resource"
+      @update:model-value="update"
+    />
+
+    <ArrayField
+      v-else-if="field.type === 'array'"
+      :field="field"
+      :model-value="modelValue"
+      :connection-id="connectionId"
+      :resource="resource"
+      @update:model-value="update"
+    />
 
     <InputText
       v-else-if="field.type === 'duration'"

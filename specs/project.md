@@ -336,6 +336,7 @@ type Action struct {
     Config      PanelConfig // typed config for the hosted Panel (e.g. a code_editor's saveRouteId), so a dock/dialog action can open an *editable* panel
     EnabledWhen *Condition // optional: gate the button on the active resource's row
     IconOnly    bool // render as the icon alone (Label becomes the tooltip) — presentation stays manifest-driven
+    Group       string // optional: cluster same-Group actions on a surface into one labelled dropdown menu
 }
 
 type ActionSuccess struct {
@@ -447,6 +448,15 @@ actions that always apply. Both render sites (detail header, table row actions)
 pass the row to the action bar; toolbar actions with no row record evaluate
 against an empty record, so only declare `EnabledWhen` on row-scoped actions.
 
+**Grouping & overflow.** By default each action renders as its own button. Actions
+that share a `Group` on a surface collapse into a single labelled dropdown menu
+(e.g. a container detail's lifecycle ops under `Lifecycle ▾`), and the renderer
+folds any standalone buttons past a small cap into a trailing `More ▾` menu — so
+a crowded surface stays tidy without per-plugin layout code. Selection (bulk) bars
+stay deliberately lean: a resource's `Row` actions are limited to destructive
+removal/termination (delete/drop/truncate/purge, or a single kill/cancel);
+lifecycle, edit, and single-item actions live on the detail header (`Detail`).
+
 ### 5.6 ResourceRef — stable identity vs display label
 
 ```go
@@ -505,7 +515,8 @@ type Group struct {
 
 type FieldType string // text, email, url, tel, number, stepper, slider,
                       // password, select, radio, multiselect, file, toggle,
-                      // textarea, json, duration, credential_ref
+                      // textarea, json, duration, credential_ref,
+                      // object (nested sub-form), array (repeatable rows)
 
 type Field struct {
     Key         string
@@ -522,6 +533,12 @@ type Field struct {
     VisibleWhen   *Condition  // structured — NOT a string expression
     Validators    []Validator // min/max/regex/oneOf, evaluated server-side too
     Step          any         // increment for number/slider (default 1)
+    Fields        []Field     // sub-fields of an "object" field
+    Item          *Field      // element descriptor of an "array" field (recurses)
+    MinItems      int         // array bounds (seed/keep this many rows)
+    MaxItems      int
+    ItemLabel     string      // singular row label, e.g. "Column"
+    AddLabel      string      // "+" button label (default "Add")
 }
 
 type CredentialKind string // ssh_private_key, ssh_password, kubeconfig, tls_client_cert, db_password, api_token, ...
@@ -572,6 +589,24 @@ action that opens `PanelCodeEditor` in a dialog; a `json` field is for structure
 input that lives **alongside other fields** in a form (e.g. a _Create table_ form's
 `columns` next to its `name`). Both paths are plugin-agnostic — the plugin only
 declares the field/config; the renderer owns the editor and the round-trip.
+
+**Composite (`object`/`array`) fields.** For structured input that would otherwise
+be a hand-typed `json` blob, a field declares `object` (a nested sub-form whose
+sub-fields are `Fields`) or `array` (a repeatable list whose element is `Item`,
+which recurses — so an array of objects is the common "rows" case). The renderer
+turns an `array` into a bordered, keyboard-accessible row list with a **"+ Add"**
+control (labelled by `AddLabel`/`ItemLabel`) and per-row remove, honouring
+`MinItems`/`MaxItems`; an `array` of `object` items gives the full form-builder
+(e.g. _Create table_ columns: each row a `name` text + `type` select + `nullable`
+toggle). The submitted body is the **nested value** (`columns: [{name,type,…}]`),
+identical to what the JSON path produced, so handlers that bind `any` are
+unchanged. Nested `VisibleWhen`/`Validators`/`Required` are evaluated per element
+against that element's own values. Every field type — including `select`,
+`multiselect`, and `optionsSource` route-sourced choices — is available inside a
+composite, since the element is just another `Field`. This is the structured,
+type-safe replacement for the JSON-textarea pattern; a bare `json` field remains
+for genuinely freeform documents (a query, a raw policy) where a builder doesn't
+help.
 
 **Route-sourced choices.** A `select`/`radio`/`multiselect` field may set
 `OptionsSource` instead of (or in addition to) static `Options`: the renderer

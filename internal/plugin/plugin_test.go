@@ -85,6 +85,46 @@ func TestValidateAcceptsAllLayouts(t *testing.T) {
 	}
 }
 
+func TestValidateCompositeSchemaFields(t *testing.T) {
+	noop := func(_ *plugin.RequestContext) (any, error) { return nil, nil }
+	base := func(input *plugin.Schema) ([]plugin.Route, plugin.Manifest) {
+		m := plugin.Manifest{
+			APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
+			Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
+			SupportedTransports: []plugin.Transport{plugin.TransportDirect},
+		}
+		routes := []plugin.Route{{ID: "x.create", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Input: input, Handle: noop}}
+		return routes, m
+	}
+
+	columns := &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
+		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldArray, Item: &plugin.Field{
+			Type: plugin.FieldObject, Fields: []plugin.Field{
+				{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+				{Key: "type", Label: "Type", Type: plugin.FieldSelect, Options: []plugin.Option{{Label: "Int", Value: "INT"}}},
+				{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle},
+			},
+		}},
+	}}}}
+	routes, m := base(columns)
+	if err := plugin.Validate(m, routes); err != nil {
+		t.Fatalf("valid composite schema rejected: %v", err)
+	}
+
+	bad := map[string]*plugin.Schema{
+		"object without fields": {Groups: []plugin.Group{{Name: "G", Fields: []plugin.Field{{Key: "o", Type: plugin.FieldObject}}}}},
+		"array without item":    {Groups: []plugin.Group{{Name: "G", Fields: []plugin.Field{{Key: "a", Type: plugin.FieldArray}}}}},
+		"array min over max":    {Groups: []plugin.Group{{Name: "G", Fields: []plugin.Field{{Key: "a", Type: plugin.FieldArray, MinItems: 3, MaxItems: 1, Item: &plugin.Field{Type: plugin.FieldText}}}}}},
+	}
+	for name, input := range bad {
+		routes, m := base(input)
+		if err := plugin.Validate(m, routes); err == nil {
+			t.Fatalf("%s: expected validation error", name)
+		}
+	}
+}
+
 func TestDashboardConfigMapAndPanelValidate(t *testing.T) {
 	cfg := plugin.DashboardConfig{Cells: []plugin.Panel{
 		{Key: "a", Label: "A", Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "x.overview"}, Span: 2},

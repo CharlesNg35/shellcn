@@ -121,7 +121,9 @@ export type FieldType =
   | "textarea"
   | "json"
   | "duration"
-  | "credential_ref";
+  | "credential_ref"
+  | "object"
+  | "array";
 
 export interface Option {
   label: string;
@@ -189,6 +191,14 @@ export interface Field {
   // Increment for number/slider inputs (defaults to 1); min/max come from the
   // min/max validators.
   step?: number;
+  // Composite fields: `fields` are an object's sub-fields; `item` is an array's
+  // element (recurses). minItems/maxItems bound an array.
+  fields?: Field[];
+  item?: Field;
+  minItems?: number;
+  maxItems?: number;
+  itemLabel?: string;
+  addLabel?: string;
 }
 
 export interface Group {

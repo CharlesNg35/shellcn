@@ -559,7 +559,9 @@ describe("FileBrowserPanel", () => {
     expect(deleteButtons).toHaveLength(1);
     // The remaining one is the selection bar's bulk delete.
     expect(
-      w.findAll("button").some((b) => b.attributes("aria-label") === "Delete selected item"),
+      w
+        .findAll("button")
+        .some((b) => b.attributes("aria-label") === "Delete selected item"),
     ).toBe(false);
   });
 

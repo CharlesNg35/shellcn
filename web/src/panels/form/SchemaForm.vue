@@ -8,7 +8,9 @@ import type {
   Schema,
 } from "../../types/projection";
 import FormField from "./FormField.vue";
-import { isVisible, validateField } from "./condition";
+import { isVisible } from "./condition";
+import { collectField } from "./collect";
+import { defaultForField } from "./defaults";
 
 const props = defineProps<{
   schema: Schema;
@@ -54,7 +56,8 @@ function seed(resetTouched = true): void {
   for (const group of groups.value) {
     for (const field of group.fields ?? []) {
       const incoming = props.modelValue?.[field.key];
-      next[field.key] = incoming !== undefined ? incoming : field.default;
+      next[field.key] =
+        incoming !== undefined ? incoming : defaultForField(field);
     }
   }
   for (const key of Object.keys(values)) {
@@ -67,6 +70,9 @@ function seed(resetTouched = true): void {
 function modelMatchesValues(model?: Record<string, unknown>): boolean {
   for (const group of groups.value) {
     for (const field of group.fields ?? []) {
+      // Composite values are objects/arrays; re-seeding them on identity would
+      // loop, so they don't drive the match check.
+      if (field.type === "object" || field.type === "array") continue;
       const incoming = model?.[field.key];
       const expected = incoming !== undefined ? incoming : field.default;
       if (values[field.key] !== expected) return false;
@@ -114,25 +120,11 @@ function onSubmit(): void {
   const preserveCredentials: string[] = [];
   for (const group of groups.value) {
     for (const field of visibleFields(group.fields ?? [])) {
-      let value = values[field.key];
+      const value = values[field.key];
       // A write-only secret that is already set and left untouched is kept by
       // the backend — never require or resubmit it.
       if (field.secret && props.secretsSet?.[field.key] && isBlank(value)) {
         continue;
-      }
-      // JSON fields edit as text; parse to an object so it binds server-side.
-      if (field.type === "json" && typeof value === "string") {
-        const trimmed = value.trim();
-        if (trimmed === "") {
-          value = undefined;
-        } else {
-          try {
-            value = JSON.parse(trimmed);
-          } catch {
-            next[field.key] = "Enter valid JSON.";
-            continue;
-          }
-        }
       }
       const credentialState = props.credentialStates?.[field.key];
       if (
@@ -145,9 +137,9 @@ function onSubmit(): void {
         preserveCredentials.push(field.key);
         continue;
       }
-      const msg = validateField(field, value);
-      if (msg) next[field.key] = msg;
-      else if (value !== undefined) payload[field.key] = value;
+      const { value: collected, error } = collectField(field, value);
+      if (error) next[field.key] = error;
+      else if (collected !== undefined) payload[field.key] = collected;
     }
   }
   errors.value = next;

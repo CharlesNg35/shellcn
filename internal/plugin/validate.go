@@ -91,6 +91,13 @@ func ValidateWithCredentialKinds(m Manifest, routes []Route, existing Credential
 		}
 	}
 
+	validateSchemaShape("config", m.Config, add)
+	for _, rt := range routes {
+		if rt.Input != nil {
+			validateSchemaShape("route "+rt.ID+" input", *rt.Input, add)
+		}
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -117,6 +124,44 @@ func validateCredentialSelectors(schema Schema, catalog CredentialKindCatalog, a
 		}
 	}
 	return used
+}
+
+// validateSchemaShape checks composite (object/array) field wiring.
+func validateSchemaShape(ctx string, schema Schema, add func(string, ...any)) {
+	var check func(prefix string, fields []Field)
+	check = func(prefix string, fields []Field) {
+		seen := map[string]bool{}
+		for _, f := range fields {
+			where := prefix + "." + f.Key
+			if seen[f.Key] {
+				add("%s: duplicate field key %q", ctx, where)
+			}
+			seen[f.Key] = true
+			switch f.Type {
+			case FieldObject:
+				if len(f.Fields) == 0 {
+					add("%s: object field %q declares no fields", ctx, where)
+				}
+				check(where, f.Fields)
+			case FieldArray:
+				if f.Item == nil {
+					add("%s: array field %q declares no item", ctx, where)
+					continue
+				}
+				if f.MaxItems != 0 && f.MinItems > f.MaxItems {
+					add("%s: array field %q has minItems > maxItems", ctx, where)
+				}
+				check(where+"[]", []Field{*f.Item})
+			default:
+				if len(f.Fields) > 0 || f.Item != nil {
+					add("%s: field %q is %q but declares composite sub-fields", ctx, where, f.Type)
+				}
+			}
+		}
+	}
+	for _, group := range schema.Groups {
+		check(group.Name, group.Fields)
+	}
 }
 
 // validateRoutes checks route shape and returns the set of route ids.
