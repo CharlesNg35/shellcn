@@ -437,9 +437,9 @@ func validateLayout(m Manifest, routes map[string]Route, actionIDs map[string]bo
 			}
 		}
 	}
-	checkTabs := func(ctx string, tabs []Tab) {
+	checkTabs := func(ctx string, tabs []Panel) {
 		for _, t := range tabs {
-			checkPanelSource(fmt.Sprintf("%s tab %q source", ctx, t.Key), t.Panel, t.Source)
+			checkPanelSource(fmt.Sprintf("%s tab %q source", ctx, t.Key), t.Type, t.Source)
 			checkPanelConfigRoutes(
 				fmt.Sprintf("%s tab %q", ctx, t.Key),
 				t.Config,
@@ -594,10 +594,10 @@ func checkPanelConfigRoutes(
 	case DashboardConfig:
 		for _, cell := range c.Cells {
 			cellCtx := fmt.Sprintf("%s cell %q", ctx, cell.Key)
-			if cell.Panel == "" {
+			if cell.Type == "" {
 				add("%s is missing a panel type", cellCtx)
 			}
-			checkPanelSource(cellCtx+" source", cell.Panel, cell.Source)
+			checkPanelSource(cellCtx+" source", cell.Type, cell.Source)
 			checkPanelConfigRoutes(
 				cellCtx,
 				cell.Config,

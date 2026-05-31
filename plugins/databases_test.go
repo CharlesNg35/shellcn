@@ -171,7 +171,7 @@ func TestDatabaseCreateActionsAreDeclaredAtCollectionLevel(t *testing.T) {
 	if !ok {
 		t.Fatal("mongodb should expose database resources")
 	}
-	var collections plugin.Tab
+	var collections plugin.Panel
 	for _, tab := range database.Detail.Tabs {
 		if tab.Key == "collections" {
 			collections = tab
@@ -212,7 +212,7 @@ func TestEditableDatabaseTablesDeclareColumnMetadataSource(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s should expose table resources", tc.protocol)
 		}
-		var data plugin.Tab
+		var data plugin.Panel
 		for _, tab := range res.Detail.Tabs {
 			if tab.Key == "data" {
 				data = tab

@@ -161,15 +161,14 @@
           "type": "text"
         }
       ],
-      "actionIds": [
-        "sample.start"
-      ],
+      "actions": {
+        "detail": [
+          "sample.start"
+        ]
+      },
       "detail": {
         "header": {
-          "title": "Container",
-          "actionIds": [
-            "sample.start"
-          ]
+          "title": "Container"
         },
         "defaultTab": "editor",
         "tabs": [

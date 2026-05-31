@@ -62,7 +62,7 @@ type Projection struct {
 	SupportedTransports []Transport            `json:"supportedTransports"`
 	Agent               *ProjectedAgentProfile `json:"agent,omitempty"`
 	Layout              Layout                 `json:"layout"`
-	Tabs                []Tab                  `json:"tabs,omitempty"`
+	Tabs                []Panel                `json:"tabs,omitempty"`
 	Tree                []TreeGroup            `json:"tree,omitempty"`
 	Resources           []ResourceType         `json:"resources,omitempty"`
 	Actions             []ProjectedAction      `json:"actions,omitempty"`

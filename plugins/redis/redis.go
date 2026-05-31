@@ -26,14 +26,14 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"kv", "keys", "pubsub", "terminal"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
-		Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("gauge"), Panel: plugin.PanelDashboard, Config: overviewDashboard()},
-			{Key: "keys", Label: "Keys", Icon: icon("key-round"), Panel: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "redis.keys.list"}, Config: plugin.KVConfig{
+		Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("gauge"), Type: plugin.PanelDashboard, Config: overviewDashboard()},
+			{Key: "keys", Label: "Keys", Icon: icon("key-round"), Type: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "redis.keys.list"}, Config: plugin.KVConfig{
 				CreateRouteID: "redis.key.write", ReadRouteID: "redis.key.read", WriteRouteID: "redis.key.write", DeleteRouteID: "redis.key.delete", KeyParam: "key", Writable: true,
 				ValueTypes: []string{"string", "hash", "list", "set", "zset"},
 			}},
-			{Key: "console", Label: "Console", Icon: icon("terminal"), Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "redis.terminal", Method: plugin.MethodWS}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
-			{Key: "info", Label: "Info", Icon: icon("file-text"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.info"}},
+			{Key: "console", Label: "Console", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "redis.terminal", Method: plugin.MethodWS}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
+			{Key: "info", Label: "Info", Icon: icon("file-text"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.info"}},
 		},
 		Streams: []plugin.Stream{
 			{ID: "redis.terminal", Kind: plugin.StreamTerminal, RouteID: "redis.terminal"},
@@ -55,10 +55,10 @@ func icon(name string) plugin.Icon {
 // overviewDashboard composes the server summary, connected clients, and pub/sub
 // channels into a single at-a-glance grid using the generic dashboard panel.
 func overviewDashboard() plugin.DashboardConfig {
-	return plugin.DashboardConfig{Cells: []plugin.DashboardCell{
-		{Key: "server", Label: "Server", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.overview"}, Span: 2},
-		{Key: "clients", Label: "Clients", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: plugin.TableConfig{Columns: clientColumns(), Exportable: true, RowClick: plugin.RowClickDetail}},
-		{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: plugin.TableConfig{Columns: channelColumns(), Exportable: true, RowClick: plugin.RowClickDetail}},
+	return plugin.DashboardConfig{Cells: []plugin.Panel{
+		{Key: "server", Label: "Server", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "redis.overview"}, Span: 2},
+		{Key: "clients", Label: "Clients", Icon: icon("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.clients.list"}, Config: plugin.TableConfig{Columns: clientColumns(), Exportable: true, RowClick: plugin.RowClickDetail}},
+		{Key: "channels", Label: "Channels", Icon: icon("radio-tower"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "redis.channels.list"}, Config: plugin.TableConfig{Columns: channelColumns(), Exportable: true, RowClick: plugin.RowClickDetail}},
 	}}
 }
 

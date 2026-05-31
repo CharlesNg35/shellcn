@@ -13,26 +13,26 @@ func yamlEditorConfig() plugin.CodeEditorConfig {
 }
 
 // yamlTab is the editable YAML detail tab (loads current object, applies on save).
-func yamlTab(k kind) plugin.Tab {
+func yamlTab(k kind) plugin.Panel {
 	getParams := map[string]string{"kind": k.name, "name": "${resource.name}"}
 	if k.namespaced {
 		getParams["namespace"] = "${resource.namespace}"
 	}
-	return plugin.Tab{
-		Key: "yaml", Label: "YAML", Icon: lucide("file-code"), Panel: plugin.PanelCodeEditor,
+	return plugin.Panel{
+		Key: "yaml", Label: "YAML", Icon: lucide("file-code"), Type: plugin.PanelCodeEditor,
 		Source: &plugin.DataSource{RouteID: "kubernetes.resource.yaml", Params: getParams},
 		Config: yamlEditorConfig(),
 	}
 }
 
 // eventsTab shows the events involving an object.
-func eventsTab(k kind) plugin.Tab {
+func eventsTab(k kind) plugin.Panel {
 	params := map[string]string{"kind": k.name, "name": "${resource.name}"}
 	if k.namespaced {
 		params["namespace"] = "${resource.namespace}"
 	}
-	return plugin.Tab{
-		Key: "events", Label: "Events", Icon: lucide("bell"), Panel: plugin.PanelTable,
+	return plugin.Panel{
+		Key: "events", Label: "Events", Icon: lucide("bell"), Type: plugin.PanelTable,
 		Source: &plugin.DataSource{RouteID: "kubernetes.resource.events", Params: params},
 		Config: plugin.TableConfig{Columns: []plugin.Column{
 			col("type", "Type", statusBadge(eventSeverities)), col("reason", "Reason"), col("message", "Message", notSort), col("count", "Count", num), ageCol(),

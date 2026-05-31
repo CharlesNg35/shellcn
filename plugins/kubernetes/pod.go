@@ -12,17 +12,17 @@ func podRefParams(extra map[string]string) map[string]string {
 }
 
 // podDetailTabs adds Logs and Shell tabs to the pod detail view.
-func podDetailTabs() []plugin.Tab {
-	return []plugin.Tab{
+func podDetailTabs() []plugin.Panel {
+	return []plugin.Panel{
 		{
-			Key: "logs", Label: "Logs", Icon: lucide("scroll-text"), Panel: plugin.PanelLogStream,
+			Key: "logs", Label: "Logs", Icon: lucide("scroll-text"), Type: plugin.PanelLogStream,
 			Source: &plugin.DataSource{
 				RouteID: "kubernetes.pod.logs", Method: plugin.MethodWS,
 				Params: podRefParams(map[string]string{"follow": "true", "tail": "500", "timestamps": "true"}),
 			},
 		},
 		{
-			Key: "terminal", Label: "Shell", Icon: lucide("terminal"), Panel: plugin.PanelTerminal,
+			Key: "terminal", Label: "Shell", Icon: lucide("terminal"), Type: plugin.PanelTerminal,
 			Source: &plugin.DataSource{
 				RouteID: "kubernetes.pod.exec", Method: plugin.MethodWS,
 				Params: podRefParams(map[string]string{"tty": "true", "cols": "80", "rows": "24"}),

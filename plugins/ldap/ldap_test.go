@@ -46,7 +46,7 @@ func TestAttributesTabIsStagedEditableGrid(t *testing.T) {
 	}
 }
 
-func attributesTab(t *testing.T) plugin.Tab {
+func attributesTab(t *testing.T) plugin.Panel {
 	t.Helper()
 	for _, res := range New().Manifest().Resources {
 		if res.Kind != "entry" {
@@ -59,7 +59,7 @@ func attributesTab(t *testing.T) plugin.Tab {
 		}
 	}
 	t.Fatal("entry resource has no attributes tab")
-	return plugin.Tab{}
+	return plugin.Panel{}
 }
 
 func TestAuthDefaultsToAnonymous(t *testing.T) {

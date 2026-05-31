@@ -18,7 +18,7 @@ func TestFilesystemPluginsValidateAndRegister(t *testing.T) {
 		if proj.Category.Key != plugin.CategoryFiles {
 			t.Fatalf("%s category: got %q want %q", name, proj.Category.Key, plugin.CategoryFiles)
 		}
-		if len(proj.Tabs) != 1 || proj.Tabs[0].Panel != plugin.PanelFileBrowser {
+		if len(proj.Tabs) != 1 || proj.Tabs[0].Type != plugin.PanelFileBrowser {
 			t.Fatalf("%s should expose one file browser tab: %+v", name, proj.Tabs)
 		}
 		fb, ok := proj.Tabs[0].Config.(plugin.FileBrowserConfig)

@@ -31,7 +31,7 @@ func (credentialRefPlugin) Manifest() plugin.Manifest {
 				Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}},
 			},
 		}}}},
-		Tabs: []plugin.Tab{{Key: "main", Label: "Main", Panel: plugin.PanelTable}},
+		Tabs: []plugin.Panel{{Key: "main", Label: "Main", Type: plugin.PanelTable}},
 	}
 }
 

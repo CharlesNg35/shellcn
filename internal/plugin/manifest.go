@@ -121,7 +121,7 @@ type Manifest struct {
 	Agent               *AgentProfile
 
 	Layout    Layout
-	Tabs      []Tab
+	Tabs      []Panel
 	Tree      []TreeGroup
 	Resources []ResourceType
 	Actions   []Action

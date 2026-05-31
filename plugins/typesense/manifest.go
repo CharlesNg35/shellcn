@@ -26,13 +26,13 @@ func resources() []plugin.ResourceType {
 					rid("collection.update"), rid("alias.upsert"), rid("collection.delete"),
 				},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("collection.overview"), Params: collectionParams()}},
-				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("documents.list"), Params: collectionParams()}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{rid("document.upsert"), rid("documents.import")}, RowActionIDs: []string{rid("document.delete")}, Exportable: true}},
-				{Key: "search", Label: "Search", Icon: icon("search"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("search.query"), Method: plugin.MethodWS, Params: collectionParams()}, Config: searchConfig()},
-				{Key: "synonyms", Label: "Synonym sets", Icon: icon("replace"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("synonyms.list")}, Config: plugin.TableConfig{Columns: synonymColumns(), ActionIDs: []string{rid("synonym.upsert")}, RowActionIDs: []string{rid("synonym.delete")}, Exportable: true}},
-				{Key: "overrides", Label: "Curation sets", Icon: icon("pin"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("overrides.list")}, Config: plugin.TableConfig{Columns: overrideColumns(), ActionIDs: []string{rid("override.upsert")}, RowActionIDs: []string{rid("override.delete")}, Exportable: true}},
-				{Key: "export", Label: "Export", Icon: icon("download"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("documents.export"), Params: collectionParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("collection.overview"), Params: collectionParams()}},
+				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("documents.list"), Params: collectionParams()}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{rid("document.upsert"), rid("documents.import")}, RowActionIDs: []string{rid("document.delete")}, Exportable: true}},
+				{Key: "search", Label: "Search", Icon: icon("search"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("search.query"), Method: plugin.MethodWS, Params: collectionParams()}, Config: searchConfig()},
+				{Key: "synonyms", Label: "Synonym sets", Icon: icon("replace"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("synonyms.list")}, Config: plugin.TableConfig{Columns: synonymColumns(), ActionIDs: []string{rid("synonym.upsert")}, RowActionIDs: []string{rid("synonym.delete")}, Exportable: true}},
+				{Key: "overrides", Label: "Curation sets", Icon: icon("pin"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("overrides.list")}, Config: plugin.TableConfig{Columns: overrideColumns(), ActionIDs: []string{rid("override.upsert")}, RowActionIDs: []string{rid("override.delete")}, Exportable: true}},
+				{Key: "export", Label: "Export", Icon: icon("download"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("documents.export"), Params: collectionParams()}},
 			}},
 		},
 		{
@@ -42,9 +42,9 @@ func resources() []plugin.ResourceType {
 				Row:    []string{rid("document.delete")},
 				Detail: []string{rid("document.delete")},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, DefaultTab: "editor", Tabs: []plugin.Tab{
-				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("document.update"), SaveMethod: plugin.MethodPatch, SaveParams: documentParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, DefaultTab: "editor", Tabs: []plugin.Panel{
+				{Key: "document", Label: "Document", Icon: icon("file-json"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Type: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("document.update"), SaveMethod: plugin.MethodPatch, SaveParams: documentParams()}},
 			}},
 		},
 		{
@@ -55,8 +55,8 @@ func resources() []plugin.ResourceType {
 				Row:     []string{rid("alias.delete")},
 				Detail:  []string{rid("alias.delete")},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("tag"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("alias.read"), Params: aliasParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("tag"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("alias.read"), Params: aliasParams()}},
 			}},
 		},
 		{
@@ -67,8 +67,8 @@ func resources() []plugin.ResourceType {
 				Row:     []string{rid("key.delete")},
 				Detail:  []string{rid("key.delete")},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("key-round"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("key.read"), Params: keyParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("key-round"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("key.read"), Params: keyParams()}},
 			}},
 		},
 	}

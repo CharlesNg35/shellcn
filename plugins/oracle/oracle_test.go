@@ -125,7 +125,7 @@ func TestTableDataGridIsEditable(t *testing.T) {
 	for _, r := range p.Routes() {
 		routeIDs[r.ID] = true
 	}
-	var data plugin.Tab
+	var data plugin.Panel
 	for _, res := range m.Resources {
 		if res.Kind != "table" {
 			continue

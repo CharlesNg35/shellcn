@@ -45,12 +45,12 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 				}},
 			},
 		}}},
-		Tabs: []plugin.Tab{{
+		Tabs: []plugin.Panel{{
 			Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
-			Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "sample.shell", Method: plugin.MethodWS},
+			Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "sample.shell", Method: plugin.MethodWS},
 		}, {
 			Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
-			Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "sample.files.list", Params: map[string]string{"path": "/"}},
+			Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "sample.files.list", Params: map[string]string{"path": "/"}},
 			Config: plugin.FileBrowserConfig{
 				PathParam:       "path",
 				ReadRouteID:     "sample.files.read",
@@ -71,21 +71,21 @@ func sampleManifest() (plugin.Manifest, []plugin.Route) {
 			Columns: []plugin.Column{{Key: "name", Label: "Name", Sortable: true, Type: plugin.ColumnText}}, Actions: plugin.ResourceActions{Detail: []string{"sample.start"}}, Detail: plugin.DetailView{
 				Header:     plugin.HeaderSpec{Title: "Container"},
 				DefaultTab: "editor",
-				Tabs: []plugin.Tab{
-					{Key: "logs", Label: "Logs", Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "sample.logs", Method: plugin.MethodWS}},
-					{Key: "config", Label: "Config", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "sample.form"}, Config: plugin.FormPanelConfig{
+				Tabs: []plugin.Panel{
+					{Key: "logs", Label: "Logs", Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "sample.logs", Method: plugin.MethodWS}},
+					{Key: "config", Label: "Config", Type: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "sample.form"}, Config: plugin.FormPanelConfig{
 						SubmitRouteID: "sample.form.save",
 						SubmitMethod:  plugin.MethodPatch,
 						SubmitLabel:   "Apply",
 						Params:        map[string]string{"id": "${resource.uid}"},
 					}},
-					{Key: "editor", Label: "Editor", Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "sample.doc"}, Config: plugin.CodeEditorConfig{
+					{Key: "editor", Label: "Editor", Type: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "sample.doc"}, Config: plugin.CodeEditorConfig{
 						Language:    "yaml",
 						SaveRouteID: "sample.doc.save",
 						SaveMethod:  plugin.MethodPut,
 						SaveParams:  map[string]string{"id": "${resource.uid}"},
 					}},
-					{Key: "query", Label: "Query", Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "sample.query", Method: plugin.MethodWS}, Config: plugin.QueryEditorConfig{
+					{Key: "query", Label: "Query", Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "sample.query", Method: plugin.MethodWS}, Config: plugin.QueryEditorConfig{
 						InitialQuery:  "select * from ${resource.name} limit 100",
 						CancelRouteID: "sample.query.cancel",
 					}},

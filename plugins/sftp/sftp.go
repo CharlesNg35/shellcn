@@ -26,7 +26,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
-		Tabs:                []plugin.Tab{filesTab()},
+		Tabs:                []plugin.Panel{filesTab()},
 	}
 }
 
@@ -61,10 +61,10 @@ func configSchema() plugin.Schema {
 	}}
 }
 
-func filesTab() plugin.Tab {
-	return plugin.Tab{
+func filesTab() plugin.Panel {
+	return plugin.Panel{
 		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
-		Panel:  plugin.PanelFileBrowser,
+		Type:   plugin.PanelFileBrowser,
 		Source: &plugin.DataSource{RouteID: "sftp.sftp.list", Params: map[string]string{"path": "."}},
 		Config: plugin.FileBrowserConfig{
 			PathParam:       "path",

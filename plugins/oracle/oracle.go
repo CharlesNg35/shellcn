@@ -77,9 +77,9 @@ func serverResource() plugin.ResourceType {
 		List: plugin.DataSource{RouteID: "oracle.schemas.list"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Schemas"},
-			Tabs: []plugin.Tab{
-				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.schemas.list"}, Config: plugin.TableConfig{Columns: schemaColumns()}},
-				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT SYSDATE AS now FROM dual")},
+			Tabs: []plugin.Panel{
+				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.schemas.list"}, Config: plugin.TableConfig{Columns: schemaColumns()}},
+				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT SYSDATE AS now FROM dual")},
 			},
 		},
 	}
@@ -90,14 +90,14 @@ func schemaResource() plugin.ResourceType {
 		Kind: "schema", Title: "Schemas",
 		List:    plugin.DataSource{RouteID: "oracle.schemas.list"},
 		Columns: schemaColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.schema.overview", Params: map[string]string{"schema": "${resource.name}"}}},
-			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.tables.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"oracle.table.create"}}},
-			{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Panel: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "oracle.relations.graph", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
-			{Key: "views", Label: "Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.views.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"oracle.view.drop"}}},
-			{Key: "procedures", Label: "Procedures", Icon: icon("function-square"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.procedures.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: procedureColumns()}},
-			{Key: "packages", Label: "Packages", Icon: icon("package"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.packages.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: packageColumns()}},
-			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.name}"}}, Config: queryConfig("SELECT SYSDATE AS now FROM dual")},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.schema.overview", Params: map[string]string{"schema": "${resource.name}"}}},
+			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.tables.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"oracle.table.create"}}},
+			{Key: "relations", Label: "Relationships", Icon: icon("workflow"), Type: plugin.PanelGraph, Source: &plugin.DataSource{RouteID: "oracle.relations.graph", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.GraphConfig{Layout: plugin.GraphLayoutGrid, FitView: true}},
+			{Key: "views", Label: "Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.views.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"oracle.view.drop"}}},
+			{Key: "procedures", Label: "Procedures", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.procedures.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: procedureColumns()}},
+			{Key: "packages", Label: "Packages", Icon: icon("package"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.packages.list", Params: map[string]string{"schema": "${resource.name}"}}, Config: plugin.TableConfig{Columns: packageColumns()}},
+			{Key: "query", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.name}"}}, Config: queryConfig("SELECT SYSDATE AS now FROM dual")},
 		}},
 	}
 }
@@ -111,12 +111,12 @@ func tableResource() plugin.ResourceType {
 			Row:    []string{"oracle.column.add", "oracle.table.truncate", "oracle.table.drop"},
 			Detail: []string{"oracle.table.truncate", "oracle.table.drop"},
 		},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "data", Label: "Data", Icon: icon("table"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.rows", Params: objectParams()}, Config: dataGridConfig()},
-			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"oracle.column.add"}, RowActionIDs: []string{"oracle.column.drop"}}},
-			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"oracle.index.create"}, RowActionIDs: []string{"oracle.index.drop"}}},
-			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.constraints", Params: objectParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}},
-			{Key: "sql", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.namespace}"}}, Config: queryConfig("SELECT * FROM ${resource.name} FETCH FIRST 100 ROWS ONLY")},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "data", Label: "Data", Icon: icon("table"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.rows", Params: objectParams()}, Config: dataGridConfig()},
+			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"oracle.column.add"}, RowActionIDs: []string{"oracle.column.drop"}}},
+			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"oracle.index.create"}, RowActionIDs: []string{"oracle.index.drop"}}},
+			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.constraints", Params: objectParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}},
+			{Key: "sql", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.namespace}"}}, Config: queryConfig("SELECT * FROM ${resource.name} FETCH FIRST 100 ROWS ONLY")},
 		}},
 	}
 }
@@ -129,10 +129,10 @@ func viewResource() plugin.ResourceType {
 			Row:    []string{"oracle.view.drop"},
 			Detail: []string{"oracle.view.drop"},
 		},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.view.rows", Params: objectParams()}},
-			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.view.definition", Params: objectParams()}},
-			{Key: "sql", Label: "SQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.namespace}"}}, Config: queryConfig("SELECT * FROM ${resource.name} FETCH FIRST 100 ROWS ONLY")},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "data", Label: "Data", Icon: icon("table-properties"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.view.rows", Params: objectParams()}},
+			{Key: "definition", Label: "Definition", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.view.definition", Params: objectParams()}},
+			{Key: "sql", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.namespace}"}}, Config: queryConfig("SELECT * FROM ${resource.name} FETCH FIRST 100 ROWS ONLY")},
 		}},
 	}
 }
@@ -141,8 +141,8 @@ func procedureResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "procedure", Title: "Procedures",
 		List: plugin.DataSource{RouteID: "oracle.procedures.list"}, Columns: procedureColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.object.definition", Params: objectParams()}},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "definition", Label: "Definition", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.object.definition", Params: objectParams()}},
 		}},
 	}
 }
@@ -151,9 +151,9 @@ func packageResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "package", Title: "Packages",
 		List: plugin.DataSource{RouteID: "oracle.packages.list"}, Columns: packageColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "spec", Label: "Spec", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.package.spec", Params: objectParams()}},
-			{Key: "body", Label: "Body", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.package.body", Params: objectParams()}},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "spec", Label: "Spec", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.package.spec", Params: objectParams()}},
+			{Key: "body", Label: "Body", Icon: icon("braces"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.package.body", Params: objectParams()}},
 		}},
 	}
 }
@@ -163,8 +163,8 @@ func sequenceResource() plugin.ResourceType {
 		Kind: "sequence", Title: "Sequences",
 		List:    plugin.DataSource{RouteID: "oracle.sequences.list"},
 		Columns: []plugin.Column{{Key: "name", Label: "Sequence", Sortable: true}, {Key: "owner", Label: "Owner", Sortable: true}, {Key: "min_value", Label: "Min", Type: plugin.ColumnNumber}, {Key: "max_value", Label: "Max", Type: plugin.ColumnNumber}, {Key: "increment_by", Label: "Increment", Type: plugin.ColumnNumber}, {Key: "last_number", Label: "Last", Type: plugin.ColumnNumber}, {Key: "cache_size", Label: "Cache", Type: plugin.ColumnNumber}},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.sequence.overview", Params: objectParams()}},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.sequence.overview", Params: objectParams()}},
 		}},
 	}
 }
@@ -174,8 +174,8 @@ func userResource() plugin.ResourceType {
 		Kind: "user", Title: "Users",
 		List:    plugin.DataSource{RouteID: "oracle.users.list"},
 		Columns: []plugin.Column{{Key: "name", Label: "User", Sortable: true}, {Key: "account_status", Label: "Status"}, {Key: "default_tablespace", Label: "Default tablespace"}, {Key: "temporary_tablespace", Label: "Temporary tablespace"}, {Key: "created", Label: "Created", Type: plugin.ColumnDateTime}},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.user.overview", Params: map[string]string{"user": "${resource.name}"}}},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.user.overview", Params: map[string]string{"user": "${resource.name}"}}},
 		}},
 	}
 }
@@ -185,8 +185,8 @@ func tablespaceResource() plugin.ResourceType {
 		Kind: "tablespace", Title: "Tablespaces",
 		List:    plugin.DataSource{RouteID: "oracle.tablespaces.list"},
 		Columns: []plugin.Column{{Key: "name", Label: "Tablespace", Sortable: true}, {Key: "status", Label: "Status"}, {Key: "contents", Label: "Contents"}, {Key: "extent_management", Label: "Extents"}, {Key: "bigfile", Label: "Bigfile", Type: plugin.ColumnBool}},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.tablespace.overview", Params: map[string]string{"tablespace": "${resource.name}"}}},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.tablespace.overview", Params: map[string]string{"tablespace": "${resource.name}"}}},
 		}},
 	}
 }
@@ -196,8 +196,8 @@ func sessionResource() plugin.ResourceType {
 		Kind: "session", Title: "Sessions",
 		List:    plugin.DataSource{RouteID: "oracle.sessions.list"},
 		Columns: []plugin.Column{{Key: "sid", Label: "SID", Type: plugin.ColumnNumber, Sortable: true}, {Key: "serial", Label: "Serial", Type: plugin.ColumnNumber}, {Key: "username", Label: "User"}, {Key: "status", Label: "Status"}, {Key: "machine", Label: "Machine"}, {Key: "program", Label: "Program"}, {Key: "logon_time", Label: "Logon", Type: plugin.ColumnDateTime}},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Session ${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.session.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Session ${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.session.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
 	}
 }

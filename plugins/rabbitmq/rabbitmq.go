@@ -67,11 +67,11 @@ func resources() []plugin.ResourceType {
 				Row:     []string{"rabbitmq.queue.purge", "rabbitmq.queue.delete"},
 				Detail:  []string{"rabbitmq.queue.publish", "rabbitmq.queue.purge", "rabbitmq.queue.delete"},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "rabbitmq.queue.overview", Params: queueParams()}},
-				{Key: "messages", Label: "Messages", Icon: icon("mail"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.queue.messages", Params: queueParams()}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"rabbitmq.queue.publish"}, Exportable: true}},
-				{Key: "bindings", Label: "Bindings", Icon: icon("link"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.bindings.list", Params: queueParams()}, Config: plugin.TableConfig{Columns: bindingColumns(), ActionIDs: []string{"rabbitmq.binding.create"}, RowActionIDs: []string{"rabbitmq.binding.delete"}, Exportable: true}},
-				{Key: "consumers", Label: "Consumers", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.consumers.list", Params: queueParams()}, Config: plugin.TableConfig{Columns: consumerColumns(), Exportable: true}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "rabbitmq.queue.overview", Params: queueParams()}},
+				{Key: "messages", Label: "Messages", Icon: icon("mail"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.queue.messages", Params: queueParams()}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"rabbitmq.queue.publish"}, Exportable: true}},
+				{Key: "bindings", Label: "Bindings", Icon: icon("link"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.bindings.list", Params: queueParams()}, Config: plugin.TableConfig{Columns: bindingColumns(), ActionIDs: []string{"rabbitmq.binding.create"}, RowActionIDs: []string{"rabbitmq.binding.delete"}, Exportable: true}},
+				{Key: "consumers", Label: "Consumers", Icon: icon("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.consumers.list", Params: queueParams()}, Config: plugin.TableConfig{Columns: consumerColumns(), Exportable: true}},
 			}},
 		},
 		{
@@ -82,9 +82,9 @@ func resources() []plugin.ResourceType {
 				Row:     []string{"rabbitmq.exchange.delete"},
 				Detail:  []string{"rabbitmq.message.publish", "rabbitmq.exchange.delete"},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "rabbitmq.exchange.overview", Params: exchangeParams()}},
-				{Key: "bindings", Label: "Bindings", Icon: icon("link"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.exchange.bindings", Params: exchangeParams()}, Config: plugin.TableConfig{Columns: bindingColumns(), RowActionIDs: []string{"rabbitmq.binding.delete"}, Exportable: true}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "rabbitmq.exchange.overview", Params: exchangeParams()}},
+				{Key: "bindings", Label: "Bindings", Icon: icon("link"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "rabbitmq.exchange.bindings", Params: exchangeParams()}, Config: plugin.TableConfig{Columns: bindingColumns(), RowActionIDs: []string{"rabbitmq.binding.delete"}, Exportable: true}},
 			}},
 		},
 	}

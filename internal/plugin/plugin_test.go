@@ -86,9 +86,9 @@ func TestValidateAcceptsAllLayouts(t *testing.T) {
 }
 
 func TestDashboardConfigMapAndPanelValidate(t *testing.T) {
-	cfg := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
-		{Key: "a", Label: "A", Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "x.overview"}, Span: 2},
-		{Key: "b", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}},
+	cfg := plugin.DashboardConfig{Cells: []plugin.Panel{
+		{Key: "a", Label: "A", Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "x.overview"}, Span: 2},
+		{Key: "b", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}},
 	}}
 	if len(cfg.Cells) != 2 || cfg.Cells[0].Span != 2 {
 		t.Fatalf("DashboardConfig cells = %#v", cfg.Cells)
@@ -100,7 +100,7 @@ func TestDashboardConfigMapAndPanelValidate(t *testing.T) {
 		APIVersion: plugin.CurrentAPIVersion, Name: "x", Title: "X",
 		Category: plugin.CategoryOther, Layout: plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Tabs:                []plugin.Tab{{Key: "overview", Label: "Overview", Panel: plugin.PanelDashboard, Config: cfg}},
+		Tabs:                []plugin.Panel{{Key: "overview", Label: "Overview", Type: plugin.PanelDashboard, Config: cfg}},
 	}
 	routes := []plugin.Route{
 		{ID: "x.overview", Method: plugin.MethodGet, Permission: "x.read", Risk: plugin.RiskSafe, Handle: noop},
@@ -180,59 +180,59 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 			*r = append(*r, plugin.Route{ID: "x.ws", Method: plugin.MethodWS, Permission: "p", Risk: plugin.RiskSafe})
 		}},
 		{"tab references unknown route", "references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "t", Label: "T", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ghost"}}}
+			m.Tabs = []plugin.Panel{{Key: "t", Label: "T", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ghost"}}}
 		}},
 		{"tab source method must match route", "declares method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "t", Label: "T", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list", Method: plugin.MethodPost}}}
+			m.Tabs = []plugin.Panel{{Key: "t", Label: "T", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list", Method: plugin.MethodPost}}}
 		}},
 		{"query editor source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "query", Label: "Query", Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "x.list"}}}
+			m.Tabs = []plugin.Panel{{Key: "query", Label: "Query", Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "x.list"}}}
 		}},
 		{"table insert source must be write route", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "table", Label: "Table", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.TableConfig{
+			m.Tabs = []plugin.Panel{{Key: "table", Label: "Table", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.TableConfig{
 				Editable: true,
 				Insert:   &plugin.DataSource{RouteID: "x.list"},
 			}}}
 		}},
 		{"table watch source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "table", Label: "Table", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.TableConfig{
+			m.Tabs = []plugin.Panel{{Key: "table", Label: "Table", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.TableConfig{
 				Watch: &plugin.DataSource{RouteID: "x.list"},
 			}}}
 		}},
 		{"dashboard cell source must validate", "cell \"logs\" source references route", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "overview", Label: "Overview", Panel: plugin.PanelDashboard, Config: plugin.DashboardConfig{Cells: []plugin.DashboardCell{{
-				Key: "logs", Label: "Logs", Panel: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "x.list"},
+			m.Tabs = []plugin.Panel{{Key: "overview", Label: "Overview", Type: plugin.PanelDashboard, Config: plugin.DashboardConfig{Cells: []plugin.Panel{{
+				Key: "logs", Label: "Logs", Type: plugin.PanelLogStream, Source: &plugin.DataSource{RouteID: "x.list"},
 			}}}}}
 		}},
 		{"file browser config references unknown route", "uploadRouteId references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "files", Label: "Files", Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{UploadRouteID: "ghost"}}}
+			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{UploadRouteID: "ghost"}}}
 		}},
 		{"file browser upload route requires file input", "without a file input schema", func(m *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.upload", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
-			m.Tabs = []plugin.Tab{{Key: "files", Label: "Files", Panel: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{UploadRouteID: "x.upload"}}}
+			m.Tabs = []plugin.Panel{{Key: "files", Label: "Files", Type: plugin.PanelFileBrowser, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FileBrowserConfig{UploadRouteID: "x.upload"}}}
 		}},
 		{"form submit route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.list"}}}
+			m.Tabs = []plugin.Panel{{Key: "form", Label: "Form", Type: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.list"}}}
 		}},
 		{"form submit method must be write method", "submitMethod has invalid write method", func(m *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.write", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
-			m.Tabs = []plugin.Tab{{Key: "form", Label: "Form", Panel: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.write", SubmitMethod: plugin.MethodGet}}}
+			m.Tabs = []plugin.Panel{{Key: "form", Label: "Form", Type: plugin.PanelForm, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.FormPanelConfig{SubmitRouteID: "x.write", SubmitMethod: plugin.MethodGet}}}
 		}},
 		{"code editor save method must be write method", "saveMethod has invalid write method", func(m *plugin.Manifest, r *[]plugin.Route) {
 			*r = append(*r, plugin.Route{ID: "x.write", Method: plugin.MethodPost, Permission: "x.write", Risk: plugin.RiskWrite, Handle: noop})
-			m.Tabs = []plugin.Tab{{Key: "editor", Label: "Editor", Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.CodeEditorConfig{SaveRouteID: "x.write", SaveMethod: plugin.MethodWS}}}
+			m.Tabs = []plugin.Panel{{Key: "editor", Label: "Editor", Type: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.CodeEditorConfig{SaveRouteID: "x.write", SaveMethod: plugin.MethodWS}}}
 		}},
 		{"kv write route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "kv", Label: "KV", Panel: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.KVConfig{WriteRouteID: "x.list"}}}
+			m.Tabs = []plugin.Panel{{Key: "kv", Label: "KV", Type: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.KVConfig{WriteRouteID: "x.list"}}}
 		}},
 		{"http client execute route must be write method", "invalid write method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "http", Label: "HTTP", Panel: plugin.PanelHTTPClient, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.HTTPClientConfig{ExecuteRouteID: "x.list"}}}
+			m.Tabs = []plugin.Panel{{Key: "http", Label: "HTTP", Type: plugin.PanelHTTPClient, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.HTTPClientConfig{ExecuteRouteID: "x.list"}}}
 		}},
 		{"remote desktop requires source", "missing a source", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Config: plugin.RemoteDesktopConfig{}}}
+			m.Tabs = []plugin.Panel{{Key: "desktop", Label: "Desktop", Type: plugin.PanelRemoteDesktop, Config: plugin.RemoteDesktopConfig{}}}
 		}},
 		{"remote desktop source must be stream", "invalid stream method", func(m *plugin.Manifest, _ *[]plugin.Route) {
-			m.Tabs = []plugin.Tab{{Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.RemoteDesktopConfig{}}}
+			m.Tabs = []plugin.Panel{{Key: "desktop", Label: "Desktop", Type: plugin.PanelRemoteDesktop, Source: &plugin.DataSource{RouteID: "x.list"}, Config: plugin.RemoteDesktopConfig{}}}
 		}},
 		{"action references unknown route", "references unknown route", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Actions = []plugin.Action{{ID: "a", Label: "A", RouteID: "ghost"}}
@@ -273,7 +273,7 @@ func TestValidateRejectsBadManifests(t *testing.T) {
 		{"detail default tab references unknown tab", "defaultTab references unknown tab", func(m *plugin.Manifest, _ *[]plugin.Route) {
 			m.Resources = []plugin.ResourceType{{
 				Kind: "k", Title: "K", List: plugin.DataSource{RouteID: "x.list"},
-				Detail: plugin.DetailView{DefaultTab: "ghost", Tabs: []plugin.Tab{{Key: "overview", Label: "Overview", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}}}},
+				Detail: plugin.DetailView{DefaultTab: "ghost", Tabs: []plugin.Panel{{Key: "overview", Label: "Overview", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "x.list"}}}},
 			}}
 		}},
 		{"credential ref missing selector", "missing Credential selector", func(m *plugin.Manifest, _ *[]plugin.Route) {
@@ -343,8 +343,8 @@ func TestValidateAcceptsRemoteDesktopConfig(t *testing.T) {
 		SupportedTransports: []plugin.Transport{
 			plugin.TransportDirect,
 		},
-		Tabs: []plugin.Tab{{
-			Key: "desktop", Label: "Desktop", Panel: plugin.PanelRemoteDesktop,
+		Tabs: []plugin.Panel{{
+			Key: "desktop", Label: "Desktop", Type: plugin.PanelRemoteDesktop,
 			Source: &plugin.DataSource{RouteID: "desktop.stream", Method: plugin.MethodWS},
 			Config: plugin.RemoteDesktopConfig{Resize: true, Clipboard: true},
 		}},

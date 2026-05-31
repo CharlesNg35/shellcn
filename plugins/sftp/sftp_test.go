@@ -21,7 +21,7 @@ func TestManifestIsFileOnly(t *testing.T) {
 	if m.Icon.Value == "folder" {
 		t.Fatal("sftp connection icon must not reuse the folder glyph")
 	}
-	if len(m.Tabs) != 1 || m.Tabs[0].Panel != plugin.PanelFileBrowser {
+	if len(m.Tabs) != 1 || m.Tabs[0].Type != plugin.PanelFileBrowser {
 		t.Fatalf("sftp should expose only file_browser tab: %+v", m.Tabs)
 	}
 	if len(m.Streams) != 0 || len(m.Recording) != 0 {

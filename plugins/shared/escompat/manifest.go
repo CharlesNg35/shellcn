@@ -48,14 +48,14 @@ func resources(provider Provider) []plugin.ResourceType {
 					routeID(provider, "index.delete"),
 				},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "health", Severities: healthSeverities}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "index.overview"), Params: map[string]string{"index": "${resource.name}"}}},
-				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "documents.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{routeID(provider, "document.create")}, RowActionIDs: []string{routeID(provider, "document.delete")}, Exportable: true}},
-				{Key: "search", Label: "Search", Icon: icon("search"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "search.query"), Method: plugin.MethodWS, Params: map[string]string{"index": "${resource.name}"}}, Config: searchConfig(provider)},
-				{Key: "mapping", Label: "Mapping", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "mapping.read"), Params: map[string]string{"index": "${resource.name}"}}},
-				{Key: "settings", Label: "Settings", Icon: icon("settings"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "settings.read"), Params: map[string]string{"index": "${resource.name}"}}},
-				{Key: "aliases", Label: "Aliases", Icon: icon("tag"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "aliases.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: aliasColumns(), ActionIDs: []string{routeID(provider, "alias.create")}, RowActionIDs: []string{routeID(provider, "alias.delete")}, Exportable: true}},
-				{Key: "shards", Label: "Shards", Icon: icon("split"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "shards.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: shardColumns(), Exportable: true}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "health", Severities: healthSeverities}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "index.overview"), Params: map[string]string{"index": "${resource.name}"}}},
+				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "documents.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{routeID(provider, "document.create")}, RowActionIDs: []string{routeID(provider, "document.delete")}, Exportable: true}},
+				{Key: "search", Label: "Search", Icon: icon("search"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "search.query"), Method: plugin.MethodWS, Params: map[string]string{"index": "${resource.name}"}}, Config: searchConfig(provider)},
+				{Key: "mapping", Label: "Mapping", Icon: icon("braces"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "mapping.read"), Params: map[string]string{"index": "${resource.name}"}}},
+				{Key: "settings", Label: "Settings", Icon: icon("settings"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "settings.read"), Params: map[string]string{"index": "${resource.name}"}}},
+				{Key: "aliases", Label: "Aliases", Icon: icon("tag"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "aliases.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: aliasColumns(), ActionIDs: []string{routeID(provider, "alias.create")}, RowActionIDs: []string{routeID(provider, "alias.delete")}, Exportable: true}},
+				{Key: "shards", Label: "Shards", Icon: icon("split"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "shards.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: shardColumns(), Exportable: true}},
 			}},
 		},
 		{
@@ -65,9 +65,9 @@ func resources(provider Provider) []plugin.ResourceType {
 				Row:    []string{routeID(provider, "document.delete")},
 				Detail: []string{routeID(provider, "document.delete")},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, DefaultTab: "editor", Tabs: []plugin.Tab{
-				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: routeID(provider, "document.update"), SaveMethod: plugin.MethodPut, SaveParams: documentParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, DefaultTab: "editor", Tabs: []plugin.Panel{
+				{Key: "document", Label: "Document", Icon: icon("file-json"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Type: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: routeID(provider, "document.update"), SaveMethod: plugin.MethodPut, SaveParams: documentParams()}},
 			}},
 		},
 	}

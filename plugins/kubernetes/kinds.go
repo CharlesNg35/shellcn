@@ -33,12 +33,12 @@ type kind struct {
 	namespaced  bool
 	redact      bool // never return object data (Secrets)
 	columns     []plugin.Column
-	extra       func(obj) Row // cells beyond commonRow
-	actionIDs   []string      // row + detail actions (Edit/Create added generically)
-	detailTabs  []plugin.Tab  // extra detail tabs beyond Overview/YAML/Events
-	subgroup    string        // optional nested sub-group within the category
-	listLimit   int64         // cap per list call (0 = unbounded), for high-churn kinds
-	recentFirst bool          // sort the fetched rows newest-first
+	extra       func(obj) Row  // cells beyond commonRow
+	actionIDs   []string       // row + detail actions (Edit/Create added generically)
+	detailTabs  []plugin.Panel // extra detail tabs beyond Overview/YAML/Events
+	subgroup    string         // optional nested sub-group within the category
+	listLimit   int64          // cap per list call (0 = unbounded), for high-churn kinds
+	recentFirst bool           // sort the fetched rows newest-first
 }
 
 // subgroupLabels names the nested sub-groups a category can expand into.
@@ -114,25 +114,25 @@ var kinds = []kind{
 		name: "deployment", title: "Deployments", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("ready", "Ready", notSort), col("upToDate", "Up-to-date", num), col("available", "Available", num), ageCol()},
-		extra:   deploymentRow, actionIDs: scalable, detailTabs: []plugin.Tab{workloadPodsTab("deployment")},
+		extra:   deploymentRow, actionIDs: scalable, detailTabs: []plugin.Panel{workloadPodsTab("deployment")},
 	},
 	{
 		name: "statefulset", title: "StatefulSets", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "statefulsets"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("ready", "Ready", notSort), ageCol()},
-		extra:   statefulSetRow, actionIDs: scalable, detailTabs: []plugin.Tab{workloadPodsTab("statefulset")},
+		extra:   statefulSetRow, actionIDs: scalable, detailTabs: []plugin.Panel{workloadPodsTab("statefulset")},
 	},
 	{
 		name: "daemonset", title: "DaemonSets", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("desired", "Desired", num), col("ready", "Ready", num), col("available", "Available", num), ageCol()},
-		extra:   daemonSetRow, actionIDs: []string{"kubernetes.resource.restart", "kubernetes.resource.delete"}, detailTabs: []plugin.Tab{workloadPodsTab("daemonset")},
+		extra:   daemonSetRow, actionIDs: []string{"kubernetes.resource.restart", "kubernetes.resource.delete"}, detailTabs: []plugin.Panel{workloadPodsTab("daemonset")},
 	},
 	{
 		name: "replicaset", title: "ReplicaSets", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "replicasets"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("desired", "Desired", num), col("current", "Current", num), col("ready", "Ready", num), ageCol()},
-		extra:   replicaSetRow, actionIDs: scalable, detailTabs: []plugin.Tab{workloadPodsTab("replicaset")},
+		extra:   replicaSetRow, actionIDs: scalable, detailTabs: []plugin.Panel{workloadPodsTab("replicaset")},
 	},
 	{
 		name: "job", title: "Jobs", category: "workloads", icon: "square-check", namespaced: true,

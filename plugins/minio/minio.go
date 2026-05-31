@@ -31,7 +31,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"filesystem", "object_storage"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
-		Tabs:                []plugin.Tab{filesystem.FilesTab(protocolName)},
+		Tabs:                []plugin.Panel{filesystem.FilesTab(protocolName)},
 	}
 }
 

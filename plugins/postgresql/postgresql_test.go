@@ -154,7 +154,7 @@ func TestManifestReferencesResolve(t *testing.T) {
 // table Data tab is an editable grid wired to row insert/update/delete.
 func TestTableDataGridIsEditable(t *testing.T) {
 	m := New().Manifest()
-	var data plugin.Tab
+	var data plugin.Panel
 	for _, res := range m.Resources {
 		if res.Kind != "table" {
 			continue

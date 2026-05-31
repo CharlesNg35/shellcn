@@ -66,11 +66,11 @@ func resources() []plugin.ResourceType {
 				Row:     []string{"kafka.topic.delete"},
 				Detail:  []string{"kafka.message.produce", "kafka.topic.delete"},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "kafka.topic.overview", Params: map[string]string{"topic": "${resource.name}"}}},
-				{Key: "partitions", Label: "Partitions", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.partitions.list", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: partitionColumns(), Exportable: true}},
-				{Key: "messages", Label: "Messages", Icon: icon("mail"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.messages.list", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"kafka.message.produce"}, Exportable: true}},
-				{Key: "config", Label: "Config", Icon: icon("settings"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.topic.config", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: configColumns(), Exportable: true}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "kafka.topic.overview", Params: map[string]string{"topic": "${resource.name}"}}},
+				{Key: "partitions", Label: "Partitions", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.partitions.list", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: partitionColumns(), Exportable: true}},
+				{Key: "messages", Label: "Messages", Icon: icon("mail"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.messages.list", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"kafka.message.produce"}, Exportable: true}},
+				{Key: "config", Label: "Config", Icon: icon("settings"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.topic.config", Params: map[string]string{"topic": "${resource.name}"}}, Config: plugin.TableConfig{Columns: configColumns(), Exportable: true}},
 			}},
 		},
 		{
@@ -80,9 +80,9 @@ func resources() []plugin.ResourceType {
 				Row:    []string{"kafka.group.delete"},
 				Detail: []string{"kafka.group.reset_offsets", "kafka.group.delete"},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "kafka.group.overview", Params: map[string]string{"group": "${resource.name}"}}},
-				{Key: "offsets", Label: "Offsets", Icon: icon("gauge"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.group.offsets", Params: map[string]string{"group": "${resource.name}"}}, Config: plugin.TableConfig{Columns: offsetColumns(), ActionIDs: []string{"kafka.group.reset_offsets"}, Exportable: true}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "kafka.group.overview", Params: map[string]string{"group": "${resource.name}"}}},
+				{Key: "offsets", Label: "Offsets", Icon: icon("gauge"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "kafka.group.offsets", Params: map[string]string{"group": "${resource.name}"}}, Config: plugin.TableConfig{Columns: offsetColumns(), ActionIDs: []string{"kafka.group.reset_offsets"}, Exportable: true}},
 			}},
 		},
 	}

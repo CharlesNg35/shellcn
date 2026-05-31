@@ -93,18 +93,18 @@ func labelSelector(labels map[string]any) string {
 // clusterResourceType is the Overview dashboard: live cluster metrics, the node
 // list, and recent events — composed from generic panels.
 func clusterResourceType() plugin.ResourceType {
-	dash := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
+	dash := plugin.DashboardConfig{Cells: []plugin.Panel{
 		{
-			Key: "metrics", Label: "Cluster metrics", Panel: plugin.PanelMetrics, Span: 2,
+			Key: "metrics", Label: "Cluster metrics", Type: plugin.PanelMetrics, Span: 2,
 			Source: &plugin.DataSource{RouteID: "kubernetes.cluster.metrics", Method: plugin.MethodWS}, Config: clusterMetricsConfig(),
 		},
 		{
-			Key: "nodes", Label: "Nodes", Panel: plugin.PanelTable, Span: 2,
+			Key: "nodes", Label: "Nodes", Type: plugin.PanelTable, Span: 2,
 			Source: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "node"}},
 			Config: kindColumnsConfig("node"),
 		},
 		{
-			Key: "events", Label: "Recent events", Panel: plugin.PanelTable, Span: 2,
+			Key: "events", Label: "Recent events", Type: plugin.PanelTable, Span: 2,
 			Source: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "event"}},
 			Config: kindColumnsConfig("event"),
 		},
@@ -116,8 +116,8 @@ func clusterResourceType() plugin.ResourceType {
 		Columns: []plugin.Column{nameCol(), col("version", "Version"), col("nodes", "Nodes", num)},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Cluster Overview"},
-			Tabs: []plugin.Tab{
-				{Key: "dashboard", Label: "Overview", Icon: lucide("layout-dashboard"), Panel: plugin.PanelDashboard, Config: dash},
+			Tabs: []plugin.Panel{
+				{Key: "dashboard", Label: "Overview", Icon: lucide("layout-dashboard"), Type: plugin.PanelDashboard, Config: dash},
 			},
 		},
 	}
@@ -140,15 +140,15 @@ func podsTableConfig() plugin.TableConfig {
 }
 
 // nodeDetailTabs adds live Metrics + scheduled Pods to a node's detail.
-func nodeDetailTabs() []plugin.Tab {
-	return []plugin.Tab{
+func nodeDetailTabs() []plugin.Panel {
+	return []plugin.Panel{
 		{
-			Key: "metrics", Label: "Metrics", Icon: lucide("activity"), Panel: plugin.PanelMetrics,
+			Key: "metrics", Label: "Metrics", Icon: lucide("activity"), Type: plugin.PanelMetrics,
 			Source: &plugin.DataSource{RouteID: "kubernetes.node.metrics", Method: plugin.MethodWS, Params: map[string]string{"name": "${resource.name}"}},
 			Config: nodeMetricsConfig(),
 		},
 		{
-			Key: "pods", Label: "Pods", Icon: lucide("box"), Panel: plugin.PanelTable,
+			Key: "pods", Label: "Pods", Icon: lucide("box"), Type: plugin.PanelTable,
 			Source: &plugin.DataSource{RouteID: "kubernetes.node.pods", Params: map[string]string{"name": "${resource.name}"}},
 			Config: podsTableConfig(),
 		},
@@ -156,9 +156,9 @@ func nodeDetailTabs() []plugin.Tab {
 }
 
 // workloadPodsTab adds the owned-Pods table to a workload's detail.
-func workloadPodsTab(kindName string) plugin.Tab {
-	return plugin.Tab{
-		Key: "pods", Label: "Pods", Icon: lucide("box"), Panel: plugin.PanelTable,
+func workloadPodsTab(kindName string) plugin.Panel {
+	return plugin.Panel{
+		Key: "pods", Label: "Pods", Icon: lucide("box"), Type: plugin.PanelTable,
 		Source: &plugin.DataSource{RouteID: "kubernetes.workload.pods", Params: map[string]string{"kind": kindName, "namespace": "${resource.namespace}", "name": "${resource.name}"}},
 		Config: podsTableConfig(),
 	}

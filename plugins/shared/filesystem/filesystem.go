@@ -93,10 +93,10 @@ func Routes(prefix, protocol string) []plugin.Route {
 	}
 }
 
-func FilesTab(prefix string) plugin.Tab {
-	return plugin.Tab{
+func FilesTab(prefix string) plugin.Panel {
+	return plugin.Panel{
 		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
-		Panel:  plugin.PanelFileBrowser,
+		Type:   plugin.PanelFileBrowser,
 		Source: &plugin.DataSource{RouteID: prefix + ".files.list", Params: map[string]string{"path": "."}},
 		Config: plugin.FileBrowserConfig{
 			PathParam:       "path",

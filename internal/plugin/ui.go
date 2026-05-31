@@ -178,24 +178,10 @@ type FormPanelConfig struct {
 	Params        map[string]string `json:"params,omitempty"`
 }
 
-// DashboardCell is one panel inside a PanelDashboard grid. It mirrors a Tab
-// minus the tab-bar semantics: any panel type, its own source/config, and an
-// optional Span (>= 2 fills the row). Plugin-agnostic — any plugin can compose
-// an at-a-glance view from its existing panels and routes.
-type DashboardCell struct {
-	Key    string      `json:"key"`
-	Label  string      `json:"label,omitempty"`
-	Icon   Icon        `json:"icon,omitzero"`
-	Panel  PanelType   `json:"panel"`
-	Source *DataSource `json:"source,omitempty"`
-	Config PanelConfig `json:"config,omitempty"`
-	Span   int         `json:"span,omitempty"`
-}
-
 // DashboardConfig is the declarative config for a PanelDashboard: a responsive
-// grid that renders every cell at once. Usable as a detail/connection Tab panel.
+// grid that renders every Panel at once. Usable as a detail/connection panel.
 type DashboardConfig struct {
-	Cells []DashboardCell `json:"cells,omitempty"`
+	Cells []Panel `json:"cells,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.
@@ -355,12 +341,13 @@ type ResourceEvent struct {
 	Resource any         `json:"resource,omitempty"`
 }
 
-// Tab is one connection-level or resource-level panel.
-type Tab struct {
+// Panel is one renderable panel: a detail/connection tab, or a dashboard cell.
+// (Tabs and dashboard cells are the same shape — this is the single type.)
+type Panel struct {
 	Key    string      `json:"key"`
-	Label  string      `json:"label"`
+	Label  string      `json:"label,omitempty"`
 	Icon   Icon        `json:"icon,omitzero"`
-	Panel  PanelType   `json:"panel"`
+	Type   PanelType   `json:"panel"`
 	Source *DataSource `json:"source,omitempty"`
 	Config PanelConfig `json:"config,omitempty"`
 	// Span is a sizing hint for the dashboard layout only: a value >= 2 makes
@@ -491,7 +478,7 @@ type ResourceActions struct {
 type DetailView struct {
 	Header     HeaderSpec `json:"header"`
 	DefaultTab string     `json:"defaultTab,omitempty"`
-	Tabs       []Tab      `json:"tabs"`
+	Tabs       []Panel    `json:"tabs"`
 }
 
 // ResourceType is a managed object type: columns, actions, detail.

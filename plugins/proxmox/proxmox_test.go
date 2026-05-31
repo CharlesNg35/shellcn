@@ -20,7 +20,7 @@ func TestManifestValidates(t *testing.T) {
 }
 
 func TestNodeStorageTabIsNodeScoped(t *testing.T) {
-	var storageTab *plugin.Tab
+	var storageTab *plugin.Panel
 	for _, r := range New().Manifest().Resources {
 		if r.Kind != "node" {
 			continue

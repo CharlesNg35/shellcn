@@ -36,9 +36,9 @@ func resourceType(k kind) plugin.ResourceType {
 	// Edit and create live in the YAML tab / a dialog, not as row buttons.
 	rowActions := append([]string(nil), k.actionIDs...)
 
-	tabs := []plugin.Tab{
+	tabs := []plugin.Panel{
 		{
-			Key: "overview", Label: "Overview", Icon: lucide("info"), Panel: plugin.PanelDocument,
+			Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelDocument,
 			Source: &plugin.DataSource{RouteID: "kubernetes.resource.get", Params: getParams},
 		},
 		yamlTab(k),
@@ -77,9 +77,9 @@ func customResourceType() plugin.ResourceType {
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
-			Tabs: []plugin.Tab{
+			Tabs: []plugin.Panel{
 				{
-					Key: "overview", Label: "Overview", Icon: lucide("info"), Panel: plugin.PanelDocument,
+					Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelDocument,
 					Source: &plugin.DataSource{RouteID: "kubernetes.resource.get", Params: map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}},
 				},
 			},

@@ -75,7 +75,7 @@ func (testPlugin) Manifest() plugin.Manifest {
 				{Label: "Docker", Kind: "docker", Template: "run {{.ConnectURL}} {{.Token}}"},
 			},
 		},
-		Tabs: []plugin.Tab{{Key: "items", Label: "Items", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "t.list"}}},
+		Tabs: []plugin.Panel{{Key: "items", Label: "Items", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "t.list"}}},
 		Streams: []plugin.Stream{
 			{ID: "t.ws", Kind: plugin.StreamTerminal, RouteID: "t.ws"},
 			{ID: "t.desk", Kind: plugin.StreamDesktop, RouteID: "t.desk"},
@@ -179,9 +179,9 @@ func (internalPlugin) Manifest() plugin.Manifest {
 		Category:            plugin.CategoryOther,
 		Layout:              plugin.LayoutTabs,
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Tabs: []plugin.Tab{
-			{Key: "items", Label: "Items", Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "internal.list"}},
-			{Key: "echo", Label: "Echo", Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "internal.echo", Method: plugin.MethodWS}},
+		Tabs: []plugin.Panel{
+			{Key: "items", Label: "Items", Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "internal.list"}},
+			{Key: "echo", Label: "Echo", Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "internal.echo", Method: plugin.MethodWS}},
 		},
 		Streams: []plugin.Stream{{ID: "internal.echo", Kind: plugin.StreamTerminal, RouteID: "internal.echo"}},
 	}

@@ -29,14 +29,14 @@ func resources() []plugin.ResourceType {
 					rid("core.commit"), rid("core.optimize"), rid("core.reload"), rid("core.delete"),
 				},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("core.overview"), Params: coreParams()}},
-				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("documents.list"), Params: coreParams()}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{rid("document.upsert"), rid("documents.delete_query")}, RowActionIDs: []string{rid("document.delete")}, Exportable: true}},
-				{Key: "search", Label: "Search", Icon: icon("search"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("search.query"), Method: plugin.MethodWS, Params: coreParams()}, Config: searchConfig()},
-				{Key: "schema", Label: "Schema", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("schema.read"), Params: coreParams()}},
-				{Key: "fields", Label: "Fields", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("schema.fields"), Params: coreParams()}, Config: plugin.TableConfig{Columns: fieldColumns(), ActionIDs: []string{rid("schema.field.add")}, RowActionIDs: []string{rid("schema.field.delete")}, Exportable: true}},
-				{Key: "config", Label: "Config", Icon: icon("settings"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("config.read"), Params: coreParams()}},
-				{Key: "ping", Label: "Ping", Icon: icon("activity"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("core.ping"), Params: coreParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("core.overview"), Params: coreParams()}},
+				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("documents.list"), Params: coreParams()}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{rid("document.upsert"), rid("documents.delete_query")}, RowActionIDs: []string{rid("document.delete")}, Exportable: true}},
+				{Key: "search", Label: "Search", Icon: icon("search"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("search.query"), Method: plugin.MethodWS, Params: coreParams()}, Config: searchConfig()},
+				{Key: "schema", Label: "Schema", Icon: icon("braces"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("schema.read"), Params: coreParams()}},
+				{Key: "fields", Label: "Fields", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("schema.fields"), Params: coreParams()}, Config: plugin.TableConfig{Columns: fieldColumns(), ActionIDs: []string{rid("schema.field.add")}, RowActionIDs: []string{rid("schema.field.delete")}, Exportable: true}},
+				{Key: "config", Label: "Config", Icon: icon("settings"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("config.read"), Params: coreParams()}},
+				{Key: "ping", Label: "Ping", Icon: icon("activity"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("core.ping"), Params: coreParams()}},
 			}},
 		},
 		{
@@ -46,9 +46,9 @@ func resources() []plugin.ResourceType {
 				Row:    []string{rid("document.delete")},
 				Detail: []string{rid("document.delete")},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, DefaultTab: "editor", Tabs: []plugin.Tab{
-				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("document.update"), SaveMethod: plugin.MethodPatch, SaveParams: documentParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, DefaultTab: "editor", Tabs: []plugin.Panel{
+				{Key: "document", Label: "Document", Icon: icon("file-json"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Type: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: rid("document.update"), SaveMethod: plugin.MethodPatch, SaveParams: documentParams()}},
 			}},
 		},
 		{
@@ -58,8 +58,8 @@ func resources() []plugin.ResourceType {
 				Row:    []string{rid("schema.field.delete")},
 				Detail: []string{rid("schema.field.delete")},
 			},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("columns-3"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("schema.field.read"), Params: fieldParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("columns-3"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("schema.field.read"), Params: fieldParams()}},
 			}},
 		},
 	}

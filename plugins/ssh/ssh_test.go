@@ -19,12 +19,12 @@ func TestManifestExposesTerminalAndFiles(t *testing.T) {
 	if len(m.Tabs) != 3 {
 		t.Fatalf("tabs: got %d want 3", len(m.Tabs))
 	}
-	if m.Tabs[0].Panel != plugin.PanelTerminal || m.Tabs[0].Source.RouteID != "ssh.shell" {
+	if m.Tabs[0].Type != plugin.PanelTerminal || m.Tabs[0].Source.RouteID != "ssh.shell" {
 		t.Fatalf("terminal tab not wired to ssh.shell: %+v", m.Tabs[0])
 	}
 	files := m.Tabs[1]
-	if files.Panel != plugin.PanelFileBrowser {
-		t.Fatalf("files tab panel: got %q", files.Panel)
+	if files.Type != plugin.PanelFileBrowser {
+		t.Fatalf("files tab panel: got %q", files.Type)
 	}
 	fb, ok := files.Config.(plugin.FileBrowserConfig)
 	if !ok || fb.ReadRouteID == "" || fb.DownloadRouteID == "" || fb.UploadRouteID == "" ||
@@ -34,7 +34,7 @@ func TestManifestExposesTerminalAndFiles(t *testing.T) {
 	if len(m.Recording) != 1 || m.Recording[0].Class != plugin.RecordingTerminal {
 		t.Fatalf("ssh should declare terminal recording: %+v", m.Recording)
 	}
-	if m.Tabs[2].Panel != plugin.PanelTable || m.Tabs[2].Source.RouteID != "ssh.snippet.list" {
+	if m.Tabs[2].Type != plugin.PanelTable || m.Tabs[2].Source.RouteID != "ssh.snippet.list" {
 		t.Fatalf("snippets tab not wired to table/list route: %+v", m.Tabs[2])
 	}
 	for _, route := range ssh.New().Routes() {

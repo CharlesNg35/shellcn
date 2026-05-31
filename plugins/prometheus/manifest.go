@@ -42,59 +42,59 @@ func resources() []plugin.ResourceType {
 			// via the Overview tree group's Ref, which goes straight to Detail.
 			List:    plugin.DataSource{RouteID: rid("overview")},
 			Actions: plugin.ResourceActions{Detail: []string{rid("snapshot.create"), rid("tombstones.clean"), rid("config.reload")}},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
-				{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("overview")}},
-				{Key: "live", Label: "Live", Icon: icon("activity"), Panel: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: rid("metrics.live"), Method: plugin.MethodWS}, Config: liveMetricsConfig()},
-				{Key: "targets", Label: "Targets", Icon: icon("crosshair"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("targets.list")}, Config: plugin.TableConfig{Columns: targetColumns(), Exportable: true}},
-				{Key: "alerts", Label: "Alerts", Icon: icon("bell"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("alerts.list")}, Config: plugin.TableConfig{Columns: alertColumns(), Exportable: true}},
-				{Key: "rules", Label: "Rules", Icon: icon("list-checks"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("rules.list")}, Config: plugin.TableConfig{Columns: ruleColumns(), Exportable: true}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
+				{Key: "overview", Label: "Overview", Icon: icon("layout-dashboard"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("overview")}},
+				{Key: "live", Label: "Live", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: rid("metrics.live"), Method: plugin.MethodWS}, Config: liveMetricsConfig()},
+				{Key: "targets", Label: "Targets", Icon: icon("crosshair"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("targets.list")}, Config: plugin.TableConfig{Columns: targetColumns(), Exportable: true}},
+				{Key: "alerts", Label: "Alerts", Icon: icon("bell"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("alerts.list")}, Config: plugin.TableConfig{Columns: alertColumns(), Exportable: true}},
+				{Key: "rules", Label: "Rules", Icon: icon("list-checks"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("rules.list")}, Config: plugin.TableConfig{Columns: ruleColumns(), Exportable: true}},
 			}},
 		},
 		{
 			Kind: "status", Title: "Status", List: plugin.DataSource{RouteID: rid("status.list")},
 			Columns: statusColumns(),
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("status.read"), Params: statusParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("status.read"), Params: statusParams()}},
 			}},
 		},
 		{
 			Kind: "target", Title: "Targets", List: plugin.DataSource{RouteID: rid("targets.list")},
 			Columns: targetColumns(),
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("crosshair"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("target.read"), Params: targetParams()}},
-				{Key: "metadata", Label: "Metadata", Icon: icon("database-zap"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("target.metadata"), Params: targetParams()}, Config: plugin.TableConfig{Columns: targetMetadataColumns(), Exportable: true}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("crosshair"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("target.read"), Params: targetParams()}},
+				{Key: "metadata", Label: "Metadata", Icon: icon("database-zap"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("target.metadata"), Params: targetParams()}, Config: plugin.TableConfig{Columns: targetMetadataColumns(), Exportable: true}},
 			}},
 		},
 		{
 			Kind: "alert", Title: "Alerts", List: plugin.DataSource{RouteID: rid("alerts.list")},
 			Columns: alertColumns(),
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("bell"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("alert.read"), Params: alertParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("bell"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("alert.read"), Params: alertParams()}},
 			}},
 		},
 		{
 			Kind: "rule", Title: "Rules", List: plugin.DataSource{RouteID: rid("rules.list")},
 			Columns: ruleColumns(),
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("list-checks"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("rule.read"), Params: ruleParams()}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("list-checks"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("rule.read"), Params: ruleParams()}},
 			}},
 		},
 		{
 			Kind: "metric", Title: "Metrics", List: plugin.DataSource{RouteID: rid("metrics.list")},
 			Columns: metricColumns(),
 			Actions: plugin.ResourceActions{Detail: []string{rid("series.delete")}},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "metadata", Label: "Metadata", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("metric.read"), Params: metricParams()}},
-				{Key: "series", Label: "Series", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("metric.series"), Params: metricParams()}, Config: plugin.TableConfig{Columns: seriesColumns(), Exportable: true}},
-				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: metricQueryConfig()},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "metadata", Label: "Metadata", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("metric.read"), Params: metricParams()}},
+				{Key: "series", Label: "Series", Icon: icon("list-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("metric.series"), Params: metricParams()}, Config: plugin.TableConfig{Columns: seriesColumns(), Exportable: true}},
+				{Key: "query", Label: "PromQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: metricQueryConfig()},
 			}},
 		},
 		{
 			Kind: "label", Title: "Labels", List: plugin.DataSource{RouteID: rid("labels.list")},
 			Columns: labelColumns(),
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "values", Label: "Values", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("label.values"), Params: labelParams()}, Config: plugin.TableConfig{Columns: labelValueColumns(), Exportable: true}},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "values", Label: "Values", Icon: icon("tags"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("label.values"), Params: labelParams()}, Config: plugin.TableConfig{Columns: labelValueColumns(), Exportable: true}},
 			}},
 		},
 	}
