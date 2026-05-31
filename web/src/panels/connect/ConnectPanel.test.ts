@@ -62,6 +62,21 @@ describe("ConnectPanel", () => {
     expect(w.emitted("connect")).toBeTruthy();
   });
 
+  it("agent: shows a neutral checking state before the first state resolves (no flash)", () => {
+    const w = mount(ConnectPanel, {
+      props: { connectionId: "edge", connection: agent },
+    });
+    // Synchronously after mount the first /agent/state hasn't resolved yet.
+    expect(w.text()).toContain("Checking agent");
+    expect(w.text()).not.toContain("Waiting for agent");
+    expect(
+      w
+        .findAllComponents(Button)
+        .find((b) => b.text().includes("Set up agent")),
+    ).toBeFalsy();
+    w.unmount();
+  });
+
   it("agent offline: Connect is gated and Set up agent enrolls", async () => {
     const w = mount(ConnectPanel, {
       props: { connectionId: "edge", connection: agent },

@@ -19,11 +19,17 @@ const connectionError = computed(() => props.errorMessage?.trim() ?? "");
 
 const agent = useAgentState(toRef(props, "connectionId"));
 const canConnect = computed(() => !isAgent.value || agent.online.value);
-// Agent is the gate: until its tunnel is up, "Connect" is not actionable and
+// Until the first state resolves we don't know if the agent is up; show a neutral
+// "checking" state so an already-online agent doesn't flash "waiting → connected".
+const checking = computed(() => isAgent.value && !agent.ready.value);
+// Agent is the gate: once we know it's offline, "Connect" isn't actionable and
 // the real next step is enrolling the agent.
-const gated = computed(() => isAgent.value && !agent.online.value);
+const gated = computed(
+  () => isAgent.value && agent.ready.value && !agent.online.value,
+);
 
 const agentTone = computed(() => {
+  if (checking.value) return "bg-surface-300 animate-pulse dark:bg-surface-600";
   switch (agent.status.value) {
     case "online":
       return "bg-emerald-400";
@@ -34,6 +40,7 @@ const agentTone = computed(() => {
   }
 });
 const agentLabel = computed(() => {
+  if (checking.value) return "Checking agent…";
   switch (agent.status.value) {
     case "online":
       return "Agent connected";
@@ -93,8 +100,8 @@ watch(
       <Button v-if="gated" @click="emit('enroll')">Set up agent</Button>
       <Button
         :disabled="!canConnect || connecting"
-        :severity="gated ? 'secondary' : undefined"
-        :outlined="gated"
+        :severity="gated || checking ? 'secondary' : undefined"
+        :outlined="gated || checking"
         @click="emit('connect')"
       >
         <AppIcon
