@@ -333,7 +333,7 @@ type Action struct {
     OnSuccess   *ActionSuccess // optional declarative UI follow-up
     Open        OpenTarget // "view" (default, run the route) | "dock" | "dialog" | "url"
     Panel       PanelType  // panel to host when Open=dock/dialog (sourced from RouteID)
-    Config      map[string]any // panel config for the hosted Panel (e.g. a code_editor's saveRouteId), so a dock/dialog action can open an *editable* panel
+    Config      PanelConfig // typed config for the hosted Panel (e.g. a code_editor's saveRouteId), so a dock/dialog action can open an *editable* panel
     EnabledWhen *Condition // optional: gate the button on the active resource's row
     IconOnly    bool // render as the icon alone (Label becomes the tooltip) — presentation stays manifest-driven
 }
@@ -761,14 +761,24 @@ string must resolve, since a blank would corrupt the value, so that errors
 loudly. The resolver special-cases no field name — only the token structure.
 
 ```go
-type Tab struct {
+// Panel is one renderable panel — a detail/connection tab OR a dashboard cell
+// (they are the same shape, so there is one type). Config holds a typed config
+// struct (TableConfig, MetricsConfig, …) — see PanelConfig below.
+type Panel struct {
     Key    string
     Label  string
     Icon   Icon
-    Panel  PanelType
-    Source DataSource     // RouteID-based; never a raw path
-    Config map[string]any // panel options (language, scale mode, columns…)
+    Type   PanelType   // wire key "panel"
+    Source *DataSource // RouteID-based; never a raw path
+    Config PanelConfig // a typed config struct, set directly (no .Map())
+    Span   int         // dashboard layout hint (>=2 fills the row)
 }
+
+// PanelConfig is a sealed interface every config struct implements, so Config
+// accepts only a real config — never arbitrary data. Plugins assign the struct
+// directly (Config: TableConfig{…}); JSON marshalling produces the same wire
+// object the renderer reads, so there is no hand-written .Map() ceremony.
+type PanelConfig interface{ /* sealed: TableConfig, MetricsConfig, … */ }
 
 type TableConfig struct {
     Columns      []Column
@@ -1046,47 +1056,44 @@ the choice is stored in user preferences. The default is a suggestion, not a loc
 
 ```go
 type ResourceType struct {
-    Kind          string       // matches ResourceRef.Kind
+    Kind          string          // matches ResourceRef.Kind
     Title         string
-    List          DataSource   // route → Page[Row]
-    Watch         *DataSource  // optional WS route → stream of ResourceEvent (§7.3)
-    Columns       []Column     // static columns
-    ColumnsSource *DataSource  // optional: route → Page[Row] of column defs {name,label} when columns are only known at runtime (leave Columns empty). The list's scoping params are merged in.
-    ActionIDs     []string     // the resource's actions — shown in the detail header (mirror into DetailView.Header.ActionIDs); NOT list-row actions
-    ListActionIDs []string     // list toolbar actions (no row context, e.g. create/prune); inherit the list's scope params
-    RowActionIDs  []string     // selected-row actions; declaring any makes the list's rows selectable. Omit → rows aren't selectable and a row click opens the detail.
-    Selectable    bool         // makes rows selectable (checkboxes) WITHOUT a row-action bar — a browse table whose actions live in the detail view. Implied by RowActionIDs.
-    Detail        DetailView   // opened when a row is clicked
+    List          DataSource      // route → Page[Row]
+    Watch         *DataSource     // optional WS route → stream of ResourceEvent (§7.3)
+    Columns       []Column        // static columns
+    ColumnsSource *DataSource     // optional: route → column defs {name,label} when only known at runtime
+    Actions       ResourceActions // this resource's actions, grouped by render surface
+    Detail        DetailView      // opened when a row is clicked
+}
+
+// ResourceActions groups a resource's action IDs by the one surface each renders
+// on — the single, non-overlapping action contract for a resource.
+type ResourceActions struct {
+    Toolbar    []string // list toolbar (no row context): create, prune
+    Row        []string // bulk over selected rows (delete); declaring any makes rows selectable
+    Detail     []string // the one open resource, in its detail header
+    Selectable bool     // row checkboxes without a row bar; Row implies it
 }
 
 type DetailView struct {
-    Header     HeaderSpec // title, status badge, action buttons
+    Header     HeaderSpec // title + status badge (actions come from ResourceActions.Detail)
     DefaultTab string     // optional initial tab key; must reference Tabs
-    Tabs       []Tab      // resource-level panels (Overview/Console/Logs/Config…)
+    Tabs       []Panel    // resource-level panels (Overview/Console/Logs/Config…)
 }
 ```
 
 This single model expresses K8s, Proxmox, Docker, and SQL schema browsers
 identically — the data differs, the renderer does not.
 
-**Three action render sites, three fields.** Each set lands in exactly one place,
-generically: `ListActionIDs` → the list **toolbar** (no row context); `RowActionIDs`
-→ the **selected-row** bar — and declaring any is what makes the rows selectable
-(checkbox/multi-select); `ActionIDs` → the resource's **detail header**. Row actions
-are opt-in: a resource that omits `RowActionIDs` has non-selectable rows, so a row
-click opens the detail rather than selecting it. A resource's lifecycle actions
-(start/stop/restart/open/remove) therefore belong in `ActionIDs` (mirrored into
-`DetailView.Header.ActionIDs`), **not** in `RowActionIDs` — they surface in the
-detail view, not on list selection. The renderer never infers row actions from
-`ActionIDs`; the three fields stay independent so the same manifest reads the same
-everywhere.
-
-**Selectable without a row-action bar.** A browse table that wants row checkboxes
-but keeps its actions in the detail view sets `Selectable: true` (also on
-`TableConfig`). It decouples selectability from `RowActionIDs`: rows get checkboxes
-and a row-body click still opens the detail, but no selected-row action bar
-appears. `RowActionIDs` implies it. This is the default for the container/engine
-browse tables (docker/podman/swarm) — select to focus, act in the detail.
+**One action block, three surfaces.** A resource declares its actions once, in
+`Actions`, grouped by where the renderer shows them — no overlap, no duplication.
+`Toolbar` → the list toolbar (no row); `Row` → the selected-row **bulk** bar, and
+declaring any is what makes rows selectable; `Detail` → the open resource's detail
+header; `Selectable` → row checkboxes without a row bar (a browse table whose
+actions live in the detail). `Row` implies `Selectable`. Per-item lifecycle
+(start/stop/restart/open) lives in `Detail`; a bulk delete goes in `Row`. The
+container/engine browse tables (docker/podman/swarm) are selectable with a
+delete-only row bar and everything else in the detail.
 
 `DefaultTab` lets a plugin choose which tab a resource detail opens first while
 keeping the tab list fully declarative. It is a view preference only: users can
