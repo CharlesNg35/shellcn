@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
@@ -156,7 +157,8 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		UseTLS:   cfg.Email.UseTLS,
 	})
 	invitations := service.NewInvitationService(st.Invitations, users, mailer)
-	aiConfig := aiconfig.New(st.AIProviders, vault, cfg.AI)
+	modelRegistry := modelreg.New(modelreg.WithLogger(logger))
+	aiConfig := aiconfig.New(st.AIProviders, vault, cfg.AI).WithModels(modelRegistry)
 
 	health := telemetry.NewHealth()
 	health.Register("store", func(ctx context.Context) error {
@@ -239,6 +241,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		RecordingMaxChunk: cfg.Recordings.MaxChunkBytes,
 		AI:                aiConfig,
 		AIGlobal:          cfg.AI,
+		ModelRegistry:     modelRegistry,
 		Audit:             auditWriter,
 		Metrics:           metrics,
 		Health:            health,

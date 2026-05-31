@@ -88,6 +88,15 @@ func (s *Server) handleDeleteAIProvider(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) handleTestAIProvider(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
+	if err := s.deps.AI.Test(r.Context(), user.ID, chi.URLParam(r, "id")); err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (s *Server) handleAIProviderModels(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
 	models, err := s.deps.AI.Models(r.Context(), user.ID, chi.URLParam(r, "id"))

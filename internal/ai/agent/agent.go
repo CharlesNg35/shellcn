@@ -14,8 +14,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 )
 
-// Buffering thresholds mirror the reference: flush accumulated text every ~40ms
-// or once it reaches ~160 chars, whichever comes first.
+// Buffering thresholds: flush accumulated text every ~40ms or once it reaches
+// ~160 chars, whichever comes first, so the UI gets smooth batched updates.
 const (
 	flushInterval = 40 * time.Millisecond
 	flushChars    = 160

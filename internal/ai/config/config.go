@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/secrets"
@@ -69,11 +70,18 @@ type Service struct {
 	store  store.AIProviderStore
 	vault  secrets.SecretStore
 	global config.AIConfig
+	models *modelreg.Registry
 }
 
 // New wires the provider store, the secret vault, and the global config.
 func New(s store.AIProviderStore, vault secrets.SecretStore, global config.AIConfig) *Service {
 	return &Service{store: s, vault: vault, global: global}
+}
+
+// WithModels enables live model listing + provider connectivity tests.
+func (s *Service) WithModels(r *modelreg.Registry) *Service {
+	s.models = r
+	return s
 }
 
 // Global returns the read-only shared-AI status (never the key).
@@ -170,13 +178,22 @@ func (s *Service) Delete(ctx context.Context, ownerID, id string) error {
 	return s.store.Delete(ctx, id)
 }
 
-// Models lists a provider's selectable models: the configured allow-list if set,
-// otherwise a static per-kind default. Live provider-catalogue queries arrive
-// with the engine.
+// Models lists a provider's selectable models. It queries the provider's live
+// catalogue when possible, falling back to the configured allow-list, then a
+// static per-kind default.
 func (s *Service) Models(ctx context.Context, ownerID, id string) ([]string, error) {
-	row, err := s.owned(ctx, ownerID, id)
+	row, key, err := s.Resolve(ctx, ownerID, id)
 	if err != nil {
 		return nil, err
+	}
+	if s.models != nil {
+		if live, err := s.models.FetchModels(ctx, string(row.Kind), row.BaseURL, key); err == nil && len(live) > 0 {
+			ids := make([]string, 0, len(live))
+			for _, m := range live {
+				ids = append(ids, m.ID)
+			}
+			return ids, nil
+		}
 	}
 	if len(row.Models) > 0 {
 		return row.Models, nil
@@ -188,6 +205,20 @@ func (s *Service) Models(ctx context.Context, ownerID, id string) ([]string, err
 		return []string{row.DefaultModel}, nil
 	}
 	return []string{}, nil
+}
+
+// Test verifies a provider's credentials and endpoint by listing its models. It
+// returns nil when the provider is reachable and authorized.
+func (s *Service) Test(ctx context.Context, ownerID, id string) error {
+	row, key, err := s.Resolve(ctx, ownerID, id)
+	if err != nil {
+		return err
+	}
+	if s.models == nil {
+		return nil
+	}
+	_, err = s.models.FetchModels(ctx, string(row.Kind), row.BaseURL, key)
+	return err
 }
 
 // Resolve returns an owned provider with its decrypted API key for use at chat

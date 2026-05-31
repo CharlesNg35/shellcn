@@ -16,6 +16,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai"
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
 	"github.com/charlesng35/shellcn/internal/ai/memory"
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/config"
@@ -56,10 +57,13 @@ type Deps struct {
 	// AIGlobal is the env/config shared-AI provider; combined with AI (user
 	// providers) it backs the chat agent. Inert when no provider is configured.
 	AIGlobal config.AIConfig
-	Audit    audit.Sink
-	Metrics  *telemetry.Metrics
-	Health   *telemetry.Health
-	Logger   *slog.Logger
+	// ModelRegistry resolves model context windows + live model lists; shared by
+	// the config service and the chat agent. Created on demand when nil.
+	ModelRegistry *modelreg.Registry
+	Audit         audit.Sink
+	Metrics       *telemetry.Metrics
+	Health        *telemetry.Health
+	Logger        *slog.Logger
 
 	// StaticFS is the embedded web/dist (nil in dev mode, where Vite serves the UI).
 	StaticFS fs.FS
@@ -90,8 +94,12 @@ func New(d Deps) *Server {
 	// The chat agent runs route tools through the server's own secure pipeline
 	// (s implements the invoker); building it here breaks the construction cycle.
 	if d.AI != nil {
+		reg := d.ModelRegistry
+		if reg == nil {
+			reg = modelreg.New(modelreg.WithLogger(d.Logger))
+		}
 		mem := memory.New(d.Store.AIConversations, d.Store.AIMessages)
-		s.chat = ai.New(d.AI, d.AIGlobal, d.Plugins, s, mem)
+		s.chat = ai.New(d.AI, d.AIGlobal, d.Plugins, s, mem, reg)
 	}
 	s.router = s.routes()
 	return s
@@ -196,6 +204,7 @@ func (s *Server) routes() chi.Router {
 				pr.Put("/me/ai/config/{id}", s.handleUpdateAIProvider)
 				pr.Delete("/me/ai/config/{id}", s.handleDeleteAIProvider)
 				pr.Get("/me/ai/config/{id}/models", s.handleAIProviderModels)
+				pr.Post("/me/ai/config/{id}/test", s.handleTestAIProvider)
 				if s.deps.Connections != nil {
 					pr.Post("/connections/{id}/ai/ticket", s.handleMintAITicket)
 					pr.Get("/connections/{id}/ai/chat", s.handleAIChat)

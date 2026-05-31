@@ -10,21 +10,19 @@ import (
 	"strings"
 
 	"github.com/charlesng35/shellcn/internal/ai/agent"
+	"github.com/charlesng35/shellcn/internal/ai/budget"
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 	einoadapter "github.com/charlesng35/shellcn/internal/ai/engine/eino"
 	"github.com/charlesng35/shellcn/internal/ai/memory"
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/ai/tools"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
-// Per-turn caps (cross-cutting limits). Conservative defaults; tunable later.
-const (
-	defaultMaxSteps     = 12
-	defaultMaxOutTokens = 4096
-)
+const defaultMaxSteps = 12
 
 var (
 	// ErrNotConfigured means neither a user provider nor the shared config is usable.
@@ -44,13 +42,18 @@ type Service struct {
 	routes    tools.RouteSource
 	invoker   tools.Invoker
 	mem       *memory.Store
+	models    *modelreg.Registry
 	factory   ProviderFactory
 }
 
 // New wires the provider-config service, the shared global config, the plugin
-// registry (route source), the secure route invoker, and conversation memory.
-func New(providers *aiconfig.Service, global config.AIConfig, routes tools.RouteSource, invoker tools.Invoker, mem *memory.Store) *Service {
-	return &Service{providers: providers, global: global, routes: routes, invoker: invoker, mem: mem, factory: buildProvider}
+// registry (route source), the secure route invoker, conversation memory, and
+// the model-limit registry.
+func New(providers *aiconfig.Service, global config.AIConfig, routes tools.RouteSource, invoker tools.Invoker, mem *memory.Store, models *modelreg.Registry) *Service {
+	if models == nil {
+		models = modelreg.New()
+	}
+	return &Service{providers: providers, global: global, routes: routes, invoker: invoker, mem: mem, models: models, factory: buildProvider}
 }
 
 // Conversations exposes the conversation/message store for transport CRUD.
@@ -88,7 +91,7 @@ type RunInput struct {
 // Run executes one turn and relays every event to sink. The caller cancels ctx
 // to stop the turn cleanly.
 func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamEvent)) error {
-	provider, model, err := s.resolveProvider(ctx, in.User, in.Scope)
+	provider, model, kind, err := s.resolveProvider(ctx, in.User, in.Scope)
 	if err != nil {
 		return err
 	}
@@ -124,23 +127,29 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		HasSubagent:     hasSubagent,
 	})
 
-	// Assemble history. With memory wired + a conversation id, persist the user
-	// message and load the compacted context; otherwise use the caller's history.
+	// Resolve the token budget from the model's limits, the system prompt, and the
+	// tool schemas; reserve output tokens and give the rest to history.
+	limits := budget.Limits{ContextWindow: s.models.ContextWindow(ctx, model, registryProvider(kind))}
+	if lk, ok := s.models.Lookup(ctx, model, registryProvider(kind)); ok {
+		limits.MaxOutputTokens = lk.MaxOutputTokens
+	}
+	overheadTokens := budget.Estimate(system) + budget.MeasureToolTokens(specs)
+	historyBudget := budget.HistoryBudget(limits, overheadTokens, 0)
+	maxOut := budget.ResolveOutputTokens(limits, overheadTokens, 0)
+
+	// With memory wired + a conversation id, persist the user message and load the
+	// compacted context; otherwise use the caller's history.
 	var msgs []engine.Message
 	persist := s.mem != nil && in.ConversationID != ""
 	if persist {
-		conv, err := s.mem.Get(ctx, in.User.ID, in.ConversationID)
-		if err != nil {
-			return err
-		}
 		if err := s.mem.AppendUser(ctx, in.ConversationID, in.UserMessage); err != nil {
 			return err
 		}
-		summary, history, err := s.mem.History(ctx, in.ConversationID, memory.ContextWindow(model), conv.Summary)
+		summary, history, err := s.mem.History(ctx, in.ConversationID, historyBudget)
 		if err != nil {
 			return err
 		}
-		msgs = history // already includes the just-appended user message
+		msgs = history
 		if summary != "" {
 			system += "\n\nConversation memory:\n" + summary
 		}
@@ -154,7 +163,7 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		Messages:     msgs,
 		Tools:        specs,
 		MaxSteps:     defaultMaxSteps,
-		MaxOutTokens: defaultMaxOutTokens,
+		MaxOutTokens: maxOut,
 	}, exec)
 	if err != nil {
 		return err
@@ -172,8 +181,23 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 
 	if persist {
 		_ = s.mem.AppendAssistant(ctx, in.ConversationID, acc.content.String(), acc.reasoning.String(), acc.calls, acc.truncated)
+		s.autoTitle(ctx, provider, model, in.User.ID, in.ConversationID, in.UserMessage, acc.content.String())
 	}
 	return nil
+}
+
+// autoTitle names a conversation after its first exchange, using the model when
+// possible and a heuristic otherwise. It is a no-op once the title is set.
+func (s *Service) autoTitle(ctx context.Context, provider engine.Provider, model, ownerID, convID, userMessage, assistantReply string) {
+	conv, err := s.mem.Get(ctx, ownerID, convID)
+	if err != nil || conv.Title != memory.DefaultTitle || s.mem.MessageCount(ctx, convID) < 2 {
+		return
+	}
+	title := agent.GenerateTitle(ctx, provider, model, userMessage, assistantReply)
+	if title == "" {
+		title = memory.TitleFrom(userMessage)
+	}
+	s.mem.SetAutoTitle(ctx, convID, title)
 }
 
 // accumulator captures a turn's assistant output to persist after streaming.
@@ -221,20 +245,36 @@ func AllowedRisks(mode string, allowDestructive bool) map[plugin.RiskLevel]bool 
 	return allowed
 }
 
-func (s *Service) resolveProvider(ctx context.Context, user models.User, scope Scope) (engine.Provider, string, error) {
+func (s *Service) resolveProvider(ctx context.Context, user models.User, scope Scope) (engine.Provider, string, models.AIProviderKind, error) {
 	if scope.ProviderID != "" {
 		cfg, key, err := s.providers.Resolve(ctx, user.ID, scope.ProviderID)
 		if err != nil {
-			return nil, "", err
+			return nil, "", "", err
 		}
 		p, err := s.factory(ctx, cfg.Kind, key, cfg.BaseURL, cfg.DefaultModel)
-		return p, cfg.DefaultModel, err
+		return p, cfg.DefaultModel, cfg.Kind, err
 	}
 	if s.global.Configured() {
-		p, err := s.factory(ctx, models.AIProviderKind(s.global.Kind), s.global.APIKey, s.global.BaseURL, s.global.DefaultModel)
-		return p, s.global.DefaultModel, err
+		kind := models.AIProviderKind(s.global.Kind)
+		p, err := s.factory(ctx, kind, s.global.APIKey, s.global.BaseURL, s.global.DefaultModel)
+		return p, s.global.DefaultModel, kind, err
 	}
-	return nil, "", ErrNotConfigured
+	return nil, "", "", ErrNotConfigured
+}
+
+// registryProvider maps a provider kind to the id the model registry indexes by.
+// openai_compatible endpoints are not in the registries, so they have no id.
+func registryProvider(kind models.AIProviderKind) string {
+	switch kind {
+	case models.AIProviderOpenAI:
+		return "openai"
+	case models.AIProviderAnthropic:
+		return "anthropic"
+	case models.AIProviderGoogle:
+		return "google"
+	default:
+		return ""
+	}
 }
 
 // buildProvider maps a provider kind to an engine adapter. OpenAI and

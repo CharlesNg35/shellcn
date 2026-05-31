@@ -8,6 +8,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai"
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
 	"github.com/charlesng35/shellcn/internal/ai/engine"
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
@@ -27,7 +28,7 @@ func newService(t *testing.T, global config.AIConfig) *ai.Service {
 	vault, _ := secrets.NewVault(key)
 	st := store.NewMemory()
 	providers := aiconfig.New(st.AIProviders, vault, global)
-	return ai.New(providers, global, plugin.NewRegistry(), nopInvoker{}, nil)
+	return ai.New(providers, global, plugin.NewRegistry(), nopInvoker{}, nil, modelreg.New(modelreg.WithOffline()))
 }
 
 func TestAllowedRisks(t *testing.T) {

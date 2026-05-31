@@ -9,6 +9,7 @@ import (
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 	"github.com/charlesng35/shellcn/internal/ai/memory"
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
@@ -103,7 +104,7 @@ func TestAgentListsResourcesViaTools(t *testing.T) {
 	inv := &recordingInvoker{}
 
 	prov := &scriptedProvider{}
-	svc := ai.New(providers, global, reg, inv, nil).WithProviderFactory(
+	svc := ai.New(providers, global, reg, inv, nil, modelreg.New(modelreg.WithOffline())).WithProviderFactory(
 		func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
 			return prov, nil
 		},
@@ -165,7 +166,7 @@ func TestTurnPersistsConversationHistory(t *testing.T) {
 	reg := plugin.NewRegistry()
 	reg.MustRegister(demoPlugin{})
 
-	svc := ai.New(providers, global, reg, &recordingInvoker{}, mem).WithProviderFactory(
+	svc := ai.New(providers, global, reg, &recordingInvoker{}, mem, modelreg.New(modelreg.WithOffline())).WithProviderFactory(
 		func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
 			return &scriptedProvider{}, nil
 		},

@@ -46,20 +46,35 @@ func TestCreateListGetRenameDelete(t *testing.T) {
 	}
 }
 
-func TestAutoTitleOnFirstMessage(t *testing.T) {
+func TestSetAutoTitleOnlyReplacesDefault(t *testing.T) {
 	m := newStore()
 	ctx := context.Background()
 	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+	if c.Title != memory.DefaultTitle {
+		t.Fatalf("new conversation should start with the default title, got %q", c.Title)
+	}
 
-	if err := m.AppendUser(ctx, c.ID, "show me all the running containers please right now"); err != nil {
-		t.Fatalf("append: %v", err)
-	}
+	m.SetAutoTitle(ctx, c.ID, "Running containers")
 	got, _ := m.Get(ctx, "u1", c.ID)
-	if !got.AutoTitled || got.Title == "New conversation" {
-		t.Fatalf("first message should auto-title: %+v", got)
+	if !got.AutoTitled || got.Title != "Running containers" {
+		t.Fatalf("auto-title should set a system title: %+v", got)
 	}
-	if len(strings.Fields(got.Title)) > 8 {
-		t.Fatalf("title should be trimmed to ~8 words: %q", got.Title)
+
+	// A user rename wins and is never overwritten by a later auto-title.
+	if _, err := m.Rename(ctx, "u1", c.ID, "My thread"); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	m.SetAutoTitle(ctx, c.ID, "Something else")
+	got, _ = m.Get(ctx, "u1", c.ID)
+	if got.Title != "My thread" || got.AutoTitled {
+		t.Fatalf("user title must survive auto-title: %+v", got)
+	}
+}
+
+func TestTitleFromHeuristic(t *testing.T) {
+	title := memory.TitleFrom("show me all the running containers please right now immediately")
+	if title == "" || len(strings.Fields(title)) > 8 {
+		t.Fatalf("heuristic title should be <= 8 words: %q", title)
 	}
 }
 
@@ -74,8 +89,8 @@ func TestHistoryKeepsRecentAndCompactsOlder(t *testing.T) {
 		_ = m.AppendAssistant(ctx, c.ID, "assistant reply "+itoa(i)+" "+strings.Repeat("y", 200), "", nil, false)
 	}
 
-	// Small window forces compaction; recent messages stay verbatim.
-	summary, msgs, err := m.History(ctx, c.ID, 2000, "")
+	// Small budget forces compaction; recent messages stay verbatim.
+	summary, msgs, err := m.History(ctx, c.ID, 500)
 	if err != nil {
 		t.Fatalf("history: %v", err)
 	}
@@ -93,15 +108,6 @@ func TestHistoryKeepsRecentAndCompactsOlder(t *testing.T) {
 	// Budget bound: kept messages should be far fewer than the full 24.
 	if len(msgs) >= 24 {
 		t.Fatalf("history not bounded: kept %d of 24", len(msgs))
-	}
-}
-
-func TestContextWindowFallback(t *testing.T) {
-	if memory.ContextWindow("gpt-4o") != 128000 {
-		t.Fatal("known model window wrong")
-	}
-	if memory.ContextWindow("totally-unknown") != 128000 {
-		t.Fatal("unknown model should fall back to default")
 	}
 }
 

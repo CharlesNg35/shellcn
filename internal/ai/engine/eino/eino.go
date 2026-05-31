@@ -113,7 +113,8 @@ func (p *Provider) runTurn(ctx context.Context, cm model.ToolCallingChatModel, r
 		}
 
 		if len(full.ToolCalls) == 0 {
-			out <- engine.StreamEvent{Type: engine.EventDone, Usage: usageOf(full)}
+			truncated := full.ResponseMeta != nil && full.ResponseMeta.FinishReason == "length"
+			out <- engine.StreamEvent{Type: engine.EventDone, Usage: usageOf(full), Truncated: truncated}
 			return
 		}
 
