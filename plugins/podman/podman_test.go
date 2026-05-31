@@ -47,7 +47,7 @@ func TestManifestDeclaresPodmanWorkspace(t *testing.T) {
 	}
 	for _, res := range m.Resources {
 		for _, tab := range res.Detail.Tabs {
-			if tab.Panel == plugin.PanelHTTPClient {
+			if tab.Type == plugin.PanelHTTPClient {
 				t.Fatalf("podman should not expose a raw API panel: resource=%s tab=%s", res.Kind, tab.Key)
 			}
 		}

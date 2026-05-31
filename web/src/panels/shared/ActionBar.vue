@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import Dialog from "primevue/dialog";
 import Button from "primevue/button";
+import Menu from "primevue/menu";
 import { useToast } from "primevue/usetoast";
 import { runFormAction } from "../../api/dataSource";
 import type {
@@ -82,6 +83,91 @@ const riskClass: Record<RiskLevel, string> = {
   destructive: "bg-rose-600 text-white hover:bg-rose-700",
   privileged: "bg-amber-600 text-white hover:bg-amber-700",
 };
+
+// Chip count (buttons + group menus) past which extra standalone buttons fold
+// into a single "More" overflow menu.
+const MAX_INLINE = 5;
+const triggerClass =
+  "inline-flex min-w-0 items-center justify-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors " +
+  riskClass.safe;
+
+type RenderUnit =
+  | { kind: "button"; action: Action }
+  | { kind: "menu"; key: string; label: string; actions: Action[] };
+
+// Cluster same-group actions into one menu unit (placed at the group's first
+// occurrence); ungrouped actions stay standalone buttons.
+const renderUnits = computed<RenderUnit[]>(() => {
+  const groups = new Map<string, Extract<RenderUnit, { kind: "menu" }>>();
+  const units: RenderUnit[] = [];
+  for (const action of props.actions) {
+    if (action.group) {
+      let unit = groups.get(action.group);
+      if (!unit) {
+        unit = {
+          kind: "menu",
+          key: `g:${action.group}`,
+          label: action.group,
+          actions: [],
+        };
+        groups.set(action.group, unit);
+        units.push(unit);
+      }
+      unit.actions.push(action);
+    } else {
+      units.push({ kind: "button", action });
+    }
+  }
+  return units;
+});
+
+// Group menus stay visible; once the chip count exceeds the limit, fold trailing
+// standalone buttons into a single "More" overflow menu.
+const layout = computed<{ visible: RenderUnit[]; overflow: Action[] }>(() => {
+  const units = renderUnits.value;
+  if (units.length <= MAX_INLINE) return { visible: units, overflow: [] };
+  const visible = [...units];
+  const overflow: Action[] = [];
+  for (
+    let i = visible.length - 1;
+    i >= 0 && visible.length > MAX_INLINE - 1;
+    i--
+  ) {
+    const u = visible[i];
+    if (u.kind === "button") {
+      overflow.unshift(u.action);
+      visible.splice(i, 1);
+    }
+  }
+  return { visible, overflow };
+});
+
+function menuModel(actions: Action[]) {
+  return actions.map((action) => ({
+    label: action.label,
+    action,
+    disabled: !isEnabled(action) || busyAction.value === action.id,
+    command: () => {
+      if (isEnabled(action)) trigger(action);
+    },
+  }));
+}
+
+function menuItemClass(action: Action): string {
+  return action.risk === "destructive"
+    ? "text-rose-600 dark:text-rose-400"
+    : "text-surface-700 dark:text-surface-200";
+}
+
+// Popup Menu instances register by key so their trigger button can open them.
+const menus = ref(new Map<string, { toggle: (event: Event) => void }>());
+function setMenu(key: string, el: unknown): void {
+  if (el) menus.value.set(key, el as { toggle: (event: Event) => void });
+  else menus.value.delete(key);
+}
+function toggleMenu(key: string, event: Event): void {
+  menus.value.get(key)?.toggle(event);
+}
 
 // Stable identity for the dock tab an action opens, so repeat clicks focus the
 // existing tab instead of stacking duplicates. An action tied to a resource
@@ -253,30 +339,113 @@ function onVisible(visible: boolean): void {
 
 <template>
   <div class="flex flex-wrap items-center gap-2">
-    <Button
-      v-for="action in actions"
-      :key="action.id"
-      type="button"
-      :disabled="!isEnabled(action) || busyAction === action.id"
-      :title="action.label"
-      :aria-label="action.label"
-      size="small"
-      :pt="{
-        root: cn(
-          'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
-          action.iconOnly ? 'p-1.5' : 'px-2.5 py-1',
-          riskClass[action.risk],
-        ),
-      }"
-      @click="isEnabled(action) && trigger(action)"
+    <template
+      v-for="unit in layout.visible"
+      :key="unit.kind === 'menu' ? unit.key : unit.action.id"
     >
-      <AppIcon
-        :icon="action.icon"
-        :size="action.iconOnly ? 16 : 15"
-        :loading="busyAction === action.id"
-      />
-      <span v-if="!action.iconOnly">{{ action.label }}</span>
-    </Button>
+      <Button
+        v-if="unit.kind === 'button'"
+        type="button"
+        :disabled="!isEnabled(unit.action) || busyAction === unit.action.id"
+        :title="unit.action.label"
+        :aria-label="unit.action.label"
+        size="small"
+        :pt="{
+          root: cn(
+            'inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-40',
+            unit.action.iconOnly ? 'p-1.5' : 'px-2.5 py-1',
+            riskClass[unit.action.risk],
+          ),
+        }"
+        @click="isEnabled(unit.action) && trigger(unit.action)"
+      >
+        <AppIcon
+          :icon="unit.action.icon"
+          :size="unit.action.iconOnly ? 16 : 15"
+          :loading="busyAction === unit.action.id"
+        />
+        <span v-if="!unit.action.iconOnly">{{ unit.action.label }}</span>
+      </Button>
+
+      <template v-else>
+        <Button
+          type="button"
+          :title="unit.label"
+          :aria-label="unit.label"
+          aria-haspopup="true"
+          size="small"
+          :pt="{ root: cn(triggerClass) }"
+          @click="toggleMenu(unit.key, $event)"
+        >
+          <span>{{ unit.label }}</span>
+          <AppIcon
+            :icon="{ type: 'lucide', value: 'chevron-down' }"
+            :size="14"
+          />
+        </Button>
+        <Menu
+          :ref="(el) => setMenu(unit.key, el)"
+          :model="menuModel(unit.actions)"
+          popup
+        >
+          <template #item="{ item, props: ip }">
+            <a
+              v-bind="ip.action"
+              class="flex items-center gap-2 px-3 py-1.5 text-xs"
+              :class="[
+                menuItemClass(item.action),
+                item.disabled ? 'pointer-events-none opacity-40' : '',
+              ]"
+            >
+              <AppIcon
+                v-if="item.action.icon"
+                :icon="item.action.icon"
+                :size="15"
+              />
+              <span>{{ item.label }}</span>
+            </a>
+          </template>
+        </Menu>
+      </template>
+    </template>
+
+    <template v-if="layout.overflow.length">
+      <Button
+        type="button"
+        title="More"
+        aria-label="More actions"
+        aria-haspopup="true"
+        size="small"
+        :pt="{ root: cn(triggerClass) }"
+        @click="toggleMenu('__more__', $event)"
+      >
+        <AppIcon :icon="{ type: 'lucide', value: 'ellipsis' }" :size="16" />
+        <AppIcon :icon="{ type: 'lucide', value: 'chevron-down' }" :size="14" />
+      </Button>
+      <Menu
+        :ref="(el) => setMenu('__more__', el)"
+        :model="menuModel(layout.overflow)"
+        popup
+      >
+        <template #item="{ item, props: ip }">
+          <a
+            v-bind="ip.action"
+            class="flex items-center gap-2 px-3 py-1.5 text-xs"
+            :class="[
+              menuItemClass(item.action),
+              item.disabled ? 'pointer-events-none opacity-40' : '',
+            ]"
+          >
+            <AppIcon
+              v-if="item.action.icon"
+              :icon="item.action.icon"
+              :size="15"
+            />
+            <span>{{ item.label }}</span>
+          </a>
+        </template>
+      </Menu>
+    </template>
 
     <Dialog
       :visible="!!pending"

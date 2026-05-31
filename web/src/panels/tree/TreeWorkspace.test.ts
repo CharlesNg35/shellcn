@@ -109,9 +109,11 @@ describe("TreeWorkspace", () => {
             title: "Containers",
             list: { routeId: "docker.containers.list" },
             columns: [],
-            actionIds: ["docker.container.start", "docker.container.stop"],
-            listActionIds: ["docker.container.create"],
-            selectable: true,
+            actions: {
+              toolbar: ["docker.container.create"],
+              detail: ["docker.container.start", "docker.container.stop"],
+              selectable: true,
+            },
             detail: { header: { title: "x" }, tabs: [] },
           },
         ] as never,
@@ -144,8 +146,8 @@ describe("TreeWorkspace", () => {
     await flushPromises();
 
     expect(captured).toBeTruthy();
-    // Toolbar actions come from listActionIds; row actions are NOT inherited
-    // from the resource's actionIds (those surface only in the detail header).
+    // The table toolbar comes from actions.toolbar; row actions only from
+    // actions.row (here empty, so detail actions never leak onto rows).
     expect(captured!.actionIds).toEqual(["docker.container.create"]);
     expect(captured!.rowActionIds).toEqual([]);
     // Selectable still makes the rows selectable (checkboxes) without row actions.

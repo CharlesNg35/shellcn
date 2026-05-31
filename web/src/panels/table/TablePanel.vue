@@ -739,7 +739,19 @@ const dataKeyField = computed(() => {
 
 function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
-  if (isInteractiveTarget(e.originalEvent?.target ?? null)) return;
+  const target = e.originalEvent?.target ?? null;
+  // A precise click on the checkbox input is toggled natively by the DataTable.
+  if (isInteractiveTarget(target)) return;
+  // Anywhere else in the selection column (its padding/box) toggles the row too,
+  // so a near-miss never navigates instead.
+  if (
+    selectable.value &&
+    target instanceof Element &&
+    target.closest('[data-p-selection-column="true"]')
+  ) {
+    toggleSelection(row);
+    return;
+  }
   if (editable.value) return; // body reserved for cell editing
   switch (rowClickMode.value) {
     case "none":

@@ -38,12 +38,17 @@ func routes() []plugin.Route {
 		{ID: rid("indexes.list"), Method: plugin.MethodGet, Path: "/indexes", Permission: "neo4j.schema.read", Risk: plugin.RiskSafe, AuditEvent: rid("indexes.list"), Handle: indexesList},
 		{ID: rid("constraints.list"), Method: plugin.MethodGet, Path: "/constraints", Permission: "neo4j.schema.read", Risk: plugin.RiskSafe, AuditEvent: rid("constraints.list"), Handle: constraintsList},
 		{ID: rid("index.create"), Method: plugin.MethodPost, Path: "/databases/{database}/indexes", Permission: "neo4j.schema.write", Risk: plugin.RiskWrite, AuditEvent: rid("index.create"), Input: indexCreateSchema(), Handle: indexCreate},
+		{ID: rid("constraint.create"), Method: plugin.MethodPost, Path: "/databases/{database}/constraints", Permission: "neo4j.schema.write", Risk: plugin.RiskWrite, AuditEvent: rid("constraint.create"), Input: constraintCreateSchema(), Handle: constraintCreate},
 		{ID: rid("schema.drop"), Method: plugin.MethodDelete, Path: "/schema/{id}", Permission: "neo4j.schema.delete", Risk: plugin.RiskDestructive, AuditEvent: rid("schema.drop"), Handle: schemaDrop},
 		{ID: rid("nodes.list"), Method: plugin.MethodGet, Path: "/nodes", Permission: "neo4j.nodes.read", Risk: plugin.RiskSafe, AuditEvent: rid("nodes.list"), Handle: nodesList},
 		{ID: rid("node.read"), Method: plugin.MethodGet, Path: "/nodes/{id}", Permission: "neo4j.nodes.read", Risk: plugin.RiskSafe, AuditEvent: rid("node.read"), Handle: nodeRead},
+		{ID: rid("node.properties"), Method: plugin.MethodGet, Path: "/nodes/{id}/properties", Permission: "neo4j.nodes.read", Risk: plugin.RiskSafe, AuditEvent: rid("node.properties"), Handle: nodeProperties},
+		{ID: rid("node.update"), Method: plugin.MethodPut, Path: "/nodes/{id}", Permission: "neo4j.nodes.write", Risk: plugin.RiskWrite, AuditEvent: rid("node.update"), Handle: nodeUpdate},
 		{ID: rid("node.relationships"), Method: plugin.MethodGet, Path: "/nodes/{id}/relationships", Permission: "neo4j.relationships.read", Risk: plugin.RiskSafe, AuditEvent: rid("node.relationships"), Handle: nodeRelationships},
 		{ID: rid("relationships.list"), Method: plugin.MethodGet, Path: "/relationships", Permission: "neo4j.relationships.read", Risk: plugin.RiskSafe, AuditEvent: rid("relationships.list"), Handle: relationshipsList},
 		{ID: rid("relationship.read"), Method: plugin.MethodGet, Path: "/relationships/{id}", Permission: "neo4j.relationships.read", Risk: plugin.RiskSafe, AuditEvent: rid("relationship.read"), Handle: relationshipRead},
+		{ID: rid("relationship.properties"), Method: plugin.MethodGet, Path: "/relationships/{id}/properties", Permission: "neo4j.relationships.read", Risk: plugin.RiskSafe, AuditEvent: rid("relationship.properties"), Handle: relationshipProperties},
+		{ID: rid("relationship.update"), Method: plugin.MethodPut, Path: "/relationships/{id}", Permission: "neo4j.relationships.write", Risk: plugin.RiskWrite, AuditEvent: rid("relationship.update"), Handle: relationshipUpdate},
 		{ID: rid("graph"), Method: plugin.MethodGet, Path: "/graph", Permission: "neo4j.graph.read", Risk: plugin.RiskSafe, AuditEvent: rid("graph"), Handle: graphRoute},
 		{ID: rid("label.graph"), Method: plugin.MethodGet, Path: "/labels/{database}/{label}/graph", Permission: "neo4j.graph.read", Risk: plugin.RiskSafe, AuditEvent: rid("label.graph"), Handle: labelGraph},
 		{ID: rid("relationship_type.graph"), Method: plugin.MethodGet, Path: "/relationship-types/{database}/{type}/graph", Permission: "neo4j.graph.read", Risk: plugin.RiskSafe, AuditEvent: rid("relationship_type.graph"), Handle: relationshipTypeGraph},
@@ -385,6 +390,90 @@ func indexCreate(rc *plugin.RequestContext) (any, error) {
 	return actionResult{OK: err == nil}, err
 }
 
+func constraintCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
+		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Required: true},
+		{Key: "entity_type", Label: "Entity", Type: plugin.FieldSelect, Required: true, Default: "node", Options: []plugin.Option{{Label: "Node", Value: "node"}, {Label: "Relationship", Value: "relationship"}}},
+		{Key: "type", Label: "Type", Type: plugin.FieldSelect, Required: true, Default: "unique", Options: []plugin.Option{
+			{Label: "Unique", Value: "unique"},
+			{Label: "Property existence", Value: "exists"},
+			{Label: "Node key", Value: "node_key"},
+		}},
+		{Key: "label", Label: "Label / type", Type: plugin.FieldText, Required: true, Placeholder: "Person"},
+		{Key: "properties", Label: "Properties", Type: plugin.FieldText, Required: true, Placeholder: "name, email"},
+	}}}}
+}
+
+func constraintCreate(rc *plugin.RequestContext) (any, error) {
+	s, err := neo4jSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name       string `json:"name" validate:"required"`
+		EntityType string `json:"entity_type"`
+		Type       string `json:"type"`
+		Label      string `json:"label" validate:"required"`
+		Properties string `json:"properties" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	query, err := constraintCreateQuery(req.Name, req.EntityType, req.Type, req.Label, splitCommaList(req.Properties))
+	if err != nil {
+		return nil, err
+	}
+	_, err = writeRows(rc.Ctx, s, databaseName(rc), query, nil)
+	return actionResult{OK: err == nil}, err
+}
+
+// constraintCreateQuery builds a `CREATE CONSTRAINT` statement. Identifiers are
+// quoted (never interpolated as values), so the generated Cypher is injection-safe.
+func constraintCreateQuery(name, entityType, constraintType, label string, props []string) (string, error) {
+	safeName, err := safeGraphName(name, "constraint name")
+	if err != nil {
+		return "", err
+	}
+	safeLabel, err := safeGraphName(label, "label / type")
+	if err != nil {
+		return "", err
+	}
+	if len(props) == 0 {
+		return "", fmt.Errorf("%w: at least one property is required", plugin.ErrInvalidInput)
+	}
+	varName, pattern := "n", "(n:"+quoteCypherName(safeLabel)+")"
+	if strings.EqualFold(entityType, "relationship") {
+		varName, pattern = "r", "()-[r:"+quoteCypherName(safeLabel)+"]-()"
+	}
+	refs := make([]string, 0, len(props))
+	for _, p := range props {
+		name, err := safeGraphName(p, "property")
+		if err != nil {
+			return "", err
+		}
+		refs = append(refs, varName+"."+quoteCypherName(name))
+	}
+	joined := strings.Join(refs, ", ")
+	expr := joined
+	if len(refs) > 1 || strings.EqualFold(constraintType, "node_key") {
+		expr = "(" + joined + ")"
+	}
+	head := "CREATE CONSTRAINT " + quoteCypherName(safeName) + " FOR " + pattern + " REQUIRE "
+	switch strings.ToLower(strings.TrimSpace(constraintType)) {
+	case "", "unique":
+		return head + expr + " IS UNIQUE", nil
+	case "exists":
+		return head + expr + " IS NOT NULL", nil
+	case "node_key":
+		return head + expr + " IS NODE KEY", nil
+	default:
+		return "", fmt.Errorf("%w: unsupported constraint type %q", plugin.ErrInvalidInput, constraintType)
+	}
+}
+
 func schemaDrop(rc *plugin.RequestContext) (any, error) {
 	kind, db, name, err := decodeID3(rc.Param("id"))
 	if err != nil {
@@ -494,6 +583,53 @@ func nodeRead(rc *plugin.RequestContext) (any, error) {
 	return rows[0], nil
 }
 
+func nodeProperties(rc *plugin.RequestContext) (any, error) {
+	_, db, id, err := decodeID3(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	s, err := neo4jSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, s, db, "MATCH (n) WHERE elementId(n) = $id RETURN properties(n) AS properties", map[string]any{"id": id})
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, plugin.ErrNotFound
+	}
+	return redactMap(asMap(rows[0]["properties"]), s.opts.RedactPatterns), nil
+}
+
+func nodeUpdate(rc *plugin.RequestContext) (any, error) {
+	_, db, id, err := decodeID3(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	s, err := neo4jSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	props, err := bindProperties(rc)
+	if err != nil {
+		return nil, err
+	}
+	query, params := setPropertiesQuery("n", "MATCH (n) WHERE elementId(n) = $id", id, props)
+	rows, err := writeRows(rc.Ctx, s, db, query+" RETURN properties(n) AS properties", params)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, plugin.ErrNotFound
+	}
+	rows[0]["properties"] = redactMap(asMap(rows[0]["properties"]), s.opts.RedactPatterns)
+	return rows[0], nil
+}
+
 func nodeRelationships(rc *plugin.RequestContext) (any, error) {
 	_, db, id, err := decodeID3(rc.Param("id"))
 	if err != nil {
@@ -554,6 +690,53 @@ func relationshipRead(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	rows, err := queryRows(rc.Ctx, s, db, "MATCH ()-[r]->() WHERE elementId(r) = $id RETURN elementId(r) AS element_id, type(r) AS type, elementId(startNode(r)) AS start, elementId(endNode(r)) AS end, properties(r) AS properties", map[string]any{"id": id})
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, plugin.ErrNotFound
+	}
+	rows[0]["properties"] = redactMap(asMap(rows[0]["properties"]), s.opts.RedactPatterns)
+	return rows[0], nil
+}
+
+func relationshipProperties(rc *plugin.RequestContext) (any, error) {
+	_, db, id, err := decodeID3(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	s, err := neo4jSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, s, db, "MATCH ()-[r]->() WHERE elementId(r) = $id RETURN properties(r) AS properties", map[string]any{"id": id})
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, plugin.ErrNotFound
+	}
+	return redactMap(asMap(rows[0]["properties"]), s.opts.RedactPatterns), nil
+}
+
+func relationshipUpdate(rc *plugin.RequestContext) (any, error) {
+	_, db, id, err := decodeID3(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	s, err := neo4jSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	props, err := bindProperties(rc)
+	if err != nil {
+		return nil, err
+	}
+	query, params := setPropertiesQuery("r", "MATCH ()-[r]->() WHERE elementId(r) = $id", id, props)
+	rows, err := writeRows(rc.Ctx, s, db, query+" RETURN properties(r) AS properties", params)
 	if err != nil {
 		return nil, err
 	}
@@ -891,6 +1074,46 @@ func writeRows(ctx context.Context, s *Session, db, query string, params map[str
 		rows = append(rows, item)
 	}
 	return rows, nil
+}
+
+// bindProperties reads the uniform property-editor body. The generic code
+// editor posts {"content": "<json>"}; a {"properties": {...}} object body is
+// also accepted so callers can target the route directly.
+func bindProperties(rc *plugin.RequestContext) (map[string]any, error) {
+	var req struct {
+		Content    string         `json:"content"`
+		Properties map[string]any `json:"properties"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	if req.Properties != nil {
+		return req.Properties, nil
+	}
+	return parsePropertiesContent(req.Content)
+}
+
+func parsePropertiesContent(content string) (map[string]any, error) {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return map[string]any{}, nil
+	}
+	var props map[string]any
+	if err := json.Unmarshal([]byte(trimmed), &props); err != nil {
+		return nil, fmt.Errorf("%w: properties must be a JSON object: %v", plugin.ErrInvalidInput, err)
+	}
+	if props == nil {
+		props = map[string]any{}
+	}
+	return props, nil
+}
+
+// setPropertiesQuery builds a property replace statement. The property map is
+// passed as a parameter ($props) and never interpolated, so arbitrary values
+// (including ones holding Cypher) are safe. `=` replaces the property map so
+// removed keys are cleared, matching the read-edit-save round trip.
+func setPropertiesQuery(varName, match, id string, props map[string]any) (string, map[string]any) {
+	return match + " SET " + varName + " = $props", map[string]any{"id": id, "props": props}
 }
 
 func ensureWritable(s *Session) error {

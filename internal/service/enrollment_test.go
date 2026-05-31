@@ -39,7 +39,7 @@ func (agentTestPlugin) Manifest() plugin.Manifest {
 					"--image {{shellquote .Image}}",
 			}},
 		},
-		Tabs: []plugin.Tab{{Key: "main", Label: "Main", Panel: plugin.PanelDocument}},
+		Tabs: []plugin.Panel{{Key: "main", Label: "Main", Type: plugin.PanelDocument}},
 	}
 }
 
@@ -163,7 +163,7 @@ func (urlArtifactPlugin) Manifest() plugin.Manifest {
 				Content:  "token={{.Token}}\nconnect={{.ConnectURL}}\n",
 			}},
 		},
-		Tabs: []plugin.Tab{{Key: "main", Label: "Main", Panel: plugin.PanelDocument}},
+		Tabs: []plugin.Panel{{Key: "main", Label: "Main", Type: plugin.PanelDocument}},
 	}
 }
 

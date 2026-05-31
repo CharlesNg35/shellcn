@@ -3,6 +3,7 @@ package docker
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -182,6 +183,189 @@ func TestDockerEngineResourceCreateRoundTrip(t *testing.T) {
 	if _, err := ds.Client().ImageInspect(ctx, "alpine:3.20"); err != nil {
 		t.Fatalf("ImageInspect after pull: %v", err)
 	}
+}
+
+func TestDockerEngineOpsIntegrationRoundTrip(t *testing.T) {
+	if os.Getenv("SHELLCN_DOCKER_INTEGRATION") != "1" {
+		t.Skip("set SHELLCN_DOCKER_INTEGRATION=1 to run against the local Docker daemon")
+	}
+	if _, err := exec.LookPath("docker"); err != nil {
+		t.Skip("docker CLI unavailable")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	suffix := time.Now().UTC().Format("20060102150405")
+	name := "shellcn-it-ops-" + suffix
+	runDocker(ctx, t, "run", "-d", "--rm", "--name", name, "alpine:3.20", "sh", "-c", "while true; do sleep 1; done")
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "docker", "rm", "-f", name).Run()
+	})
+
+	sess, err := Connect(ctx, plugin.ConnectConfig{
+		Config: map[string]any{"endpoint_type": "unix", "socket_path": "/var/run/docker.sock"},
+		Net:    directNet{},
+	})
+	if err != nil {
+		t.Fatalf("Connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+	ds := sess.(*dockerengine.Session)
+
+	id := containerIDByName(ctx, t, ds, name)
+
+	call := func(handler func(*plugin.RequestContext) (any, error), params map[string]string, body string) any {
+		t.Helper()
+		rc := plugin.NewRequestContext(ctx, models.User{}, ds, params, nil, []byte(body))
+		res, err := handler(rc)
+		if err != nil {
+			t.Fatalf("handler: %v", err)
+		}
+		if ar, ok := res.(dockerengine.ActionResult); ok && !ar.OK {
+			t.Fatalf("handler reported not OK")
+		}
+		return res
+	}
+
+	// pause -> unpause
+	call(dockerengine.PauseContainer, map[string]string{"id": id}, "")
+	if got := containerState(ctx, t, ds, id); got != "paused" {
+		t.Fatalf("after pause state = %q, want paused", got)
+	}
+	call(dockerengine.UnpauseContainer, map[string]string{"id": id}, "")
+	if got := containerState(ctx, t, ds, id); got != "running" {
+		t.Fatalf("after unpause state = %q, want running", got)
+	}
+
+	// rename
+	renamed := name + "-r"
+	call(dockerengine.RenameContainer, map[string]string{"id": id}, `{"name":"`+renamed+`"}`)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "docker", "rm", "-f", renamed).Run()
+	})
+	if got := containerIDByName(ctx, t, ds, renamed); got != id {
+		t.Fatalf("rename did not take effect: id by new name = %q, want %q", got, id)
+	}
+
+	// network connect -> disconnect
+	netName := "shellcn-it-ops-net-" + suffix
+	call(dockerengine.CreateNetwork, nil, `{"name":"`+netName+`","driver":"bridge"}`)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "docker", "network", "rm", netName).Run()
+	})
+	call(dockerengine.ConnectNetwork, map[string]string{"id": netName}, `{"container":"`+renamed+`","aliases":"alias-a"}`)
+	if !containerInNetwork(ctx, t, ds, id, netName) {
+		t.Fatalf("container not attached to network %q after connect", netName)
+	}
+	call(dockerengine.DisconnectNetwork, map[string]string{"id": netName}, `{"container":"`+renamed+`","force":true}`)
+	if containerInNetwork(ctx, t, ds, id, netName) {
+		t.Fatalf("container still attached to network %q after disconnect", netName)
+	}
+
+	// kill (default SIGKILL) - container uses --rm so it disappears afterward
+	call(dockerengine.KillContainer, map[string]string{"id": id}, "")
+
+	// image build -> tag -> push (validation path)
+	dockerfile := "FROM alpine:3.20\nRUN echo shellcn-build > /shellcn\n"
+	buildTag := "shellcn-it-build-" + suffix + ":latest"
+	buildBody, _ := jsonBody(map[string]any{"tag": buildTag, "dockerfile": dockerfile})
+	buildRes := call(dockerengine.BuildImage, nil, buildBody)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "docker", "rmi", "-f", buildTag).Run()
+	})
+	if br, ok := buildRes.(dockerengine.BuildResult); !ok || !br.OK {
+		t.Fatalf("build result unexpected: %#v", buildRes)
+	}
+	if _, err := ds.Client().ImageInspect(ctx, buildTag); err != nil {
+		t.Fatalf("ImageInspect after build: %v", err)
+	}
+
+	tagTarget := "shellcn-it-tag-" + suffix + ":1.0"
+	call(dockerengine.TagImage, map[string]string{"id": buildTag}, `{"target":"`+tagTarget+`"}`)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "docker", "rmi", "-f", tagTarget).Run()
+	})
+	if _, err := ds.Client().ImageInspect(ctx, tagTarget); err != nil {
+		t.Fatalf("ImageInspect after tag: %v", err)
+	}
+
+	// push: exercise the handler's validation path (empty reference must fail).
+	// A real registry push is not provisioned in this environment.
+	emptyRC := plugin.NewRequestContext(ctx, models.User{}, ds, nil, nil, []byte(`{"image":"  "}`))
+	if _, err := dockerengine.PushImage(emptyRC); err == nil {
+		t.Fatal("PushImage with empty reference should fail validation")
+	}
+
+	// compose down on a label-derived project, then up is a no-op (containers gone).
+	composeName := "shellcn-it-compose-" + suffix
+	runDocker(ctx, t, "run", "-d", "--name", composeName,
+		"--label", "com.docker.compose.project="+composeName,
+		"--label", "com.docker.compose.service=web",
+		"alpine:3.20", "sh", "-c", "while true; do sleep 1; done")
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_ = exec.CommandContext(cleanupCtx, "docker", "rm", "-f", composeName).Run()
+	})
+	downRes := call(dockerengine.ComposeDown, map[string]string{"project": composeName}, "")
+	if cr, ok := downRes.(dockerengine.ComposeResult); !ok || cr.Affected < 1 || cr.Succeeded < 1 {
+		t.Fatalf("compose down result unexpected: %#v", downRes)
+	}
+}
+
+func jsonBody(v map[string]any) (string, error) {
+	b, err := json.Marshal(v)
+	return string(b), err
+}
+
+func containerIDByName(ctx context.Context, t *testing.T, ds *dockerengine.Session, name string) string {
+	t.Helper()
+	list, err := ds.Client().ContainerList(ctx, dockerclient.ContainerListOptions{All: true})
+	if err != nil {
+		t.Fatalf("ContainerList: %v", err)
+	}
+	for _, c := range list.Items {
+		if trimName(c.Names) == name {
+			return c.ID
+		}
+	}
+	t.Fatalf("container %q not listed", name)
+	return ""
+}
+
+func containerState(ctx context.Context, t *testing.T, ds *dockerengine.Session, id string) string {
+	t.Helper()
+	res, err := ds.Client().ContainerInspect(ctx, id, dockerclient.ContainerInspectOptions{})
+	if err != nil {
+		t.Fatalf("ContainerInspect: %v", err)
+	}
+	if res.Container.State == nil {
+		return ""
+	}
+	return string(res.Container.State.Status)
+}
+
+func containerInNetwork(ctx context.Context, t *testing.T, ds *dockerengine.Session, id, netName string) bool {
+	t.Helper()
+	res, err := ds.Client().ContainerInspect(ctx, id, dockerclient.ContainerInspectOptions{})
+	if err != nil {
+		t.Fatalf("ContainerInspect: %v", err)
+	}
+	if res.Container.NetworkSettings == nil {
+		return false
+	}
+	_, ok := res.Container.NetworkSettings.Networks[netName]
+	return ok
 }
 
 func runDocker(ctx context.Context, t *testing.T, args ...string) {

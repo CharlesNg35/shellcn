@@ -27,7 +27,13 @@ export type Transport = "direct" | "agent";
 export const TRANSPORT_DIRECT: Transport = "direct";
 export const TRANSPORT_AGENT: Transport = "agent";
 
-export type Layout = "tabs" | "sidebar_tree" | "dashboard";
+export const Layout = {
+  Tabs: "tabs",
+  SidebarTree: "sidebar_tree",
+  Dashboard: "dashboard",
+  Single: "single",
+} as const;
+export type Layout = (typeof Layout)[keyof typeof Layout];
 
 export type KnownPanelType =
   | "terminal"
@@ -121,7 +127,11 @@ export type FieldType =
   | "textarea"
   | "json"
   | "duration"
-  | "credential_ref";
+  | "credential_ref"
+  | "object"
+  | "array"
+  | "autocomplete"
+  | "map";
 
 export interface Option {
   label: string;
@@ -189,6 +199,16 @@ export interface Field {
   // Increment for number/slider inputs (defaults to 1); min/max come from the
   // min/max validators.
   step?: number;
+  // Composite fields: `fields` are an object's sub-fields; `item` is an array's
+  // element (recurses). minItems/maxItems bound an array.
+  fields?: Field[];
+  item?: Field;
+  minItems?: number;
+  maxItems?: number;
+  itemLabel?: string;
+  addLabel?: string;
+  keyLabel?: string;
+  keyPlaceholder?: string;
 }
 
 export interface Group {
@@ -217,6 +237,10 @@ export interface FileBrowserConfig {
   mkdirRouteId?: string;
   renameRouteId?: string;
   deleteRouteId?: string;
+  moveRouteId?: string;
+  copyRouteId?: string;
+  chmodRouteId?: string;
+  archiveRouteId?: string;
   writable?: boolean;
   multipleUpload?: boolean;
   maxUploadBytes?: number;
@@ -458,6 +482,7 @@ export interface Action {
   config?: Record<string, unknown>; // panel config for a dock/dialog-opened panel
   enabledWhen?: Condition; // gate on the active row's fields; false = disabled
   iconOnly?: boolean; // render as the icon alone; label becomes the tooltip
+  group?: string; // cluster same-group actions into one labeled dropdown menu
 }
 
 export interface Stream {
@@ -526,7 +551,14 @@ export interface HeaderSpec {
   statusField?: string;
   // Colors the status badge by value (same value->severity map as a badge column).
   severities?: Record<string, Severity>;
-  actionIds?: string[];
+}
+
+// ResourceActions groups a resource's action IDs by render surface.
+export interface ResourceActions {
+  toolbar?: string[]; // list toolbar (create, prune)
+  row?: string[]; // bulk over selected rows (delete); implies selectable
+  detail?: string[]; // the one open resource, in its detail header
+  selectable?: boolean; // row checkboxes without a row bar; row implies it
 }
 
 export interface DetailView {
@@ -542,10 +574,8 @@ export interface ResourceType {
   watch?: DataSource;
   columns: Column[];
   columnsSource?: DataSource; // runtime column defs when columns is empty (e.g. CRDs)
-  actionIds: string[];
-  listActionIds?: string[];
-  rowActionIds?: string[];
-  selectable?: boolean; // row checkboxes without row actions (actions in detail)
+  // Actions grouped by render surface (toolbar / row / detail).
+  actions?: ResourceActions;
   detail: DetailView;
 }
 

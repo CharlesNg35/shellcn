@@ -154,9 +154,9 @@ func helmReleaseResourceType() plugin.ResourceType {
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: helmStatusSeverities},
-			Tabs: []plugin.Tab{
+			Tabs: []plugin.Panel{
 				{
-					Key: "overview", Label: "Overview", Icon: lucide("info"), Panel: plugin.PanelDocument,
+					Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelDocument,
 					Source: &plugin.DataSource{RouteID: "kubernetes.helm.release", Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}},
 				},
 			},

@@ -74,9 +74,9 @@ func serverResource() plugin.ResourceType {
 		List: plugin.DataSource{RouteID: "cassandra.keyspaces.list"},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Keyspaces"},
-			Tabs: []plugin.Tab{
-				{Key: "keyspaces", Label: "Keyspaces", Icon: icon("database"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.keyspaces.list"}, Config: plugin.TableConfig{ActionIDs: []string{"cassandra.keyspace.create"}}.Map()},
-				{Key: "console", Label: "CQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT release_version FROM system.local;")},
+			Tabs: []plugin.Panel{
+				{Key: "keyspaces", Label: "Keyspaces", Icon: icon("database"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.keyspaces.list"}, Config: plugin.TableConfig{ActionIDs: []string{"cassandra.keyspace.create"}}},
+				{Key: "console", Label: "CQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT release_version FROM system.local;")},
 			},
 		},
 	}
@@ -84,10 +84,14 @@ func serverResource() plugin.ResourceType {
 
 func keyspaceResource() plugin.ResourceType {
 	return plugin.ResourceType{
-		Kind:          "keyspace",
-		Title:         "Keyspaces",
-		List:          plugin.DataSource{RouteID: "cassandra.keyspaces.list"},
-		ListActionIDs: []string{"cassandra.keyspace.create"},
+		Kind:  "keyspace",
+		Title: "Keyspaces",
+		List:  plugin.DataSource{RouteID: "cassandra.keyspaces.list"},
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"cassandra.keyspace.create"},
+			Row:     []string{"cassandra.keyspace.drop"},
+			Detail:  []string{"cassandra.keyspace.drop"},
+		},
 		Columns: []plugin.Column{
 			{Key: "name", Label: "Keyspace", Sortable: true},
 			{Key: "replication", Label: "Replication"},
@@ -95,13 +99,13 @@ func keyspaceResource() plugin.ResourceType {
 			{Key: "tables", Label: "Tables", Type: plugin.ColumnNumber, Sortable: true},
 			{Key: "views", Label: "Views", Type: plugin.ColumnNumber, Sortable: true},
 		},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.keyspace.overview", Params: map[string]string{"keyspace": "${resource.uid}"}}},
-			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.tables.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"cassandra.table.create"}}.Map()},
-			{Key: "views", Label: "Materialized Views", Icon: icon("panel-top"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.views.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"cassandra.view.drop"}}.Map()},
-			{Key: "types", Label: "Types", Icon: icon("braces"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.types.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: typeColumns()}.Map()},
-			{Key: "functions", Label: "Functions", Icon: icon("function-square"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.functions.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: functionColumns()}.Map()},
-			{Key: "query", Label: "CQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT release_version FROM system.local;")},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.keyspace.overview", Params: map[string]string{"keyspace": "${resource.uid}"}}},
+			{Key: "tables", Label: "Tables", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.tables.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: tableColumns(), ActionIDs: []string{"cassandra.table.create"}, RowActionIDs: []string{"cassandra.table.truncate", "cassandra.table.drop"}}},
+			{Key: "views", Label: "Materialized Views", Icon: icon("panel-top"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.views.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: viewColumns(), RowActionIDs: []string{"cassandra.view.drop"}}},
+			{Key: "types", Label: "Types", Icon: icon("braces"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.types.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: typeColumns(), ActionIDs: []string{"cassandra.type.create"}, RowActionIDs: []string{"cassandra.type.drop"}}},
+			{Key: "functions", Label: "Functions", Icon: icon("function-square"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.functions.list", Params: map[string]string{"keyspace": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: functionColumns()}},
+			{Key: "query", Label: "CQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT release_version FROM system.local;")},
 		}},
 	}
 }
@@ -109,15 +113,18 @@ func keyspaceResource() plugin.ResourceType {
 func tableResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "table", Title: "Tables",
-		List:         plugin.DataSource{RouteID: "cassandra.tables.list"},
-		Columns:      tableColumns(),
-		RowActionIDs: []string{"cassandra.column.add", "cassandra.table.truncate", "cassandra.table.drop"},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"cassandra.table.truncate", "cassandra.table.drop"}}, Tabs: []plugin.Tab{
-			{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}.Map()},
-			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"cassandra.column.add"}, RowActionIDs: []string{"cassandra.column.drop"}}.Map()},
-			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"cassandra.index.create"}, RowActionIDs: []string{"cassandra.index.drop"}}.Map()},
-			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.table.definition", Params: tableParams()}},
-			{Key: "query", Label: "CQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM \"${resource.namespace}\".\"${resource.name}\" LIMIT 100;")},
+		List:    plugin.DataSource{RouteID: "cassandra.tables.list"},
+		Columns: tableColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"cassandra.table.truncate", "cassandra.table.drop"},
+			Detail: []string{"cassandra.table.truncate", "cassandra.table.drop"},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "data", Label: "Data", Icon: icon("table-properties"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.rows", Params: tableParams()}, Config: dataGridConfig()},
+			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"cassandra.column.add"}, RowActionIDs: []string{"cassandra.column.drop"}}},
+			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"cassandra.index.create"}, RowActionIDs: []string{"cassandra.index.drop"}}},
+			{Key: "definition", Label: "Definition", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.table.definition", Params: tableParams()}},
+			{Key: "query", Label: "CQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM \"${resource.namespace}\".\"${resource.name}\" LIMIT 100;")},
 		}},
 	}
 }
@@ -125,13 +132,16 @@ func tableResource() plugin.ResourceType {
 func viewResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "view", Title: "Materialized Views",
-		List:         plugin.DataSource{RouteID: "cassandra.views.list"},
-		Columns:      viewColumns(),
-		RowActionIDs: []string{"cassandra.view.drop"},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{"cassandra.view.drop"}}, Tabs: []plugin.Tab{
-			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns()}.Map()},
-			{Key: "definition", Label: "Definition", Icon: icon("code"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.view.definition", Params: tableParams()}},
-			{Key: "query", Label: "CQL", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM \"${resource.namespace}\".\"${resource.name}\" LIMIT 100;")},
+		List:    plugin.DataSource{RouteID: "cassandra.views.list"},
+		Columns: viewColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"cassandra.view.drop"},
+			Detail: []string{"cassandra.view.drop"},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns()}},
+			{Key: "definition", Label: "Definition", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.view.definition", Params: tableParams()}},
+			{Key: "query", Label: "CQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cassandra.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT * FROM \"${resource.namespace}\".\"${resource.name}\" LIMIT 100;")},
 		}},
 	}
 }
@@ -141,8 +151,12 @@ func typeResource() plugin.ResourceType {
 		Kind: "type", Title: "Types",
 		List:    plugin.DataSource{RouteID: "cassandra.types.list"},
 		Columns: typeColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.type.overview", Params: map[string]string{"keyspace": "${resource.namespace}", "name": "${resource.name}"}}},
+		Actions: plugin.ResourceActions{
+			Row:    []string{"cassandra.type.drop"},
+			Detail: []string{"cassandra.type.drop"},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.type.overview", Params: map[string]string{"keyspace": "${resource.namespace}", "name": "${resource.name}"}}},
 		}},
 	}
 }
@@ -152,8 +166,8 @@ func functionResource() plugin.ResourceType {
 		Kind: "function", Title: "Functions",
 		List:    plugin.DataSource{RouteID: "cassandra.functions.list"},
 		Columns: functionColumns(),
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.function.overview", Params: map[string]string{"id": "${resource.uid}"}}},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.function.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
 	}
 }
@@ -163,8 +177,8 @@ func nodeResource() plugin.ResourceType {
 		Kind: "node", Title: "Nodes",
 		List:    plugin.DataSource{RouteID: "cassandra.nodes.list"},
 		Columns: []plugin.Column{{Key: "address", Label: "Address", Sortable: true}, {Key: "data_center", Label: "Datacenter", Sortable: true}, {Key: "rack", Label: "Rack"}, {Key: "release_version", Label: "Version"}, {Key: "schema_version", Label: "Schema"}},
-		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-			{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.node.overview", Params: map[string]string{"address": "${resource.uid}"}}},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.node.overview", Params: map[string]string{"address": "${resource.uid}"}}},
 		}},
 	}
 }
@@ -173,7 +187,23 @@ func tableParams() map[string]string {
 	return map[string]string{"keyspace": "${resource.namespace}", "table": "${resource.name}"}
 }
 
-func queryConfig(initial string) map[string]any {
+// dataGridConfig makes the table Data tab an editable grid. RowKey is left empty
+// so the renderer targets rows by the per-row _key (primary-key) map the rows
+// handler attaches; tables without a usable key carry no _key and stay read-only.
+func dataGridConfig() plugin.TableConfig {
+	return plugin.TableConfig{
+		Editable:      true,
+		StagedEdits:   true,
+		Exportable:    true,
+		EmptyText:     "No rows.",
+		Insert:        &plugin.DataSource{RouteID: "cassandra.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
+		Update:        &plugin.DataSource{RouteID: "cassandra.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
+		Delete:        &plugin.DataSource{RouteID: "cassandra.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		ColumnsSource: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()},
+	}
+}
+
+func queryConfig(initial string) plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "sql",
 		Label:             "CQL",
@@ -185,7 +215,7 @@ func queryConfig(initial string) map[string]any {
 		CancelRouteID:     "cassandra.query.cancel",
 		CompletionRouteID: "cassandra.completion",
 		Exportable:        true,
-	}.Map()
+	}
 }
 
 func tableColumns() []plugin.Column {
@@ -215,6 +245,9 @@ func functionColumns() []plugin.Column {
 func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "cassandra.keyspace.create", Label: "Create keyspace", Icon: icon("plus"), RouteID: "cassandra.keyspace.create"},
+		{ID: "cassandra.keyspace.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cassandra.keyspace.drop", Params: map[string]string{"keyspace": "${resource.uid}"}, Confirm: true, ConfirmText: "Drop this keyspace? Every table, view, type, and all data within it will be permanently deleted."},
+		{ID: "cassandra.type.create", Label: "Create type", Icon: icon("plus"), RouteID: "cassandra.type.create", Params: map[string]string{"keyspace": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "types"}},
+		{ID: "cassandra.type.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cassandra.type.drop", Params: map[string]string{"keyspace": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this type? Tables and columns that use it must already be gone."},
 		{ID: "cassandra.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "cassandra.table.create", Params: map[string]string{"keyspace": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
 		{ID: "cassandra.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "cassandra.column.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "cassandra.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "cassandra.column.drop", Params: map[string]string{"keyspace": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},

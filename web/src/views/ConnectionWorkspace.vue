@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import Tabs from "primevue/tabs";
 import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
@@ -28,8 +28,10 @@ import DockPanel from "../panels/dock/DockPanel.vue";
 import { useDockStore } from "../stores/dock";
 import ConnectionFormDialog from "../components/ConnectionFormDialog.vue";
 import ShareDialog from "../components/ShareDialog.vue";
+import { serializeView, parseView } from "../stores/workspaceUrl";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { recordingForStream } from "../composables/useRecordingControl";
+import { Layout } from "../types/projection";
 import type {
   Action,
   PluginProjection,
@@ -45,6 +47,7 @@ const dockState = computed(() => dock.state(props.id));
 const connectionSessions = useConnectionSessionsStore();
 const liveStatus = useConnectionStatusStore();
 const router = useRouter();
+const route = useRoute();
 const notify = useNotify();
 
 const showEdit = ref(false);
@@ -106,6 +109,10 @@ async function load(): Promise<void> {
     ws.open(props.id);
     const proj = await conns.projection(c.protocol);
     projection.value = proj;
+    // Restore the view from the URL (deep link / refresh) before defaulting.
+    const restore =
+      typeof route.query.v === "string" ? route.query.v : undefined;
+    if (restore) applyLocator(restore);
     if (!ws.view(props.id).activeTab && proj.tabs?.length) {
       ws.setActiveTab(props.id, proj.tabs[0].key);
     }
@@ -190,6 +197,62 @@ function onActionDone(action: Action): void {
   }
   ws.setActiveTab(props.id, tabKey);
 }
+
+// The active location encoded for the `?v=` query: the top tab (tabs layout) or
+// the active workbench view (sidebar_tree). single/dashboard have none.
+const activeLocator = computed<string | undefined>(() => {
+  const proj = projection.value;
+  if (!proj) return undefined;
+  if (proj.layout === Layout.Tabs) return view.value.activeTab || undefined;
+  if (proj.layout === Layout.SidebarTree) {
+    const a = ws.activeView(props.id);
+    return a ? serializeView(a) : undefined;
+  }
+  return undefined;
+});
+
+// Apply a `?v=` locator to the store: switch the tab, or reconstruct/activate the
+// workbench view (reopening a preview that was replaced).
+function applyLocator(v?: string): void {
+  const proj = projection.value;
+  if (!proj) return;
+  if (proj.layout === Layout.Tabs) {
+    if (v && proj.tabs?.some((t) => t.key === v)) ws.setActiveTab(props.id, v);
+    return;
+  }
+  if (proj.layout !== Layout.SidebarTree || !v) return;
+  const parsed = parseView(v, proj.resources ?? [], proj.tree ?? []);
+  if (!parsed) return;
+  if (ws.view(props.id).views.some((o) => o.id === parsed.id))
+    ws.activateView(props.id, parsed.id);
+  else ws.openPreviewView(props.id, parsed);
+}
+
+// store → URL. Opening a resource (sidebar_tree) adds a history entry so Back
+// returns to the previous one; switching a top tab just reflects in the URL
+// (replace, still deep-linkable). The first locator always replaces — no spurious
+// entry when a connection opens.
+watch(activeLocator, (loc) => {
+  const current = typeof route.query.v === "string" ? route.query.v : undefined;
+  if (loc === current) return;
+  const query = { ...route.query };
+  if (loc) query.v = loc;
+  else delete query.v;
+  const push =
+    projection.value?.layout === Layout.SidebarTree && current !== undefined;
+  void router[push ? "push" : "replace"]({ query });
+});
+
+// URL → store: Back/Forward restores the active view (equality-guarded, so the two
+// watchers settle without a loop).
+watch(
+  () => route.query.v,
+  (raw) => {
+    const v = typeof raw === "string" ? raw : undefined;
+    if (v === activeLocator.value) return;
+    applyLocator(v);
+  },
+);
 </script>
 
 <template>
@@ -316,7 +379,10 @@ function onActionDone(action: Action): void {
           <!-- Flat tab layout. The tab bar is PrimeVue; content is rendered through
              KeepAlive (not PrimeVue's lazy TabPanels) so switching tabs HIDES a
              panel instead of destroying it — terminals/streams stay alive. -->
-          <div v-if="projection.layout === 'tabs'" class="flex h-full flex-col">
+          <div
+            v-if="projection.layout === Layout.Tabs"
+            class="flex h-full flex-col"
+          >
             <Tabs
               :value="view.activeTab ?? ''"
               @update:value="ws.setActiveTab(id, String($event))"
@@ -344,9 +410,26 @@ function onActionDone(action: Action): void {
             </div>
           </div>
 
+          <!-- Single-panel layout: one full-bleed screen (desktop/terminal/files),
+             no tab bar. -->
+          <div
+            v-else-if="projection.layout === Layout.Single && activeTab"
+            class="h-full min-h-0 overflow-hidden"
+          >
+            <PanelHost
+              :key="`${id}:${activeTab.key}`"
+              :panel="activeTab.panel"
+              :connection-id="id"
+              :source="activeTab.source"
+              :config="tabConfig(activeTab)"
+              :actions="projection.actions ?? []"
+              @action-done="onActionDone"
+            />
+          </div>
+
           <!-- Dashboard layout: every panel rendered at once in a grid. -->
           <DashboardWorkspace
-            v-else-if="projection.layout === 'dashboard'"
+            v-else-if="projection.layout === Layout.Dashboard"
             :connection-id="id"
             :tabs="projection.tabs ?? []"
             :actions="projection.actions ?? []"

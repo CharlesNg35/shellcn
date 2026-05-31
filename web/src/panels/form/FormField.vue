@@ -8,6 +8,7 @@ import Password from "primevue/password";
 import Textarea from "primevue/textarea";
 import Select from "primevue/select";
 import MultiSelect from "primevue/multiselect";
+import AutoComplete from "primevue/autocomplete";
 import ToggleSwitch from "primevue/toggleswitch";
 import Button from "primevue/button";
 import FileUpload from "primevue/fileupload";
@@ -24,6 +25,9 @@ import { fetchPage } from "../../api/dataSource";
 import AppIcon from "../../components/AppIcon.vue";
 import CredentialSelect from "./CredentialSelect.vue";
 import CodeTextEditor from "../shared/CodeTextEditor.vue";
+import ObjectField from "./ObjectField.vue";
+import ArrayField from "./ArrayField.vue";
+import MapField from "./MapField.vue";
 
 const props = defineProps<{
   field: Field;
@@ -35,6 +39,8 @@ const props = defineProps<{
   // Context for a field whose options come from a route (optionsSource).
   connectionId?: string;
   resource?: ResourceRef | null;
+  // Suppress the field label (used for the value control of a map/array row).
+  hideLabel?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
 
@@ -105,6 +111,15 @@ function update(value: unknown): void {
   emit("update:modelValue", value);
 }
 
+// Free-text autocomplete: filter the static option labels by the typed query,
+// showing all on an empty query (dropdown click).
+const suggestions = ref<string[]>([]);
+function onComplete(event: { query: string }): void {
+  const all = options.value.map((o) => String(o.value));
+  const q = event.query.trim().toLowerCase();
+  suggestions.value = q ? all.filter((s) => s.toLowerCase().includes(q)) : all;
+}
+
 // JSON fields edit as text; an object default is pretty-printed for display and
 // re-parsed on submit (SchemaForm), so the editor always holds a string.
 const jsonText = computed(() => {
@@ -131,7 +146,10 @@ function updateFiles(event: FileUploadSelectEvent): void {
 
 <template>
   <div class="flex min-w-0 flex-col gap-1">
-    <label class="text-sm font-medium text-surface-700 dark:text-surface-200">
+    <label
+      v-if="!hideLabel"
+      class="text-sm font-medium text-surface-700 dark:text-surface-200"
+    >
       {{ field.label }}
       <span v-if="field.required" class="text-red-500">*</span>
     </label>
@@ -283,6 +301,43 @@ function updateFiles(event: FileUploadSelectEvent): void {
         <span>{{ opt.label }}</span>
       </label>
     </div>
+
+    <AutoComplete
+      v-else-if="field.type === 'autocomplete'"
+      :model-value="(modelValue as string) ?? ''"
+      :suggestions="suggestions"
+      dropdown
+      :placeholder="field.placeholder"
+      @complete="onComplete"
+      @update:model-value="update"
+    />
+
+    <ObjectField
+      v-else-if="field.type === 'object'"
+      :field="field"
+      :model-value="modelValue"
+      :connection-id="connectionId"
+      :resource="resource"
+      @update:model-value="update"
+    />
+
+    <ArrayField
+      v-else-if="field.type === 'array'"
+      :field="field"
+      :model-value="modelValue"
+      :connection-id="connectionId"
+      :resource="resource"
+      @update:model-value="update"
+    />
+
+    <MapField
+      v-else-if="field.type === 'map'"
+      :field="field"
+      :model-value="modelValue"
+      :connection-id="connectionId"
+      :resource="resource"
+      @update:model-value="update"
+    />
 
     <InputText
       v-else-if="field.type === 'duration'"

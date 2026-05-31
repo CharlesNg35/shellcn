@@ -4,39 +4,39 @@ import "github.com/charlesng35/shellcn/internal/plugin"
 
 // yamlEditorConfig is the code_editor config that saves edits via server-side
 // apply (POST). Used by the YAML detail tab and the Create dialog.
-func yamlEditorConfig() map[string]any {
+func yamlEditorConfig() plugin.CodeEditorConfig {
 	return plugin.CodeEditorConfig{
 		Language:    "yaml",
 		SaveRouteID: "kubernetes.resource.apply",
 		SaveMethod:  plugin.MethodPost,
-	}.Map()
+	}
 }
 
 // yamlTab is the editable YAML detail tab (loads current object, applies on save).
-func yamlTab(k kind) plugin.Tab {
+func yamlTab(k kind) plugin.Panel {
 	getParams := map[string]string{"kind": k.name, "name": "${resource.name}"}
 	if k.namespaced {
 		getParams["namespace"] = "${resource.namespace}"
 	}
-	return plugin.Tab{
-		Key: "yaml", Label: "YAML", Icon: lucide("file-code"), Panel: plugin.PanelCodeEditor,
+	return plugin.Panel{
+		Key: "yaml", Label: "YAML", Icon: lucide("file-code"), Type: plugin.PanelCodeEditor,
 		Source: &plugin.DataSource{RouteID: "kubernetes.resource.yaml", Params: getParams},
 		Config: yamlEditorConfig(),
 	}
 }
 
 // eventsTab shows the events involving an object.
-func eventsTab(k kind) plugin.Tab {
+func eventsTab(k kind) plugin.Panel {
 	params := map[string]string{"kind": k.name, "name": "${resource.name}"}
 	if k.namespaced {
 		params["namespace"] = "${resource.namespace}"
 	}
-	return plugin.Tab{
-		Key: "events", Label: "Events", Icon: lucide("bell"), Panel: plugin.PanelTable,
+	return plugin.Panel{
+		Key: "events", Label: "Events", Icon: lucide("bell"), Type: plugin.PanelTable,
 		Source: &plugin.DataSource{RouteID: "kubernetes.resource.events", Params: params},
 		Config: plugin.TableConfig{Columns: []plugin.Column{
 			col("type", "Type", statusBadge(eventSeverities)), col("reason", "Reason"), col("message", "Message", notSort), col("count", "Count", num), ageCol(),
-		}}.Map(),
+		}},
 	}
 }
 

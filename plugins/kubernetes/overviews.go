@@ -93,18 +93,18 @@ func labelSelector(labels map[string]any) string {
 // clusterResourceType is the Overview dashboard: live cluster metrics, the node
 // list, and recent events — composed from generic panels.
 func clusterResourceType() plugin.ResourceType {
-	dash := plugin.DashboardConfig{Cells: []plugin.DashboardCell{
+	dash := plugin.DashboardConfig{Cells: []plugin.Panel{
 		{
-			Key: "metrics", Label: "Cluster metrics", Panel: plugin.PanelMetrics, Span: 2,
+			Key: "metrics", Label: "Cluster metrics", Type: plugin.PanelMetrics, Span: 2,
 			Source: &plugin.DataSource{RouteID: "kubernetes.cluster.metrics", Method: plugin.MethodWS}, Config: clusterMetricsConfig(),
 		},
 		{
-			Key: "nodes", Label: "Nodes", Panel: plugin.PanelTable, Span: 2,
+			Key: "nodes", Label: "Nodes", Type: plugin.PanelTable, Span: 2,
 			Source: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "node"}},
 			Config: kindColumnsConfig("node"),
 		},
 		{
-			Key: "events", Label: "Recent events", Panel: plugin.PanelTable, Span: 2,
+			Key: "events", Label: "Recent events", Type: plugin.PanelTable, Span: 2,
 			Source: &plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": "event"}},
 			Config: kindColumnsConfig("event"),
 		},
@@ -116,8 +116,8 @@ func clusterResourceType() plugin.ResourceType {
 		Columns: []plugin.Column{nameCol(), col("version", "Version"), col("nodes", "Nodes", num)},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Cluster Overview"},
-			Tabs: []plugin.Tab{
-				{Key: "dashboard", Label: "Overview", Icon: lucide("layout-dashboard"), Panel: plugin.PanelDashboard, Config: dash.Map()},
+			Tabs: []plugin.Panel{
+				{Key: "dashboard", Label: "Overview", Icon: lucide("layout-dashboard"), Type: plugin.PanelDashboard, Config: dash},
 			},
 		},
 	}
@@ -125,30 +125,30 @@ func clusterResourceType() plugin.ResourceType {
 
 // kindColumnsConfig reuses a catalog kind's declared columns for an embedded
 // dashboard table, so it matches the full list view (badges and all).
-func kindColumnsConfig(name string) map[string]any {
+func kindColumnsConfig(name string) plugin.TableConfig {
 	if k, ok := kindByName(name); ok {
-		return plugin.TableConfig{Columns: k.columns}.Map()
+		return plugin.TableConfig{Columns: k.columns}
 	}
-	return nil
+	return plugin.TableConfig{}
 }
 
-func podsTableConfig() map[string]any {
+func podsTableConfig() plugin.TableConfig {
 	return plugin.TableConfig{Columns: []plugin.Column{
 		col("name", "Name"), col("ready", "Ready", notSort), col("status", "Status", statusBadge(podSeverities)),
 		col("restarts", "Restarts", num), col("node", "Node"), ageCol(),
-	}}.Map()
+	}}
 }
 
 // nodeDetailTabs adds live Metrics + scheduled Pods to a node's detail.
-func nodeDetailTabs() []plugin.Tab {
-	return []plugin.Tab{
+func nodeDetailTabs() []plugin.Panel {
+	return []plugin.Panel{
 		{
-			Key: "metrics", Label: "Metrics", Icon: lucide("activity"), Panel: plugin.PanelMetrics,
+			Key: "metrics", Label: "Metrics", Icon: lucide("activity"), Type: plugin.PanelMetrics,
 			Source: &plugin.DataSource{RouteID: "kubernetes.node.metrics", Method: plugin.MethodWS, Params: map[string]string{"name": "${resource.name}"}},
 			Config: nodeMetricsConfig(),
 		},
 		{
-			Key: "pods", Label: "Pods", Icon: lucide("box"), Panel: plugin.PanelTable,
+			Key: "pods", Label: "Pods", Icon: lucide("box"), Type: plugin.PanelTable,
 			Source: &plugin.DataSource{RouteID: "kubernetes.node.pods", Params: map[string]string{"name": "${resource.name}"}},
 			Config: podsTableConfig(),
 		},
@@ -156,15 +156,15 @@ func nodeDetailTabs() []plugin.Tab {
 }
 
 // workloadPodsTab adds the owned-Pods table to a workload's detail.
-func workloadPodsTab(kindName string) plugin.Tab {
-	return plugin.Tab{
-		Key: "pods", Label: "Pods", Icon: lucide("box"), Panel: plugin.PanelTable,
+func workloadPodsTab(kindName string) plugin.Panel {
+	return plugin.Panel{
+		Key: "pods", Label: "Pods", Icon: lucide("box"), Type: plugin.PanelTable,
 		Source: &plugin.DataSource{RouteID: "kubernetes.workload.pods", Params: map[string]string{"kind": kindName, "namespace": "${resource.namespace}", "name": "${resource.name}"}},
 		Config: podsTableConfig(),
 	}
 }
 
-func clusterMetricsConfig() map[string]any {
+func clusterMetricsConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Gauges: []plugin.MetricGauge{
 			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
@@ -179,10 +179,10 @@ func clusterMetricsConfig() map[string]any {
 			{Key: "mem", Label: "Memory", Unit: "bytes"},
 		},
 		History: 60,
-	}.Map()
+	}
 }
 
-func nodeMetricsConfig() map[string]any {
+func nodeMetricsConfig() plugin.MetricsConfig {
 	return plugin.MetricsConfig{
 		Gauges: []plugin.MetricGauge{
 			{Key: "cpuPct", Label: "CPU", Unit: "%", Max: 100},
@@ -193,5 +193,5 @@ func nodeMetricsConfig() map[string]any {
 			{Key: "mem", Label: "Memory", Unit: "bytes"},
 		},
 		History: 60,
-	}.Map()
+	}
 }

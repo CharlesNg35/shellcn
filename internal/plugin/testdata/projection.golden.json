@@ -124,15 +124,15 @@
         }
       },
       "config": {
-        "deleteRouteId": "sample.files.delete",
-        "downloadRouteId": "sample.files.download",
-        "mkdirRouteId": "sample.files.mkdir",
-        "multipleUpload": true,
         "pathParam": "path",
         "readRouteId": "sample.files.read",
-        "renameRouteId": "sample.files.rename",
+        "downloadRouteId": "sample.files.download",
         "uploadRouteId": "sample.files.upload",
-        "writable": true
+        "mkdirRouteId": "sample.files.mkdir",
+        "renameRouteId": "sample.files.rename",
+        "deleteRouteId": "sample.files.delete",
+        "writable": true,
+        "multipleUpload": true
       }
     }
   ],
@@ -161,15 +161,14 @@
           "type": "text"
         }
       ],
-      "actionIds": [
-        "sample.start"
-      ],
+      "actions": {
+        "detail": [
+          "sample.start"
+        ]
+      },
       "detail": {
         "header": {
-          "title": "Container",
-          "actionIds": [
-            "sample.start"
-          ]
+          "title": "Container"
         },
         "defaultTab": "editor",
         "tabs": [
@@ -190,12 +189,12 @@
               "routeId": "sample.form"
             },
             "config": {
+              "submitRouteId": "sample.form.save",
+              "submitMethod": "PATCH",
+              "submitLabel": "Apply",
               "params": {
                 "id": "${resource.uid}"
-              },
-              "submitLabel": "Apply",
-              "submitMethod": "PATCH",
-              "submitRouteId": "sample.form.save"
+              }
             }
           },
           {
@@ -207,11 +206,11 @@
             },
             "config": {
               "language": "yaml",
+              "saveRouteId": "sample.doc.save",
               "saveMethod": "PUT",
               "saveParams": {
                 "id": "${resource.uid}"
-              },
-              "saveRouteId": "sample.doc.save"
+              }
             }
           },
           {
@@ -223,8 +222,8 @@
               "method": "WS"
             },
             "config": {
-              "cancelRouteId": "sample.query.cancel",
-              "initialQuery": "select * from ${resource.name} limit 100"
+              "initialQuery": "select * from ${resource.name} limit 100",
+              "cancelRouteId": "sample.query.cancel"
             }
           }
         ]

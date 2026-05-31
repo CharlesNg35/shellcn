@@ -78,8 +78,14 @@ func routes() []plugin.Route {
 		{ID: "postgresql.schema.create", Method: plugin.MethodPost, Path: "/schemas", Permission: "postgresql.schemas.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.schema.create", Input: schemaCreateSchema(), Handle: createSchema},
 		{ID: "postgresql.schema.drop", Method: plugin.MethodDelete, Path: "/schemas/{schema}", Permission: "postgresql.schemas.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.schema.drop", Handle: dropSchema},
 		{ID: "postgresql.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.table.create", Input: tableCreateSchema(), Handle: createTable},
+		{ID: "postgresql.table.create.in_database", Method: plugin.MethodPost, Path: "/databases/{database}/tables", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.table.create", Input: tableCreateInDatabaseSchema(), Handle: createTable},
 		{ID: "postgresql.column.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "postgresql.column.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.column.drop", Handle: dropColumn},
+		{ID: "postgresql.column.rename", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/rename", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.column.rename", Input: columnRenameSchema(), Handle: renameColumn},
+		{ID: "postgresql.column.alter", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/alter", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.column.alter", Input: columnAlterSchema(), Handle: alterColumn},
+		{ID: "postgresql.constraint.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/constraints", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.constraint.add", Input: constraintAddSchema(), Handle: addConstraint},
+		{ID: "postgresql.constraint.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/constraints/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.constraint.drop", Handle: dropConstraint},
+		{ID: "postgresql.table.rename", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/rename", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.table.rename", Input: tableRenameSchema(), Handle: renameTable},
 		{ID: "postgresql.index.create", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes", Permission: "postgresql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "postgresql.index.create", Input: indexCreateSchema(), Handle: createIndex},
 		{ID: "postgresql.index.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes/drop", Permission: "postgresql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.index.drop", Handle: dropIndex},
 		{ID: "postgresql.table.truncate", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/truncate", Permission: "postgresql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "postgresql.table.truncate", Handle: truncateTable},
@@ -134,9 +140,18 @@ func schemaCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"id","type":"bigserial","primary":true,"nullable":false}`},
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "bigserial", TypeSuggestions: []string{"bigint", "bigserial", "integer", "serial", "smallint", "boolean", "text", "varchar(255)", "char(1)", "numeric(10,2)", "real", "double precision", "date", "timestamptz", "timestamp", "time", "uuid", "jsonb", "json", "bytea", "inet"}, Default: true, Primary: true, Unique: true}),
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
+}
+
+// tableCreateInDatabaseSchema is the create-table form for the database-level
+// table list: a Schema picker (the database's schemas) plus the table fields.
+func tableCreateInDatabaseSchema() *plugin.Schema {
+	fields := append([]plugin.Field{
+		{Key: "schema", Label: "Schema", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "postgresql.schemas.list", Params: map[string]string{"database": "${resource.uid}"}}},
+	}, tableCreateSchema().Groups[0].Fields...)
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: fields}}}
 }
 
 func columnAddSchema() *plugin.Schema {
@@ -145,6 +160,50 @@ func columnAddSchema() *plugin.Schema {
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "text"},
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func columnRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename column", Fields: []plugin.Field{
+		{Key: "newName", Label: "New name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func columnAlterSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Change type", Fields: []plugin.Field{
+		{Key: "type", Label: "New type", Type: plugin.FieldText, Required: true, Default: "text"},
+		{Key: "using", Label: "USING expression", Type: plugin.FieldText, Help: "Optional cast expression, e.g. column::integer."},
+	}}}}
+}
+
+func tableRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename table", Fields: []plugin.Field{
+		{Key: "newName", Label: "New name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func constraintAddSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
+		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "type", Label: "Type", Type: plugin.FieldSelect, Required: true, Default: constraintPrimaryKey, Options: []plugin.Option{
+			{Label: "Primary key", Value: constraintPrimaryKey},
+			{Label: "Unique", Value: constraintUnique},
+			{Label: "Check", Value: constraintCheck},
+			{Label: "Foreign key", Value: constraintForeignKey},
+		}},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, OptionsSource: &plugin.DataSource{RouteID: "postgresql.table.columns", Params: tableParams()}, Help: "Columns for primary key, unique, or the referencing side of a foreign key.", VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{
+			{Field: "type", Op: plugin.OpIn, Value: []any{constraintPrimaryKey, constraintUnique, constraintForeignKey}},
+		}}},
+		{Key: "check", Label: "Check expression", Type: plugin.FieldText, Help: "Boolean expression, e.g. price > 0.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintCheck}}}},
+		{Key: "refTable", Label: "Referenced table", Type: plugin.FieldText, Help: "Target table for a foreign key (schema-qualified or bare).", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
+		{Key: "refColumns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Comma-separated columns on the referenced table.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
+		{Key: "onDelete", Label: "On delete", Type: plugin.FieldSelect, Options: []plugin.Option{
+			{Label: "No action", Value: "NO ACTION"},
+			{Label: "Restrict", Value: "RESTRICT"},
+			{Label: "Cascade", Value: "CASCADE"},
+			{Label: "Set null", Value: "SET NULL"},
+			{Label: "Set default", Value: "SET DEFAULT"},
+		}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
 	}}}}
 }
 
@@ -705,6 +764,10 @@ ORDER BY con.conname`, []any{schema, table})
 	if err != nil {
 		return nil, err
 	}
+	for i := range rows {
+		name := fmt.Sprint(rows[i]["name"])
+		rows[i]["ref"] = plugin.ResourceRef{Kind: "constraint", Scope: schema, Namespace: table, Name: name, UID: schema + "." + table + "." + name}
+	}
 	return pageRows(rc, rows)
 }
 
@@ -1022,16 +1085,23 @@ func createTable(rc *plugin.RequestContext) (any, error) {
 	if err := ensureWritable(s); err != nil {
 		return nil, err
 	}
-	schema, err := sqldb.SafeIdentifier(paramOf(rc, "schema"))
-	if err != nil {
-		return nil, err
-	}
 	var req struct {
+		Schema      string `json:"schema"`
 		Name        string `json:"name" validate:"required"`
 		Columns     any    `json:"columns" validate:"required"`
 		IfNotExists bool   `json:"if_not_exists"`
 	}
 	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	// Schema comes from the path when creating within a schema, else from the
+	// body (database-level create, where the form picks the schema).
+	schemaName := paramOf(rc, "schema")
+	if schemaName == "" {
+		schemaName = req.Schema
+	}
+	schema, err := sqldb.SafeIdentifier(schemaName)
+	if err != nil {
 		return nil, err
 	}
 	table, err := sqldb.SafeIdentifier(req.Name)
@@ -1101,6 +1171,139 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := pool.Exec(rc.Ctx, "ALTER TABLE "+sqldb.Qualified(schema, table)+" DROP COLUMN "+sqldb.QuoteIdent(column)); err != nil {
+		return nil, pgErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func renameColumn(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		NewName string `json:"newName" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := renameColumnSQL(schema, table, rc.Param("name"), req.NewName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, pgErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func alterColumn(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Type  string `json:"type" validate:"required"`
+		Using string `json:"using"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := alterColumnTypeSQL(schema, table, rc.Param("name"), req.Type, req.Using)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, pgErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func renameTable(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		NewName string `json:"newName" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := renameTableSQL(schema, table, req.NewName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, pgErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func addConstraint(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req constraintRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := addConstraintSQL(schema, table, req)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, pgErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropConstraint(rc *plugin.RequestContext) (any, error) {
+	s, pool, err := dbPool(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	stmt, err := dropConstraintSQL(schema, table, rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := pool.Exec(rc.Ctx, stmt); err != nil {
 		return nil, pgErr(err)
 	}
 	return actionResult{OK: true}, nil

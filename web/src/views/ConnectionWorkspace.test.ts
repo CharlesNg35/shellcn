@@ -7,6 +7,7 @@ import { installFetch } from "../test/fetchMock";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
 import type { PluginProjection } from "../types/projection";
+import { Layout } from "../types/projection";
 import ConnectionWorkspace from "./ConnectionWorkspace.vue";
 
 const projection: PluginProjection = {
@@ -25,7 +26,7 @@ const projection: PluginProjection = {
   config: { groups: [] },
   capabilities: [],
   supportedTransports: ["direct"],
-  layout: "sidebar_tree",
+  layout: Layout.SidebarTree,
   tree: [
     {
       key: "containers",
@@ -40,7 +41,6 @@ const projection: PluginProjection = {
       title: "Containers",
       list: { routeId: "docker.container.list" },
       columns: [],
-      actionIds: [],
       detail: { header: {}, tabs: [] },
     },
   ],
@@ -381,7 +381,7 @@ describe("ConnectionWorkspace", () => {
   it("renders every panel as a card in the dashboard layout", async () => {
     const dashboard: PluginProjection = {
       ...projection,
-      layout: "dashboard",
+      layout: Layout.Dashboard,
       tree: [],
       resources: [],
       tabs: [
@@ -447,5 +447,174 @@ describe("ConnectionWorkspace", () => {
     expect(wrapper.text()).toContain("Logs");
     // The span=2 panel fills the row.
     expect(cards[1].classes()).toContain("lg:col-span-2");
+  });
+
+  it("restores the active tab from ?v= and syncs tab switches back to the URL", async () => {
+    const tabsProj: PluginProjection = {
+      ...projection,
+      layout: Layout.Tabs,
+      tree: [],
+      resources: [],
+      tabs: [
+        {
+          key: "overview",
+          label: "Overview",
+          panel: "document",
+          source: { routeId: "x.o" },
+        },
+        { key: "keys", label: "Keys", panel: "kv", source: { routeId: "x.k" } },
+      ],
+    };
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "redis",
+              protocol: "docker",
+              transport: "direct",
+            },
+          ],
+        };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) return { body: tabsProj };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+    const r = router();
+    await r.push("/?v=keys");
+
+    mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: { plugins: [r], stubs: { AppIcon: true, PanelHost: true } },
+    });
+    await flushPromises();
+    // Deep link restored the Keys tab, not the default first tab.
+    expect(ws.view("c1").activeTab).toBe("keys");
+
+    ws.setActiveTab("c1", "overview");
+    await flushPromises();
+    expect(r.currentRoute.value.query.v).toBe("overview");
+
+    // A tab switch uses replace, so Back does NOT step to the previous tab.
+    await r.back();
+    await flushPromises();
+    expect(r.currentRoute.value.query.v).not.toBe("keys");
+  });
+
+  it("pushes ?v= per opened view and reconstructs it on Back (sidebar_tree)", async () => {
+    let pluginFetches = 0;
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return {
+          body: [
+            {
+              id: "c1",
+              name: "docker",
+              protocol: "docker",
+              transport: "direct",
+            },
+          ],
+        };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) {
+        pluginFetches += 1;
+        return { body: projection };
+      }
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+    const r = router();
+
+    mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: { plugins: [r], stubs: { AppIcon: true, TreeWorkspace: true } },
+    });
+    await flushPromises();
+
+    ws.openPreviewView("c1", {
+      id: "group:containers",
+      title: "Containers",
+      kind: "list",
+      groupKey: "containers",
+    });
+    await flushPromises();
+    expect(r.currentRoute.value.query.v).toBe("group:containers");
+
+    ws.openPreviewView("c1", {
+      id: "detail:abc",
+      title: "web",
+      kind: "detail",
+      ref: { kind: "container", uid: "abc", name: "web" },
+    });
+    await flushPromises();
+    expect(r.currentRoute.value.query.v).toBe("detail:container:abc:n=web");
+
+    await r.back();
+    await flushPromises();
+    expect(r.currentRoute.value.query.v).toBe("group:containers");
+    // The replaced preview is reconstructed from the URL and made active.
+    expect(ws.activeView("c1")?.id).toBe("group:containers");
+    // Navigation never re-fetched the projection (workspace was not remounted).
+    expect(pluginFetches).toBe(1);
+  });
+
+  it("renders a single full-bleed panel with no tab bar in the single layout", async () => {
+    const single: PluginProjection = {
+      ...projection,
+      layout: Layout.Single,
+      tree: [],
+      resources: [],
+      tabs: [
+        {
+          key: "desktop",
+          label: "Desktop",
+          panel: "remote_desktop",
+          source: { routeId: "x.desktop" },
+        },
+      ],
+    };
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return {
+          body: [
+            { id: "c1", name: "vnc", protocol: "docker", transport: "direct" },
+          ],
+        };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) return { body: single };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+
+    const wrapper = mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: {
+        plugins: [router()],
+        stubs: { AppIcon: true, PanelHost: true },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find("panel-host-stub").exists()).toBe(true);
+    // No tab bar chrome for a single screen.
+    expect(wrapper.find('[role="tablist"]').exists()).toBe(false);
   });
 });

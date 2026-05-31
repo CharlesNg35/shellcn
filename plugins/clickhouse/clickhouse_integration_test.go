@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -166,6 +167,29 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		}
 	}
 
+	// Editable data grid round-trip. INSERT is synchronous, so the row reads back
+	// immediately and carries its sorting-key (id) as _key. UPDATE/DELETE are
+	// asynchronous ALTER ... mutations, so assert the handlers schedule them rather
+	// than that the row changes synchronously.
+	dataParams := map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}
+	if _, err := insertRow(rowMutationRC(ctx, s, dataParams, map[string]any{"values": map[string]any{"id": uint64(2), "name": "bob", "access_token": "bob-token"}})); err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+	inserted := findRow(ctx, t, s, dataParams, "name", "bob")
+	if inserted == nil {
+		t.Fatalf("inserted row was not found")
+	}
+	insertedKey, ok := inserted["_key"].(map[string]any)
+	if !ok || fmt.Sprint(insertedKey["id"]) != "2" {
+		t.Fatalf("expected _key carrying id 2, got %#v", inserted["_key"])
+	}
+	if _, err := updateRow(rowMutationRC(ctx, s, dataParams, map[string]any{"key": map[string]any{"id": uint64(2)}, "values": map[string]any{"name": "robert"}})); err != nil {
+		t.Fatalf("update row mutation: %v", err)
+	}
+	if _, err := deleteRow(rowMutationRC(ctx, s, dataParams, map[string]any{"key": map[string]any{"id": uint64(2)}})); err != nil {
+		t.Fatalf("delete row mutation: %v", err)
+	}
+
 	// Column/index management via declarative DDL actions. The drop handlers read
 	// the target identifier from params (the action sends it as the "name" param),
 	// not the body.
@@ -177,12 +201,38 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		}
 		return plugin.NewRequestContext(ctx, models.User{}, s, full, nil, nil)
 	}
-	if _, err := s.db.ExecContext(ctx, "ALTER TABLE shellcn_people ADD INDEX ix_name name TYPE set(0) GRANULARITY 1"); err != nil {
-		t.Fatalf("seed index: %v", err)
+	// Data-skipping index create + drop round-trip via the declarative handlers.
+	if _, err := createIndex(rowMutationRC(ctx, s, ddlParams(db), map[string]any{
+		"name": "ix_name", "expression": "name", "type": "set(0)", "granularity": 4,
+	})); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	var ixCount int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.data_skipping_indices WHERE database = ? AND table = 'shellcn_people' AND name = 'ix_name'", db).Scan(&ixCount); err != nil || ixCount != 1 {
+		t.Fatalf("expected ix_name index created, got %d err=%v", ixCount, err)
 	}
 	if _, err := dropIndex(ddlRC(map[string]string{"name": "ix_name"})); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.data_skipping_indices WHERE database = ? AND table = 'shellcn_people' AND name = 'ix_name'", db).Scan(&ixCount); err != nil || ixCount != 0 {
+		t.Fatalf("expected ix_name index dropped, got %d err=%v", ixCount, err)
+	}
+
+	// MODIFY COLUMN round-trip: widen access_token to Nullable(String) before it is
+	// dropped below, and verify the new type lands in system.columns.
+	if _, err := alterColumn(rowMutationRC(ctx, s, ddlParams(db), map[string]any{
+		"name": "access_token", "type": "String", "nullable": true,
+	})); err != nil {
+		t.Fatalf("alter column: %v", err)
+	}
+	var colType string
+	if err := s.db.QueryRowContext(ctx, "SELECT type FROM system.columns WHERE database = ? AND table = 'shellcn_people' AND name = 'access_token'", db).Scan(&colType); err != nil {
+		t.Fatalf("read modified column type: %v", err)
+	}
+	if colType != "Nullable(String)" {
+		t.Fatalf("expected access_token modified to Nullable(String), got %q", colType)
+	}
+
 	if _, err := dropColumn(ddlRC(map[string]string{"name": "access_token"})); err != nil {
 		t.Fatalf("drop column: %v", err)
 	}
@@ -190,6 +240,101 @@ func TestClickHousePluginIntegration(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.columns WHERE database = ? AND table = 'shellcn_people' AND name = 'access_token'", db).Scan(&cols); err != nil || cols != 0 {
 		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
 	}
+
+	// RENAME TABLE round-trip: rename within the same database, verify the new name
+	// is present and the old name is gone, then rename it back so later cleanup and
+	// assertions that depend on shellcn_people still hold.
+	if _, err := renameTable(rowMutationRC(ctx, s, ddlParams(db), map[string]any{"name": "shellcn_people_renamed"})); err != nil {
+		t.Fatalf("rename table: %v", err)
+	}
+	if !tableExists(ctx, t, s, db, "shellcn_people_renamed") || tableExists(ctx, t, s, db, "shellcn_people") {
+		t.Fatalf("expected table renamed to shellcn_people_renamed")
+	}
+	if _, err := renameTable(rowMutationRC(ctx, s, map[string]string{"database": db, "table": "shellcn_people_renamed"}, map[string]any{"name": "shellcn_people"})); err != nil {
+		t.Fatalf("rename table back: %v", err)
+	}
+
+	// User create -> grant -> drop round-trip via the declarative handlers.
+	itUser := "shellcn_it_user_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "DROP USER IF EXISTS "+quoteIdent(itUser))
+	})
+	if _, err := createUser(rowMutationRC(ctx, s, nil, map[string]any{
+		"name": itUser, "auth_type": "sha256_password", "password": "S3cr3t!Pass", "if_not_exists": true,
+	})); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	var userCount int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.users WHERE name = ?", itUser).Scan(&userCount); err != nil || userCount != 1 {
+		t.Fatalf("expected user created, got %d err=%v", userCount, err)
+	}
+	if _, err := grantUser(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"user": itUser}, nil, mustJSON(map[string]any{
+		"privilege": "SELECT", "on": db + ".*",
+	}))); err != nil {
+		t.Fatalf("grant user: %v", err)
+	}
+	var grantCount int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.grants WHERE user_name = ? AND access_type = 'SELECT'", itUser).Scan(&grantCount); err != nil || grantCount == 0 {
+		t.Fatalf("expected SELECT grant, got %d err=%v", grantCount, err)
+	}
+	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"user": itUser}, nil, nil)); err != nil {
+		t.Fatalf("drop user: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.users WHERE name = ?", itUser).Scan(&userCount); err != nil || userCount != 0 {
+		t.Fatalf("expected user dropped, got %d err=%v", userCount, err)
+	}
+
+	// Merge STOP/START round-trip on a real table. SYSTEM STOP/START MERGES return no
+	// rows; assert the handlers run cleanly and the table still accepts a merge cycle.
+	if _, err := stopMerges(plugin.NewRequestContext(ctx, models.User{}, s, ddlParams(db), nil, nil)); err != nil {
+		t.Fatalf("stop merges: %v", err)
+	}
+	if _, err := startMerges(plugin.NewRequestContext(ctx, models.User{}, s, ddlParams(db), nil, nil)); err != nil {
+		t.Fatalf("start merges: %v", err)
+	}
+
+	// Kill-query handler path. Killing a real in-flight query is racy, so target a
+	// query_id that is not running: KILL QUERY succeeds with zero matched queries,
+	// exercising the handler, statement generation, and audit path end to end.
+	if _, err := killProcess(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": "shellcn-it-not-running"}, nil, nil)); err != nil {
+		t.Fatalf("kill process (no match): %v", err)
+	}
+
+	// Kill-mutation handler path. Likewise drive it against a non-existent mutation so
+	// the handler/SQL/validate path runs without depending on a live mutation.
+	if _, err := killMutation(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{
+		"database": db, "table": "shellcn_people", "id": "0000000000",
+	}, nil, nil)); err != nil {
+		t.Fatalf("kill mutation (no match): %v", err)
+	}
+
+	// Database create + drop round-trip via the declarative handlers.
+	dropDB := "shellcn_it_drop_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": dropDB, "if_not_exists": true})); err != nil {
+		t.Fatalf("create database (drop round-trip): %v", err)
+	}
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": dropDB}, nil, nil)); err != nil {
+		t.Fatalf("drop database: %v", err)
+	}
+	var dbCount int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.databases WHERE name = ?", dropDB).Scan(&dbCount); err != nil || dbCount != 0 {
+		t.Fatalf("expected database dropped, got %d err=%v", dbCount, err)
+	}
+}
+
+func ddlParams(database string) map[string]string {
+	return map[string]string{"database": database, "table": "shellcn_people"}
+}
+
+func tableExists(ctx context.Context, t *testing.T, s *Session, database, name string) bool {
+	t.Helper()
+	var count int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.tables WHERE database = ? AND name = ?", database, name).Scan(&count); err != nil {
+		t.Fatalf("table exists check: %v", err)
+	}
+	return count > 0
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {
@@ -278,8 +423,28 @@ func configFromDSN(t *testing.T, raw string) map[string]any {
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
+	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, mustJSON(body))
+}
+
+func mustJSON(body map[string]any) []byte {
 	raw, _ := json.Marshal(body)
-	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
+	return raw
+}
+
+// findRow scans the table via the data-grid handler (which attaches _key) and
+// returns the first row whose column equals value, or nil when absent.
+func findRow(ctx context.Context, t *testing.T, s *Session, params map[string]string, column, value string) row {
+	t.Helper()
+	res, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, params, nil, nil))
+	if err != nil {
+		t.Fatalf("table rows: %v", err)
+	}
+	for _, r := range res.(plugin.Page[row]).Items {
+		if fmt.Sprint(r[column]) == value {
+			return r
+		}
+	}
+	return nil
 }
 
 func run(ctx context.Context, t *testing.T, name string, args ...string) string {

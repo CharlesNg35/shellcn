@@ -3,6 +3,7 @@ package cassandra
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -90,19 +91,85 @@ func TestCassandraPluginIntegration(t *testing.T) {
 		t.Fatalf("created keyspace was not listed: %#v", keyspaces)
 	}
 
+	// Keyspace drop round-trip: create a SEPARATE throwaway keyspace via the
+	// handler, confirm it lists, then drop it via the handler and confirm it's gone.
+	// Kept distinct from shellcn_it so later sub-steps still have their keyspace.
+	dropKS := "shellcn_it_drop"
+	createDropKSRC := plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, mustJSON(t, map[string]any{
+		"name":               dropKS,
+		"replication_class":  "SimpleStrategy",
+		"replication_factor": 1,
+		"durable_writes":     true,
+		"if_not_exists":      true,
+	}))
+	if _, err := createKeyspace(createDropKSRC); err != nil {
+		t.Fatalf("create throwaway keyspace: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cleanupCancel()
+		_ = execCQL(cleanupCtx, s, `DROP KEYSPACE IF EXISTS "`+dropKS+`"`)
+	})
+	if list, err := listKeyspaces(baseRC); err != nil {
+		t.Fatalf("list keyspaces before drop: %v", err)
+	} else if !pageHasName(list.(plugin.Page[row]), dropKS) {
+		t.Fatalf("throwaway keyspace %q was not listed before drop", dropKS)
+	}
+	if _, err := dropKeyspace(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": dropKS}, nil, nil)); err != nil {
+		t.Fatalf("drop keyspace: %v", err)
+	}
+	if list, err := listKeyspaces(baseRC); err != nil {
+		t.Fatalf("list keyspaces after drop: %v", err)
+	} else if pageHasName(list.(plugin.Page[row]), dropKS) {
+		t.Fatalf("keyspace %q still listed after drop", dropKS)
+	}
+
+	// UDT create/drop round-trip in shellcn_it: create a type via the handler,
+	// confirm it lists, drop it via the handler, confirm it's gone.
+	if _, err := createType(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it"}, nil, mustJSON(t, map[string]any{
+		"name": "address",
+		"fields": []map[string]any{
+			{"name": "street", "type": "text"},
+			{"name": "zip", "type": "text"},
+		},
+		"if_not_exists": true,
+	}))); err != nil {
+		t.Fatalf("create type: %v", err)
+	}
+	typeListRC := plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.keyspace": {"shellcn_it"}}, nil)
+	if types, err := listTypes(typeListRC); err != nil {
+		t.Fatalf("list types after create: %v", err)
+	} else if !pageHasName(types.(plugin.Page[row]), "address") {
+		t.Fatalf("created type was not listed")
+	}
+	if _, err := dropType(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "name": "address"}, nil, nil)); err != nil {
+		t.Fatalf("drop type: %v", err)
+	}
+	if types, err := listTypes(typeListRC); err != nil {
+		t.Fatalf("list types after drop: %v", err)
+	} else if pageHasName(types.(plugin.Page[row]), "address") {
+		t.Fatalf("type still listed after drop")
+	}
+
 	// Materialized view drop round-trip: create an MV, drop it via the handler.
+	// MVs are disabled by default in some Cassandra builds; skip this sub-check there.
 	if err := execCQL(ctx, s, `CREATE MATERIALIZED VIEW "shellcn_it"."people_by_name" AS SELECT * FROM "shellcn_it"."people" WHERE name IS NOT NULL AND id IS NOT NULL PRIMARY KEY (name, id)`); err != nil {
-		t.Fatalf("seed materialized view: %v", err)
-	}
-	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "view": "people_by_name"}, nil, nil)); err != nil {
-		t.Fatalf("drop materialized view: %v", err)
-	}
-	views, err := listViews(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.keyspace": {"shellcn_it"}}, nil))
-	if err != nil {
-		t.Fatalf("list views: %v", err)
-	}
-	if pageHasName(views.(plugin.Page[row]), "people_by_name") {
-		t.Fatalf("materialized view still listed after drop")
+		if strings.Contains(err.Error(), "Materialized views are disabled") {
+			t.Log("materialized views disabled in this Cassandra build; skipping MV drop round-trip")
+		} else {
+			t.Fatalf("seed materialized view: %v", err)
+		}
+	} else {
+		if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "view": "people_by_name"}, nil, nil)); err != nil {
+			t.Fatalf("drop materialized view: %v", err)
+		}
+		views, err := listViews(plugin.NewRequestContext(ctx, models.User{}, s, nil, url.Values{"p.keyspace": {"shellcn_it"}}, nil))
+		if err != nil {
+			t.Fatalf("list views: %v", err)
+		}
+		if pageHasName(views.(plugin.Page[row]), "people_by_name") {
+			t.Fatalf("materialized view still listed after drop")
+		}
 	}
 
 	tableRC := plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, nil)
@@ -133,6 +200,39 @@ func TestCassandraPluginIntegration(t *testing.T) {
 			t.Fatalf("table %s route: %v", name, err)
 		}
 	}
+
+	// Editable data grid round-trip: insert a row, read it back, update it, delete
+	// it, asserting at each step. Identity is the primary key (id), echoed as _key.
+	rowID := "22222222-2222-2222-2222-222222222222"
+	mutationRC := func(body map[string]any) *plugin.RequestContext {
+		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, mustJSON(t, body))
+	}
+	if _, err := insertRow(mutationRC(map[string]any{"values": map[string]any{"id": rowID, "name": "bob", "access_token": "bob-token"}})); err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+	bob := findRowByName(ctx, t, s, "name", "bob")
+	if bob == nil {
+		t.Fatalf("inserted row was not found")
+	}
+	rowKey, ok := bob["_key"].(map[string]any)
+	if !ok || fmt.Sprint(rowKey["id"]) != rowID {
+		t.Fatalf("expected _key carrying id %s, got %#v", rowID, bob["_key"])
+	}
+	if _, err := updateRow(mutationRC(map[string]any{"key": map[string]any{"id": rowID}, "values": map[string]any{"name": "robert"}})); err != nil {
+		t.Fatalf("update row: %v", err)
+	}
+	if updated := findRowByName(ctx, t, s, "name", "robert"); updated == nil {
+		t.Fatalf("updated row was not found after update")
+	}
+	if stale := findRowByName(ctx, t, s, "name", "bob"); stale != nil {
+		t.Fatalf("row still has old name after update: %#v", stale)
+	}
+	if _, err := deleteRow(mutationRC(map[string]any{"key": map[string]any{"id": rowID}})); err != nil {
+		t.Fatalf("delete row: %v", err)
+	}
+	if gone := findRowByName(ctx, t, s, "name", "robert"); gone != nil {
+		t.Fatalf("row still present after delete: %#v", gone)
+	}
 	for name, fn := range map[string]func(*plugin.RequestContext) (any, error){
 		"views":      listViews,
 		"types":      listTypes,
@@ -149,13 +249,18 @@ func TestCassandraPluginIntegration(t *testing.T) {
 	ddlRC := func(body map[string]any) *plugin.RequestContext {
 		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, mustJSON(t, body))
 	}
+	// Drops read the target name from a query param (the manifest actions pass
+	// name: ${resource.name}), not the body.
+	dropRC := func(name string) *plugin.RequestContext {
+		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people", "name": name}, nil, nil)
+	}
 	if _, err := createIndex(ddlRC(map[string]any{"name": "ix_people_name", "column": "name"})); err != nil {
 		t.Fatalf("create index: %v", err)
 	}
-	if _, err := dropIndex(ddlRC(map[string]any{"name": "ix_people_name"})); err != nil {
+	if _, err := dropIndex(dropRC("ix_people_name")); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
-	if _, err := dropColumn(ddlRC(map[string]any{"column": "access_token"})); err != nil {
+	if _, err := dropColumn(dropRC("access_token")); err != nil {
 		t.Fatalf("drop column: %v", err)
 	}
 }
@@ -286,6 +391,23 @@ func pageHasScopedName(page plugin.Page[row], namespace, name string) bool {
 		}
 	}
 	return false
+}
+
+// findRowByName scans the table via the data-grid handler (which attaches _key)
+// and returns the first row whose column equals value, or nil when absent.
+func findRowByName(ctx context.Context, t *testing.T, s *Session, column, value string) row {
+	t.Helper()
+	rc := plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, nil)
+	res, err := tableRows(rc)
+	if err != nil {
+		t.Fatalf("table rows: %v", err)
+	}
+	for _, r := range res.(plugin.Page[row]).Items {
+		if fmt.Sprint(r[column]) == value {
+			return r
+		}
+	}
+	return nil
 }
 
 func columnIndex(columns []string, column string) int {

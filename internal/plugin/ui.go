@@ -23,6 +23,25 @@ const (
 	PanelHTTPClient PanelType = "http_client"
 )
 
+// PanelConfig is a sealed marker every panel config struct implements, so a
+// Panel/Action Config field accepts only a real config — never arbitrary data.
+// The unexported method keeps the set closed to this package.
+type PanelConfig interface{ panelConfig() }
+
+func (TableConfig) panelConfig()         {}
+func (FileBrowserConfig) panelConfig()   {}
+func (FormPanelConfig) panelConfig()     {}
+func (DashboardConfig) panelConfig()     {}
+func (MetricsConfig) panelConfig()       {}
+func (GraphConfig) panelConfig()         {}
+func (TraceConfig) panelConfig()         {}
+func (KVConfig) panelConfig()            {}
+func (TerminalConfig) panelConfig()      {}
+func (CodeEditorConfig) panelConfig()    {}
+func (QueryEditorConfig) panelConfig()   {}
+func (HTTPClientConfig) panelConfig()    {}
+func (RemoteDesktopConfig) panelConfig() {}
+
 // StreamKind tags the long-lived channel a panel binds to.
 type StreamKind string
 
@@ -137,65 +156,6 @@ type TableConfig struct {
 	RowClick RowClickAction `json:"rowClick,omitempty"`
 }
 
-func (c TableConfig) Map() map[string]any {
-	out := map[string]any{}
-	if len(c.Columns) > 0 {
-		out["columns"] = c.Columns
-	}
-	if c.ColumnsSource != nil {
-		out["columnsSource"] = c.ColumnsSource
-	}
-	if c.Watch != nil {
-		out["watch"] = c.Watch
-	}
-	if c.RefreshIntervalMs > 0 {
-		out["refreshIntervalMs"] = c.RefreshIntervalMs
-	}
-	if c.DefaultSort != nil {
-		out["defaultSort"] = c.DefaultSort
-	}
-	if len(c.ActionIDs) > 0 {
-		out["actionIds"] = c.ActionIDs
-	}
-	if len(c.RowActionIDs) > 0 {
-		out["rowActionIds"] = c.RowActionIDs
-	}
-	if c.Selectable {
-		out["selectable"] = true
-	}
-	if c.Editable {
-		out["editable"] = true
-	}
-	if len(c.RowKey) > 0 {
-		out["rowKey"] = c.RowKey
-	}
-	if c.Insert != nil {
-		out["insert"] = c.Insert
-	}
-	if c.Update != nil {
-		out["update"] = c.Update
-	}
-	if c.Delete != nil {
-		out["delete"] = c.Delete
-	}
-	if c.EmptyText != "" {
-		out["emptyText"] = c.EmptyText
-	}
-	if c.StagedEdits {
-		out["stagedEdits"] = true
-	}
-	if len(c.HiddenColumns) > 0 {
-		out["hiddenColumns"] = c.HiddenColumns
-	}
-	if c.Exportable {
-		out["exportable"] = true
-	}
-	if c.RowClick != "" {
-		out["rowClick"] = c.RowClick
-	}
-	return out
-}
-
 type FileBrowserConfig struct {
 	PathParam       string `json:"pathParam,omitempty"`
 	ReadRouteID     string `json:"readRouteId,omitempty"`
@@ -205,51 +165,18 @@ type FileBrowserConfig struct {
 	MkdirRouteID    string `json:"mkdirRouteId,omitempty"`
 	RenameRouteID   string `json:"renameRouteId,omitempty"`
 	DeleteRouteID   string `json:"deleteRouteId,omitempty"`
+	// Bulk-operation slots over a multi-selection. Each is optional; the renderer
+	// shows a bulk action only when its slot is set. Move/Copy take
+	// {"paths":[...],"dest":"<dir>"}; Chmod takes {"paths":[...],"mode":"0644"};
+	// Archive takes {"paths":[...]} and streams a zip download.
+	MoveRouteID     string `json:"moveRouteId,omitempty"`
+	CopyRouteID     string `json:"copyRouteId,omitempty"`
+	ChmodRouteID    string `json:"chmodRouteId,omitempty"`
+	ArchiveRouteID  string `json:"archiveRouteId,omitempty"`
 	Writable        bool   `json:"writable,omitempty"`
 	MultipleUpload  bool   `json:"multipleUpload,omitempty"`
 	MaxUploadBytes  int64  `json:"maxUploadBytes,omitempty"`
 	UploadFieldName string `json:"uploadFieldName,omitempty"`
-}
-
-func (c FileBrowserConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.PathParam != "" {
-		out["pathParam"] = c.PathParam
-	}
-	if c.ReadRouteID != "" {
-		out["readRouteId"] = c.ReadRouteID
-	}
-	if c.DownloadRouteID != "" {
-		out["downloadRouteId"] = c.DownloadRouteID
-	}
-	if c.WriteRouteID != "" {
-		out["writeRouteId"] = c.WriteRouteID
-	}
-	if c.UploadRouteID != "" {
-		out["uploadRouteId"] = c.UploadRouteID
-	}
-	if c.MkdirRouteID != "" {
-		out["mkdirRouteId"] = c.MkdirRouteID
-	}
-	if c.RenameRouteID != "" {
-		out["renameRouteId"] = c.RenameRouteID
-	}
-	if c.DeleteRouteID != "" {
-		out["deleteRouteId"] = c.DeleteRouteID
-	}
-	if c.Writable {
-		out["writable"] = true
-	}
-	if c.MultipleUpload {
-		out["multipleUpload"] = true
-	}
-	if c.MaxUploadBytes > 0 {
-		out["maxUploadBytes"] = c.MaxUploadBytes
-	}
-	if c.UploadFieldName != "" {
-		out["uploadFieldName"] = c.UploadFieldName
-	}
-	return out
 }
 
 type FormPanelConfig struct {
@@ -259,49 +186,10 @@ type FormPanelConfig struct {
 	Params        map[string]string `json:"params,omitempty"`
 }
 
-func (c FormPanelConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.SubmitRouteID != "" {
-		out["submitRouteId"] = c.SubmitRouteID
-	}
-	if c.SubmitMethod != "" {
-		out["submitMethod"] = c.SubmitMethod
-	}
-	if c.SubmitLabel != "" {
-		out["submitLabel"] = c.SubmitLabel
-	}
-	if len(c.Params) > 0 {
-		out["params"] = c.Params
-	}
-	return out
-}
-
-// DashboardCell is one panel inside a PanelDashboard grid. It mirrors a Tab
-// minus the tab-bar semantics: any panel type, its own source/config, and an
-// optional Span (>= 2 fills the row). Plugin-agnostic — any plugin can compose
-// an at-a-glance view from its existing panels and routes.
-type DashboardCell struct {
-	Key    string         `json:"key"`
-	Label  string         `json:"label,omitempty"`
-	Icon   Icon           `json:"icon,omitzero"`
-	Panel  PanelType      `json:"panel"`
-	Source *DataSource    `json:"source,omitempty"`
-	Config map[string]any `json:"config,omitempty"`
-	Span   int            `json:"span,omitempty"`
-}
-
 // DashboardConfig is the declarative config for a PanelDashboard: a responsive
-// grid that renders every cell at once. Usable as a detail/connection Tab panel.
+// grid that renders every Panel at once. Usable as a detail/connection panel.
 type DashboardConfig struct {
-	Cells []DashboardCell `json:"cells,omitempty"`
-}
-
-func (c DashboardConfig) Map() map[string]any {
-	out := map[string]any{}
-	if len(c.Cells) > 0 {
-		out["cells"] = c.Cells
-	}
-	return out
+	Cells []Panel `json:"cells,omitempty"`
 }
 
 // MetricStat is one KPI number card in the metrics panel.
@@ -338,23 +226,6 @@ type MetricsConfig struct {
 	History int            `json:"history,omitempty"`
 }
 
-func (c MetricsConfig) Map() map[string]any {
-	out := map[string]any{}
-	if len(c.Stats) > 0 {
-		out["stats"] = c.Stats
-	}
-	if len(c.Gauges) > 0 {
-		out["gauges"] = c.Gauges
-	}
-	if len(c.Series) > 0 {
-		out["series"] = c.Series
-	}
-	if c.History > 0 {
-		out["history"] = c.History
-	}
-	return out
-}
-
 type GraphLayout string
 
 const (
@@ -372,33 +243,8 @@ type GraphConfig struct {
 	ExpandParam   string `json:"expandParam,omitempty"`
 }
 
-func (c GraphConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.Layout != "" {
-		out["layout"] = c.Layout
-	}
-	if c.FitView {
-		out["fitView"] = c.FitView
-	}
-	if c.ExpandRouteID != "" {
-		out["expandRouteId"] = c.ExpandRouteID
-	}
-	if c.ExpandParam != "" {
-		out["expandParam"] = c.ExpandParam
-	}
-	return out
-}
-
 type TraceConfig struct {
 	ServiceField string `json:"serviceField,omitempty"`
-}
-
-func (c TraceConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.ServiceField != "" {
-		out["serviceField"] = c.ServiceField
-	}
-	return out
 }
 
 type KVConfig struct {
@@ -414,48 +260,11 @@ type KVConfig struct {
 	ValueTypes []string `json:"valueTypes,omitempty"`
 }
 
-func (c KVConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.CreateRouteID != "" {
-		out["createRouteId"] = c.CreateRouteID
-	}
-	if c.ReadRouteID != "" {
-		out["readRouteId"] = c.ReadRouteID
-	}
-	if c.WriteRouteID != "" {
-		out["writeRouteId"] = c.WriteRouteID
-	}
-	if c.DeleteRouteID != "" {
-		out["deleteRouteId"] = c.DeleteRouteID
-	}
-	if c.KeyParam != "" {
-		out["keyParam"] = c.KeyParam
-	}
-	if c.Writable {
-		out["writable"] = c.Writable
-	}
-	if len(c.ValueTypes) > 0 {
-		out["valueTypes"] = c.ValueTypes
-	}
-	return out
-}
-
 // TerminalConfig opts a terminal panel into extra controls. Off by default so a
 // plugin enables only what its terminal needs.
 type TerminalConfig struct {
 	Zoom   bool `json:"zoom,omitempty"`   // font-size +/- controls and Ctrl/⌘ +/-/0
 	Search bool `json:"search,omitempty"` // scrollback find with match navigation
-}
-
-func (c TerminalConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.Zoom {
-		out["zoom"] = true
-	}
-	if c.Search {
-		out["search"] = true
-	}
-	return out
 }
 
 type CodeEditorConfig struct {
@@ -483,73 +292,6 @@ type QueryEditorConfig struct {
 	Exportable        bool              `json:"exportable,omitempty"`
 }
 
-func (c CodeEditorConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.Language != "" {
-		out["language"] = c.Language
-	}
-	if c.InitialContent != "" {
-		out["initialContent"] = c.InitialContent
-	}
-	if c.SaveRouteID != "" {
-		out["saveRouteId"] = c.SaveRouteID
-	}
-	if c.SaveMethod != "" {
-		out["saveMethod"] = c.SaveMethod
-	}
-	if len(c.SaveParams) > 0 {
-		out["saveParams"] = c.SaveParams
-	}
-	if c.SaveBodyKey != "" {
-		out["saveBodyKey"] = c.SaveBodyKey
-	}
-	if len(c.SaveExtra) > 0 {
-		out["saveExtra"] = c.SaveExtra
-	}
-	return out
-}
-
-func (c QueryEditorConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.Language != "" {
-		out["language"] = c.Language
-	}
-	if c.Label != "" {
-		out["label"] = c.Label
-	}
-	if c.ExecuteLabel != "" {
-		out["executeLabel"] = c.ExecuteLabel
-	}
-	if c.CancelLabel != "" {
-		out["cancelLabel"] = c.CancelLabel
-	}
-	if c.RunningLabel != "" {
-		out["runningLabel"] = c.RunningLabel
-	}
-	if c.EmptyText != "" {
-		out["emptyText"] = c.EmptyText
-	}
-	if c.InitialQuery != "" {
-		out["initialQuery"] = c.InitialQuery
-	}
-	if c.CancelRouteID != "" {
-		out["cancelRouteId"] = c.CancelRouteID
-	}
-	if len(c.CancelParams) > 0 {
-		out["cancelParams"] = c.CancelParams
-	}
-	if c.CompletionRouteID != "" {
-		out["completionRouteId"] = c.CompletionRouteID
-	}
-	if len(c.CompletionParams) > 0 {
-		out["completionParams"] = c.CompletionParams
-	}
-	if c.Exportable {
-		out["exportable"] = true
-	}
-	return out
-}
-
 type HeaderDefault struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
@@ -564,51 +306,11 @@ type HTTPClientConfig struct {
 	DefaultBody    string          `json:"defaultBody,omitempty"`
 }
 
-func (c HTTPClientConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.ExecuteRouteID != "" {
-		out["executeRouteId"] = c.ExecuteRouteID
-	}
-	if len(c.Methods) > 0 {
-		out["methods"] = c.Methods
-	}
-	if c.DefaultMethod != "" {
-		out["defaultMethod"] = c.DefaultMethod
-	}
-	if c.DefaultURL != "" {
-		out["defaultUrl"] = c.DefaultURL
-	}
-	if len(c.DefaultHeaders) > 0 {
-		out["defaultHeaders"] = c.DefaultHeaders
-	}
-	if c.DefaultBody != "" {
-		out["defaultBody"] = c.DefaultBody
-	}
-	return out
-}
-
 type RemoteDesktopConfig struct {
 	Resize     bool   `json:"resize,omitempty"`
 	Clipboard  bool   `json:"clipboard,omitempty"`
 	Audio      bool   `json:"audio,omitempty"`
 	RepeaterID string `json:"repeaterID,omitempty"`
-}
-
-func (c RemoteDesktopConfig) Map() map[string]any {
-	out := map[string]any{}
-	if c.Resize {
-		out["resize"] = c.Resize
-	}
-	if c.Clipboard {
-		out["clipboard"] = c.Clipboard
-	}
-	if c.Audio {
-		out["audio"] = c.Audio
-	}
-	if c.RepeaterID != "" {
-		out["repeaterID"] = c.RepeaterID
-	}
-	return out
 }
 
 // Severity styles a badge.
@@ -647,14 +349,15 @@ type ResourceEvent struct {
 	Resource any         `json:"resource,omitempty"`
 }
 
-// Tab is one connection-level or resource-level panel.
-type Tab struct {
-	Key    string         `json:"key"`
-	Label  string         `json:"label"`
-	Icon   Icon           `json:"icon,omitzero"`
-	Panel  PanelType      `json:"panel"`
-	Source *DataSource    `json:"source,omitempty"`
-	Config map[string]any `json:"config,omitempty"`
+// Panel is one renderable panel: a detail/connection tab, or a dashboard cell.
+// (Tabs and dashboard cells are the same shape — this is the single type.)
+type Panel struct {
+	Key    string      `json:"key"`
+	Label  string      `json:"label,omitempty"`
+	Icon   Icon        `json:"icon,omitzero"`
+	Type   PanelType   `json:"panel"`
+	Source *DataSource `json:"source,omitempty"`
+	Config PanelConfig `json:"config,omitempty"`
 	// Span is a sizing hint for the dashboard layout only: a value >= 2 makes
 	// the panel fill the row; otherwise it occupies one grid column. Other
 	// layouts ignore it.
@@ -730,12 +433,16 @@ type Action struct {
 	Panel PanelType  `json:"panel,omitempty"`
 	// Config is the panel config for a dock/dialog-opened Panel (e.g. a
 	// code_editor's saveRouteId), so an action can open an editable panel.
-	Config map[string]any `json:"config,omitempty"`
+	Config PanelConfig `json:"config,omitempty"`
 	// EnabledWhen gates the button on the active row's fields (e.g. state ==
 	// "running"); false shows it disabled, not hidden. Empty = always enabled.
 	EnabledWhen *Condition `json:"enabledWhen,omitempty"`
 	// IconOnly renders the button as its icon alone; Label becomes the tooltip.
 	IconOnly bool `json:"iconOnly,omitempty"`
+	// Group clusters actions on a surface into one labeled dropdown menu (the
+	// label is the group string); empty renders the action as a standalone
+	// button. The renderer also collapses overflow buttons into a "More" menu.
+	Group string `json:"group,omitempty"`
 }
 
 // NavigateTarget is where the UI moves after an action succeeds.
@@ -759,21 +466,31 @@ type Stream struct {
 	RouteID string     `json:"routeId"`
 }
 
-// HeaderSpec configures a resource DetailView header.
+// HeaderSpec configures a resource DetailView header. Detail actions live in
+// ResourceActions.Detail, not here.
 type HeaderSpec struct {
 	Title       string `json:"title,omitempty"`
 	StatusField string `json:"statusField,omitempty"`
 	// Severities colors the status badge by value (same value->severity map as a
 	// badge Column); unmapped values stay neutral.
 	Severities map[string]Severity `json:"severities,omitempty"`
-	ActionIDs  []string            `json:"actionIds,omitempty"`
+}
+
+// ResourceActions groups a resource's action IDs by where the renderer shows
+// them — the single, non-overlapping action contract for a resource. Each ID
+// references Manifest.Actions.
+type ResourceActions struct {
+	Toolbar    []string `json:"toolbar,omitempty"`    // list toolbar, no row context (create, prune)
+	Row        []string `json:"row,omitempty"`        // bulk over selected rows (delete); implies Selectable
+	Detail     []string `json:"detail,omitempty"`     // the one open resource, in its detail header
+	Selectable bool     `json:"selectable,omitempty"` // row checkboxes without a row bar; Row implies it
 }
 
 // DetailView is opened when a resource row is clicked.
 type DetailView struct {
 	Header     HeaderSpec `json:"header"`
 	DefaultTab string     `json:"defaultTab,omitempty"`
-	Tabs       []Tab      `json:"tabs"`
+	Tabs       []Panel    `json:"tabs"`
 }
 
 // ResourceType is a managed object type: columns, actions, detail.
@@ -789,13 +506,10 @@ type ResourceType struct {
 	// name/label) for lists whose columns are only known at runtime. The list's
 	// scoping params are merged in, so one generic type can serve many shapes.
 	ColumnsSource *DataSource `json:"columnsSource,omitempty"`
-	ActionIDs     []string    `json:"actionIds"`
-	ListActionIDs []string    `json:"listActionIds,omitempty"`
-	RowActionIDs  []string    `json:"rowActionIds,omitempty"`
-	// Selectable makes the list rows selectable (checkboxes) without declaring
-	// RowActionIDs — a browse table whose actions live in the detail view.
-	Selectable bool       `json:"selectable,omitempty"`
-	Detail     DetailView `json:"detail"`
+	// Actions groups this resource's actions by render surface (toolbar / row /
+	// detail). The single action contract for a resource.
+	Actions ResourceActions `json:"actions,omitzero"`
+	Detail  DetailView      `json:"detail"`
 }
 
 // ScopeControl names the scope filter's input widget. Open vocabulary: the

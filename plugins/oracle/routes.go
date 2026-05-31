@@ -61,6 +61,11 @@ func routes() []plugin.Route {
 		{ID: "oracle.sessions.tree", Method: plugin.MethodGet, Path: "/tree/sessions", Permission: "oracle.sessions.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.sessions.tree", Handle: treeSessions},
 		{ID: "oracle.sessions.list", Method: plugin.MethodGet, Path: "/sessions", Permission: "oracle.sessions.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.sessions.list", Handle: listSessions},
 		{ID: "oracle.session.overview", Method: plugin.MethodGet, Path: "/sessions/{id}/overview", Permission: "oracle.sessions.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.session.overview", Handle: sessionOverview},
+		{ID: "oracle.session.kill", Method: plugin.MethodPost, Path: "/sessions/{id}/kill", Permission: "oracle.sessions.kill", Risk: plugin.RiskDestructive, AuditEvent: "oracle.session.kill", Handle: killSession},
+		{ID: "oracle.user.drop", Method: plugin.MethodDelete, Path: "/users/{user}", Permission: "oracle.users.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.user.drop", Handle: dropUser},
+		{ID: "oracle.user.lock", Method: plugin.MethodPost, Path: "/users/{user}/lock", Permission: "oracle.users.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.user.lock", Handle: lockUser},
+		{ID: "oracle.user.unlock", Method: plugin.MethodPost, Path: "/users/{user}/unlock", Permission: "oracle.users.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.user.unlock", Handle: unlockUser},
+		{ID: "oracle.user.grant", Method: plugin.MethodPost, Path: "/users/{user}/grant", Permission: "oracle.users.write", Risk: plugin.RiskPrivileged, AuditEvent: "oracle.user.grant", Input: userGrantSchema(), Handle: grantUser},
 		{ID: "oracle.table.rows", Method: plugin.MethodGet, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.table.rows", Handle: tableRows},
 		{ID: "oracle.view.rows", Method: plugin.MethodGet, Path: "/objects/{id}/view-rows", Permission: "oracle.views.data.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.view.rows", Handle: tableRows},
 		{ID: "oracle.table.columns", Method: plugin.MethodGet, Path: "/objects/{id}/columns", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.table.columns", Handle: tableColumnsRoute},
@@ -74,11 +79,18 @@ func routes() []plugin.Route {
 		{ID: "oracle.table.row.insert", Method: plugin.MethodPost, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.table.row.insert", Handle: insertRow},
 		{ID: "oracle.table.row.update", Method: plugin.MethodPatch, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.table.row.update", Handle: updateRow},
 		{ID: "oracle.table.row.delete", Method: plugin.MethodDelete, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.row.delete", Handle: deleteRow},
+		{ID: "oracle.schema.create", Method: plugin.MethodPost, Path: "/schemas", Permission: "oracle.schemas.write", Risk: plugin.RiskPrivileged, AuditEvent: "oracle.schema.create", Input: schemaCreateSchema(), Handle: createSchema},
+		{ID: "oracle.schema.drop", Method: plugin.MethodDelete, Path: "/schemas/{schema}", Permission: "oracle.schemas.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.schema.drop", Handle: dropSchema},
 		{ID: "oracle.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.table.create", Input: tableCreateSchema(), Handle: createTable},
+		{ID: "oracle.table.rename", Method: plugin.MethodPost, Path: "/objects/{id}/rename", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.table.rename", Input: tableRenameSchema(), Handle: renameTable},
 		{ID: "oracle.column.add", Method: plugin.MethodPost, Path: "/objects/{id}/columns", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "oracle.column.alter", Method: plugin.MethodPost, Path: "/objects/{id}/columns/alter", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.column.alter", Input: columnAlterSchema(), Handle: alterColumn},
+		{ID: "oracle.column.rename", Method: plugin.MethodPost, Path: "/objects/{id}/columns/rename", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.column.rename", Input: columnRenameSchema(), Handle: renameColumn},
 		{ID: "oracle.column.drop", Method: plugin.MethodPost, Path: "/objects/{id}/columns/drop", Permission: "oracle.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "oracle.column.drop", Handle: dropColumn},
 		{ID: "oracle.index.create", Method: plugin.MethodPost, Path: "/objects/{id}/indexes", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.index.create", Input: indexCreateSchema(), Handle: createIndex},
 		{ID: "oracle.index.drop", Method: plugin.MethodPost, Path: "/objects/{id}/indexes/drop", Permission: "oracle.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "oracle.index.drop", Handle: dropIndex},
+		{ID: "oracle.constraint.add", Method: plugin.MethodPost, Path: "/objects/{id}/constraints", Permission: "oracle.tables.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.constraint.add", Input: constraintAddSchema(), Handle: addConstraint},
+		{ID: "oracle.constraint.drop", Method: plugin.MethodPost, Path: "/objects/{id}/constraints/drop", Permission: "oracle.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "oracle.constraint.drop", Handle: dropConstraint},
 		{ID: "oracle.table.truncate", Method: plugin.MethodPost, Path: "/objects/{id}/truncate", Permission: "oracle.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.truncate", Handle: truncateTable},
 		{ID: "oracle.table.drop", Method: plugin.MethodDelete, Path: "/objects/{id}", Permission: "oracle.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.table.drop", Handle: dropTable},
 		{ID: "oracle.query", Method: plugin.MethodWS, Path: "/query", Permission: "oracle.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "oracle.query", Stream: queryStream},
@@ -93,7 +105,7 @@ func oracleSession(rc *plugin.RequestContext) (*Session, error) {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"ID","type":"NUMBER GENERATED BY DEFAULT AS IDENTITY","primary":true,"nullable":false}`},
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "VARCHAR2(255)", TypeSuggestions: []string{"NUMBER", "NUMBER(10,2)", "VARCHAR2(255)", "CHAR(1)", "NVARCHAR2(255)", "CLOB", "BLOB", "DATE", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "FLOAT", "BINARY_FLOAT", "BINARY_DOUBLE", "RAW(16)"}, Default: true, Primary: true, Unique: true}),
 	}}}}
 }
 
@@ -111,6 +123,70 @@ func indexCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
+	}}}}
+}
+
+// In Oracle a schema is a user, so creating one is CREATE USER plus a minimal
+// quota/grant so the new owner can actually create objects.
+func schemaCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Schema", Fields: []plugin.Field{
+		{Key: "name", Label: "Schema (user) name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true},
+	}}}}
+}
+
+// userGrantSchema collects one or more roles/system privileges to GRANT to a
+// user (e.g. CONNECT, RESOURCE, CREATE SESSION). Object privileges are out of
+// scope here — those are managed from the owning object.
+func userGrantSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Grant", Fields: []plugin.Field{
+		{Key: "privileges", Label: "Roles / privileges", Type: plugin.FieldMultiSelect, Required: true, Options: []plugin.Option{
+			{Label: "CONNECT", Value: "CONNECT"},
+			{Label: "RESOURCE", Value: "RESOURCE"},
+			{Label: "DBA", Value: "DBA"},
+			{Label: "CREATE SESSION", Value: "CREATE SESSION"},
+			{Label: "CREATE TABLE", Value: "CREATE TABLE"},
+			{Label: "CREATE VIEW", Value: "CREATE VIEW"},
+			{Label: "CREATE PROCEDURE", Value: "CREATE PROCEDURE"},
+			{Label: "CREATE SEQUENCE", Value: "CREATE SEQUENCE"},
+			{Label: "UNLIMITED TABLESPACE", Value: "UNLIMITED TABLESPACE"},
+		}, Help: "Each entry is a role or system privilege granted to the user."},
+	}}}}
+}
+
+func tableRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename", Fields: []plugin.Field{
+		{Key: "name", Label: "New table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func columnAlterSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "VARCHAR2(255)"},
+		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
+		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func columnRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename", Fields: []plugin.Field{
+		{Key: "to", Label: "New column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func constraintAddSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
+		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "type", Label: "Type", Type: plugin.FieldSelect, Required: true, Default: "PRIMARY KEY", Options: []plugin.Option{
+			{Label: "Primary key", Value: "PRIMARY KEY"},
+			{Label: "Unique", Value: "UNIQUE"},
+			{Label: "Check", Value: "CHECK"},
+			{Label: "Foreign key", Value: "FOREIGN KEY"},
+		}},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, OptionsSource: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Help: "Required for primary key, unique, and foreign key."},
+		{Key: "check", Label: "Check expression", Type: plugin.FieldText, Help: `e.g. AGE >= 0. Required for a CHECK constraint.`},
+		{Key: "ref_table", Label: "Referenced table", Type: plugin.FieldText, Help: "Foreign key only: target table (optionally OWNER.TABLE)."},
+		{Key: "ref_columns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Foreign key only: comma-separated columns in the referenced table."},
 	}}}}
 }
 
@@ -597,6 +673,161 @@ WHERE sid = :1 AND (:2 IS NULL OR serial# = :2)`, []any{sid, nullIfEmpty(serial)
 	return rows[0], nil
 }
 
+// killSession terminates a session by SID,SERIAL#. The id carried by a session
+// resource ref is "sid:serial"; both are validated as integers and rebuilt into
+// the quoted-literal 'sid,serial' Oracle expects — never string-interpolated as
+// identifiers.
+func killSession(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	sid, serial, err := sessionSidSerial(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	stmt := "ALTER SYSTEM KILL SESSION '" + sid + "," + serial + "' IMMEDIATE"
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// sessionSidSerial splits and validates a "sid:serial" session id into the two
+// integer components used to build a KILL SESSION target.
+func sessionSidSerial(id string) (string, string, error) {
+	sidRaw, serialRaw, ok := strings.Cut(strings.TrimSpace(id), ":")
+	if !ok {
+		return "", "", fmt.Errorf("%w: session id must be sid:serial", plugin.ErrInvalidInput)
+	}
+	sid, err := numericToken(sidRaw)
+	if err != nil {
+		return "", "", err
+	}
+	serial, err := numericToken(serialRaw)
+	if err != nil {
+		return "", "", err
+	}
+	return sid, serial, nil
+}
+
+// numericToken accepts only an unsigned integer, guarding the KILL SESSION
+// literal against any injection through the sid/serial values.
+func numericToken(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("%w: a numeric value is required", plugin.ErrInvalidInput)
+	}
+	if _, err := strconv.ParseUint(raw, 10, 64); err != nil {
+		return "", fmt.Errorf("%w: value must be a non-negative integer", plugin.ErrInvalidInput)
+	}
+	return raw, nil
+}
+
+// dropUser drops an Oracle user (schema) and everything it owns.
+func dropUser(rc *plugin.RequestContext) (any, error) {
+	name, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP USER "+quoteIdent(name)+" CASCADE")
+}
+
+func lockUser(rc *plugin.RequestContext) (any, error) {
+	name, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "ALTER USER "+quoteIdent(name)+" ACCOUNT LOCK")
+}
+
+func unlockUser(rc *plugin.RequestContext) (any, error) {
+	name, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "ALTER USER "+quoteIdent(name)+" ACCOUNT UNLOCK")
+}
+
+// grantUser grants one or more roles/system privileges to a user.
+func grantUser(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Privileges any `json:"privileges" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	privs, err := grantPrivileges(req.Privileges)
+	if err != nil {
+		return nil, err
+	}
+	stmt := "GRANT " + strings.Join(privs, ", ") + " TO " + quoteIdent(name)
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// grantPrivileges validates a list of roles/system privileges. Each is a SQL
+// keyword (possibly multi-word, e.g. CREATE SESSION), not a quoted identifier,
+// so it must contain only letters, digits, underscores, and single spaces.
+func grantPrivileges(value any) ([]string, error) {
+	var raw []string
+	switch t := value.(type) {
+	case string:
+		raw = strings.Split(t, ",")
+	case []string:
+		raw = t
+	case []any:
+		for _, item := range t {
+			raw = append(raw, fmt.Sprint(item))
+		}
+	default:
+		return nil, fmt.Errorf("%w: privileges must be a list", plugin.ErrInvalidInput)
+	}
+	out := make([]string, 0, len(raw))
+	for _, p := range raw {
+		priv, err := safePrivilege(p)
+		if err != nil {
+			return nil, err
+		}
+		if priv != "" {
+			out = append(out, priv)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%w: at least one privilege is required", plugin.ErrInvalidInput)
+	}
+	return out, nil
+}
+
+func safePrivilege(raw string) (string, error) {
+	priv := strings.ToUpper(strings.Join(strings.Fields(raw), " "))
+	if priv == "" {
+		return "", nil
+	}
+	for _, r := range priv {
+		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != ' ' {
+			return "", fmt.Errorf("%w: privilege contains unsupported characters", plugin.ErrInvalidInput)
+		}
+	}
+	return priv, nil
+}
+
 func tableRows(rc *plugin.RequestContext) (any, error) {
 	owner, name, err := objectIdent(rc)
 	if err != nil {
@@ -809,7 +1040,12 @@ ORDER BY c.constraint_name`, []any{owner, name})
 	if err != nil {
 		return nil, err
 	}
-	normalizeRows(rows)
+	id := rc.Param("id")
+	for _, r := range rows {
+		normalizeRowKeys(r)
+		cn := fmt.Sprint(r["name"])
+		r["ref"] = plugin.ResourceRef{Kind: "constraint", Scope: id, Name: cn, UID: id + "." + cn}
+	}
 	return pageRows(rc, rows)
 }
 
@@ -1014,6 +1250,212 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(owner, table)+" DROP COLUMN "+quoteIdent(column)); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// createSchema creates an Oracle schema, which is a user: CREATE USER plus a
+// minimal grant and unlimited quota so the new owner can create objects.
+func createSchema(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name     string `json:"name" validate:"required"`
+		Password string `json:"password" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(req.Password) == "" {
+		return nil, fmt.Errorf("%w: password is required", plugin.ErrInvalidInput)
+	}
+	// The password is a quoted literal, not an identifier, so escape single quotes.
+	password := "\"" + strings.ReplaceAll(req.Password, `"`, `""`) + "\""
+	stmts := []string{
+		"CREATE USER " + quoteIdent(name) + " IDENTIFIED BY " + password,
+		"ALTER USER " + quoteIdent(name) + " QUOTA UNLIMITED ON USERS",
+		"GRANT CONNECT, RESOURCE TO " + quoteIdent(name),
+	}
+	for _, stmt := range stmts {
+		if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+			return nil, oracleErr(err)
+		}
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropSchema(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(rc.Param("schema"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "DROP USER "+quoteIdent(name)+" CASCADE"); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func renameTable(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	owner, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	to, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(owner, table)+" RENAME TO "+quoteIdent(to)); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func alterColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	owner, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	column, err := safeIdent(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Type     string `json:"type" validate:"required"`
+		Nullable bool   `json:"nullable"`
+		Default  string `json:"default"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	clause, err := alterColumnClause(column, req.Type, req.Nullable, req.Default)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(owner, table)+" MODIFY ("+clause+")"); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func renameColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	owner, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	column, err := safeIdent(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		To string `json:"to" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	to, err := safeIdent(req.To)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(owner, table)+" RENAME COLUMN "+quoteIdent(column)+" TO "+quoteIdent(to)); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func addConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	owner, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name       string `json:"name" validate:"required"`
+		Type       string `json:"type" validate:"required"`
+		Columns    any    `json:"columns"`
+		Check      string `json:"check"`
+		RefTable   string `json:"ref_table"`
+		RefColumns string `json:"ref_columns"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	clause, err := constraintClause(req.Name, req.Type, req.Columns, req.Check, req.RefTable, req.RefColumns)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(owner, table)+" ADD "+clause); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	owner, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(owner, table)+" DROP CONSTRAINT "+quoteIdent(name)); err != nil {
 		return nil, oracleErr(err)
 	}
 	return actionResult{OK: true}, nil
@@ -1654,6 +2096,109 @@ func ddlColumn(spec sqldb.ColumnSpec) (string, error) {
 	return strings.Join(parts, " "), nil
 }
 
+// alterColumnClause builds the body of an Oracle ALTER TABLE ... MODIFY (...)
+// for one column: type, NULL/NOT NULL, and an optional default.
+func alterColumnClause(column, dataType string, nullable bool, def string) (string, error) {
+	col, err := safeIdent(column)
+	if err != nil {
+		return "", err
+	}
+	dataType = strings.TrimSpace(dataType)
+	if !sqldb.SafeType(dataType) {
+		return "", fmt.Errorf("%w: unsafe column type", plugin.ErrInvalidInput)
+	}
+	parts := []string{quoteIdent(col), dataType}
+	if strings.TrimSpace(def) != "" {
+		if !sqldb.SafeDefault(def) {
+			return "", fmt.Errorf("%w: unsafe default expression", plugin.ErrInvalidInput)
+		}
+		parts = append(parts, "DEFAULT "+strings.TrimSpace(def))
+	}
+	if nullable {
+		parts = append(parts, "NULL")
+	} else {
+		parts = append(parts, "NOT NULL")
+	}
+	return strings.Join(parts, " "), nil
+}
+
+// constraintClause builds an Oracle CONSTRAINT clause (the body of ALTER TABLE
+// ADD ...) for a primary-key, unique, check, or foreign-key constraint.
+func constraintClause(name, kind string, columns any, check, refTable, refColumns string) (string, error) {
+	cn, err := safeIdent(name)
+	if err != nil {
+		return "", err
+	}
+	prefix := "CONSTRAINT " + quoteIdent(cn) + " "
+	switch strings.ToUpper(strings.TrimSpace(kind)) {
+	case "PRIMARY KEY", "UNIQUE":
+		cols, err := sqldb.IdentifierListValue(columns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		if len(cols) == 0 {
+			return "", fmt.Errorf("%w: at least one column is required", plugin.ErrInvalidInput)
+		}
+		return prefix + strings.ToUpper(strings.TrimSpace(kind)) + " (" + strings.Join(cols, ", ") + ")", nil
+	case "CHECK":
+		expr := strings.TrimSpace(check)
+		if expr == "" {
+			return "", fmt.Errorf("%w: a check expression is required", plugin.ErrInvalidInput)
+		}
+		if !sqldb.SafeDefault(expr) {
+			return "", fmt.Errorf("%w: unsafe check expression", plugin.ErrInvalidInput)
+		}
+		return prefix + "CHECK (" + expr + ")", nil
+	case "FOREIGN KEY":
+		cols, err := sqldb.IdentifierListValue(columns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		if len(cols) == 0 {
+			return "", fmt.Errorf("%w: at least one column is required", plugin.ErrInvalidInput)
+		}
+		ref, err := qualifiedRef(refTable)
+		if err != nil {
+			return "", err
+		}
+		refCols, err := sqldb.IdentifierListValue(refColumns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		if len(refCols) == 0 {
+			return "", fmt.Errorf("%w: referenced columns are required", plugin.ErrInvalidInput)
+		}
+		return prefix + "FOREIGN KEY (" + strings.Join(cols, ", ") + ") REFERENCES " + ref + " (" + strings.Join(refCols, ", ") + ")", nil
+	default:
+		return "", fmt.Errorf("%w: unsupported constraint type", plugin.ErrInvalidInput)
+	}
+}
+
+// qualifiedRef quotes a foreign-key target that is either TABLE or OWNER.TABLE.
+func qualifiedRef(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("%w: a referenced table is required", plugin.ErrInvalidInput)
+	}
+	owner, table, ok := strings.Cut(raw, ".")
+	if !ok {
+		name, err := safeIdent(raw)
+		if err != nil {
+			return "", err
+		}
+		return quoteIdent(name), nil
+	}
+	o, err := safeIdent(owner)
+	if err != nil {
+		return "", err
+	}
+	t, err := safeIdent(table)
+	if err != nil {
+		return "", err
+	}
+	return qualified(o, t), nil
+}
+
 func objectIdent(rc *plugin.RequestContext) (string, string, error) {
 	return parseObjectID(rc.Param("id"))
 }
@@ -1736,12 +2281,6 @@ func oracleErr(err error) error {
 func isPrivilegeError(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "ORA-00942") || strings.Contains(msg, "ORA-01031")
-}
-
-func normalizeRows(rows []row) {
-	for _, r := range rows {
-		normalizeRowKeys(r)
-	}
 }
 
 func normalizeRowKeys(r row) {

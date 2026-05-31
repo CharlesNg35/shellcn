@@ -25,7 +25,7 @@ func TestManifestExposesTerminalRecording(t *testing.T) {
 	if len(m.CredentialKinds) != 0 {
 		t.Fatalf("telnet should not declare credentials: %+v", m.CredentialKinds)
 	}
-	if len(m.Tabs) != 1 || m.Tabs[0].Panel != plugin.PanelTerminal || m.Tabs[0].Source.RouteID != "telnet.shell" {
+	if len(m.Tabs) != 1 || m.Tabs[0].Type != plugin.PanelTerminal || m.Tabs[0].Source.RouteID != "telnet.shell" {
 		t.Fatalf("terminal tab not wired to telnet.shell: %+v", m.Tabs)
 	}
 	if len(m.Streams) != 1 || m.Streams[0].Kind != plugin.StreamTerminal || m.Streams[0].RouteID != "telnet.shell" {

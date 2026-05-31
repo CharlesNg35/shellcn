@@ -33,6 +33,10 @@ type confirmationError struct {
 
 func (e confirmationError) Error() string { return e.message }
 
+// dialect builds parameterized single-row CQL (quoted identifiers, ? binds) for
+// the editable data grid, reusing the driver-neutral SQL DML builder.
+var dialect = sqldb.Dialect{QuoteIdent: quoteIdent, Placeholder: sqldb.QuestionPlaceholder}
+
 func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "cassandra.keyspaces.tree", Method: plugin.MethodGet, Path: "/tree/keyspaces", Permission: "cassandra.keyspaces.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.keyspaces.tree", Handle: treeKeyspaces},
@@ -53,11 +57,17 @@ func routes() []plugin.Route {
 		{ID: "cassandra.node.overview", Method: plugin.MethodGet, Path: "/nodes/{address}/overview", Permission: "cassandra.nodes.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.node.overview", Handle: nodeOverview},
 		{ID: "cassandra.table.rows", Method: plugin.MethodGet, Path: "/tables/{keyspace}/{table}/rows", Permission: "cassandra.tables.data.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.table.rows", Handle: tableRows},
 		{ID: "cassandra.table.columns", Method: plugin.MethodGet, Path: "/tables/{keyspace}/{table}/columns", Permission: "cassandra.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.table.columns", Handle: tableColumnsRoute},
+		{ID: "cassandra.table.row.insert", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/rows", Permission: "cassandra.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.table.row.insert", Handle: insertRow},
+		{ID: "cassandra.table.row.update", Method: plugin.MethodPatch, Path: "/tables/{keyspace}/{table}/rows", Permission: "cassandra.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.table.row.update", Handle: updateRow},
+		{ID: "cassandra.table.row.delete", Method: plugin.MethodDelete, Path: "/tables/{keyspace}/{table}/rows", Permission: "cassandra.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.table.row.delete", Handle: deleteRow},
 		{ID: "cassandra.table.indexes", Method: plugin.MethodGet, Path: "/tables/{keyspace}/{table}/indexes", Permission: "cassandra.indexes.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.table.indexes", Handle: tableIndexes},
 		{ID: "cassandra.table.definition", Method: plugin.MethodGet, Path: "/tables/{keyspace}/{table}/definition", Permission: "cassandra.tables.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.table.definition", Handle: tableDefinition},
 		{ID: "cassandra.view.definition", Method: plugin.MethodGet, Path: "/views/{keyspace}/{table}/definition", Permission: "cassandra.views.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.view.definition", Handle: viewDefinition},
 		{ID: "cassandra.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "cassandra.keyspaces.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.completion", Handle: completionRoute},
 		{ID: "cassandra.keyspace.create", Method: plugin.MethodPost, Path: "/keyspaces", Permission: "cassandra.keyspaces.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.keyspace.create", Input: keyspaceCreateSchema(), Handle: createKeyspace},
+		{ID: "cassandra.keyspace.drop", Method: plugin.MethodDelete, Path: "/keyspaces/{keyspace}", Permission: "cassandra.keyspaces.delete", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.keyspace.drop", Handle: dropKeyspace},
+		{ID: "cassandra.type.create", Method: plugin.MethodPost, Path: "/keyspaces/{keyspace}/types", Permission: "cassandra.types.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.type.create", Input: typeCreateSchema(), Handle: createType},
+		{ID: "cassandra.type.drop", Method: plugin.MethodDelete, Path: "/types/{keyspace}/{name}", Permission: "cassandra.types.delete", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.type.drop", Handle: dropType},
 		{ID: "cassandra.table.create", Method: plugin.MethodPost, Path: "/keyspaces/{keyspace}/tables", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "cassandra.column.add", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/columns", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "cassandra.column.drop", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/columns/drop", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.column.drop", Handle: dropColumn},
@@ -81,7 +91,7 @@ func keyspaceCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Keyspace name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "replication_class", Label: "Replication class", Type: plugin.FieldSelect, Required: true, Default: "SimpleStrategy", Options: []plugin.Option{{Label: "SimpleStrategy", Value: "SimpleStrategy"}, {Label: "NetworkTopologyStrategy", Value: "NetworkTopologyStrategy"}}},
 		{Key: "replication_factor", Label: "Replication factor", Type: plugin.FieldNumber, Default: 1, VisibleWhen: &simpleStrategy, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 20}}},
-		{Key: "datacenter_replication", Label: "Datacenter replication", Type: plugin.FieldJSON, Required: true, VisibleWhen: &networkTopology, Help: `Object of datacenter name to replication factor, for example {"dc1":3,"dc2":3}.`},
+		{Key: "datacenter_replication", Label: "Datacenter replication", Type: plugin.FieldMap, Required: true, VisibleWhen: &networkTopology, KeyPlaceholder: "datacenter", AddLabel: "Add datacenter", Item: &plugin.Field{Type: plugin.FieldNumber, Default: 1, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 20}}}},
 		{Key: "durable_writes", Label: "Durable writes", Type: plugin.FieldToggle, Default: true},
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
@@ -90,7 +100,10 @@ func keyspaceCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"id","type":"uuid","primary":true}`},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldArray, Required: true, MinItems: 1, ItemLabel: "Column", Item: &plugin.Field{Type: plugin.FieldObject, Fields: []plugin.Field{
+			{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+			{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Placeholder: "text"},
+		}}},
 		{Key: "primary_key", Label: "Primary key", Type: plugin.FieldText, Required: true, Help: "CQL primary key expression, for example id or (tenant_id, id)."},
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
@@ -107,6 +120,17 @@ func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "column", Label: "Column", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Help: "Cassandra secondary indexes cover a single column."},
+	}}}}
+}
+
+func typeCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Type", Fields: []plugin.Field{
+		{Key: "name", Label: "Type name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "fields", Label: "Fields", Type: plugin.FieldArray, Required: true, MinItems: 1, ItemLabel: "Field", Item: &plugin.Field{Type: plugin.FieldObject, Fields: []plugin.Field{
+			{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+			{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Placeholder: "text"},
+		}}},
+		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
 }
 
@@ -458,8 +482,62 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	pk, err := primaryKeyColumns(rc.Ctx, s, keyspace, table)
+	if err != nil {
+		return nil, err
+	}
+	attachRowKeys(rows, pk, s.opts.RedactPatterns)
 	next := encodeCursor(iter.PageState())
 	return plugin.Page[row]{Items: rows, NextCursor: next}, nil
+}
+
+// primaryKeyColumns returns a table's CQL primary key — partition key columns
+// followed by clustering columns, in key order — read from the schema catalog.
+// These are the columns a row mutation must match to identify exactly one row.
+func primaryKeyColumns(ctx context.Context, s *Session, keyspace, table string) ([]string, error) {
+	rows, err := queryRows(ctx, s, `
+SELECT column_name, kind, position
+FROM system_schema.columns
+WHERE keyspace_name = ? AND table_name = ?`, []any{keyspace, table})
+	if err != nil {
+		return nil, err
+	}
+	keyRows := make([]row, 0, len(rows))
+	for _, r := range rows {
+		switch fmt.Sprint(r["kind"]) {
+		case "partition_key", "clustering":
+			keyRows = append(keyRows, r)
+		}
+	}
+	sort.Slice(keyRows, func(i, j int) bool {
+		ki, kj := fmt.Sprint(keyRows[i]["kind"]), fmt.Sprint(keyRows[j]["kind"])
+		if ki != kj {
+			return columnKindRank(ki) < columnKindRank(kj)
+		}
+		return intValue(keyRows[i]["position"]) < intValue(keyRows[j]["position"])
+	})
+	out := make([]string, 0, len(keyRows))
+	for _, r := range keyRows {
+		out = append(out, fmt.Sprint(r["column_name"]))
+	}
+	return out, nil
+}
+
+// attachRowKeys tags each row with the primary-key/value map the editable grid
+// echoes back for UPDATE/DELETE. The grid stays read-only when the table has no
+// usable primary key, or when a key column is itself sensitive (so a redacted
+// value is never shipped raw inside _key).
+func attachRowKeys(rows []row, pk, patterns []string) {
+	if len(pk) == 0 || sqldb.AnyColumnRedacted(pk, patterns) {
+		return
+	}
+	for _, r := range rows {
+		key := map[string]any{}
+		for _, col := range pk {
+			key[col] = r[col]
+		}
+		r["_key"] = key
+	}
 }
 
 func tableColumnsRoute(rc *plugin.RequestContext) (any, error) {
@@ -634,6 +712,68 @@ func createKeyspace(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return actionResult{OK: true}, nil
+}
+
+func dropKeyspace(rc *plugin.RequestContext) (any, error) {
+	keyspace, err := safeIdent(rc.Param("keyspace"))
+	if err != nil {
+		return nil, err
+	}
+	if isSystemKeyspace(keyspace) {
+		return nil, fmt.Errorf("%w: system keyspaces cannot be dropped", plugin.ErrForbidden)
+	}
+	return execDDL(rc, "DROP KEYSPACE "+quoteIdent(keyspace))
+}
+
+func createType(rc *plugin.RequestContext) (any, error) {
+	s, err := cassandraSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	keyspace, err := safeIdent(rc.Param("keyspace"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        string `json:"name" validate:"required"`
+		Fields      any    `json:"fields" validate:"required"`
+		IfNotExists bool   `json:"if_not_exists"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	fields, err := parseColumns(req.Fields)
+	if err != nil {
+		return nil, err
+	}
+	prefix := "CREATE TYPE "
+	if req.IfNotExists {
+		prefix += "IF NOT EXISTS "
+	}
+	cql := prefix + qualified(keyspace, name) + " (" + strings.Join(fields, ", ") + ")"
+	if err := execCQL(rc.Ctx, s, cql); err != nil {
+		return nil, err
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropType(rc *plugin.RequestContext) (any, error) {
+	keyspace, err := safeIdent(rc.Param("keyspace"))
+	if err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP TYPE "+qualified(keyspace, name))
 }
 
 func createTable(rc *plugin.RequestContext) (any, error) {
@@ -829,6 +969,99 @@ func execDDL(rc *plugin.RequestContext, cql string) (any, error) {
 		return nil, err
 	}
 	return actionResult{OK: true}, nil
+}
+
+// --- row mutations ------------------------------------------------------
+
+func insertRow(rc *plugin.RequestContext) (any, error) {
+	s, keyspace, table, m, err := mutationContext(rc)
+	if err != nil {
+		return nil, err
+	}
+	cql, args, err := dialect.Insert(qualified(keyspace, table), m.Values)
+	if err != nil {
+		return nil, err
+	}
+	if err := execCQLArgs(rc.Ctx, s, cql, args); err != nil {
+		return nil, err
+	}
+	return actionResult{OK: true}, nil
+}
+
+func updateRow(rc *plugin.RequestContext) (any, error) {
+	s, keyspace, table, m, err := mutationContext(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRowKey(rc, s, keyspace, table, m.Key); err != nil {
+		return nil, err
+	}
+	cql, args, err := dialect.Update(qualified(keyspace, table), m.Key, m.Values)
+	if err != nil {
+		return nil, err
+	}
+	if err := execCQLArgs(rc.Ctx, s, cql, args); err != nil {
+		return nil, err
+	}
+	return actionResult{OK: true}, nil
+}
+
+func deleteRow(rc *plugin.RequestContext) (any, error) {
+	s, keyspace, table, m, err := mutationContext(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRowKey(rc, s, keyspace, table, m.Key); err != nil {
+		return nil, err
+	}
+	cql, args, err := dialect.Delete(qualified(keyspace, table), m.Key)
+	if err != nil {
+		return nil, err
+	}
+	if err := execCQLArgs(rc.Ctx, s, cql, args); err != nil {
+		return nil, err
+	}
+	return actionResult{OK: true}, nil
+}
+
+// mutationContext resolves the session, target table, and decoded mutation body
+// shared by the row insert/update/delete handlers, after the read-only gate.
+func mutationContext(rc *plugin.RequestContext) (*Session, string, string, sqldb.RowMutation, error) {
+	s, err := cassandraSession(rc)
+	if err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	keyspace, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	var m sqldb.RowMutation
+	if err := rc.Bind(&m); err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	return s, keyspace, table, m, nil
+}
+
+// validateRowKey loads the table's primary key and rejects any client key that
+// is not exactly that key, so a mutation can only ever target one partition/row.
+func validateRowKey(rc *plugin.RequestContext, s *Session, keyspace, table string, key map[string]any) error {
+	pk, err := primaryKeyColumns(rc.Ctx, s, keyspace, table)
+	if err != nil {
+		return err
+	}
+	return sqldb.ValidateRowKey(pk, key)
+}
+
+func execCQLArgs(ctx context.Context, s *Session, cql string, args []any) error {
+	ctx, cancel := context.WithTimeout(ctx, s.opts.QueryTimeout)
+	defer cancel()
+	if err := s.db.Query(cql, args...).WithContext(ctx).Consistency(s.opts.Consistency).Exec(); err != nil {
+		return cassandraErr(err)
+	}
+	return nil
 }
 
 func cancelQuery(rc *plugin.RequestContext) (any, error) {

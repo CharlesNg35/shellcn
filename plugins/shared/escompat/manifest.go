@@ -34,34 +34,42 @@ func resources(provider Provider) []plugin.ResourceType {
 	return []plugin.ResourceType{
 		{
 			Kind: "index", Title: "Indexes", List: plugin.DataSource{RouteID: routeID(provider, "indexes.list")},
-			Columns:       indexColumns(),
-			ListActionIDs: []string{routeID(provider, "index.create")},
-			RowActionIDs:  []string{routeID(provider, "index.refresh"), routeID(provider, "index.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "health", Severities: healthSeverities, ActionIDs: []string{
-				routeID(provider, "mapping.update"),
-				routeID(provider, "index.refresh"),
-				routeID(provider, "index.flush"),
-				routeID(provider, "index.close"),
-				routeID(provider, "index.open"),
-				routeID(provider, "reindex"),
-				routeID(provider, "index.delete"),
-			}}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "index.overview"), Params: map[string]string{"index": "${resource.name}"}}},
-				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "documents.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{routeID(provider, "document.create")}, RowActionIDs: []string{routeID(provider, "document.delete")}, Exportable: true}.Map()},
-				{Key: "search", Label: "Search", Icon: icon("search"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "search.query"), Method: plugin.MethodWS, Params: map[string]string{"index": "${resource.name}"}}, Config: searchConfig(provider)},
-				{Key: "mapping", Label: "Mapping", Icon: icon("braces"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "mapping.read"), Params: map[string]string{"index": "${resource.name}"}}},
-				{Key: "settings", Label: "Settings", Icon: icon("settings"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "settings.read"), Params: map[string]string{"index": "${resource.name}"}}},
-				{Key: "aliases", Label: "Aliases", Icon: icon("tag"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "aliases.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: aliasColumns(), ActionIDs: []string{routeID(provider, "alias.create")}, RowActionIDs: []string{routeID(provider, "alias.delete")}, Exportable: true}.Map()},
-				{Key: "shards", Label: "Shards", Icon: icon("split"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "shards.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: shardColumns(), Exportable: true}.Map()},
+			Columns: indexColumns(),
+			Actions: plugin.ResourceActions{
+				Toolbar: []string{routeID(provider, "index.create")},
+				Row:     []string{routeID(provider, "index.delete")},
+				Detail: []string{
+					routeID(provider, "mapping.update"),
+					routeID(provider, "settings.update"),
+					routeID(provider, "index.refresh"),
+					routeID(provider, "index.flush"),
+					routeID(provider, "index.close"),
+					routeID(provider, "index.open"),
+					routeID(provider, "reindex"),
+					routeID(provider, "documents.delete_by_query"),
+					routeID(provider, "index.delete"),
+				},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "health", Severities: healthSeverities}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "index.overview"), Params: map[string]string{"index": "${resource.name}"}}},
+				{Key: "documents", Label: "Documents", Icon: icon("file-json"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "documents.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: documentColumns(), ActionIDs: []string{routeID(provider, "document.create")}, RowActionIDs: []string{routeID(provider, "document.delete")}, Exportable: true}},
+				{Key: "search", Label: "Search", Icon: icon("search"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "search.query"), Method: plugin.MethodWS, Params: map[string]string{"index": "${resource.name}"}}, Config: searchConfig(provider)},
+				{Key: "mapping", Label: "Mapping", Icon: icon("braces"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "mapping.read"), Params: map[string]string{"index": "${resource.name}"}}},
+				{Key: "settings", Label: "Settings", Icon: icon("settings"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "settings.read"), Params: map[string]string{"index": "${resource.name}"}}},
+				{Key: "aliases", Label: "Aliases", Icon: icon("tag"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "aliases.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: aliasColumns(), ActionIDs: []string{routeID(provider, "alias.create")}, RowActionIDs: []string{routeID(provider, "alias.delete")}, Exportable: true}},
+				{Key: "shards", Label: "Shards", Icon: icon("split"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: routeID(provider, "shards.list"), Params: map[string]string{"index": "${resource.name}"}}, Config: plugin.TableConfig{Columns: shardColumns(), Exportable: true}},
 			}},
 		},
 		{
 			Kind: "document", Title: "Documents", List: plugin.DataSource{RouteID: routeID(provider, "documents.list")},
-			Columns:      documentColumns(),
-			RowActionIDs: []string{routeID(provider, "document.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{routeID(provider, "document.delete")}}, DefaultTab: "editor", Tabs: []plugin.Tab{
-				{Key: "document", Label: "Document", Icon: icon("file-json"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}},
-				{Key: "editor", Label: "Editor", Icon: icon("code"), Panel: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: routeID(provider, "document.update"), SaveMethod: plugin.MethodPut, SaveParams: documentParams()}.Map()},
+			Columns: documentColumns(),
+			Actions: plugin.ResourceActions{
+				Row:    []string{routeID(provider, "document.delete")},
+				Detail: []string{routeID(provider, "document.delete")},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, DefaultTab: "editor", Tabs: []plugin.Panel{
+				{Key: "document", Label: "Document", Icon: icon("file-json"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}},
+				{Key: "editor", Label: "Editor", Icon: icon("code"), Type: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: routeID(provider, "document.read"), Params: documentParams()}, Config: plugin.CodeEditorConfig{Language: "json", SaveRouteID: routeID(provider, "document.update"), SaveMethod: plugin.MethodPut, SaveParams: documentParams()}},
 			}},
 		},
 	}
@@ -81,8 +89,10 @@ func actions(provider Provider) []plugin.Action {
 		{ID: routeID(provider, "index.close"), Label: "Close", Icon: icon("lock"), RouteID: routeID(provider, "index.close"), Params: indexParams(), Confirm: true, ConfirmText: "Close this index?", EnabledWhen: whenIndexOpen()},
 		{ID: routeID(provider, "index.open"), Label: "Open", Icon: icon("lock-open"), RouteID: routeID(provider, "index.open"), Params: indexParams(), EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "status", Op: plugin.OpIn, Value: []string{"close", "closed"}}}}},
 		{ID: routeID(provider, "index.delete"), Label: "Delete", Icon: icon("trash-2"), RouteID: routeID(provider, "index.delete"), Params: indexParams(), Confirm: true, ConfirmText: "Delete this index and all documents?"},
-		{ID: routeID(provider, "mapping.update"), Label: "Update mapping", Icon: icon("braces"), RouteID: routeID(provider, "mapping.update"), Params: indexParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"properties\": {\n    \"new_field\": { \"type\": \"text\" }\n  }\n}", SaveRouteID: routeID(provider, "mapping.update"), SaveMethod: plugin.MethodPut, SaveParams: indexParams(), SaveBodyKey: "mapping"}.Map()},
-		{ID: routeID(provider, "document.create"), Label: "Create document", Icon: icon("plus"), RouteID: routeID(provider, "document.create"), Params: indexParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"title\": \"Example\"\n}", SaveRouteID: routeID(provider, "document.create"), SaveMethod: plugin.MethodPost, SaveParams: indexParams(), SaveBodyKey: "document"}.Map()},
+		{ID: routeID(provider, "mapping.update"), Label: "Update mapping", Icon: icon("braces"), RouteID: routeID(provider, "mapping.update"), Params: indexParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"properties\": {\n    \"new_field\": { \"type\": \"text\" }\n  }\n}", SaveRouteID: routeID(provider, "mapping.update"), SaveMethod: plugin.MethodPut, SaveParams: indexParams(), SaveBodyKey: "mapping"}},
+		{ID: routeID(provider, "settings.update"), Label: "Update settings", Icon: icon("settings"), RouteID: routeID(provider, "settings.update"), Params: indexParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"index\": {\n    \"number_of_replicas\": 1,\n    \"refresh_interval\": \"30s\"\n  }\n}", SaveRouteID: routeID(provider, "settings.update"), SaveMethod: plugin.MethodPut, SaveParams: indexParams(), SaveBodyKey: "settings"}},
+		{ID: routeID(provider, "documents.delete_by_query"), Label: "Delete by query", Icon: icon("eraser"), RouteID: routeID(provider, "documents.delete_by_query"), Params: indexParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Confirm: true, ConfirmText: "Delete all documents matching this query? This cannot be undone.", Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"match_all\": {}\n}", SaveRouteID: routeID(provider, "documents.delete_by_query"), SaveMethod: plugin.MethodPost, SaveParams: indexParams(), SaveBodyKey: "query"}},
+		{ID: routeID(provider, "document.create"), Label: "Create document", Icon: icon("plus"), RouteID: routeID(provider, "document.create"), Params: indexParams(), Open: plugin.OpenDialog, Panel: plugin.PanelCodeEditor, Config: plugin.CodeEditorConfig{Language: "json", InitialContent: "{\n  \"title\": \"Example\"\n}", SaveRouteID: routeID(provider, "document.create"), SaveMethod: plugin.MethodPost, SaveParams: indexParams(), SaveBodyKey: "document"}},
 		{ID: routeID(provider, "document.delete"), Label: "Delete", Icon: icon("trash"), RouteID: routeID(provider, "document.delete"), Params: documentParams(), Confirm: true, ConfirmText: "Delete this document?"},
 		{ID: routeID(provider, "reindex"), Label: "Reindex", Icon: icon("copy"), RouteID: routeID(provider, "reindex"), Params: map[string]string{"source": "${resource.name}"}, Confirm: true, ConfirmText: "Start a reindex operation?"},
 		{ID: routeID(provider, "alias.create"), Label: "Add alias", Icon: icon("plus"), RouteID: routeID(provider, "alias.create"), Params: indexParams()},
@@ -94,7 +104,7 @@ func aliasParams() map[string]string {
 	return map[string]string{"index": "${resource.namespace}", "alias": "${resource.name}"}
 }
 
-func searchConfig(provider Provider) map[string]any {
+func searchConfig(provider Provider) plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "json",
 		Label:             provider.Title + " query",
@@ -104,7 +114,7 @@ func searchConfig(provider Provider) map[string]any {
 		InitialQuery:      `{"query":{"match_all":{}},"size":50}`,
 		CompletionRouteID: routeID(provider, "completion"),
 		Exportable:        true,
-	}.Map()
+	}
 }
 
 func indexParams() map[string]string {

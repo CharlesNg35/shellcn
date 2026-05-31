@@ -27,16 +27,16 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		CredentialKinds:     sshsftp.CredentialKinds(),
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
-		Tabs: []plugin.Tab{
+		Tabs: []plugin.Panel{
 			{
 				Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
-				Panel: plugin.PanelTerminal,
+				Type: plugin.PanelTerminal,
 				Source: &plugin.DataSource{
 					RouteID: "ssh.shell",
 					Method:  plugin.MethodWS,
 					Params:  map[string]string{"cols": "80", "rows": "24"},
 				},
-				Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map(),
+				Config: plugin.TerminalConfig{Zoom: true, Search: true},
 			},
 			filesTab("ssh"),
 			snippetsTab(),
@@ -66,10 +66,10 @@ func (p *Plugin) Manifest() plugin.Manifest {
 	}
 }
 
-func snippetsTab() plugin.Tab {
-	return plugin.Tab{
+func snippetsTab() plugin.Panel {
+	return plugin.Panel{
 		Key: "snippets", Label: "Snippets", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "code"},
-		Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ssh.snippet.list"},
+		Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "ssh.snippet.list"},
 		Config: plugin.TableConfig{
 			Columns: []plugin.Column{
 				{Key: "name", Label: "Name", Sortable: true},
@@ -78,7 +78,7 @@ func snippetsTab() plugin.Tab {
 			},
 			ActionIDs:    []string{"ssh.snippet.create"},
 			RowActionIDs: []string{"ssh.snippet.run", "ssh.snippet.delete"},
-		}.Map(),
+		},
 	}
 }
 
@@ -113,10 +113,10 @@ func configSchema(protocol string) plugin.Schema {
 	}}
 }
 
-func filesTab(prefix string) plugin.Tab {
-	return plugin.Tab{
+func filesTab(prefix string) plugin.Panel {
+	return plugin.Panel{
 		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
-		Panel:  plugin.PanelFileBrowser,
+		Type:   plugin.PanelFileBrowser,
 		Source: &plugin.DataSource{RouteID: prefix + ".sftp.list", Params: map[string]string{"path": "."}},
 		Config: plugin.FileBrowserConfig{
 			PathParam:       "path",
@@ -131,6 +131,6 @@ func filesTab(prefix string) plugin.Tab {
 			MultipleUpload:  true,
 			MaxUploadBytes:  52428800,
 			UploadFieldName: "files",
-		}.Map(),
+		},
 	}
 }

@@ -147,7 +147,7 @@ func TestManifestReferencesResolve(t *testing.T) {
 		if !routeIDs[res.List.RouteID] {
 			t.Fatalf("resource %q list points at missing route %q", res.Kind, res.List.RouteID)
 		}
-		for _, id := range append(append([]string{}, res.ActionIDs...), append(res.ListActionIDs, res.RowActionIDs...)...) {
+		for _, id := range append(append([]string{}, res.Actions.Detail...), append(res.Actions.Toolbar, res.Actions.Row...)...) {
 			if _, ok := actionByID[id]; !ok {
 				t.Fatalf("resource %q references missing action %q", res.Kind, id)
 			}
@@ -178,13 +178,9 @@ func fieldMap(schema plugin.Schema) map[string]bool {
 	return out
 }
 
-func actionIDs(config map[string]any) []string {
-	if config == nil {
-		return nil
+func actionIDs(config plugin.PanelConfig) []string {
+	if tc, ok := config.(plugin.TableConfig); ok {
+		return append(append([]string{}, tc.ActionIDs...), tc.RowActionIDs...)
 	}
-	raw, ok := config["actionIds"].([]string)
-	if !ok {
-		return nil
-	}
-	return raw
+	return nil
 }

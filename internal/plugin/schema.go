@@ -21,6 +21,16 @@ const (
 	FieldJSON          FieldType = "json"
 	FieldDuration      FieldType = "duration"
 	FieldCredentialRef FieldType = "credential_ref"
+	// FieldObject nests a sub-form (Fields); FieldArray is a repeatable list of Item.
+	FieldObject FieldType = "object"
+	FieldArray  FieldType = "array"
+	// FieldAutocomplete is a free-text input with Options/OptionsSource suggestions
+	// (e.g. a DB column type: pick a common one or type a parameterized custom).
+	FieldAutocomplete FieldType = "autocomplete"
+	// FieldMap is repeatable key/value rows whose value type is Item; it submits
+	// an object {key: value} (e.g. config entries, labels), so a handler binding
+	// a map is unchanged.
+	FieldMap FieldType = "map"
 )
 
 const (
@@ -115,6 +125,18 @@ type Field struct {
 	// Step is the increment for number/slider inputs (defaults to 1). Min/max
 	// bounds come from the min/max validators.
 	Step any `json:"step,omitempty"`
+
+	// Composite fields: Fields holds an object's sub-fields; Item describes an
+	// array's element (recurses). MinItems/MaxItems bound an array.
+	Fields    []Field `json:"fields,omitempty"`
+	Item      *Field  `json:"item,omitempty"`
+	MinItems  int     `json:"minItems,omitempty"`
+	MaxItems  int     `json:"maxItems,omitempty"`
+	ItemLabel string  `json:"itemLabel,omitempty"`
+	AddLabel  string  `json:"addLabel,omitempty"`
+	// KeyLabel/KeyPlaceholder label the key input of a map field.
+	KeyLabel       string `json:"keyLabel,omitempty"`
+	KeyPlaceholder string `json:"keyPlaceholder,omitempty"`
 }
 
 type Group struct {
@@ -153,12 +175,24 @@ func (s Schema) ValuesWithDefaults(values map[string]any) map[string]any {
 // HasFileField reports whether the schema can submit browser File values and
 // therefore requires multipart/form-data binding at the server boundary.
 func (s Schema) HasFileField() bool {
+	found := false
 	for _, group := range s.Groups {
-		for _, field := range group.Fields {
-			if field.Type == FieldFile {
-				return true
+		walkFields(group.Fields, func(f Field) {
+			if f.Type == FieldFile {
+				found = true
 			}
+		})
+	}
+	return found
+}
+
+// walkFields visits every field, recursing into object Fields and array Items.
+func walkFields(fields []Field, visit func(Field)) {
+	for _, f := range fields {
+		visit(f)
+		walkFields(f.Fields, visit)
+		if f.Item != nil {
+			walkFields([]Field{*f.Item}, visit)
 		}
 	}
-	return false
 }

@@ -31,14 +31,14 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"remote_desktop"},
 		CredentialKinds:     credentialKinds(),
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutTabs,
-		Tabs: []plugin.Tab{{
+		Layout:              plugin.LayoutSingle,
+		Tabs: []plugin.Panel{{
 			Key:    "console",
 			Label:  "Console",
 			Icon:   plugin.Icon{Type: plugin.IconSVG, Value: iconSVG},
-			Panel:  plugin.PanelRemoteDesktop,
+			Type:   plugin.PanelRemoteDesktop,
 			Source: &plugin.DataSource{RouteID: "vnc.desktop", Method: plugin.MethodWS},
-			Config: plugin.RemoteDesktopConfig{Resize: true}.Map(),
+			Config: plugin.RemoteDesktopConfig{Resize: true},
 		}},
 		Streams: []plugin.Stream{{ID: "vnc.desktop", Kind: plugin.StreamDesktop, RouteID: "vnc.desktop"}},
 		Recording: []plugin.RecordingCapability{{

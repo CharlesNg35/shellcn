@@ -79,16 +79,31 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.table.row.update", Method: plugin.MethodPatch, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.row.update", Handle: updateRow},
 		{ID: "cockroachdb.table.row.delete", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}/rows", Permission: "cockroachdb.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.row.delete", Handle: deleteRow},
 		{ID: "cockroachdb.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "cockroachdb.databases.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
+		{ID: "cockroachdb.database.drop", Method: plugin.MethodDelete, Path: "/databases/{database}", Permission: "cockroachdb.databases.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.database.drop", Handle: dropDatabase},
 		{ID: "cockroachdb.schema.create", Method: plugin.MethodPost, Path: "/schemas", Permission: "cockroachdb.schemas.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.schema.create", Input: schemaCreateSchema(), Handle: createSchema},
+		{ID: "cockroachdb.schema.drop", Method: plugin.MethodDelete, Path: "/schemas/{schema}", Permission: "cockroachdb.schemas.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.schema.drop", Handle: dropSchema},
 		{ID: "cockroachdb.table.create", Method: plugin.MethodPost, Path: "/schemas/{schema}/tables", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "cockroachdb.column.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "cockroachdb.column.rename", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/rename", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.column.rename", Input: columnRenameSchema(), Handle: renameColumn},
+		{ID: "cockroachdb.column.alter", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/alter", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.column.alter", Input: columnAlterSchema(), Handle: alterColumn},
 		{ID: "cockroachdb.column.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/columns/drop", Permission: "cockroachdb.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.column.drop", Handle: dropColumn},
+		{ID: "cockroachdb.constraint.add", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/constraints", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.constraint.add", Input: constraintAddSchema(), Handle: addConstraint},
+		{ID: "cockroachdb.constraint.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/constraints/drop", Permission: "cockroachdb.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.constraint.drop", Handle: dropConstraint},
+		{ID: "cockroachdb.table.rename", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/rename", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.table.rename", Input: tableRenameSchema(), Handle: renameTable},
 		{ID: "cockroachdb.index.create", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes", Permission: "cockroachdb.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.index.create", Input: indexCreateSchema(), Handle: createIndex},
 		{ID: "cockroachdb.index.drop", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/indexes/drop", Permission: "cockroachdb.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.index.drop", Handle: dropIndex},
 		{ID: "cockroachdb.table.truncate", Method: plugin.MethodPost, Path: "/tables/{schema}/{table}/truncate", Permission: "cockroachdb.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.truncate", Handle: truncateTable},
 		{ID: "cockroachdb.table.drop", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}", Permission: "cockroachdb.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.drop", Handle: dropTable},
 		{ID: "cockroachdb.query", Method: plugin.MethodWS, Path: "/query", Permission: "cockroachdb.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "cockroachdb.query", Stream: queryStream},
 		{ID: "cockroachdb.query.cancel", Method: plugin.MethodPost, Path: "/query/cancel", Permission: "cockroachdb.query.cancel", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.query.cancel", Handle: cancelQuery},
+		{ID: "cockroachdb.session.cancel", Method: plugin.MethodPost, Path: "/sessions/{id}/cancel", Permission: "cockroachdb.sessions.cancel", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.session.cancel", Handle: cancelSession},
+		{ID: "cockroachdb.query.cancel.id", Method: plugin.MethodPost, Path: "/queries/{id}/cancel", Permission: "cockroachdb.queries.cancel", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.query.cancel.id", Handle: cancelQueryByID},
+		{ID: "cockroachdb.users.list", Method: plugin.MethodGet, Path: "/users", Permission: "cockroachdb.users.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.users.list", Handle: listUsers},
+		{ID: "cockroachdb.users.tree", Method: plugin.MethodGet, Path: "/tree/users", Permission: "cockroachdb.users.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.users.tree", Handle: treeUsers},
+		{ID: "cockroachdb.user.overview", Method: plugin.MethodGet, Path: "/users/{user}/overview", Permission: "cockroachdb.users.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.user.overview", Handle: userOverview},
+		{ID: "cockroachdb.user.create", Method: plugin.MethodPost, Path: "/users", Permission: "cockroachdb.users.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.user.create", Input: userCreateSchema(), Handle: createUser},
+		{ID: "cockroachdb.user.drop", Method: plugin.MethodDelete, Path: "/users/{user}", Permission: "cockroachdb.users.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.user.drop", Handle: dropUser},
+		{ID: "cockroachdb.user.grant", Method: plugin.MethodPost, Path: "/users/{user}/grant", Permission: "cockroachdb.users.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.user.grant", Input: userGrantSchema(), Handle: grantUser},
 	}
 }
 
@@ -146,7 +161,7 @@ func createSchema(rc *plugin.RequestContext) (any, error) {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"id","type":"INT8 DEFAULT unique_rowid()","primary":true,"nullable":false}`},
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "INT8", TypeSuggestions: []string{"INT8", "INT8 DEFAULT unique_rowid()", "INT4", "INT2", "SERIAL", "DECIMAL(10,2)", "FLOAT8", "BOOL", "STRING", "VARCHAR(255)", "BYTES", "DATE", "TIMESTAMPTZ", "TIMESTAMP", "TIME", "UUID", "JSONB", "INTERVAL", "INET"}, Default: true, Primary: true, Unique: true}),
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
 }
@@ -165,6 +180,81 @@ func indexCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "cockroachdb.table.columns", Params: tableParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
+	}}}}
+}
+
+func columnRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename column", Fields: []plugin.Field{
+		{Key: "newName", Label: "New name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func columnAlterSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Change type", Fields: []plugin.Field{
+		{Key: "type", Label: "New type", Type: plugin.FieldText, Required: true, Default: "STRING"},
+		{Key: "using", Label: "USING expression", Type: plugin.FieldText, Help: "Optional cast expression, e.g. column::INT8."},
+	}}}}
+}
+
+func tableRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename table", Fields: []plugin.Field{
+		{Key: "newName", Label: "New name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func constraintAddSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
+		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "type", Label: "Type", Type: plugin.FieldSelect, Required: true, Default: constraintPrimaryKey, Options: []plugin.Option{
+			{Label: "Primary key", Value: constraintPrimaryKey},
+			{Label: "Unique", Value: constraintUnique},
+			{Label: "Check", Value: constraintCheck},
+			{Label: "Foreign key", Value: constraintForeignKey},
+		}},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, OptionsSource: &plugin.DataSource{RouteID: "cockroachdb.table.columns", Params: tableParams()}, Help: "Columns for primary key, unique, or the referencing side of a foreign key.", VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{
+			{Field: "type", Op: plugin.OpIn, Value: []any{constraintPrimaryKey, constraintUnique, constraintForeignKey}},
+		}}},
+		{Key: "check", Label: "Check expression", Type: plugin.FieldText, Help: "Boolean expression, e.g. price > 0.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintCheck}}}},
+		{Key: "refTable", Label: "Referenced table", Type: plugin.FieldText, Help: "Target table for a foreign key (schema-qualified or bare).", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
+		{Key: "refColumns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Comma-separated columns on the referenced table.", VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
+		{Key: "onDelete", Label: "On delete", Type: plugin.FieldSelect, Options: []plugin.Option{
+			{Label: "No action", Value: "NO ACTION"},
+			{Label: "Restrict", Value: "RESTRICT"},
+			{Label: "Cascade", Value: "CASCADE"},
+			{Label: "Set null", Value: "SET NULL"},
+			{Label: "Set default", Value: "SET DEFAULT"},
+		}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
+	}}}}
+}
+
+func userCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "User", Fields: []plugin.Field{
+		{Key: "name", Label: "Username", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, Help: "Optional. Leave blank to create a user without a password."},
+	}}}}
+}
+
+func userGrantSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Grant", Fields: []plugin.Field{
+		{Key: "target", Label: "Grant", Type: plugin.FieldSelect, Required: true, Default: grantTargetRole, Options: []plugin.Option{
+			{Label: "Role", Value: grantTargetRole},
+			{Label: "Database privilege", Value: grantTargetDatabase},
+			{Label: "Schema privilege", Value: grantTargetSchema},
+			{Label: "Table privilege", Value: grantTargetTable},
+		}},
+		{Key: "role", Label: "Role", Type: plugin.FieldText, Help: "Role to grant to the user.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "target", Op: plugin.OpEq, Value: grantTargetRole}}}},
+		{Key: "privilege", Label: "Privilege", Type: plugin.FieldSelect, Default: "ALL", Options: []plugin.Option{
+			{Label: "ALL", Value: "ALL"},
+			{Label: "SELECT", Value: "SELECT"},
+			{Label: "INSERT", Value: "INSERT"},
+			{Label: "UPDATE", Value: "UPDATE"},
+			{Label: "DELETE", Value: "DELETE"},
+			{Label: "CREATE", Value: "CREATE"},
+			{Label: "DROP", Value: "DROP"},
+			{Label: "CONNECT", Value: "CONNECT"},
+			{Label: "USAGE", Value: "USAGE"},
+		}, VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{{Field: "target", Op: plugin.OpIn, Value: []any{grantTargetDatabase, grantTargetSchema, grantTargetTable}}}}},
+		{Key: "object", Label: "Object", Type: plugin.FieldText, Help: "Database/schema name, or schema-qualified table (e.g. public.orders).", VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{{Field: "target", Op: plugin.OpIn, Value: []any{grantTargetDatabase, grantTargetSchema, grantTargetTable}}}}},
 	}}}}
 }
 
@@ -726,6 +816,10 @@ ORDER BY tc.constraint_name`, []any{schema, table})
 	if err != nil {
 		return nil, err
 	}
+	for i := range rows {
+		name := fmt.Sprint(rows[i]["name"])
+		rows[i]["ref"] = plugin.ResourceRef{Kind: "constraint", Scope: schema, Namespace: table, Name: name, UID: schema + "." + table + "." + name}
+	}
 	return pageRows(rc, rows)
 }
 
@@ -899,6 +993,35 @@ func createDatabase(rc *plugin.RequestContext) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+func dropDatabase(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	if name == s.opts.Database {
+		return nil, fmt.Errorf("%w: cannot drop the connected database", plugin.ErrForbidden)
+	}
+	if _, err := s.pool.Exec(rc.Ctx, "DROP DATABASE "+sqldb.QuoteIdent(name)); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropSchema(rc *plugin.RequestContext) (any, error) {
+	name, err := sqldb.SafeIdentifier(rc.Param("schema"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP SCHEMA "+sqldb.QuoteIdent(name))
+}
+
 func createTable(rc *plugin.RequestContext) (any, error) {
 	s, err := cockroachSession(rc)
 	if err != nil {
@@ -986,6 +1109,139 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.pool.Exec(rc.Ctx, "ALTER TABLE "+sqldb.Qualified(schema, table)+" DROP COLUMN "+sqldb.QuoteIdent(column)); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func renameColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		NewName string `json:"newName" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := renameColumnSQL(schema, table, rc.Param("name"), req.NewName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func alterColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Type  string `json:"type" validate:"required"`
+		Using string `json:"using"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := alterColumnTypeSQL(schema, table, rc.Param("name"), req.Type, req.Using)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func renameTable(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		NewName string `json:"newName" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := renameTableSQL(schema, table, req.NewName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func addConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req constraintRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := addConstraintSQL(schema, table, req)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.pool.Exec(rc.Ctx, stmt); err != nil {
+		return nil, cockroachErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	schema, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	stmt, err := dropConstraintSQL(schema, table, rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.pool.Exec(rc.Ctx, stmt); err != nil {
 		return nil, cockroachErr(err)
 	}
 	return actionResult{OK: true}, nil
@@ -1228,6 +1484,89 @@ func cancelQuery(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return actionResult{OK: s.cancelAll()}, nil
+}
+
+func cancelSession(rc *plugin.RequestContext) (any, error) {
+	stmt, err := cancelSessionSQL(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func cancelQueryByID(rc *plugin.RequestContext) (any, error) {
+	stmt, err := cancelQuerySQL(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func listUsers(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, s, `
+SELECT username AS name,
+       array_to_string(member_of, ', ') AS member_of,
+       options
+FROM [SHOW USERS]
+ORDER BY username`, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		name := fmt.Sprint(r["name"])
+		r["ref"] = plugin.ResourceRef{Kind: "user", Name: name, UID: name}
+	}
+	return pageRows(rc, rows)
+}
+
+func treeUsers(rc *plugin.RequestContext) (any, error) {
+	return treeFromPage(rc, "user", "user", "name", listUsers)
+}
+
+func userOverview(rc *plugin.RequestContext) (any, error) {
+	if _, err := sqldb.SafeIdentifier(rc.Param("user")); err != nil {
+		return nil, err
+	}
+	return overviewFromRows(rc, "user", "name", listUsers)
+}
+
+func createUser(rc *plugin.RequestContext) (any, error) {
+	var req userCreateRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := createUserSQL(req)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func dropUser(rc *plugin.RequestContext) (any, error) {
+	stmt, err := dropUserSQL(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func grantUser(rc *plugin.RequestContext) (any, error) {
+	var req grantRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	if req.User == "" {
+		req.User = rc.Param("user")
+	}
+	stmt, err := grantSQL(req)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
 }
 
 func queryStream(rc *plugin.RequestContext, client plugin.ClientStream) error {

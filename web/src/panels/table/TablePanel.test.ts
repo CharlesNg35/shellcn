@@ -677,6 +677,27 @@ describe("TablePanel staged edits", () => {
     w.unmount();
   });
 
+  it("toggles selection when the selection-column cell is clicked (not just the checkbox)", async () => {
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "docker.container.list" },
+        config: { columns, selectable: true },
+      },
+    });
+    await flushPromises();
+    const cell = w.find('td[data-p-selection-column="true"]');
+    expect(cell.exists()).toBe(true);
+    await cell.trigger("click");
+    // The cell padding toggles the row instead of navigating away.
+    expect(w.emitted("select")).toBeFalsy();
+    expect(
+      (w.findComponent({ name: "DataTable" }).props("selection") as unknown[])
+        .length,
+    ).toBe(1);
+    w.unmount();
+  });
+
   it("navigates on row-click when rowClick is navigate", async () => {
     const w = mount(TablePanel, {
       props: {

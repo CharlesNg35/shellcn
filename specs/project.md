@@ -333,9 +333,10 @@ type Action struct {
     OnSuccess   *ActionSuccess // optional declarative UI follow-up
     Open        OpenTarget // "view" (default, run the route) | "dock" | "dialog" | "url"
     Panel       PanelType  // panel to host when Open=dock/dialog (sourced from RouteID)
-    Config      map[string]any // panel config for the hosted Panel (e.g. a code_editor's saveRouteId), so a dock/dialog action can open an *editable* panel
+    Config      PanelConfig // typed config for the hosted Panel (e.g. a code_editor's saveRouteId), so a dock/dialog action can open an *editable* panel
     EnabledWhen *Condition // optional: gate the button on the active resource's row
     IconOnly    bool // render as the icon alone (Label becomes the tooltip) — presentation stays manifest-driven
+    Group       string // optional: cluster same-Group actions on a surface into one labelled dropdown menu
 }
 
 type ActionSuccess struct {
@@ -447,6 +448,15 @@ actions that always apply. Both render sites (detail header, table row actions)
 pass the row to the action bar; toolbar actions with no row record evaluate
 against an empty record, so only declare `EnabledWhen` on row-scoped actions.
 
+**Grouping & overflow.** By default each action renders as its own button. Actions
+that share a `Group` on a surface collapse into a single labelled dropdown menu
+(e.g. a container detail's lifecycle ops under `Lifecycle ▾`), and the renderer
+folds any standalone buttons past a small cap into a trailing `More ▾` menu — so
+a crowded surface stays tidy without per-plugin layout code. Selection (bulk) bars
+stay deliberately lean: a resource's `Row` actions are limited to destructive
+removal/termination (delete/drop/truncate/purge, or a single kill/cancel);
+lifecycle, edit, and single-item actions live on the detail header (`Detail`).
+
 ### 5.6 ResourceRef — stable identity vs display label
 
 ```go
@@ -505,7 +515,9 @@ type Group struct {
 
 type FieldType string // text, email, url, tel, number, stepper, slider,
                       // password, select, radio, multiselect, file, toggle,
-                      // textarea, json, duration, credential_ref
+                      // textarea, json, duration, credential_ref,
+                      // object (nested sub-form), array (repeatable rows),
+                      // autocomplete (free text + Options/OptionsSource suggestions)
 
 type Field struct {
     Key         string
@@ -522,6 +534,12 @@ type Field struct {
     VisibleWhen   *Condition  // structured — NOT a string expression
     Validators    []Validator // min/max/regex/oneOf, evaluated server-side too
     Step          any         // increment for number/slider (default 1)
+    Fields        []Field     // sub-fields of an "object" field
+    Item          *Field      // element descriptor of an "array" field (recurses)
+    MinItems      int         // array bounds (seed/keep this many rows)
+    MaxItems      int
+    ItemLabel     string      // singular row label, e.g. "Column"
+    AddLabel      string      // "+" button label (default "Add")
 }
 
 type CredentialKind string // ssh_private_key, ssh_password, kubeconfig, tls_client_cert, db_password, api_token, ...
@@ -572,6 +590,24 @@ action that opens `PanelCodeEditor` in a dialog; a `json` field is for structure
 input that lives **alongside other fields** in a form (e.g. a _Create table_ form's
 `columns` next to its `name`). Both paths are plugin-agnostic — the plugin only
 declares the field/config; the renderer owns the editor and the round-trip.
+
+**Composite (`object`/`array`) fields.** For structured input that would otherwise
+be a hand-typed `json` blob, a field declares `object` (a nested sub-form whose
+sub-fields are `Fields`) or `array` (a repeatable list whose element is `Item`,
+which recurses — so an array of objects is the common "rows" case). The renderer
+turns an `array` into a bordered, keyboard-accessible row list with a **"+ Add"**
+control (labelled by `AddLabel`/`ItemLabel`) and per-row remove, honouring
+`MinItems`/`MaxItems`; an `array` of `object` items gives the full form-builder
+(e.g. _Create table_ columns: each row a `name` text + `type` select + `nullable`
+toggle). The submitted body is the **nested value** (`columns: [{name,type,…}]`),
+identical to what the JSON path produced, so handlers that bind `any` are
+unchanged. Nested `VisibleWhen`/`Validators`/`Required` are evaluated per element
+against that element's own values. Every field type — including `select`,
+`multiselect`, and `optionsSource` route-sourced choices — is available inside a
+composite, since the element is just another `Field`. This is the structured,
+type-safe replacement for the JSON-textarea pattern; a bare `json` field remains
+for genuinely freeform documents (a query, a raw policy) where a builder doesn't
+help.
 
 **Route-sourced choices.** A `select`/`radio`/`multiselect` field may set
 `OptionsSource` instead of (or in addition to) static `Options`: the renderer
@@ -697,9 +733,10 @@ from the selected kind.
 ```go
 type Layout string
 const (
-    LayoutTabs        Layout = "tabs"         // flat: SSH, Redis, VNC
+    LayoutTabs        Layout = "tabs"         // flat: SSH, Redis (a top tab bar)
     LayoutSidebarTree Layout = "sidebar_tree" // hierarchical: Docker, K8s, Proxmox, SQL
     LayoutDashboard   Layout = "dashboard"    // grid: every Tab panel shown at once
+    LayoutSingle      Layout = "single"       // one full-bleed panel, no tab bar: VNC, RDP, SFTP, Telnet
 )
 
 // Workbench primitives (all generic / cross-plugin — no per-plugin frontend):
@@ -716,6 +753,11 @@ const (
 //     knows its ref, and state-dependent UI can't evaluate.
 //   - The sidebar_tree workspace keeps MULTIPLE open views as a closable tab strip
 //     (details + lists), not one selection at a time — switch/close, state kept.
+//   - The ACTIVE location syncs to the URL (`/c/:id?v=…`): the top tab (tabs layout)
+//     or the active workbench view (sidebar_tree), encoded self-sufficiently so
+//     browser Back/Forward walk the visited resources and a pasted/refreshed link
+//     restores the view. Navigation is query-only (same `/c/:id`), so the workspace
+//     never remounts — live terminals/streams survive. single/dashboard carry no `v`.
 //   - MetricsConfig drives the metrics panel (stat cards, gauges, time-series)
 //     entirely from declared field keys; the renderer hardcodes none.
 //   - TerminalConfig opts a terminal panel into zoom and/or scrollback search;
@@ -761,14 +803,24 @@ string must resolve, since a blank would corrupt the value, so that errors
 loudly. The resolver special-cases no field name — only the token structure.
 
 ```go
-type Tab struct {
+// Panel is one renderable panel — a detail/connection tab OR a dashboard cell
+// (they are the same shape, so there is one type). Config holds a typed config
+// struct (TableConfig, MetricsConfig, …) — see PanelConfig below.
+type Panel struct {
     Key    string
     Label  string
     Icon   Icon
-    Panel  PanelType
-    Source DataSource     // RouteID-based; never a raw path
-    Config map[string]any // panel options (language, scale mode, columns…)
+    Type   PanelType   // wire key "panel"
+    Source *DataSource // RouteID-based; never a raw path
+    Config PanelConfig // a typed config struct, set directly (no .Map())
+    Span   int         // dashboard layout hint (>=2 fills the row)
 }
+
+// PanelConfig is a sealed interface every config struct implements, so Config
+// accepts only a real config — never arbitrary data. Plugins assign the struct
+// directly (Config: TableConfig{…}); JSON marshalling produces the same wire
+// object the renderer reads, so there is no hand-written .Map() ceremony.
+type PanelConfig interface{ /* sealed: TableConfig, MetricsConfig, … */ }
 
 type TableConfig struct {
     Columns      []Column
@@ -1046,47 +1098,44 @@ the choice is stored in user preferences. The default is a suggestion, not a loc
 
 ```go
 type ResourceType struct {
-    Kind          string       // matches ResourceRef.Kind
+    Kind          string          // matches ResourceRef.Kind
     Title         string
-    List          DataSource   // route → Page[Row]
-    Watch         *DataSource  // optional WS route → stream of ResourceEvent (§7.3)
-    Columns       []Column     // static columns
-    ColumnsSource *DataSource  // optional: route → Page[Row] of column defs {name,label} when columns are only known at runtime (leave Columns empty). The list's scoping params are merged in.
-    ActionIDs     []string     // the resource's actions — shown in the detail header (mirror into DetailView.Header.ActionIDs); NOT list-row actions
-    ListActionIDs []string     // list toolbar actions (no row context, e.g. create/prune); inherit the list's scope params
-    RowActionIDs  []string     // selected-row actions; declaring any makes the list's rows selectable. Omit → rows aren't selectable and a row click opens the detail.
-    Selectable    bool         // makes rows selectable (checkboxes) WITHOUT a row-action bar — a browse table whose actions live in the detail view. Implied by RowActionIDs.
-    Detail        DetailView   // opened when a row is clicked
+    List          DataSource      // route → Page[Row]
+    Watch         *DataSource     // optional WS route → stream of ResourceEvent (§7.3)
+    Columns       []Column        // static columns
+    ColumnsSource *DataSource     // optional: route → column defs {name,label} when only known at runtime
+    Actions       ResourceActions // this resource's actions, grouped by render surface
+    Detail        DetailView      // opened when a row is clicked
+}
+
+// ResourceActions groups a resource's action IDs by the one surface each renders
+// on — the single, non-overlapping action contract for a resource.
+type ResourceActions struct {
+    Toolbar    []string // list toolbar (no row context): create, prune
+    Row        []string // bulk over selected rows (delete); declaring any makes rows selectable
+    Detail     []string // the one open resource, in its detail header
+    Selectable bool     // row checkboxes without a row bar; Row implies it
 }
 
 type DetailView struct {
-    Header     HeaderSpec // title, status badge, action buttons
+    Header     HeaderSpec // title + status badge (actions come from ResourceActions.Detail)
     DefaultTab string     // optional initial tab key; must reference Tabs
-    Tabs       []Tab      // resource-level panels (Overview/Console/Logs/Config…)
+    Tabs       []Panel    // resource-level panels (Overview/Console/Logs/Config…)
 }
 ```
 
 This single model expresses K8s, Proxmox, Docker, and SQL schema browsers
 identically — the data differs, the renderer does not.
 
-**Three action render sites, three fields.** Each set lands in exactly one place,
-generically: `ListActionIDs` → the list **toolbar** (no row context); `RowActionIDs`
-→ the **selected-row** bar — and declaring any is what makes the rows selectable
-(checkbox/multi-select); `ActionIDs` → the resource's **detail header**. Row actions
-are opt-in: a resource that omits `RowActionIDs` has non-selectable rows, so a row
-click opens the detail rather than selecting it. A resource's lifecycle actions
-(start/stop/restart/open/remove) therefore belong in `ActionIDs` (mirrored into
-`DetailView.Header.ActionIDs`), **not** in `RowActionIDs` — they surface in the
-detail view, not on list selection. The renderer never infers row actions from
-`ActionIDs`; the three fields stay independent so the same manifest reads the same
-everywhere.
-
-**Selectable without a row-action bar.** A browse table that wants row checkboxes
-but keeps its actions in the detail view sets `Selectable: true` (also on
-`TableConfig`). It decouples selectability from `RowActionIDs`: rows get checkboxes
-and a row-body click still opens the detail, but no selected-row action bar
-appears. `RowActionIDs` implies it. This is the default for the container/engine
-browse tables (docker/podman/swarm) — select to focus, act in the detail.
+**One action block, three surfaces.** A resource declares its actions once, in
+`Actions`, grouped by where the renderer shows them — no overlap, no duplication.
+`Toolbar` → the list toolbar (no row); `Row` → the selected-row **bulk** bar, and
+declaring any is what makes rows selectable; `Detail` → the open resource's detail
+header; `Selectable` → row checkboxes without a row bar (a browse table whose
+actions live in the detail). `Row` implies `Selectable`. Per-item lifecycle
+(start/stop/restart/open) lives in `Detail`; a bulk delete goes in `Row`. The
+container/engine browse tables (docker/podman/swarm) are selectable with a
+delete-only row bar and everything else in the detail.
 
 `DefaultTab` lets a plugin choose which tab a resource detail opens first while
 keeping the tab list fully declarative. It is a view preference only: users can

@@ -2,7 +2,9 @@ package mssql
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/url"
 	"os"
@@ -56,6 +58,19 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	}
 	if !pageHasName(databases.(plugin.Page[row]), createdDatabase) {
 		t.Fatalf("created database was not listed: %#v", databases)
+	}
+
+	// Drop the database through the handler (forces SINGLE_USER first).
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"database": createdDatabase}, nil, nil)); err != nil {
+		t.Fatalf("drop database: %v", err)
+	}
+	var dbExists int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sys.databases WHERE name = @p1`, createdDatabase).Scan(&dbExists); err != nil || dbExists != 0 {
+		t.Fatalf("expected database dropped, got %d err=%v", dbExists, err)
+	}
+	// Dropping the connected database must be refused.
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"database": s.opts.Database}, nil, nil)); err == nil {
+		t.Fatal("dropping the connected database must be rejected")
 	}
 
 	seed(ctx, t, s)
@@ -182,6 +197,61 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
 	}
 
+	// Schema create + drop within the database.
+	if _, err := createSchema(rowMutationRC(ctx, s, map[string]string{"database": "shellcn"}, map[string]any{"name": "app"})); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	var schemaCount int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.schemas WHERE name = 'app'`).Scan(&schemaCount); err != nil || schemaCount != 1 {
+		t.Fatalf("expected schema app created, got %d err=%v", schemaCount, err)
+	}
+	if _, err := dropSchema(rowMutationRC(ctx, s, map[string]string{"database": "shellcn", "schema": "app"}, nil)); err != nil {
+		t.Fatalf("drop schema: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.schemas WHERE name = 'app'`).Scan(&schemaCount); err != nil || schemaCount != 0 {
+		t.Fatalf("expected schema app dropped, got %d err=%v", schemaCount, err)
+	}
+
+	// Alter column: widen and toggle nullability of the people.name column.
+	if _, err := alterColumn(rowMutationRC(ctx, s, params, map[string]any{"name": "name", "type": "nvarchar(512)", "nullable": true})); err != nil {
+		t.Fatalf("alter column: %v", err)
+	}
+	var maxLen int
+	var isNullable bool
+	if err := s.db.QueryRowContext(ctx, `SELECT c.max_length, c.is_nullable FROM [shellcn].sys.columns c JOIN [shellcn].sys.objects o ON o.object_id = c.object_id JOIN [shellcn].sys.schemas sc ON sc.schema_id = o.schema_id WHERE sc.name = 'dbo' AND o.name = 'people' AND c.name = 'name'`).Scan(&maxLen, &isNullable); err != nil {
+		t.Fatalf("read altered column: %v", err)
+	}
+	if maxLen != 1024 || !isNullable {
+		t.Fatalf("expected nvarchar(512) NULL (max_length 1024, nullable), got max_length=%d nullable=%v", maxLen, isNullable)
+	}
+
+	// Constraint add (UNIQUE) + drop on the people table.
+	if _, err := addConstraint(rowMutationRC(ctx, s, params, map[string]any{"name": "uq_people_name", "type": "UNIQUE", "columns": "name"})); err != nil {
+		t.Fatalf("add constraint: %v", err)
+	}
+	var constraintCount int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.key_constraints WHERE name = 'uq_people_name'`).Scan(&constraintCount); err != nil || constraintCount != 1 {
+		t.Fatalf("expected constraint uq_people_name created, got %d err=%v", constraintCount, err)
+	}
+	if _, err := dropConstraint(rowMutationRC(ctx, s, map[string]string{"id": objectID("shellcn", "dbo", "people"), "name": "uq_people_name"}, nil)); err != nil {
+		t.Fatalf("drop constraint: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.key_constraints WHERE name = 'uq_people_name'`).Scan(&constraintCount); err != nil || constraintCount != 0 {
+		t.Fatalf("expected constraint uq_people_name dropped, got %d err=%v", constraintCount, err)
+	}
+
+	// Rename table people -> humans, then back so later assertions still match.
+	if _, err := renameTable(rowMutationRC(ctx, s, params, map[string]any{"name": "humans"})); err != nil {
+		t.Fatalf("rename table: %v", err)
+	}
+	var renamed int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.objects o JOIN [shellcn].sys.schemas sc ON sc.schema_id = o.schema_id WHERE sc.name = 'dbo' AND o.name = 'humans'`).Scan(&renamed); err != nil || renamed != 1 {
+		t.Fatalf("expected table renamed to humans, got %d err=%v", renamed, err)
+	}
+	if _, err := renameTable(rowMutationRC(ctx, s, map[string]string{"id": objectID("shellcn", "dbo", "humans")}, map[string]any{"name": "people"})); err != nil {
+		t.Fatalf("rename table back: %v", err)
+	}
+
 	// Foreign-key cells carry generic _links to the referenced table.
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE [shellcn].[dbo].[orders] (id bigint IDENTITY(1,1) PRIMARY KEY, person_id bigint REFERENCES [shellcn].[dbo].[people](id))`); err != nil {
 		t.Fatalf("create child table: %v", err)
@@ -204,6 +274,102 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	}
 	if !hasEdge(graph.(sqldb.GraphPayload), "dbo.orders", "dbo.people") {
 		t.Fatalf("expected FK edge orders -> people, got %#v", graph)
+	}
+
+	exerciseUserManagement(ctx, t, s)
+	exerciseJobControl(ctx, t, s)
+}
+
+// exerciseUserManagement round-trips create -> grant -> drop for a contained
+// database user in the seeded shellcn database.
+func exerciseUserManagement(ctx context.Context, t *testing.T, s *Session) {
+	t.Helper()
+	userName := "shellcn_user_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "USE [shellcn]; EXEC("+quoteLiteral("DROP USER IF EXISTS "+quoteIdent(userName))+")")
+	})
+
+	if _, err := createUser(rowMutationRC(ctx, s, nil, map[string]any{"database": "shellcn", "name": userName})); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	var userCount int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.database_principals WHERE name = @p1`, userName).Scan(&userCount); err != nil || userCount != 1 {
+		t.Fatalf("expected user %s created, got %d err=%v", userName, userCount, err)
+	}
+
+	grantParams := map[string]string{"database": "shellcn", "user": userName}
+	if _, err := grantUser(rowMutationRC(ctx, s, grantParams, map[string]any{"permission": "SELECT"})); err != nil {
+		t.Fatalf("grant user: %v", err)
+	}
+	var granted int
+	if err := s.db.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM [shellcn].sys.database_permissions p
+JOIN [shellcn].sys.database_principals dp ON dp.principal_id = p.grantee_principal_id
+WHERE dp.name = @p1 AND p.permission_name = 'SELECT' AND p.state_desc = 'GRANT'`, userName).Scan(&granted); err != nil || granted == 0 {
+		t.Fatalf("expected SELECT granted to %s, got %d err=%v", userName, granted, err)
+	}
+
+	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, grantParams, nil, nil)); err != nil {
+		t.Fatalf("drop user: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.database_principals WHERE name = @p1`, userName).Scan(&userCount); err != nil || userCount != 0 {
+		t.Fatalf("expected user %s dropped, got %d err=%v", userName, userCount, err)
+	}
+}
+
+// exerciseJobControl creates a throwaway SQL Agent job, then runs the
+// enable/disable/start handlers against it. SQL Agent may be unavailable on
+// some images; in that case the job-create step is skipped rather than failed.
+func exerciseJobControl(ctx context.Context, t *testing.T, s *Session) {
+	t.Helper()
+	jobNameValue := "shellcn_job_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if _, err := s.db.ExecContext(ctx, "EXEC msdb.dbo.sp_add_job @job_name = @job_name, @enabled = 1", sql.Named("job_name", jobNameValue)); err != nil {
+		t.Skipf("SQL Agent unavailable, skipping job control: %v", err)
+		return
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "EXEC msdb.dbo.sp_delete_job @job_name = @job_name", sql.Named("job_name", jobNameValue))
+	})
+
+	enabledOf := func() bool {
+		var enabled bool
+		if err := s.db.QueryRowContext(ctx, `SELECT enabled FROM msdb.dbo.sysjobs WHERE name = @p1`, jobNameValue).Scan(&enabled); err != nil {
+			t.Fatalf("read job enabled: %v", err)
+		}
+		return enabled
+	}
+
+	jobParams := map[string]string{"name": jobNameValue}
+	if _, err := disableJob(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil {
+		t.Fatalf("disable job: %v", err)
+	}
+	if enabledOf() {
+		t.Fatal("expected job disabled")
+	}
+	if _, err := enableJob(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil {
+		t.Fatalf("enable job: %v", err)
+	}
+	if !enabledOf() {
+		t.Fatal("expected job enabled")
+	}
+	// The job has no steps/server target, so a start request may legitimately
+	// fail; assert only that the handler reaches the procedure without a
+	// parameter/validation error.
+	if _, err := startJob(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil && !errors.Is(err, plugin.ErrUnavailable) {
+		t.Fatalf("start job: unexpected error class: %v", err)
+	}
+
+	// The job list surfaces the created job and scans enabled as a bool.
+	jobs, err := listJobs(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if !pageHasName(jobs.(plugin.Page[row]), jobNameValue) {
+		t.Fatalf("created job not listed: %#v", jobs)
 	}
 }
 

@@ -3,12 +3,16 @@ package swarm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"regexp"
 	"testing"
+
+	"github.com/moby/moby/api/types/swarm"
 
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
@@ -35,7 +39,7 @@ func TestManifestDeclaresSwarmWorkspace(t *testing.T) {
 	}
 	for _, res := range m.Resources {
 		for _, tab := range res.Detail.Tabs {
-			if tab.Panel == plugin.PanelHTTPClient {
+			if tab.Type == plugin.PanelHTTPClient {
 				t.Fatalf("swarm should not expose a raw API panel: resource=%s tab=%s", res.Kind, tab.Key)
 			}
 		}
@@ -99,6 +103,87 @@ func TestRoutesAgainstFakeSwarmDaemon(t *testing.T) {
 	stack := stacks.(plugin.Page[dockerengine.Row])
 	if len(stack.Items) != 1 || stack.Items[0]["name"] != "demo" || stack.Items[0]["services"] != 1 {
 		t.Fatalf("stack row unexpected: %+v", stack.Items)
+	}
+}
+
+func u64(v uint64) *uint64 { return &v }
+
+func TestParseAvailability(t *testing.T) {
+	for _, in := range []string{"active", "PAUSE", " drain "} {
+		if _, err := parseAvailability(in); err != nil {
+			t.Fatalf("parseAvailability(%q): %v", in, err)
+		}
+	}
+	if _, err := parseAvailability("offline"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("parseAvailability(offline) err = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestParseRole(t *testing.T) {
+	if r, err := parseRole("Manager"); err != nil || r != swarm.NodeRoleManager {
+		t.Fatalf("parseRole(Manager) = %q, %v", r, err)
+	}
+	if _, err := parseRole("leader"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("parseRole(leader) err = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestParseEnv(t *testing.T) {
+	got, err := parseEnv("FOO=bar\n\n  BAZ=qux  \n")
+	if err != nil {
+		t.Fatalf("parseEnv: %v", err)
+	}
+	want := []string{"FOO=bar", "BAZ=qux"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseEnv = %#v, want %#v", got, want)
+	}
+	if _, err := parseEnv("noequals"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("parseEnv(noequals) err = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestApplyServiceUpdate(t *testing.T) {
+	env := "A=1\nB=2"
+	spec := swarm.ServiceSpec{
+		TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.0"}},
+		Mode:         swarm.ServiceMode{Replicated: &swarm.ReplicatedService{Replicas: u64(1)}},
+	}
+	if err := applyServiceUpdate(&spec, serviceUpdateRequest{Image: "nginx:2.0", Env: &env, Replicas: u64(5)}); err != nil {
+		t.Fatalf("applyServiceUpdate: %v", err)
+	}
+	if spec.TaskTemplate.ContainerSpec.Image != "nginx:2.0" {
+		t.Fatalf("image = %q", spec.TaskTemplate.ContainerSpec.Image)
+	}
+	if got := *spec.Mode.Replicated.Replicas; got != 5 {
+		t.Fatalf("replicas = %d, want 5", got)
+	}
+	if !reflect.DeepEqual(spec.TaskTemplate.ContainerSpec.Env, []string{"A=1", "B=2"}) {
+		t.Fatalf("env = %#v", spec.TaskTemplate.ContainerSpec.Env)
+	}
+}
+
+func TestApplyServiceUpdateNoChange(t *testing.T) {
+	spec := swarm.ServiceSpec{TaskTemplate: swarm.TaskSpec{ContainerSpec: &swarm.ContainerSpec{Image: "nginx:1.0"}}}
+	if err := applyServiceUpdate(&spec, serviceUpdateRequest{}); err != nil {
+		t.Fatalf("applyServiceUpdate: %v", err)
+	}
+	if spec.TaskTemplate.ContainerSpec.Image != "nginx:1.0" {
+		t.Fatalf("image changed unexpectedly: %q", spec.TaskTemplate.ContainerSpec.Image)
+	}
+}
+
+func TestApplyServiceUpdateReplicasOnGlobalFails(t *testing.T) {
+	spec := swarm.ServiceSpec{Mode: swarm.ServiceMode{Global: &swarm.GlobalService{}}}
+	if err := applyServiceUpdate(&spec, serviceUpdateRequest{Replicas: u64(3)}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("err = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestStampStackNamespace(t *testing.T) {
+	spec := swarm.ServiceSpec{}
+	stampStackNamespace(&spec, "demo")
+	if spec.Labels[stackNamespaceLabel] != "demo" {
+		t.Fatalf("namespace label = %q", spec.Labels[stackNamespaceLabel])
 	}
 }
 

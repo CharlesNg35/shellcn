@@ -25,8 +25,8 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Config:              configSchema(),
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutTabs,
-		Tabs:                []plugin.Tab{filesTab()},
+		Layout:              plugin.LayoutSingle,
+		Tabs:                []plugin.Panel{filesTab()},
 	}
 }
 
@@ -61,10 +61,10 @@ func configSchema() plugin.Schema {
 	}}
 }
 
-func filesTab() plugin.Tab {
-	return plugin.Tab{
+func filesTab() plugin.Panel {
+	return plugin.Panel{
 		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
-		Panel:  plugin.PanelFileBrowser,
+		Type:   plugin.PanelFileBrowser,
 		Source: &plugin.DataSource{RouteID: "sftp.sftp.list", Params: map[string]string{"path": "."}},
 		Config: plugin.FileBrowserConfig{
 			PathParam:       "path",
@@ -75,10 +75,14 @@ func filesTab() plugin.Tab {
 			MkdirRouteID:    "sftp.sftp.mkdir",
 			RenameRouteID:   "sftp.sftp.rename",
 			DeleteRouteID:   "sftp.sftp.delete",
+			MoveRouteID:     "sftp.sftp.move",
+			CopyRouteID:     "sftp.sftp.copy",
+			ChmodRouteID:    "sftp.sftp.chmod",
+			ArchiveRouteID:  "sftp.sftp.archive",
 			Writable:        true,
 			MultipleUpload:  true,
 			MaxUploadBytes:  52428800,
 			UploadFieldName: "files",
-		}.Map(),
+		},
 	}
 }

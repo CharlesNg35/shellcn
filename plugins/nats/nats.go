@@ -52,21 +52,27 @@ func resources() []plugin.ResourceType {
 	return []plugin.ResourceType{
 		{
 			Kind: "stream", Title: "Streams", List: plugin.DataSource{RouteID: "nats.streams.list"},
-			Columns:       streamColumns(),
-			ListActionIDs: []string{"nats.stream.create"},
-			RowActionIDs:  []string{"nats.stream.purge", "nats.stream.delete"},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{"nats.message.publish", "nats.stream.purge", "nats.stream.delete"}}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "nats.stream.overview", Params: map[string]string{"stream": "${resource.name}"}}},
-				{Key: "messages", Label: "Messages", Icon: icon("mail"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "nats.messages.list", Params: map[string]string{"stream": "${resource.name}"}}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"nats.message.publish"}, RowActionIDs: []string{"nats.message.delete"}, Exportable: true}.Map()},
-				{Key: "consumers", Label: "Consumers", Icon: icon("users"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "nats.consumers.list", Params: map[string]string{"stream": "${resource.name}"}}, Config: plugin.TableConfig{Columns: consumerColumns(), ActionIDs: []string{"nats.consumer.create"}, RowActionIDs: []string{"nats.consumer.delete"}, Exportable: true}.Map()},
+			Columns: streamColumns(),
+			Actions: plugin.ResourceActions{
+				Toolbar: []string{"nats.stream.create"},
+				Row:     []string{"nats.stream.purge", "nats.stream.delete"},
+				Detail:  []string{"nats.message.publish", "nats.stream.update", "nats.stream.purge", "nats.stream.delete"},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "nats.stream.overview", Params: map[string]string{"stream": "${resource.name}"}}},
+				{Key: "messages", Label: "Messages", Icon: icon("mail"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "nats.messages.list", Params: map[string]string{"stream": "${resource.name}"}}, Config: plugin.TableConfig{Columns: messageColumns(), ActionIDs: []string{"nats.message.publish"}, RowActionIDs: []string{"nats.message.delete"}, Exportable: true}},
+				{Key: "consumers", Label: "Consumers", Icon: icon("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "nats.consumers.list", Params: map[string]string{"stream": "${resource.name}"}}, Config: plugin.TableConfig{Columns: consumerColumns(), ActionIDs: []string{"nats.consumer.create"}, RowActionIDs: []string{"nats.consumer.delete"}, Exportable: true}},
 			}},
 		},
 		{
 			Kind: "consumer", Title: "Consumers", List: plugin.DataSource{RouteID: "nats.consumers.list"},
-			Columns:      consumerColumns(),
-			RowActionIDs: []string{"nats.consumer.delete"},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}", ActionIDs: []string{"nats.consumer.delete"}}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "nats.consumer.overview", Params: map[string]string{"stream": "${resource.namespace}", "consumer": "${resource.name}"}}},
+			Columns: consumerColumns(),
+			Actions: plugin.ResourceActions{
+				Row:    []string{"nats.consumer.delete"},
+				Detail: []string{"nats.consumer.delete"},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "nats.consumer.overview", Params: map[string]string{"stream": "${resource.namespace}", "consumer": "${resource.name}"}}},
 			}},
 		},
 	}
@@ -75,6 +81,7 @@ func resources() []plugin.ResourceType {
 func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "nats.stream.create", Label: "Create stream", Icon: icon("plus"), RouteID: "nats.stream.create"},
+		{ID: "nats.stream.update", Label: "Edit", Icon: icon("pencil"), RouteID: "nats.stream.update", Params: map[string]string{"stream": "${resource.name}"}},
 		{ID: "nats.stream.purge", Label: "Purge", Icon: icon("eraser"), RouteID: "nats.stream.purge", Params: map[string]string{"stream": "${resource.name}"}, Confirm: true, ConfirmText: "Purge every message in this stream?"},
 		{ID: "nats.stream.delete", Label: "Delete", Icon: icon("trash-2"), RouteID: "nats.stream.delete", Params: map[string]string{"stream": "${resource.name}"}, Confirm: true, ConfirmText: "Delete this stream?"},
 		{ID: "nats.consumer.create", Label: "Create consumer", Icon: icon("plus"), RouteID: "nats.consumer.create", Params: map[string]string{"stream": "${resource.name}"}},

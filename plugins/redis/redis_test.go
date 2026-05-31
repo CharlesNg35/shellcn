@@ -36,14 +36,14 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	if err := plugin.Validate(m, New().Routes()); err != nil {
 		t.Fatalf("manifest invalid: %v", err)
 	}
-	var console *plugin.Tab
+	var console *plugin.Panel
 	for i := range m.Tabs {
 		if m.Tabs[i].Key == "console" {
 			console = &m.Tabs[i]
 			break
 		}
 	}
-	if console == nil || console.Panel != plugin.PanelTerminal || console.Source == nil || console.Source.RouteID != "redis.terminal" {
+	if console == nil || console.Type != plugin.PanelTerminal || console.Source == nil || console.Source.RouteID != "redis.terminal" {
 		t.Fatalf("console should be a terminal panel backed by redis.terminal, got %+v", console)
 	}
 }

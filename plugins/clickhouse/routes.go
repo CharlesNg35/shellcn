@@ -22,7 +22,8 @@ import (
 type row map[string]any
 
 type actionResult struct {
-	OK bool `json:"ok"`
+	OK      bool   `json:"ok"`
+	Message string `json:"message,omitempty"`
 }
 
 type confirmationError struct {
@@ -30,6 +31,8 @@ type confirmationError struct {
 }
 
 func (e confirmationError) Error() string { return e.message }
+
+var dialect = sqldb.Dialect{QuoteIdent: quoteIdent, Placeholder: sqldb.QuestionPlaceholder}
 
 func routes() []plugin.Route {
 	return []plugin.Route{
@@ -56,6 +59,9 @@ func routes() []plugin.Route {
 		{ID: "clickhouse.users.list", Method: plugin.MethodGet, Path: "/users", Permission: "clickhouse.users.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.users.list", Handle: listUsers},
 		{ID: "clickhouse.user.overview", Method: plugin.MethodGet, Path: "/users/{user}/overview", Permission: "clickhouse.users.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.user.overview", Handle: userOverview},
 		{ID: "clickhouse.table.rows", Method: plugin.MethodGet, Path: "/tables/{database}/{table}/rows", Permission: "clickhouse.tables.data.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.table.rows", Handle: tableRows},
+		{ID: "clickhouse.table.row.insert", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/rows", Permission: "clickhouse.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.table.row.insert", Handle: insertRow},
+		{ID: "clickhouse.table.row.update", Method: plugin.MethodPatch, Path: "/tables/{database}/{table}/rows", Permission: "clickhouse.tables.data.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.row.update", Handle: updateRow},
+		{ID: "clickhouse.table.row.delete", Method: plugin.MethodDelete, Path: "/tables/{database}/{table}/rows", Permission: "clickhouse.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.row.delete", Handle: deleteRow},
 		{ID: "clickhouse.view.rows", Method: plugin.MethodGet, Path: "/views/{database}/{table}/rows", Permission: "clickhouse.views.data.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.view.rows", Handle: tableRows},
 		{ID: "clickhouse.table.columns", Method: plugin.MethodGet, Path: "/tables/{database}/{table}/columns", Permission: "clickhouse.tables.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.table.columns", Handle: tableColumnsRoute},
 		{ID: "clickhouse.table.indexes", Method: plugin.MethodGet, Path: "/tables/{database}/{table}/indexes", Permission: "clickhouse.tables.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.table.indexes", Handle: tableIndexes},
@@ -64,12 +70,25 @@ func routes() []plugin.Route {
 		{ID: "clickhouse.view.definition", Method: plugin.MethodGet, Path: "/views/{database}/{table}/definition", Permission: "clickhouse.views.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.view.definition", Handle: tableDefinition},
 		{ID: "clickhouse.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "clickhouse.databases.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.completion", Handle: completionRoute},
 		{ID: "clickhouse.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "clickhouse.databases.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
+		{ID: "clickhouse.database.drop", Method: plugin.MethodDelete, Path: "/databases/{database}", Permission: "clickhouse.databases.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.database.drop", Handle: dropDatabase},
 		{ID: "clickhouse.table.create", Method: plugin.MethodPost, Path: "/databases/{database}/tables", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.table.create", Input: tableCreateSchema(), Handle: createTable},
+		{ID: "clickhouse.table.rename", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/rename", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.table.rename", Input: tableRenameSchema(), Handle: renameTable},
 		{ID: "clickhouse.column.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "clickhouse.column.alter", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/alter", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.column.alter", Input: columnAlterSchema(), Handle: alterColumn},
 		{ID: "clickhouse.column.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.column.drop", Handle: dropColumn},
+		{ID: "clickhouse.index.create", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.index.create", Input: indexCreateSchema(), Handle: createIndex},
 		{ID: "clickhouse.index.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.index.drop", Handle: dropIndex},
+		{ID: "clickhouse.constraint.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/constraints", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.constraint.add", Input: constraintAddSchema(), Handle: addConstraint},
+		{ID: "clickhouse.constraint.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/constraints/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.constraint.drop", Handle: dropConstraint},
 		{ID: "clickhouse.table.truncate", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/truncate", Permission: "clickhouse.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.truncate", Handle: truncateTable},
 		{ID: "clickhouse.table.drop", Method: plugin.MethodDelete, Path: "/tables/{database}/{table}", Permission: "clickhouse.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.drop", Handle: dropTable},
+		{ID: "clickhouse.process.kill", Method: plugin.MethodPost, Path: "/processes/{id}/kill", Permission: "clickhouse.processes.kill", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.process.kill", Handle: killProcess},
+		{ID: "clickhouse.mutation.kill", Method: plugin.MethodPost, Path: "/mutations/{database}/{table}/{id}/kill", Permission: "clickhouse.mutations.kill", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.mutation.kill", Handle: killMutation},
+		{ID: "clickhouse.merge.stop", Method: plugin.MethodPost, Path: "/merges/{database}/{table}/stop", Permission: "clickhouse.merges.control", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.merge.stop", Handle: stopMerges},
+		{ID: "clickhouse.merge.start", Method: plugin.MethodPost, Path: "/merges/{database}/{table}/start", Permission: "clickhouse.merges.control", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.merge.start", Handle: startMerges},
+		{ID: "clickhouse.user.create", Method: plugin.MethodPost, Path: "/users", Permission: "clickhouse.users.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.user.create", Input: userCreateSchema(), Handle: createUser},
+		{ID: "clickhouse.user.grant", Method: plugin.MethodPost, Path: "/users/{user}/grant", Permission: "clickhouse.users.write", Risk: plugin.RiskPrivileged, AuditEvent: "clickhouse.user.grant", Input: userGrantSchema(), Handle: grantUser},
+		{ID: "clickhouse.user.drop", Method: plugin.MethodDelete, Path: "/users/{user}", Permission: "clickhouse.users.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.user.drop", Handle: dropUser},
 		{ID: "clickhouse.query", Method: plugin.MethodWS, Path: "/query", Permission: "clickhouse.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "clickhouse.query", Stream: queryStream},
 		{ID: "clickhouse.query.cancel", Method: plugin.MethodPost, Path: "/query/cancel", Permission: "clickhouse.query.cancel", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.query.cancel", Handle: cancelQuery},
 	}
@@ -89,7 +108,7 @@ func databaseCreateSchema() *plugin.Schema {
 func tableCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Table", Fields: []plugin.Field{
 		{Key: "name", Label: "Table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
-		{Key: "columns", Label: "Columns", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"event_time","type":"DateTime","nullable":false}`},
+		sqldb.ColumnsArrayField(sqldb.ColumnsField{TypePlaceholder: "DateTime", TypeSuggestions: []string{"UInt64", "UInt32", "UInt8", "Int64", "Int32", "Int8", "Float64", "Float32", "Decimal(10,2)", "String", "FixedString(16)", "Date", "DateTime", "DateTime64(3)", "Bool", "UUID", "Nullable(String)", "Array(String)", "LowCardinality(String)", "JSON"}, Default: true}),
 		{Key: "engine", Label: "Engine", Type: plugin.FieldText, Required: true, Default: "MergeTree"},
 		{Key: "order_by", Label: "ORDER BY", Type: plugin.FieldText, Required: true, Default: "tuple()"},
 		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
@@ -102,6 +121,62 @@ func columnAddSchema() *plugin.Schema {
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "String"},
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: false},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func columnAlterSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "name", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "String"},
+		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: false},
+		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func indexCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Data-skipping index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "expression", Label: "Expression", Type: plugin.FieldText, Required: true, Help: "Column or expression to index, e.g. `value` or `lower(name)`."},
+		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "minmax", Help: "Index type, e.g. minmax, set(0), bloom_filter(0.01), ngrambf_v1(...)."},
+		{Key: "granularity", Label: "Granularity", Type: plugin.FieldNumber, Default: 1},
+	}}}}
+}
+
+func tableRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename table", Fields: []plugin.Field{
+		{Key: "database", Label: "Target database", Type: plugin.FieldText, Help: "Leave blank to keep the current database.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "name", Label: "New name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func constraintAddSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
+		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "expression", Label: "CHECK expression", Type: plugin.FieldText, Required: true, Help: "Boolean expression every row must satisfy, e.g. `age >= 0`."},
+	}}}}
+}
+
+func userCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "User", Fields: []plugin.Field{
+		{Key: "name", Label: "User name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "auth_type", Label: "Authentication", Type: plugin.FieldSelect, Default: "sha256_password", Options: []plugin.Option{
+			{Label: "Password (sha256)", Value: "sha256_password"},
+			{Label: "Password (double sha1)", Value: "double_sha1_password"},
+			{Label: "Plaintext password", Value: "plaintext_password"},
+			{Label: "No password", Value: "no_password"},
+		}},
+		{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{
+			{Field: "auth_type", Op: plugin.OpIn, Value: []any{"sha256_password", "double_sha1_password", "plaintext_password"}},
+		}}},
+		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
+	}}}}
+}
+
+func userGrantSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Grant", Fields: []plugin.Field{
+		{Key: "privilege", Label: "Privilege", Type: plugin.FieldText, Required: true, Default: "SELECT", Help: "Access type to grant, e.g. SELECT, INSERT, ALTER, or ALL."},
+		{Key: "on", Label: "On", Type: plugin.FieldText, Required: true, Default: "*.*", Help: "Target scope: `*.*`, `db.*`, or `db.table`."},
+		{Key: "with_grant_option", Label: "With grant option", Type: plugin.FieldToggle, Default: false},
 	}}}}
 }
 
@@ -318,7 +393,7 @@ ORDER BY create_time DESC, database, table`, []any{database, database, table, ta
 	}
 	for _, r := range rows {
 		id := mutationUID(r)
-		r["ref"] = plugin.ResourceRef{Kind: "mutation", Name: fmt.Sprint(r["mutation_id"]), UID: id}
+		r["ref"] = plugin.ResourceRef{Kind: "mutation", Namespace: fmt.Sprint(r["database"]), Scope: fmt.Sprint(r["table"]), Name: fmt.Sprint(r["mutation_id"]), UID: id}
 	}
 	return pageRows(rc, rows)
 }
@@ -342,7 +417,7 @@ ORDER BY elapsed DESC, database, table`, nil)
 	}
 	for _, r := range rows {
 		id := fmt.Sprint(r["id"])
-		r["ref"] = plugin.ResourceRef{Kind: "merge", Name: id, UID: id}
+		r["ref"] = plugin.ResourceRef{Kind: "merge", Namespace: fmt.Sprint(r["database"]), Scope: fmt.Sprint(r["table"]), Name: id, UID: id}
 	}
 	return pageRows(rc, rows)
 }
@@ -485,6 +560,11 @@ func tableRows(rc *plugin.RequestContext) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	key, err := sortingKeyColumns(rc.Ctx, s, database, table)
+	if err != nil {
+		return nil, err
+	}
+	attachRowKeys(rows, key, s.opts.RedactPatterns)
 	redactRows(rows, s.opts.RedactPatterns)
 	next := ""
 	if uint64(offset+len(rows)) < total {
@@ -650,6 +730,14 @@ func createDatabase(rc *plugin.RequestContext) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+func dropDatabase(rc *plugin.RequestContext) (any, error) {
+	database, err := sqldb.SafeIdentifier(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP DATABASE IF EXISTS "+quoteIdent(database))
+}
+
 func createTable(rc *plugin.RequestContext) (any, error) {
 	s, err := clickhouseSession(rc)
 	if err != nil {
@@ -705,6 +793,41 @@ func createTable(rc *plugin.RequestContext) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+func renameTable(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Database string `json:"database"`
+		Name     string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	targetDB := database
+	if strings.TrimSpace(req.Database) != "" {
+		if targetDB, err = sqldb.SafeIdentifier(req.Database); err != nil {
+			return nil, err
+		}
+	}
+	target, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "RENAME TABLE "+qualified(database, table)+" TO "+qualified(targetDB, target)); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
 func addColumn(rc *plugin.RequestContext) (any, error) {
 	s, err := clickhouseSession(rc)
 	if err != nil {
@@ -736,6 +859,37 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+func alterColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name     string `json:"name" validate:"required"`
+		Type     string `json:"type" validate:"required"`
+		Nullable bool   `json:"nullable"`
+		Default  string `json:"default"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	column, err := ddlColumn(sqldb.ColumnSpec{Name: req.Name, Type: req.Type, Nullable: req.Nullable, Default: req.Default})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" MODIFY COLUMN "+column); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
 func dropColumn(rc *plugin.RequestContext) (any, error) {
 	s, err := clickhouseSession(rc)
 	if err != nil {
@@ -753,6 +907,37 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" DROP COLUMN "+quoteIdent(column)); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func createIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        string `json:"name" validate:"required"`
+		Expression  string `json:"expression" validate:"required"`
+		Type        string `json:"type" validate:"required"`
+		Granularity int    `json:"granularity"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	clause, err := buildAddIndex(req.Name, req.Expression, req.Type, req.Granularity)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" "+clause); err != nil {
 		return nil, clickhouseErr(err)
 	}
 	return actionResult{OK: true}, nil
@@ -776,6 +961,57 @@ func dropIndex(rc *plugin.RequestContext) (any, error) {
 	}
 	// ClickHouse data-skipping indexes are dropped via ALTER TABLE ... DROP INDEX.
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" DROP INDEX "+quoteIdent(name)); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func addConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name       string `json:"name" validate:"required"`
+		Expression string `json:"expression" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	clause, err := buildAddConstraint(req.Name, req.Expression)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" "+clause); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" DROP CONSTRAINT "+quoteIdent(name)); err != nil {
 		return nil, clickhouseErr(err)
 	}
 	return actionResult{OK: true}, nil
@@ -821,6 +1057,385 @@ func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {
 		return nil, clickhouseErr(err)
 	}
 	return actionResult{OK: true}, nil
+}
+
+// killProcess terminates a running query identified by its query_id. The id comes
+// from the process row and is a server-assigned string, but it is still embedded
+// as an escaped string literal (KILL takes no bound parameters).
+func killProcess(rc *plugin.RequestContext) (any, error) {
+	id := strings.TrimSpace(rc.Param("id"))
+	if id == "" {
+		return nil, fmt.Errorf("%w: query id is required", plugin.ErrInvalidInput)
+	}
+	return execDDL(rc, buildKillQuery(id))
+}
+
+// killMutation cancels an in-flight mutation. ClickHouse identifies a mutation by
+// (database, table, mutation_id); the database/table are strict identifiers and the
+// mutation_id is an escaped string literal. The action supplies all three from the
+// mutation's resource ref (Namespace=database, Scope=table, Name=mutation_id).
+func killMutation(rc *plugin.RequestContext) (any, error) {
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	stmt, err := buildKillMutation(database, table, rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func stopMerges(rc *plugin.RequestContext) (any, error) {
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "SYSTEM STOP MERGES "+qualified(database, table))
+}
+
+func startMerges(rc *plugin.RequestContext) (any, error) {
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "SYSTEM START MERGES "+qualified(database, table))
+}
+
+func createUser(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        string `json:"name" validate:"required"`
+		AuthType    string `json:"auth_type"`
+		Password    string `json:"password"`
+		IfNotExists bool   `json:"if_not_exists"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := buildCreateUser(req.Name, req.AuthType, req.Password, req.IfNotExists)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true, Message: "User created."}, nil
+}
+
+func dropUser(rc *plugin.RequestContext) (any, error) {
+	user, err := sqldb.SafeIdentifier(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP USER IF EXISTS "+quoteIdent(user))
+}
+
+func grantUser(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Privilege       string `json:"privilege" validate:"required"`
+		On              string `json:"on" validate:"required"`
+		WithGrantOption bool   `json:"with_grant_option"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := buildGrant(rc.Param("user"), req.Privilege, req.On, req.WithGrantOption)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true, Message: "Privilege granted."}, nil
+}
+
+// quoteLiteral renders a value as a single-quoted ClickHouse string literal,
+// escaping backslashes and single quotes so it can be embedded safely in
+// statements (KILL/SYSTEM) that do not accept bound parameters.
+func quoteLiteral(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	return "'" + s + "'"
+}
+
+func buildKillQuery(queryID string) string {
+	return "KILL QUERY WHERE query_id = " + quoteLiteral(queryID)
+}
+
+func buildKillMutation(database, table, mutationID string) (string, error) {
+	id := strings.TrimSpace(mutationID)
+	if id == "" {
+		return "", fmt.Errorf("%w: mutation id is required", plugin.ErrInvalidInput)
+	}
+	return "KILL MUTATION WHERE database = " + quoteLiteral(database) +
+		" AND table = " + quoteLiteral(table) +
+		" AND mutation_id = " + quoteLiteral(id), nil
+}
+
+// buildCreateUser renders CREATE USER with an IDENTIFIED WITH clause. The user
+// name is a strict identifier; the auth type is constrained to a known set and the
+// password is embedded as an escaped string literal (CREATE USER takes no bound
+// parameters).
+func buildCreateUser(name, authType, password string, ifNotExists bool) (string, error) {
+	user, err := sqldb.SafeIdentifier(name)
+	if err != nil {
+		return "", err
+	}
+	auth := strings.TrimSpace(authType)
+	if auth == "" {
+		auth = "sha256_password"
+	}
+	prefix := "CREATE USER "
+	if ifNotExists {
+		prefix += "IF NOT EXISTS "
+	}
+	stmt := prefix + quoteIdent(user)
+	switch auth {
+	case "no_password":
+		stmt += " IDENTIFIED WITH no_password"
+	case "sha256_password", "double_sha1_password", "plaintext_password":
+		if password == "" {
+			return "", fmt.Errorf("%w: password is required for %s", plugin.ErrInvalidInput, auth)
+		}
+		stmt += " IDENTIFIED WITH " + auth + " BY " + quoteLiteral(password)
+	default:
+		return "", fmt.Errorf("%w: unsupported authentication type %q", plugin.ErrInvalidInput, auth)
+	}
+	return stmt, nil
+}
+
+// buildGrant renders GRANT <privilege> ON <target> TO <user>. The privilege and
+// target are free-form SQL (access types and db.table scopes), so they are screened
+// by the safe-expression guard; the user is a strict identifier.
+func buildGrant(user, privilege, on string, withGrantOption bool) (string, error) {
+	ident, err := sqldb.SafeIdentifier(user)
+	if err != nil {
+		return "", err
+	}
+	priv := strings.TrimSpace(privilege)
+	if priv == "" || !sqldb.SafeDefault(priv) {
+		return "", fmt.Errorf("%w: unsafe privilege", plugin.ErrInvalidInput)
+	}
+	target := strings.TrimSpace(on)
+	if target == "" || !sqldb.SafeDefault(target) {
+		return "", fmt.Errorf("%w: unsafe grant target", plugin.ErrInvalidInput)
+	}
+	stmt := "GRANT " + priv + " ON " + target + " TO " + quoteIdent(ident)
+	if withGrantOption {
+		stmt += " WITH GRANT OPTION"
+	}
+	return stmt, nil
+}
+
+// insertRow appends one row. INSERT is a normal, cheap operation in ClickHouse,
+// so it only needs the read-only/confirm gates the other writes use.
+func insertRow(rc *plugin.RequestContext) (any, error) {
+	s, database, table, m, err := rowMutationInput(rc)
+	if err != nil {
+		return nil, err
+	}
+	stmt, args, err := dialect.Insert(qualified(database, table), m.Values)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt, args...); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true, Message: "Row inserted."}, nil
+}
+
+// updateRow rewrites the matched row(s) with an ALTER TABLE ... UPDATE mutation.
+// Mutations are asynchronous and rewrite affected parts, so the result message
+// says the change was scheduled rather than implying an immediate row count.
+func updateRow(rc *plugin.RequestContext) (any, error) {
+	s, database, table, m, err := rowMutationInput(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateMutationKey(rc, s, database, table, m.Key); err != nil {
+		return nil, err
+	}
+	stmt, args, err := buildAlterUpdate(qualified(database, table), m.Key, m.Values)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt, args...); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true, Message: "Update mutation scheduled. ClickHouse applies it asynchronously; the row may not reflect the change immediately."}, nil
+}
+
+// deleteRow removes the matched row(s) with an ALTER TABLE ... DELETE mutation
+// (heavy and asynchronous in ClickHouse).
+func deleteRow(rc *plugin.RequestContext) (any, error) {
+	s, database, table, m, err := rowMutationInput(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateMutationKey(rc, s, database, table, m.Key); err != nil {
+		return nil, err
+	}
+	stmt, args, err := buildAlterDelete(qualified(database, table), m.Key)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt, args...); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true, Message: "Delete mutation scheduled. ClickHouse applies it asynchronously; the row may not disappear immediately."}, nil
+}
+
+// rowMutationInput resolves the session and target table and decodes the uniform
+// mutation body, applying the read-only and destructive-confirmation gates that
+// govern every ClickHouse write.
+func rowMutationInput(rc *plugin.RequestContext) (*Session, string, string, sqldb.RowMutation, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	var m sqldb.RowMutation
+	if err := rc.Bind(&m); err != nil {
+		return nil, "", "", sqldb.RowMutation{}, err
+	}
+	return s, database, table, m, nil
+}
+
+// validateMutationKey rejects any client key that is not exactly the table's
+// sorting key, so a mutation can only ever target one identified row's columns.
+func validateMutationKey(rc *plugin.RequestContext, s *Session, database, table string, key map[string]any) error {
+	cols, err := sortingKeyColumns(rc.Ctx, s, database, table)
+	if err != nil {
+		return err
+	}
+	return sqldb.ValidateRowKey(cols, key)
+}
+
+// buildAlterUpdate builds "ALTER TABLE t UPDATE col = ?, … WHERE keycol = ? AND …"
+// with bound parameters. Column order is sorted so the statement is deterministic.
+func buildAlterUpdate(table string, key, values map[string]any) (string, []any, error) {
+	if len(values) == 0 {
+		return "", nil, fmt.Errorf("%w: no values to update", plugin.ErrInvalidInput)
+	}
+	if len(key) == 0 {
+		return "", nil, fmt.Errorf("%w: row key is required to update a row", plugin.ErrInvalidInput)
+	}
+	setCols := sortedKeys(values)
+	set := make([]string, len(setCols))
+	args := make([]any, 0, len(setCols)+len(key))
+	for i, c := range setCols {
+		col, err := sqldb.SafeIdentifier(c)
+		if err != nil {
+			return "", nil, err
+		}
+		set[i] = quoteIdent(col) + " = ?"
+		args = append(args, values[c])
+	}
+	where, whereArgs, err := matchClause(key)
+	if err != nil {
+		return "", nil, err
+	}
+	args = append(args, whereArgs...)
+	return "ALTER TABLE " + table + " UPDATE " + strings.Join(set, ", ") + " WHERE " + where, args, nil
+}
+
+// buildAlterDelete builds "ALTER TABLE t DELETE WHERE keycol = ? AND …". The key
+// must be non-empty so an editing mistake can never wipe a whole table.
+func buildAlterDelete(table string, key map[string]any) (string, []any, error) {
+	if len(key) == 0 {
+		return "", nil, fmt.Errorf("%w: row key is required to delete a row", plugin.ErrInvalidInput)
+	}
+	where, args, err := matchClause(key)
+	if err != nil {
+		return "", nil, err
+	}
+	return "ALTER TABLE " + table + " DELETE WHERE " + where, args, nil
+}
+
+// matchClause builds a "col = ? AND …" (or "col IS NULL") predicate over the key
+// columns in stable sorted order, returning the bound arguments for non-NULL keys.
+func matchClause(key map[string]any) (string, []any, error) {
+	cols := sortedKeys(key)
+	parts := make([]string, len(cols))
+	args := make([]any, 0, len(cols))
+	for i, c := range cols {
+		col, err := sqldb.SafeIdentifier(c)
+		if err != nil {
+			return "", nil, err
+		}
+		if key[c] == nil {
+			parts[i] = quoteIdent(col) + " IS NULL"
+			continue
+		}
+		parts[i] = quoteIdent(col) + " = ?"
+		args = append(args, key[c])
+	}
+	return strings.Join(parts, " AND "), args, nil
+}
+
+func sortedKeys(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// sortingKeyColumns returns the table's ORDER BY (sorting) key columns in order.
+// ClickHouse has no enforced primary key, so the sorting key is the closest
+// stable row identity; tables without one (e.g. ORDER BY tuple()) stay read-only.
+func sortingKeyColumns(ctx context.Context, s *Session, database, table string) ([]string, error) {
+	rows, err := queryRows(ctx, s, `
+SELECT name
+FROM system.columns
+WHERE database = ? AND table = ? AND is_in_sorting_key = 1
+ORDER BY position`, []any{database, table})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, fmt.Sprint(r["name"]))
+	}
+	return out, nil
+}
+
+// attachRowKeys tags each row with the sorting-key/value map the editable grid
+// echoes back for UPDATE/DELETE. The grid stays read-only when the table has no
+// sorting key, or when a key column is itself sensitive (so a redacted value is
+// never shipped raw inside _key).
+func attachRowKeys(rows []row, key, patterns []string) {
+	if len(key) == 0 || sqldb.AnyColumnRedacted(key, patterns) {
+		return
+	}
+	for _, r := range rows {
+		k := map[string]any{}
+		for _, col := range key {
+			k[col] = r[col]
+		}
+		r["_key"] = k
+	}
 }
 
 func cancelQuery(rc *plugin.RequestContext) (any, error) {
@@ -1312,4 +1927,42 @@ func ddlColumn(spec sqldb.ColumnSpec) (string, error) {
 		parts = append(parts, "DEFAULT "+strings.TrimSpace(spec.Default))
 	}
 	return strings.Join(parts, " "), nil
+}
+
+// buildAddIndex builds an "ADD INDEX name expr TYPE type GRANULARITY n" clause for
+// a ClickHouse data-skipping index. The expression and type are free-form SQL, so
+// they are screened by the same safe-expression/safe-type guards the other DDL
+// helpers use; the name is a strict identifier and granularity defaults to 1.
+func buildAddIndex(name, expression, indexType string, granularity int) (string, error) {
+	ident, err := sqldb.SafeIdentifier(name)
+	if err != nil {
+		return "", err
+	}
+	expr := strings.TrimSpace(expression)
+	if expr == "" || !sqldb.SafeDefault(expr) {
+		return "", fmt.Errorf("%w: unsafe index expression", plugin.ErrInvalidInput)
+	}
+	idxType := strings.TrimSpace(indexType)
+	if idxType == "" || !sqldb.SafeType(idxType) {
+		return "", fmt.Errorf("%w: unsafe index type", plugin.ErrInvalidInput)
+	}
+	if granularity <= 0 {
+		granularity = 1
+	}
+	return fmt.Sprintf("ADD INDEX %s %s TYPE %s GRANULARITY %d", quoteIdent(ident), expr, idxType, granularity), nil
+}
+
+// buildAddConstraint builds an "ADD CONSTRAINT name CHECK (expr)" clause. The CHECK
+// expression is free-form SQL screened by the safe-expression guard; the name is a
+// strict identifier.
+func buildAddConstraint(name, expression string) (string, error) {
+	ident, err := sqldb.SafeIdentifier(name)
+	if err != nil {
+		return "", err
+	}
+	expr := strings.TrimSpace(expression)
+	if expr == "" || !sqldb.SafeDefault(expr) {
+		return "", fmt.Errorf("%w: unsafe constraint expression", plugin.ErrInvalidInput)
+	}
+	return "ADD CONSTRAINT " + quoteIdent(ident) + " CHECK " + expr, nil
 }

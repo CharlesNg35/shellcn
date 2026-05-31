@@ -27,8 +27,13 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Config:              configSchema(),
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutTabs,
-		Tabs:                []plugin.Tab{filesystem.FilesTab(protocolName)},
+		Layout:              plugin.LayoutSingle,
+		Tabs: []plugin.Panel{filesystem.FilesTab(
+			protocolName,
+			filesystem.WithMove(protocolName),
+			filesystem.WithCopy(protocolName),
+			filesystem.WithArchive(protocolName),
+		)},
 	}
 }
 

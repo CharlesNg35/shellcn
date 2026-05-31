@@ -37,18 +37,16 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 
 func TestAttributesTabIsStagedEditableGrid(t *testing.T) {
 	tab := attributesTab(t)
-	for _, key := range []string{"editable", "stagedEdits"} {
-		if tab.Config[key] != true {
-			t.Fatalf("attributes grid %q = %#v, want true", key, tab.Config[key])
-		}
+	tc, ok := tab.Config.(plugin.TableConfig)
+	if !ok || !tc.Editable || !tc.StagedEdits {
+		t.Fatalf("attributes grid must be an editable staged grid: %#v", tab.Config)
 	}
-	rowKey, _ := tab.Config["rowKey"].([]string)
-	if len(rowKey) != 1 || rowKey[0] != "attribute" {
-		t.Fatalf("attributes grid rowKey = %#v, want [attribute]", tab.Config["rowKey"])
+	if len(tc.RowKey) != 1 || tc.RowKey[0] != "attribute" {
+		t.Fatalf("attributes grid rowKey = %#v, want [attribute]", tc.RowKey)
 	}
 }
 
-func attributesTab(t *testing.T) plugin.Tab {
+func attributesTab(t *testing.T) plugin.Panel {
 	t.Helper()
 	for _, res := range New().Manifest().Resources {
 		if res.Kind != "entry" {
@@ -61,7 +59,7 @@ func attributesTab(t *testing.T) plugin.Tab {
 		}
 	}
 	t.Fatal("entry resource has no attributes tab")
-	return plugin.Tab{}
+	return plugin.Panel{}
 }
 
 func TestAuthDefaultsToAnonymous(t *testing.T) {
@@ -189,5 +187,37 @@ func TestIconForEntry(t *testing.T) {
 		if got := iconForEntry([]string{class}); got.Value != want {
 			t.Fatalf("iconForEntry(%q) = %q, want %q", class, got.Value, want)
 		}
+	}
+}
+
+func TestEntryAddAttributesIsMapOfTextArray(t *testing.T) {
+	var schema *plugin.Schema
+	for _, r := range New().Routes() {
+		if r.ID == "ldap.entry.add" {
+			schema = r.Input
+		}
+	}
+	if schema == nil {
+		t.Fatal("ldap.entry.add has no input schema")
+	}
+	var field *plugin.Field
+	for _, g := range schema.Groups {
+		for i := range g.Fields {
+			if g.Fields[i].Key == "attributes" {
+				field = &g.Fields[i]
+			}
+		}
+	}
+	if field == nil {
+		t.Fatal("no attributes field")
+	}
+	if field.Type != plugin.FieldMap {
+		t.Fatalf("attributes is %q, want map", field.Type)
+	}
+	if field.Item == nil || field.Item.Type != plugin.FieldArray {
+		t.Fatalf("attributes value item is not an array")
+	}
+	if field.Item.Item == nil || field.Item.Item.Type != plugin.FieldText {
+		t.Fatalf("attributes value array element is not text")
 	}
 }

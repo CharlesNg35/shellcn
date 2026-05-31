@@ -40,6 +40,7 @@ func Routes() []plugin.Route {
 		{ID: rid("schema.fields"), Method: plugin.MethodGet, Path: "/cores/{core}/schema/fields", Permission: "solr.schema.read", Risk: plugin.RiskSafe, AuditEvent: rid("schema.fields"), Handle: listFields},
 		{ID: rid("schema.field.read"), Method: plugin.MethodGet, Path: "/cores/{core}/schema/fields/{field}", Permission: "solr.schema.read", Risk: plugin.RiskSafe, AuditEvent: rid("schema.field.read"), Handle: readField},
 		{ID: rid("schema.field.add"), Method: plugin.MethodPost, Path: "/cores/{core}/schema/fields", Permission: "solr.schema.write", Risk: plugin.RiskWrite, AuditEvent: rid("schema.field.add"), Input: fieldAddSchema(), Handle: addField},
+		{ID: rid("schema.field.replace"), Method: plugin.MethodPut, Path: "/cores/{core}/schema/fields/{field}", Permission: "solr.schema.write", Risk: plugin.RiskWrite, AuditEvent: rid("schema.field.replace"), Input: fieldReplaceSchema(), Handle: replaceField},
 		{ID: rid("schema.field.delete"), Method: plugin.MethodDelete, Path: "/cores/{core}/schema/fields/{field}", Permission: "solr.schema.delete", Risk: plugin.RiskDestructive, AuditEvent: rid("schema.field.delete"), Handle: deleteField},
 		{ID: rid("config.read"), Method: plugin.MethodGet, Path: "/cores/{core}/config", Permission: "solr.config.read", Risk: plugin.RiskSafe, AuditEvent: rid("config.read"), Handle: readConfig},
 		{ID: rid("search.query"), Method: plugin.MethodWS, Path: "/cores/{core}/search", Permission: "solr.search.execute", Risk: plugin.RiskSafe, AuditEvent: rid("search.query"), Stream: searchStream},
@@ -71,6 +72,16 @@ func deleteQuerySchema() *plugin.Schema {
 func fieldAddSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Field", Fields: []plugin.Field{
 		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "string"},
+		{Key: "indexed", Label: "Indexed", Type: plugin.FieldToggle, Default: true},
+		{Key: "stored", Label: "Stored", Type: plugin.FieldToggle, Default: true},
+		{Key: "multi_valued", Label: "Multi-valued", Type: plugin.FieldToggle},
+		{Key: "required", Label: "Required", Type: plugin.FieldToggle},
+	}}}}
+}
+
+func fieldReplaceSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Field", Fields: []plugin.Field{
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "string"},
 		{Key: "indexed", Label: "Indexed", Type: plugin.FieldToggle, Default: true},
 		{Key: "stored", Label: "Stored", Type: plugin.FieldToggle, Default: true},
@@ -415,6 +426,38 @@ func readField(rc *plugin.RequestContext) (any, error) {
 	return out, err
 }
 
+type fieldSpec struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Indexed     bool   `json:"indexed"`
+	Stored      bool   `json:"stored"`
+	MultiValued bool   `json:"multi_valued"`
+	Required    bool   `json:"required"`
+}
+
+// fieldDefinition builds the Solr field definition body for add-field/replace-field.
+// Solr requires the complete definition; multiValued/required are emitted only when set.
+func fieldDefinition(spec fieldSpec) row {
+	field := row{"name": strings.TrimSpace(spec.Name), "type": strings.TrimSpace(spec.Type), "indexed": spec.Indexed, "stored": spec.Stored}
+	if spec.MultiValued {
+		field["multiValued"] = true
+	}
+	if spec.Required {
+		field["required"] = true
+	}
+	return field
+}
+
+func validFieldDefinition(spec fieldSpec) error {
+	if strings.TrimSpace(spec.Name) == "" {
+		return fmt.Errorf("%w: field name is required", plugin.ErrInvalidInput)
+	}
+	if strings.TrimSpace(spec.Type) == "" {
+		return fmt.Errorf("%w: field type is required", plugin.ErrInvalidInput)
+	}
+	return nil
+}
+
 func addField(rc *plugin.RequestContext) (any, error) {
 	s, err := session(rc)
 	if err != nil {
@@ -423,27 +466,33 @@ func addField(rc *plugin.RequestContext) (any, error) {
 	if err := ensureWritable(s); err != nil {
 		return nil, err
 	}
-	var req struct {
-		Name        string `json:"name"`
-		Type        string `json:"type"`
-		Indexed     bool   `json:"indexed"`
-		Stored      bool   `json:"stored"`
-		MultiValued bool   `json:"multi_valued"`
-		Required    bool   `json:"required"`
-	}
-	if err := rc.Bind(&req); err != nil {
+	var spec fieldSpec
+	if err := rc.Bind(&spec); err != nil {
 		return nil, err
 	}
-	field := row{"name": req.Name, "type": req.Type, "indexed": req.Indexed, "stored": req.Stored}
-	if req.MultiValued {
-		field["multiValued"] = true
+	if err := validFieldDefinition(spec); err != nil {
+		return nil, err
 	}
-	if req.Required {
-		field["required"] = true
+	return schemaCommand(rc, s, "add-field", fieldDefinition(spec))
+}
+
+func replaceField(rc *plugin.RequestContext) (any, error) {
+	s, err := session(rc)
+	if err != nil {
+		return nil, err
 	}
-	var out row
-	err = s.client.Do(rc.Ctx, http.MethodPost, corePath(coreParam(rc), "/schema"), url.Values{"wt": []string{"json"}}, row{"add-field": field}, &out)
-	return out, err
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var spec fieldSpec
+	if err := rc.Bind(&spec); err != nil {
+		return nil, err
+	}
+	spec.Name = fieldParam(rc)
+	if err := validFieldDefinition(spec); err != nil {
+		return nil, err
+	}
+	return schemaCommand(rc, s, "replace-field", fieldDefinition(spec))
 }
 
 func deleteField(rc *plugin.RequestContext) (any, error) {
@@ -454,8 +503,20 @@ func deleteField(rc *plugin.RequestContext) (any, error) {
 	if err := ensureWritable(s); err != nil {
 		return nil, err
 	}
+	field := strings.TrimSpace(fieldParam(rc))
+	if field == "" {
+		return nil, fmt.Errorf("%w: field name is required", plugin.ErrInvalidInput)
+	}
+	return schemaCommand(rc, s, "delete-field", row{"name": field})
+}
+
+func schemaCommand(rc *plugin.RequestContext, s *Session, command string, body row) (any, error) {
+	core := strings.TrimSpace(coreParam(rc))
+	if core == "" {
+		return nil, fmt.Errorf("%w: collection or core is required", plugin.ErrInvalidInput)
+	}
 	var out row
-	err = s.client.Do(rc.Ctx, http.MethodPost, corePath(coreParam(rc), "/schema"), url.Values{"wt": []string{"json"}}, row{"delete-field": row{"name": fieldParam(rc)}}, &out)
+	err := s.client.Do(rc.Ctx, http.MethodPost, corePath(core, "/schema"), url.Values{"wt": []string{"json"}}, row{command: body}, &out)
 	return out, err
 }
 

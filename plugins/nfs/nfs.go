@@ -37,8 +37,13 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Config:              configSchema(),
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutTabs,
-		Tabs:                []plugin.Tab{filesystem.FilesTab(protocolName)},
+		Layout:              plugin.LayoutSingle,
+		Tabs: []plugin.Panel{filesystem.FilesTab(
+			protocolName,
+			filesystem.WithMove(protocolName),
+			filesystem.WithCopy(protocolName),
+			filesystem.WithArchive(protocolName),
+		)},
 	}
 }
 
@@ -213,6 +218,19 @@ func (c *Client) Remove(_ context.Context, p string, isDir bool) error {
 		return c.target.RmDir(p)
 	}
 	return c.target.Remove(p)
+}
+
+func (c *Client) Move(_ context.Context, src, dst string) error {
+	return c.target.Rename(src, dst)
+}
+
+func (c *Client) Copy(ctx context.Context, src, dst string) error {
+	r, err := c.Open(ctx, src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = r.Close() }()
+	return c.Write(ctx, dst, r)
 }
 
 type nfsInfo struct {

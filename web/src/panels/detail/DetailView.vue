@@ -18,6 +18,8 @@ import { badgeClassFor } from "../shared/severity";
 const props = defineProps<{
   connectionId: string;
   detail: DetailViewSpec;
+  // The resource's detail-header action IDs (resolved against `actions`).
+  detailActionIds?: string[];
   row: Row;
   actions: Action[];
 }>();
@@ -70,7 +72,7 @@ const current = computed(() =>
 );
 
 const headerActions = computed(() =>
-  (props.detail.header.actionIds ?? [])
+  (props.detailActionIds ?? [])
     .map((id) => props.actions.find((a) => a.id === id))
     .filter((a): a is Action => Boolean(a)),
 );

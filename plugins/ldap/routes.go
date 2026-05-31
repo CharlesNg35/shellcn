@@ -50,7 +50,7 @@ func entryAddSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Entry", Fields: []plugin.Field{
 		{Key: "rdn", Label: "RDN", Type: plugin.FieldText, Required: true, Placeholder: "uid=jdoe", Help: "Relative DN of the new entry, e.g. uid=jdoe or cn=Engineers."},
 		{Key: "object_class", Label: "Object classes", Type: plugin.FieldText, Required: true, Default: "top", Help: "Comma-separated objectClass values, e.g. top,inetOrgPerson."},
-		{Key: "attributes", Label: "Attributes", Type: plugin.FieldJSON, Help: `Optional JSON of attribute values, e.g. {"cn":["John Doe"],"sn":["Doe"]}.`},
+		{Key: "attributes", Label: "Attributes", Type: plugin.FieldMap, KeyPlaceholder: "cn", AddLabel: "Add attribute", Item: &plugin.Field{Type: plugin.FieldArray, ItemLabel: "Value", MinItems: 1, Item: &plugin.Field{Type: plugin.FieldText}}},
 	}}}}
 }
 

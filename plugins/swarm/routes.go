@@ -48,6 +48,10 @@ func Routes() []plugin.Route {
 		{ID: "swarm.stack.services", Method: plugin.MethodGet, Path: "/stacks/{stack}/services", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.stack.services", Handle: stackServices},
 		{ID: "swarm.service.remove", Method: plugin.MethodDelete, Path: "/services/{id}", Permission: "swarm.services.delete", Risk: plugin.RiskDestructive, AuditEvent: "swarm.service.remove", Handle: removeService},
 		{ID: "swarm.service.scale", Method: plugin.MethodPost, Path: "/services/{id}/scale", Permission: "swarm.services.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.service.scale", Input: scaleSchema(), Handle: scaleService},
+		{ID: "swarm.service.update", Method: plugin.MethodPost, Path: "/services/{id}/update", Permission: "swarm.services.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.service.update", Input: serviceUpdateSchema(), Handle: updateService},
+		{ID: "swarm.service.rollback", Method: plugin.MethodPost, Path: "/services/{id}/rollback", Permission: "swarm.services.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.service.rollback", Handle: rollbackService},
+		{ID: "swarm.node.update", Method: plugin.MethodPost, Path: "/nodes/{id}/update", Permission: "swarm.nodes.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.node.update", Input: nodeUpdateSchema(), Handle: updateNode},
+		{ID: "swarm.stack.deploy", Method: plugin.MethodPost, Path: "/stacks/deploy", Permission: "swarm.stacks.write", Risk: plugin.RiskWrite, AuditEvent: "swarm.stack.deploy", Input: stackDeploySchema(), Handle: deployStack},
 		{ID: "swarm.service.logs", Method: plugin.MethodWS, Path: "/services/{id}/logs", Permission: "swarm.services.logs", Risk: plugin.RiskSafe, AuditEvent: "swarm.service.logs", Input: dockerengine.LogsSchema(), Stream: serviceLogsStream},
 		{ID: "swarm.events.watch", Method: plugin.MethodWS, Path: "/events", Permission: "swarm.services.read", Risk: plugin.RiskSafe, AuditEvent: "swarm.events.watch", Stream: watchServiceEvents},
 	}

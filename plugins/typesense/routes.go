@@ -59,7 +59,29 @@ func Routes() []plugin.Route {
 func collectionCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Collection", Fields: []plugin.Field{
 		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
-		{Key: "fields", Label: "Fields", Type: plugin.FieldJSON, Required: true, Default: []any{map[string]any{"name": "name", "type": "string"}}},
+		{Key: "fields", Label: "Fields", Type: plugin.FieldArray, Required: true, MinItems: 1, ItemLabel: "Field", Item: &plugin.Field{Type: plugin.FieldObject, Fields: []plugin.Field{
+			{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
+			{Key: "type", Label: "Type", Type: plugin.FieldSelect, Required: true, Default: "string", Options: []plugin.Option{
+				{Label: "string", Value: "string"},
+				{Label: "int32", Value: "int32"},
+				{Label: "int64", Value: "int64"},
+				{Label: "float", Value: "float"},
+				{Label: "bool", Value: "bool"},
+				{Label: "string[]", Value: "string[]"},
+				{Label: "int32[]", Value: "int32[]"},
+				{Label: "int64[]", Value: "int64[]"},
+				{Label: "float[]", Value: "float[]"},
+				{Label: "bool[]", Value: "bool[]"},
+				{Label: "object", Value: "object"},
+				{Label: "object[]", Value: "object[]"},
+				{Label: "geopoint", Value: "geopoint"},
+				{Label: "auto", Value: "auto"},
+			}},
+			{Key: "facet", Label: "Facet", Type: plugin.FieldToggle},
+			{Key: "optional", Label: "Optional", Type: plugin.FieldToggle},
+			{Key: "sort", Label: "Sortable", Type: plugin.FieldToggle},
+			{Key: "index", Label: "Index", Type: plugin.FieldToggle, Default: true},
+		}}},
 		{Key: "default_sorting_field", Label: "Default sorting field", Type: plugin.FieldText},
 		{Key: "enable_nested_fields", Label: "Enable nested fields", Type: plugin.FieldToggle},
 	}}}}
@@ -124,8 +146,8 @@ func overrideUpsertSchema() *plugin.Schema {
 func keyCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Key", Fields: []plugin.Field{
 		{Key: "description", Label: "Description", Type: plugin.FieldText, Required: true},
-		{Key: "actions", Label: "Actions", Type: plugin.FieldJSON, Required: true, Default: []any{"documents:search"}},
-		{Key: "collections", Label: "Collections", Type: plugin.FieldJSON, Required: true, Default: []any{"*"}},
+		{Key: "actions", Label: "Actions", Type: plugin.FieldArray, Required: true, MinItems: 1, ItemLabel: "Action", Default: []any{"documents:search"}, Item: &plugin.Field{Type: plugin.FieldText}},
+		{Key: "collections", Label: "Collections", Type: plugin.FieldArray, Required: true, MinItems: 1, ItemLabel: "Collection", Default: []any{"*"}, Item: &plugin.Field{Type: plugin.FieldText}},
 		{Key: "expires_at", Label: "Expires at unix timestamp", Type: plugin.FieldNumber},
 	}}}}
 }

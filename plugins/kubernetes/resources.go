@@ -36,9 +36,9 @@ func resourceType(k kind) plugin.ResourceType {
 	// Edit and create live in the YAML tab / a dialog, not as row buttons.
 	rowActions := append([]string(nil), k.actionIDs...)
 
-	tabs := []plugin.Tab{
+	tabs := []plugin.Panel{
 		{
-			Key: "overview", Label: "Overview", Icon: lucide("info"), Panel: plugin.PanelDocument,
+			Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelDocument,
 			Source: &plugin.DataSource{RouteID: "kubernetes.resource.get", Params: getParams},
 		},
 		yamlTab(k),
@@ -47,15 +47,18 @@ func resourceType(k kind) plugin.ResourceType {
 	tabs = append(tabs, eventsTab(k))
 
 	return plugin.ResourceType{
-		Kind:          k.name,
-		Title:         k.title,
-		List:          plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": k.name}},
-		Watch:         &plugin.DataSource{RouteID: "kubernetes.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": k.name}},
-		Columns:       k.columns,
-		ActionIDs:     rowActions,
-		ListActionIDs: []string{"kubernetes.create." + k.name},
+		Kind:    k.name,
+		Title:   k.title,
+		List:    plugin.DataSource{RouteID: "kubernetes.resource.list", Params: map[string]string{"kind": k.name}},
+		Watch:   &plugin.DataSource{RouteID: "kubernetes.resource.watch", Method: plugin.MethodWS, Params: map[string]string{"kind": k.name}},
+		Columns: k.columns,
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"kubernetes.create." + k.name},
+			Row:     []string{"kubernetes.resource.delete"},
+			Detail:  rowActions,
+		},
 		Detail: plugin.DetailView{
-			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: columnSeverities(k.columns, "status"), ActionIDs: rowActions},
+			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: columnSeverities(k.columns, "status")},
 			Tabs:   tabs,
 		},
 	}
@@ -70,12 +73,16 @@ func customResourceType() plugin.ResourceType {
 		List:  plugin.DataSource{RouteID: "kubernetes.resource.list"},
 		// No static columns: the CRD's own printer columns are fetched at runtime.
 		ColumnsSource: &plugin.DataSource{RouteID: "kubernetes.resource.columns"},
-		ListActionIDs: []string{"kubernetes.create.customresource"},
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"kubernetes.create.customresource"},
+			Row:     []string{"kubernetes.resource.delete"},
+			Detail:  []string{"kubernetes.resource.delete"},
+		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
-			Tabs: []plugin.Tab{
+			Tabs: []plugin.Panel{
 				{
-					Key: "overview", Label: "Overview", Icon: lucide("info"), Panel: plugin.PanelDocument,
+					Key: "overview", Label: "Overview", Icon: lucide("info"), Type: plugin.PanelDocument,
 					Source: &plugin.DataSource{RouteID: "kubernetes.resource.get", Params: map[string]string{"kind": "${resource.scope}", "namespace": "${resource.namespace}", "name": "${resource.name}"}},
 				},
 			},
@@ -89,8 +96,11 @@ func actions() []plugin.Action {
 		{ID: "kubernetes.resource.delete", Label: "Delete", Icon: lucide("trash"), RouteID: "kubernetes.resource.delete", Params: uid, Confirm: true, ConfirmText: "Delete this resource?", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 		{ID: "kubernetes.resource.scale", Label: "Scale", Icon: lucide("move-vertical"), RouteID: "kubernetes.resource.scale", Params: uid},
 		{ID: "kubernetes.resource.restart", Label: "Restart", Icon: lucide("refresh-cw"), RouteID: "kubernetes.resource.restart", Params: uid, Confirm: true, ConfirmText: "Roll out a restart?"},
-		{ID: "kubernetes.node.cordon", Label: "Cordon", Icon: lucide("ban"), RouteID: "kubernetes.node.cordon", Params: uid, Confirm: true, ConfirmText: "Mark this node unschedulable?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpNeq, Value: true}}}},
-		{ID: "kubernetes.node.uncordon", Label: "Uncordon", Icon: lucide("circle-check"), RouteID: "kubernetes.node.uncordon", Params: uid, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpEq, Value: true}}}},
+		{ID: "kubernetes.node.cordon", Label: "Cordon", Icon: lucide("ban"), RouteID: "kubernetes.node.cordon", Params: uid, Confirm: true, ConfirmText: "Mark this node unschedulable?", EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpNeq, Value: true}}}, Group: "Scheduling"},
+		{ID: "kubernetes.node.uncordon", Label: "Uncordon", Icon: lucide("circle-check"), RouteID: "kubernetes.node.uncordon", Params: uid, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "unschedulable", Op: plugin.OpEq, Value: true}}}, Group: "Scheduling"},
+		{ID: "kubernetes.node.drain", Label: "Drain", Icon: lucide("trash-2"), RouteID: "kubernetes.node.drain", Params: uid, Confirm: true, ConfirmText: "Cordon this node and evict its pods?", Group: "Scheduling"},
+		{ID: "kubernetes.rollout.undo", Label: "Rollout undo", Icon: lucide("undo-2"), RouteID: "kubernetes.rollout.undo", Params: uid, Confirm: true, ConfirmText: "Roll back to the previous revision?"},
+		{ID: "kubernetes.cronjob.trigger", Label: "Trigger", Icon: lucide("play"), RouteID: "kubernetes.cronjob.trigger", Params: uid, Confirm: true, ConfirmText: "Create a Job from this CronJob now?"},
 		{ID: "kubernetes.service.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.service.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
 		{ID: "kubernetes.pod.open", Label: "Open", Icon: lucide("external-link"), RouteID: "kubernetes.pod.open", Open: plugin.OpenURL, Params: map[string]string{"namespace": "${resource.namespace}", "name": "${resource.name}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
 	}

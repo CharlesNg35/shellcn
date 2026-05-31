@@ -24,11 +24,11 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Config:              configSchema(),
 		Capabilities:        []plugin.Capability{"terminal"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutTabs,
-		Tabs: []plugin.Tab{{
+		Layout:              plugin.LayoutSingle,
+		Tabs: []plugin.Panel{{
 			Key: "terminal", Label: "Terminal", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "terminal"},
-			Panel: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "telnet.shell", Method: plugin.MethodWS, Params: map[string]string{"cols": "80", "rows": "24"}},
-			Config: plugin.TerminalConfig{Zoom: true, Search: true}.Map(),
+			Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "telnet.shell", Method: plugin.MethodWS, Params: map[string]string{"cols": "80", "rows": "24"}},
+			Config: plugin.TerminalConfig{Zoom: true, Search: true},
 		}},
 		Streams: []plugin.Stream{{ID: "telnet.shell", Kind: plugin.StreamTerminal, RouteID: "telnet.shell"}},
 		Recording: []plugin.RecordingCapability{{

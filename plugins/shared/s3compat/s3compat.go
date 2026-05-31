@@ -18,6 +18,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	transfermanager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	smithy "github.com/aws/smithy-go"
@@ -61,9 +62,12 @@ func (s *Session) Close() error {
 }
 
 type Client struct {
-	s3     *awss3.Client
-	bucket string
-	prefix string
+	s3       *awss3.Client
+	presign  *awss3.PresignClient
+	uploader *transfermanager.Client
+	region   string
+	bucket   string
+	prefix   string
 }
 
 func Connect(_ context.Context, cfg plugin.ConnectConfig, opts Options) (plugin.Session, error) {
@@ -86,7 +90,15 @@ func Connect(_ context.Context, cfg plugin.ConnectConfig, opts Options) (plugin.
 	if opts.Endpoint != "" {
 		s3opts.BaseEndpoint = aws.String(opts.Endpoint)
 	}
-	return &Session{fs: &Client{s3: awss3.New(s3opts), bucket: opts.Bucket, prefix: normalizePrefix(opts.Prefix)}}, nil
+	api := awss3.New(s3opts)
+	return &Session{fs: &Client{
+		s3:       api,
+		presign:  awss3.NewPresignClient(api),
+		uploader: transfermanager.New(api),
+		region:   opts.Region,
+		bucket:   opts.Bucket,
+		prefix:   normalizePrefix(opts.Prefix),
+	}}, nil
 }
 
 func normalizeOptions(cfg plugin.ConnectConfig, opts *Options) error {
@@ -271,7 +283,7 @@ func (c *Client) OpenRange(ctx context.Context, p string, offset, length int64) 
 }
 
 func (c *Client) Write(ctx context.Context, p string, r io.Reader) error {
-	_, err := c.s3.PutObject(ctx, &awss3.PutObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(c.key(p)), Body: r})
+	_, err := c.uploader.UploadObject(ctx, &transfermanager.UploadObjectInput{Bucket: aws.String(c.bucket), Key: aws.String(c.key(p)), Body: r})
 	return err
 }
 

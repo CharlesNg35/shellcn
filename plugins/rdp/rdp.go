@@ -33,14 +33,14 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"remote_desktop"},
 		CredentialKinds:     credentialKinds(),
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
-		Layout:              plugin.LayoutTabs,
-		Tabs: []plugin.Tab{{
+		Layout:              plugin.LayoutSingle,
+		Tabs: []plugin.Panel{{
 			Key:    "console",
 			Label:  "Console",
 			Icon:   icon,
-			Panel:  plugin.PanelRemoteDesktop,
+			Type:   plugin.PanelRemoteDesktop,
 			Source: &plugin.DataSource{RouteID: "rdp.desktop", Method: plugin.MethodWS},
-			Config: plugin.RemoteDesktopConfig{Resize: true}.Map(),
+			Config: plugin.RemoteDesktopConfig{Resize: true},
 		}},
 		Streams: []plugin.Stream{{ID: "rdp.desktop", Kind: plugin.StreamDesktop, RouteID: "rdp.desktop"}},
 		Recording: []plugin.RecordingCapability{{

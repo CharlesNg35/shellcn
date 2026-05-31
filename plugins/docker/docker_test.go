@@ -43,8 +43,8 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 	if containerRes == nil {
 		t.Fatal("missing container resource")
 	}
-	if !contains(containerRes.ListActionIDs, "docker.container.create") {
-		t.Fatalf("container list actions = %#v, want create action", containerRes.ListActionIDs)
+	if !contains(containerRes.Actions.Toolbar, "docker.container.create") {
+		t.Fatalf("container list actions = %#v, want create action", containerRes.Actions.Toolbar)
 	}
 	wantTabs := []string{"overview", "terminal", "logs", "inspect", "env"}
 	if len(containerRes.Detail.Tabs) != len(wantTabs) {
@@ -55,8 +55,8 @@ func TestManifestDeclaresDockerWorkspace(t *testing.T) {
 			t.Fatalf("tab %d = %q, want %q", i, containerRes.Detail.Tabs[i].Key, want)
 		}
 	}
-	if containerRes.Detail.Tabs[0].Panel != plugin.PanelDocument || containerRes.Detail.Tabs[0].Source.RouteID != "docker.container.overview" {
-		t.Fatalf("container overview should render selected container details, got panel=%s source=%+v", containerRes.Detail.Tabs[0].Panel, containerRes.Detail.Tabs[0].Source)
+	if containerRes.Detail.Tabs[0].Type != plugin.PanelDocument || containerRes.Detail.Tabs[0].Source.RouteID != "docker.container.overview" {
+		t.Fatalf("container overview should render selected container details, got panel=%s source=%+v", containerRes.Detail.Tabs[0].Type, containerRes.Detail.Tabs[0].Source)
 	}
 	var composeRes *plugin.ResourceType
 	for i := range m.Resources {

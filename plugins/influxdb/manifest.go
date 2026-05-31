@@ -18,28 +18,36 @@ func resources() []plugin.ResourceType {
 		{
 			Kind: "status", Title: "Status", List: plugin.DataSource{RouteID: rid("status.list")},
 			Columns: statusColumns(),
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("status.read"), Params: statusParams()}},
-				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("status.read"), Params: statusParams()}},
+				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS}, Config: queryConfig()},
 			}},
 		},
 		{
 			Kind: "namespace", Title: "Databases / Buckets", List: plugin.DataSource{RouteID: rid("namespaces.list")},
-			Columns: namespaceColumns(), ListActionIDs: []string{rid("namespace.create")}, RowActionIDs: []string{rid("write.namespace"), rid("namespace.delete")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}", ActionIDs: []string{rid("write.namespace"), rid("namespace.delete")}}, Tabs: []plugin.Tab{
-				{Key: "overview", Label: "Overview", Icon: icon("info"), Panel: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("namespace.read"), Params: namespaceParams()}},
-				{Key: "measurements", Label: "Measurements", Icon: icon("table-2"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurements.list"), Params: namespaceParams()}, Config: plugin.TableConfig{Columns: measurementColumns(), Exportable: true}.Map()},
-				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: namespaceParams()}, Config: queryConfig()},
+			Columns: namespaceColumns(),
+			Actions: plugin.ResourceActions{
+				Toolbar: []string{rid("namespace.create")},
+				Row:     []string{rid("namespace.delete")},
+				Detail:  []string{rid("write.namespace"), rid("namespace.delete")},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("namespace.read"), Params: namespaceParams()}},
+				{Key: "measurements", Label: "Measurements", Icon: icon("table-2"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurements.list"), Params: namespaceParams()}, Config: plugin.TableConfig{Columns: measurementColumns(), Exportable: true}},
+				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: namespaceParams()}, Config: queryConfig()},
 			}},
 		},
 		{
 			Kind: "measurement", Title: "Measurements", List: plugin.DataSource{RouteID: rid("measurements.list")},
-			Columns: measurementColumns(), RowActionIDs: []string{rid("write.measurement")},
-			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}", ActionIDs: []string{rid("write.measurement")}}, Tabs: []plugin.Tab{
-				{Key: "data", Label: "Data", Icon: icon("table-properties"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.rows"), Params: measurementParams()}, Config: plugin.TableConfig{Exportable: true, EmptyText: "No points in the selected range."}.Map()},
-				{Key: "fields", Label: "Fields", Icon: icon("columns-3"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.fields"), Params: measurementParams()}, Config: plugin.TableConfig{Columns: fieldColumns(), Exportable: true}.Map()},
-				{Key: "tags", Label: "Tags", Icon: icon("tags"), Panel: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.tags"), Params: measurementParams()}, Config: plugin.TableConfig{Columns: tagColumns(), Exportable: true}.Map()},
-				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Panel: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: namespaceParams()}, Config: measurementQueryConfig()},
+			Columns: measurementColumns(),
+			Actions: plugin.ResourceActions{
+				Detail: []string{rid("write.measurement")},
+			},
+			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
+				{Key: "data", Label: "Data", Icon: icon("table-properties"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.rows"), Params: measurementParams()}, Config: plugin.TableConfig{Exportable: true, EmptyText: "No points in the selected range."}},
+				{Key: "fields", Label: "Fields", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.fields"), Params: measurementParams()}, Config: plugin.TableConfig{Columns: fieldColumns(), Exportable: true}},
+				{Key: "tags", Label: "Tags", Icon: icon("tags"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("measurement.tags"), Params: measurementParams()}, Config: plugin.TableConfig{Columns: tagColumns(), Exportable: true}},
+				{Key: "query", Label: "Query", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: namespaceParams()}, Config: measurementQueryConfig()},
 			}},
 		},
 	}
@@ -54,7 +62,7 @@ func actions() []plugin.Action {
 	}
 }
 
-func queryConfig() map[string]any {
+func queryConfig() plugin.QueryEditorConfig {
 	return plugin.QueryEditorConfig{
 		Language:          "plaintext",
 		Label:             "Query",
@@ -63,10 +71,10 @@ func queryConfig() map[string]any {
 		EmptyText:         "Run a query to see results.",
 		CompletionRouteID: rid("completion"),
 		Exportable:        true,
-	}.Map()
+	}
 }
 
-func measurementQueryConfig() map[string]any {
+func measurementQueryConfig() plugin.QueryEditorConfig {
 	return queryConfig()
 }
 

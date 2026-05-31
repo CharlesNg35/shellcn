@@ -99,8 +99,59 @@ func TestNeo4jPluginIntegration(t *testing.T) {
 		t.Fatalf("expected nodes, got %#v", nodes)
 	}
 	nodeRef := nodes[0]["ref"].(map[string]any)
-	call(ctx, t, routes[rid("node.read")], sess, map[string]string{"id": fmt.Sprint(nodeRef["uid"])}, nil, nil)
-	call(ctx, t, routes[rid("node.relationships")], sess, map[string]string{"id": fmt.Sprint(nodeRef["uid"])}, nil, nil)
+	nodeID := fmt.Sprint(nodeRef["uid"])
+	call(ctx, t, routes[rid("node.read")], sess, map[string]string{"id": nodeID}, nil, nil)
+	call(ctx, t, routes[rid("node.relationships")], sess, map[string]string{"id": nodeID}, nil, nil)
+
+	// Node property update: the {"properties":{...}} body replaces the property map,
+	// read it back via node.properties and assert the change.
+	updated := call(ctx, t, routes[rid("node.update")], sess, map[string]string{"id": nodeID}, nil, testJSON(t, map[string]any{
+		"properties": map[string]any{"name": "Ada", "kind": "engineer", "team": "core"},
+	})).(row)
+	if props := asMap(updated["properties"]); fmt.Sprint(props["team"]) != "core" {
+		t.Fatalf("expected updated node properties to include team=core, got %#v", updated["properties"])
+	}
+	readback := asMap(call(ctx, t, routes[rid("node.properties")], sess, map[string]string{"id": nodeID}, nil, nil))
+	if fmt.Sprint(readback["team"]) != "core" {
+		t.Fatalf("node.properties did not reflect update: %#v", readback)
+	}
+	// The code-editor body {"content":"<json>"} is accepted as well; this replaces
+	// the map, so the previously-set team key is cleared.
+	editor := call(ctx, t, routes[rid("node.update")], sess, map[string]string{"id": nodeID}, nil, testJSON(t, map[string]any{
+		"content": `{"name":"Ada","kind":"engineer"}`,
+	})).(row)
+	if props := asMap(editor["properties"]); fmt.Sprint(props["team"]) != "<nil>" {
+		t.Fatalf("expected content-editor update to clear team, got %#v", editor["properties"])
+	}
+
+	// Relationship property update mirrors the node path.
+	relList := pageItems(call(ctx, t, routes[rid("relationships.list")], sess, nil, url.Values{"p.database": []string{db}, "p.type": []string{"KNOWS"}}, nil))
+	if len(relList) != 1 {
+		t.Fatalf("expected one KNOWS relationship, got %#v", relList)
+	}
+	relID := fmt.Sprint(relList[0]["ref"].(map[string]any)["uid"])
+	relUpdated := call(ctx, t, routes[rid("relationship.update")], sess, map[string]string{"id": relID}, nil, testJSON(t, map[string]any{
+		"properties": map[string]any{"since": int64(2026), "weight": int64(5)},
+	})).(row)
+	if props := asMap(relUpdated["properties"]); fmt.Sprint(props["weight"]) != "5" {
+		t.Fatalf("expected relationship update to set weight=5, got %#v", relUpdated["properties"])
+	}
+
+	// Constraint create round-trip: create a uniqueness constraint, confirm it is
+	// listed, then drop it via schema.drop and confirm it is gone.
+	constraintName := "shellcn_it_unique"
+	call(ctx, t, routes[rid("constraint.create")], sess, map[string]string{"database": db}, nil, testJSON(t, map[string]any{
+		"name": constraintName, "entity_type": "node", "type": "unique", "label": "ShellCNIT", "properties": "name",
+	}))
+	constraints := pageItems(call(ctx, t, routes[rid("constraints.list")], sess, nil, url.Values{"p.database": []string{db}}, nil))
+	if !hasRowName(constraints, constraintName) {
+		t.Fatalf("expected created constraint %q in %#v", constraintName, constraints)
+	}
+	call(ctx, t, routes[rid("schema.drop")], sess, map[string]string{"id": mustEncodeID("constraint", db, constraintName)}, nil, nil)
+	constraints = pageItems(call(ctx, t, routes[rid("constraints.list")], sess, nil, url.Values{"p.database": []string{db}}, nil))
+	if hasRowName(constraints, constraintName) {
+		t.Fatalf("constraint %q still present after drop: %#v", constraintName, constraints)
+	}
 
 	rels := pageItems(call(ctx, t, routes[rid("relationships.list")], sess, nil, url.Values{"p.database": []string{db}, "p.type": []string{"KNOWS"}}, nil))
 	if len(rels) != 1 {

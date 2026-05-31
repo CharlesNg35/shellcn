@@ -2,6 +2,7 @@ package escompat
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
@@ -17,6 +18,42 @@ func (w wrappedSession) OpenChannel(context.Context, plugin.ChannelRequest) (plu
 	return nil, plugin.ErrNotSupported
 }
 func (w wrappedSession) Close() error { return nil }
+
+func TestValidateIndex(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want string
+		ok   bool
+	}{
+		{name: "plain", in: "orders", want: "orders", ok: true},
+		{name: "trims", in: "  orders  ", want: "orders", ok: true},
+		{name: "empty", in: "", ok: false},
+		{name: "blank", in: "   ", ok: false},
+		{name: "wildcard", in: "orders-*", ok: false},
+		{name: "comma", in: "orders,users", ok: false},
+		{name: "all", in: "_all", ok: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := validateIndex(tc.in)
+			if tc.ok {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if got != tc.want {
+					t.Fatalf("got %q want %q", got, tc.want)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("expected error for %q", tc.in)
+			}
+			if !errors.Is(err, plugin.ErrInvalidInput) {
+				t.Fatalf("error %v is not ErrInvalidInput", err)
+			}
+		})
+	}
+}
 
 func TestUnwrapResolvesThroughHandleWrapper(t *testing.T) {
 	inner := &Session{}

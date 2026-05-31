@@ -14,7 +14,7 @@ func clusterShellAction() plugin.Action {
 		ID: "kubernetes.cluster.shell", Label: "Cluster Shell", Icon: lucide("terminal"),
 		RouteID: "kubernetes.cluster.shell", Open: plugin.OpenDock, Panel: plugin.PanelTerminal,
 		Params:   map[string]string{"tty": "true", "cols": "80", "rows": "24"},
-		Config:   plugin.TerminalConfig{Zoom: true, Search: true}.Map(),
+		Config:   plugin.TerminalConfig{Zoom: true, Search: true},
 		IconOnly: true,
 	}
 }
@@ -29,7 +29,7 @@ func applyYAMLAction() plugin.Action {
 			InitialContent: applyStarter,
 			SaveRouteID:    "kubernetes.resource.apply",
 			SaveMethod:     plugin.MethodPost,
-		}.Map(),
+		},
 		IconOnly: true,
 	}
 }

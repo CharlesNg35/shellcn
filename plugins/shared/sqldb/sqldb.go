@@ -62,6 +62,54 @@ type ColumnSpec struct {
 	Unique   bool   `json:"unique"`
 }
 
+// ColumnsField describes which ColumnSpec attributes a dialect's DDL builder
+// honours, so a plugin only exposes sub-fields its handler actually applies.
+type ColumnsField struct {
+	TypePlaceholder string
+	// TypeSuggestions are the dialect's common column types; the type field
+	// becomes a free-text autocomplete offering them (custom types stay typable).
+	TypeSuggestions []string
+	Default         bool
+	Primary         bool
+	Unique          bool
+}
+
+// ColumnsArrayField builds the create-table "columns" field as a repeatable
+// array of column objects. The submitted value is the same []ColumnSpec shape
+// ParseDDLColumns reads, so handlers bind it unchanged.
+func ColumnsArrayField(opts ColumnsField) plugin.Field {
+	typeField := plugin.Field{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Placeholder: opts.TypePlaceholder}
+	if len(opts.TypeSuggestions) > 0 {
+		typeField.Type = plugin.FieldAutocomplete
+		for _, t := range opts.TypeSuggestions {
+			typeField.Options = append(typeField.Options, plugin.Option{Label: t, Value: t})
+		}
+	}
+	sub := []plugin.Field{
+		{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: IdentifierPattern}}},
+		typeField,
+		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle},
+	}
+	if opts.Primary {
+		sub = append(sub, plugin.Field{Key: "primary", Label: "Primary key", Type: plugin.FieldToggle})
+	}
+	if opts.Unique {
+		sub = append(sub, plugin.Field{Key: "unique", Label: "Unique", Type: plugin.FieldToggle})
+	}
+	if opts.Default {
+		sub = append(sub, plugin.Field{Key: "default", Label: "Default expression", Type: plugin.FieldText})
+	}
+	return plugin.Field{
+		Key:       "columns",
+		Label:     "Columns",
+		Type:      plugin.FieldArray,
+		Required:  true,
+		MinItems:  1,
+		ItemLabel: "Column",
+		Item:      &plugin.Field{Type: plugin.FieldObject, Fields: sub},
+	}
+}
+
 type TLSOptions struct {
 	Mode              string
 	Host              string

@@ -55,7 +55,6 @@ func routes() []plugin.Route {
 		{ID: "redis.clients.list", Method: plugin.MethodGet, Path: "/clients", Permission: "redis.clients.read", Risk: plugin.RiskSafe, AuditEvent: "redis.clients.list", Handle: listClients},
 		{ID: "redis.channels.list", Method: plugin.MethodGet, Path: "/channels", Permission: "redis.pubsub.read", Risk: plugin.RiskSafe, AuditEvent: "redis.channels.list", Handle: listChannels},
 		{ID: "redis.terminal", Method: plugin.MethodWS, Path: "/terminal", Permission: "redis.command.execute", Risk: plugin.RiskPrivileged, AuditEvent: "redis.terminal", Stream: terminalStream},
-		{ID: "redis.command", Method: plugin.MethodWS, Path: "/command", Permission: "redis.command.execute", Risk: plugin.RiskPrivileged, AuditEvent: "redis.command", Stream: commandStream},
 		{ID: "redis.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "redis.read", Risk: plugin.RiskSafe, AuditEvent: "redis.completion", Handle: completionRoute},
 	}
 }
@@ -356,44 +355,6 @@ func terminalStream(rc *plugin.RequestContext, client plugin.ClientStream) error
 			if client.Context().Err() != nil || errors.Is(err, io.EOF) {
 				return nil
 			}
-			return err
-		}
-	}
-}
-
-func commandStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
-	s, err := redisSession(rc)
-	if err != nil {
-		return err
-	}
-	dec := json.NewDecoder(client)
-	enc := json.NewEncoder(client)
-	for {
-		var req sqldb.QueryRequest
-		if err := dec.Decode(&req); err != nil {
-			if client.Context().Err() != nil || errors.Is(err, io.EOF) {
-				return nil
-			}
-			if err := enc.Encode(map[string]any{"error": "Invalid Redis command request."}); err != nil {
-				return err
-			}
-			continue
-		}
-		result, err := executeCommandRequest(client.Context(), s, req)
-		rc.Audit(commandAuditResult(err), commandAuditParams(req.Query, result, err), err)
-		if err != nil {
-			payload := map[string]any{"error": err.Error()}
-			var confirmErr confirmationError
-			if errors.As(err, &confirmErr) {
-				payload["requiresConfirmation"] = true
-				payload["confirmMessage"] = "This Redis command can change data, configuration, or server state. Review it before running."
-			}
-			if err := enc.Encode(payload); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := enc.Encode(result); err != nil {
 			return err
 		}
 	}
