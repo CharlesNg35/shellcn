@@ -104,11 +104,12 @@ func backupColumns() []plugin.Column {
 
 func qemuResource() plugin.ResourceType {
 	cols := guestColumns()
-	lifecycle := []string{"act.qemu.start", "act.qemu.shutdown", "act.qemu.reboot", "act.qemu.stop", "act.qemu.suspend", "act.qemu.resume", "act.qemu.migrate", "act.qemu.snapshot.create", "act.qemu.backup"}
+	lifecycle := []string{"act.qemu.start", "act.qemu.shutdown", "act.qemu.reboot", "act.qemu.stop", "act.qemu.suspend", "act.qemu.resume", "act.qemu.migrate", "act.qemu.clone", "act.qemu.resize", "act.qemu.restore", "act.qemu.snapshot.create", "act.qemu.backup", "act.qemu.destroy"}
+	row := []string{"act.qemu.destroy"}
 	return plugin.ResourceType{
 		Kind: "qemu", Title: "Virtual Machines",
 		List: plugin.DataSource{RouteID: "proxmox.qemu.list"}, Columns: cols,
-		Actions: plugin.ResourceActions{Detail: lifecycle},
+		Actions: plugin.ResourceActions{Detail: lifecycle, Row: row},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
@@ -124,11 +125,12 @@ func qemuResource() plugin.ResourceType {
 
 func lxcResource() plugin.ResourceType {
 	cols := guestColumns()
-	lifecycle := []string{"act.lxc.start", "act.lxc.shutdown", "act.lxc.reboot", "act.lxc.stop", "act.lxc.migrate", "act.lxc.snapshot.create", "act.lxc.backup"}
+	lifecycle := []string{"act.lxc.start", "act.lxc.shutdown", "act.lxc.reboot", "act.lxc.stop", "act.lxc.migrate", "act.lxc.clone", "act.lxc.restore", "act.lxc.snapshot.create", "act.lxc.backup", "act.lxc.destroy"}
+	row := []string{"act.lxc.destroy"}
 	return plugin.ResourceType{
 		Kind: "lxc", Title: "Containers",
 		List: plugin.DataSource{RouteID: "proxmox.lxc.list"}, Columns: cols,
-		Actions: plugin.ResourceActions{Detail: lifecycle},
+		Actions: plugin.ResourceActions{Detail: lifecycle, Row: row},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
@@ -155,13 +157,14 @@ func nodeResource() plugin.ResourceType {
 	return plugin.ResourceType{
 		Kind: "node", Title: "Nodes",
 		List: plugin.DataSource{RouteID: "proxmox.node.list"}, Columns: cols,
+		Actions: plugin.ResourceActions{Detail: []string{"act.node.power"}},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "status", Severities: statusSeverities},
 			Tabs: []plugin.Panel{
 				{Key: "overview", Label: "Overview", Icon: icon("activity"), Type: plugin.PanelMetrics, Source: &plugin.DataSource{RouteID: "proxmox.node.metrics", Method: plugin.MethodWS, Params: nodeParam}, Config: cpuMemMetrics()},
 				{Key: "shell", Label: "Shell", Icon: icon("terminal"), Type: plugin.PanelTerminal, Source: &plugin.DataSource{RouteID: "proxmox.node.shell", Method: plugin.MethodWS, Params: nodeParam}, Config: plugin.TerminalConfig{Zoom: true, Search: true}},
 				{Key: "storage", Label: "Storage", Icon: icon("database"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.node.storage", Params: nodeParam}, Config: plugin.TableConfig{Columns: storageColumns()}},
-				{Key: "tasks", Label: "Tasks", Icon: icon("list"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.node.tasks", Params: nodeParam}, Config: plugin.TableConfig{Columns: taskColumns(), RowClick: plugin.RowClickDetail}},
+				{Key: "tasks", Label: "Tasks", Icon: icon("list"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "proxmox.node.tasks", Params: nodeParam}, Config: plugin.TableConfig{Columns: taskColumns(), RowActionIDs: []string{"act.task.stop"}, RowClick: plugin.RowClickDetail}},
 			},
 		},
 	}
@@ -234,6 +237,20 @@ func cpuMemMetrics() plugin.MetricsConfig {
 
 func actions() []plugin.Action {
 	acts := append(lifecycleActions("qemu"), lifecycleActions("lxc")...)
+	acts = append(acts,
+		plugin.Action{
+			ID: "act.node.power", Label: "Power", Icon: icon("power"), RouteID: "proxmox.node.power",
+			Params:  map[string]string{"node": "${resource.uid}"},
+			Confirm: true, ConfirmText: "Reboot or shut down this node? Running guests are affected.",
+		},
+		plugin.Action{
+			ID: "act.task.stop", Label: "Stop", Icon: icon("square"), RouteID: "proxmox.task.stop",
+			Params:      map[string]string{"node": "${resource.namespace}", "upid": "${resource.uid}"},
+			Confirm:     true,
+			ConfirmText: "Stop this running task?",
+			EnabledWhen: whenStatus("running"),
+		},
+	)
 	return append(acts, plugin.Action{
 		ID: "act.backup.delete", Label: "Delete", Icon: icon("trash"), RouteID: "proxmox.backup.delete",
 		Params:  map[string]string{"node": "${resource.namespace}", "storage": "${resource.name}", "volume": "${resource.uid}"},
@@ -256,11 +273,15 @@ func lifecycleActions(kind string) []plugin.Action {
 		{ID: "act." + kind + ".migrate", Label: "Migrate", Icon: icon("route"), RouteID: "proxmox." + kind + ".migrate", Params: gp},
 		{ID: "act." + kind + ".snapshot.create", Label: "Snapshot", Icon: icon("camera"), RouteID: "proxmox." + kind + ".snapshot.create", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "snapshots"}},
 		{ID: "act." + kind + ".backup", Label: "Backup", Icon: icon("save"), RouteID: "proxmox." + kind + ".backup", Params: gp, OnSuccess: &plugin.ActionSuccess{SelectTab: "backups"}},
+		{ID: "act." + kind + ".clone", Label: "Clone", Icon: icon("copy"), RouteID: "proxmox." + kind + ".clone", Params: gp},
+		{ID: "act." + kind + ".restore", Label: "Restore", Icon: icon("upload"), RouteID: "proxmox." + kind + ".restore", Params: map[string]string{"node": "${resource.namespace}"}, Confirm: true, ConfirmText: "Restore a guest from a backup archive?"},
+		{ID: "act." + kind + ".destroy", Label: "Destroy", Icon: icon("trash-2"), RouteID: "proxmox." + kind + ".destroy", Params: gp, Confirm: true, ConfirmText: "Destroy this guest and all its disks? This cannot be undone.", EnabledWhen: whenStatus("stopped")},
 	}
 	if kind == "qemu" {
 		acts = append(acts,
 			plugin.Action{ID: "act.qemu.suspend", Label: "Suspend", Icon: icon("power-off"), RouteID: "proxmox.qemu.suspend", Params: gp, Confirm: true, ConfirmText: "Suspend this VM to disk?", EnabledWhen: whenStatus("running")},
 			plugin.Action{ID: "act.qemu.resume", Label: "Resume", Icon: icon("play"), RouteID: "proxmox.qemu.resume", Params: gp},
+			plugin.Action{ID: "act.qemu.resize", Label: "Resize disk", Icon: icon("scaling"), RouteID: "proxmox.qemu.resize", Params: gp},
 		)
 	}
 	snapParams := map[string]string{"node": "${resource.namespace}", "vmid": "${resource.name}", "snapname": "${resource.uid}"}

@@ -159,7 +159,7 @@ func serviceResource() plugin.ResourceType {
 		Columns: serviceColumns(),
 		Actions: plugin.ResourceActions{
 			Row:    []string{"swarm.service.remove"},
-			Detail: []string{"swarm.service.open", "swarm.service.scale", "swarm.service.remove"},
+			Detail: []string{"swarm.service.open", "swarm.service.scale", "swarm.service.update", "swarm.service.rollback", "swarm.service.remove"},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
@@ -180,6 +180,10 @@ func stackResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "stack", Title: "Stacks", List: plugin.DataSource{RouteID: "swarm.stacks.list"}, Columns: columns,
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"swarm.stack.deploy"},
+			Detail:  []string{"swarm.stack.deploy"},
+		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},
 			Tabs: []plugin.Panel{
@@ -202,6 +206,9 @@ func nodeResource() plugin.ResourceType {
 	}
 	return plugin.ResourceType{
 		Kind: "node", Title: "Nodes", List: plugin.DataSource{RouteID: "swarm.nodes.list"}, Columns: columns,
+		Actions: plugin.ResourceActions{
+			Detail: []string{"swarm.node.update"},
+		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}", StatusField: "state", Severities: stateSeverities},
 			Tabs: []plugin.Panel{
@@ -230,6 +237,10 @@ func actions() []plugin.Action {
 	return []plugin.Action{
 		{ID: "swarm.service.open", Label: "Open", Icon: icon("external-link"), RouteID: "swarm.service.open", Open: plugin.OpenURL, Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "ports", Op: plugin.OpNotEmpty}}}},
 		{ID: "swarm.service.scale", Label: "Scale", Icon: icon("move-vertical"), RouteID: "swarm.service.scale", Params: map[string]string{"id": "${resource.uid}"}, EnabledWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "mode", Op: plugin.OpEq, Value: "replicated"}}}},
+		{ID: "swarm.service.update", Label: "Update", Icon: icon("pencil"), RouteID: "swarm.service.update", Params: map[string]string{"id": "${resource.uid}"}},
+		{ID: "swarm.service.rollback", Label: "Rollback", Icon: icon("undo-2"), RouteID: "swarm.service.rollback", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Roll this service back to its previous spec?"},
 		{ID: "swarm.service.remove", Label: "Remove", Icon: icon("trash"), RouteID: "swarm.service.remove", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Remove this service?"},
+		{ID: "swarm.node.update", Label: "Update", Icon: icon("settings"), RouteID: "swarm.node.update", Params: map[string]string{"id": "${resource.uid}"}},
+		{ID: "swarm.stack.deploy", Label: "Deploy stack", Icon: icon("upload"), RouteID: "swarm.stack.deploy"},
 	}
 }

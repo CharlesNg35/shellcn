@@ -24,7 +24,7 @@ func resources() []plugin.ResourceType {
 			Columns: coreColumns(),
 			Actions: plugin.ResourceActions{
 				Toolbar: []string{rid("core.create")},
-				Row:     []string{rid("core.reload"), rid("core.delete")},
+				Row:     []string{rid("core.delete")},
 				Detail: []string{
 					rid("core.commit"), rid("core.optimize"), rid("core.reload"), rid("core.delete"),
 				},
@@ -55,7 +55,7 @@ func resources() []plugin.ResourceType {
 			Kind: "field", Title: "Fields", List: plugin.DataSource{RouteID: rid("schema.fields")},
 			Columns: fieldColumns(),
 			Actions: plugin.ResourceActions{
-				Row:    []string{rid("schema.field.replace"), rid("schema.field.delete")},
+				Row:    []string{rid("schema.field.delete")},
 				Detail: []string{rid("schema.field.replace"), rid("schema.field.delete")},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}/${resource.name}"}, Tabs: []plugin.Panel{

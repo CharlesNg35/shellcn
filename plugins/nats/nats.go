@@ -55,7 +55,7 @@ func resources() []plugin.ResourceType {
 			Columns: streamColumns(),
 			Actions: plugin.ResourceActions{
 				Toolbar: []string{"nats.stream.create"},
-				Row:     []string{"nats.stream.update", "nats.stream.purge", "nats.stream.delete"},
+				Row:     []string{"nats.stream.purge", "nats.stream.delete"},
 				Detail:  []string{"nats.message.publish", "nats.stream.update", "nats.stream.purge", "nats.stream.delete"},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{

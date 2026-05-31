@@ -114,7 +114,7 @@ var kinds = []kind{
 		name: "deployment", title: "Deployments", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "deployments"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("ready", "Ready", notSort), col("upToDate", "Up-to-date", num), col("available", "Available", num), ageCol()},
-		extra:   deploymentRow, actionIDs: scalable, detailTabs: []plugin.Panel{workloadPodsTab("deployment")},
+		extra:   deploymentRow, actionIDs: []string{"kubernetes.resource.scale", "kubernetes.resource.restart", "kubernetes.rollout.undo", "kubernetes.resource.delete"}, detailTabs: []plugin.Panel{workloadPodsTab("deployment")},
 	},
 	{
 		name: "statefulset", title: "StatefulSets", category: "workloads", icon: "layers", namespaced: true,
@@ -144,7 +144,7 @@ var kinds = []kind{
 		name: "cronjob", title: "CronJobs", category: "workloads", icon: "clock", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "cronjobs"},
 		columns: []plugin.Column{nameCol(), nsCol(), col("schedule", "Schedule"), col("suspend", "Suspend"), col("active", "Active", num), col("lastSchedule", "Last schedule", func(c *plugin.Column) { c.Type = plugin.ColumnDateTime }), ageCol()},
-		extra:   cronJobRow, actionIDs: justDelete,
+		extra:   cronJobRow, actionIDs: []string{"kubernetes.cronjob.trigger", "kubernetes.resource.delete"},
 	},
 	{
 		name: "replicationcontroller", title: "Replication Controllers", category: "workloads", icon: "layers", namespaced: true,
@@ -324,7 +324,7 @@ var kinds = []kind{
 		name: "node", title: "Nodes", category: "cluster", icon: "server",
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "nodes"},
 		columns: []plugin.Column{nameCol(), col("status", "Status", statusBadge(nodeSeverities)), col("roles", "Roles"), col("version", "Version"), ageCol()},
-		extra:   nodeRow, actionIDs: []string{"kubernetes.node.cordon", "kubernetes.node.uncordon"}, detailTabs: nodeDetailTabs(),
+		extra:   nodeRow, actionIDs: []string{"kubernetes.node.cordon", "kubernetes.node.uncordon", "kubernetes.node.drain"}, detailTabs: nodeDetailTabs(),
 	},
 	{
 		name: "event", title: "Events", category: "cluster", icon: "bell", namespaced: true,

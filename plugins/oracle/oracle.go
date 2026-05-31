@@ -175,7 +175,7 @@ func userResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "oracle.users.list"},
 		Columns: []plugin.Column{{Key: "name", Label: "User", Sortable: true}, {Key: "account_status", Label: "Status"}, {Key: "default_tablespace", Label: "Default tablespace"}, {Key: "temporary_tablespace", Label: "Temporary tablespace"}, {Key: "created", Label: "Created", Type: plugin.ColumnDateTime}},
 		Actions: plugin.ResourceActions{
-			Row:    []string{"oracle.user.lock", "oracle.user.unlock", "oracle.user.drop"},
+			Row:    []string{"oracle.user.drop"},
 			Detail: []string{"oracle.user.grant", "oracle.user.lock", "oracle.user.unlock", "oracle.user.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{

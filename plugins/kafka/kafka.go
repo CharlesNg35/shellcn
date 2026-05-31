@@ -63,7 +63,7 @@ func resources() []plugin.ResourceType {
 			Columns: topicColumns(),
 			Actions: plugin.ResourceActions{
 				Toolbar: []string{"kafka.topic.create"},
-				Row:     []string{"kafka.topic.add_partitions", "kafka.topic.delete"},
+				Row:     []string{"kafka.topic.delete"},
 				Detail:  []string{"kafka.message.produce", "kafka.topic.alter_config", "kafka.topic.add_partitions", "kafka.topic.delete"},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{

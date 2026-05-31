@@ -174,7 +174,7 @@ func userResource() plugin.ResourceType {
 		Columns: []plugin.Column{{Key: "name", Label: "User", Sortable: true}, {Key: "database", Label: "Database", Sortable: true}, {Key: "type", Label: "Type"}, {Key: "login", Label: "Login"}, {Key: "created", Label: "Created", Type: plugin.ColumnDateTime}},
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{"mssql.user.create"},
-			Row:     []string{"mssql.user.grant", "mssql.user.drop"},
+			Row:     []string{"mssql.user.drop"},
 			Detail:  []string{"mssql.user.grant", "mssql.user.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
@@ -189,7 +189,6 @@ func jobResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "mssql.jobs.list"},
 		Columns: []plugin.Column{{Key: "name", Label: "Job", Sortable: true}, {Key: "enabled", Label: "Enabled", Type: plugin.ColumnBool}, {Key: "owner", Label: "Owner"}, {Key: "created", Label: "Created", Type: plugin.ColumnDateTime}},
 		Actions: plugin.ResourceActions{
-			Row:    []string{"mssql.job.start", "mssql.job.enable", "mssql.job.disable"},
 			Detail: []string{"mssql.job.start", "mssql.job.enable", "mssql.job.disable"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{

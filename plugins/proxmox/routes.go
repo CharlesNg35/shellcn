@@ -53,6 +53,23 @@ func Routes() []plugin.Route {
 		{ID: "proxmox.backup.delete", Method: plugin.MethodDelete, Path: "/nodes/{node}/storage/{storage}/content/{volume}", Permission: "proxmox.backup.delete", Risk: plugin.RiskDestructive, AuditEvent: "proxmox.backup.delete", Handle: backupDelete},
 		{ID: "proxmox.qemu.migrate", Method: plugin.MethodPost, Path: "/nodes/{node}/qemu/{vmid}/migrate", Permission: "proxmox.qemu.write", Risk: plugin.RiskWrite, AuditEvent: "proxmox.qemu.migrate", Input: migrateSchema(), Handle: guestMigrate("qemu")},
 		{ID: "proxmox.lxc.migrate", Method: plugin.MethodPost, Path: "/nodes/{node}/lxc/{vmid}/migrate", Permission: "proxmox.lxc.write", Risk: plugin.RiskWrite, AuditEvent: "proxmox.lxc.migrate", Input: migrateSchema(), Handle: guestMigrate("lxc")},
+
+		// Clone / restore / destroy / resize.
+		{ID: "proxmox.qemu.clone", Method: plugin.MethodPost, Path: "/nodes/{node}/qemu/{vmid}/clone", Permission: "proxmox.qemu.write", Risk: plugin.RiskWrite, AuditEvent: "proxmox.qemu.clone", Input: cloneSchema("qemu"), Handle: guestClone("qemu")},
+		{ID: "proxmox.lxc.clone", Method: plugin.MethodPost, Path: "/nodes/{node}/lxc/{vmid}/clone", Permission: "proxmox.lxc.write", Risk: plugin.RiskWrite, AuditEvent: "proxmox.lxc.clone", Input: cloneSchema("lxc"), Handle: guestClone("lxc")},
+		{ID: "proxmox.qemu.restore", Method: plugin.MethodPost, Path: "/nodes/{node}/qemu", Permission: "proxmox.qemu.write", Risk: plugin.RiskWrite, AuditEvent: "proxmox.qemu.restore", Input: restoreSchema("qemu"), Handle: guestRestore("qemu")},
+		{ID: "proxmox.lxc.restore", Method: plugin.MethodPost, Path: "/nodes/{node}/lxc", Permission: "proxmox.lxc.write", Risk: plugin.RiskWrite, AuditEvent: "proxmox.lxc.restore", Input: restoreSchema("lxc"), Handle: guestRestore("lxc")},
+		{ID: "proxmox.qemu.destroy", Method: plugin.MethodDelete, Path: "/nodes/{node}/qemu/{vmid}", Permission: "proxmox.qemu.write", Risk: plugin.RiskDestructive, AuditEvent: "proxmox.qemu.destroy", Handle: guestDestroy("qemu")},
+		{ID: "proxmox.lxc.destroy", Method: plugin.MethodDelete, Path: "/nodes/{node}/lxc/{vmid}", Permission: "proxmox.lxc.write", Risk: plugin.RiskDestructive, AuditEvent: "proxmox.lxc.destroy", Handle: guestDestroy("lxc")},
+		{ID: "proxmox.qemu.resize", Method: plugin.MethodPut, Path: "/nodes/{node}/qemu/{vmid}/resize", Permission: "proxmox.qemu.write", Risk: plugin.RiskWrite, AuditEvent: "proxmox.qemu.resize", Input: resizeSchema(), Handle: qemuResize},
+
+		// Node power.
+		{ID: "proxmox.node.power", Method: plugin.MethodPost, Path: "/nodes/{node}/status", Permission: "proxmox.node.write", Risk: plugin.RiskDestructive, AuditEvent: "proxmox.node.power", Input: powerSchema(), Handle: nodePower},
+
+		// Task control.
+		{ID: "proxmox.task.stop", Method: plugin.MethodDelete, Path: "/nodes/{node}/tasks/{upid}", Permission: "proxmox.task.write", Risk: plugin.RiskWrite, AuditEvent: "proxmox.task.stop", Handle: taskStop},
+		{ID: "proxmox.task.status", Method: plugin.MethodGet, Path: "/nodes/{node}/tasks/{upid}/status", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.task.status", Handle: taskStatus},
+		{ID: "proxmox.task.log", Method: plugin.MethodGet, Path: "/nodes/{node}/tasks/{upid}/log", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.task.log", Handle: taskLog},
 	}
 
 	// Lifecycle (per guest kind).
@@ -387,6 +404,7 @@ func listTasks(rc *plugin.RequestContext) (any, error) {
 			"status":    status,
 			"starttime": rfcTime(t["starttime"]),
 			"_id":       upid,
+			"ref":       plugin.ResourceRef{Kind: "task", Namespace: node, Name: node, UID: upid},
 		})
 	}
 	return pageRows(rc, rows)

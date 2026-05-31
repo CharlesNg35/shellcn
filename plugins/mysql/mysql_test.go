@@ -324,11 +324,14 @@ func TestUserActionsWiredToRoutes(t *testing.T) {
 	if !contains(user.Actions.Toolbar, "mysql.user.create") {
 		t.Fatalf("user toolbar = %#v, want create", user.Actions.Toolbar)
 	}
-	if !contains(user.Actions.Row, "mysql.user.drop") || !contains(user.Actions.Row, "mysql.user.grant") {
-		t.Fatalf("user row actions = %#v, want grant+drop", user.Actions.Row)
+	if !contains(user.Actions.Row, "mysql.user.drop") {
+		t.Fatalf("user row actions = %#v, want drop", user.Actions.Row)
 	}
-	if !contains(user.Actions.Detail, "mysql.user.grant") {
-		t.Fatalf("user detail actions = %#v, want grant", user.Actions.Detail)
+	if contains(user.Actions.Row, "mysql.user.grant") {
+		t.Fatalf("user row actions = %#v, grant belongs in detail not row", user.Actions.Row)
+	}
+	if !contains(user.Actions.Detail, "mysql.user.grant") || !contains(user.Actions.Detail, "mysql.user.drop") {
+		t.Fatalf("user detail actions = %#v, want grant+drop", user.Actions.Detail)
 	}
 }
 

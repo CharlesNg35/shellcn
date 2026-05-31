@@ -62,7 +62,7 @@ func resources() []plugin.ResourceType {
 			Kind: "task", Title: "Tasks", List: plugin.DataSource{RouteID: rid("tasks.list")},
 			Columns: taskColumns(),
 			Actions: plugin.ResourceActions{
-				Row:    []string{rid("task.cancel"), rid("task.delete")},
+				Row:    []string{rid("task.delete")},
 				Detail: []string{rid("task.cancel"), rid("task.delete")},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Task ${resource.name}", StatusField: "status", Severities: taskStatusSeverities}, Tabs: []plugin.Panel{
@@ -74,7 +74,7 @@ func resources() []plugin.ResourceType {
 			Columns: keyColumns(),
 			Actions: plugin.ResourceActions{
 				Toolbar: []string{rid("key.create")},
-				Row:     []string{rid("key.update"), rid("key.delete")},
+				Row:     []string{rid("key.delete")},
 				Detail:  []string{rid("key.update"), rid("key.delete")},
 			},
 			Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{

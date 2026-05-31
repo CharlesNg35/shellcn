@@ -37,7 +37,7 @@ func resources(provider Provider) []plugin.ResourceType {
 			Columns: indexColumns(),
 			Actions: plugin.ResourceActions{
 				Toolbar: []string{routeID(provider, "index.create")},
-				Row:     []string{routeID(provider, "index.refresh"), routeID(provider, "index.delete")},
+				Row:     []string{routeID(provider, "index.delete")},
 				Detail: []string{
 					routeID(provider, "mapping.update"),
 					routeID(provider, "settings.update"),

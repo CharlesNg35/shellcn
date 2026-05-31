@@ -29,6 +29,10 @@ func Routes() []plugin.Route {
 
 		{ID: "kubernetes.node.cordon", Method: plugin.MethodPost, Path: "/nodes/cordon", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.node.cordon", Handle: CordonNode},
 		{ID: "kubernetes.node.uncordon", Method: plugin.MethodPost, Path: "/nodes/uncordon", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.node.uncordon", Handle: UncordonNode},
+		{ID: "kubernetes.node.drain", Method: plugin.MethodPost, Path: "/nodes/drain", Permission: permDelete, Risk: plugin.RiskDestructive, AuditEvent: "kubernetes.node.drain", Input: drainSchema(), Handle: DrainNode},
+
+		{ID: "kubernetes.rollout.undo", Method: plugin.MethodPost, Path: "/resources/{kind}/rollout-undo", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.rollout.undo", Handle: RolloutUndo},
+		{ID: "kubernetes.cronjob.trigger", Method: plugin.MethodPost, Path: "/resources/{kind}/trigger", Permission: permWrite, Risk: plugin.RiskWrite, AuditEvent: "kubernetes.cronjob.trigger", Handle: TriggerCronJob},
 
 		{ID: "kubernetes.resource.yaml", Method: plugin.MethodGet, Path: "/resources/{kind}/yaml", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.yaml", Handle: GetYAML},
 		{ID: "kubernetes.resource.template", Method: plugin.MethodGet, Path: "/resources/{kind}/template", Permission: permRead, Risk: plugin.RiskSafe, AuditEvent: "kubernetes.resource.template", Handle: TemplateYAML},
@@ -62,6 +66,16 @@ func applySchema() *plugin.Schema {
 		Fields: []plugin.Field{
 			{Key: "content", Label: "Manifest", Type: plugin.FieldTextarea, Required: true},
 			{Key: "dryRun", Label: "Dry run", Type: plugin.FieldToggle},
+		},
+	}}}
+}
+
+func drainSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{
+		Name: "Drain",
+		Fields: []plugin.Field{
+			{Key: "gracePeriodSeconds", Label: "Grace period (s)", Type: plugin.FieldStepper, Default: 30, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}, {Type: plugin.ValidatorMax, Value: 3600}}},
+			{Key: "force", Label: "Force (evict unmanaged pods)", Type: plugin.FieldToggle},
 		},
 	}}}
 }

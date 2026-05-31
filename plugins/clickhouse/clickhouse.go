@@ -189,7 +189,6 @@ func mergeResource() plugin.ResourceType {
 		List:    plugin.DataSource{RouteID: "clickhouse.merges.list"},
 		Columns: mergeColumns(),
 		Actions: plugin.ResourceActions{
-			Row:    []string{"clickhouse.merge.stop", "clickhouse.merge.start"},
 			Detail: []string{"clickhouse.merge.stop", "clickhouse.merge.start"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
@@ -224,7 +223,7 @@ func userResource() plugin.ResourceType {
 		},
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{"clickhouse.user.create"},
-			Row:     []string{"clickhouse.user.grant", "clickhouse.user.drop"},
+			Row:     []string{"clickhouse.user.drop"},
 			Detail:  []string{"clickhouse.user.grant", "clickhouse.user.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{

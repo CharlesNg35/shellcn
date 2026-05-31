@@ -174,7 +174,7 @@ func userResource() plugin.ResourceType {
 		},
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{"mysql.user.create"},
-			Row:     []string{"mysql.user.grant", "mysql.user.drop"},
+			Row:     []string{"mysql.user.drop"},
 			Detail:  []string{"mysql.user.grant", "mysql.user.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{

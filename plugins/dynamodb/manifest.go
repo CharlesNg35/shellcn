@@ -33,8 +33,8 @@ func tableResource() plugin.ResourceType {
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{rid("table.create")},
-			Row:     []string{rid("table.delete"), rid("backup.create")},
-			Detail:  []string{rid("table.delete"), rid("ttl.update")},
+			Row:     []string{rid("table.delete")},
+			Detail:  []string{rid("backup.create"), rid("ttl.update"), rid("table.delete")},
 		},
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.name}"},

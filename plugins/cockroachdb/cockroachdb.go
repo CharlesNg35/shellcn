@@ -195,7 +195,7 @@ func userResource() plugin.ResourceType {
 		Columns: userColumns(),
 		Actions: plugin.ResourceActions{
 			Toolbar: []string{"cockroachdb.user.create"},
-			Row:     []string{"cockroachdb.user.grant", "cockroachdb.user.drop"},
+			Row:     []string{"cockroachdb.user.drop"},
 			Detail:  []string{"cockroachdb.user.grant", "cockroachdb.user.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
