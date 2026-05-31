@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../test/fetchMock";
 import { useConnectionsStore } from "./connections";
+import { Layout } from "../types/projection";
 
 const connections = [
   {
@@ -43,7 +44,7 @@ const sshProjection = {
   config: { groups: [] },
   capabilities: [],
   supportedTransports: ["direct"],
-  layout: "tabs",
+  layout: Layout.Tabs,
 };
 
 beforeEach(() => {

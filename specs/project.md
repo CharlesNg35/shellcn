@@ -753,6 +753,11 @@ const (
 //     knows its ref, and state-dependent UI can't evaluate.
 //   - The sidebar_tree workspace keeps MULTIPLE open views as a closable tab strip
 //     (details + lists), not one selection at a time — switch/close, state kept.
+//   - The ACTIVE location syncs to the URL (`/c/:id?v=…`): the top tab (tabs layout)
+//     or the active workbench view (sidebar_tree), encoded self-sufficiently so
+//     browser Back/Forward walk the visited resources and a pasted/refreshed link
+//     restores the view. Navigation is query-only (same `/c/:id`), so the workspace
+//     never remounts — live terminals/streams survive. single/dashboard carry no `v`.
 //   - MetricsConfig drives the metrics panel (stat cards, gauges, time-series)
 //     entirely from declared field keys; the renderer hardcodes none.
 //   - TerminalConfig opts a terminal panel into zoom and/or scrollback search;

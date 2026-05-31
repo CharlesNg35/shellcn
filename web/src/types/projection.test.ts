@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import projectionSrc from "./projection.ts?raw";
+import { Layout } from "./projection";
 import type {
   CredentialSummary,
   Icon,
@@ -52,7 +53,7 @@ describe("projection contract", () => {
       },
       capabilities: ["terminal", "filesystem"],
       supportedTransports: ["direct"],
-      layout: "tabs",
+      layout: Layout.Tabs,
       tabs: [
         {
           key: "shell",

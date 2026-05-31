@@ -9,6 +9,7 @@ import ConnectionFormDialog from "./ConnectionFormDialog.vue";
 import ProtocolPicker from "./ProtocolPicker.vue";
 import SchemaForm from "../panels/form/SchemaForm.vue";
 import type { PluginProjection } from "../types/projection";
+import { Layout } from "../types/projection";
 
 const projection: PluginProjection = {
   apiVersion: 1,
@@ -41,7 +42,7 @@ const projection: PluginProjection = {
   },
   capabilities: [],
   supportedTransports: ["direct"],
-  layout: "tabs",
+  layout: Layout.Tabs,
 };
 
 beforeEach(() => {
