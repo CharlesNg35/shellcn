@@ -3,6 +3,7 @@ package cassandra
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -132,6 +133,39 @@ func TestCassandraPluginIntegration(t *testing.T) {
 		if _, err := fn(tableRC); err != nil {
 			t.Fatalf("table %s route: %v", name, err)
 		}
+	}
+
+	// Editable data grid round-trip: insert a row, read it back, update it, delete
+	// it, asserting at each step. Identity is the primary key (id), echoed as _key.
+	rowID := "22222222-2222-2222-2222-222222222222"
+	mutationRC := func(body map[string]any) *plugin.RequestContext {
+		return plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, mustJSON(t, body))
+	}
+	if _, err := insertRow(mutationRC(map[string]any{"values": map[string]any{"id": rowID, "name": "bob", "access_token": "bob-token"}})); err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+	bob := findRowByName(ctx, t, s, "name", "bob")
+	if bob == nil {
+		t.Fatalf("inserted row was not found")
+	}
+	rowKey, ok := bob["_key"].(map[string]any)
+	if !ok || fmt.Sprint(rowKey["id"]) != rowID {
+		t.Fatalf("expected _key carrying id %s, got %#v", rowID, bob["_key"])
+	}
+	if _, err := updateRow(mutationRC(map[string]any{"key": map[string]any{"id": rowID}, "values": map[string]any{"name": "robert"}})); err != nil {
+		t.Fatalf("update row: %v", err)
+	}
+	if updated := findRowByName(ctx, t, s, "name", "robert"); updated == nil {
+		t.Fatalf("updated row was not found after update")
+	}
+	if stale := findRowByName(ctx, t, s, "name", "bob"); stale != nil {
+		t.Fatalf("row still has old name after update: %#v", stale)
+	}
+	if _, err := deleteRow(mutationRC(map[string]any{"key": map[string]any{"id": rowID}})); err != nil {
+		t.Fatalf("delete row: %v", err)
+	}
+	if gone := findRowByName(ctx, t, s, "name", "robert"); gone != nil {
+		t.Fatalf("row still present after delete: %#v", gone)
 	}
 	for name, fn := range map[string]func(*plugin.RequestContext) (any, error){
 		"views":      listViews,
@@ -286,6 +320,23 @@ func pageHasScopedName(page plugin.Page[row], namespace, name string) bool {
 		}
 	}
 	return false
+}
+
+// findRowByName scans the table via the data-grid handler (which attaches _key)
+// and returns the first row whose column equals value, or nil when absent.
+func findRowByName(ctx context.Context, t *testing.T, s *Session, column, value string) row {
+	t.Helper()
+	rc := plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"keyspace": "shellcn_it", "table": "people"}, nil, nil)
+	res, err := tableRows(rc)
+	if err != nil {
+		t.Fatalf("table rows: %v", err)
+	}
+	for _, r := range res.(plugin.Page[row]).Items {
+		if fmt.Sprint(r[column]) == value {
+			return r
+		}
+	}
+	return nil
 }
 
 func columnIndex(columns []string, column string) int {

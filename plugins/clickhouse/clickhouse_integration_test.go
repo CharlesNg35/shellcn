@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -166,6 +167,29 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		}
 	}
 
+	// Editable data grid round-trip. INSERT is synchronous, so the row reads back
+	// immediately and carries its sorting-key (id) as _key. UPDATE/DELETE are
+	// asynchronous ALTER ... mutations, so assert the handlers schedule them rather
+	// than that the row changes synchronously.
+	dataParams := map[string]string{"database": cfg["database"].(string), "table": "shellcn_people"}
+	if _, err := insertRow(rowMutationRC(ctx, s, dataParams, map[string]any{"values": map[string]any{"id": uint64(2), "name": "bob", "access_token": "bob-token"}})); err != nil {
+		t.Fatalf("insert row: %v", err)
+	}
+	inserted := findRow(ctx, t, s, dataParams, "name", "bob")
+	if inserted == nil {
+		t.Fatalf("inserted row was not found")
+	}
+	insertedKey, ok := inserted["_key"].(map[string]any)
+	if !ok || fmt.Sprint(insertedKey["id"]) != "2" {
+		t.Fatalf("expected _key carrying id 2, got %#v", inserted["_key"])
+	}
+	if _, err := updateRow(rowMutationRC(ctx, s, dataParams, map[string]any{"key": map[string]any{"id": uint64(2)}, "values": map[string]any{"name": "robert"}})); err != nil {
+		t.Fatalf("update row mutation: %v", err)
+	}
+	if _, err := deleteRow(rowMutationRC(ctx, s, dataParams, map[string]any{"key": map[string]any{"id": uint64(2)}})); err != nil {
+		t.Fatalf("delete row mutation: %v", err)
+	}
+
 	// Column/index management via declarative DDL actions. The drop handlers read
 	// the target identifier from params (the action sends it as the "name" param),
 	// not the body.
@@ -280,6 +304,22 @@ func configFromDSN(t *testing.T, raw string) map[string]any {
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
 	raw, _ := json.Marshal(body)
 	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
+}
+
+// findRow scans the table via the data-grid handler (which attaches _key) and
+// returns the first row whose column equals value, or nil when absent.
+func findRow(ctx context.Context, t *testing.T, s *Session, params map[string]string, column, value string) row {
+	t.Helper()
+	res, err := tableRows(plugin.NewRequestContext(ctx, models.User{}, s, params, nil, nil))
+	if err != nil {
+		t.Fatalf("table rows: %v", err)
+	}
+	for _, r := range res.(plugin.Page[row]).Items {
+		if fmt.Sprint(r[column]) == value {
+			return r
+		}
+	}
+	return nil
 }
 
 func run(ctx context.Context, t *testing.T, name string, args ...string) string {
