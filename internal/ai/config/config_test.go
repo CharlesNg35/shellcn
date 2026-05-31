@@ -1,0 +1,179 @@
+package aiconfig_test
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"testing"
+
+	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
+	"github.com/charlesng35/shellcn/internal/config"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/secrets"
+	"github.com/charlesng35/shellcn/internal/store"
+)
+
+func newService(t *testing.T, global config.AIConfig) (*aiconfig.Service, *store.Store) {
+	t.Helper()
+	key, _ := secrets.GenerateMasterKey()
+	vault, err := secrets.NewVault(key)
+	if err != nil {
+		t.Fatalf("vault: %v", err)
+	}
+	st := store.NewMemory()
+	return aiconfig.New(st.AIProviders, vault, global), st
+}
+
+func validInput() aiconfig.Input {
+	return aiconfig.Input{
+		Kind:         models.AIProviderOpenAI,
+		Name:         "My OpenAI",
+		APIKey:       "sk-secret-123",
+		Models:       []string{"gpt-4o", "gpt-4o-mini"},
+		DefaultModel: "gpt-4o",
+	}
+}
+
+func TestCreateEncryptsKeyAndNeverReturnsIt(t *testing.T) {
+	svc, st := newService(t, config.AIConfig{})
+	ctx := context.Background()
+
+	sum, err := svc.Create(ctx, "user-1", validInput())
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if !sum.HasKey {
+		t.Fatal("summary should report HasKey")
+	}
+
+	// The stored ciphertext must not contain the plaintext key.
+	row, err := st.AIProviders.Get(ctx, sum.ID)
+	if err != nil {
+		t.Fatalf("get row: %v", err)
+	}
+	if len(row.APIKeyCiphertext) == 0 {
+		t.Fatal("key not encrypted at rest")
+	}
+	if bytes.Contains(row.APIKeyCiphertext, []byte("sk-secret-123")) {
+		t.Fatal("plaintext key leaked into ciphertext")
+	}
+
+	// Resolve round-trips the decrypted key for chat-time use.
+	_, plain, err := svc.Resolve(ctx, "user-1", sum.ID)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if plain != "sk-secret-123" {
+		t.Fatalf("decrypted key = %q", plain)
+	}
+}
+
+func TestUpdateEmptyKeyPreservesStored(t *testing.T) {
+	svc, _ := newService(t, config.AIConfig{})
+	ctx := context.Background()
+	sum, err := svc.Create(ctx, "user-1", validInput())
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	in := validInput()
+	in.APIKey = "" // keep existing
+	in.Name = "Renamed"
+	if _, err := svc.Update(ctx, "user-1", sum.ID, in); err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	_, plain, err := svc.Resolve(ctx, "user-1", sum.ID)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	if plain != "sk-secret-123" {
+		t.Fatalf("key should be preserved, got %q", plain)
+	}
+
+	in.APIKey = "sk-rotated"
+	if _, err := svc.Update(ctx, "user-1", sum.ID, in); err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+	_, plain, _ = svc.Resolve(ctx, "user-1", sum.ID)
+	if plain != "sk-rotated" {
+		t.Fatalf("key should rotate, got %q", plain)
+	}
+}
+
+func TestOwnerScopingHidesOthers(t *testing.T) {
+	svc, _ := newService(t, config.AIConfig{})
+	ctx := context.Background()
+	sum, _ := svc.Create(ctx, "user-1", validInput())
+
+	if _, _, err := svc.Resolve(ctx, "user-2", sum.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("other owner resolve: want ErrNotFound, got %v", err)
+	}
+	if err := svc.Delete(ctx, "user-2", sum.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("other owner delete: want ErrNotFound, got %v", err)
+	}
+	list, _ := svc.List(ctx, "user-2")
+	if len(list) != 0 {
+		t.Fatalf("user-2 should see no providers, got %d", len(list))
+	}
+}
+
+func TestModelsPerKind(t *testing.T) {
+	svc, _ := newService(t, config.AIConfig{})
+	ctx := context.Background()
+
+	withList, _ := svc.Create(ctx, "user-1", validInput())
+	got, err := svc.Models(ctx, "user-1", withList.ID)
+	if err != nil {
+		t.Fatalf("models: %v", err)
+	}
+	if len(got) != 2 || got[0] != "gpt-4o" {
+		t.Fatalf("allow-list should win: %v", got)
+	}
+
+	noList := aiconfig.Input{Kind: models.AIProviderAnthropic, Name: "Claude", APIKey: "k", DefaultModel: "claude-sonnet-4-5"}
+	sum, _ := svc.Create(ctx, "user-1", noList)
+	got, _ = svc.Models(ctx, "user-1", sum.ID)
+	if len(got) == 0 {
+		t.Fatal("anthropic should fall back to static defaults")
+	}
+}
+
+func TestValidationRejectsBadInput(t *testing.T) {
+	svc, _ := newService(t, config.AIConfig{})
+	ctx := context.Background()
+
+	cases := []aiconfig.Input{
+		{Kind: "bogus", Name: "x", APIKey: "k", DefaultModel: "m"},
+		{Kind: models.AIProviderOpenAI, Name: "", APIKey: "k", DefaultModel: "m"},
+		{Kind: models.AIProviderOpenAI, Name: "x", APIKey: "", DefaultModel: "m"},
+		{Kind: models.AIProviderOpenAICompat, Name: "x", DefaultModel: "m"}, // no base URL
+		{Kind: models.AIProviderOpenAI, Name: "x", APIKey: "k", DefaultModel: ""},
+	}
+	for i, c := range cases {
+		if _, err := svc.Create(ctx, "user-1", c); !errors.Is(err, aiconfig.ErrInvalid()) {
+			t.Errorf("case %d: want ErrInvalid, got %v", i, err)
+		}
+	}
+
+	// openai_compatible with base URL but no key is allowed (local endpoints).
+	if _, err := svc.Create(ctx, "user-1", aiconfig.Input{
+		Kind: models.AIProviderOpenAICompat, Name: "Ollama", BaseURL: "http://localhost:11434/v1", DefaultModel: "llama3",
+	}); err != nil {
+		t.Fatalf("compat without key should be allowed: %v", err)
+	}
+}
+
+func TestGlobalStatusProjection(t *testing.T) {
+	off, _ := newService(t, config.AIConfig{})
+	if off.Global().Configured {
+		t.Fatal("empty global should be not-configured")
+	}
+
+	on, _ := newService(t, config.AIConfig{
+		Kind: "openai", Name: "Shared", APIKey: "sk-x", DefaultModel: "gpt-4o",
+	})
+	g := on.Global()
+	if !g.Configured || g.Provider != "Shared" || g.Model != "gpt-4o" {
+		t.Fatalf("unexpected global status %+v", g)
+	}
+}

@@ -16,8 +16,10 @@ import (
 
 	"github.com/coder/websocket"
 
+	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
@@ -239,6 +241,7 @@ func (boomPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session
 
 type harness struct {
 	ts             *httptest.Server
+	srv            *server.Server
 	store          *store.Store
 	pluginSessions *session.Manager
 	sessionMgr     *auth.SessionManager
@@ -288,12 +291,15 @@ func newHarness(t *testing.T) *harness {
 		Enrollments: enrollments, Tunnels: tunnels,
 		Users: users, TwoFactor: twoFactor, Invitations: invitations,
 		Recording: recEngine, Recordings: recordings,
+		AI: aiconfig.New(st.AIProviders, vault, config.AIConfig{
+			Kind: "openai", Name: "Shared", APIKey: "sk-global-secret", DefaultModel: "gpt-4o",
+		}),
 	})
 
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
-	h := &harness{ts: ts, store: st, pluginSessions: sessMgr, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
+	h := &harness{ts: ts, srv: srv, store: st, pluginSessions: sessMgr, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
 
 	ctx := context.Background()
 	for _, u := range []struct {

@@ -163,7 +163,9 @@ func forwardedValue(header, key string) string {
 // cannot be forged by a client header.
 func (s *Server) withRemoteAddr(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(w, r.WithContext(audit.WithRemoteAddr(r.Context(), clientIP(r))))
+		ctx := audit.WithRemoteAddr(r.Context(), clientIP(r))
+		ctx = audit.WithSource(ctx, audit.SourceHTTP, "")
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

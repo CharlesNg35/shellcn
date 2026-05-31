@@ -240,6 +240,36 @@ function connectionFolders(): Json[] {
   return connectionFoldersState;
 }
 
+let aiProvidersState: Json[] | null = null;
+function aiProviders(): Json[] {
+  aiProvidersState ??= [];
+  return aiProvidersState;
+}
+
+let aiConversationsState: Json[] | null = null;
+function aiConversations(): Json[] {
+  aiConversationsState ??= [];
+  return aiConversationsState;
+}
+function aiProviderSummary(body: Json, existing?: Json): Json {
+  const now = new Date().toISOString();
+  const hasKey =
+    typeof body.apiKey === "string" && body.apiKey.trim() !== ""
+      ? true
+      : Boolean(existing?.hasKey);
+  return {
+    id: existing ? existing.id : uid("aip"),
+    kind: body.kind,
+    name: body.name,
+    baseUrl: body.baseUrl || undefined,
+    models: Array.isArray(body.models) ? body.models : [],
+    defaultModel: body.defaultModel,
+    hasKey,
+    createdAt: existing ? existing.createdAt : now,
+    updatedAt: now,
+  };
+}
+
 let credentialsState: Json[] | null = null;
 function credentials(): Json[] {
   if (!credentialsState)
@@ -324,6 +354,8 @@ function uid(prefix: string): string {
 function resetControlPlaneState(): void {
   connectionsState = null;
   connectionFoldersState = null;
+  aiProvidersState = null;
+  aiConversationsState = null;
   credentialsState = null;
   recordingsState = null;
   adminUsersState = null;
@@ -541,6 +573,104 @@ function handleHTTP(
   }
   if (path === "/api/admin/email" && method === "GET") {
     return send(res, 200, { enabled: false });
+  }
+
+  // --- AI providers --------------------------------------------------------
+  if (path === "/api/ai/global" && method === "GET") {
+    return send(res, 200, {
+      configured: true,
+      provider: "Shared OpenAI",
+      kind: "openai",
+      model: "gpt-4o",
+    });
+  }
+  if (path === "/api/me/ai/config" && method === "GET") {
+    return send(res, 200, aiProviders());
+  }
+  if (path === "/api/me/ai/config" && method === "POST") {
+    return void readBody(req).then((raw) => {
+      const summary = aiProviderSummary(raw as Json);
+      aiProviders().push(summary);
+      send(res, 201, summary);
+    });
+  }
+  {
+    const m = path.match(/^\/api\/me\/ai\/config\/([^/]+)$/);
+    if (m && method === "PUT") {
+      return void readBody(req).then((raw) => {
+        const list = aiProviders();
+        const idx = list.findIndex((p) => p.id === m[1]);
+        if (idx < 0) return send(res, 404, { error: "not found" });
+        list[idx] = aiProviderSummary(raw as Json, list[idx]);
+        send(res, 200, list[idx]);
+      });
+    }
+    if (m && method === "DELETE") {
+      const list = aiProviders();
+      const idx = list.findIndex((p) => p.id === m[1]);
+      if (idx >= 0) list.splice(idx, 1);
+      return send(res, 204, null);
+    }
+  }
+  {
+    const m = path.match(/^\/api\/me\/ai\/config\/([^/]+)\/models$/);
+    if (m && method === "GET") {
+      const p = aiProviders().find((x) => x.id === m[1]);
+      const models =
+        p && Array.isArray(p.models) && p.models.length
+          ? p.models
+          : ["gpt-4o", "gpt-4o-mini"];
+      return send(res, 200, { models });
+    }
+  }
+  {
+    const list = path.match(/^\/api\/connections\/([^/]+)\/ai\/conversations$/);
+    if (list && method === "GET") {
+      return send(
+        res,
+        200,
+        aiConversations().filter((c) => c.connectionId === list[1]),
+      );
+    }
+    if (list && method === "POST") {
+      const now = new Date().toISOString();
+      const conv: Json = {
+        id: uid("aiconv"),
+        ownerId: "u-demo",
+        connectionId: list[1],
+        title: "New conversation",
+        autoTitled: false,
+        providerId: "",
+        model: "",
+        createdAt: now,
+        updatedAt: now,
+      };
+      aiConversations().push(conv);
+      return send(res, 201, conv);
+    }
+    const one = path.match(
+      /^\/api\/connections\/[^/]+\/ai\/conversations\/([^/]+)$/,
+    );
+    if (one && method === "GET") {
+      const conv = aiConversations().find((c) => c.id === one[1]);
+      return send(res, 200, { conversation: conv ?? null, messages: [] });
+    }
+    if (one && method === "PUT") {
+      return void readBody(req).then((raw) => {
+        const conv = aiConversations().find((c) => c.id === one[1]);
+        if (conv) {
+          conv.title = String((raw as Json).title ?? conv.title);
+          conv.autoTitled = false;
+        }
+        send(res, 200, conv ?? {});
+      });
+    }
+    if (one && method === "DELETE") {
+      const arr = aiConversations();
+      const idx = arr.findIndex((c) => c.id === one[1]);
+      if (idx >= 0) arr.splice(idx, 1);
+      return send(res, 204, null);
+    }
   }
   if (path === "/api/admin/users" && method === "GET") {
     return send(res, 200, adminUsers());

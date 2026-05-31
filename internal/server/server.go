@@ -13,8 +13,12 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/time/rate"
 
+	"github.com/charlesng35/shellcn/internal/ai"
+	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
+	"github.com/charlesng35/shellcn/internal/ai/memory"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
@@ -48,10 +52,14 @@ type Deps struct {
 	Recordings        *service.RecordingService
 	Recording         *recording.Engine
 	RecordingMaxChunk int64
-	Audit             audit.Sink
-	Metrics           *telemetry.Metrics
-	Health            *telemetry.Health
-	Logger            *slog.Logger
+	AI                *aiconfig.Service
+	// AIGlobal is the env/config shared-AI provider; combined with AI (user
+	// providers) it backs the chat agent. Inert when no provider is configured.
+	AIGlobal config.AIConfig
+	Audit    audit.Sink
+	Metrics  *telemetry.Metrics
+	Health   *telemetry.Health
+	Logger   *slog.Logger
 
 	// StaticFS is the embedded web/dist (nil in dev mode, where Vite serves the UI).
 	StaticFS fs.FS
@@ -65,6 +73,7 @@ type Server struct {
 	deps         Deps
 	router       chi.Router
 	loginLimiter *rateLimiter
+	chat         *ai.Service
 }
 
 // New builds the server and its routes.
@@ -78,6 +87,12 @@ func New(d Deps) *Server {
 	// ~5 login attempts/min per IP with a small burst — generous for humans,
 	// punishing for online password guessing.
 	s := &Server{deps: d, loginLimiter: newRateLimiter(rate.Every(12*time.Second), 5)}
+	// The chat agent runs route tools through the server's own secure pipeline
+	// (s implements the invoker); building it here breaks the construction cycle.
+	if d.AI != nil {
+		mem := memory.New(d.Store.AIConversations, d.Store.AIMessages)
+		s.chat = ai.New(d.AI, d.AIGlobal, d.Plugins, s, mem)
+	}
 	s.router = s.routes()
 	return s
 }
@@ -171,6 +186,26 @@ func (s *Server) routes() chi.Router {
 			}
 
 			pr.Get("/audit/me", s.handleMyAudit)
+
+			// AI: read-only shared-config status + owner-scoped provider CRUD. No
+			// global write path — the shared config lives in env/internal/config.
+			if s.deps.AI != nil {
+				pr.Get("/ai/global", s.handleAIGlobal)
+				pr.Get("/me/ai/config", s.handleListAIProviders)
+				pr.Post("/me/ai/config", s.handleCreateAIProvider)
+				pr.Put("/me/ai/config/{id}", s.handleUpdateAIProvider)
+				pr.Delete("/me/ai/config/{id}", s.handleDeleteAIProvider)
+				pr.Get("/me/ai/config/{id}/models", s.handleAIProviderModels)
+				if s.deps.Connections != nil {
+					pr.Post("/connections/{id}/ai/ticket", s.handleMintAITicket)
+					pr.Get("/connections/{id}/ai/chat", s.handleAIChat)
+					pr.Get("/connections/{id}/ai/conversations", s.handleListConversations)
+					pr.Post("/connections/{id}/ai/conversations", s.handleCreateConversation)
+					pr.Get("/connections/{id}/ai/conversations/{cid}", s.handleGetConversation)
+					pr.Put("/connections/{id}/ai/conversations/{cid}", s.handleRenameConversation)
+					pr.Delete("/connections/{id}/ai/conversations/{cid}", s.handleDeleteConversation)
+				}
+			}
 			if s.deps.Connections != nil {
 				pr.Get("/connections/{id}/grants", s.handleListConnectionGrants)
 				pr.Post("/connections/{id}/grants", s.handleCreateConnectionGrant)

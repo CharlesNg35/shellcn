@@ -44,6 +44,8 @@
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
     "dompurify": "^3.4.5",
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^14.2.0",
     "pinia": "^3.0.4",
     "primevue": "^4.5.5",
     "tailwind-merge": "^3.6.0",
@@ -55,6 +57,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.60.0",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.12.3",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-vue": "^6.0.6",

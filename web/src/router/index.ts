@@ -73,6 +73,11 @@ const router = createRouter({
           name: "settings",
           component: () => import("../views/SettingsView.vue"),
         },
+        {
+          path: "settings/ai",
+          name: "ai-settings",
+          component: () => import("../views/AiSettingsView.vue"),
+        },
       ],
     },
     { path: "/:pathMatch(.*)*", redirect: { name: "home" } },

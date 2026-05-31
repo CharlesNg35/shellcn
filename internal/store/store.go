@@ -181,6 +181,31 @@ type InvitationStore interface {
 	Delete(ctx context.Context, id string) error
 }
 
+// AIProviderStore persists user-scoped AI provider configs (ciphertext keys).
+type AIProviderStore interface {
+	Create(ctx context.Context, c *models.AIProviderConfig) error
+	Get(ctx context.Context, id string) (models.AIProviderConfig, error)
+	ListByOwner(ctx context.Context, ownerID string) ([]models.AIProviderConfig, error)
+	Update(ctx context.Context, c *models.AIProviderConfig) error
+	Delete(ctx context.Context, id string) error
+}
+
+// AIConversationStore persists chat threads (user + connection scoped).
+type AIConversationStore interface {
+	Create(ctx context.Context, c *models.AIConversation) error
+	Get(ctx context.Context, id string) (models.AIConversation, error)
+	List(ctx context.Context, ownerID, connectionID string) ([]models.AIConversation, error)
+	Update(ctx context.Context, c *models.AIConversation) error
+	Delete(ctx context.Context, id string) error
+}
+
+// AIMessageStore persists conversation messages in sequence.
+type AIMessageStore interface {
+	Append(ctx context.Context, m *models.AIMessage) error
+	List(ctx context.Context, conversationID string) ([]models.AIMessage, error)
+	DeleteByConversation(ctx context.Context, conversationID string) error
+}
+
 // Store aggregates every repository plus lifecycle controls.
 type Store struct {
 	Users                UserStore
@@ -197,6 +222,9 @@ type Store struct {
 	Policies             PolicyStore
 	Invitations          InvitationStore
 	Recordings           RecordingStore
+	AIProviders          AIProviderStore
+	AIConversations      AIConversationStore
+	AIMessages           AIMessageStore
 
 	close func() error
 }

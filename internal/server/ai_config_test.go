@@ -1,0 +1,84 @@
+package server_test
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+)
+
+func TestAIGlobalNeverExposesKey(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodGet, "/api/ai/global", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("global: want 200, got %d", resp.Status)
+	}
+	body := string(resp.Body)
+	if !strings.Contains(body, `"configured":true`) || !strings.Contains(body, `"model":"gpt-4o"`) {
+		t.Fatalf("global status missing presence/model: %s", body)
+	}
+	if strings.Contains(body, "sk-global-secret") {
+		t.Fatalf("global key leaked over API: %s", body)
+	}
+}
+
+func TestNoGlobalWritePath(t *testing.T) {
+	h := newHarness(t)
+	// There is intentionally no write endpoint for the shared config.
+	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
+		if resp := h.do(t, m, "/api/ai/global", "op", strings.NewReader(`{}`)); resp.Status < 400 {
+			t.Fatalf("%s /api/ai/global should not succeed, got %d", m, resp.Status)
+		}
+	}
+}
+
+func TestUserProviderCRUDOverHTTP(t *testing.T) {
+	h := newHarness(t)
+
+	// Create.
+	body := `{"kind":"openai","name":"Mine","apiKey":"sk-user-secret","models":["gpt-4o"],"defaultModel":"gpt-4o"}`
+	resp := h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(body))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create: want 201, got %d (%s)", resp.Status, resp.Body)
+	}
+	created := string(resp.Body)
+	if strings.Contains(created, "sk-user-secret") {
+		t.Fatalf("user key leaked in create response: %s", created)
+	}
+	if !strings.Contains(created, `"hasKey":true`) {
+		t.Fatalf("create response should report hasKey: %s", created)
+	}
+	id := createConnID(t, resp) // reuses the {"id":...} extractor
+
+	// List (op sees their own; the response carries no key).
+	resp = h.do(t, http.MethodGet, "/api/me/ai/config", "op", nil)
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"name":"Mine"`) {
+		t.Fatalf("list: status=%d body=%s", resp.Status, resp.Body)
+	}
+	if strings.Contains(string(resp.Body), "sk-user-secret") {
+		t.Fatalf("user key leaked in list: %s", resp.Body)
+	}
+
+	// Models listing.
+	resp = h.do(t, http.MethodGet, "/api/me/ai/config/"+id+"/models", "op", nil)
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), "gpt-4o") {
+		t.Fatalf("models: status=%d body=%s", resp.Status, resp.Body)
+	}
+
+	// Another user cannot see or mutate it (owner-scoped → 404).
+	if resp := h.do(t, http.MethodDelete, "/api/me/ai/config/"+id, "viewer", nil); resp.Status != http.StatusNotFound {
+		t.Fatalf("cross-owner delete: want 404, got %d", resp.Status)
+	}
+
+	// Owner deletes.
+	if resp := h.do(t, http.MethodDelete, "/api/me/ai/config/"+id, "op", nil); resp.Status != http.StatusNoContent {
+		t.Fatalf("delete: want 204, got %d", resp.Status)
+	}
+}
+
+func TestUserProviderValidationReturns400(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(`{"kind":"bogus","name":"x","defaultModel":"m"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("bad kind: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
+}

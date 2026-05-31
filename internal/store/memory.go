@@ -26,7 +26,166 @@ func NewMemory() *Store {
 		Policies:             &memPolicyStore{m: map[string]models.PolicyRule{}},
 		Invitations:          &memInvitationStore{m: map[string]models.Invitation{}},
 		Recordings:           &memRecordingStore{m: map[string]models.Recording{}},
+		AIProviders:          &memAIProviderStore{m: map[string]models.AIProviderConfig{}},
+		AIConversations:      &memAIConversationStore{m: map[string]models.AIConversation{}},
+		AIMessages:           &memAIMessageStore{m: map[string][]models.AIMessage{}},
 	}
+}
+
+type memAIConversationStore struct {
+	mu sync.RWMutex
+	m  map[string]models.AIConversation
+}
+
+func (s *memAIConversationStore) Create(_ context.Context, c *models.AIConversation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[c.ID]; ok {
+		return models.ErrConflict
+	}
+	s.m[c.ID] = *c
+	return nil
+}
+
+func (s *memAIConversationStore) Get(_ context.Context, id string) (models.AIConversation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.m[id]
+	if !ok {
+		return models.AIConversation{}, ErrNotFound
+	}
+	return c, nil
+}
+
+func (s *memAIConversationStore) List(_ context.Context, ownerID, connectionID string) ([]models.AIConversation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var list []models.AIConversation
+	for _, c := range s.m {
+		if c.OwnerID != ownerID {
+			continue
+		}
+		if connectionID != "" && c.ConnectionID != connectionID {
+			continue
+		}
+		list = append(list, c)
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].UpdatedAt.After(list[j].UpdatedAt) })
+	return list, nil
+}
+
+func (s *memAIConversationStore) Update(_ context.Context, c *models.AIConversation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prev, ok := s.m[c.ID]
+	if !ok {
+		return ErrNotFound
+	}
+	prev.Title = c.Title
+	prev.AutoTitled = c.AutoTitled
+	prev.ProviderID = c.ProviderID
+	prev.Model = c.Model
+	prev.Summary = c.Summary
+	prev.UpdatedAt = c.UpdatedAt
+	s.m[c.ID] = prev
+	return nil
+}
+
+func (s *memAIConversationStore) Delete(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, id)
+	return nil
+}
+
+type memAIMessageStore struct {
+	mu sync.RWMutex
+	m  map[string][]models.AIMessage
+}
+
+func (s *memAIMessageStore) Append(_ context.Context, m *models.AIMessage) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.m[m.ConversationID] = append(s.m[m.ConversationID], *m)
+	return nil
+}
+
+func (s *memAIMessageStore) List(_ context.Context, conversationID string) ([]models.AIMessage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := append([]models.AIMessage(nil), s.m[conversationID]...)
+	sort.Slice(out, func(i, j int) bool { return out[i].Seq < out[j].Seq })
+	return out, nil
+}
+
+func (s *memAIMessageStore) DeleteByConversation(_ context.Context, conversationID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, conversationID)
+	return nil
+}
+
+type memAIProviderStore struct {
+	mu sync.RWMutex
+	m  map[string]models.AIProviderConfig
+}
+
+func (s *memAIProviderStore) Create(_ context.Context, c *models.AIProviderConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.m[c.ID]; ok {
+		return models.ErrConflict
+	}
+	s.m[c.ID] = *c
+	return nil
+}
+
+func (s *memAIProviderStore) Get(_ context.Context, id string) (models.AIProviderConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	c, ok := s.m[id]
+	if !ok {
+		return models.AIProviderConfig{}, ErrNotFound
+	}
+	return c, nil
+}
+
+func (s *memAIProviderStore) ListByOwner(_ context.Context, ownerID string) ([]models.AIProviderConfig, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var list []models.AIProviderConfig
+	for _, c := range s.m {
+		if c.OwnerID == ownerID {
+			list = append(list, c)
+		}
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].CreatedAt.Before(list[j].CreatedAt) })
+	return list, nil
+}
+
+func (s *memAIProviderStore) Update(_ context.Context, c *models.AIProviderConfig) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	prev, ok := s.m[c.ID]
+	if !ok {
+		return ErrNotFound
+	}
+	prev.Kind = c.Kind
+	prev.Name = c.Name
+	prev.BaseURL = c.BaseURL
+	prev.Models = c.Models
+	prev.DefaultModel = c.DefaultModel
+	prev.APIKeyCiphertext = c.APIKeyCiphertext
+	prev.UpdatedAt = time.Now()
+	s.m[c.ID] = prev
+	return nil
+}
+
+func (s *memAIProviderStore) Delete(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.m, id)
+	return nil
 }
 
 type memUserStore struct {

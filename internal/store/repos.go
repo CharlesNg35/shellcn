@@ -568,6 +568,107 @@ func (s *gormRecordingStore) List(ctx context.Context, f RecordingFilter) ([]mod
 	return list, nil
 }
 
+type gormAIProviderStore struct{ db *gorm.DB }
+
+func (s *gormAIProviderStore) Create(ctx context.Context, c *models.AIProviderConfig) error {
+	return s.db.WithContext(ctx).Create(c).Error
+}
+
+func (s *gormAIProviderStore) Get(ctx context.Context, id string) (models.AIProviderConfig, error) {
+	var c models.AIProviderConfig
+	if err := s.db.WithContext(ctx).First(&c, "id = ?", id).Error; err != nil {
+		return models.AIProviderConfig{}, normNotFound(err)
+	}
+	return c, nil
+}
+
+func (s *gormAIProviderStore) ListByOwner(ctx context.Context, ownerID string) ([]models.AIProviderConfig, error) {
+	var list []models.AIProviderConfig
+	if err := s.db.WithContext(ctx).Where("owner_id = ?", ownerID).Order("created_at").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormAIProviderStore) Update(ctx context.Context, c *models.AIProviderConfig) error {
+	res := s.db.WithContext(ctx).Model(&models.AIProviderConfig{}).Where("id = ?", c.ID).
+		Updates(map[string]any{
+			"kind":               c.Kind,
+			"name":               c.Name,
+			"base_url":           c.BaseURL,
+			"models":             c.Models,
+			"default_model":      c.DefaultModel,
+			"api_key_ciphertext": c.APIKeyCiphertext,
+			"updated_at":         c.UpdatedAt,
+		})
+	return rowsOrNotFound(res)
+}
+
+func (s *gormAIProviderStore) Delete(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&models.AIProviderConfig{}, "id = ?", id).Error
+}
+
+type gormAIConversationStore struct{ db *gorm.DB }
+
+func (s *gormAIConversationStore) Create(ctx context.Context, c *models.AIConversation) error {
+	return s.db.WithContext(ctx).Create(c).Error
+}
+
+func (s *gormAIConversationStore) Get(ctx context.Context, id string) (models.AIConversation, error) {
+	var c models.AIConversation
+	if err := s.db.WithContext(ctx).First(&c, "id = ?", id).Error; err != nil {
+		return models.AIConversation{}, normNotFound(err)
+	}
+	return c, nil
+}
+
+func (s *gormAIConversationStore) List(ctx context.Context, ownerID, connectionID string) ([]models.AIConversation, error) {
+	var list []models.AIConversation
+	q := s.db.WithContext(ctx).Where("owner_id = ?", ownerID)
+	if connectionID != "" {
+		q = q.Where("connection_id = ?", connectionID)
+	}
+	if err := q.Order("updated_at DESC").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormAIConversationStore) Update(ctx context.Context, c *models.AIConversation) error {
+	res := s.db.WithContext(ctx).Model(&models.AIConversation{}).Where("id = ?", c.ID).
+		Updates(map[string]any{
+			"title":       c.Title,
+			"auto_titled": c.AutoTitled,
+			"provider_id": c.ProviderID,
+			"model":       c.Model,
+			"summary":     c.Summary,
+			"updated_at":  c.UpdatedAt,
+		})
+	return rowsOrNotFound(res)
+}
+
+func (s *gormAIConversationStore) Delete(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&models.AIConversation{}, "id = ?", id).Error
+}
+
+type gormAIMessageStore struct{ db *gorm.DB }
+
+func (s *gormAIMessageStore) Append(ctx context.Context, m *models.AIMessage) error {
+	return s.db.WithContext(ctx).Create(m).Error
+}
+
+func (s *gormAIMessageStore) List(ctx context.Context, conversationID string) ([]models.AIMessage, error) {
+	var list []models.AIMessage
+	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).Order("seq").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormAIMessageStore) DeleteByConversation(ctx context.Context, conversationID string) error {
+	return s.db.WithContext(ctx).Delete(&models.AIMessage{}, "conversation_id = ?", conversationID).Error
+}
+
 type gormEnrollmentStore struct{ db *gorm.DB }
 
 func (s *gormEnrollmentStore) Create(ctx context.Context, e *models.AgentEnrollment) error {

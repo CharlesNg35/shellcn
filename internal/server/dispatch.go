@@ -61,7 +61,13 @@ func (s *Server) resolve(r *http.Request) (resolved, error) {
 	user, _ := userFrom(ctx)
 	connID := chi.URLParam(r, "id")
 	routeID := chi.URLParam(r, "routeID")
+	return s.resolveRoute(ctx, user, connID, routeID, pParams(r))
+}
 
+// resolveRoute is the transport-agnostic core of resolve: it loads the
+// connection + route, validates path params, and authorizes the user. Both the
+// HTTP dispatcher and InvokeRoute (AI agent) share it for identical authz.
+func (s *Server) resolveRoute(ctx context.Context, user models.User, connID, routeID string, rawParams map[string]string) (resolved, error) {
 	conn, err := s.deps.Store.Connections.Get(ctx, connID)
 	if err != nil {
 		return resolved{}, err // store.ErrNotFound → 404
@@ -75,9 +81,9 @@ func (s *Server) resolve(r *http.Request) (resolved, error) {
 		return resolved{}, plugin.ErrNotFound
 	}
 
-	params, err := resolveRouteParams(route.Path, pParams(r))
+	params, err := resolveRouteParams(route.Path, rawParams)
 	if err != nil {
-		return resolved{user: user, conn: conn, plg: plg, route: route, params: pParams(r)}, err
+		return resolved{user: user, conn: conn, plg: plg, route: route, params: rawParams}, err
 	}
 	res := resolved{user: user, conn: conn, plg: plg, route: route, params: params}
 	if err := s.authorize(ctx, user, conn, route); err != nil {
@@ -258,10 +264,26 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, res resolved)
 	}
 	defer cleanup()
 
+	result, herr := s.invoke(ctx, res, rc)
+	if herr != nil {
+		writeError(w, s.deps.Logger, herr)
+		return
+	}
+	if dl, ok := result.(*plugin.Download); ok {
+		s.writeDownload(w, r, dl)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// invoke runs the validate → handle → metrics → audit core of the secure
+// pipeline against an already-resolved route and bound request context. It is
+// the single source of truth shared by HTTP dispatch and the AI agent: both get
+// identical schema validation, handler execution, and audit recording.
+func (s *Server) invoke(ctx context.Context, res resolved, rc *plugin.RequestContext) (any, error) {
 	if err := rc.ValidateSchema(res.route.Input); err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
-		writeError(w, s.deps.Logger, err)
-		return
+		return nil, err
 	}
 
 	start := time.Now()
@@ -276,15 +298,41 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, res resolved)
 
 	if herr != nil {
 		s.auditEvent(ctx, res, auditResult(herr), herr)
-		writeError(w, s.deps.Logger, herr)
-		return
+		return nil, herr
 	}
 	s.auditEvent(ctx, res, models.AuditAllowed, nil)
-	if dl, ok := result.(*plugin.Download); ok {
-		s.writeDownload(w, r, dl)
-		return
+	return result, nil
+}
+
+// InvokeRoute runs one plugin route through the full secure pipeline
+// (resolve → authorize → acquire session → validate → handle → audit) as the
+// given user, returning the handler result. It is transport-agnostic: the AI
+// agent calls it to execute a connection route as a tool with exactly the same
+// authorization, validation, and audit a direct HTTP call receives. The caller
+// marks the audit source/turn via audit.WithSource on ctx. Streaming routes are
+// not invocable here.
+func (s *Server) InvokeRoute(ctx context.Context, user models.User, connID, routeID string, params map[string]string, body []byte) (any, error) {
+	res, err := s.resolveRoute(ctx, user, connID, routeID, params)
+	if err != nil {
+		if res.route.ID != "" {
+			s.auditEvent(ctx, res, models.AuditDenied, err)
+			s.incAuthzFailure(err)
+		}
+		return nil, err
 	}
-	writeJSON(w, http.StatusOK, result)
+	if res.route.IsStream() {
+		return nil, plugin.ErrNotSupported
+	}
+
+	ctx, cancel := routeContext(ctx, res.route)
+	defer cancel()
+	handle, err := s.acquireSession(ctx, res)
+	if err != nil {
+		s.auditEvent(ctx, res, models.AuditError, err)
+		return nil, err
+	}
+	rc := plugin.NewRequestContext(ctx, user, handle, res.params, nil, body).WithSnippets(s.snippetStore())
+	return s.invoke(ctx, res, rc)
 }
 
 func (s *Server) writeDownload(w http.ResponseWriter, r *http.Request, dl *plugin.Download) {

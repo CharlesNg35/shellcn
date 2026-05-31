@@ -28,6 +28,7 @@ import DockPanel from "../panels/dock/DockPanel.vue";
 import { useDockStore } from "../stores/dock";
 import ConnectionFormDialog from "../components/ConnectionFormDialog.vue";
 import ShareDialog from "../components/ShareDialog.vue";
+import AiChatLauncher from "../components/AiChatLauncher.vue";
 import { serializeView, parseView } from "../stores/workspaceUrl";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { recordingForStream } from "../composables/useRecordingControl";
@@ -312,6 +313,7 @@ watch(
           <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           Disconnect
         </Button>
+        <AiChatLauncher :connection-id="id" :connected="connected" />
         <Button
           v-if="canShare"
           text
