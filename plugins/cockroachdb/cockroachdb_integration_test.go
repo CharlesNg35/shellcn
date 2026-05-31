@@ -285,8 +285,64 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		t.Fatal("dropping the connected database must be rejected")
 	}
 
+	// User management round-trip: create -> grant -> drop.
+	createdUser := "shellcn_it_user"
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = s.pool.Exec(cleanupCtx, "DROP USER IF EXISTS "+sqldb.QuoteIdent(createdUser))
+	})
+	// The self-provisioned cluster runs --insecure, which rejects WITH PASSWORD;
+	// exercise the (optional) no-password path.
+	if _, err := createUser(rowMutationRC(ctx, s, nil, map[string]any{"name": createdUser})); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	users, err := listUsers(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list users: %v", err)
+	}
+	if !pageHasName(users.(plugin.Page[row]), createdUser) {
+		t.Fatalf("created user was not listed: %#v", users)
+	}
+	if _, err := grantUser(rowMutationRC(ctx, s, map[string]string{"user": createdUser}, map[string]any{"target": grantTargetDatabase, "privilege": "ALL", "object": "defaultdb"})); err != nil {
+		t.Fatalf("grant user: %v", err)
+	}
+	// A user holding grants cannot be dropped; revoke first.
+	if _, err := s.pool.Exec(ctx, "REVOKE ALL ON DATABASE defaultdb FROM "+sqldb.QuoteIdent(createdUser)); err != nil {
+		t.Fatalf("revoke grant: %v", err)
+	}
+	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"user": createdUser}, nil, nil)); err != nil {
+		t.Fatalf("drop user: %v", err)
+	}
+	usersAfterDrop, err := listUsers(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list users after drop: %v", err)
+	}
+	if pageHasName(usersAfterDrop.(plugin.Page[row]), createdUser) {
+		t.Fatalf("dropped user is still listed: %#v", usersAfterDrop)
+	}
+
+	// Cancel handlers: reject malformed ids before touching the cluster, and
+	// drive a real CANCEL QUERY against a live (own) session's query id. The id
+	// is read from SHOW QUERIES; cancelling is racy — by the time CANCEL runs the
+	// query (the SHOW QUERIES read itself) has usually finished, so a "not found"
+	// from the cluster is an accepted outcome as long as the handler reaches it.
+	if _, err := cancelSession(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": "not-a-hex-token"}, nil, nil)); err == nil {
+		t.Fatal("cancelSession must reject a malformed session id")
+	}
+	if _, err := cancelQueryByID(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": "'; SELECT 1"}, nil, nil)); err == nil {
+		t.Fatal("cancelQueryByID must reject a malformed query id")
+	}
+	var queryID string
+	if err := s.pool.QueryRow(ctx, `SELECT query_id FROM [SHOW QUERIES] LIMIT 1`).Scan(&queryID); err == nil && queryID != "" {
+		if _, err := cancelQueryByID(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": queryID}, nil, nil)); err != nil && !strings.Contains(err.Error(), "not found") {
+			t.Fatalf("cancel query by id: %v", err)
+		}
+	}
+
 	for name, fn := range map[string]func(*plugin.RequestContext) (any, error){
 		"databases": listDatabases,
+		"users":     listUsers,
 		"schemas":   listSchemas,
 		"nodes":     listNodes,
 		"jobs":      listJobs,

@@ -172,6 +172,11 @@ func userResource() plugin.ResourceType {
 			{Key: "plugin", Label: "Auth plugin"},
 			{Key: "locked", Label: "Locked", Type: plugin.ColumnBool},
 		},
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"mysql.user.create"},
+			Row:     []string{"mysql.user.grant", "mysql.user.drop"},
+			Detail:  []string{"mysql.user.grant", "mysql.user.drop"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mysql.user.overview", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}}},
 		}},
@@ -250,5 +255,8 @@ func actions() []plugin.Action {
 		{ID: "mysql.constraint.add", Label: "Add constraint", Icon: icon("plus"), RouteID: "mysql.constraint.add", Params: tableParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "constraints"}},
 		{ID: "mysql.constraint.drop", Label: "Drop constraint", Icon: icon("trash"), RouteID: "mysql.constraint.drop", Params: map[string]string{"database": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}", "type": "${resource.uid}"}, Confirm: true, ConfirmText: "Drop this constraint?", OnSuccess: &plugin.ActionSuccess{SelectTab: "constraints"}},
 		{ID: "mysql.column.alter", Label: "Alter column", Icon: icon("pencil"), RouteID: "mysql.column.alter", Params: map[string]string{"database": "${resource.scope}", "table": "${resource.namespace}", "name": "${resource.name}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
+		{ID: "mysql.user.create", Label: "Create user", Icon: icon("user-plus"), RouteID: "mysql.user.create", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
+		{ID: "mysql.user.grant", Label: "Grant privileges", Icon: icon("shield-plus"), RouteID: "mysql.user.grant", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}},
+		{ID: "mysql.user.drop", Label: "Drop user", Icon: icon("trash-2"), RouteID: "mysql.user.drop", Params: map[string]string{"user": "${resource.name}", "host": "${resource.namespace}"}, Confirm: true, ConfirmText: "Drop this user? Their privileges are permanently removed."},
 	}
 }

@@ -72,6 +72,9 @@ func routes() []plugin.Route {
 		{ID: "mysql.index.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes/drop", Permission: "mysql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mysql.index.drop", Handle: dropIndex},
 		{ID: "mysql.table.truncate", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/truncate", Permission: "mysql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.table.truncate", Handle: truncateTable},
 		{ID: "mysql.table.drop", Method: plugin.MethodDelete, Path: "/tables/{database}/{table}", Permission: "mysql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.table.drop", Handle: dropTable},
+		{ID: "mysql.user.create", Method: plugin.MethodPost, Path: "/users", Permission: "mysql.users.write", Risk: plugin.RiskPrivileged, AuditEvent: "mysql.user.create", Input: userCreateSchema(), Handle: createUser},
+		{ID: "mysql.user.grant", Method: plugin.MethodPost, Path: "/users/{host}/{user}/grant", Permission: "mysql.users.write", Risk: plugin.RiskPrivileged, AuditEvent: "mysql.user.grant", Input: userGrantSchema(), Handle: grantUser},
+		{ID: "mysql.user.drop", Method: plugin.MethodDelete, Path: "/users/{host}/{user}", Permission: "mysql.users.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.user.drop", Handle: dropUser},
 		{ID: "mysql.query", Method: plugin.MethodWS, Path: "/query", Permission: "mysql.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "mysql.query", Stream: queryStream},
 		{ID: "mysql.query.cancel", Method: plugin.MethodPost, Path: "/query/cancel", Permission: "mysql.query.cancel", Risk: plugin.RiskWrite, AuditEvent: "mysql.query.cancel", Handle: cancelQuery},
 	}
@@ -146,6 +149,29 @@ func constraintAddSchema() *plugin.Schema {
 		{Key: "ref_columns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Foreign key only; comma-separated, matching the column order."},
 		{Key: "expression", Label: "Check expression", Type: plugin.FieldText, Help: "Check only, e.g. price > 0."},
 	}}}}
+}
+
+func userCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "User", Fields: []plugin.Field{
+		{Key: "username", Label: "Username", Type: plugin.FieldText, Required: true},
+		{Key: "host", Label: "Host", Type: plugin.FieldText, Default: "%", Help: "Host the account connects from; '%' matches any host."},
+		{Key: "password", Label: "Password", Type: plugin.FieldPassword},
+	}}}}
+}
+
+func userGrantSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Grant", Fields: []plugin.Field{
+		{Key: "privileges", Label: "Privileges", Type: plugin.FieldMultiSelect, Required: true, Options: grantPrivilegeOptions()},
+		{Key: "scope", Label: "Scope", Type: plugin.FieldText, Default: "*.*", Help: "Privilege level: *.* (global), db.* (database), or db.table."},
+	}}}}
+}
+
+func grantPrivilegeOptions() []plugin.Option {
+	opts := make([]plugin.Option, 0, len(grantPrivilegeAllowlist))
+	for _, p := range grantPrivilegeAllowlist {
+		opts = append(opts, plugin.Option{Label: p, Value: p})
+	}
+	return opts
 }
 
 // treeDatabases lists databases as expandable branches; each drills into its
@@ -1307,6 +1333,219 @@ func dropTable(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return execDDL(rc, "DROP TABLE "+qualified(database, table))
+}
+
+// grantPrivilegeAllowlist is the closed set of privileges the grant action
+// accepts. Privileges are not quotable literals, so they are matched against
+// this allowlist and emitted verbatim — never interpolated from raw input.
+var grantPrivilegeAllowlist = []string{
+	"ALL PRIVILEGES",
+	"ALTER",
+	"ALTER ROUTINE",
+	"CREATE",
+	"CREATE ROUTINE",
+	"CREATE TEMPORARY TABLES",
+	"CREATE USER",
+	"CREATE VIEW",
+	"DELETE",
+	"DROP",
+	"EVENT",
+	"EXECUTE",
+	"GRANT OPTION",
+	"INDEX",
+	"INSERT",
+	"LOCK TABLES",
+	"PROCESS",
+	"REFERENCES",
+	"RELOAD",
+	"SELECT",
+	"SHOW DATABASES",
+	"SHOW VIEW",
+	"TRIGGER",
+	"UPDATE",
+}
+
+// normalizeStringList accepts a privilege list supplied as a multiselect array
+// or a comma-separated string, returning trimmed, non-empty entries.
+func normalizeStringList(v any) []string {
+	var raw []string
+	switch t := v.(type) {
+	case string:
+		raw = strings.Split(t, ",")
+	case []string:
+		raw = t
+	case []any:
+		for _, item := range t {
+			raw = append(raw, fmt.Sprint(item))
+		}
+	}
+	out := make([]string, 0, len(raw))
+	for _, p := range raw {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// quoteLiteral renders a value as a MySQL single-quoted string literal, escaping
+// the backslash and single-quote that could otherwise break out of the quotes.
+// Used for account names, hosts, and passwords, which are literals (not idents).
+func quoteLiteral(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	return "'" + s + "'"
+}
+
+// userSpec parses and validates a user/host pair into quoted literals plus the
+// 'user'@'host' account reference MySQL expects.
+func userSpec(user, host string) (account string, err error) {
+	user = strings.TrimSpace(user)
+	if user == "" {
+		return "", fmt.Errorf("%w: a username is required", plugin.ErrInvalidInput)
+	}
+	host = strings.TrimSpace(host)
+	if host == "" {
+		host = "%"
+	}
+	return quoteLiteral(user) + "@" + quoteLiteral(host), nil
+}
+
+// grantClause validates a privilege list against the allowlist and a scope of
+// the form *.*, db.*, or db.table, returning the "<privileges> ON <scope>"
+// fragment. Scope identifiers are quoted; '*' is preserved as the wildcard.
+func grantClause(privileges any, scope string) (string, error) {
+	privs := normalizeStringList(privileges)
+	if len(privs) == 0 {
+		return "", fmt.Errorf("%w: at least one privilege is required", plugin.ErrInvalidInput)
+	}
+	allowed := map[string]bool{}
+	for _, p := range grantPrivilegeAllowlist {
+		allowed[p] = true
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(privs))
+	for _, p := range privs {
+		p = strings.ToUpper(strings.TrimSpace(p))
+		if !allowed[p] {
+			return "", fmt.Errorf("%w: unsupported privilege %q", plugin.ErrInvalidInput, p)
+		}
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	target, err := grantScope(scope)
+	if err != nil {
+		return "", err
+	}
+	return strings.Join(out, ", ") + " ON " + target, nil
+}
+
+func grantScope(scope string) (string, error) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		scope = "*.*"
+	}
+	database, object, found := strings.Cut(scope, ".")
+	if !found {
+		return "", fmt.Errorf("%w: scope must be database.object (e.g. *.* or app.users)", plugin.ErrInvalidInput)
+	}
+	dbPart := "*"
+	if database != "*" {
+		safe, err := sqldb.SafeIdentifier(database)
+		if err != nil {
+			return "", err
+		}
+		dbPart = quoteIdent(safe)
+	}
+	objPart := "*"
+	if object != "*" {
+		safe, err := sqldb.SafeIdentifier(object)
+		if err != nil {
+			return "", err
+		}
+		objPart = quoteIdent(safe)
+	}
+	return dbPart + "." + objPart, nil
+}
+
+func createUser(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Username string `json:"username" validate:"required"`
+		Host     string `json:"host"`
+		Password string `json:"password"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	account, err := userSpec(req.Username, req.Host)
+	if err != nil {
+		return nil, err
+	}
+	stmt := "CREATE USER " + account
+	if pw := req.Password; pw != "" {
+		stmt += " IDENTIFIED BY " + quoteLiteral(pw)
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mysqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func grantUser(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	account, err := userSpec(rc.Param("user"), rc.Param("host"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Privileges any    `json:"privileges" validate:"required"`
+		Scope      string `json:"scope"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	clause, err := grantClause(req.Privileges, req.Scope)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "GRANT "+clause+" TO "+account); err != nil {
+		return nil, mysqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropUser(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	account, err := userSpec(rc.Param("user"), rc.Param("host"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "DROP USER "+account); err != nil {
+		return nil, mysqlErr(err)
+	}
+	return actionResult{OK: true}, nil
 }
 
 func dropView(rc *plugin.RequestContext) (any, error) {

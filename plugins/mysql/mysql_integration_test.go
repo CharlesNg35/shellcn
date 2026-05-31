@@ -288,6 +288,61 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 		t.Fatalf("expected database dropped, got %d err=%v", dbExists, err)
 	}
 
+	// User management round-trip: create → grant → verify → drop → verify gone.
+	itUser := "shellcn_it_user_" + strconv.FormatInt(time.Now().UnixNano()%100000, 10)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "DROP USER IF EXISTS "+quoteLiteral(itUser)+"@"+quoteLiteral("%"))
+	})
+	if _, err := createUser(rowMutationRC(ctx, s, nil, map[string]any{"username": itUser, "host": "%", "password": "Sh3llcn!pw"})); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	userParams := map[string]string{"user": itUser, "host": "%"}
+	users, err := listUsers(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list users: %v", err)
+	}
+	foundUser := false
+	for _, u := range users.(plugin.Page[row]).Items {
+		if u["user"] == itUser {
+			foundUser = true
+		}
+	}
+	if !foundUser {
+		t.Fatalf("created user was not listed: %s", itUser)
+	}
+
+	if _, err := grantUser(rowMutationRC(ctx, s, userParams, map[string]any{"privileges": []any{"SELECT", "INSERT"}, "scope": database + ".*"})); err != nil {
+		t.Fatalf("grant user: %v", err)
+	}
+	grants, err := s.db.QueryContext(ctx, "SHOW GRANTS FOR "+quoteLiteral(itUser)+"@"+quoteLiteral("%"))
+	if err != nil {
+		t.Fatalf("show grants: %v", err)
+	}
+	grantedSelect := false
+	for grants.Next() {
+		var line string
+		if err := grants.Scan(&line); err != nil {
+			t.Fatalf("scan grant: %v", err)
+		}
+		if strings.Contains(line, "SELECT") && strings.Contains(line, quoteIdent(database)) {
+			grantedSelect = true
+		}
+	}
+	_ = grants.Close()
+	if !grantedSelect {
+		t.Fatalf("expected SELECT grant on %s for user", database)
+	}
+
+	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{}, s, userParams, nil, nil)); err != nil {
+		t.Fatalf("drop user: %v", err)
+	}
+	var userCount int
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM mysql.user WHERE User = ? AND Host = ?", itUser, "%").Scan(&userCount); err != nil || userCount != 0 {
+		t.Fatalf("expected user dropped, got %d err=%v", userCount, err)
+	}
+
 	// Foreign-key cells carry generic _links to the referenced table.
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE shellcn_orders (id bigint unsigned AUTO_INCREMENT PRIMARY KEY, person_id bigint unsigned, FOREIGN KEY (person_id) REFERENCES shellcn_people(id))`); err != nil {
 		t.Fatalf("create child table: %v", err)

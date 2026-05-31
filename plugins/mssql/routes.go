@@ -54,6 +54,12 @@ func routes() []plugin.Route {
 		{ID: "mssql.jobs.tree", Method: plugin.MethodGet, Path: "/tree/jobs", Permission: "mssql.jobs.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.jobs.tree", Handle: treeJobs},
 		{ID: "mssql.jobs.list", Method: plugin.MethodGet, Path: "/jobs", Permission: "mssql.jobs.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.jobs.list", Handle: listJobs},
 		{ID: "mssql.job.overview", Method: plugin.MethodGet, Path: "/jobs/{id}/overview", Permission: "mssql.jobs.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.job.overview", Handle: jobOverview},
+		{ID: "mssql.job.start", Method: plugin.MethodPost, Path: "/jobs/{name}/start", Permission: "mssql.jobs.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.job.start", Handle: startJob},
+		{ID: "mssql.job.enable", Method: plugin.MethodPost, Path: "/jobs/{name}/enable", Permission: "mssql.jobs.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.job.enable", Handle: enableJob},
+		{ID: "mssql.job.disable", Method: plugin.MethodPost, Path: "/jobs/{name}/disable", Permission: "mssql.jobs.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.job.disable", Handle: disableJob},
+		{ID: "mssql.user.create", Method: plugin.MethodPost, Path: "/users", Permission: "mssql.users.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.user.create", Input: userCreateSchema(), Handle: createUser},
+		{ID: "mssql.user.grant", Method: plugin.MethodPost, Path: "/users/{database}/{user}/grant", Permission: "mssql.users.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.user.grant", Input: userGrantSchema(), Handle: grantUser},
+		{ID: "mssql.user.drop", Method: plugin.MethodDelete, Path: "/users/{database}/{user}", Permission: "mssql.users.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.user.drop", Handle: dropUser},
 		{ID: "mssql.table.rows", Method: plugin.MethodGet, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.table.rows", Handle: tableRows},
 		{ID: "mssql.view.rows", Method: plugin.MethodGet, Path: "/objects/{id}/view-rows", Permission: "mssql.views.data.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.view.rows", Handle: tableRows},
 		{ID: "mssql.table.columns", Method: plugin.MethodGet, Path: "/objects/{id}/columns", Permission: "mssql.tables.read", Risk: plugin.RiskSafe, AuditEvent: "mssql.table.columns", Handle: tableColumnsRoute},
@@ -152,6 +158,31 @@ func constraintAddSchema() *plugin.Schema {
 		{Key: "check", Label: "Check expression", Type: plugin.FieldText, Help: "Boolean expression for a CHECK constraint, e.g. [age] >= 0."},
 		{Key: "ref_table", Label: "Referenced table", Type: plugin.FieldText, Help: "Schema-qualified target for a FOREIGN KEY, e.g. dbo.people."},
 		{Key: "ref_columns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Comma-separated referenced columns for a FOREIGN KEY."},
+	}}}}
+}
+
+func userCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "User", Fields: []plugin.Field{
+		{Key: "database", Label: "Database", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "Database in which to create the user."},
+		{Key: "name", Label: "User name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, Help: "Sets up a server login with this password; leave blank to create a user for an existing login."},
+		{Key: "login", Label: "Existing login", Type: plugin.FieldText, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, Help: "Map the user to this existing server login instead of creating one."},
+	}}}}
+}
+
+func userGrantSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Grant", Fields: []plugin.Field{
+		{Key: "permission", Label: "Permission", Type: plugin.FieldSelect, Required: true, Default: "SELECT", Options: []plugin.Option{
+			{Label: "SELECT", Value: "SELECT"},
+			{Label: "INSERT", Value: "INSERT"},
+			{Label: "UPDATE", Value: "UPDATE"},
+			{Label: "DELETE", Value: "DELETE"},
+			{Label: "EXECUTE", Value: "EXECUTE"},
+			{Label: "REFERENCES", Value: "REFERENCES"},
+			{Label: "CONTROL", Value: "CONTROL"},
+			{Label: "ALTER", Value: "ALTER"},
+			{Label: "VIEW DEFINITION", Value: "VIEW DEFINITION"},
+		}},
 	}}}}
 }
 
@@ -550,6 +581,192 @@ WHERE CONVERT(varchar(36), j.job_id) = @p1`, []any{id})
 		return nil, plugin.ErrNotFound
 	}
 	return rows[0], nil
+}
+
+// jobName resolves the SQL Agent job name from the route param. SQL Agent job
+// names allow arbitrary characters, so the value is never interpolated — it is
+// passed as a parameter to the msdb stored procedures.
+func jobName(rc *plugin.RequestContext) (string, error) {
+	name := strings.TrimSpace(rc.Param("name"))
+	if name == "" {
+		return "", fmt.Errorf("%w: job name is required", plugin.ErrInvalidInput)
+	}
+	if strings.ContainsRune(name, '\x00') {
+		return "", fmt.Errorf("%w: job name is invalid", plugin.ErrInvalidInput)
+	}
+	return name, nil
+}
+
+func startJob(rc *plugin.RequestContext) (any, error) {
+	s, name, err := jobMutation(rc)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "EXEC msdb.dbo.sp_start_job @job_name = @job_name", sql.Named("job_name", name)); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func enableJob(rc *plugin.RequestContext) (any, error) {
+	return setJobEnabled(rc, true)
+}
+
+func disableJob(rc *plugin.RequestContext) (any, error) {
+	return setJobEnabled(rc, false)
+}
+
+func setJobEnabled(rc *plugin.RequestContext, enabled bool) (any, error) {
+	s, name, err := jobMutation(rc)
+	if err != nil {
+		return nil, err
+	}
+	flag := 0
+	if enabled {
+		flag = 1
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "EXEC msdb.dbo.sp_update_job @job_name = @job_name, @enabled = @enabled", sql.Named("job_name", name), sql.Named("enabled", flag)); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func jobMutation(rc *plugin.RequestContext) (*Session, string, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, "", err
+	}
+	name, err := jobName(rc)
+	if err != nil {
+		return nil, "", err
+	}
+	return s, name, nil
+}
+
+// createUser creates a database-scoped user. When a password is supplied it
+// first provisions a matching server login (CREATE LOGIN) then maps a user to
+// it; otherwise it creates a user for the named existing login, or a contained
+// user without a login when neither is given.
+func createUser(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Database string `json:"database" validate:"required"`
+		Name     string `json:"name" validate:"required"`
+		Password string `json:"password"`
+		Login    string `json:"login"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	database, err := safeIdent(req.Database)
+	if err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	login := strings.TrimSpace(req.Login)
+	password := strings.TrimSpace(req.Password)
+	var userStmt string
+	switch {
+	case password != "":
+		if _, err := s.db.ExecContext(rc.Ctx, "CREATE LOGIN "+quoteIdent(name)+" WITH PASSWORD = "+quoteLiteral(password)); err != nil {
+			return nil, mssqlErr(err)
+		}
+		userStmt = "CREATE USER " + quoteIdent(name) + " FOR LOGIN " + quoteIdent(name)
+	case login != "":
+		loginName, err := safeIdent(login)
+		if err != nil {
+			return nil, err
+		}
+		userStmt = "CREATE USER " + quoteIdent(name) + " FOR LOGIN " + quoteIdent(loginName)
+	default:
+		userStmt = "CREATE USER " + quoteIdent(name) + " WITHOUT LOGIN"
+	}
+	// CREATE USER must run in the target database; wrap it in a USE-prefixed batch.
+	stmt := "USE " + quoteIdent(database) + "; EXEC(" + quoteLiteral(userStmt) + ")"
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropUser(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, err := safeIdent(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	user, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	stmt := "USE " + quoteIdent(database) + "; EXEC(" + quoteLiteral("DROP USER "+quoteIdent(user)) + ")"
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func grantUser(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, err := safeIdent(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	user, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Permission string `json:"permission" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	permission, err := grantPermission(req.Permission)
+	if err != nil {
+		return nil, err
+	}
+	stmt := "USE " + quoteIdent(database) + "; EXEC(" + quoteLiteral("GRANT "+permission+" TO "+quoteIdent(user)) + ")"
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// grantPermission validates a database-scoped permission against a fixed
+// allow-list so the GRANT statement can never carry an injected clause.
+func grantPermission(raw string) (string, error) {
+	perm := strings.ToUpper(strings.TrimSpace(raw))
+	switch perm {
+	case "SELECT", "INSERT", "UPDATE", "DELETE", "EXECUTE", "REFERENCES", "CONTROL", "ALTER", "VIEW DEFINITION":
+		return perm, nil
+	default:
+		return "", fmt.Errorf("%w: unsupported permission %q", plugin.ErrInvalidInput, raw)
+	}
 }
 
 func tableRows(rc *plugin.RequestContext) (any, error) {

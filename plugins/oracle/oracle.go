@@ -174,6 +174,10 @@ func userResource() plugin.ResourceType {
 		Kind: "user", Title: "Users",
 		List:    plugin.DataSource{RouteID: "oracle.users.list"},
 		Columns: []plugin.Column{{Key: "name", Label: "User", Sortable: true}, {Key: "account_status", Label: "Status"}, {Key: "default_tablespace", Label: "Default tablespace"}, {Key: "temporary_tablespace", Label: "Temporary tablespace"}, {Key: "created", Label: "Created", Type: plugin.ColumnDateTime}},
+		Actions: plugin.ResourceActions{
+			Row:    []string{"oracle.user.lock", "oracle.user.unlock", "oracle.user.drop"},
+			Detail: []string{"oracle.user.grant", "oracle.user.lock", "oracle.user.unlock", "oracle.user.drop"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.user.overview", Params: map[string]string{"user": "${resource.name}"}}},
 		}},
@@ -196,6 +200,10 @@ func sessionResource() plugin.ResourceType {
 		Kind: "session", Title: "Sessions",
 		List:    plugin.DataSource{RouteID: "oracle.sessions.list"},
 		Columns: []plugin.Column{{Key: "sid", Label: "SID", Type: plugin.ColumnNumber, Sortable: true}, {Key: "serial", Label: "Serial", Type: plugin.ColumnNumber}, {Key: "username", Label: "User"}, {Key: "status", Label: "Status"}, {Key: "machine", Label: "Machine"}, {Key: "program", Label: "Program"}, {Key: "logon_time", Label: "Logon", Type: plugin.ColumnDateTime}},
+		Actions: plugin.ResourceActions{
+			Row:    []string{"oracle.session.kill"},
+			Detail: []string{"oracle.session.kill"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Session ${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "oracle.session.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
@@ -283,5 +291,10 @@ func actions() []plugin.Action {
 		{ID: "oracle.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "oracle.table.truncate", Params: objectParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "oracle.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "oracle.table.drop", Params: objectParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 		{ID: "oracle.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "oracle.view.drop", Params: objectParams(), Confirm: true, ConfirmText: "Drop this view?"},
+		{ID: "oracle.session.kill", Label: "Kill session", Icon: icon("circle-x"), RouteID: "oracle.session.kill", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Kill this session? In-flight work is rolled back and the connection is terminated immediately."},
+		{ID: "oracle.user.lock", Label: "Lock account", Icon: icon("lock"), RouteID: "oracle.user.lock", Params: map[string]string{"user": "${resource.name}"}},
+		{ID: "oracle.user.unlock", Label: "Unlock account", Icon: icon("lock-open"), RouteID: "oracle.user.unlock", Params: map[string]string{"user": "${resource.name}"}},
+		{ID: "oracle.user.grant", Label: "Grant roles/privileges", Icon: icon("shield-plus"), RouteID: "oracle.user.grant", Params: map[string]string{"user": "${resource.name}"}},
+		{ID: "oracle.user.drop", Label: "Drop user", Icon: icon("trash-2"), RouteID: "oracle.user.drop", Params: map[string]string{"user": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this user? The user and every object it owns are permanently deleted."},
 	}
 }

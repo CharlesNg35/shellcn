@@ -61,6 +61,11 @@ func routes() []plugin.Route {
 		{ID: "oracle.sessions.tree", Method: plugin.MethodGet, Path: "/tree/sessions", Permission: "oracle.sessions.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.sessions.tree", Handle: treeSessions},
 		{ID: "oracle.sessions.list", Method: plugin.MethodGet, Path: "/sessions", Permission: "oracle.sessions.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.sessions.list", Handle: listSessions},
 		{ID: "oracle.session.overview", Method: plugin.MethodGet, Path: "/sessions/{id}/overview", Permission: "oracle.sessions.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.session.overview", Handle: sessionOverview},
+		{ID: "oracle.session.kill", Method: plugin.MethodPost, Path: "/sessions/{id}/kill", Permission: "oracle.sessions.kill", Risk: plugin.RiskDestructive, AuditEvent: "oracle.session.kill", Handle: killSession},
+		{ID: "oracle.user.drop", Method: plugin.MethodDelete, Path: "/users/{user}", Permission: "oracle.users.delete", Risk: plugin.RiskDestructive, AuditEvent: "oracle.user.drop", Handle: dropUser},
+		{ID: "oracle.user.lock", Method: plugin.MethodPost, Path: "/users/{user}/lock", Permission: "oracle.users.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.user.lock", Handle: lockUser},
+		{ID: "oracle.user.unlock", Method: plugin.MethodPost, Path: "/users/{user}/unlock", Permission: "oracle.users.write", Risk: plugin.RiskWrite, AuditEvent: "oracle.user.unlock", Handle: unlockUser},
+		{ID: "oracle.user.grant", Method: plugin.MethodPost, Path: "/users/{user}/grant", Permission: "oracle.users.write", Risk: plugin.RiskPrivileged, AuditEvent: "oracle.user.grant", Input: userGrantSchema(), Handle: grantUser},
 		{ID: "oracle.table.rows", Method: plugin.MethodGet, Path: "/objects/{id}/rows", Permission: "oracle.tables.data.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.table.rows", Handle: tableRows},
 		{ID: "oracle.view.rows", Method: plugin.MethodGet, Path: "/objects/{id}/view-rows", Permission: "oracle.views.data.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.view.rows", Handle: tableRows},
 		{ID: "oracle.table.columns", Method: plugin.MethodGet, Path: "/objects/{id}/columns", Permission: "oracle.tables.read", Risk: plugin.RiskSafe, AuditEvent: "oracle.table.columns", Handle: tableColumnsRoute},
@@ -127,6 +132,25 @@ func schemaCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Schema", Fields: []plugin.Field{
 		{Key: "name", Label: "Schema (user) name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "password", Label: "Password", Type: plugin.FieldPassword, Required: true, Secret: true},
+	}}}}
+}
+
+// userGrantSchema collects one or more roles/system privileges to GRANT to a
+// user (e.g. CONNECT, RESOURCE, CREATE SESSION). Object privileges are out of
+// scope here — those are managed from the owning object.
+func userGrantSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Grant", Fields: []plugin.Field{
+		{Key: "privileges", Label: "Roles / privileges", Type: plugin.FieldMultiSelect, Required: true, Options: []plugin.Option{
+			{Label: "CONNECT", Value: "CONNECT"},
+			{Label: "RESOURCE", Value: "RESOURCE"},
+			{Label: "DBA", Value: "DBA"},
+			{Label: "CREATE SESSION", Value: "CREATE SESSION"},
+			{Label: "CREATE TABLE", Value: "CREATE TABLE"},
+			{Label: "CREATE VIEW", Value: "CREATE VIEW"},
+			{Label: "CREATE PROCEDURE", Value: "CREATE PROCEDURE"},
+			{Label: "CREATE SEQUENCE", Value: "CREATE SEQUENCE"},
+			{Label: "UNLIMITED TABLESPACE", Value: "UNLIMITED TABLESPACE"},
+		}, Help: "Each entry is a role or system privilege granted to the user."},
 	}}}}
 }
 
@@ -647,6 +671,161 @@ WHERE sid = :1 AND (:2 IS NULL OR serial# = :2)`, []any{sid, nullIfEmpty(serial)
 	}
 	normalizeRowKeys(rows[0])
 	return rows[0], nil
+}
+
+// killSession terminates a session by SID,SERIAL#. The id carried by a session
+// resource ref is "sid:serial"; both are validated as integers and rebuilt into
+// the quoted-literal 'sid,serial' Oracle expects — never string-interpolated as
+// identifiers.
+func killSession(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	sid, serial, err := sessionSidSerial(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	stmt := "ALTER SYSTEM KILL SESSION '" + sid + "," + serial + "' IMMEDIATE"
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// sessionSidSerial splits and validates a "sid:serial" session id into the two
+// integer components used to build a KILL SESSION target.
+func sessionSidSerial(id string) (string, string, error) {
+	sidRaw, serialRaw, ok := strings.Cut(strings.TrimSpace(id), ":")
+	if !ok {
+		return "", "", fmt.Errorf("%w: session id must be sid:serial", plugin.ErrInvalidInput)
+	}
+	sid, err := numericToken(sidRaw)
+	if err != nil {
+		return "", "", err
+	}
+	serial, err := numericToken(serialRaw)
+	if err != nil {
+		return "", "", err
+	}
+	return sid, serial, nil
+}
+
+// numericToken accepts only an unsigned integer, guarding the KILL SESSION
+// literal against any injection through the sid/serial values.
+func numericToken(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("%w: a numeric value is required", plugin.ErrInvalidInput)
+	}
+	if _, err := strconv.ParseUint(raw, 10, 64); err != nil {
+		return "", fmt.Errorf("%w: value must be a non-negative integer", plugin.ErrInvalidInput)
+	}
+	return raw, nil
+}
+
+// dropUser drops an Oracle user (schema) and everything it owns.
+func dropUser(rc *plugin.RequestContext) (any, error) {
+	name, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP USER "+quoteIdent(name)+" CASCADE")
+}
+
+func lockUser(rc *plugin.RequestContext) (any, error) {
+	name, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "ALTER USER "+quoteIdent(name)+" ACCOUNT LOCK")
+}
+
+func unlockUser(rc *plugin.RequestContext) (any, error) {
+	name, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "ALTER USER "+quoteIdent(name)+" ACCOUNT UNLOCK")
+}
+
+// grantUser grants one or more roles/system privileges to a user.
+func grantUser(rc *plugin.RequestContext) (any, error) {
+	s, err := oracleSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Privileges any `json:"privileges" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	privs, err := grantPrivileges(req.Privileges)
+	if err != nil {
+		return nil, err
+	}
+	stmt := "GRANT " + strings.Join(privs, ", ") + " TO " + quoteIdent(name)
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, oracleErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// grantPrivileges validates a list of roles/system privileges. Each is a SQL
+// keyword (possibly multi-word, e.g. CREATE SESSION), not a quoted identifier,
+// so it must contain only letters, digits, underscores, and single spaces.
+func grantPrivileges(value any) ([]string, error) {
+	var raw []string
+	switch t := value.(type) {
+	case string:
+		raw = strings.Split(t, ",")
+	case []string:
+		raw = t
+	case []any:
+		for _, item := range t {
+			raw = append(raw, fmt.Sprint(item))
+		}
+	default:
+		return nil, fmt.Errorf("%w: privileges must be a list", plugin.ErrInvalidInput)
+	}
+	out := make([]string, 0, len(raw))
+	for _, p := range raw {
+		priv, err := safePrivilege(p)
+		if err != nil {
+			return nil, err
+		}
+		if priv != "" {
+			out = append(out, priv)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%w: at least one privilege is required", plugin.ErrInvalidInput)
+	}
+	return out, nil
+}
+
+func safePrivilege(raw string) (string, error) {
+	priv := strings.ToUpper(strings.Join(strings.Fields(raw), " "))
+	if priv == "" {
+		return "", nil
+	}
+	for _, r := range priv {
+		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != ' ' {
+			return "", fmt.Errorf("%w: privilege contains unsupported characters", plugin.ErrInvalidInput)
+		}
+	}
+	return priv, nil
 }
 
 func tableRows(rc *plugin.RequestContext) (any, error) {

@@ -2,11 +2,168 @@ package cockroachdb
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
+
+// liveOpsTokenRE matches a CockroachDB session/query identifier as returned by
+// SHOW SESSIONS / SHOW QUERIES (a hexadecimal token). CANCEL takes the id as a
+// string literal, so the token is validated against this strict allow-list and
+// then embedded as a single-quoted literal — never raw interpolation.
+var liveOpsTokenRE = regexp.MustCompile(`^[0-9a-fA-F]{1,64}$`)
+
+// stringLiteral renders s as a safe single-quoted SQL string literal, doubling
+// embedded quotes. Callers must still validate any value that is not already
+// constrained to a safe alphabet.
+func stringLiteral(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
+func liveOpsToken(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if !liveOpsTokenRE.MatchString(raw) {
+		return "", fmt.Errorf("%w: invalid identifier", plugin.ErrInvalidInput)
+	}
+	return raw, nil
+}
+
+// cancelSessionSQL builds CANCEL SESSION '<id>' from a validated hex token.
+func cancelSessionSQL(id string) (string, error) {
+	token, err := liveOpsToken(id)
+	if err != nil {
+		return "", err
+	}
+	return "CANCEL SESSION " + stringLiteral(token), nil
+}
+
+// cancelQuerySQL builds CANCEL QUERY '<id>' from a validated hex token.
+func cancelQuerySQL(id string) (string, error) {
+	token, err := liveOpsToken(id)
+	if err != nil {
+		return "", err
+	}
+	return "CANCEL QUERY " + stringLiteral(token), nil
+}
+
+type userCreateRequest struct {
+	Name     string `json:"name"`
+	Password string `json:"password"`
+	Login    bool   `json:"login"`
+}
+
+// createUserSQL builds CREATE USER <name> [WITH PASSWORD '<pw>'] [LOGIN|NOLOGIN].
+// The name is a validated, quoted identifier; the password is a safe string
+// literal (never an identifier, never interpolated raw).
+func createUserSQL(req userCreateRequest) (string, error) {
+	name, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return "", err
+	}
+	stmt := "CREATE USER " + sqldb.QuoteIdent(name)
+	password := req.Password
+	if password != "" {
+		stmt += " WITH PASSWORD " + stringLiteral(password)
+	}
+	return stmt, nil
+}
+
+func dropUserSQL(name string) (string, error) {
+	user, err := sqldb.SafeIdentifier(name)
+	if err != nil {
+		return "", err
+	}
+	return "DROP USER " + sqldb.QuoteIdent(user), nil
+}
+
+const (
+	grantTargetRole     = "role"
+	grantTargetDatabase = "database"
+	grantTargetSchema   = "schema"
+	grantTargetTable    = "table"
+)
+
+var validPrivileges = map[string]bool{
+	"ALL":        true,
+	"SELECT":     true,
+	"INSERT":     true,
+	"UPDATE":     true,
+	"DELETE":     true,
+	"CREATE":     true,
+	"DROP":       true,
+	"GRANT":      true,
+	"ZONECONFIG": true,
+	"CONNECT":    true,
+	"USAGE":      true,
+}
+
+type grantRequest struct {
+	User      string `json:"user"`
+	Target    string `json:"target"`
+	Role      string `json:"role"`
+	Privilege string `json:"privilege"`
+	Object    string `json:"object"`
+}
+
+// grantSQL builds either a role grant (GRANT <role> TO <user>) or an
+// object-privilege grant (GRANT <priv> ON <kind> <object> TO <user>). All
+// identifiers are validated/quoted and the privilege is checked against a fixed
+// allow-list so nothing untrusted reaches the statement.
+func grantSQL(req grantRequest) (string, error) {
+	user, err := sqldb.SafeIdentifier(req.User)
+	if err != nil {
+		return "", err
+	}
+	target := req.Target
+	if target == "" {
+		target = grantTargetRole
+	}
+	if target == grantTargetRole {
+		role, err := sqldb.SafeIdentifier(req.Role)
+		if err != nil {
+			return "", err
+		}
+		return "GRANT " + sqldb.QuoteIdent(role) + " TO " + sqldb.QuoteIdent(user), nil
+	}
+	priv := strings.ToUpper(strings.TrimSpace(req.Privilege))
+	if !validPrivileges[priv] {
+		return "", fmt.Errorf("%w: unsupported privilege", plugin.ErrInvalidInput)
+	}
+	object, kind, err := grantObject(target, req.Object)
+	if err != nil {
+		return "", err
+	}
+	return "GRANT " + priv + " ON " + kind + " " + object + " TO " + sqldb.QuoteIdent(user), nil
+}
+
+// grantObject validates and quotes the grant target object, returning the quoted
+// reference and the ON-clause keyword for the object kind.
+func grantObject(target, raw string) (string, string, error) {
+	switch target {
+	case grantTargetDatabase:
+		name, err := sqldb.SafeIdentifier(raw)
+		if err != nil {
+			return "", "", err
+		}
+		return sqldb.QuoteIdent(name), "DATABASE", nil
+	case grantTargetSchema:
+		name, err := sqldb.SafeIdentifier(raw)
+		if err != nil {
+			return "", "", err
+		}
+		return sqldb.QuoteIdent(name), "SCHEMA", nil
+	case grantTargetTable:
+		ref, err := qualifiedRef(raw)
+		if err != nil {
+			return "", "", err
+		}
+		return ref, "TABLE", nil
+	default:
+		return "", "", fmt.Errorf("%w: unsupported grant target", plugin.ErrInvalidInput)
+	}
+}
 
 const (
 	constraintPrimaryKey = "primary_key"

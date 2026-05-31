@@ -225,6 +225,113 @@ func TestTableDataGridIsEditable(t *testing.T) {
 	}
 }
 
+func TestQuoteLiteralEscapes(t *testing.T) {
+	cases := map[string]string{
+		`alice`:      `'alice'`,
+		`o'brien`:    `'o\'brien'`,
+		`a\b`:        `'a\\b'`,
+		`x'; DROP--`: `'x\'; DROP--'`,
+	}
+	for in, want := range cases {
+		if got := quoteLiteral(in); got != want {
+			t.Fatalf("quoteLiteral(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestUserSpecQuotesAndDefaultsHost(t *testing.T) {
+	account, err := userSpec("alice", "")
+	if err != nil || account != `'alice'@'%'` {
+		t.Fatalf("userSpec default host = %q err=%v", account, err)
+	}
+	account, err = userSpec("svc", "10.0.0.1")
+	if err != nil || account != `'svc'@'10.0.0.1'` {
+		t.Fatalf("userSpec = %q err=%v", account, err)
+	}
+	// A username carrying a quote must be escaped, not allowed to break out.
+	account, err = userSpec("ev'il", "%")
+	if err != nil || account != `'ev\'il'@'%'` {
+		t.Fatalf("userSpec malicious = %q err=%v", account, err)
+	}
+	if _, err := userSpec("", "%"); err == nil {
+		t.Fatal("empty username accepted")
+	}
+}
+
+func TestGrantClause(t *testing.T) {
+	clause, err := grantClause([]string{"SELECT", "INSERT"}, "app.users")
+	if err != nil || clause != "SELECT, INSERT ON `app`.`users`" {
+		t.Fatalf("grant clause = %q err=%v", clause, err)
+	}
+	// Default scope and comma-separated string input.
+	clause, err = grantClause("select", "")
+	if err != nil || clause != "SELECT ON *.*" {
+		t.Fatalf("grant clause (default scope) = %q err=%v", clause, err)
+	}
+	clause, err = grantClause([]any{"SELECT"}, "app.*")
+	if err != nil || clause != "SELECT ON `app`.*" {
+		t.Fatalf("grant clause (db scope) = %q err=%v", clause, err)
+	}
+	// Duplicates collapse.
+	clause, err = grantClause([]string{"SELECT", "select"}, "*.*")
+	if err != nil || clause != "SELECT ON *.*" {
+		t.Fatalf("grant clause (dedup) = %q err=%v", clause, err)
+	}
+	if _, err := grantClause([]string{}, "*.*"); err == nil {
+		t.Fatal("empty privilege list accepted")
+	}
+	// Privileges outside the allowlist (incl. injection attempts) are rejected.
+	if _, err := grantClause([]string{"SELECT; DROP DATABASE app"}, "*.*"); err == nil {
+		t.Fatal("unsafe privilege accepted")
+	}
+	if _, err := grantClause([]string{"SUPER"}, "*.*"); err == nil {
+		t.Fatal("non-allowlisted privilege accepted")
+	}
+	// Scope identifiers are validated; injection in the scope is rejected.
+	if _, err := grantClause([]string{"SELECT"}, "app`; DROP--.*"); err == nil {
+		t.Fatal("unsafe scope identifier accepted")
+	}
+	if _, err := grantClause([]string{"SELECT"}, "noseparator"); err == nil {
+		t.Fatal("scope without database.object separator accepted")
+	}
+}
+
+func TestUserActionsWiredToRoutes(t *testing.T) {
+	p := New()
+	m := p.Manifest()
+	routeIDs := map[string]bool{}
+	for _, r := range p.Routes() {
+		routeIDs[r.ID] = true
+	}
+	for _, id := range []string{"mysql.user.create", "mysql.user.grant", "mysql.user.drop"} {
+		if !routeIDs[id] {
+			t.Fatalf("missing route %q", id)
+		}
+	}
+	actions := map[string]plugin.Action{}
+	for _, a := range m.Actions {
+		actions[a.ID] = a
+	}
+	if a, ok := actions["mysql.user.drop"]; !ok || !a.Confirm {
+		t.Fatalf("drop user action must require confirmation: %#v", a)
+	}
+	var user plugin.ResourceType
+	for _, res := range m.Resources {
+		if res.Kind == "user" {
+			user = res
+		}
+	}
+	if !contains(user.Actions.Toolbar, "mysql.user.create") {
+		t.Fatalf("user toolbar = %#v, want create", user.Actions.Toolbar)
+	}
+	if !contains(user.Actions.Row, "mysql.user.drop") || !contains(user.Actions.Row, "mysql.user.grant") {
+		t.Fatalf("user row actions = %#v, want grant+drop", user.Actions.Row)
+	}
+	if !contains(user.Actions.Detail, "mysql.user.grant") {
+		t.Fatalf("user detail actions = %#v, want grant", user.Actions.Detail)
+	}
+}
+
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

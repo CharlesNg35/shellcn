@@ -168,3 +168,122 @@ func TestAddConstraintSQL(t *testing.T) {
 		t.Fatal("addConstraintSQL must reject an unsupported ON DELETE action")
 	}
 }
+
+func TestCancelSessionSQL(t *testing.T) {
+	got, err := cancelSessionSQL("1530c309b1d8d5f00000000000000001")
+	if err != nil {
+		t.Fatalf("cancelSessionSQL: %v", err)
+	}
+	if want := `CANCEL SESSION '1530c309b1d8d5f00000000000000001'`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	for _, bad := range []string{"", "  ", "'; DROP TABLE x; --", "not-hex", "1530c309'"} {
+		if _, err := cancelSessionSQL(bad); err == nil {
+			t.Fatalf("cancelSessionSQL must reject %q", bad)
+		}
+	}
+}
+
+func TestCancelQuerySQL(t *testing.T) {
+	got, err := cancelQuerySQL("1673f590433eaa000000000000000001")
+	if err != nil {
+		t.Fatalf("cancelQuerySQL: %v", err)
+	}
+	if want := `CANCEL QUERY '1673f590433eaa000000000000000001'`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if _, err := cancelQuerySQL("1; SELECT 1"); err == nil {
+		t.Fatal("cancelQuerySQL must reject a non-token id")
+	}
+}
+
+func TestCreateUserSQL(t *testing.T) {
+	got, err := createUserSQL(userCreateRequest{Name: "max"})
+	if err != nil {
+		t.Fatalf("createUserSQL: %v", err)
+	}
+	if want := `CREATE USER "max"`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	withPw, err := createUserSQL(userCreateRequest{Name: "max", Password: "s'ecret"})
+	if err != nil {
+		t.Fatalf("createUserSQL password: %v", err)
+	}
+	if want := `CREATE USER "max" WITH PASSWORD 's''ecret'`; withPw != want {
+		t.Fatalf("got %q, want %q", withPw, want)
+	}
+	if _, err := createUserSQL(userCreateRequest{Name: "1bad"}); err == nil {
+		t.Fatal("createUserSQL must reject an unsafe username")
+	}
+}
+
+func TestDropUserSQL(t *testing.T) {
+	got, err := dropUserSQL("max")
+	if err != nil {
+		t.Fatalf("dropUserSQL: %v", err)
+	}
+	if want := `DROP USER "max"`; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+	if _, err := dropUserSQL("bad name"); err == nil {
+		t.Fatal("dropUserSQL must reject an unsafe username")
+	}
+}
+
+func TestGrantSQL(t *testing.T) {
+	cases := []struct {
+		name string
+		req  grantRequest
+		want string
+	}{
+		{
+			name: "role",
+			req:  grantRequest{User: "priya", Target: grantTargetRole, Role: "analysts"},
+			want: `GRANT "analysts" TO "priya"`,
+		},
+		{
+			name: "role default target",
+			req:  grantRequest{User: "priya", Role: "analysts"},
+			want: `GRANT "analysts" TO "priya"`,
+		},
+		{
+			name: "database privilege",
+			req:  grantRequest{User: "max", Target: grantTargetDatabase, Privilege: "all", Object: "movr"},
+			want: `GRANT ALL ON DATABASE "movr" TO "max"`,
+		},
+		{
+			name: "table privilege qualified",
+			req:  grantRequest{User: "max", Target: grantTargetTable, Privilege: "SELECT", Object: "public.orders"},
+			want: `GRANT SELECT ON TABLE "public"."orders" TO "max"`,
+		},
+		{
+			name: "schema privilege",
+			req:  grantRequest{User: "max", Target: grantTargetSchema, Privilege: "USAGE", Object: "public"},
+			want: `GRANT USAGE ON SCHEMA "public" TO "max"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := grantSQL(tc.req)
+			if err != nil {
+				t.Fatalf("grantSQL: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	if _, err := grantSQL(grantRequest{User: "bad name", Role: "analysts"}); err == nil {
+		t.Fatal("grantSQL must reject an unsafe user")
+	}
+	if _, err := grantSQL(grantRequest{User: "max", Target: grantTargetDatabase, Privilege: "DROP TABLE", Object: "movr"}); err == nil {
+		t.Fatal("grantSQL must reject an unknown privilege")
+	}
+	if _, err := grantSQL(grantRequest{User: "max", Target: "cluster", Privilege: "ALL", Object: "x"}); err == nil {
+		t.Fatal("grantSQL must reject an unsupported target")
+	}
+	if _, err := grantSQL(grantRequest{User: "max", Target: grantTargetTable, Privilege: "SELECT", Object: "bad name"}); err == nil {
+		t.Fatal("grantSQL must reject an unsafe object")
+	}
+}

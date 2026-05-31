@@ -157,6 +157,134 @@ func TestConstraintClause(t *testing.T) {
 	}
 }
 
+func TestSessionSidSerialValidation(t *testing.T) {
+	sid, serial, err := sessionSidSerial("123:45")
+	if err != nil {
+		t.Fatalf("valid session id rejected: %v", err)
+	}
+	if sid != "123" || serial != "45" {
+		t.Fatalf("unexpected sid/serial: %q %q", sid, serial)
+	}
+	bad := []string{
+		"123",                     // missing serial
+		"123:",                    // empty serial
+		":45",                     // empty sid
+		"12a:45",                  // non-numeric sid
+		"123:4x",                  // non-numeric serial
+		"123,45:1",                // injected comma
+		"123:45' IMMEDIATE; DROP", // injection attempt
+		"-1:2",                    // negative
+		"",                        // empty
+	}
+	for _, id := range bad {
+		if _, _, err := sessionSidSerial(id); err == nil {
+			t.Fatalf("invalid session id accepted: %q", id)
+		}
+	}
+}
+
+func TestGrantPrivileges(t *testing.T) {
+	got, err := grantPrivileges([]any{"connect", "create session", " resource "})
+	if err != nil {
+		t.Fatalf("valid privileges rejected: %v", err)
+	}
+	want := []string{"CONNECT", "CREATE SESSION", "RESOURCE"}
+	if len(got) != len(want) {
+		t.Fatalf("unexpected privileges: %#v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("privilege %d: got %q want %q", i, got[i], want[i])
+		}
+	}
+	if got, err := grantPrivileges("DBA"); err != nil || len(got) != 1 || got[0] != "DBA" {
+		t.Fatalf("string privilege wrong: %#v err=%v", got, err)
+	}
+	bad := []any{
+		[]any{},                         // empty list
+		"",                              // empty string
+		[]any{"SELECT ANY TABLE; DROP"}, // injection via semicolon
+		[]any{"GRANT \"X\""},            // embedded quote
+		[]any{"RESOURCE, DBA"},          // injected comma
+		42,                              // wrong type
+	}
+	for _, v := range bad {
+		if _, err := grantPrivileges(v); err == nil {
+			t.Fatalf("invalid privileges accepted: %#v", v)
+		}
+	}
+}
+
+func TestUserAndSessionActionsAreWired(t *testing.T) {
+	p := New()
+	m := p.Manifest()
+
+	routeIDs := map[string]bool{}
+	for _, r := range p.Routes() {
+		routeIDs[r.ID] = true
+	}
+	actionByID := map[string]plugin.Action{}
+	for _, a := range m.Actions {
+		actionByID[a.ID] = a
+	}
+
+	want := []string{
+		"oracle.session.kill",
+		"oracle.user.drop", "oracle.user.lock", "oracle.user.unlock", "oracle.user.grant",
+	}
+	for _, id := range want {
+		a, ok := actionByID[id]
+		if !ok {
+			t.Fatalf("missing action %q", id)
+		}
+		if !routeIDs[a.RouteID] {
+			t.Fatalf("action %q points at missing route %q", id, a.RouteID)
+		}
+	}
+
+	risk := map[string]plugin.RiskLevel{}
+	for _, r := range p.Routes() {
+		risk[r.ID] = r.Risk
+	}
+	if risk["oracle.session.kill"] != plugin.RiskDestructive {
+		t.Fatalf("session.kill must be destructive, got %q", risk["oracle.session.kill"])
+	}
+	if risk["oracle.user.drop"] != plugin.RiskDestructive {
+		t.Fatalf("user.drop must be destructive, got %q", risk["oracle.user.drop"])
+	}
+	if risk["oracle.user.grant"] != plugin.RiskPrivileged {
+		t.Fatalf("user.grant must be privileged, got %q", risk["oracle.user.grant"])
+	}
+
+	// session.kill and user.drop must require confirmation.
+	for _, id := range []string{"oracle.session.kill", "oracle.user.drop"} {
+		if !actionByID[id].Confirm {
+			t.Fatalf("action %q must require confirmation", id)
+		}
+	}
+
+	// The user and session resources expose the new live-ops surfaces.
+	surfaces := map[string]plugin.ResourceActions{}
+	for _, res := range m.Resources {
+		surfaces[res.Kind] = res.Actions
+	}
+	if !contains(surfaces["session"].Row, "oracle.session.kill") {
+		t.Fatalf("session resource missing kill row action: %#v", surfaces["session"])
+	}
+	if !contains(surfaces["user"].Detail, "oracle.user.grant") {
+		t.Fatalf("user resource missing grant detail action: %#v", surfaces["user"])
+	}
+}
+
+func contains(ids []string, want string) bool {
+	for _, id := range ids {
+		if id == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestObjectIDRoundTrip(t *testing.T) {
 	id := objectID("SHELLCN_TEST", "PEOPLE")
 	owner, name, err := parseObjectID(id)

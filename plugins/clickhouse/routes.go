@@ -82,6 +82,13 @@ func routes() []plugin.Route {
 		{ID: "clickhouse.constraint.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/constraints/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.constraint.drop", Handle: dropConstraint},
 		{ID: "clickhouse.table.truncate", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/truncate", Permission: "clickhouse.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.truncate", Handle: truncateTable},
 		{ID: "clickhouse.table.drop", Method: plugin.MethodDelete, Path: "/tables/{database}/{table}", Permission: "clickhouse.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.drop", Handle: dropTable},
+		{ID: "clickhouse.process.kill", Method: plugin.MethodPost, Path: "/processes/{id}/kill", Permission: "clickhouse.processes.kill", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.process.kill", Handle: killProcess},
+		{ID: "clickhouse.mutation.kill", Method: plugin.MethodPost, Path: "/mutations/{database}/{table}/{id}/kill", Permission: "clickhouse.mutations.kill", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.mutation.kill", Handle: killMutation},
+		{ID: "clickhouse.merge.stop", Method: plugin.MethodPost, Path: "/merges/{database}/{table}/stop", Permission: "clickhouse.merges.control", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.merge.stop", Handle: stopMerges},
+		{ID: "clickhouse.merge.start", Method: plugin.MethodPost, Path: "/merges/{database}/{table}/start", Permission: "clickhouse.merges.control", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.merge.start", Handle: startMerges},
+		{ID: "clickhouse.user.create", Method: plugin.MethodPost, Path: "/users", Permission: "clickhouse.users.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.user.create", Input: userCreateSchema(), Handle: createUser},
+		{ID: "clickhouse.user.grant", Method: plugin.MethodPost, Path: "/users/{user}/grant", Permission: "clickhouse.users.write", Risk: plugin.RiskPrivileged, AuditEvent: "clickhouse.user.grant", Input: userGrantSchema(), Handle: grantUser},
+		{ID: "clickhouse.user.drop", Method: plugin.MethodDelete, Path: "/users/{user}", Permission: "clickhouse.users.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.user.drop", Handle: dropUser},
 		{ID: "clickhouse.query", Method: plugin.MethodWS, Path: "/query", Permission: "clickhouse.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "clickhouse.query", Stream: queryStream},
 		{ID: "clickhouse.query.cancel", Method: plugin.MethodPost, Path: "/query/cancel", Permission: "clickhouse.query.cancel", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.query.cancel", Handle: cancelQuery},
 	}
@@ -146,6 +153,30 @@ func constraintAddSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
 		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "expression", Label: "CHECK expression", Type: plugin.FieldText, Required: true, Help: "Boolean expression every row must satisfy, e.g. `age >= 0`."},
+	}}}}
+}
+
+func userCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "User", Fields: []plugin.Field{
+		{Key: "name", Label: "User name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "auth_type", Label: "Authentication", Type: plugin.FieldSelect, Default: "sha256_password", Options: []plugin.Option{
+			{Label: "Password (sha256)", Value: "sha256_password"},
+			{Label: "Password (double sha1)", Value: "double_sha1_password"},
+			{Label: "Plaintext password", Value: "plaintext_password"},
+			{Label: "No password", Value: "no_password"},
+		}},
+		{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{
+			{Field: "auth_type", Op: plugin.OpIn, Value: []any{"sha256_password", "double_sha1_password", "plaintext_password"}},
+		}}},
+		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
+	}}}}
+}
+
+func userGrantSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Grant", Fields: []plugin.Field{
+		{Key: "privilege", Label: "Privilege", Type: plugin.FieldText, Required: true, Default: "SELECT", Help: "Access type to grant, e.g. SELECT, INSERT, ALTER, or ALL."},
+		{Key: "on", Label: "On", Type: plugin.FieldText, Required: true, Default: "*.*", Help: "Target scope: `*.*`, `db.*`, or `db.table`."},
+		{Key: "with_grant_option", Label: "With grant option", Type: plugin.FieldToggle, Default: false},
 	}}}}
 }
 
@@ -362,7 +393,7 @@ ORDER BY create_time DESC, database, table`, []any{database, database, table, ta
 	}
 	for _, r := range rows {
 		id := mutationUID(r)
-		r["ref"] = plugin.ResourceRef{Kind: "mutation", Name: fmt.Sprint(r["mutation_id"]), UID: id}
+		r["ref"] = plugin.ResourceRef{Kind: "mutation", Namespace: fmt.Sprint(r["database"]), Scope: fmt.Sprint(r["table"]), Name: fmt.Sprint(r["mutation_id"]), UID: id}
 	}
 	return pageRows(rc, rows)
 }
@@ -386,7 +417,7 @@ ORDER BY elapsed DESC, database, table`, nil)
 	}
 	for _, r := range rows {
 		id := fmt.Sprint(r["id"])
-		r["ref"] = plugin.ResourceRef{Kind: "merge", Name: id, UID: id}
+		r["ref"] = plugin.ResourceRef{Kind: "merge", Namespace: fmt.Sprint(r["database"]), Scope: fmt.Sprint(r["table"]), Name: id, UID: id}
 	}
 	return pageRows(rc, rows)
 }
@@ -1026,6 +1057,188 @@ func execDDL(rc *plugin.RequestContext, sqlText string) (any, error) {
 		return nil, clickhouseErr(err)
 	}
 	return actionResult{OK: true}, nil
+}
+
+// killProcess terminates a running query identified by its query_id. The id comes
+// from the process row and is a server-assigned string, but it is still embedded
+// as an escaped string literal (KILL takes no bound parameters).
+func killProcess(rc *plugin.RequestContext) (any, error) {
+	id := strings.TrimSpace(rc.Param("id"))
+	if id == "" {
+		return nil, fmt.Errorf("%w: query id is required", plugin.ErrInvalidInput)
+	}
+	return execDDL(rc, buildKillQuery(id))
+}
+
+// killMutation cancels an in-flight mutation. ClickHouse identifies a mutation by
+// (database, table, mutation_id); the database/table are strict identifiers and the
+// mutation_id is an escaped string literal. The action supplies all three from the
+// mutation's resource ref (Namespace=database, Scope=table, Name=mutation_id).
+func killMutation(rc *plugin.RequestContext) (any, error) {
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	stmt, err := buildKillMutation(database, table, rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func stopMerges(rc *plugin.RequestContext) (any, error) {
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "SYSTEM STOP MERGES "+qualified(database, table))
+}
+
+func startMerges(rc *plugin.RequestContext) (any, error) {
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "SYSTEM START MERGES "+qualified(database, table))
+}
+
+func createUser(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        string `json:"name" validate:"required"`
+		AuthType    string `json:"auth_type"`
+		Password    string `json:"password"`
+		IfNotExists bool   `json:"if_not_exists"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := buildCreateUser(req.Name, req.AuthType, req.Password, req.IfNotExists)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true, Message: "User created."}, nil
+}
+
+func dropUser(rc *plugin.RequestContext) (any, error) {
+	user, err := sqldb.SafeIdentifier(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP USER IF EXISTS "+quoteIdent(user))
+}
+
+func grantUser(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	var req struct {
+		Privilege       string `json:"privilege" validate:"required"`
+		On              string `json:"on" validate:"required"`
+		WithGrantOption bool   `json:"with_grant_option"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := buildGrant(rc.Param("user"), req.Privilege, req.On, req.WithGrantOption)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true, Message: "Privilege granted."}, nil
+}
+
+// quoteLiteral renders a value as a single-quoted ClickHouse string literal,
+// escaping backslashes and single quotes so it can be embedded safely in
+// statements (KILL/SYSTEM) that do not accept bound parameters.
+func quoteLiteral(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	return "'" + s + "'"
+}
+
+func buildKillQuery(queryID string) string {
+	return "KILL QUERY WHERE query_id = " + quoteLiteral(queryID)
+}
+
+func buildKillMutation(database, table, mutationID string) (string, error) {
+	id := strings.TrimSpace(mutationID)
+	if id == "" {
+		return "", fmt.Errorf("%w: mutation id is required", plugin.ErrInvalidInput)
+	}
+	return "KILL MUTATION WHERE database = " + quoteLiteral(database) +
+		" AND table = " + quoteLiteral(table) +
+		" AND mutation_id = " + quoteLiteral(id), nil
+}
+
+// buildCreateUser renders CREATE USER with an IDENTIFIED WITH clause. The user
+// name is a strict identifier; the auth type is constrained to a known set and the
+// password is embedded as an escaped string literal (CREATE USER takes no bound
+// parameters).
+func buildCreateUser(name, authType, password string, ifNotExists bool) (string, error) {
+	user, err := sqldb.SafeIdentifier(name)
+	if err != nil {
+		return "", err
+	}
+	auth := strings.TrimSpace(authType)
+	if auth == "" {
+		auth = "sha256_password"
+	}
+	prefix := "CREATE USER "
+	if ifNotExists {
+		prefix += "IF NOT EXISTS "
+	}
+	stmt := prefix + quoteIdent(user)
+	switch auth {
+	case "no_password":
+		stmt += " IDENTIFIED WITH no_password"
+	case "sha256_password", "double_sha1_password", "plaintext_password":
+		if password == "" {
+			return "", fmt.Errorf("%w: password is required for %s", plugin.ErrInvalidInput, auth)
+		}
+		stmt += " IDENTIFIED WITH " + auth + " BY " + quoteLiteral(password)
+	default:
+		return "", fmt.Errorf("%w: unsupported authentication type %q", plugin.ErrInvalidInput, auth)
+	}
+	return stmt, nil
+}
+
+// buildGrant renders GRANT <privilege> ON <target> TO <user>. The privilege and
+// target are free-form SQL (access types and db.table scopes), so they are screened
+// by the safe-expression guard; the user is a strict identifier.
+func buildGrant(user, privilege, on string, withGrantOption bool) (string, error) {
+	ident, err := sqldb.SafeIdentifier(user)
+	if err != nil {
+		return "", err
+	}
+	priv := strings.TrimSpace(privilege)
+	if priv == "" || !sqldb.SafeDefault(priv) {
+		return "", fmt.Errorf("%w: unsafe privilege", plugin.ErrInvalidInput)
+	}
+	target := strings.TrimSpace(on)
+	if target == "" || !sqldb.SafeDefault(target) {
+		return "", fmt.Errorf("%w: unsafe grant target", plugin.ErrInvalidInput)
+	}
+	stmt := "GRANT " + priv + " ON " + target + " TO " + quoteIdent(ident)
+	if withGrantOption {
+		stmt += " WITH GRANT OPTION"
+	}
+	return stmt, nil
 }
 
 // insertRow appends one row. INSERT is a normal, cheap operation in ClickHouse,

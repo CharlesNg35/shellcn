@@ -173,6 +173,10 @@ func mutationResource() plugin.ResourceType {
 		Kind: "mutation", Title: "Mutations",
 		List:    plugin.DataSource{RouteID: "clickhouse.mutations.list"},
 		Columns: mutationColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"clickhouse.mutation.kill"},
+			Detail: []string{"clickhouse.mutation.kill"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.mutation.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
@@ -184,6 +188,10 @@ func mergeResource() plugin.ResourceType {
 		Kind: "merge", Title: "Merges",
 		List:    plugin.DataSource{RouteID: "clickhouse.merges.list"},
 		Columns: mergeColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"clickhouse.merge.stop", "clickhouse.merge.start"},
+			Detail: []string{"clickhouse.merge.stop", "clickhouse.merge.start"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.merge.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
@@ -195,6 +203,10 @@ func processResource() plugin.ResourceType {
 		Kind: "process", Title: "Processes",
 		List:    plugin.DataSource{RouteID: "clickhouse.processes.list"},
 		Columns: processColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"clickhouse.process.kill"},
+			Detail: []string{"clickhouse.process.kill"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.process.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
@@ -209,6 +221,11 @@ func userResource() plugin.ResourceType {
 			{Key: "user", Label: "User", Sortable: true},
 			{Key: "auth_type", Label: "Auth"},
 			{Key: "storage", Label: "Storage"},
+		},
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"clickhouse.user.create"},
+			Row:     []string{"clickhouse.user.grant", "clickhouse.user.drop"},
+			Detail:  []string{"clickhouse.user.grant", "clickhouse.user.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "clickhouse.user.overview", Params: map[string]string{"user": "${resource.name}"}}},
@@ -305,5 +322,12 @@ func actions() []plugin.Action {
 		{ID: "clickhouse.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "clickhouse.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "clickhouse.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "clickhouse.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 		{ID: "clickhouse.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "clickhouse.view.drop", Params: map[string]string{"database": "${resource.namespace}", "view": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this view?"},
+		{ID: "clickhouse.process.kill", Label: "Kill query", Icon: icon("circle-stop"), RouteID: "clickhouse.process.kill", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Kill this running query? It is terminated on the server."},
+		{ID: "clickhouse.mutation.kill", Label: "Kill mutation", Icon: icon("circle-stop"), RouteID: "clickhouse.mutation.kill", Params: map[string]string{"database": "${resource.namespace}", "table": "${resource.scope}", "id": "${resource.name}"}, Confirm: true, ConfirmText: "Kill this mutation? Cancelling a partially applied mutation can leave parts in a mixed state."},
+		{ID: "clickhouse.merge.stop", Label: "Stop merges", Icon: icon("pause"), RouteID: "clickhouse.merge.stop", Params: map[string]string{"database": "${resource.namespace}", "table": "${resource.scope}"}, Confirm: true, ConfirmText: "Stop background merges for this table? Parts stop merging until merges are started again."},
+		{ID: "clickhouse.merge.start", Label: "Start merges", Icon: icon("play"), RouteID: "clickhouse.merge.start", Params: map[string]string{"database": "${resource.namespace}", "table": "${resource.scope}"}},
+		{ID: "clickhouse.user.create", Label: "Create user", Icon: icon("user-plus"), RouteID: "clickhouse.user.create"},
+		{ID: "clickhouse.user.grant", Label: "Grant privilege", Icon: icon("key-round"), RouteID: "clickhouse.user.grant", Params: map[string]string{"user": "${resource.name}"}},
+		{ID: "clickhouse.user.drop", Label: "Drop user", Icon: icon("trash-2"), RouteID: "clickhouse.user.drop", Params: map[string]string{"user": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this user? They can no longer connect.", OnSuccess: &plugin.ActionSuccess{Navigate: plugin.NavigateList}},
 	}
 }

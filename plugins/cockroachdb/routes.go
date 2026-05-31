@@ -96,6 +96,14 @@ func routes() []plugin.Route {
 		{ID: "cockroachdb.table.drop", Method: plugin.MethodDelete, Path: "/tables/{schema}/{table}", Permission: "cockroachdb.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.table.drop", Handle: dropTable},
 		{ID: "cockroachdb.query", Method: plugin.MethodWS, Path: "/query", Permission: "cockroachdb.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "cockroachdb.query", Stream: queryStream},
 		{ID: "cockroachdb.query.cancel", Method: plugin.MethodPost, Path: "/query/cancel", Permission: "cockroachdb.query.cancel", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.query.cancel", Handle: cancelQuery},
+		{ID: "cockroachdb.session.cancel", Method: plugin.MethodPost, Path: "/sessions/{id}/cancel", Permission: "cockroachdb.sessions.cancel", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.session.cancel", Handle: cancelSession},
+		{ID: "cockroachdb.query.cancel.id", Method: plugin.MethodPost, Path: "/queries/{id}/cancel", Permission: "cockroachdb.queries.cancel", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.query.cancel.id", Handle: cancelQueryByID},
+		{ID: "cockroachdb.users.list", Method: plugin.MethodGet, Path: "/users", Permission: "cockroachdb.users.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.users.list", Handle: listUsers},
+		{ID: "cockroachdb.users.tree", Method: plugin.MethodGet, Path: "/tree/users", Permission: "cockroachdb.users.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.users.tree", Handle: treeUsers},
+		{ID: "cockroachdb.user.overview", Method: plugin.MethodGet, Path: "/users/{user}/overview", Permission: "cockroachdb.users.read", Risk: plugin.RiskSafe, AuditEvent: "cockroachdb.user.overview", Handle: userOverview},
+		{ID: "cockroachdb.user.create", Method: plugin.MethodPost, Path: "/users", Permission: "cockroachdb.users.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.user.create", Input: userCreateSchema(), Handle: createUser},
+		{ID: "cockroachdb.user.drop", Method: plugin.MethodDelete, Path: "/users/{user}", Permission: "cockroachdb.users.delete", Risk: plugin.RiskDestructive, AuditEvent: "cockroachdb.user.drop", Handle: dropUser},
+		{ID: "cockroachdb.user.grant", Method: plugin.MethodPost, Path: "/users/{user}/grant", Permission: "cockroachdb.users.write", Risk: plugin.RiskWrite, AuditEvent: "cockroachdb.user.grant", Input: userGrantSchema(), Handle: grantUser},
 	}
 }
 
@@ -216,6 +224,37 @@ func constraintAddSchema() *plugin.Schema {
 			{Label: "Set null", Value: "SET NULL"},
 			{Label: "Set default", Value: "SET DEFAULT"},
 		}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "type", Op: plugin.OpEq, Value: constraintForeignKey}}}},
+	}}}}
+}
+
+func userCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "User", Fields: []plugin.Field{
+		{Key: "name", Label: "Username", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "password", Label: "Password", Type: plugin.FieldPassword, Secret: true, Help: "Optional. Leave blank to create a user without a password."},
+	}}}}
+}
+
+func userGrantSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Grant", Fields: []plugin.Field{
+		{Key: "target", Label: "Grant", Type: plugin.FieldSelect, Required: true, Default: grantTargetRole, Options: []plugin.Option{
+			{Label: "Role", Value: grantTargetRole},
+			{Label: "Database privilege", Value: grantTargetDatabase},
+			{Label: "Schema privilege", Value: grantTargetSchema},
+			{Label: "Table privilege", Value: grantTargetTable},
+		}},
+		{Key: "role", Label: "Role", Type: plugin.FieldText, Help: "Role to grant to the user.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}, VisibleWhen: &plugin.Condition{AllOf: []plugin.Rule{{Field: "target", Op: plugin.OpEq, Value: grantTargetRole}}}},
+		{Key: "privilege", Label: "Privilege", Type: plugin.FieldSelect, Default: "ALL", Options: []plugin.Option{
+			{Label: "ALL", Value: "ALL"},
+			{Label: "SELECT", Value: "SELECT"},
+			{Label: "INSERT", Value: "INSERT"},
+			{Label: "UPDATE", Value: "UPDATE"},
+			{Label: "DELETE", Value: "DELETE"},
+			{Label: "CREATE", Value: "CREATE"},
+			{Label: "DROP", Value: "DROP"},
+			{Label: "CONNECT", Value: "CONNECT"},
+			{Label: "USAGE", Value: "USAGE"},
+		}, VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{{Field: "target", Op: plugin.OpIn, Value: []any{grantTargetDatabase, grantTargetSchema, grantTargetTable}}}}},
+		{Key: "object", Label: "Object", Type: plugin.FieldText, Help: "Database/schema name, or schema-qualified table (e.g. public.orders).", VisibleWhen: &plugin.Condition{AnyOf: []plugin.Rule{{Field: "target", Op: plugin.OpIn, Value: []any{grantTargetDatabase, grantTargetSchema, grantTargetTable}}}}},
 	}}}}
 }
 
@@ -1445,6 +1484,89 @@ func cancelQuery(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return actionResult{OK: s.cancelAll()}, nil
+}
+
+func cancelSession(rc *plugin.RequestContext) (any, error) {
+	stmt, err := cancelSessionSQL(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func cancelQueryByID(rc *plugin.RequestContext) (any, error) {
+	stmt, err := cancelQuerySQL(rc.Param("id"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func listUsers(rc *plugin.RequestContext) (any, error) {
+	s, err := cockroachSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := queryRows(rc.Ctx, s, `
+SELECT username AS name,
+       array_to_string(member_of, ', ') AS member_of,
+       options
+FROM [SHOW USERS]
+ORDER BY username`, nil)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		name := fmt.Sprint(r["name"])
+		r["ref"] = plugin.ResourceRef{Kind: "user", Name: name, UID: name}
+	}
+	return pageRows(rc, rows)
+}
+
+func treeUsers(rc *plugin.RequestContext) (any, error) {
+	return treeFromPage(rc, "user", "user", "name", listUsers)
+}
+
+func userOverview(rc *plugin.RequestContext) (any, error) {
+	if _, err := sqldb.SafeIdentifier(rc.Param("user")); err != nil {
+		return nil, err
+	}
+	return overviewFromRows(rc, "user", "name", listUsers)
+}
+
+func createUser(rc *plugin.RequestContext) (any, error) {
+	var req userCreateRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := createUserSQL(req)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func dropUser(rc *plugin.RequestContext) (any, error) {
+	stmt, err := dropUserSQL(rc.Param("user"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
+}
+
+func grantUser(rc *plugin.RequestContext) (any, error) {
+	var req grantRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	if req.User == "" {
+		req.User = rc.Param("user")
+	}
+	stmt, err := grantSQL(req)
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, stmt)
 }
 
 func queryStream(rc *plugin.RequestContext, client plugin.ClientStream) error {

@@ -228,6 +228,72 @@ func TestOraclePluginIntegration(t *testing.T) {
 	if !hasEdge(graph.(sqldb.GraphPayload), "SHELLCN_TEST.ORDERS", "SHELLCN_TEST.PEOPLE") {
 		t.Fatalf("expected FK edge orders -> people, got %#v", graph)
 	}
+
+	// User management: create (via schema.create) -> lock -> unlock -> grant ->
+	// drop, asserting account_status and granted role at each step.
+	if _, err := createSchema(rowMutationRC(ctx, s, nil, map[string]any{"name": "SHELLCN_USER", "password": "ShellCN123"})); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	userParams := map[string]string{"user": "SHELLCN_USER"}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, `DROP USER SHELLCN_USER CASCADE`)
+	})
+
+	if _, err := lockUser(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, userParams, nil, nil)); err != nil {
+		t.Fatalf("lock user: %v", err)
+	}
+	if got := userAccountStatus(ctx, t, s, "SHELLCN_USER"); !strings.Contains(got, "LOCKED") {
+		t.Fatalf("expected locked account, got %q", got)
+	}
+	if _, err := unlockUser(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, userParams, nil, nil)); err != nil {
+		t.Fatalf("unlock user: %v", err)
+	}
+	if got := userAccountStatus(ctx, t, s, "SHELLCN_USER"); strings.Contains(got, "LOCKED") {
+		t.Fatalf("expected unlocked account, got %q", got)
+	}
+
+	if _, err := grantUser(rowMutationRC(ctx, s, userParams, map[string]any{"privileges": []any{"CREATE SESSION", "CREATE TABLE"}})); err != nil {
+		t.Fatalf("grant user: %v", err)
+	}
+	var grants int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM dba_sys_privs WHERE grantee = 'SHELLCN_USER' AND privilege IN ('CREATE SESSION','CREATE TABLE')`).Scan(&grants); err != nil || grants != 2 {
+		t.Fatalf("expected 2 system privileges granted, got %d err=%v", grants, err)
+	}
+
+	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, userParams, nil, nil)); err != nil {
+		t.Fatalf("drop user: %v", err)
+	}
+	var present int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM all_users WHERE username = 'SHELLCN_USER'`).Scan(&present); err != nil || present != 0 {
+		t.Fatalf("expected SHELLCN_USER dropped, got %d err=%v", present, err)
+	}
+
+	// Session kill: reject malformed ids, then best-effort kill the current
+	// session's own SID/SERIAL# (KILL marks it; the running connection may report
+	// ORA-00027 when killing itself, which is acceptable here).
+	if _, err := killSession(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"id": "bad:id"}, nil, nil)); err == nil {
+		t.Fatal("kill session accepted a non-numeric id")
+	}
+	var sid, serial int64
+	if err := s.db.QueryRowContext(ctx, `SELECT sid, serial# FROM v$session WHERE sid = SYS_CONTEXT('USERENV','SID')`).Scan(&sid, &serial); err != nil {
+		t.Skipf("v$session unavailable for session.kill exercise: %v", err)
+	}
+	killID := strconv.FormatInt(sid, 10) + ":" + strconv.FormatInt(serial, 10)
+	_, killErr := killSession(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"id": killID}, nil, nil))
+	if killErr != nil && !strings.Contains(killErr.Error(), "ORA-00027") {
+		t.Fatalf("kill session (self) unexpected error: %v", killErr)
+	}
+}
+
+func userAccountStatus(ctx context.Context, t *testing.T, s *Session, user string) string {
+	t.Helper()
+	var status string
+	if err := s.db.QueryRowContext(ctx, `SELECT account_status FROM dba_users WHERE username = :1`, user).Scan(&status); err != nil {
+		t.Fatalf("read account status for %s: %v", user, err)
+	}
+	return status
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {

@@ -254,6 +254,62 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		t.Fatalf("rename table back: %v", err)
 	}
 
+	// User create -> grant -> drop round-trip via the declarative handlers.
+	itUser := "shellcn_it_user_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "DROP USER IF EXISTS "+quoteIdent(itUser))
+	})
+	if _, err := createUser(rowMutationRC(ctx, s, nil, map[string]any{
+		"name": itUser, "auth_type": "sha256_password", "password": "S3cr3t!Pass", "if_not_exists": true,
+	})); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	var userCount int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.users WHERE name = ?", itUser).Scan(&userCount); err != nil || userCount != 1 {
+		t.Fatalf("expected user created, got %d err=%v", userCount, err)
+	}
+	if _, err := grantUser(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"user": itUser}, nil, mustJSON(map[string]any{
+		"privilege": "SELECT", "on": db + ".*",
+	}))); err != nil {
+		t.Fatalf("grant user: %v", err)
+	}
+	var grantCount int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.grants WHERE user_name = ? AND access_type = 'SELECT'", itUser).Scan(&grantCount); err != nil || grantCount == 0 {
+		t.Fatalf("expected SELECT grant, got %d err=%v", grantCount, err)
+	}
+	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"user": itUser}, nil, nil)); err != nil {
+		t.Fatalf("drop user: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.users WHERE name = ?", itUser).Scan(&userCount); err != nil || userCount != 0 {
+		t.Fatalf("expected user dropped, got %d err=%v", userCount, err)
+	}
+
+	// Merge STOP/START round-trip on a real table. SYSTEM STOP/START MERGES return no
+	// rows; assert the handlers run cleanly and the table still accepts a merge cycle.
+	if _, err := stopMerges(plugin.NewRequestContext(ctx, models.User{}, s, ddlParams(db), nil, nil)); err != nil {
+		t.Fatalf("stop merges: %v", err)
+	}
+	if _, err := startMerges(plugin.NewRequestContext(ctx, models.User{}, s, ddlParams(db), nil, nil)); err != nil {
+		t.Fatalf("start merges: %v", err)
+	}
+
+	// Kill-query handler path. Killing a real in-flight query is racy, so target a
+	// query_id that is not running: KILL QUERY succeeds with zero matched queries,
+	// exercising the handler, statement generation, and audit path end to end.
+	if _, err := killProcess(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"id": "shellcn-it-not-running"}, nil, nil)); err != nil {
+		t.Fatalf("kill process (no match): %v", err)
+	}
+
+	// Kill-mutation handler path. Likewise drive it against a non-existent mutation so
+	// the handler/SQL/validate path runs without depending on a live mutation.
+	if _, err := killMutation(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{
+		"database": db, "table": "shellcn_people", "id": "0000000000",
+	}, nil, nil)); err != nil {
+		t.Fatalf("kill mutation (no match): %v", err)
+	}
+
 	// Database create + drop round-trip via the declarative handlers.
 	dropDB := "shellcn_it_drop_" + strconv.FormatInt(time.Now().UnixNano(), 10)
 	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": dropDB, "if_not_exists": true})); err != nil {
@@ -367,8 +423,12 @@ func configFromDSN(t *testing.T, raw string) map[string]any {
 }
 
 func rowMutationRC(ctx context.Context, s *Session, params map[string]string, body map[string]any) *plugin.RequestContext {
+	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, mustJSON(body))
+}
+
+func mustJSON(body map[string]any) []byte {
 	raw, _ := json.Marshal(body)
-	return plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, params, nil, raw)
+	return raw
 }
 
 // findRow scans the table via the data-grid handler (which attaches _key) and

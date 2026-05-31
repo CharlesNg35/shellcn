@@ -167,6 +167,42 @@ func TestObjectIDRoundTrip(t *testing.T) {
 	}
 }
 
+func TestGrantPermissionAllowList(t *testing.T) {
+	for _, in := range []struct {
+		raw  string
+		want string
+	}{
+		{"select", "SELECT"},
+		{" Execute ", "EXECUTE"},
+		{"view definition", "VIEW DEFINITION"},
+	} {
+		got, err := grantPermission(in.raw)
+		if err != nil || got != in.want {
+			t.Fatalf("grantPermission(%q) = %q, %v; want %q", in.raw, got, err, in.want)
+		}
+	}
+	for _, bad := range []string{"", "DROP", "SELECT; DROP TABLE x", "GRANT ALL"} {
+		if _, err := grantPermission(bad); err == nil {
+			t.Fatalf("grantPermission(%q) accepted an unsafe permission", bad)
+		}
+	}
+}
+
+func TestJobNameValidation(t *testing.T) {
+	rc := func(name string) *plugin.RequestContext {
+		return plugin.NewRequestContext(context.Background(), models.User{}, &Session{}, map[string]string{"name": name}, nil, nil)
+	}
+	if got, err := jobName(rc("  Nightly Backup  ")); err != nil || got != "Nightly Backup" {
+		t.Fatalf("jobName trims and accepts arbitrary names: got %q err=%v", got, err)
+	}
+	if _, err := jobName(rc("")); err == nil {
+		t.Fatal("empty job name accepted")
+	}
+	if _, err := jobName(rc("bad\x00name")); err == nil {
+		t.Fatal("job name with NUL accepted")
+	}
+}
+
 func TestRedactRowsMasksConfiguredColumns(t *testing.T) {
 	rows := []row{{"id": int64(1), "access_token": "plain", "name": "alice"}}
 	redactRows(rows, sqldb.DefaultRedactColumnPatterns())

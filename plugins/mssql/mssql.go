@@ -172,6 +172,11 @@ func userResource() plugin.ResourceType {
 		Kind: "user", Title: "Users",
 		List:    plugin.DataSource{RouteID: "mssql.users.list"},
 		Columns: []plugin.Column{{Key: "name", Label: "User", Sortable: true}, {Key: "database", Label: "Database", Sortable: true}, {Key: "type", Label: "Type"}, {Key: "login", Label: "Login"}, {Key: "created", Label: "Created", Type: plugin.ColumnDateTime}},
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"mssql.user.create"},
+			Row:     []string{"mssql.user.grant", "mssql.user.drop"},
+			Detail:  []string{"mssql.user.grant", "mssql.user.drop"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mssql.user.overview", Params: map[string]string{"database": "${resource.namespace}", "user": "${resource.name}"}}},
 		}},
@@ -183,6 +188,10 @@ func jobResource() plugin.ResourceType {
 		Kind: "job", Title: "Jobs",
 		List:    plugin.DataSource{RouteID: "mssql.jobs.list"},
 		Columns: []plugin.Column{{Key: "name", Label: "Job", Sortable: true}, {Key: "enabled", Label: "Enabled", Type: plugin.ColumnBool}, {Key: "owner", Label: "Owner"}, {Key: "created", Label: "Created", Type: plugin.ColumnDateTime}},
+		Actions: plugin.ResourceActions{
+			Row:    []string{"mssql.job.start", "mssql.job.enable", "mssql.job.disable"},
+			Detail: []string{"mssql.job.start", "mssql.job.enable", "mssql.job.disable"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "mssql.job.overview", Params: map[string]string{"id": "${resource.uid}"}}},
 		}},
@@ -271,5 +280,11 @@ func actions() []plugin.Action {
 		{ID: "mssql.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "mssql.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "mssql.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mssql.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 		{ID: "mssql.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "mssql.view.drop", Params: objectParams(), Confirm: true, ConfirmText: "Drop this view?"},
+		{ID: "mssql.job.start", Label: "Start job", Icon: icon("play"), RouteID: "mssql.job.start", Params: map[string]string{"name": "${resource.name}"}, Confirm: true, ConfirmText: "Start this SQL Agent job now?"},
+		{ID: "mssql.job.enable", Label: "Enable job", Icon: icon("toggle-right"), RouteID: "mssql.job.enable", Params: map[string]string{"name": "${resource.name}"}},
+		{ID: "mssql.job.disable", Label: "Disable job", Icon: icon("toggle-left"), RouteID: "mssql.job.disable", Params: map[string]string{"name": "${resource.name}"}},
+		{ID: "mssql.user.create", Label: "Create user", Icon: icon("user-plus"), RouteID: "mssql.user.create"},
+		{ID: "mssql.user.grant", Label: "Grant permission", Icon: icon("shield-check"), RouteID: "mssql.user.grant", Params: map[string]string{"database": "${resource.namespace}", "user": "${resource.name}"}},
+		{ID: "mssql.user.drop", Label: "Drop user", Icon: icon("user-minus"), RouteID: "mssql.user.drop", Params: map[string]string{"database": "${resource.namespace}", "user": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this database user?"},
 	}
 }

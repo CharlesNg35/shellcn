@@ -53,6 +53,7 @@ func tree() []plugin.TreeGroup {
 		{Key: "jobs", Label: "Jobs", Icon: icon("briefcase-business"), ResourceKind: "job"},
 		{Key: "sessions", Label: "Sessions", Icon: icon("activity"), ResourceKind: "session"},
 		{Key: "queries", Label: "Queries", Icon: icon("search-code"), ResourceKind: "query"},
+		{Key: "users", Label: "Users", Icon: icon("users"), Source: plugin.DataSource{RouteID: "cockroachdb.users.tree"}, ResourceKind: "user"},
 		{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Source: plugin.DataSource{RouteID: "cockroachdb.schemas.tree"}, ResourceKind: "schema"},
 		{Key: "functions", Label: "Functions", Icon: icon("function-square"), Source: plugin.DataSource{RouteID: "cockroachdb.functions.tree"}, ResourceKind: "function"},
 	}
@@ -67,6 +68,7 @@ func resources() []plugin.ResourceType {
 		jobResource(),
 		sessionResource(),
 		queryResource(),
+		userResource(),
 		schemaResource(),
 		tableResource(),
 		viewResource(),
@@ -85,6 +87,7 @@ func serverResource() plugin.ResourceType {
 			Header: plugin.HeaderSpec{Title: "Databases"},
 			Tabs: []plugin.Panel{
 				{Key: "databases", Label: "Databases", Icon: icon("database"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.databases.list"}, Config: plugin.TableConfig{ActionIDs: []string{"cockroachdb.database.create"}}},
+				{Key: "users", Label: "Users", Icon: icon("users"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cockroachdb.users.list"}, Config: plugin.TableConfig{Columns: userColumns(), ActionIDs: []string{"cockroachdb.user.create"}, RowActionIDs: []string{"cockroachdb.user.grant", "cockroachdb.user.drop"}}},
 				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "cockroachdb.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT now();")},
 			},
 		},
@@ -160,6 +163,10 @@ func sessionResource() plugin.ResourceType {
 		Kind: "session", Title: "Sessions",
 		List:    plugin.DataSource{RouteID: "cockroachdb.sessions.list"},
 		Columns: sessionColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"cockroachdb.session.cancel"},
+			Detail: []string{"cockroachdb.session.cancel"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Session ${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cockroachdb.session.overview", Params: map[string]string{"session": "${resource.uid}"}}},
 		}},
@@ -171,8 +178,28 @@ func queryResource() plugin.ResourceType {
 		Kind: "query", Title: "Queries",
 		List:    plugin.DataSource{RouteID: "cockroachdb.queries.list"},
 		Columns: queryColumns(),
+		Actions: plugin.ResourceActions{
+			Row:    []string{"cockroachdb.query.cancel.id"},
+			Detail: []string{"cockroachdb.query.cancel.id"},
+		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "Query ${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cockroachdb.query.overview", Params: map[string]string{"query": "${resource.uid}"}}},
+		}},
+	}
+}
+
+func userResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind: "user", Title: "Users",
+		List:    plugin.DataSource{RouteID: "cockroachdb.users.list"},
+		Columns: userColumns(),
+		Actions: plugin.ResourceActions{
+			Toolbar: []string{"cockroachdb.user.create"},
+			Row:     []string{"cockroachdb.user.grant", "cockroachdb.user.drop"},
+			Detail:  []string{"cockroachdb.user.grant", "cockroachdb.user.drop"},
+		},
+		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
+			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cockroachdb.user.overview", Params: map[string]string{"user": "${resource.uid}"}}},
 		}},
 	}
 }
@@ -330,6 +357,10 @@ func queryColumns() []plugin.Column {
 	return []plugin.Column{{Key: "query_id", Label: "Query", Sortable: true}, {Key: "node_id", Label: "Node", Type: plugin.ColumnNumber}, {Key: "username", Label: "User"}, {Key: "start", Label: "Started", Type: plugin.ColumnDateTime}, {Key: "status", Label: "Status"}, {Key: "query", Label: "SQL"}}
 }
 
+func userColumns() []plugin.Column {
+	return []plugin.Column{{Key: "name", Label: "User", Sortable: true}, {Key: "member_of", Label: "Member of"}, {Key: "options", Label: "Options"}}
+}
+
 func columnColumns() []plugin.Column {
 	return []plugin.Column{{Key: "name", Label: "Column", Sortable: true}, {Key: "type", Label: "Type"}, {Key: "nullable", Label: "Nullable", Type: plugin.ColumnBool}, {Key: "default", Label: "Default"}, {Key: "identity", Label: "Identity"}, {Key: "position", Label: "Position", Type: plugin.ColumnNumber, Sortable: true}}
 }
@@ -361,5 +392,10 @@ func actions() []plugin.Action {
 		{ID: "cockroachdb.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "cockroachdb.table.truncate", Params: tableParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "cockroachdb.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cockroachdb.table.drop", Params: tableParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 		{ID: "cockroachdb.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "cockroachdb.view.drop", Params: map[string]string{"schema": "${resource.namespace}", "view": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this view?"},
+		{ID: "cockroachdb.session.cancel", Label: "Cancel session", Icon: icon("circle-stop"), RouteID: "cockroachdb.session.cancel", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Cancel this session? Its active query is stopped and the session ends."},
+		{ID: "cockroachdb.query.cancel.id", Label: "Cancel query", Icon: icon("circle-stop"), RouteID: "cockroachdb.query.cancel.id", Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Cancel this query? It will be stopped."},
+		{ID: "cockroachdb.user.create", Label: "Create user", Icon: icon("user-plus"), RouteID: "cockroachdb.user.create"},
+		{ID: "cockroachdb.user.grant", Label: "Grant", Icon: icon("shield-plus"), RouteID: "cockroachdb.user.grant", Params: map[string]string{"user": "${resource.uid}"}},
+		{ID: "cockroachdb.user.drop", Label: "Drop user", Icon: icon("user-minus"), RouteID: "cockroachdb.user.drop", Params: map[string]string{"user": "${resource.uid}"}, Confirm: true, ConfirmText: "Drop this user? They lose access to the cluster."},
 	}
 }

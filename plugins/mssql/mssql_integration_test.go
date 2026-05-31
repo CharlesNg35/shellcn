@@ -2,7 +2,9 @@ package mssql
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/url"
 	"os"
@@ -272,6 +274,102 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	}
 	if !hasEdge(graph.(sqldb.GraphPayload), "dbo.orders", "dbo.people") {
 		t.Fatalf("expected FK edge orders -> people, got %#v", graph)
+	}
+
+	exerciseUserManagement(ctx, t, s)
+	exerciseJobControl(ctx, t, s)
+}
+
+// exerciseUserManagement round-trips create -> grant -> drop for a contained
+// database user in the seeded shellcn database.
+func exerciseUserManagement(ctx context.Context, t *testing.T, s *Session) {
+	t.Helper()
+	userName := "shellcn_user_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "USE [shellcn]; EXEC("+quoteLiteral("DROP USER IF EXISTS "+quoteIdent(userName))+")")
+	})
+
+	if _, err := createUser(rowMutationRC(ctx, s, nil, map[string]any{"database": "shellcn", "name": userName})); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	var userCount int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.database_principals WHERE name = @p1`, userName).Scan(&userCount); err != nil || userCount != 1 {
+		t.Fatalf("expected user %s created, got %d err=%v", userName, userCount, err)
+	}
+
+	grantParams := map[string]string{"database": "shellcn", "user": userName}
+	if _, err := grantUser(rowMutationRC(ctx, s, grantParams, map[string]any{"permission": "SELECT"})); err != nil {
+		t.Fatalf("grant user: %v", err)
+	}
+	var granted int
+	if err := s.db.QueryRowContext(ctx, `
+SELECT COUNT(*) FROM [shellcn].sys.database_permissions p
+JOIN [shellcn].sys.database_principals dp ON dp.principal_id = p.grantee_principal_id
+WHERE dp.name = @p1 AND p.permission_name = 'SELECT' AND p.state_desc = 'GRANT'`, userName).Scan(&granted); err != nil || granted == 0 {
+		t.Fatalf("expected SELECT granted to %s, got %d err=%v", userName, granted, err)
+	}
+
+	if _, err := dropUser(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, grantParams, nil, nil)); err != nil {
+		t.Fatalf("drop user: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.database_principals WHERE name = @p1`, userName).Scan(&userCount); err != nil || userCount != 0 {
+		t.Fatalf("expected user %s dropped, got %d err=%v", userName, userCount, err)
+	}
+}
+
+// exerciseJobControl creates a throwaway SQL Agent job, then runs the
+// enable/disable/start handlers against it. SQL Agent may be unavailable on
+// some images; in that case the job-create step is skipped rather than failed.
+func exerciseJobControl(ctx context.Context, t *testing.T, s *Session) {
+	t.Helper()
+	jobNameValue := "shellcn_job_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if _, err := s.db.ExecContext(ctx, "EXEC msdb.dbo.sp_add_job @job_name = @job_name, @enabled = 1", sql.Named("job_name", jobNameValue)); err != nil {
+		t.Skipf("SQL Agent unavailable, skipping job control: %v", err)
+		return
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, "EXEC msdb.dbo.sp_delete_job @job_name = @job_name", sql.Named("job_name", jobNameValue))
+	})
+
+	enabledOf := func() bool {
+		var enabled bool
+		if err := s.db.QueryRowContext(ctx, `SELECT enabled FROM msdb.dbo.sysjobs WHERE name = @p1`, jobNameValue).Scan(&enabled); err != nil {
+			t.Fatalf("read job enabled: %v", err)
+		}
+		return enabled
+	}
+
+	jobParams := map[string]string{"name": jobNameValue}
+	if _, err := disableJob(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil {
+		t.Fatalf("disable job: %v", err)
+	}
+	if enabledOf() {
+		t.Fatal("expected job disabled")
+	}
+	if _, err := enableJob(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil {
+		t.Fatalf("enable job: %v", err)
+	}
+	if !enabledOf() {
+		t.Fatal("expected job enabled")
+	}
+	// The job has no steps/server target, so a start request may legitimately
+	// fail; assert only that the handler reaches the procedure without a
+	// parameter/validation error.
+	if _, err := startJob(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, jobParams, nil, nil)); err != nil && !errors.Is(err, plugin.ErrUnavailable) {
+		t.Fatalf("start job: unexpected error class: %v", err)
+	}
+
+	// The job list surfaces the created job and scans enabled as a bool.
+	jobs, err := listJobs(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list jobs: %v", err)
+	}
+	if !pageHasName(jobs.(plugin.Page[row]), jobNameValue) {
+		t.Fatalf("created job not listed: %#v", jobs)
 	}
 }
 
