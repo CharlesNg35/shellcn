@@ -70,10 +70,16 @@ func routes() []plugin.Route {
 		{ID: "clickhouse.view.definition", Method: plugin.MethodGet, Path: "/views/{database}/{table}/definition", Permission: "clickhouse.views.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.view.definition", Handle: tableDefinition},
 		{ID: "clickhouse.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "clickhouse.databases.read", Risk: plugin.RiskSafe, AuditEvent: "clickhouse.completion", Handle: completionRoute},
 		{ID: "clickhouse.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "clickhouse.databases.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
+		{ID: "clickhouse.database.drop", Method: plugin.MethodDelete, Path: "/databases/{database}", Permission: "clickhouse.databases.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.database.drop", Handle: dropDatabase},
 		{ID: "clickhouse.table.create", Method: plugin.MethodPost, Path: "/databases/{database}/tables", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.table.create", Input: tableCreateSchema(), Handle: createTable},
+		{ID: "clickhouse.table.rename", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/rename", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.table.rename", Input: tableRenameSchema(), Handle: renameTable},
 		{ID: "clickhouse.column.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "clickhouse.column.alter", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/alter", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.column.alter", Input: columnAlterSchema(), Handle: alterColumn},
 		{ID: "clickhouse.column.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.column.drop", Handle: dropColumn},
+		{ID: "clickhouse.index.create", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.index.create", Input: indexCreateSchema(), Handle: createIndex},
 		{ID: "clickhouse.index.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.index.drop", Handle: dropIndex},
+		{ID: "clickhouse.constraint.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/constraints", Permission: "clickhouse.tables.write", Risk: plugin.RiskWrite, AuditEvent: "clickhouse.constraint.add", Input: constraintAddSchema(), Handle: addConstraint},
+		{ID: "clickhouse.constraint.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/constraints/drop", Permission: "clickhouse.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.constraint.drop", Handle: dropConstraint},
 		{ID: "clickhouse.table.truncate", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/truncate", Permission: "clickhouse.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.truncate", Handle: truncateTable},
 		{ID: "clickhouse.table.drop", Method: plugin.MethodDelete, Path: "/tables/{database}/{table}", Permission: "clickhouse.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "clickhouse.table.drop", Handle: dropTable},
 		{ID: "clickhouse.query", Method: plugin.MethodWS, Path: "/query", Permission: "clickhouse.query.execute", Risk: plugin.RiskPrivileged, AuditEvent: "clickhouse.query", Stream: queryStream},
@@ -108,6 +114,38 @@ func columnAddSchema() *plugin.Schema {
 		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "String"},
 		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: false},
 		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func columnAlterSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "name", Label: "Column name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "String"},
+		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: false},
+		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func indexCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Data-skipping index", Fields: []plugin.Field{
+		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "expression", Label: "Expression", Type: plugin.FieldText, Required: true, Help: "Column or expression to index, e.g. `value` or `lower(name)`."},
+		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "minmax", Help: "Index type, e.g. minmax, set(0), bloom_filter(0.01), ngrambf_v1(...)."},
+		{Key: "granularity", Label: "Granularity", Type: plugin.FieldNumber, Default: 1},
+	}}}}
+}
+
+func tableRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename table", Fields: []plugin.Field{
+		{Key: "database", Label: "Target database", Type: plugin.FieldText, Help: "Leave blank to keep the current database.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "name", Label: "New name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func constraintAddSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
+		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "expression", Label: "CHECK expression", Type: plugin.FieldText, Required: true, Help: "Boolean expression every row must satisfy, e.g. `age >= 0`."},
 	}}}}
 }
 
@@ -661,6 +699,14 @@ func createDatabase(rc *plugin.RequestContext) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+func dropDatabase(rc *plugin.RequestContext) (any, error) {
+	database, err := sqldb.SafeIdentifier(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP DATABASE IF EXISTS "+quoteIdent(database))
+}
+
 func createTable(rc *plugin.RequestContext) (any, error) {
 	s, err := clickhouseSession(rc)
 	if err != nil {
@@ -716,6 +762,41 @@ func createTable(rc *plugin.RequestContext) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+func renameTable(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Database string `json:"database"`
+		Name     string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	targetDB := database
+	if strings.TrimSpace(req.Database) != "" {
+		if targetDB, err = sqldb.SafeIdentifier(req.Database); err != nil {
+			return nil, err
+		}
+	}
+	target, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "RENAME TABLE "+qualified(database, table)+" TO "+qualified(targetDB, target)); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
 func addColumn(rc *plugin.RequestContext) (any, error) {
 	s, err := clickhouseSession(rc)
 	if err != nil {
@@ -747,6 +828,37 @@ func addColumn(rc *plugin.RequestContext) (any, error) {
 	return actionResult{OK: true}, nil
 }
 
+func alterColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name     string `json:"name" validate:"required"`
+		Type     string `json:"type" validate:"required"`
+		Nullable bool   `json:"nullable"`
+		Default  string `json:"default"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	column, err := ddlColumn(sqldb.ColumnSpec{Name: req.Name, Type: req.Type, Nullable: req.Nullable, Default: req.Default})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" MODIFY COLUMN "+column); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
 func dropColumn(rc *plugin.RequestContext) (any, error) {
 	s, err := clickhouseSession(rc)
 	if err != nil {
@@ -764,6 +876,37 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" DROP COLUMN "+quoteIdent(column)); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func createIndex(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        string `json:"name" validate:"required"`
+		Expression  string `json:"expression" validate:"required"`
+		Type        string `json:"type" validate:"required"`
+		Granularity int    `json:"granularity"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	clause, err := buildAddIndex(req.Name, req.Expression, req.Type, req.Granularity)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" "+clause); err != nil {
 		return nil, clickhouseErr(err)
 	}
 	return actionResult{OK: true}, nil
@@ -787,6 +930,57 @@ func dropIndex(rc *plugin.RequestContext) (any, error) {
 	}
 	// ClickHouse data-skipping indexes are dropped via ALTER TABLE ... DROP INDEX.
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" DROP INDEX "+quoteIdent(name)); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func addConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name       string `json:"name" validate:"required"`
+		Expression string `json:"expression" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	clause, err := buildAddConstraint(req.Name, req.Expression)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" "+clause); err != nil {
+		return nil, clickhouseErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := clickhouseSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" DROP CONSTRAINT "+quoteIdent(name)); err != nil {
 		return nil, clickhouseErr(err)
 	}
 	return actionResult{OK: true}, nil
@@ -1520,4 +1714,42 @@ func ddlColumn(spec sqldb.ColumnSpec) (string, error) {
 		parts = append(parts, "DEFAULT "+strings.TrimSpace(spec.Default))
 	}
 	return strings.Join(parts, " "), nil
+}
+
+// buildAddIndex builds an "ADD INDEX name expr TYPE type GRANULARITY n" clause for
+// a ClickHouse data-skipping index. The expression and type are free-form SQL, so
+// they are screened by the same safe-expression/safe-type guards the other DDL
+// helpers use; the name is a strict identifier and granularity defaults to 1.
+func buildAddIndex(name, expression, indexType string, granularity int) (string, error) {
+	ident, err := sqldb.SafeIdentifier(name)
+	if err != nil {
+		return "", err
+	}
+	expr := strings.TrimSpace(expression)
+	if expr == "" || !sqldb.SafeDefault(expr) {
+		return "", fmt.Errorf("%w: unsafe index expression", plugin.ErrInvalidInput)
+	}
+	idxType := strings.TrimSpace(indexType)
+	if idxType == "" || !sqldb.SafeType(idxType) {
+		return "", fmt.Errorf("%w: unsafe index type", plugin.ErrInvalidInput)
+	}
+	if granularity <= 0 {
+		granularity = 1
+	}
+	return fmt.Sprintf("ADD INDEX %s %s TYPE %s GRANULARITY %d", quoteIdent(ident), expr, idxType, granularity), nil
+}
+
+// buildAddConstraint builds an "ADD CONSTRAINT name CHECK (expr)" clause. The CHECK
+// expression is free-form SQL screened by the safe-expression guard; the name is a
+// strict identifier.
+func buildAddConstraint(name, expression string) (string, error) {
+	ident, err := sqldb.SafeIdentifier(name)
+	if err != nil {
+		return "", err
+	}
+	expr := strings.TrimSpace(expression)
+	if expr == "" || !sqldb.SafeDefault(expr) {
+		return "", fmt.Errorf("%w: unsafe constraint expression", plugin.ErrInvalidInput)
+	}
+	return "ADD CONSTRAINT " + quoteIdent(ident) + " CHECK " + expr, nil
 }

@@ -60,9 +60,14 @@ func routes() []plugin.Route {
 		{ID: "mysql.table.row.update", Method: plugin.MethodPatch, Path: "/tables/{database}/{table}/rows", Permission: "mysql.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.table.row.update", Handle: updateRow},
 		{ID: "mysql.table.row.delete", Method: plugin.MethodDelete, Path: "/tables/{database}/{table}/rows", Permission: "mysql.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.table.row.delete", Handle: deleteRow},
 		{ID: "mysql.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "mysql.databases.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
+		{ID: "mysql.database.drop", Method: plugin.MethodDelete, Path: "/databases/{database}", Permission: "mysql.databases.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.database.drop", Handle: dropDatabase},
 		{ID: "mysql.table.create", Method: plugin.MethodPost, Path: "/databases/{database}/tables", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.table.create", Input: tableCreateSchema(), Handle: createTable},
+		{ID: "mysql.table.rename", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/rename", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.table.rename", Input: tableRenameSchema(), Handle: renameTable},
 		{ID: "mysql.column.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "mysql.column.alter", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/alter", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.column.alter", Input: columnAlterSchema(), Handle: alterColumn},
 		{ID: "mysql.column.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/columns/drop", Permission: "mysql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mysql.column.drop", Handle: dropColumn},
+		{ID: "mysql.constraint.add", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/constraints", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.constraint.add", Input: constraintAddSchema(), Handle: addConstraint},
+		{ID: "mysql.constraint.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/constraints/drop", Permission: "mysql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mysql.constraint.drop", Handle: dropConstraint},
 		{ID: "mysql.index.create", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes", Permission: "mysql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mysql.index.create", Input: indexCreateSchema(), Handle: createIndex},
 		{ID: "mysql.index.drop", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/indexes/drop", Permission: "mysql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mysql.index.drop", Handle: dropIndex},
 		{ID: "mysql.table.truncate", Method: plugin.MethodPost, Path: "/tables/{database}/{table}/truncate", Permission: "mysql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "mysql.table.truncate", Handle: truncateTable},
@@ -108,6 +113,38 @@ func indexCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "mysql.table.columns", Params: tableParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
+	}}}}
+}
+
+func tableRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename", Fields: []plugin.Field{
+		{Key: "name", Label: "New table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func columnAlterSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "new_name", Label: "Rename to", Type: plugin.FieldText, Help: "Leave blank to keep the current name.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "type", Label: "Type", Type: plugin.FieldText, Required: true, Default: "varchar(255)"},
+		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
+		{Key: "default", Label: "Default expression", Type: plugin.FieldText},
+	}}}}
+}
+
+func constraintAddSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
+		{Key: "kind", Label: "Type", Type: plugin.FieldSelect, Required: true, Default: "PRIMARY KEY", Options: []plugin.Option{
+			{Label: "Primary key", Value: "PRIMARY KEY"},
+			{Label: "Unique", Value: "UNIQUE"},
+			{Label: "Foreign key", Value: "FOREIGN KEY"},
+			{Label: "Check", Value: "CHECK"},
+		}},
+		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Help: "Required for unique, foreign key, and check; ignored for primary key.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, OptionsSource: &plugin.DataSource{RouteID: "mysql.table.columns", Params: tableParams()}, Help: "Constrained columns (primary/unique/foreign key)."},
+		{Key: "ref_database", Label: "Referenced database", Type: plugin.FieldText, Help: "Foreign key only; defaults to this database.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "ref_table", Label: "Referenced table", Type: plugin.FieldText, Help: "Foreign key only.", Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "ref_columns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Foreign key only; comma-separated, matching the column order."},
+		{Key: "expression", Label: "Check expression", Type: plugin.FieldText, Help: "Check only, e.g. price > 0."},
 	}}}}
 }
 
@@ -559,6 +596,13 @@ ORDER BY tc.CONSTRAINT_NAME`, []any{database, table})
 	if err != nil {
 		return nil, err
 	}
+	for i := range rows {
+		name := fmt.Sprint(rows[i]["name"])
+		constraintType := strings.ToUpper(fmt.Sprint(rows[i]["type"]))
+		// UID carries the constraint type so the drop action can pick MySQL's
+		// type-specific DROP syntax (PRIMARY KEY / FOREIGN KEY / CHECK / INDEX).
+		rows[i]["ref"] = plugin.ResourceRef{Kind: "constraint", Scope: database, Namespace: table, Name: name, UID: constraintType}
+	}
 	return pageRows(rc, rows)
 }
 
@@ -796,6 +840,252 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" DROP COLUMN "+quoteIdent(column)); err != nil {
+		return nil, mysqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func alterColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	column, err := sqldb.SafeIdentifier(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		NewName  string `json:"new_name"`
+		Type     string `json:"type" validate:"required"`
+		Nullable bool   `json:"nullable"`
+		Default  string `json:"default"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	stmt, err := alterColumnSQL(qualified(database, table), column, req.NewName, sqldb.ColumnSpec{Type: req.Type, Nullable: req.Nullable, Default: req.Default})
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mysqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// alterColumnSQL builds an ALTER TABLE that changes a column's definition. When a
+// new name is supplied it uses CHANGE COLUMN (old new ...); otherwise MODIFY
+// COLUMN (no rename). The definition reuses ddlColumn's safe quoting/validation.
+func alterColumnSQL(qualifiedTable, column, newName string, spec sqldb.ColumnSpec) (string, error) {
+	target := column
+	verb := "MODIFY"
+	if trimmed := strings.TrimSpace(newName); trimmed != "" && trimmed != column {
+		renamed, err := sqldb.SafeIdentifier(trimmed)
+		if err != nil {
+			return "", err
+		}
+		target = renamed
+		verb = "CHANGE"
+	}
+	spec.Name = target
+	definition, err := ddlColumn(spec)
+	if err != nil {
+		return "", err
+	}
+	if verb == "CHANGE" {
+		return "ALTER TABLE " + qualifiedTable + " CHANGE COLUMN " + quoteIdent(column) + " " + definition, nil
+	}
+	return "ALTER TABLE " + qualifiedTable + " MODIFY COLUMN " + definition, nil
+}
+
+func renameTable(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	target, err := sqldb.SafeIdentifier(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	stmt := "RENAME TABLE " + qualified(database, table) + " TO " + qualified(database, target)
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mysqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func addConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req constraintAddRequest
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	clause, err := constraintAddClause(database, req)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" ADD "+clause); err != nil {
+		return nil, mysqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+type constraintAddRequest struct {
+	Kind        string `json:"kind" validate:"required"`
+	Name        string `json:"name"`
+	Columns     any    `json:"columns"`
+	RefDatabase string `json:"ref_database"`
+	RefTable    string `json:"ref_table"`
+	RefColumns  string `json:"ref_columns"`
+	Expression  string `json:"expression"`
+}
+
+// constraintAddClause builds the ADD ... fragment of ALTER TABLE for each MySQL
+// constraint kind. PRIMARY KEY is unnamed (MySQL ignores constraint names on it);
+// UNIQUE/FOREIGN KEY/CHECK carry a name. CHECK requires MySQL 8.0.16+ / MariaDB.
+func constraintAddClause(defaultDatabase string, req constraintAddRequest) (string, error) {
+	kind := strings.ToUpper(strings.TrimSpace(req.Kind))
+	named := ""
+	if name := strings.TrimSpace(req.Name); name != "" {
+		safe, err := sqldb.SafeIdentifier(name)
+		if err != nil {
+			return "", err
+		}
+		named = "CONSTRAINT " + quoteIdent(safe) + " "
+	}
+	switch kind {
+	case "PRIMARY KEY":
+		cols, err := sqldb.IdentifierListValue(req.Columns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		return "PRIMARY KEY (" + strings.Join(cols, ", ") + ")", nil
+	case "UNIQUE":
+		cols, err := sqldb.IdentifierListValue(req.Columns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		return named + "UNIQUE (" + strings.Join(cols, ", ") + ")", nil
+	case "FOREIGN KEY":
+		cols, err := sqldb.IdentifierListValue(req.Columns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		refTable, err := sqldb.SafeIdentifier(req.RefTable)
+		if err != nil {
+			return "", fmt.Errorf("%w: a referenced table is required for a foreign key", plugin.ErrInvalidInput)
+		}
+		refDatabase := strings.TrimSpace(req.RefDatabase)
+		if refDatabase == "" {
+			refDatabase = defaultDatabase
+		}
+		refDatabaseSafe, err := sqldb.SafeIdentifier(refDatabase)
+		if err != nil {
+			return "", err
+		}
+		refCols, err := sqldb.IdentifierList(req.RefColumns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		return named + "FOREIGN KEY (" + strings.Join(cols, ", ") + ") REFERENCES " + qualified(refDatabaseSafe, refTable) + " (" + strings.Join(refCols, ", ") + ")", nil
+	case "CHECK":
+		expr := strings.TrimSpace(req.Expression)
+		if expr == "" || !sqldb.SafeDefault(expr) {
+			return "", fmt.Errorf("%w: a safe check expression is required", plugin.ErrInvalidInput)
+		}
+		return named + "CHECK (" + expr + ")", nil
+	default:
+		return "", fmt.Errorf("%w: unsupported constraint type %q", plugin.ErrInvalidInput, req.Kind)
+	}
+}
+
+func dropConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, table, err := tableIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	clause, err := constraintDropClause(rc.Param("type"), name)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, table)+" "+clause); err != nil {
+		return nil, mysqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+// constraintDropClause maps a constraint type to MySQL's type-specific DROP
+// syntax: PRIMARY KEY has no name; FOREIGN KEY and CHECK drop by name; a UNIQUE
+// constraint is backed by an index, so it drops via DROP INDEX.
+func constraintDropClause(constraintType, name string) (string, error) {
+	switch strings.ToUpper(strings.TrimSpace(constraintType)) {
+	case "PRIMARY KEY", "PRIMARY":
+		return "DROP PRIMARY KEY", nil
+	case "FOREIGN KEY":
+		return "DROP FOREIGN KEY " + quoteIdent(name), nil
+	case "CHECK":
+		return "DROP CHECK " + quoteIdent(name), nil
+	case "UNIQUE":
+		return "DROP INDEX " + quoteIdent(name), nil
+	default:
+		return "", fmt.Errorf("%w: unsupported constraint type %q", plugin.ErrInvalidInput, constraintType)
+	}
+}
+
+func dropDatabase(rc *plugin.RequestContext) (any, error) {
+	s, err := mysqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	name, err := sqldb.SafeIdentifier(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "DROP DATABASE "+quoteIdent(name)); err != nil {
 		return nil, mysqlErr(err)
 	}
 	return actionResult{OK: true}, nil

@@ -214,6 +214,80 @@ CREATE TABLE IF NOT EXISTS shellcn_people (
 		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
 	}
 
+	// Structural DDL round-trips on a dedicated table: constraint add/drop,
+	// rename, and column alter.
+	if _, err := s.db.ExecContext(ctx, `CREATE TABLE shellcn_ddl (id bigint unsigned AUTO_INCREMENT PRIMARY KEY, email varchar(255) NOT NULL, price int NOT NULL DEFAULT 0)`); err != nil {
+		t.Fatalf("seed ddl table: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		_, _ = s.db.ExecContext(cleanupCtx, `DROP TABLE IF EXISTS shellcn_ddl_renamed`)
+		_, _ = s.db.ExecContext(cleanupCtx, `DROP TABLE IF EXISTS shellcn_ddl`)
+	})
+	ddlParams := map[string]string{"database": database, "table": "shellcn_ddl"}
+
+	// Constraint add (UNIQUE) then drop (DROP INDEX), verified via TABLE_CONSTRAINTS.
+	if _, err := addConstraint(rowMutationRC(ctx, s, ddlParams, map[string]any{"kind": "UNIQUE", "name": "uq_email", "columns": "email"})); err != nil {
+		t.Fatalf("add unique constraint: %v", err)
+	}
+	if !constraintExists(ctx, t, s, database, "shellcn_ddl", "uq_email") {
+		t.Fatal("expected uq_email constraint to exist after add")
+	}
+	if _, err := dropConstraint(rowMutationRC(ctx, s, map[string]string{"database": database, "table": "shellcn_ddl", "name": "uq_email", "type": "UNIQUE"}, nil)); err != nil {
+		t.Fatalf("drop unique constraint: %v", err)
+	}
+	if constraintExists(ctx, t, s, database, "shellcn_ddl", "uq_email") {
+		t.Fatal("expected uq_email constraint to be gone after drop")
+	}
+
+	// Column alter (MODIFY then CHANGE rename), verified via information_schema.
+	if _, err := alterColumn(rowMutationRC(ctx, s, map[string]string{"database": database, "table": "shellcn_ddl", "name": "email"}, map[string]any{"type": "varchar(128)", "nullable": true})); err != nil {
+		t.Fatalf("modify column: %v", err)
+	}
+	var nullable, colType string
+	if err := s.db.QueryRowContext(ctx, `SELECT IS_NULLABLE, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'shellcn_ddl' AND COLUMN_NAME = 'email'`, database).Scan(&nullable, &colType); err != nil {
+		t.Fatalf("read altered column: %v", err)
+	}
+	if nullable != "YES" || !strings.Contains(strings.ToLower(colType), "varchar(128)") {
+		t.Fatalf("expected nullable varchar(128), got nullable=%q type=%q", nullable, colType)
+	}
+	if _, err := alterColumn(rowMutationRC(ctx, s, map[string]string{"database": database, "table": "shellcn_ddl", "name": "email"}, map[string]any{"new_name": "contact_email", "type": "varchar(128)", "nullable": true})); err != nil {
+		t.Fatalf("rename column: %v", err)
+	}
+	var renamed int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'shellcn_ddl' AND COLUMN_NAME = 'contact_email'`, database).Scan(&renamed); err != nil || renamed != 1 {
+		t.Fatalf("expected column renamed to contact_email, got %d err=%v", renamed, err)
+	}
+
+	// Table rename, verified by listing.
+	if _, err := renameTable(rowMutationRC(ctx, s, ddlParams, map[string]any{"name": "shellcn_ddl_renamed"})); err != nil {
+		t.Fatalf("rename table: %v", err)
+	}
+	var oldExists, newExists int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'shellcn_ddl'`, database).Scan(&oldExists); err != nil {
+		t.Fatalf("read old table: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'shellcn_ddl_renamed'`, database).Scan(&newExists); err != nil {
+		t.Fatalf("read renamed table: %v", err)
+	}
+	if oldExists != 0 || newExists != 1 {
+		t.Fatalf("expected table renamed (old=%d new=%d)", oldExists, newExists)
+	}
+
+	// Database drop round-trip on a throwaway database.
+	dropDB := "shellcn_drop_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if _, err := s.db.ExecContext(ctx, "CREATE DATABASE "+quoteIdent(dropDB)); err != nil {
+		t.Fatalf("seed database to drop: %v", err)
+	}
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": dropDB}, nil, nil)); err != nil {
+		t.Fatalf("drop database: %v", err)
+	}
+	var dbExists int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?`, dropDB).Scan(&dbExists); err != nil || dbExists != 0 {
+		t.Fatalf("expected database dropped, got %d err=%v", dbExists, err)
+	}
+
 	// Foreign-key cells carry generic _links to the referenced table.
 	if _, err := s.db.ExecContext(ctx, `CREATE TABLE shellcn_orders (id bigint unsigned AUTO_INCREMENT PRIMARY KEY, person_id bigint unsigned, FOREIGN KEY (person_id) REFERENCES shellcn_people(id))`); err != nil {
 		t.Fatalf("create child table: %v", err)
@@ -362,6 +436,17 @@ func pageHasName(page plugin.Page[row], name string) bool {
 		}
 	}
 	return false
+}
+
+func constraintExists(ctx context.Context, t *testing.T, s *Session, database, table, name string) bool {
+	t.Helper()
+	var count int
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ?`,
+		database, table, name).Scan(&count); err != nil {
+		t.Fatalf("read constraint %q: %v", name, err)
+	}
+	return count > 0
 }
 
 func hasEdge(g sqldb.GraphPayload, source, target string) bool {

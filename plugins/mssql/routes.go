@@ -66,9 +66,16 @@ func routes() []plugin.Route {
 		{ID: "mssql.table.row.update", Method: plugin.MethodPatch, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.row.update", Handle: updateRow},
 		{ID: "mssql.table.row.delete", Method: plugin.MethodDelete, Path: "/objects/{id}/rows", Permission: "mssql.tables.data.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.table.row.delete", Handle: deleteRow},
 		{ID: "mssql.database.create", Method: plugin.MethodPost, Path: "/databases", Permission: "mssql.databases.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.database.create", Input: databaseCreateSchema(), Handle: createDatabase},
+		{ID: "mssql.database.drop", Method: plugin.MethodDelete, Path: "/databases/{database}", Permission: "mssql.databases.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.database.drop", Handle: dropDatabase},
+		{ID: "mssql.schema.create", Method: plugin.MethodPost, Path: "/databases/{database}/schemas", Permission: "mssql.schemas.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.schema.create", Input: schemaCreateSchema(), Handle: createSchema},
+		{ID: "mssql.schema.drop", Method: plugin.MethodDelete, Path: "/schemas/{database}/{schema}", Permission: "mssql.schemas.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.schema.drop", Handle: dropSchema},
 		{ID: "mssql.table.create", Method: plugin.MethodPost, Path: "/schemas/{database}/{schema}/tables", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.create", Input: tableCreateSchema(), Handle: createTable},
+		{ID: "mssql.table.rename", Method: plugin.MethodPost, Path: "/objects/{id}/rename", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.table.rename", Input: tableRenameSchema(), Handle: renameTable},
 		{ID: "mssql.column.add", Method: plugin.MethodPost, Path: "/objects/{id}/columns", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.column.add", Input: columnAddSchema(), Handle: addColumn},
+		{ID: "mssql.column.alter", Method: plugin.MethodPost, Path: "/objects/{id}/columns/alter", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.column.alter", Input: columnAlterSchema(), Handle: alterColumn},
 		{ID: "mssql.column.drop", Method: plugin.MethodPost, Path: "/objects/{id}/columns/drop", Permission: "mssql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mssql.column.drop", Handle: dropColumn},
+		{ID: "mssql.constraint.add", Method: plugin.MethodPost, Path: "/objects/{id}/constraints", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.constraint.add", Input: constraintAddSchema(), Handle: addConstraint},
+		{ID: "mssql.constraint.drop", Method: plugin.MethodPost, Path: "/objects/{id}/constraints/drop", Permission: "mssql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mssql.constraint.drop", Handle: dropConstraint},
 		{ID: "mssql.index.create", Method: plugin.MethodPost, Path: "/objects/{id}/indexes", Permission: "mssql.tables.write", Risk: plugin.RiskWrite, AuditEvent: "mssql.index.create", Input: indexCreateSchema(), Handle: createIndex},
 		{ID: "mssql.index.drop", Method: plugin.MethodPost, Path: "/objects/{id}/indexes/drop", Permission: "mssql.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "mssql.index.drop", Handle: dropIndex},
 		{ID: "mssql.table.truncate", Method: plugin.MethodPost, Path: "/objects/{id}/truncate", Permission: "mssql.tables.delete", Risk: plugin.RiskDestructive, AuditEvent: "mssql.table.truncate", Handle: truncateTable},
@@ -109,6 +116,42 @@ func indexCreateSchema() *plugin.Schema {
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "mssql.table.columns", Params: objectParams()}},
 		{Key: "unique", Label: "Unique", Type: plugin.FieldToggle},
+	}}}}
+}
+
+func schemaCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Schema", Fields: []plugin.Field{
+		{Key: "name", Label: "Schema name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func tableRenameSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Rename", Fields: []plugin.Field{
+		{Key: "name", Label: "New table name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+	}}}}
+}
+
+func columnAlterSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Column", Fields: []plugin.Field{
+		{Key: "name", Label: "Column", Type: plugin.FieldMultiSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "mssql.table.columns", Params: objectParams()}},
+		{Key: "type", Label: "New type", Type: plugin.FieldText, Required: true, Default: "nvarchar(255)"},
+		{Key: "nullable", Label: "Nullable", Type: plugin.FieldToggle, Default: true},
+	}}}}
+}
+
+func constraintAddSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Constraint", Fields: []plugin.Field{
+		{Key: "name", Label: "Constraint name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "type", Label: "Type", Type: plugin.FieldSelect, Required: true, Default: "PRIMARY KEY", Options: []plugin.Option{
+			{Label: "Primary key", Value: "PRIMARY KEY"},
+			{Label: "Unique", Value: "UNIQUE"},
+			{Label: "Check", Value: "CHECK"},
+			{Label: "Foreign key", Value: "FOREIGN KEY"},
+		}},
+		{Key: "columns", Label: "Columns", Type: plugin.FieldMultiSelect, OptionsSource: &plugin.DataSource{RouteID: "mssql.table.columns", Params: objectParams()}, Help: "Columns for PRIMARY KEY, UNIQUE, or FOREIGN KEY."},
+		{Key: "check", Label: "Check expression", Type: plugin.FieldText, Help: "Boolean expression for a CHECK constraint, e.g. [age] >= 0."},
+		{Key: "ref_table", Label: "Referenced table", Type: plugin.FieldText, Help: "Schema-qualified target for a FOREIGN KEY, e.g. dbo.people."},
+		{Key: "ref_columns", Label: "Referenced columns", Type: plugin.FieldText, Help: "Comma-separated referenced columns for a FOREIGN KEY."},
 	}}}}
 }
 
@@ -713,6 +756,11 @@ WHERE ps.name = @p1 AND po.name = @p2`, quoteIdent(database), quoteIdent(databas
 	if err != nil {
 		return nil, err
 	}
+	id := rc.Param("id")
+	for i := range rows {
+		name := fmt.Sprint(rows[i]["name"])
+		rows[i]["ref"] = plugin.ResourceRef{Kind: "constraint", Scope: id, Name: name, UID: id + "." + name}
+	}
 	return pageRows(rc, rows)
 }
 
@@ -889,6 +937,215 @@ func dropColumn(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	if _, err := s.db.ExecContext(rc.Ctx, "ALTER TABLE "+qualified(database, schema, table)+" DROP COLUMN "+quoteIdent(column)); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropDatabase(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	if strings.EqualFold(name, s.opts.Database) {
+		return nil, fmt.Errorf("%w: cannot drop the connected database", plugin.ErrForbidden)
+	}
+	// SQL Server refuses DROP DATABASE while sessions hold it; force it offline
+	// (rolling back open transactions) first so the drop succeeds cleanly.
+	if _, err := s.db.ExecContext(rc.Ctx, "ALTER DATABASE "+quoteIdent(name)+" SET SINGLE_USER WITH ROLLBACK IMMEDIATE"); err != nil {
+		return nil, mssqlErr(err)
+	}
+	if _, err := s.db.ExecContext(rc.Ctx, "DROP DATABASE "+quoteIdent(name)); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func createSchema(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, err := safeIdent(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	// CREATE SCHEMA must be the first statement in its batch, so it is run in the
+	// target database via a USE-prefixed batch rather than three-part naming.
+	stmt := "USE " + quoteIdent(database) + "; EXEC(" + quoteLiteral("CREATE SCHEMA "+quoteIdent(name)) + ")"
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropSchema(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, err := safeIdent(rc.Param("database"))
+	if err != nil {
+		return nil, err
+	}
+	schema, err := safeIdent(rc.Param("schema"))
+	if err != nil {
+		return nil, err
+	}
+	stmt := "USE " + quoteIdent(database) + "; EXEC(" + quoteLiteral("DROP SCHEMA "+quoteIdent(schema)) + ")"
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func renameTable(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, schema, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name string `json:"name" validate:"required"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	newName, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	// sp_rename takes the qualified current name and the bare new name; the new
+	// name is passed literally so it can never carry separators.
+	current := quoteLiteral(schema + "." + table)
+	target := quoteLiteral(newName)
+	stmt := "USE " + quoteIdent(database) + "; EXEC sp_rename " + current + ", " + target
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func alterColumn(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, schema, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name     any    `json:"name" validate:"required"`
+		Type     string `json:"type" validate:"required"`
+		Nullable bool   `json:"nullable"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	column, err := singleIdentValue(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	dataType := strings.TrimSpace(req.Type)
+	if !sqldb.SafeType(dataType) {
+		return nil, fmt.Errorf("%w: unsafe column type", plugin.ErrInvalidInput)
+	}
+	null := "NOT NULL"
+	if req.Nullable {
+		null = "NULL"
+	}
+	stmt := "ALTER TABLE " + qualified(database, schema, table) + " ALTER COLUMN " + quoteIdent(column) + " " + dataType + " " + null
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func addConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, schema, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name       string `json:"name" validate:"required"`
+		Type       string `json:"type" validate:"required"`
+		Columns    any    `json:"columns"`
+		Check      string `json:"check"`
+		RefTable   string `json:"ref_table"`
+		RefColumns string `json:"ref_columns"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	clause, err := constraintClause(req.Name, req.Type, req.Columns, req.Check, req.RefTable, req.RefColumns)
+	if err != nil {
+		return nil, err
+	}
+	stmt := "ALTER TABLE " + qualified(database, schema, table) + " ADD " + clause
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
+		return nil, mssqlErr(err)
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropConstraint(rc *plugin.RequestContext) (any, error) {
+	s, err := mssqlSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	database, schema, table, err := objectIdent(rc)
+	if err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	stmt := "ALTER TABLE " + qualified(database, schema, table) + " DROP CONSTRAINT " + quoteIdent(name)
+	if _, err := s.db.ExecContext(rc.Ctx, stmt); err != nil {
 		return nil, mssqlErr(err)
 	}
 	return actionResult{OK: true}, nil
@@ -1581,6 +1838,105 @@ func quoteIdent(s string) string {
 
 func quoteLiteral(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+}
+
+// singleIdentValue accepts a single identifier that the generic form may submit
+// either as a bare string or as a one-element multiselect array.
+func singleIdentValue(v any) (string, error) {
+	switch t := v.(type) {
+	case string:
+		return safeIdent(t)
+	case []any:
+		if len(t) != 1 {
+			return "", fmt.Errorf("%w: exactly one column is required", plugin.ErrInvalidInput)
+		}
+		return safeIdent(fmt.Sprint(t[0]))
+	case []string:
+		if len(t) != 1 {
+			return "", fmt.Errorf("%w: exactly one column is required", plugin.ErrInvalidInput)
+		}
+		return safeIdent(t[0])
+	default:
+		return "", fmt.Errorf("%w: a column is required", plugin.ErrInvalidInput)
+	}
+}
+
+// constraintClause builds the "CONSTRAINT name <body>" fragment for ALTER TABLE
+// ADD across the four structural constraint kinds, validating every identifier
+// and rejecting unsafe CHECK expressions.
+func constraintClause(name, kind string, columns any, check, refTable, refColumns string) (string, error) {
+	cname, err := safeIdent(name)
+	if err != nil {
+		return "", err
+	}
+	prefix := "CONSTRAINT " + quoteIdent(cname) + " "
+	switch strings.ToUpper(strings.TrimSpace(kind)) {
+	case "PRIMARY KEY", "UNIQUE":
+		cols, err := sqldb.IdentifierListValue(columns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		if len(cols) == 0 {
+			return "", fmt.Errorf("%w: at least one column is required", plugin.ErrInvalidInput)
+		}
+		body := "PRIMARY KEY"
+		if strings.EqualFold(kind, "UNIQUE") {
+			body = "UNIQUE"
+		}
+		return prefix + body + " (" + strings.Join(cols, ", ") + ")", nil
+	case "CHECK":
+		expr := strings.TrimSpace(check)
+		if expr == "" {
+			return "", fmt.Errorf("%w: a check expression is required", plugin.ErrInvalidInput)
+		}
+		if !sqldb.SafeDefault(expr) {
+			return "", fmt.Errorf("%w: unsafe check expression", plugin.ErrInvalidInput)
+		}
+		return prefix + "CHECK (" + expr + ")", nil
+	case "FOREIGN KEY":
+		cols, err := sqldb.IdentifierListValue(columns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		if len(cols) == 0 {
+			return "", fmt.Errorf("%w: at least one column is required", plugin.ErrInvalidInput)
+		}
+		ref, err := refTableClause(refTable)
+		if err != nil {
+			return "", err
+		}
+		refCols, err := sqldb.IdentifierListValue(refColumns, quoteIdent)
+		if err != nil {
+			return "", err
+		}
+		if len(refCols) == 0 {
+			return "", fmt.Errorf("%w: at least one referenced column is required", plugin.ErrInvalidInput)
+		}
+		return prefix + "FOREIGN KEY (" + strings.Join(cols, ", ") + ") REFERENCES " + ref + " (" + strings.Join(refCols, ", ") + ")", nil
+	default:
+		return "", fmt.Errorf("%w: unsupported constraint type %q", plugin.ErrInvalidInput, kind)
+	}
+}
+
+// refTableClause quotes a (optionally schema-qualified) referenced table name.
+func refTableClause(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("%w: a referenced table is required", plugin.ErrInvalidInput)
+	}
+	parts := strings.Split(raw, ".")
+	if len(parts) > 2 {
+		return "", fmt.Errorf("%w: referenced table is invalid", plugin.ErrInvalidInput)
+	}
+	quoted := make([]string, 0, len(parts))
+	for _, p := range parts {
+		ident, err := safeIdent(p)
+		if err != nil {
+			return "", err
+		}
+		quoted = append(quoted, quoteIdent(ident))
+	}
+	return strings.Join(quoted, "."), nil
 }
 
 func offsetCursor(raw string) (int, error) {

@@ -89,6 +89,79 @@ func TestMySQLDDLColumnValidation(t *testing.T) {
 	}
 }
 
+func TestAlterColumnSQL(t *testing.T) {
+	modify, err := alterColumnSQL("`app`.`people`", "name", "", sqldb.ColumnSpec{Type: "varchar(128)", Nullable: false})
+	if err != nil {
+		t.Fatalf("modify column rejected: %v", err)
+	}
+	if modify != "ALTER TABLE `app`.`people` MODIFY COLUMN `name` varchar(128) NOT NULL" {
+		t.Fatalf("unexpected modify SQL: %q", modify)
+	}
+	change, err := alterColumnSQL("`app`.`people`", "name", "full_name", sqldb.ColumnSpec{Type: "varchar(255)", Nullable: true, Default: "''"})
+	if err != nil {
+		t.Fatalf("change column rejected: %v", err)
+	}
+	if change != "ALTER TABLE `app`.`people` CHANGE COLUMN `name` `full_name` varchar(255) DEFAULT ''" {
+		t.Fatalf("unexpected change SQL: %q", change)
+	}
+	if _, err := alterColumnSQL("`app`.`people`", "name", "bad-name", sqldb.ColumnSpec{Type: "text"}); err == nil {
+		t.Fatal("invalid rename identifier accepted")
+	}
+	if _, err := alterColumnSQL("`app`.`people`", "name", "", sqldb.ColumnSpec{Type: "text; drop table x"}); err == nil {
+		t.Fatal("unsafe type accepted")
+	}
+}
+
+func TestConstraintAddClause(t *testing.T) {
+	pk, err := constraintAddClause("app", constraintAddRequest{Kind: "PRIMARY KEY", Columns: []string{"id"}})
+	if err != nil || pk != "PRIMARY KEY (`id`)" {
+		t.Fatalf("primary key clause = %q err=%v", pk, err)
+	}
+	uniq, err := constraintAddClause("app", constraintAddRequest{Kind: "UNIQUE", Name: "uq_email", Columns: "email"})
+	if err != nil || uniq != "CONSTRAINT `uq_email` UNIQUE (`email`)" {
+		t.Fatalf("unique clause = %q err=%v", uniq, err)
+	}
+	fk, err := constraintAddClause("app", constraintAddRequest{Kind: "FOREIGN KEY", Name: "fk_person", Columns: "person_id", RefTable: "people", RefColumns: "id"})
+	if err != nil || fk != "CONSTRAINT `fk_person` FOREIGN KEY (`person_id`) REFERENCES `app`.`people` (`id`)" {
+		t.Fatalf("foreign key clause = %q err=%v", fk, err)
+	}
+	fkRef, err := constraintAddClause("app", constraintAddRequest{Kind: "FOREIGN KEY", Columns: "person_id", RefDatabase: "other", RefTable: "people", RefColumns: "id"})
+	if err != nil || fkRef != "FOREIGN KEY (`person_id`) REFERENCES `other`.`people` (`id`)" {
+		t.Fatalf("foreign key (cross-db, unnamed) clause = %q err=%v", fkRef, err)
+	}
+	chk, err := constraintAddClause("app", constraintAddRequest{Kind: "CHECK", Name: "ck_price", Expression: "price > 0"})
+	if err != nil || chk != "CONSTRAINT `ck_price` CHECK (price > 0)" {
+		t.Fatalf("check clause = %q err=%v", chk, err)
+	}
+	if _, err := constraintAddClause("app", constraintAddRequest{Kind: "CHECK", Expression: "price > 0; drop table x"}); err == nil {
+		t.Fatal("unsafe check expression accepted")
+	}
+	if _, err := constraintAddClause("app", constraintAddRequest{Kind: "FOREIGN KEY", Columns: "person_id", RefColumns: "id"}); err == nil {
+		t.Fatal("foreign key without referenced table accepted")
+	}
+	if _, err := constraintAddClause("app", constraintAddRequest{Kind: "TRIGGER"}); err == nil {
+		t.Fatal("unsupported constraint kind accepted")
+	}
+}
+
+func TestConstraintDropClause(t *testing.T) {
+	cases := map[string]string{
+		"PRIMARY KEY": "DROP PRIMARY KEY",
+		"FOREIGN KEY": "DROP FOREIGN KEY `fk_person`",
+		"CHECK":       "DROP CHECK `fk_person`",
+		"UNIQUE":      "DROP INDEX `fk_person`",
+	}
+	for constraintType, want := range cases {
+		got, err := constraintDropClause(constraintType, "fk_person")
+		if err != nil || got != want {
+			t.Fatalf("drop %q = %q err=%v, want %q", constraintType, got, err, want)
+		}
+	}
+	if _, err := constraintDropClause("WHATEVER", "x"); err == nil {
+		t.Fatal("unsupported constraint type accepted for drop")
+	}
+}
+
 func TestRoutineIDRoundTrip(t *testing.T) {
 	id := routineID("app", "procedure", "refresh_stats")
 	database, routineType, routine, err := parseRoutineID(id)

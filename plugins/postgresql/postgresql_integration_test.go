@@ -184,8 +184,58 @@ INSERT INTO public.shellcn_people (name, password) VALUES ('alice', 'secret-pass
 		t.Fatalf("expected password column dropped, got %d err=%v", cols, err)
 	}
 
+	// Constraint add → drop round-trip (a UNIQUE on name).
+	if _, err := addConstraint(rowMutationRC(ctx, s, tableParams, map[string]any{"name": "uq_people_name", "type": constraintUnique, "columns": []any{"name"}})); err != nil {
+		t.Fatalf("add constraint: %v", err)
+	}
+	var con int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM pg_constraint WHERE conname='uq_people_name' AND conrelid='public.shellcn_people'::regclass`).Scan(&con); err != nil || con != 1 {
+		t.Fatalf("expected created constraint, got %d err=%v", con, err)
+	}
+	if _, err := dropConstraint(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "uq_people_name"}, nil)); err != nil {
+		t.Fatalf("drop constraint: %v", err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM pg_constraint WHERE conname='uq_people_name' AND conrelid='public.shellcn_people'::regclass`).Scan(&con); err != nil || con != 0 {
+		t.Fatalf("expected dropped constraint, got %d err=%v", con, err)
+	}
+
+	// Rename a column, then change its type; verify both via the columns route.
+	if _, err := renameColumn(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "name"}, map[string]any{"newName": "full_name"})); err != nil {
+		t.Fatalf("rename column: %v", err)
+	}
+	if _, err := alterColumn(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "full_name"}, map[string]any{"type": "varchar(120)", "using": "full_name::varchar(120)"})); err != nil {
+		t.Fatalf("alter column: %v", err)
+	}
+	cres, err := tableColumnsRoute(plugin.NewRequestContext(ctx, models.User{}, s, tableParams, nil, nil))
+	if err != nil {
+		t.Fatalf("columns route after alter: %v", err)
+	}
+	if !pageHasName(cres.(plugin.Page[row]), "full_name") {
+		t.Fatalf("renamed column full_name not listed: %#v", cres)
+	}
+	var dtype string
+	if err := pool.QueryRow(ctx, `SELECT data_type FROM information_schema.columns WHERE table_schema='public' AND table_name='shellcn_people' AND column_name='full_name'`).Scan(&dtype); err != nil || dtype != "character varying" {
+		t.Fatalf("expected character varying after alter, got %q err=%v", dtype, err)
+	}
+
+	// Rename the table, verify via the tables list, then rename it back so the
+	// remaining assertions (and cleanup) still find shellcn_people.
+	if _, err := renameTable(rowMutationRC(ctx, s, tableParams, map[string]any{"newName": "shellcn_persons"})); err != nil {
+		t.Fatalf("rename table: %v", err)
+	}
+	renamed, err := listTables(rc)
+	if err != nil {
+		t.Fatalf("list tables after rename: %v", err)
+	}
+	if !pageHasName(renamed.(plugin.Page[row]), "shellcn_persons") {
+		t.Fatalf("renamed table shellcn_persons not listed: %#v", renamed)
+	}
+	if _, err := renameTable(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_persons"}, map[string]any{"newName": "shellcn_people"})); err != nil {
+		t.Fatalf("rename table back: %v", err)
+	}
+
 	// View create → drop round-trip.
-	if _, err := pool.Exec(ctx, `CREATE VIEW public.shellcn_people_v AS SELECT id, name FROM public.shellcn_people`); err != nil {
+	if _, err := pool.Exec(ctx, `CREATE VIEW public.shellcn_people_v AS SELECT id, full_name FROM public.shellcn_people`); err != nil {
 		t.Fatalf("seed view: %v", err)
 	}
 	if _, err := dropView(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "public", "view": "shellcn_people_v"}, nil, nil)); err != nil {

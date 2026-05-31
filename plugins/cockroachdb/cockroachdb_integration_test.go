@@ -220,6 +220,71 @@ INSERT INTO public.shellcn_people (id, name, access_token) VALUES (1, 'alice', '
 		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
 	}
 
+	// Column rename + alter type round-trip.
+	if _, err := renameColumn(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "name"}, map[string]any{"newName": "full_name"})); err != nil {
+		t.Fatalf("rename column: %v", err)
+	}
+	if _, err := alterColumn(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "full_name"}, map[string]any{"type": "VARCHAR(64)"})); err != nil {
+		t.Fatalf("alter column: %v", err)
+	}
+	var renamedCols int
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='shellcn_people' AND column_name='full_name'`).Scan(&renamedCols); err != nil || renamedCols != 1 {
+		t.Fatalf("expected renamed column full_name, got %d err=%v", renamedCols, err)
+	}
+
+	// Constraint add + drop round-trip (CHECK is the simplest to add/drop in place).
+	if _, err := addConstraint(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people"}, map[string]any{"name": "people_id_positive", "type": constraintCheck, "check": "id > 0"})); err != nil {
+		t.Fatalf("add constraint: %v", err)
+	}
+	var conCount int
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema='public' AND table_name='shellcn_people' AND constraint_name='people_id_positive'`).Scan(&conCount); err != nil || conCount != 1 {
+		t.Fatalf("expected constraint added, got %d err=%v", conCount, err)
+	}
+	if _, err := dropConstraint(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people", "name": "people_id_positive"}, nil)); err != nil {
+		t.Fatalf("drop constraint: %v", err)
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema='public' AND table_name='shellcn_people' AND constraint_name='people_id_positive'`).Scan(&conCount); err != nil || conCount != 0 {
+		t.Fatalf("expected constraint dropped, got %d err=%v", conCount, err)
+	}
+
+	// Table rename round-trip (renamed back so later cleanup still finds it).
+	if _, err := renameTable(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_people"}, map[string]any{"newName": "shellcn_humans"})); err != nil {
+		t.Fatalf("rename table: %v", err)
+	}
+	var renamedTables int
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='shellcn_humans'`).Scan(&renamedTables); err != nil || renamedTables != 1 {
+		t.Fatalf("expected renamed table shellcn_humans, got %d err=%v", renamedTables, err)
+	}
+	if _, err := renameTable(rowMutationRC(ctx, s, map[string]string{"schema": "public", "table": "shellcn_humans"}, map[string]any{"newName": "shellcn_people"})); err != nil {
+		t.Fatalf("rename table back: %v", err)
+	}
+
+	// Drop schema round-trip: the empty schema created earlier drops cleanly.
+	if _, err := dropSchema(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"schema": "shellcn_sc"}, nil, nil)); err != nil {
+		t.Fatalf("drop schema: %v", err)
+	}
+	var schemaCount int
+	if err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='shellcn_sc'`).Scan(&schemaCount); err != nil || schemaCount != 0 {
+		t.Fatalf("expected schema dropped, got %d err=%v", schemaCount, err)
+	}
+
+	// Drop database round-trip: the database created earlier drops through the
+	// handler (it is not the connected database).
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": createdDatabase}, nil, nil)); err != nil {
+		t.Fatalf("drop database: %v", err)
+	}
+	databasesAfterDrop, err := listDatabases(plugin.NewRequestContext(ctx, models.User{}, s, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list databases after drop: %v", err)
+	}
+	if pageHasName(databasesAfterDrop.(plugin.Page[row]), createdDatabase) {
+		t.Fatalf("dropped database is still listed: %#v", databasesAfterDrop)
+	}
+	// Dropping the connected database must be refused.
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": s.opts.Database}, nil, nil)); err == nil {
+		t.Fatal("dropping the connected database must be rejected")
+	}
+
 	for name, fn := range map[string]func(*plugin.RequestContext) (any, error){
 		"databases": listDatabases,
 		"schemas":   listSchemas,

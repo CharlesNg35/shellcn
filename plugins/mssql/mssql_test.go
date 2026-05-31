@@ -81,6 +81,78 @@ func TestMSSQLDDLColumnValidation(t *testing.T) {
 	}
 }
 
+func TestConstraintClauseGeneration(t *testing.T) {
+	cases := []struct {
+		name    string
+		kind    string
+		columns any
+		check   string
+		ref     string
+		refcols string
+		want    string
+	}{
+		{name: "pk_app", kind: "PRIMARY KEY", columns: []any{"id"}, want: "CONSTRAINT [pk_app] PRIMARY KEY ([id])"},
+		{name: "uq_email", kind: "UNIQUE", columns: "email", want: "CONSTRAINT [uq_email] UNIQUE ([email])"},
+		{name: "uq_pair", kind: "unique", columns: []any{"a", "b"}, want: "CONSTRAINT [uq_pair] UNIQUE ([a], [b])"},
+		{name: "ck_age", kind: "CHECK", check: "[age] >= 0", want: "CONSTRAINT [ck_age] CHECK ([age] >= 0)"},
+		{name: "fk_person", kind: "FOREIGN KEY", columns: "person_id", ref: "dbo.people", refcols: "id", want: "CONSTRAINT [fk_person] FOREIGN KEY ([person_id]) REFERENCES [dbo].[people] ([id])"},
+	}
+	for _, tc := range cases {
+		got, err := constraintClause(tc.name, tc.kind, tc.columns, tc.check, tc.ref, tc.refcols)
+		if err != nil {
+			t.Fatalf("%s: unexpected error: %v", tc.name, err)
+		}
+		if got != tc.want {
+			t.Fatalf("%s: got %q want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestConstraintClauseRejectsUnsafe(t *testing.T) {
+	if _, err := constraintClause("ck", "CHECK", nil, "1=1; DROP TABLE x", "", ""); err == nil {
+		t.Fatal("unsafe check expression accepted")
+	}
+	if _, err := constraintClause("pk", "PRIMARY KEY", nil, "", "", ""); err == nil {
+		t.Fatal("primary key without columns accepted")
+	}
+	if _, err := constraintClause("fk", "FOREIGN KEY", "a", "", "bad.ref.table", "id"); err == nil {
+		t.Fatal("over-qualified referenced table accepted")
+	}
+	if _, err := constraintClause("bad:name", "UNIQUE", "a", "", "", ""); err == nil {
+		t.Fatal("invalid constraint identifier accepted")
+	}
+	if _, err := constraintClause("c", "GIBBERISH", "a", "", "", ""); err == nil {
+		t.Fatal("unknown constraint type accepted")
+	}
+}
+
+func TestRefTableClause(t *testing.T) {
+	if got, err := refTableClause("people"); err != nil || got != "[people]" {
+		t.Fatalf("bare table: got %q err=%v", got, err)
+	}
+	if got, err := refTableClause("dbo.people"); err != nil || got != "[dbo].[people]" {
+		t.Fatalf("qualified table: got %q err=%v", got, err)
+	}
+	if _, err := refTableClause(""); err == nil {
+		t.Fatal("empty referenced table accepted")
+	}
+}
+
+func TestSingleIdentValue(t *testing.T) {
+	if got, err := singleIdentValue("name"); err != nil || got != "name" {
+		t.Fatalf("string ident: got %q err=%v", got, err)
+	}
+	if got, err := singleIdentValue([]any{"name"}); err != nil || got != "name" {
+		t.Fatalf("array ident: got %q err=%v", got, err)
+	}
+	if _, err := singleIdentValue([]any{"a", "b"}); err == nil {
+		t.Fatal("multi-element array accepted")
+	}
+	if _, err := singleIdentValue("bad:name"); err == nil {
+		t.Fatal("invalid identifier accepted")
+	}
+}
+
 func TestObjectIDRoundTrip(t *testing.T) {
 	id := objectID("app", "dbo", "people")
 	database, schema, name, err := parseObjectID(id)

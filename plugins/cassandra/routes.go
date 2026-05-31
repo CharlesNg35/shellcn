@@ -65,6 +65,9 @@ func routes() []plugin.Route {
 		{ID: "cassandra.view.definition", Method: plugin.MethodGet, Path: "/views/{keyspace}/{table}/definition", Permission: "cassandra.views.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.view.definition", Handle: viewDefinition},
 		{ID: "cassandra.completion", Method: plugin.MethodGet, Path: "/completion", Permission: "cassandra.keyspaces.read", Risk: plugin.RiskSafe, AuditEvent: "cassandra.completion", Handle: completionRoute},
 		{ID: "cassandra.keyspace.create", Method: plugin.MethodPost, Path: "/keyspaces", Permission: "cassandra.keyspaces.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.keyspace.create", Input: keyspaceCreateSchema(), Handle: createKeyspace},
+		{ID: "cassandra.keyspace.drop", Method: plugin.MethodDelete, Path: "/keyspaces/{keyspace}", Permission: "cassandra.keyspaces.delete", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.keyspace.drop", Handle: dropKeyspace},
+		{ID: "cassandra.type.create", Method: plugin.MethodPost, Path: "/keyspaces/{keyspace}/types", Permission: "cassandra.types.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.type.create", Input: typeCreateSchema(), Handle: createType},
+		{ID: "cassandra.type.drop", Method: plugin.MethodDelete, Path: "/types/{keyspace}/{name}", Permission: "cassandra.types.delete", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.type.drop", Handle: dropType},
 		{ID: "cassandra.table.create", Method: plugin.MethodPost, Path: "/keyspaces/{keyspace}/tables", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.table.create", Input: tableCreateSchema(), Handle: createTable},
 		{ID: "cassandra.column.add", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/columns", Permission: "cassandra.tables.write", Risk: plugin.RiskWrite, AuditEvent: "cassandra.column.add", Input: columnAddSchema(), Handle: addColumn},
 		{ID: "cassandra.column.drop", Method: plugin.MethodPost, Path: "/tables/{keyspace}/{table}/columns/drop", Permission: "cassandra.tables.write", Risk: plugin.RiskDestructive, AuditEvent: "cassandra.column.drop", Handle: dropColumn},
@@ -114,6 +117,14 @@ func indexCreateSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Index", Fields: []plugin.Field{
 		{Key: "name", Label: "Index name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
 		{Key: "column", Label: "Column", Type: plugin.FieldSelect, Required: true, OptionsSource: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Help: "Cassandra secondary indexes cover a single column."},
+	}}}}
+}
+
+func typeCreateSchema() *plugin.Schema {
+	return &plugin.Schema{Groups: []plugin.Group{{Name: "Type", Fields: []plugin.Field{
+		{Key: "name", Label: "Type name", Type: plugin.FieldText, Required: true, Validators: []plugin.Validator{{Type: plugin.ValidatorRegex, Value: sqldb.IdentifierPattern}}},
+		{Key: "fields", Label: "Fields", Type: plugin.FieldJSON, Required: true, Help: `Array of {"name":"street","type":"text"}`},
+		{Key: "if_not_exists", Label: "If not exists", Type: plugin.FieldToggle, Default: true},
 	}}}}
 }
 
@@ -695,6 +706,68 @@ func createKeyspace(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	return actionResult{OK: true}, nil
+}
+
+func dropKeyspace(rc *plugin.RequestContext) (any, error) {
+	keyspace, err := safeIdent(rc.Param("keyspace"))
+	if err != nil {
+		return nil, err
+	}
+	if isSystemKeyspace(keyspace) {
+		return nil, fmt.Errorf("%w: system keyspaces cannot be dropped", plugin.ErrForbidden)
+	}
+	return execDDL(rc, "DROP KEYSPACE "+quoteIdent(keyspace))
+}
+
+func createType(rc *plugin.RequestContext) (any, error) {
+	s, err := cassandraSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureWritable(s); err != nil {
+		return nil, err
+	}
+	keyspace, err := safeIdent(rc.Param("keyspace"))
+	if err != nil {
+		return nil, err
+	}
+	var req struct {
+		Name        string `json:"name" validate:"required"`
+		Fields      any    `json:"fields" validate:"required"`
+		IfNotExists bool   `json:"if_not_exists"`
+	}
+	if err := rc.Bind(&req); err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(req.Name)
+	if err != nil {
+		return nil, err
+	}
+	fields, err := parseColumns(req.Fields)
+	if err != nil {
+		return nil, err
+	}
+	prefix := "CREATE TYPE "
+	if req.IfNotExists {
+		prefix += "IF NOT EXISTS "
+	}
+	cql := prefix + qualified(keyspace, name) + " (" + strings.Join(fields, ", ") + ")"
+	if err := execCQL(rc.Ctx, s, cql); err != nil {
+		return nil, err
+	}
+	return actionResult{OK: true}, nil
+}
+
+func dropType(rc *plugin.RequestContext) (any, error) {
+	keyspace, err := safeIdent(rc.Param("keyspace"))
+	if err != nil {
+		return nil, err
+	}
+	name, err := safeIdent(rc.Param("name"))
+	if err != nil {
+		return nil, err
+	}
+	return execDDL(rc, "DROP TYPE "+qualified(keyspace, name))
 }
 
 func createTable(rc *plugin.RequestContext) (any, error) {

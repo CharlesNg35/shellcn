@@ -201,12 +201,38 @@ func TestClickHousePluginIntegration(t *testing.T) {
 		}
 		return plugin.NewRequestContext(ctx, models.User{}, s, full, nil, nil)
 	}
-	if _, err := s.db.ExecContext(ctx, "ALTER TABLE shellcn_people ADD INDEX ix_name name TYPE set(0) GRANULARITY 1"); err != nil {
-		t.Fatalf("seed index: %v", err)
+	// Data-skipping index create + drop round-trip via the declarative handlers.
+	if _, err := createIndex(rowMutationRC(ctx, s, ddlParams(db), map[string]any{
+		"name": "ix_name", "expression": "name", "type": "set(0)", "granularity": 4,
+	})); err != nil {
+		t.Fatalf("create index: %v", err)
+	}
+	var ixCount int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.data_skipping_indices WHERE database = ? AND table = 'shellcn_people' AND name = 'ix_name'", db).Scan(&ixCount); err != nil || ixCount != 1 {
+		t.Fatalf("expected ix_name index created, got %d err=%v", ixCount, err)
 	}
 	if _, err := dropIndex(ddlRC(map[string]string{"name": "ix_name"})); err != nil {
 		t.Fatalf("drop index: %v", err)
 	}
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.data_skipping_indices WHERE database = ? AND table = 'shellcn_people' AND name = 'ix_name'", db).Scan(&ixCount); err != nil || ixCount != 0 {
+		t.Fatalf("expected ix_name index dropped, got %d err=%v", ixCount, err)
+	}
+
+	// MODIFY COLUMN round-trip: widen access_token to Nullable(String) before it is
+	// dropped below, and verify the new type lands in system.columns.
+	if _, err := alterColumn(rowMutationRC(ctx, s, ddlParams(db), map[string]any{
+		"name": "access_token", "type": "String", "nullable": true,
+	})); err != nil {
+		t.Fatalf("alter column: %v", err)
+	}
+	var colType string
+	if err := s.db.QueryRowContext(ctx, "SELECT type FROM system.columns WHERE database = ? AND table = 'shellcn_people' AND name = 'access_token'", db).Scan(&colType); err != nil {
+		t.Fatalf("read modified column type: %v", err)
+	}
+	if colType != "Nullable(String)" {
+		t.Fatalf("expected access_token modified to Nullable(String), got %q", colType)
+	}
+
 	if _, err := dropColumn(ddlRC(map[string]string{"name": "access_token"})); err != nil {
 		t.Fatalf("drop column: %v", err)
 	}
@@ -214,6 +240,45 @@ func TestClickHousePluginIntegration(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.columns WHERE database = ? AND table = 'shellcn_people' AND name = 'access_token'", db).Scan(&cols); err != nil || cols != 0 {
 		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
 	}
+
+	// RENAME TABLE round-trip: rename within the same database, verify the new name
+	// is present and the old name is gone, then rename it back so later cleanup and
+	// assertions that depend on shellcn_people still hold.
+	if _, err := renameTable(rowMutationRC(ctx, s, ddlParams(db), map[string]any{"name": "shellcn_people_renamed"})); err != nil {
+		t.Fatalf("rename table: %v", err)
+	}
+	if !tableExists(ctx, t, s, db, "shellcn_people_renamed") || tableExists(ctx, t, s, db, "shellcn_people") {
+		t.Fatalf("expected table renamed to shellcn_people_renamed")
+	}
+	if _, err := renameTable(rowMutationRC(ctx, s, map[string]string{"database": db, "table": "shellcn_people_renamed"}, map[string]any{"name": "shellcn_people"})); err != nil {
+		t.Fatalf("rename table back: %v", err)
+	}
+
+	// Database create + drop round-trip via the declarative handlers.
+	dropDB := "shellcn_it_drop_" + strconv.FormatInt(time.Now().UnixNano(), 10)
+	if _, err := createDatabase(rowMutationRC(ctx, s, nil, map[string]any{"name": dropDB, "if_not_exists": true})); err != nil {
+		t.Fatalf("create database (drop round-trip): %v", err)
+	}
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{}, s, map[string]string{"database": dropDB}, nil, nil)); err != nil {
+		t.Fatalf("drop database: %v", err)
+	}
+	var dbCount int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.databases WHERE name = ?", dropDB).Scan(&dbCount); err != nil || dbCount != 0 {
+		t.Fatalf("expected database dropped, got %d err=%v", dbCount, err)
+	}
+}
+
+func ddlParams(database string) map[string]string {
+	return map[string]string{"database": database, "table": "shellcn_people"}
+}
+
+func tableExists(ctx context.Context, t *testing.T, s *Session, database, name string) bool {
+	t.Helper()
+	var count int
+	if err := s.db.QueryRowContext(ctx, "SELECT count() FROM system.tables WHERE database = ? AND name = ?", database, name).Scan(&count); err != nil {
+		t.Fatalf("table exists check: %v", err)
+	}
+	return count > 0
 }
 
 func integrationConfig(ctx context.Context, t *testing.T) map[string]any {

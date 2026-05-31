@@ -3,6 +3,7 @@ package cassandra
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/gocql/gocql"
@@ -93,6 +94,43 @@ func TestCQLDDLValidation(t *testing.T) {
 	}
 	if safePrimaryKey("id); DROP TABLE users") {
 		t.Fatal("unsafe primary key accepted")
+	}
+}
+
+func TestDropKeyspaceCQLGeneration(t *testing.T) {
+	if got := "DROP KEYSPACE " + quoteIdent("shellcn_drop_it"); got != `DROP KEYSPACE "shellcn_drop_it"` {
+		t.Fatalf("unexpected drop keyspace CQL: %s", got)
+	}
+	// Identifier quoting must escape embedded quotes so a crafted name can't break out.
+	if got := quoteIdent(`a"b`); got != `"a""b"` {
+		t.Fatalf("unexpected quoting: %s", got)
+	}
+}
+
+func TestCreateTypeCQLGeneration(t *testing.T) {
+	fields, err := parseColumns([]any{
+		map[string]any{"name": "street", "type": "text"},
+		map[string]any{"name": "zip", "type": "frozen<list<text>>"},
+	})
+	if err != nil {
+		t.Fatalf("valid UDT fields rejected: %v", err)
+	}
+	cql := "CREATE TYPE IF NOT EXISTS " + qualified("shop", "address") + " (" + strings.Join(fields, ", ") + ")"
+	want := `CREATE TYPE IF NOT EXISTS "shop"."address" ("street" text, "zip" frozen<list<text>>)`
+	if cql != want {
+		t.Fatalf("unexpected create type CQL:\n got: %s\nwant: %s", cql, want)
+	}
+	if _, err := parseColumns([]any{map[string]any{"name": "bad-field", "type": "text"}}); err == nil {
+		t.Fatal("invalid UDT field identifier accepted")
+	}
+	if _, err := parseColumns([]any{map[string]any{"name": "x", "type": "text; drop table users"}}); err == nil {
+		t.Fatal("unsafe UDT field type accepted")
+	}
+}
+
+func TestDropTypeCQLGeneration(t *testing.T) {
+	if got := "DROP TYPE " + qualified("shop", "address"); got != `DROP TYPE "shop"."address"` {
+		t.Fatalf("unexpected drop type CQL: %s", got)
 	}
 }
 

@@ -96,6 +96,67 @@ func TestOracleDDLColumnValidation(t *testing.T) {
 	}
 }
 
+func TestAlterColumnClause(t *testing.T) {
+	got, err := alterColumnClause("NAME", "VARCHAR2(120)", false, "'n/a'")
+	if err != nil {
+		t.Fatalf("alter clause: %v", err)
+	}
+	if got != `"NAME" VARCHAR2(120) DEFAULT 'n/a' NOT NULL` {
+		t.Fatalf("unexpected modify clause: %q", got)
+	}
+	if got, err := alterColumnClause("NOTE", "CLOB", true, ""); err != nil || got != `"NOTE" CLOB NULL` {
+		t.Fatalf("nullable modify clause wrong: %q err=%v", got, err)
+	}
+	if _, err := alterColumnClause("bad:name", "NUMBER", true, ""); err == nil {
+		t.Fatal("invalid identifier accepted")
+	}
+	if _, err := alterColumnClause("NAME", "VARCHAR2(10); DROP TABLE x", true, ""); err == nil {
+		t.Fatal("unsafe type accepted")
+	}
+	if _, err := alterColumnClause("NAME", "VARCHAR2(10)", true, "1; DROP TABLE x"); err == nil {
+		t.Fatal("unsafe default accepted")
+	}
+}
+
+func TestConstraintClause(t *testing.T) {
+	cases := []struct {
+		name, kind                       string
+		columns                          any
+		check, refTable, refColumns, sql string
+	}{
+		{name: "PK_PEOPLE", kind: "PRIMARY KEY", columns: "ID", sql: `CONSTRAINT "PK_PEOPLE" PRIMARY KEY ("ID")`},
+		{name: "UQ_EMAIL", kind: "UNIQUE", columns: []any{"EMAIL", "TENANT"}, sql: `CONSTRAINT "UQ_EMAIL" UNIQUE ("EMAIL", "TENANT")`},
+		{name: "CK_AGE", kind: "CHECK", check: "AGE >= 0", sql: `CONSTRAINT "CK_AGE" CHECK (AGE >= 0)`},
+		{name: "FK_ORDER", kind: "FOREIGN KEY", columns: "PERSON_ID", refTable: "APP.PEOPLE", refColumns: "ID", sql: `CONSTRAINT "FK_ORDER" FOREIGN KEY ("PERSON_ID") REFERENCES "APP"."PEOPLE" ("ID")`},
+		{name: "FK_LOCAL", kind: "FOREIGN KEY", columns: "PID", refTable: "PEOPLE", refColumns: "ID", sql: `CONSTRAINT "FK_LOCAL" FOREIGN KEY ("PID") REFERENCES "PEOPLE" ("ID")`},
+	}
+	for _, c := range cases {
+		got, err := constraintClause(c.name, c.kind, c.columns, c.check, c.refTable, c.refColumns)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if got != c.sql {
+			t.Fatalf("%s: got %q want %q", c.name, got, c.sql)
+		}
+	}
+
+	if _, err := constraintClause("bad:name", "UNIQUE", "ID", "", "", ""); err == nil {
+		t.Fatal("invalid constraint name accepted")
+	}
+	if _, err := constraintClause("PK", "PRIMARY KEY", "", "", "", ""); err == nil {
+		t.Fatal("primary key without columns accepted")
+	}
+	if _, err := constraintClause("CK", "CHECK", "", "AGE >= 0; DROP TABLE x", "", ""); err == nil {
+		t.Fatal("unsafe check expression accepted")
+	}
+	if _, err := constraintClause("FK", "FOREIGN KEY", "PID", "", "", "ID"); err == nil {
+		t.Fatal("foreign key without referenced table accepted")
+	}
+	if _, err := constraintClause("X", "EXCLUSION", "ID", "", "", ""); err == nil {
+		t.Fatal("unsupported constraint type accepted")
+	}
+}
+
 func TestObjectIDRoundTrip(t *testing.T) {
 	id := objectID("SHELLCN_TEST", "PEOPLE")
 	owner, name, err := parseObjectID(id)
@@ -115,6 +176,57 @@ func TestRedactRowsMasksConfiguredColumns(t *testing.T) {
 	redactRows(rows, sqldb.DefaultRedactColumnPatterns())
 	if rows[0]["access_token"] != sqldb.RedactedValue || rows[0]["name"] != "alice" {
 		t.Fatalf("unexpected row redaction: %#v", rows)
+	}
+}
+
+func TestStructuralDDLActionsAreWired(t *testing.T) {
+	p := New()
+	m := p.Manifest()
+
+	routeIDs := map[string]bool{}
+	for _, r := range p.Routes() {
+		routeIDs[r.ID] = true
+	}
+	actionByID := map[string]plugin.Action{}
+	for _, a := range m.Actions {
+		actionByID[a.ID] = a
+	}
+
+	want := []string{
+		"oracle.schema.create", "oracle.schema.drop",
+		"oracle.constraint.add", "oracle.constraint.drop",
+		"oracle.table.rename",
+		"oracle.column.alter", "oracle.column.rename",
+	}
+	for _, id := range want {
+		a, ok := actionByID[id]
+		if !ok {
+			t.Fatalf("missing action %q", id)
+		}
+		if !routeIDs[a.RouteID] {
+			t.Fatalf("action %q points at missing route %q", id, a.RouteID)
+		}
+	}
+
+	// Every action id referenced by a resource's panels/surfaces must resolve to
+	// a declared Action, so the new surfaces are not dangling.
+	check := func(ids []string, where string) {
+		for _, id := range ids {
+			if _, ok := actionByID[id]; !ok {
+				t.Fatalf("%s references undefined action %q", where, id)
+			}
+		}
+	}
+	for _, res := range m.Resources {
+		check(res.Actions.Toolbar, res.Kind+" toolbar")
+		check(res.Actions.Row, res.Kind+" row")
+		check(res.Actions.Detail, res.Kind+" detail")
+		for _, tab := range res.Detail.Tabs {
+			if tc, ok := tab.Config.(plugin.TableConfig); ok {
+				check(tc.ActionIDs, res.Kind+"/"+tab.Key+" actionIds")
+				check(tc.RowActionIDs, res.Kind+"/"+tab.Key+" rowActionIds")
+			}
+		}
 	}
 }
 

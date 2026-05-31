@@ -179,6 +179,148 @@ func TestTableDataGridIsEditable(t *testing.T) {
 	}
 }
 
+func TestRenameTableSQL(t *testing.T) {
+	got, err := renameTableSQL("public", "people", "persons")
+	if err != nil {
+		t.Fatalf("renameTableSQL: %v", err)
+	}
+	want := `ALTER TABLE "public"."people" RENAME TO "persons"`
+	if got != want {
+		t.Fatalf("rename table SQL\n got: %s\nwant: %s", got, want)
+	}
+	if _, err := renameTableSQL("public", "people", "bad name"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("expected invalid identifier rejection, got %v", err)
+	}
+	if _, err := renameTableSQL("public", "people", `x"; DROP TABLE y;--`); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("expected injection rejection, got %v", err)
+	}
+}
+
+func TestRenameColumnSQL(t *testing.T) {
+	got, err := renameColumnSQL("public", "people", "name", "full_name")
+	if err != nil {
+		t.Fatalf("renameColumnSQL: %v", err)
+	}
+	want := `ALTER TABLE "public"."people" RENAME COLUMN "name" TO "full_name"`
+	if got != want {
+		t.Fatalf("rename column SQL\n got: %s\nwant: %s", got, want)
+	}
+	if _, err := renameColumnSQL("public", "people", "name", "bad name"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("expected invalid new name rejection, got %v", err)
+	}
+	if _, err := renameColumnSQL("public", "people", `n"ame`, "x"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("expected invalid source column rejection, got %v", err)
+	}
+}
+
+func TestAlterColumnTypeSQL(t *testing.T) {
+	got, err := alterColumnTypeSQL("public", "people", "age", "integer", "")
+	if err != nil {
+		t.Fatalf("alterColumnTypeSQL: %v", err)
+	}
+	want := `ALTER TABLE "public"."people" ALTER COLUMN "age" TYPE integer`
+	if got != want {
+		t.Fatalf("alter column SQL\n got: %s\nwant: %s", got, want)
+	}
+	got, err = alterColumnTypeSQL("public", "people", "age", "integer", "age::integer")
+	if err != nil {
+		t.Fatalf("alterColumnTypeSQL with using: %v", err)
+	}
+	want = `ALTER TABLE "public"."people" ALTER COLUMN "age" TYPE integer USING age::integer`
+	if got != want {
+		t.Fatalf("alter column USING SQL\n got: %s\nwant: %s", got, want)
+	}
+	if _, err := alterColumnTypeSQL("public", "people", "age", "integer; DROP TABLE x", ""); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("expected unsafe type rejection, got %v", err)
+	}
+	if _, err := alterColumnTypeSQL("public", "people", "age", "integer", "age::int; DROP TABLE x"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("expected unsafe USING rejection, got %v", err)
+	}
+	if _, err := alterColumnTypeSQL("public", "people", `a"ge`, "integer", ""); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("expected invalid column rejection, got %v", err)
+	}
+}
+
+func TestDropConstraintSQL(t *testing.T) {
+	got, err := dropConstraintSQL("public", "people", "people_pkey")
+	if err != nil {
+		t.Fatalf("dropConstraintSQL: %v", err)
+	}
+	want := `ALTER TABLE "public"."people" DROP CONSTRAINT "people_pkey"`
+	if got != want {
+		t.Fatalf("drop constraint SQL\n got: %s\nwant: %s", got, want)
+	}
+	if _, err := dropConstraintSQL("public", "people", "bad name"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("expected invalid constraint name rejection, got %v", err)
+	}
+}
+
+func TestAddConstraintSQL(t *testing.T) {
+	cases := []struct {
+		name string
+		req  constraintRequest
+		want string
+	}{
+		{
+			name: "primary key",
+			req:  constraintRequest{Name: "people_pkey", Type: constraintPrimaryKey, Columns: []any{"id"}},
+			want: `ALTER TABLE "public"."people" ADD CONSTRAINT "people_pkey" PRIMARY KEY ("id")`,
+		},
+		{
+			name: "unique multi-column",
+			req:  constraintRequest{Name: "uq_name_email", Type: constraintUnique, Columns: []any{"name", "email"}},
+			want: `ALTER TABLE "public"."people" ADD CONSTRAINT "uq_name_email" UNIQUE ("name", "email")`,
+		},
+		{
+			name: "check",
+			req:  constraintRequest{Name: "ck_age", Type: constraintCheck, Check: "age > 0"},
+			want: `ALTER TABLE "public"."people" ADD CONSTRAINT "ck_age" CHECK (age > 0)`,
+		},
+		{
+			name: "foreign key bare table",
+			req:  constraintRequest{Name: "fk_org", Type: constraintForeignKey, Columns: []any{"org_id"}, RefTable: "orgs", RefColumns: "id"},
+			want: `ALTER TABLE "public"."people" ADD CONSTRAINT "fk_org" FOREIGN KEY ("org_id") REFERENCES "orgs" ("id")`,
+		},
+		{
+			name: "foreign key qualified with on delete",
+			req:  constraintRequest{Name: "fk_org", Type: constraintForeignKey, Columns: []any{"org_id"}, RefTable: "public.orgs", RefColumns: "id", OnDelete: "cascade"},
+			want: `ALTER TABLE "public"."people" ADD CONSTRAINT "fk_org" FOREIGN KEY ("org_id") REFERENCES "public"."orgs" ("id") ON DELETE CASCADE`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := addConstraintSQL("public", "people", tc.req)
+			if err != nil {
+				t.Fatalf("addConstraintSQL: %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("add constraint SQL\n got: %s\nwant: %s", got, tc.want)
+			}
+		})
+	}
+
+	bad := []struct {
+		name string
+		req  constraintRequest
+	}{
+		{"bad name", constraintRequest{Name: "bad name", Type: constraintPrimaryKey, Columns: []any{"id"}}},
+		{"bad column", constraintRequest{Name: "c", Type: constraintPrimaryKey, Columns: []any{`i"d`}}},
+		{"unsafe check", constraintRequest{Name: "c", Type: constraintCheck, Check: "1=1; DROP TABLE x"}},
+		{"empty check", constraintRequest{Name: "c", Type: constraintCheck}},
+		{"fk bad ref table", constraintRequest{Name: "c", Type: constraintForeignKey, Columns: []any{"org_id"}, RefTable: "or gs", RefColumns: "id"}},
+		{"fk bad ref column", constraintRequest{Name: "c", Type: constraintForeignKey, Columns: []any{"org_id"}, RefTable: "orgs", RefColumns: `i"d`}},
+		{"fk bad on delete", constraintRequest{Name: "c", Type: constraintForeignKey, Columns: []any{"org_id"}, RefTable: "orgs", RefColumns: "id", OnDelete: "explode"}},
+		{"unknown type", constraintRequest{Name: "c", Type: "wat", Columns: []any{"id"}}},
+	}
+	for _, tc := range bad {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := addConstraintSQL("public", "people", tc.req); !errors.Is(err, plugin.ErrInvalidInput) {
+				t.Fatalf("expected ErrInvalidInput, got %v", err)
+			}
+		})
+	}
+}
+
 func TestTreeIsDatabaseRooted(t *testing.T) {
 	m := New().Manifest()
 	if len(m.Tree) != 1 || m.Tree[0].Key != "databases" {

@@ -78,7 +78,7 @@ func serverResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "Schemas"},
 			Tabs: []plugin.Panel{
-				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.schemas.list"}, Config: plugin.TableConfig{Columns: schemaColumns()}},
+				{Key: "schemas", Label: "Schemas", Icon: icon("folder-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.schemas.list"}, Config: plugin.TableConfig{Columns: schemaColumns(), ActionIDs: []string{"oracle.schema.create"}, RowActionIDs: []string{"oracle.schema.drop"}}},
 				{Key: "console", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS}, Config: queryConfig("SELECT SYSDATE AS now FROM dual")},
 			},
 		},
@@ -109,13 +109,13 @@ func tableResource() plugin.ResourceType {
 		Columns: tableColumns(),
 		Actions: plugin.ResourceActions{
 			Row:    []string{"oracle.table.truncate", "oracle.table.drop"},
-			Detail: []string{"oracle.table.truncate", "oracle.table.drop"},
+			Detail: []string{"oracle.table.rename", "oracle.table.truncate", "oracle.table.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "data", Label: "Data", Icon: icon("table"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.rows", Params: objectParams()}, Config: dataGridConfig()},
-			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"oracle.column.add"}, RowActionIDs: []string{"oracle.column.drop"}}},
+			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.columns", Params: objectParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"oracle.column.add"}, RowActionIDs: []string{"oracle.column.alter", "oracle.column.rename", "oracle.column.drop"}}},
 			{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.indexes", Params: objectParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"oracle.index.create"}, RowActionIDs: []string{"oracle.index.drop"}}},
-			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.constraints", Params: objectParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}},
+			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "oracle.table.constraints", Params: objectParams()}, Config: plugin.TableConfig{Columns: constraintColumns(), ActionIDs: []string{"oracle.constraint.add"}, RowActionIDs: []string{"oracle.constraint.drop"}}},
 			{Key: "sql", Label: "SQL", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: "oracle.query", Method: plugin.MethodWS, Params: map[string]string{"schema": "${resource.namespace}"}}, Config: queryConfig("SELECT * FROM ${resource.name} FETCH FIRST 100 ROWS ONLY")},
 		}},
 	}
@@ -268,11 +268,18 @@ func constraintColumns() []plugin.Column {
 
 func actions() []plugin.Action {
 	return []plugin.Action{
+		{ID: "oracle.schema.create", Label: "Create schema", Icon: icon("folder-plus"), RouteID: "oracle.schema.create", OnSuccess: &plugin.ActionSuccess{SelectTab: "schemas"}},
+		{ID: "oracle.schema.drop", Label: "Drop schema", Icon: icon("trash-2"), RouteID: "oracle.schema.drop", Params: map[string]string{"schema": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this schema (user)? The user and every object it owns are permanently deleted.", OnSuccess: &plugin.ActionSuccess{SelectTab: "schemas"}},
 		{ID: "oracle.table.create", Label: "Create table", Icon: icon("plus"), RouteID: "oracle.table.create", Params: map[string]string{"schema": "${resource.name}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "tables"}},
+		{ID: "oracle.table.rename", Label: "Rename table", Icon: icon("pencil"), RouteID: "oracle.table.rename", Params: objectParams()},
 		{ID: "oracle.column.add", Label: "Add column", Icon: icon("columns-3"), RouteID: "oracle.column.add", Params: objectParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
+		{ID: "oracle.column.alter", Label: "Modify column", Icon: icon("pencil"), RouteID: "oracle.column.alter", Params: map[string]string{"id": "${resource.scope}", "name": "${resource.name}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
+		{ID: "oracle.column.rename", Label: "Rename column", Icon: icon("pencil-line"), RouteID: "oracle.column.rename", Params: map[string]string{"id": "${resource.scope}", "name": "${resource.name}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "oracle.column.drop", Label: "Drop column", Icon: icon("trash"), RouteID: "oracle.column.drop", Params: map[string]string{"id": "${resource.scope}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this column? Its data is permanently removed.", OnSuccess: &plugin.ActionSuccess{SelectTab: "columns"}},
 		{ID: "oracle.index.create", Label: "Create index", Icon: icon("plus"), RouteID: "oracle.index.create", Params: objectParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
 		{ID: "oracle.index.drop", Label: "Drop index", Icon: icon("trash"), RouteID: "oracle.index.drop", Params: map[string]string{"id": "${resource.scope}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this index?", OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: "oracle.constraint.add", Label: "Add constraint", Icon: icon("plus"), RouteID: "oracle.constraint.add", Params: objectParams(), OnSuccess: &plugin.ActionSuccess{SelectTab: "constraints"}},
+		{ID: "oracle.constraint.drop", Label: "Drop constraint", Icon: icon("trash"), RouteID: "oracle.constraint.drop", Params: map[string]string{"id": "${resource.scope}", "name": "${resource.name}"}, Confirm: true, ConfirmText: "Drop this constraint?", OnSuccess: &plugin.ActionSuccess{SelectTab: "constraints"}},
 		{ID: "oracle.table.truncate", Label: "Truncate", Icon: icon("trash"), RouteID: "oracle.table.truncate", Params: objectParams(), Confirm: true, ConfirmText: "Truncate this table? Every row will be deleted."},
 		{ID: "oracle.table.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "oracle.table.drop", Params: objectParams(), Confirm: true, ConfirmText: "Drop this table? The table definition and data will be permanently deleted."},
 		{ID: "oracle.view.drop", Label: "Drop", Icon: icon("trash-2"), RouteID: "oracle.view.drop", Params: objectParams(), Confirm: true, ConfirmText: "Drop this view?"},

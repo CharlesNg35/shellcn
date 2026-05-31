@@ -58,6 +58,19 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 		t.Fatalf("created database was not listed: %#v", databases)
 	}
 
+	// Drop the database through the handler (forces SINGLE_USER first).
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"database": createdDatabase}, nil, nil)); err != nil {
+		t.Fatalf("drop database: %v", err)
+	}
+	var dbExists int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sys.databases WHERE name = @p1`, createdDatabase).Scan(&dbExists); err != nil || dbExists != 0 {
+		t.Fatalf("expected database dropped, got %d err=%v", dbExists, err)
+	}
+	// Dropping the connected database must be refused.
+	if _, err := dropDatabase(plugin.NewRequestContext(ctx, models.User{ID: "u1"}, s, map[string]string{"database": s.opts.Database}, nil, nil)); err == nil {
+		t.Fatal("dropping the connected database must be rejected")
+	}
+
 	seed(ctx, t, s)
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -180,6 +193,61 @@ func TestMSSQLPluginIntegration(t *testing.T) {
 	var cols int
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'people' AND COLUMN_NAME = 'access_token'`).Scan(&cols); err != nil || cols != 0 {
 		t.Fatalf("expected access_token column dropped, got %d err=%v", cols, err)
+	}
+
+	// Schema create + drop within the database.
+	if _, err := createSchema(rowMutationRC(ctx, s, map[string]string{"database": "shellcn"}, map[string]any{"name": "app"})); err != nil {
+		t.Fatalf("create schema: %v", err)
+	}
+	var schemaCount int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.schemas WHERE name = 'app'`).Scan(&schemaCount); err != nil || schemaCount != 1 {
+		t.Fatalf("expected schema app created, got %d err=%v", schemaCount, err)
+	}
+	if _, err := dropSchema(rowMutationRC(ctx, s, map[string]string{"database": "shellcn", "schema": "app"}, nil)); err != nil {
+		t.Fatalf("drop schema: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.schemas WHERE name = 'app'`).Scan(&schemaCount); err != nil || schemaCount != 0 {
+		t.Fatalf("expected schema app dropped, got %d err=%v", schemaCount, err)
+	}
+
+	// Alter column: widen and toggle nullability of the people.name column.
+	if _, err := alterColumn(rowMutationRC(ctx, s, params, map[string]any{"name": "name", "type": "nvarchar(512)", "nullable": true})); err != nil {
+		t.Fatalf("alter column: %v", err)
+	}
+	var maxLen int
+	var isNullable bool
+	if err := s.db.QueryRowContext(ctx, `SELECT c.max_length, c.is_nullable FROM [shellcn].sys.columns c JOIN [shellcn].sys.objects o ON o.object_id = c.object_id JOIN [shellcn].sys.schemas sc ON sc.schema_id = o.schema_id WHERE sc.name = 'dbo' AND o.name = 'people' AND c.name = 'name'`).Scan(&maxLen, &isNullable); err != nil {
+		t.Fatalf("read altered column: %v", err)
+	}
+	if maxLen != 1024 || !isNullable {
+		t.Fatalf("expected nvarchar(512) NULL (max_length 1024, nullable), got max_length=%d nullable=%v", maxLen, isNullable)
+	}
+
+	// Constraint add (UNIQUE) + drop on the people table.
+	if _, err := addConstraint(rowMutationRC(ctx, s, params, map[string]any{"name": "uq_people_name", "type": "UNIQUE", "columns": "name"})); err != nil {
+		t.Fatalf("add constraint: %v", err)
+	}
+	var constraintCount int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.key_constraints WHERE name = 'uq_people_name'`).Scan(&constraintCount); err != nil || constraintCount != 1 {
+		t.Fatalf("expected constraint uq_people_name created, got %d err=%v", constraintCount, err)
+	}
+	if _, err := dropConstraint(rowMutationRC(ctx, s, map[string]string{"id": objectID("shellcn", "dbo", "people"), "name": "uq_people_name"}, nil)); err != nil {
+		t.Fatalf("drop constraint: %v", err)
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.key_constraints WHERE name = 'uq_people_name'`).Scan(&constraintCount); err != nil || constraintCount != 0 {
+		t.Fatalf("expected constraint uq_people_name dropped, got %d err=%v", constraintCount, err)
+	}
+
+	// Rename table people -> humans, then back so later assertions still match.
+	if _, err := renameTable(rowMutationRC(ctx, s, params, map[string]any{"name": "humans"})); err != nil {
+		t.Fatalf("rename table: %v", err)
+	}
+	var renamed int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM [shellcn].sys.objects o JOIN [shellcn].sys.schemas sc ON sc.schema_id = o.schema_id WHERE sc.name = 'dbo' AND o.name = 'humans'`).Scan(&renamed); err != nil || renamed != 1 {
+		t.Fatalf("expected table renamed to humans, got %d err=%v", renamed, err)
+	}
+	if _, err := renameTable(rowMutationRC(ctx, s, map[string]string{"id": objectID("shellcn", "dbo", "humans")}, map[string]any{"name": "people"})); err != nil {
+		t.Fatalf("rename table back: %v", err)
 	}
 
 	// Foreign-key cells carry generic _links to the referenced table.

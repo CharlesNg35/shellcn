@@ -156,6 +156,73 @@ func TestMutationRejectsUnsafeIdentifier(t *testing.T) {
 	}
 }
 
+func TestAddIndexStatement(t *testing.T) {
+	clause, err := buildAddIndex("ix_value", "value", "minmax", 4)
+	if err != nil {
+		t.Fatalf("add index build failed: %v", err)
+	}
+	if clause != "ADD INDEX `ix_value` value TYPE minmax GRANULARITY 4" {
+		t.Fatalf("unexpected add index clause: %q", clause)
+	}
+	// Non-positive granularity defaults to 1; set(0) is a valid index type.
+	clause, err = buildAddIndex("ix_name", "lower(name)", "set(0)", 0)
+	if err != nil {
+		t.Fatalf("add index build failed: %v", err)
+	}
+	if clause != "ADD INDEX `ix_name` lower(name) TYPE set(0) GRANULARITY 1" {
+		t.Fatalf("unexpected add index clause: %q", clause)
+	}
+}
+
+func TestAddIndexRejectsUnsafeInput(t *testing.T) {
+	if _, err := buildAddIndex("bad-name", "value", "minmax", 1); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unsafe index name must be rejected, got %v", err)
+	}
+	if _, err := buildAddIndex("ix", "value; DROP TABLE t", "minmax", 1); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unsafe index expression must be rejected, got %v", err)
+	}
+	if _, err := buildAddIndex("ix", "value", "minmax; DROP TABLE t", 1); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unsafe index type must be rejected, got %v", err)
+	}
+	if _, err := buildAddIndex("ix", "", "minmax", 1); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("empty index expression must be rejected, got %v", err)
+	}
+}
+
+func TestAddConstraintStatement(t *testing.T) {
+	clause, err := buildAddConstraint("age_positive", "age >= 0")
+	if err != nil {
+		t.Fatalf("add constraint build failed: %v", err)
+	}
+	if clause != "ADD CONSTRAINT `age_positive` CHECK age >= 0" {
+		t.Fatalf("unexpected add constraint clause: %q", clause)
+	}
+}
+
+func TestAddConstraintRejectsUnsafeInput(t *testing.T) {
+	if _, err := buildAddConstraint("bad name", "age >= 0"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unsafe constraint name must be rejected, got %v", err)
+	}
+	if _, err := buildAddConstraint("c", "age >= 0; DROP TABLE t"); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unsafe constraint expression must be rejected, got %v", err)
+	}
+	if _, err := buildAddConstraint("c", ""); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("empty constraint expression must be rejected, got %v", err)
+	}
+}
+
+func TestModifyColumnReusesDDLColumn(t *testing.T) {
+	// ALTER ... MODIFY COLUMN reuses ddlColumn, so the rendered column definition
+	// matches the ADD COLUMN form, including the Nullable() wrap and DEFAULT.
+	col, err := ddlColumn(sqldb.ColumnSpec{Name: "score", Type: "Float64", Default: "0"})
+	if err != nil {
+		t.Fatalf("valid modify column rejected: %v", err)
+	}
+	if col != "`score` Float64 DEFAULT 0" {
+		t.Fatalf("unexpected modify column: %q", col)
+	}
+}
+
 func TestReadOnlyBlocksRowMutation(t *testing.T) {
 	if err := ensureWritable(&Session{opts: options{ReadOnly: true}}); !errors.Is(err, plugin.ErrForbidden) {
 		t.Fatalf("read-only mode must block row mutations, got %v", err)
