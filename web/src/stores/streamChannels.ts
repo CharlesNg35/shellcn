@@ -6,10 +6,14 @@ export type ChannelStatus = "connecting" | "open" | "closed" | "error";
 
 // The browser WebSocket satisfies this; tests inject a fake.
 export interface SocketLike {
+  readyState: number;
   send(data: string): void;
   close(): void;
   addEventListener(type: string, listener: (ev: unknown) => void): void;
 }
+
+// WebSocket.OPEN; referenced numerically so it works without a DOM lib in tests.
+const WS_OPEN = 1;
 
 type Listener = (data: string) => void;
 
@@ -79,8 +83,12 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     return () => channel.listeners.delete(fn);
   }
 
+  // Only send on an open socket: a panel may push input (e.g. a resize frame)
+  // while the stream is still connecting or after it closed, which would throw.
   function send(key: string, data: string): void {
-    channels.get(key)?.socket.send(data);
+    const channel = channels.get(key);
+    if (channel && channel.socket.readyState === WS_OPEN)
+      channel.socket.send(data);
   }
 
   function buffer(key: string): string[] {

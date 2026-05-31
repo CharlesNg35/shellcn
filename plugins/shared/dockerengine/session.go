@@ -18,6 +18,7 @@ import (
 	dockerclient "github.com/moby/moby/client"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/loopback"
 )
 
 type endpoint struct {
@@ -35,6 +36,9 @@ type Session struct {
 	// net dials arbitrary addresses over the connection's transport — used to
 	// reach a container's web port for the browser proxy.
 	net plugin.NetTransport
+	// bridge fronts the agent tunnel as a local socket so the exec hijack works
+	// (nil for direct transport).
+	bridge *loopback.Bridge
 }
 
 // Client exposes the moby client so plugin-specific handlers (swarm services,
@@ -52,14 +56,33 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig, defaultSocket string
 	if err != nil {
 		return nil, err
 	}
-	dial := func(ctx context.Context, _, _ string) (net.Conn, error) {
+	tunnelDial := func(ctx context.Context) (net.Conn, error) {
 		return cfg.Net.DialContext(ctx, ep.network, ep.address)
 	}
+	dial := func(ctx context.Context, _, _ string) (net.Conn, error) { return tunnelDial(ctx) }
+
+	// The moby exec hijack bypasses a custom dialer and needs a real socket, so
+	// over the agent we front the tunnel with a loopback bridge and dial that —
+	// mirroring how the k8s exec/port-forward upgraders reach the agent.
+	var bridge *loopback.Bridge
+	if cfg.Transport == plugin.TransportAgent {
+		if bridge, err = loopback.New(tunnelDial); err != nil {
+			return nil, fmt.Errorf("%w: agent bridge: %v", plugin.ErrUnavailable, err)
+		}
+		addr := bridge.Addr()
+		dial = func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		}
+	}
+
 	cli, err := dockerclient.New(
 		dockerclient.WithHost("http://docker"),
 		dockerclient.WithDialContext(dial),
 	)
 	if err != nil {
+		if bridge != nil {
+			_ = bridge.Close()
+		}
 		return nil, fmt.Errorf("%w: create docker client: %v", plugin.ErrUnavailable, err)
 	}
 	s := &Session{
@@ -67,6 +90,7 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig, defaultSocket string
 		endpoint: ep,
 		connID:   cfg.ConnectionID,
 		net:      cfg.Net,
+		bridge:   bridge,
 		http: &http.Client{Transport: &http.Transport{
 			DialContext: dial,
 		}},
@@ -136,7 +160,11 @@ func (s *Session) HealthCheck(ctx context.Context) error {
 }
 
 func (s *Session) Close() error {
-	return s.cli.Close()
+	err := s.cli.Close()
+	if s.bridge != nil {
+		_ = s.bridge.Close()
+	}
+	return err
 }
 
 func (s *Session) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (plugin.Channel, error) {
