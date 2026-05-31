@@ -47,7 +47,7 @@ func databaseResource() plugin.ResourceType {
 			{Key: "labels", Label: "Labels", Icon: icon("tags"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("labels.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: labelColumns(), ActionIDs: []string{rid("node.create")}, Exportable: true}},
 			{Key: "relationship_types", Label: "Relationship Types", Icon: icon("git-branch"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("relationship_types.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: relationshipTypeColumns(), ActionIDs: []string{rid("relationship.create")}, Exportable: true}},
 			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("indexes.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{rid("index.create")}, RowActionIDs: []string{rid("schema.drop")}, Exportable: true}},
-			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("constraints.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: constraintColumns(), RowActionIDs: []string{rid("schema.drop")}, Exportable: true}},
+			{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("constraints.list"), Params: map[string]string{"database": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: constraintColumns(), ActionIDs: []string{rid("constraint.create")}, RowActionIDs: []string{rid("schema.drop")}, Exportable: true}},
 			{Key: "cypher", Label: "Cypher", Icon: icon("square-terminal"), Type: plugin.PanelQueryEditor, Source: &plugin.DataSource{RouteID: rid("query"), Method: plugin.MethodWS, Params: map[string]string{"database": "${resource.uid}"}}, Config: queryConfig("MATCH (n) RETURN n LIMIT 25")},
 		}},
 	}
@@ -92,6 +92,7 @@ func nodeResource() plugin.ResourceType {
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("node.read"), Params: map[string]string{"id": "${resource.uid}"}}},
+			{Key: "properties", Label: "Properties", Icon: icon("braces"), Type: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("node.properties"), Params: map[string]string{"id": "${resource.uid}"}}, Config: propertiesEditorConfig(rid("node.update"))},
 			{Key: "relationships", Label: "Relationships", Icon: icon("git-branch"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: rid("node.relationships"), Params: map[string]string{"id": "${resource.uid}"}}, Config: plugin.TableConfig{Columns: relationshipColumns(), RowActionIDs: []string{rid("relationship.delete")}, Exportable: true}},
 		}},
 	}
@@ -108,6 +109,7 @@ func relationshipResource() plugin.ResourceType {
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.name}"}, Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("info"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: rid("relationship.read"), Params: map[string]string{"id": "${resource.uid}"}}},
+			{Key: "properties", Label: "Properties", Icon: icon("braces"), Type: plugin.PanelCodeEditor, Source: &plugin.DataSource{RouteID: rid("relationship.properties"), Params: map[string]string{"id": "${resource.uid}"}}, Config: propertiesEditorConfig(rid("relationship.update"))},
 		}},
 	}
 }
@@ -141,7 +143,17 @@ func actions() []plugin.Action {
 		{ID: rid("relationship.create"), Label: "Create relationship", Icon: icon("git-branch-plus"), RouteID: rid("relationship.create"), Params: map[string]string{"database": "${resource.namespace}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "relationships"}},
 		{ID: rid("relationship.delete"), Label: "Delete relationship", Icon: icon("trash"), RouteID: rid("relationship.delete"), Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Delete this relationship?"},
 		{ID: rid("index.create"), Label: "Create index", Icon: icon("plus"), RouteID: rid("index.create"), Params: map[string]string{"database": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "indexes"}},
+		{ID: rid("constraint.create"), Label: "Create constraint", Icon: icon("plus"), RouteID: rid("constraint.create"), Params: map[string]string{"database": "${resource.uid}"}, OnSuccess: &plugin.ActionSuccess{SelectTab: "constraints"}},
 		{ID: rid("schema.drop"), Label: "Drop", Icon: icon("trash"), RouteID: rid("schema.drop"), Params: map[string]string{"id": "${resource.uid}"}, Confirm: true, ConfirmText: "Drop this index or constraint?"},
+	}
+}
+
+func propertiesEditorConfig(saveRouteID string) plugin.CodeEditorConfig {
+	return plugin.CodeEditorConfig{
+		Language:    "json",
+		SaveRouteID: saveRouteID,
+		SaveMethod:  plugin.MethodPut,
+		SaveParams:  map[string]string{"id": "${resource.uid}"},
 	}
 }
 

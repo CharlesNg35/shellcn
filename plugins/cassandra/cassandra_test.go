@@ -95,3 +95,98 @@ func TestCQLDDLValidation(t *testing.T) {
 		t.Fatal("unsafe primary key accepted")
 	}
 }
+
+func TestRowMutationCQLGeneration(t *testing.T) {
+	table := qualified("shop", "orders")
+
+	insertCQL, insertArgs, err := dialect.Insert(table, map[string]any{"id": "u1", "total": float64(42)})
+	if err != nil {
+		t.Fatalf("insert build: %v", err)
+	}
+	if insertCQL != `INSERT INTO "shop"."orders" ("id", "total") VALUES (?, ?)` {
+		t.Fatalf("unexpected insert CQL: %s", insertCQL)
+	}
+	if len(insertArgs) != 2 || insertArgs[0] != "u1" || insertArgs[1] != int64(42) {
+		t.Fatalf("unexpected insert args: %#v", insertArgs)
+	}
+
+	updateCQL, updateArgs, err := dialect.Update(table, map[string]any{"id": "u1"}, map[string]any{"total": float64(7)})
+	if err != nil {
+		t.Fatalf("update build: %v", err)
+	}
+	if updateCQL != `UPDATE "shop"."orders" SET "total" = ? WHERE "id" = ?` {
+		t.Fatalf("unexpected update CQL: %s", updateCQL)
+	}
+	if len(updateArgs) != 2 || updateArgs[0] != int64(7) || updateArgs[1] != "u1" {
+		t.Fatalf("unexpected update args: %#v", updateArgs)
+	}
+
+	deleteCQL, deleteArgs, err := dialect.Delete(table, map[string]any{"tenant": "t1", "id": "u1"})
+	if err != nil {
+		t.Fatalf("delete build: %v", err)
+	}
+	if deleteCQL != `DELETE FROM "shop"."orders" WHERE "id" = ? AND "tenant" = ?` {
+		t.Fatalf("unexpected delete CQL: %s", deleteCQL)
+	}
+	if len(deleteArgs) != 2 || deleteArgs[0] != "u1" || deleteArgs[1] != "t1" {
+		t.Fatalf("unexpected delete args: %#v", deleteArgs)
+	}
+
+	if _, _, err := dialect.Insert(table, nil); err == nil {
+		t.Fatal("insert with no values should be rejected")
+	}
+	if _, _, err := dialect.Delete(table, nil); err == nil {
+		t.Fatal("delete with no key should be rejected (would sweep the table)")
+	}
+}
+
+func TestRowMutationCQLRejectsUnsafeIdentifier(t *testing.T) {
+	table := qualified("shop", "orders")
+	if _, _, err := dialect.Insert(table, map[string]any{"bad-col": 1}); err == nil {
+		t.Fatal("insert with unsafe column identifier should be rejected")
+	}
+	if _, _, err := dialect.Update(table, map[string]any{"id": "x"}, map[string]any{"bad col": 1}); err == nil {
+		t.Fatal("update with unsafe set identifier should be rejected")
+	}
+}
+
+func TestAttachRowKeysGuards(t *testing.T) {
+	// No primary key: rows stay read-only (no _key attached).
+	rows := []row{{"id": "u1"}}
+	attachRowKeys(rows, nil, nil)
+	if _, ok := rows[0]["_key"]; ok {
+		t.Fatal("keyless table must not receive a _key (stays read-only)")
+	}
+
+	// Sensitive key column: refuse to ship the raw key value to the client.
+	rows = []row{{"api_key": "secret", "value": 1}}
+	attachRowKeys(rows, []string{"api_key"}, sqldb.DefaultRedactColumnPatterns())
+	if _, ok := rows[0]["_key"]; ok {
+		t.Fatal("sensitive key column must keep the grid read-only")
+	}
+
+	// Usable composite key: _key carries exactly the key columns.
+	rows = []row{{"tenant": "t1", "id": "u1", "total": 9}}
+	attachRowKeys(rows, []string{"tenant", "id"}, nil)
+	key, ok := rows[0]["_key"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected _key map, got %#v", rows[0]["_key"])
+	}
+	if len(key) != 2 || key["tenant"] != "t1" || key["id"] != "u1" {
+		t.Fatalf("unexpected _key: %#v", key)
+	}
+}
+
+func TestValidateRowKeyRejectsNonPrimaryKey(t *testing.T) {
+	// A key that is not exactly the primary key must be rejected so a mutation
+	// cannot widen its WHERE clause beyond a single identified row.
+	if err := sqldb.ValidateRowKey([]string{"id"}, map[string]any{"name": "x"}); err == nil {
+		t.Fatal("non-primary-key column accepted as row key")
+	}
+	if err := sqldb.ValidateRowKey(nil, map[string]any{"id": "x"}); !errors.Is(err, plugin.ErrForbidden) {
+		t.Fatalf("keyless table should forbid mutations, got %v", err)
+	}
+	if err := sqldb.ValidateRowKey([]string{"id"}, map[string]any{"id": "x"}); err != nil {
+		t.Fatalf("exact primary key rejected: %v", err)
+	}
+}

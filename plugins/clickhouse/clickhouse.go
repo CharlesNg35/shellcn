@@ -125,7 +125,7 @@ func tableResource() plugin.ResourceType {
 		Detail: plugin.DetailView{
 			Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"},
 			Tabs: []plugin.Panel{
-				{Key: "data", Label: "Data", Icon: icon("table-properties"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}},
+				{Key: "data", Label: "Data", Icon: icon("table-properties"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.rows", Params: tableParams()}, Config: dataGridConfig()},
 				{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"clickhouse.column.add"}, RowActionIDs: []string{"clickhouse.column.drop"}}},
 				{Key: "indexes", Label: "Indexes", Icon: icon("key-round"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), RowActionIDs: []string{"clickhouse.index.drop"}}},
 				{Key: "constraints", Label: "Constraints", Icon: icon("shield-check"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "clickhouse.table.constraints", Params: tableParams()}, Config: plugin.TableConfig{Columns: constraintColumns()}},
@@ -214,6 +214,24 @@ func userResource() plugin.ResourceType {
 
 func tableParams() map[string]string {
 	return map[string]string{"database": "${resource.namespace}", "table": "${resource.name}"}
+}
+
+// dataGridConfig makes the table Data tab editable. ClickHouse INSERTs are cheap,
+// but UPDATE/DELETE become asynchronous ALTER mutations, so the renderer's
+// confirmation flow guards them via the destructive route risk. Rows are targeted
+// by the table's sorting key, which the rows handler attaches as _key; tables
+// without a sorting key (ORDER BY tuple()) ship no key and stay read-only.
+func dataGridConfig() plugin.TableConfig {
+	return plugin.TableConfig{
+		Editable:      true,
+		StagedEdits:   true,
+		Exportable:    true,
+		EmptyText:     "No rows.",
+		Insert:        &plugin.DataSource{RouteID: "clickhouse.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
+		Update:        &plugin.DataSource{RouteID: "clickhouse.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
+		Delete:        &plugin.DataSource{RouteID: "clickhouse.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		ColumnsSource: &plugin.DataSource{RouteID: "clickhouse.table.columns", Params: tableParams()},
+	}
 }
 
 func queryConfig(initial string) plugin.QueryEditorConfig {

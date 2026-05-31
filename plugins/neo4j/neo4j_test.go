@@ -3,6 +3,7 @@ package neo4j
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
@@ -193,6 +194,94 @@ func TestManifestReferencesResolve(t *testing.T) {
 				t.Fatalf("resource %q tab %q points at missing route %q", res.Kind, tab.Key, tab.Source.RouteID)
 			}
 		}
+	}
+}
+
+func TestSetPropertiesQuery(t *testing.T) {
+	props := map[string]any{"name": "Ada", "code": "MATCH (n) DETACH DELETE n"}
+
+	q, params := setPropertiesQuery("n", "MATCH (n) WHERE elementId(n) = $id", "4:abc", props)
+	if q != "MATCH (n) WHERE elementId(n) = $id SET n = $props" {
+		t.Fatalf("unexpected node update query: %q", q)
+	}
+	if params["id"] != "4:abc" {
+		t.Fatalf("id param not carried: %#v", params)
+	}
+	// Property values are parameterised, never interpolated into the statement —
+	// a value that itself contains Cypher must not leak into the query text.
+	got, ok := params["props"].(map[string]any)
+	if !ok || got["code"] != props["code"] {
+		t.Fatalf("props must be passed as a parameter map: %#v", params["props"])
+	}
+	if strings.Contains(q, "Ada") || strings.Contains(q, "DETACH") {
+		t.Fatalf("query must not interpolate property values: %q", q)
+	}
+
+	rq, rparams := setPropertiesQuery("r", "MATCH ()-[r]->() WHERE elementId(r) = $id", "5:rel", props)
+	if rq != "MATCH ()-[r]->() WHERE elementId(r) = $id SET r = $props" {
+		t.Fatalf("unexpected relationship update query: %q", rq)
+	}
+	if rparams["id"] != "5:rel" {
+		t.Fatalf("relationship id param not carried: %#v", rparams)
+	}
+}
+
+func TestParsePropertiesContent(t *testing.T) {
+	got, err := parsePropertiesContent(`{"name":"Ada","age":36}`)
+	if err != nil {
+		t.Fatalf("parse properties: %v", err)
+	}
+	if got["name"] != "Ada" {
+		t.Fatalf("unexpected parsed properties: %#v", got)
+	}
+
+	empty, err := parsePropertiesContent("   ")
+	if err != nil || len(empty) != 0 {
+		t.Fatalf("blank content should yield empty map: %#v %v", empty, err)
+	}
+
+	if _, err := parsePropertiesContent(`[1,2,3]`); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("non-object JSON should be rejected, got %v", err)
+	}
+	if _, err := parsePropertiesContent(`{not json}`); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("invalid JSON should be rejected, got %v", err)
+	}
+}
+
+func TestConstraintCreateQuery(t *testing.T) {
+	tests := []struct {
+		name   string
+		entity string
+		ctype  string
+		label  string
+		props  []string
+		want   string
+	}{
+		{name: "unique single", entity: "node", ctype: "unique", label: "Person", props: []string{"email"}, want: "CREATE CONSTRAINT `c1` FOR (n:`Person`) REQUIRE n.`email` IS UNIQUE"},
+		{name: "exists", entity: "node", ctype: "exists", label: "Person", props: []string{"name"}, want: "CREATE CONSTRAINT `c1` FOR (n:`Person`) REQUIRE n.`name` IS NOT NULL"},
+		{name: "node key multi", entity: "node", ctype: "node_key", label: "Person", props: []string{"first", "last"}, want: "CREATE CONSTRAINT `c1` FOR (n:`Person`) REQUIRE (n.`first`, n.`last`) IS NODE KEY"},
+		{name: "relationship", entity: "relationship", ctype: "exists", label: "KNOWS", props: []string{"since"}, want: "CREATE CONSTRAINT `c1` FOR ()-[r:`KNOWS`]-() REQUIRE r.`since` IS NOT NULL"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := constraintCreateQuery("c1", tt.entity, tt.ctype, tt.label, tt.props)
+			if err != nil {
+				t.Fatalf("build constraint query: %v", err)
+			}
+			if q != tt.want {
+				t.Fatalf("constraint query mismatch:\n got: %q\nwant: %q", q, tt.want)
+			}
+		})
+	}
+
+	if _, err := constraintCreateQuery("c1", "node", "unique", "Person", nil); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("missing properties should error, got %v", err)
+	}
+	if _, err := constraintCreateQuery("c1", "node", "bogus", "Person", []string{"x"}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unknown constraint type should error, got %v", err)
+	}
+	if _, err := constraintCreateQuery("bad name", "node", "unique", "Person", []string{"x"}); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("unsafe constraint name should error, got %v", err)
 	}
 }
 

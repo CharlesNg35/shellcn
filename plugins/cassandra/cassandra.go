@@ -116,7 +116,7 @@ func tableResource() plugin.ResourceType {
 			Detail: []string{"cassandra.table.truncate", "cassandra.table.drop"},
 		},
 		Detail: plugin.DetailView{Header: plugin.HeaderSpec{Title: "${resource.namespace}.${resource.name}"}, Tabs: []plugin.Panel{
-			{Key: "data", Label: "Data", Icon: icon("table-properties"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.rows", Params: tableParams()}, Config: plugin.TableConfig{Exportable: true}},
+			{Key: "data", Label: "Data", Icon: icon("table-properties"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.rows", Params: tableParams()}, Config: dataGridConfig()},
 			{Key: "columns", Label: "Columns", Icon: icon("columns-3"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()}, Config: plugin.TableConfig{Columns: columnColumns(), ActionIDs: []string{"cassandra.column.add"}, RowActionIDs: []string{"cassandra.column.drop"}}},
 			{Key: "indexes", Label: "Indexes", Icon: icon("list-tree"), Type: plugin.PanelTable, Source: &plugin.DataSource{RouteID: "cassandra.table.indexes", Params: tableParams()}, Config: plugin.TableConfig{Columns: indexColumns(), ActionIDs: []string{"cassandra.index.create"}, RowActionIDs: []string{"cassandra.index.drop"}}},
 			{Key: "definition", Label: "Definition", Icon: icon("code"), Type: plugin.PanelDocument, Source: &plugin.DataSource{RouteID: "cassandra.table.definition", Params: tableParams()}},
@@ -177,6 +177,22 @@ func nodeResource() plugin.ResourceType {
 
 func tableParams() map[string]string {
 	return map[string]string{"keyspace": "${resource.namespace}", "table": "${resource.name}"}
+}
+
+// dataGridConfig makes the table Data tab an editable grid. RowKey is left empty
+// so the renderer targets rows by the per-row _key (primary-key) map the rows
+// handler attaches; tables without a usable key carry no _key and stay read-only.
+func dataGridConfig() plugin.TableConfig {
+	return plugin.TableConfig{
+		Editable:      true,
+		StagedEdits:   true,
+		Exportable:    true,
+		EmptyText:     "No rows.",
+		Insert:        &plugin.DataSource{RouteID: "cassandra.table.row.insert", Method: plugin.MethodPost, Params: tableParams()},
+		Update:        &plugin.DataSource{RouteID: "cassandra.table.row.update", Method: plugin.MethodPatch, Params: tableParams()},
+		Delete:        &plugin.DataSource{RouteID: "cassandra.table.row.delete", Method: plugin.MethodDelete, Params: tableParams()},
+		ColumnsSource: &plugin.DataSource{RouteID: "cassandra.table.columns", Params: tableParams()},
+	}
 }
 
 func queryConfig(initial string) plugin.QueryEditorConfig {
