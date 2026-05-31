@@ -113,6 +113,16 @@ function writableConfig() {
   };
 }
 
+function bulkConfig() {
+  return {
+    ...writableConfig(),
+    moveRouteId: "ssh.sftp.move",
+    copyRouteId: "ssh.sftp.copy",
+    chmodRouteId: "ssh.sftp.chmod",
+    archiveRouteId: "ssh.sftp.archive",
+  };
+}
+
 function bodyButton(text: string): HTMLButtonElement | undefined {
   return [...document.body.querySelectorAll("button")].find(
     (b) => b.textContent?.trim() === text,
@@ -488,5 +498,148 @@ describe("FileBrowserPanel", () => {
     expect(del.url).toContain("p.path=%2FREADME.md");
     expect(del.init?.method).toBe("DELETE");
     expect(JSON.parse(String(del.init?.body))).toEqual({ path: "/README.md" });
+  });
+
+  it("shows the selection bar once an entry is selected via its checkbox", async () => {
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: bulkConfig(),
+      },
+    });
+    await flushPromises();
+
+    // No selection yet → no selection bar.
+    expect(w.text()).not.toContain("selected");
+
+    await w
+      .findAll('input[type="checkbox"]')
+      .find((c) => c.attributes("aria-label") === "Select README.md")!
+      .trigger("change");
+    await flushPromises();
+
+    expect(w.text()).toContain("1 selected");
+    // Bulk buttons gated on configured slots are present.
+    expect(w.findAll("button").some((b) => b.text().includes("Move"))).toBe(
+      true,
+    );
+    expect(w.findAll("button").some((b) => b.text().includes("Copy"))).toBe(
+      true,
+    );
+    expect(
+      w.findAll("button").some((b) => b.text().includes("Download zip")),
+    ).toBe(true);
+  });
+
+  it("hides a bulk button when its route id is absent", async () => {
+    const config = bulkConfig();
+    delete (config as { moveRouteId?: string }).moveRouteId;
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config,
+      },
+    });
+    await flushPromises();
+    await w
+      .findAll('input[type="checkbox"]')
+      .find((c) => c.attributes("aria-label") === "Select README.md")!
+      .trigger("change");
+    await flushPromises();
+
+    expect(w.text()).toContain("1 selected");
+    // Move slot removed → no Move button; Copy slot still present.
+    expect(w.findAll("button").some((b) => b.text().includes("Move"))).toBe(
+      false,
+    );
+    expect(w.findAll("button").some((b) => b.text().includes("Copy"))).toBe(
+      true,
+    );
+  });
+
+  it("runs bulk delete once per selected entry", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method && init.method !== "GET") return { body: { ok: true } };
+      return { body: { items: rootEntries, nextCursor: "" } };
+    });
+
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: bulkConfig(),
+      },
+    });
+    await flushPromises();
+
+    // Select both entries via the select-all checkbox in the toolbar... instead
+    // toggle each entry's checkbox.
+    for (const label of ["Select etc", "Select README.md"]) {
+      await w
+        .findAll('input[type="checkbox"]')
+        .find((c) => c.attributes("aria-label") === label)!
+        .trigger("change");
+    }
+    await flushPromises();
+    expect(w.text()).toContain("2 selected");
+
+    await w
+      .findAll("button")
+      .find((b) => b.text().includes("Delete"))!
+      .trigger("click");
+    await flushPromises();
+    bodyButton("Delete")!.click();
+    await flushPromises();
+
+    const deletes = calls.filter(
+      (c) => c.url.includes("ssh.sftp.delete") && c.init?.method === "DELETE",
+    );
+    expect(deletes.length).toBe(2);
+    const bodies = deletes.map((d) => JSON.parse(String(d.init?.body)).path);
+    expect(bodies.sort()).toEqual(["/README.md", "/etc"]);
+  });
+
+  it("sends a bulk move with the selection and destination", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.unstubAllGlobals();
+    installFetch((url, init) => {
+      calls.push({ url, init });
+      if (init?.method && init.method !== "GET") return { body: { ok: true } };
+      return { body: { items: rootEntries, nextCursor: "" } };
+    });
+
+    const w = mount(FileBrowserPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "ssh.sftp.list", params: { path: "/" } },
+        config: bulkConfig(),
+      },
+    });
+    await flushPromises();
+    await w
+      .findAll('input[type="checkbox"]')
+      .find((c) => c.attributes("aria-label") === "Select README.md")!
+      .trigger("change");
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((b) => b.text().includes("Move"))!
+      .trigger("click");
+    await setBodyInput("/destination/folder", "/archive");
+    bodyButton("Move")!.click();
+    await flushPromises();
+
+    const move = calls.find((c) => c.url.includes("ssh.sftp.move"))!;
+    expect(move.init?.method).toBe("POST");
+    expect(JSON.parse(String(move.init?.body))).toEqual({
+      paths: ["/README.md"],
+      dest: "/archive",
+    });
   });
 });

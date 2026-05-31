@@ -37,7 +37,12 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
-		Tabs:                []plugin.Panel{filesystem.FilesTab(protocolName)},
+		Tabs: []plugin.Panel{filesystem.FilesTab(
+			protocolName,
+			filesystem.WithMove(protocolName),
+			filesystem.WithCopy(protocolName),
+			filesystem.WithArchive(protocolName),
+		)},
 	}
 }
 
@@ -212,6 +217,14 @@ func (c *Client) Rename(_ context.Context, from, to string) error {
 
 func (c *Client) Remove(_ context.Context, p string, _ bool) error {
 	return c.client.Remove(p)
+}
+
+func (c *Client) Move(_ context.Context, src, dst string) error {
+	return c.client.Rename(src, dst, true)
+}
+
+func (c *Client) Copy(_ context.Context, src, dst string) error {
+	return c.client.Copy(src, dst, true)
 }
 
 func (c *Client) MapError(err error) error {

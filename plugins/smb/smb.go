@@ -38,7 +38,13 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"filesystem"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
-		Tabs:                []plugin.Panel{filesystem.FilesTab(protocolName)},
+		Tabs: []plugin.Panel{filesystem.FilesTab(
+			protocolName,
+			filesystem.WithMove(protocolName),
+			filesystem.WithCopy(protocolName),
+			filesystem.WithChmod(protocolName),
+			filesystem.WithArchive(protocolName),
+		)},
 	}
 }
 
@@ -263,6 +269,23 @@ func (c *Client) Rename(_ context.Context, from, to string) error {
 
 func (c *Client) Remove(_ context.Context, p string, _ bool) error {
 	return c.share.Remove(smbPath(p))
+}
+
+func (c *Client) Move(_ context.Context, src, dst string) error {
+	return c.share.Rename(smbPath(src), smbPath(dst))
+}
+
+func (c *Client) Copy(ctx context.Context, src, dst string) error {
+	r, err := c.Open(ctx, src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = r.Close() }()
+	return c.Write(ctx, dst, r)
+}
+
+func (c *Client) Chmod(_ context.Context, p string, mode os.FileMode) error {
+	return c.share.Chmod(smbPath(p), mode)
 }
 
 func smbPath(p string) string {

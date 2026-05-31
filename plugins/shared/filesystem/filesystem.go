@@ -90,28 +90,58 @@ func Routes(prefix, protocol string) []plugin.Route {
 		{ID: prefix + ".files.mkdir", Method: plugin.MethodPost, Path: "/files/mkdir/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.mkdir", Input: nameSchema("Folder"), Handle: mkdir},
 		{ID: prefix + ".files.rename", Method: plugin.MethodPatch, Path: "/files/rename/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.rename", Input: nameSchema("Name"), Handle: renameEntry},
 		{ID: prefix + ".files.delete", Method: plugin.MethodDelete, Path: "/files/delete/{path}", Permission: protocol + ".files.write", Risk: plugin.RiskDestructive, AuditEvent: protocol + ".files.delete", Handle: deleteEntry},
+		{ID: prefix + ".files.move", Method: plugin.MethodPost, Path: "/files/move", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.move", Handle: move},
+		{ID: prefix + ".files.copy", Method: plugin.MethodPost, Path: "/files/copy", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.copy", Handle: copyFiles},
+		{ID: prefix + ".files.chmod", Method: plugin.MethodPost, Path: "/files/chmod", Permission: protocol + ".files.write", Risk: plugin.RiskWrite, AuditEvent: protocol + ".files.chmod", Handle: chmod},
+		{ID: prefix + ".files.archive", Method: plugin.MethodPost, Path: "/files/archive", Permission: protocol + ".files.read", Risk: plugin.RiskSafe, AuditEvent: protocol + ".files.archive", Handle: archive},
 	}
 }
 
-func FilesTab(prefix string) plugin.Panel {
+// FilesOption opts a FilesTab into the bulk-operation slots a backend supports.
+type FilesOption func(*plugin.FileBrowserConfig)
+
+// WithMove populates the move bulk slot so the renderer surfaces that action.
+// A backend opts in only for ops it implements; sibling options cover copy,
+// chmod, and archive.
+func WithMove(prefix string) FilesOption {
+	return func(c *plugin.FileBrowserConfig) { c.MoveRouteID = prefix + ".files.move" }
+}
+
+func WithCopy(prefix string) FilesOption {
+	return func(c *plugin.FileBrowserConfig) { c.CopyRouteID = prefix + ".files.copy" }
+}
+
+func WithChmod(prefix string) FilesOption {
+	return func(c *plugin.FileBrowserConfig) { c.ChmodRouteID = prefix + ".files.chmod" }
+}
+
+func WithArchive(prefix string) FilesOption {
+	return func(c *plugin.FileBrowserConfig) { c.ArchiveRouteID = prefix + ".files.archive" }
+}
+
+func FilesTab(prefix string, opts ...FilesOption) plugin.Panel {
+	cfg := plugin.FileBrowserConfig{
+		PathParam:       "path",
+		ReadRouteID:     prefix + ".files.read",
+		DownloadRouteID: prefix + ".files.download",
+		WriteRouteID:    prefix + ".files.write",
+		UploadRouteID:   prefix + ".files.upload",
+		MkdirRouteID:    prefix + ".files.mkdir",
+		RenameRouteID:   prefix + ".files.rename",
+		DeleteRouteID:   prefix + ".files.delete",
+		Writable:        true,
+		MultipleUpload:  true,
+		MaxUploadBytes:  52428800,
+		UploadFieldName: "files",
+	}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	return plugin.Panel{
 		Key: "files", Label: "Files", Icon: plugin.Icon{Type: plugin.IconLucide, Value: "folder"},
 		Type:   plugin.PanelFileBrowser,
 		Source: &plugin.DataSource{RouteID: prefix + ".files.list", Params: map[string]string{"path": "."}},
-		Config: plugin.FileBrowserConfig{
-			PathParam:       "path",
-			ReadRouteID:     prefix + ".files.read",
-			DownloadRouteID: prefix + ".files.download",
-			WriteRouteID:    prefix + ".files.write",
-			UploadRouteID:   prefix + ".files.upload",
-			MkdirRouteID:    prefix + ".files.mkdir",
-			RenameRouteID:   prefix + ".files.rename",
-			DeleteRouteID:   prefix + ".files.delete",
-			Writable:        true,
-			MultipleUpload:  true,
-			MaxUploadBytes:  52428800,
-			UploadFieldName: "files",
-		},
+		Config: cfg,
 	}
 }
 

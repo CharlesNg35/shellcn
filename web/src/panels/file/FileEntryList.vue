@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Checkbox from "primevue/checkbox";
 import AppIcon from "../../components/AppIcon.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import PanelError from "../shared/PanelError.vue";
@@ -12,13 +13,22 @@ withDefaults(
     loading: boolean;
     error?: string | null;
     emptyText?: string;
+    selectable?: boolean;
+    selectedPaths?: Set<string>;
   }>(),
-  { selectedPath: undefined, error: null, emptyText: "This folder is empty." },
+  {
+    selectedPath: undefined,
+    error: null,
+    emptyText: "This folder is empty.",
+    selectable: false,
+    selectedPaths: () => new Set<string>(),
+  },
 );
 const emit = defineEmits<{
   select: [entry: FileEntry];
   open: [entry: FileEntry];
   retry: [];
+  toggle: [entry: FileEntry];
 }>();
 
 // Roving focus: arrow keys move between rows so the list is keyboard-navigable.
@@ -50,7 +60,19 @@ function moveFocus(event: KeyboardEvent, dir: 1 | -1): void {
       {{ emptyText }}
     </p>
     <ul v-else class="divide-y divide-surface-100 dark:divide-surface-800/70">
-      <li v-for="entry in entries" :key="entry.path">
+      <li v-for="entry in entries" :key="entry.path" class="flex items-center">
+        <span
+          v-if="selectable"
+          class="flex shrink-0 items-center pl-3"
+          @click.stop
+        >
+          <Checkbox
+            :model-value="selectedPaths.has(entry.path)"
+            binary
+            :aria-label="`Select ${entry.name}`"
+            @update:model-value="emit('toggle', entry)"
+          />
+        </span>
         <button
           type="button"
           class="group flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-surface-100 focus-visible:bg-surface-100 focus-visible:ring-2 focus-visible:ring-primary-500/35 focus-visible:outline-none focus-visible:ring-inset dark:hover:bg-surface-800 dark:focus-visible:bg-surface-800"

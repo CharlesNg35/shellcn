@@ -581,6 +581,10 @@ func checkPanelConfigRoutes(
 		checkWriteRouteID(ctx+" mkdirRouteId", c.MkdirRouteID)
 		checkWriteRouteID(ctx+" renameRouteId", c.RenameRouteID)
 		checkWriteRouteID(ctx+" deleteRouteId", c.DeleteRouteID)
+		checkWriteRouteID(ctx+" moveRouteId", c.MoveRouteID)
+		checkWriteRouteID(ctx+" copyRouteId", c.CopyRouteID)
+		checkWriteRouteID(ctx+" chmodRouteId", c.ChmodRouteID)
+		checkRouteID(ctx+" archiveRouteId", c.ArchiveRouteID)
 	case FormPanelConfig:
 		checkWriteRouteID(ctx+" submitRouteId", c.SubmitRouteID)
 		validateWriteConfigMethod(ctx+" submitMethod", c.SubmitMethod, add)

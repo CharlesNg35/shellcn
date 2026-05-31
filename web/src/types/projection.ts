@@ -217,6 +217,10 @@ export interface FileBrowserConfig {
   mkdirRouteId?: string;
   renameRouteId?: string;
   deleteRouteId?: string;
+  moveRouteId?: string;
+  copyRouteId?: string;
+  chmodRouteId?: string;
+  archiveRouteId?: string;
   writable?: boolean;
   multipleUpload?: boolean;
   maxUploadBytes?: number;

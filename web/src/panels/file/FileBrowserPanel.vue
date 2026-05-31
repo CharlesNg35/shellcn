@@ -14,6 +14,7 @@ import {
   uploadFiles,
 } from "../../api/dataSource";
 import type { UploadProgress } from "../../api/dataSource";
+import { apiFetch } from "../../api/client";
 import type {
   FileBrowserConfig,
   FileContent,
@@ -26,6 +27,7 @@ import FileCrumbs from "./FileCrumbs.vue";
 import FileEntryGrid from "./FileEntryGrid.vue";
 import FileEntryList from "./FileEntryList.vue";
 import FilePane from "./FilePane.vue";
+import FileSelectionBar from "./FileSelectionBar.vue";
 import FileToolbar from "./FileToolbar.vue";
 import {
   formatBytes,
@@ -50,6 +52,10 @@ const uploadRouteId = computed(() => fileConfig.value?.uploadRouteId);
 const mkdirRouteId = computed(() => fileConfig.value?.mkdirRouteId);
 const renameRouteId = computed(() => fileConfig.value?.renameRouteId);
 const deleteRouteId = computed(() => fileConfig.value?.deleteRouteId);
+const moveRouteId = computed(() => fileConfig.value?.moveRouteId);
+const copyRouteId = computed(() => fileConfig.value?.copyRouteId);
+const chmodRouteId = computed(() => fileConfig.value?.chmodRouteId);
+const archiveRouteId = computed(() => fileConfig.value?.archiveRouteId);
 const writable = computed(() => Boolean(fileConfig.value?.writable));
 const multipleUpload = computed(() => fileConfig.value?.multipleUpload ?? true);
 const uploadFieldName = computed(
@@ -70,9 +76,26 @@ const editContent = ref("");
 const loadingContent = ref(false);
 const contentError = ref<string | null>(null);
 const mutating = ref(false);
-const operation = ref<"upload" | "save" | "mkdir" | "rename" | "delete" | null>(
-  null,
-);
+const operation = ref<
+  | "upload"
+  | "save"
+  | "mkdir"
+  | "rename"
+  | "delete"
+  | "move"
+  | "copy"
+  | "chmod"
+  | "archive"
+  | null
+>(null);
+
+const selectedPaths = ref<Set<string>>(new Set());
+const moveOpen = ref(false);
+const copyOpen = ref(false);
+const chmodOpen = ref(false);
+const bulkDeleteOpen = ref(false);
+const destPath = ref("");
+const chmodMode = ref("");
 const uploadProgress = ref<UploadProgress | null>(null);
 const uploadLabel = ref("");
 const mkdirOpen = ref(false);
@@ -126,6 +149,36 @@ const canEdit = computed(
     selected.value &&
     !selected.value.isDir,
 );
+
+// Bulk operations work over the multi-selection. Each is offered only when its
+// route slot is configured; delete/move/copy/chmod additionally require write.
+const selectionCount = computed(() => selectedPaths.value.size);
+const hasSelection = computed(() => selectionCount.value > 0);
+const selectedEntries = computed(() =>
+  filtered.value.filter((e) => selectedPaths.value.has(e.path)),
+);
+const allSelected = computed(
+  () =>
+    filtered.value.length > 0 &&
+    filtered.value.every((e) => selectedPaths.value.has(e.path)),
+);
+const canBulkDelete = computed(
+  () => writable.value && Boolean(deleteRouteId.value),
+);
+const canMove = computed(() => writable.value && Boolean(moveRouteId.value));
+const canCopy = computed(() => writable.value && Boolean(copyRouteId.value));
+const canChmod = computed(() => writable.value && Boolean(chmodRouteId.value));
+const canArchive = computed(() => Boolean(archiveRouteId.value));
+const selectable = computed(
+  () =>
+    canBulkDelete.value ||
+    canMove.value ||
+    canCopy.value ||
+    canChmod.value ||
+    canArchive.value,
+);
+const validMode = computed(() => /^[0-7]{3,4}$/.test(chmodMode.value.trim()));
+const validDest = computed(() => Boolean(destPath.value.trim()));
 const dirty = computed(
   () =>
     Boolean(canEdit.value) &&
@@ -209,6 +262,7 @@ async function loadList(path: string): Promise<void> {
   loadingList.value = true;
   listError.value = null;
   selected.value = null;
+  selectedPaths.value = new Set();
   content.value = null;
   contentError.value = null;
   fileFilter.value = "";
@@ -453,6 +507,180 @@ async function deleteEntry(): Promise<void> {
   }
 }
 
+function toggleSelect(entry: FileEntry): void {
+  const next = new Set(selectedPaths.value);
+  if (next.has(entry.path)) next.delete(entry.path);
+  else next.add(entry.path);
+  selectedPaths.value = next;
+}
+
+function toggleSelectAll(): void {
+  if (allSelected.value) {
+    selectedPaths.value = new Set();
+    return;
+  }
+  selectedPaths.value = new Set(filtered.value.map((e) => e.path));
+}
+
+function clearSelection(): void {
+  selectedPaths.value = new Set();
+}
+
+function beginMove(): void {
+  destPath.value = cwd.value;
+  moveOpen.value = true;
+}
+
+function beginCopy(): void {
+  destPath.value = cwd.value;
+  copyOpen.value = true;
+}
+
+function beginChmod(): void {
+  chmodMode.value = "0644";
+  chmodOpen.value = true;
+}
+
+async function bulkDelete(): Promise<void> {
+  const routeId = deleteRouteId.value;
+  const paths = selectedEntries.value.map((e) => e.path);
+  if (!routeId || paths.length === 0) return;
+  mutating.value = true;
+  operation.value = "delete";
+  try {
+    // Delete has no batch route; run it once per selected entry.
+    for (const path of paths) {
+      await runAction(
+        props.connectionId,
+        routeId,
+        operationCtx.value,
+        { path },
+        operationParams(path),
+        "DELETE",
+      );
+    }
+    bulkDeleteOpen.value = false;
+    clearSelection();
+    notifySuccess(
+      paths.length === 1 ? "Deleted." : `Deleted ${paths.length} items.`,
+    );
+    await loadList(cwd.value);
+  } catch (e) {
+    notifyError(e);
+  } finally {
+    mutating.value = false;
+    operation.value = null;
+  }
+}
+
+async function bulkTransfer(kind: "move" | "copy"): Promise<void> {
+  const routeId = kind === "move" ? moveRouteId.value : copyRouteId.value;
+  const dest = destPath.value.trim();
+  const paths = selectedEntries.value.map((e) => e.path);
+  if (!routeId || !dest || paths.length === 0) return;
+  mutating.value = true;
+  operation.value = kind;
+  try {
+    await runAction(
+      props.connectionId,
+      routeId,
+      operationCtx.value,
+      { paths, dest },
+      props.source?.params,
+    );
+    moveOpen.value = false;
+    copyOpen.value = false;
+    clearSelection();
+    notifySuccess(kind === "move" ? "Moved." : "Copied.");
+    await loadList(cwd.value);
+  } catch (e) {
+    notifyError(e);
+  } finally {
+    mutating.value = false;
+    operation.value = null;
+  }
+}
+
+async function bulkChmod(): Promise<void> {
+  const routeId = chmodRouteId.value;
+  const mode = chmodMode.value.trim();
+  const paths = selectedEntries.value.map((e) => e.path);
+  if (!routeId || !validMode.value || paths.length === 0) return;
+  mutating.value = true;
+  operation.value = "chmod";
+  try {
+    await runAction(
+      props.connectionId,
+      routeId,
+      operationCtx.value,
+      { paths, mode },
+      props.source?.params,
+    );
+    chmodOpen.value = false;
+    clearSelection();
+    notifySuccess("Permissions updated.");
+    await loadList(cwd.value);
+  } catch (e) {
+    notifyError(e);
+  } finally {
+    mutating.value = false;
+    operation.value = null;
+  }
+}
+
+function archiveSelected(): void {
+  const routeId = archiveRouteId.value;
+  const paths = selectedEntries.value.map((e) => e.path);
+  if (!routeId || paths.length === 0) return;
+  // Archive streams a zip; POST the selection and trigger a browser download
+  // from the response blob.
+  operation.value = "archive";
+  mutating.value = true;
+  downloadArchive(routeId, paths)
+    .then(() => {
+      notifySuccess("Archive ready.");
+    })
+    .catch((e) => notifyError(e))
+    .finally(() => {
+      mutating.value = false;
+      operation.value = null;
+    });
+}
+
+async function downloadArchive(
+  routeId: string,
+  paths: string[],
+): Promise<void> {
+  const url = routeURL(
+    props.connectionId,
+    routeId,
+    operationCtx.value,
+    props.source?.params ?? {},
+  );
+  const res = await apiFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paths }),
+  });
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const name =
+    paths.length === 1 ? `${baseName(paths[0]!)}.zip` : "archive.zip";
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
+
+function baseName(path: string): string {
+  const trimmed = path.replace(/\/+$/, "");
+  const idx = trimmed.lastIndexOf("/");
+  return idx >= 0 ? trimmed.slice(idx + 1) : trimmed;
+}
+
 async function retryContent(): Promise<void> {
   if (selected.value) await selectEntry(selected.value);
 }
@@ -504,6 +732,26 @@ watch(
       @refresh="loadList(cwd)"
     />
 
+    <FileSelectionBar
+      v-if="selectable && hasSelection"
+      :count="selectionCount"
+      :all-selected="allSelected"
+      :some-selected="hasSelection"
+      :can-move="canMove"
+      :can-copy="canCopy"
+      :can-chmod="canChmod"
+      :can-archive="canArchive"
+      :can-delete="canBulkDelete"
+      :busy="mutating"
+      @toggle-all="toggleSelectAll"
+      @clear="clearSelection"
+      @move="beginMove"
+      @copy="beginCopy"
+      @chmod="beginChmod"
+      @archive="archiveSelected"
+      @delete="bulkDeleteOpen = true"
+    />
+
     <div v-if="viewMode === 'split'" class="flex min-h-0 flex-1">
       <div
         class="w-80 shrink-0 border-r border-surface-200 bg-surface-50/40 dark:border-surface-800 dark:bg-surface-950/30"
@@ -514,9 +762,12 @@ watch(
           :loading="loadingList"
           :error="listError"
           :empty-text="listEmptyText"
+          :selectable="selectable"
+          :selected-paths="selectedPaths"
           @select="selectEntry"
           @open="openEntry"
           @retry="loadList(cwd)"
+          @toggle="toggleSelect"
         />
       </div>
 
@@ -548,9 +799,12 @@ watch(
       :loading="loadingList"
       :error="listError"
       :empty-text="listEmptyText"
+      :selectable="selectable"
+      :selected-paths="selectedPaths"
       @select="selectEntry"
       @open="openEntry"
       @retry="loadList(cwd)"
+      @toggle="toggleSelect"
     />
 
     <Dialog
@@ -655,6 +909,137 @@ watch(
           :loading="operation === 'delete'"
           :disabled="mutating"
           @click="deleteEntry"
+        />
+      </div>
+    </Dialog>
+
+    <Dialog v-model:visible="moveOpen" modal header="Move selection">
+      <form
+        class="flex w-80 flex-col gap-4"
+        @submit.prevent="bulkTransfer('move')"
+      >
+        <p class="text-sm text-surface-600 dark:text-surface-300">
+          Move {{ selectionCount }}
+          {{ selectionCount === 1 ? "item" : "items" }} to:
+        </p>
+        <InputText
+          v-model="destPath"
+          autofocus
+          placeholder="/destination/folder"
+          aria-label="Destination folder"
+        />
+        <div class="flex justify-end gap-2">
+          <Button
+            type="button"
+            label="Cancel"
+            severity="secondary"
+            outlined
+            :disabled="mutating"
+            @click="moveOpen = false"
+          />
+          <Button
+            type="submit"
+            label="Move"
+            :loading="operation === 'move'"
+            :disabled="!validDest || mutating"
+          />
+        </div>
+      </form>
+    </Dialog>
+
+    <Dialog v-model:visible="copyOpen" modal header="Copy selection">
+      <form
+        class="flex w-80 flex-col gap-4"
+        @submit.prevent="bulkTransfer('copy')"
+      >
+        <p class="text-sm text-surface-600 dark:text-surface-300">
+          Copy {{ selectionCount }}
+          {{ selectionCount === 1 ? "item" : "items" }} to:
+        </p>
+        <InputText
+          v-model="destPath"
+          autofocus
+          placeholder="/destination/folder"
+          aria-label="Destination folder"
+        />
+        <div class="flex justify-end gap-2">
+          <Button
+            type="button"
+            label="Cancel"
+            severity="secondary"
+            outlined
+            :disabled="mutating"
+            @click="copyOpen = false"
+          />
+          <Button
+            type="submit"
+            label="Copy"
+            :loading="operation === 'copy'"
+            :disabled="!validDest || mutating"
+          />
+        </div>
+      </form>
+    </Dialog>
+
+    <Dialog v-model:visible="chmodOpen" modal header="Change permissions">
+      <form class="flex w-80 flex-col gap-4" @submit.prevent="bulkChmod">
+        <p class="text-sm text-surface-600 dark:text-surface-300">
+          Set octal mode for {{ selectionCount }}
+          {{ selectionCount === 1 ? "item" : "items" }}:
+        </p>
+        <InputText
+          v-model="chmodMode"
+          autofocus
+          placeholder="0644"
+          aria-label="Octal permission mode"
+          :invalid="Boolean(chmodMode.trim()) && !validMode"
+        />
+        <small
+          v-if="Boolean(chmodMode.trim()) && !validMode"
+          class="text-danger-500"
+        >
+          Enter a 3 or 4 digit octal mode (e.g. 0644).
+        </small>
+        <div class="flex justify-end gap-2">
+          <Button
+            type="button"
+            label="Cancel"
+            severity="secondary"
+            outlined
+            :disabled="mutating"
+            @click="chmodOpen = false"
+          />
+          <Button
+            type="submit"
+            label="Apply"
+            :loading="operation === 'chmod'"
+            :disabled="!validMode || mutating"
+          />
+        </div>
+      </form>
+    </Dialog>
+
+    <Dialog v-model:visible="bulkDeleteOpen" modal header="Delete selection">
+      <p class="mb-4 w-80 text-sm text-surface-600 dark:text-surface-300">
+        Delete {{ selectionCount }}
+        {{ selectionCount === 1 ? "item" : "items" }}? This cannot be undone.
+      </p>
+      <div class="flex justify-end gap-2">
+        <Button
+          type="button"
+          label="Cancel"
+          severity="secondary"
+          outlined
+          :disabled="mutating"
+          @click="bulkDeleteOpen = false"
+        />
+        <Button
+          type="button"
+          label="Delete"
+          severity="danger"
+          :loading="operation === 'delete'"
+          :disabled="mutating"
+          @click="bulkDelete"
         />
       </div>
     </Dialog>

@@ -165,6 +165,14 @@ type FileBrowserConfig struct {
 	MkdirRouteID    string `json:"mkdirRouteId,omitempty"`
 	RenameRouteID   string `json:"renameRouteId,omitempty"`
 	DeleteRouteID   string `json:"deleteRouteId,omitempty"`
+	// Bulk-operation slots over a multi-selection. Each is optional; the renderer
+	// shows a bulk action only when its slot is set. Move/Copy take
+	// {"paths":[...],"dest":"<dir>"}; Chmod takes {"paths":[...],"mode":"0644"};
+	// Archive takes {"paths":[...]} and streams a zip download.
+	MoveRouteID     string `json:"moveRouteId,omitempty"`
+	CopyRouteID     string `json:"copyRouteId,omitempty"`
+	ChmodRouteID    string `json:"chmodRouteId,omitempty"`
+	ArchiveRouteID  string `json:"archiveRouteId,omitempty"`
 	Writable        bool   `json:"writable,omitempty"`
 	MultipleUpload  bool   `json:"multipleUpload,omitempty"`
 	MaxUploadBytes  int64  `json:"maxUploadBytes,omitempty"`

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import Checkbox from "primevue/checkbox";
 import AppIcon from "../../components/AppIcon.vue";
 import SkeletonList from "../../components/SkeletonList.vue";
 import PanelError from "../shared/PanelError.vue";
@@ -12,13 +13,22 @@ withDefaults(
     loading: boolean;
     error?: string | null;
     emptyText?: string;
+    selectable?: boolean;
+    selectedPaths?: Set<string>;
   }>(),
-  { selectedPath: undefined, error: null, emptyText: "This folder is empty." },
+  {
+    selectedPath: undefined,
+    error: null,
+    emptyText: "This folder is empty.",
+    selectable: false,
+    selectedPaths: () => new Set<string>(),
+  },
 );
 const emit = defineEmits<{
   select: [entry: FileEntry];
   open: [entry: FileEntry];
   retry: [];
+  toggle: [entry: FileEntry];
 }>();
 </script>
 
@@ -45,7 +55,7 @@ const emit = defineEmits<{
         v-for="entry in entries"
         :key="entry.path"
         type="button"
-        class="min-w-0 rounded-lg border border-surface-200 bg-surface-0 p-3 text-left transition-colors hover:border-primary-300 hover:bg-primary-50/50 dark:border-surface-800 dark:bg-surface-950 dark:hover:border-primary-500/60 dark:hover:bg-primary-500/10"
+        class="relative min-w-0 rounded-lg border border-surface-200 bg-surface-0 p-3 text-left transition-colors hover:border-primary-300 hover:bg-primary-50/50 dark:border-surface-800 dark:bg-surface-950 dark:hover:border-primary-500/60 dark:hover:bg-primary-500/10"
         :class="
           selectedPath === entry.path
             ? 'border-primary-400 bg-primary-50 dark:border-primary-500 dark:bg-primary-500/10'
@@ -59,6 +69,14 @@ const emit = defineEmits<{
         @click="entry.isDir ? emit('open', entry) : emit('select', entry)"
         @dblclick="emit('open', entry)"
       >
+        <span v-if="selectable" class="absolute top-2 right-2" @click.stop>
+          <Checkbox
+            :model-value="selectedPaths.has(entry.path)"
+            binary
+            :aria-label="`Select ${entry.name}`"
+            @update:model-value="emit('toggle', entry)"
+          />
+        </span>
         <AppIcon
           :icon="{ type: 'lucide', value: iconFor(entry.name, entry.isDir) }"
           :size="28"

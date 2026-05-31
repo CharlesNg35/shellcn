@@ -2,6 +2,7 @@
 package ftpfs
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -279,6 +280,34 @@ func (c *Client) Rename(_ context.Context, from, to string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.conn.Rename(from, to)
+}
+
+// Move renames src to dst (RNFR/RNTO).
+func (c *Client) Move(_ context.Context, src, dst string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.Rename(src, dst)
+}
+
+// Copy duplicates src to dst. A single FTP control connection allows only one
+// active data transfer, so the source is fully drained (and its data connection
+// closed) before the upload begins.
+func (c *Client) Copy(_ context.Context, src, dst string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	r, err := c.conn.Retr(src)
+	if err != nil {
+		return err
+	}
+	data, readErr := io.ReadAll(r)
+	closeErr := r.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	return c.conn.Stor(dst, bytes.NewReader(data))
 }
 
 func (c *Client) Remove(_ context.Context, p string, isDir bool) error {
