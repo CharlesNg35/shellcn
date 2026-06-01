@@ -55,7 +55,6 @@ type Writer struct {
 	now   func() time.Time
 }
 
-// NewWriter wires the audit store.
 func NewWriter(s store.AuditStore) *Writer {
 	return &Writer{store: s, now: time.Now}
 }

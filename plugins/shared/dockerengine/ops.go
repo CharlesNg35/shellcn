@@ -24,7 +24,6 @@ var killSignals = []string{
 	"SIGKILL", "SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT", "SIGUSR1", "SIGUSR2", "SIGSTOP", "SIGCONT",
 }
 
-// PauseContainer suspends every process in a running container.
 func PauseContainer(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -34,7 +33,6 @@ func PauseContainer(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: err == nil}, DockerErr(err)
 }
 
-// UnpauseContainer resumes a paused container.
 func UnpauseContainer(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -64,7 +62,6 @@ func KillContainer(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: err == nil}, DockerErr(err)
 }
 
-// RenameContainer changes a container's name.
 func RenameContainer(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -84,7 +81,6 @@ func RenameContainer(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: err == nil}, DockerErr(err)
 }
 
-// TagImage adds a target reference to an existing image.
 func TagImage(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -196,7 +192,6 @@ type BuildResult struct {
 	Output string `json:"output,omitempty"`
 }
 
-// ConnectNetwork attaches a container to a network.
 func ConnectNetwork(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -224,7 +219,6 @@ func ConnectNetwork(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: err == nil}, DockerErr(err)
 }
 
-// DisconnectNetwork detaches a container from a network.
 func DisconnectNetwork(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -408,8 +402,6 @@ func collectBuildOutput(r io.Reader) (string, error) {
 	}
 	return out.String(), nil
 }
-
-// Schemas for the new action input forms.
 
 func KillContainerSchema() *plugin.Schema {
 	options := make([]plugin.Option, 0, len(killSignals))

@@ -27,7 +27,6 @@ type ConnectionService struct {
 	vault   secrets.SecretStore
 }
 
-// NewConnectionService wires the dependencies.
 func NewConnectionService(conns store.ConnectionStore, plugins *plugin.Registry, creds *CredentialService, vault secrets.SecretStore) *ConnectionService {
 	return &ConnectionService{conns: conns, plugins: plugins, creds: creds, vault: vault}
 }
@@ -244,7 +243,6 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	return existing, nil
 }
 
-// Delete removes a connection.
 func (s *ConnectionService) Delete(ctx context.Context, id string) error {
 	return s.conns.Delete(ctx, id)
 }

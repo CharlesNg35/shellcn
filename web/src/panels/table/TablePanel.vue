@@ -329,8 +329,6 @@ function discardStaged(): void {
   clearStaging();
 }
 
-// -----------------------------------------------------------------------
-
 function keyFor(row: Row): Record<string, unknown> | null {
   const explicit = row._key;
   if (explicit && typeof explicit === "object") {
@@ -521,8 +519,6 @@ async function submitInsert(): Promise<void> {
     inserting.value = false;
   }
 }
-
-// -----------------------------------------------------------------------
 
 const hidden = computed(() => {
   const set = new Set(RESERVED);

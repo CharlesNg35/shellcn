@@ -544,7 +544,6 @@ func RemoveNetwork(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: err == nil}, DockerErr(err)
 }
 
-// ImagePullSchema returns the input form for the shared image pull handler.
 func ImagePullSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Image", Fields: []plugin.Field{
 		{Key: "image", Label: "Image", Type: plugin.FieldText, Required: true, Placeholder: "nginx:latest", Help: "Image reference (repository:tag)."},
@@ -595,7 +594,6 @@ func PullImage(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: true}, nil
 }
 
-// CreateVolume creates a named volume.
 func CreateVolume(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -617,7 +615,6 @@ func CreateVolume(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: true}, nil
 }
 
-// CreateNetwork creates a network.
 func CreateNetwork(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -1225,7 +1222,6 @@ func streamParams(rc *plugin.RequestContext) map[string]string {
 	return params
 }
 
-// CreateContainerSchema is the manifest input schema for the create form.
 func CreateContainerSchema() *plugin.Schema {
 	onFailure := plugin.Condition{AllOf: []plugin.Rule{{Field: "restart", Op: plugin.OpEq, Value: string(container.RestartPolicyOnFailure)}}}
 	return &plugin.Schema{Groups: []plugin.Group{
@@ -1259,7 +1255,6 @@ func CreateContainerSchema() *plugin.Schema {
 	}}
 }
 
-// LogsSchema is the manifest input schema for the log stream controls.
 func LogsSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Logs", Fields: []plugin.Field{
 		{Key: "tail", Label: "Tail", Type: plugin.FieldNumber},
@@ -1269,7 +1264,6 @@ func LogsSchema() *plugin.Schema {
 	}}}}
 }
 
-// ExecSchema is the manifest input schema for the exec terminal controls.
 func ExecSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Exec", Fields: []plugin.Field{
 		{Key: "cols", Label: "Columns", Type: plugin.FieldNumber},

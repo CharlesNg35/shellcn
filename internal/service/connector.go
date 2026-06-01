@@ -23,7 +23,6 @@ type Connector struct {
 	onSecretAccess func()
 }
 
-// NewConnector wires the dependencies.
 func NewConnector(plugins *plugin.Registry, creds *CredentialService, vault secrets.SecretStore, tunnels transport.TunnelRegistry) *Connector {
 	return &Connector{plugins: plugins, creds: creds, vault: vault, tunnels: tunnels}
 }

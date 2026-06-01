@@ -40,7 +40,6 @@ func WithCredentialKindCatalog(kinds plugin.CredentialKindCatalog) CredentialSer
 	}
 }
 
-// NewCredentialService wires the dependencies.
 func NewCredentialService(creds store.CredentialStore, grants store.CredentialGrantStore, vault secrets.SecretStore, opts ...CredentialServiceOption) *CredentialService {
 	svc := &CredentialService{
 		creds:  creds,

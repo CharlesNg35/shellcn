@@ -79,7 +79,6 @@ func commonRow(o obj) Row {
 func refName(o obj) string { return str(o, "metadata", "name") }
 func refNS(o obj) string   { return str(o, "metadata", "namespace") }
 
-// joinStrings is a small helper for comma-joined column cells.
 func joinStrings(items []string) string { return strings.Join(items, ", ") }
 
 // scalar renders a nested field that may be an int or a string (e.g. an

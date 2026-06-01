@@ -86,7 +86,6 @@ func (s *Session) helmReleases(rc *plugin.RequestContext) (map[string]helmReleas
 	return latest, nil
 }
 
-// HelmReleases lists installed Helm releases.
 func HelmReleases(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
