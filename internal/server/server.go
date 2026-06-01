@@ -201,6 +201,7 @@ func (s *Server) routes() chi.Router {
 				pr.Get("/ai/global", s.handleAIGlobal)
 				pr.Get("/me/ai/config", s.handleListAIProviders)
 				pr.Post("/me/ai/config", s.handleCreateAIProvider)
+				pr.Post("/me/ai/models", s.handlePreviewAIProviderModels)
 				pr.Put("/me/ai/config/{id}", s.handleUpdateAIProvider)
 				pr.Delete("/me/ai/config/{id}", s.handleDeleteAIProvider)
 				pr.Get("/me/ai/config/{id}/models", s.handleAIProviderModels)

@@ -16,9 +16,10 @@ const providerModelsTTL = 2 * time.Hour
 // defaultBaseURLs are the API endpoints for the built-in vendors. An
 // openai_compatible provider must supply its own base URL.
 var defaultBaseURLs = map[string]string{
-	"openai":    "https://api.openai.com/v1",
-	"anthropic": "https://api.anthropic.com/v1",
-	"google":    "https://generativelanguage.googleapis.com/v1beta",
+	"openai":     "https://api.openai.com/v1",
+	"openrouter": "https://openrouter.ai/api/v1",
+	"anthropic":  "https://api.anthropic.com/v1",
+	"google":     "https://generativelanguage.googleapis.com/v1beta",
 }
 
 // nonChatPattern excludes models that are not chat-completion capable.
@@ -47,6 +48,7 @@ func (r *Registry) FetchModels(ctx context.Context, kind, baseURL, apiKey string
 	if err != nil {
 		return nil, err
 	}
+	r.cacheProviderModelLimits(kind, models)
 	return models, nil
 }
 
@@ -186,6 +188,20 @@ func (r *Registry) providerCache(kind, base string) *ttlCache[[]ProviderModel] {
 		r.providerCaches[key] = c
 	}
 	return c
+}
+
+func (r *Registry) cacheProviderModelLimits(kind string, models []ProviderModel) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, m := range models {
+		l, ok := mergeLimits(Limits{ContextWindow: m.ContextWindow, MaxOutputTokens: m.MaxOutputTokens})
+		if !ok {
+			continue
+		}
+		for _, key := range []string{kind + "|" + m.ID, "|" + m.ID} {
+			r.resolved[strings.ToLower(key)] = l
+		}
+	}
 }
 
 func sortModels(m []ProviderModel) []ProviderModel {

@@ -207,11 +207,14 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 
 	var mu sync.Mutex
 	var cancel context.CancelFunc
+	var activeTurn uint64
 	var wg sync.WaitGroup
+	var queued []aiClientFrame
 	confirmer := &wsConfirmer{out: out, decisions: map[string]chan bool{}}
 
 	defer func() {
 		mu.Lock()
+		queued = nil
 		if cancel != nil {
 			cancel()
 		}
@@ -222,6 +225,56 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 	}()
 
 	send := func(ev engine.StreamEvent) { out <- ev }
+	var startTurnLocked func(aiClientFrame)
+	startTurnLocked = func(frame aiClientFrame) {
+		if ctx.Err() != nil {
+			return
+		}
+		turnCtx, c2 := context.WithCancel(ctx)
+		activeTurn++
+		turnID := activeTurn
+		cancel = c2
+		wg.Add(1)
+		go func(frame aiClientFrame) {
+			defer wg.Done()
+			tctx := audit.WithSource(turnCtx, audit.SourceAI, uuid.NewString())
+
+			convID := frame.ConversationID
+			if convID == "" {
+				if cv, err := s.chat.Conversations().Create(tctx, user.ID, conn.ID, frame.ProviderID, ""); err == nil {
+					convID = cv.ID
+					out <- aiMetaFrame{Type: "conversation", ConversationID: cv.ID}
+				}
+			}
+
+			in := ai.RunInput{
+				User: user, ConnID: conn.ID, Protocol: conn.Protocol,
+				ConnectionTitle: conn.Name, AIMode: connectionAIMode(conn),
+				AllowDestructive: conn.AIAllowDestructive,
+				Scope:            ai.Scope{ProviderID: frame.ProviderID, Model: frame.Model},
+				ConversationID:   convID,
+				UserMessage:      frame.Content,
+				RecentOps:        s.recentAuditLines(tctx, user.ID, conn.ID),
+				Confirm:          confirmer,
+			}
+			if err := s.chat.Run(tctx, in, send); err != nil {
+				send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
+				send(engine.StreamEvent{Type: engine.EventDone})
+			}
+
+			mu.Lock()
+			c2()
+			if activeTurn == turnID {
+				cancel = nil
+			}
+			if len(queued) > 0 && ctx.Err() == nil {
+				next := queued[0]
+				queued = queued[1:]
+				startTurnLocked(next)
+			}
+			mu.Unlock()
+		}(frame)
+	}
 
 	for {
 		var frame aiClientFrame
@@ -239,46 +292,12 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 			confirmer.deliver(frame.ToolID, frame.Type == "confirm")
 		case "user_message":
 			mu.Lock()
-			if cancel != nil { // one turn at a time; queueing arrives later
-				mu.Unlock()
-				continue
+			if cancel != nil {
+				queued = append(queued, frame)
+			} else {
+				startTurnLocked(frame)
 			}
-			turnCtx, c2 := context.WithCancel(ctx)
-			cancel = c2
-			wg.Add(1)
 			mu.Unlock()
-
-			go func(frame aiClientFrame) {
-				defer wg.Done()
-				tctx := audit.WithSource(turnCtx, audit.SourceAI, uuid.NewString())
-
-				convID := frame.ConversationID
-				if convID == "" {
-					if cv, err := s.chat.Conversations().Create(tctx, user.ID, conn.ID, frame.ProviderID, ""); err == nil {
-						convID = cv.ID
-						out <- aiMetaFrame{Type: "conversation", ConversationID: cv.ID}
-					}
-				}
-
-				in := ai.RunInput{
-					User: user, ConnID: conn.ID, Protocol: conn.Protocol,
-					ConnectionTitle: conn.Name, AIMode: connectionAIMode(conn),
-					AllowDestructive: conn.AIAllowDestructive,
-					Scope:            ai.Scope{ProviderID: frame.ProviderID, Model: frame.Model},
-					ConversationID:   convID,
-					UserMessage:      frame.Content,
-					RecentOps:        s.recentAuditLines(tctx, user.ID, conn.ID),
-					Confirm:          confirmer,
-				}
-				if err := s.chat.Run(tctx, in, send); err != nil {
-					send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
-					send(engine.StreamEvent{Type: engine.EventDone})
-				}
-				mu.Lock()
-				c2()
-				cancel = nil
-				mu.Unlock()
-			}(frame)
 		}
 	}
 }

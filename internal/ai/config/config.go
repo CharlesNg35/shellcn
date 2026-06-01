@@ -28,6 +28,7 @@ func ErrInvalid() error { return errInvalid }
 // providers are openai_compatible rows with their own name + base URL.
 var builtinKinds = map[models.AIProviderKind]bool{
 	models.AIProviderOpenAI:       true,
+	models.AIProviderOpenRouter:   true,
 	models.AIProviderAnthropic:    true,
 	models.AIProviderGoogle:       true,
 	models.AIProviderOpenAICompat: true,
@@ -36,9 +37,10 @@ var builtinKinds = map[models.AIProviderKind]bool{
 // defaultModels is the static fallback for the picker when no live catalogue or
 // configured allow-list is available.
 var defaultModels = map[models.AIProviderKind][]string{
-	models.AIProviderOpenAI:    {"gpt-4o", "gpt-4o-mini", "o3-mini"},
-	models.AIProviderAnthropic: {"claude-opus-4-1", "claude-sonnet-4-5", "claude-haiku-4-5"},
-	models.AIProviderGoogle:    {"gemini-2.5-pro", "gemini-2.5-flash"},
+	models.AIProviderOpenAI:     {"gpt-4o", "gpt-4o-mini", "o3-mini"},
+	models.AIProviderOpenRouter: {"openai/gpt-4o", "anthropic/claude-sonnet-4.5", "google/gemini-2.5-pro"},
+	models.AIProviderAnthropic:  {"claude-opus-4-1", "claude-sonnet-4-5", "claude-haiku-4-5"},
+	models.AIProviderGoogle:     {"gemini-2.5-pro", "gemini-2.5-flash"},
 }
 
 // Input is a create/update request for a user provider. On update an empty
@@ -199,6 +201,39 @@ func (s *Service) Models(ctx context.Context, ownerID, id string) ([]string, err
 	}
 	if row.DefaultModel != "" {
 		return []string{row.DefaultModel}, nil
+	}
+	return []string{}, nil
+}
+
+// ModelsForInput lists models for an unsaved provider draft. It is used by the
+// settings UI to fetch a provider catalog before persisting the key.
+func (s *Service) ModelsForInput(ctx context.Context, in Input) ([]string, error) {
+	in.Kind = models.AIProviderKind(strings.TrimSpace(string(in.Kind)))
+	in.BaseURL = strings.TrimSpace(in.BaseURL)
+	in.APIKey = strings.TrimSpace(in.APIKey)
+	if !builtinKinds[in.Kind] {
+		return nil, fmt.Errorf("%w: unknown kind %q", errInvalid, in.Kind)
+	}
+	if in.Kind == models.AIProviderOpenAICompat && in.BaseURL == "" {
+		return nil, fmt.Errorf("%w: base URL is required for an openai-compatible provider", errInvalid)
+	}
+	if s.models != nil {
+		if live, err := s.models.FetchModels(ctx, string(in.Kind), in.BaseURL, in.APIKey); err == nil && len(live) > 0 {
+			ids := make([]string, 0, len(live))
+			for _, m := range live {
+				ids = append(ids, m.ID)
+			}
+			return ids, nil
+		}
+	}
+	if len(in.Models) > 0 {
+		return in.Models, nil
+	}
+	if m, ok := defaultModels[in.Kind]; ok {
+		return m, nil
+	}
+	if in.DefaultModel != "" {
+		return []string{in.DefaultModel}, nil
 	}
 	return []string{}, nil
 }

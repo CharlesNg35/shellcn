@@ -10,7 +10,7 @@ import "strings"
 // (presence + provider/model) is exposed. The model is pinned: users see which
 // model was used but cannot switch the shared config.
 type AIConfig struct {
-	Kind         string   `mapstructure:"kind"`          // openai | anthropic | google | openai_compatible
+	Kind         string   `mapstructure:"kind"`          // openai | openrouter | anthropic | google | openai_compatible
 	Name         string   `mapstructure:"name"`          // display name shown as "Shared AI"
 	BaseURL      string   `mapstructure:"base_url"`      // required for openai_compatible endpoints
 	APIKey       string   `mapstructure:"api_key"`       // env-preferred (SHELLCN_AI_API_KEY); never persisted

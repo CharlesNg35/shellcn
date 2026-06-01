@@ -15,6 +15,7 @@ func TestBuildProviderCoversEveryKind(t *testing.T) {
 	ctx := context.Background()
 	for _, kind := range []models.AIProviderKind{
 		models.AIProviderOpenAI,
+		models.AIProviderOpenRouter,
 		models.AIProviderAnthropic,
 		models.AIProviderGoogle,
 		models.AIProviderOpenAICompat,
@@ -32,6 +33,7 @@ func TestBuildProviderCoversEveryKind(t *testing.T) {
 func TestRegistryProviderPerKind(t *testing.T) {
 	cases := map[models.AIProviderKind]string{
 		models.AIProviderOpenAI:       "openai",
+		models.AIProviderOpenRouter:   "openrouter",
 		models.AIProviderAnthropic:    "anthropic",
 		models.AIProviderGoogle:       "google",
 		models.AIProviderOpenAICompat: "",

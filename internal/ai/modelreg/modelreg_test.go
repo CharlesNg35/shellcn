@@ -87,6 +87,9 @@ func TestFetchModelsOpenAICompatible(t *testing.T) {
 	if len(models) != 1 || models[0].ID != "gpt-4o" || models[0].ContextWindow != 128000 {
 		t.Fatalf("unexpected models: %+v", models)
 	}
+	if lim, ok := r.Lookup(context.Background(), "gpt-4o", "openai_compatible"); !ok || lim.ContextWindow != 128000 || lim.MaxOutputTokens != 16384 {
+		t.Fatalf("fetched model limits were not cached: %+v ok=%v", lim, ok)
+	}
 }
 
 func TestFetchModelsGoogleFilters(t *testing.T) {
@@ -111,7 +114,7 @@ func TestFetchModelsGoogleFilters(t *testing.T) {
 
 func TestResolveBaseURLPerKind(t *testing.T) {
 	r := New(WithOffline())
-	for _, kind := range []string{"openai", "anthropic", "google"} {
+	for _, kind := range []string{"openai", "openrouter", "anthropic", "google"} {
 		if r.resolveBaseURL(kind, "") == "" {
 			t.Errorf("vendor kind %q has no default base URL", kind)
 		}

@@ -32,6 +32,7 @@ vi.mock("../api/ai", () => ({
     update: vi.fn(),
     remove: vi.fn(),
     models: vi.fn(),
+    previewModels: vi.fn(),
   },
 }));
 
@@ -52,8 +53,20 @@ describe("AiSettingsView", () => {
     const wrapper = mount(AiSettingsView);
     await flushPromises();
     expect(wrapper.text()).toContain("Shared AI");
+    expect(wrapper.text()).toContain("Configured");
     expect(wrapper.text()).toContain("Shared OpenAI");
-    expect(wrapper.text()).toContain("No AI providers yet");
+    expect(wrapper.text()).toContain("No personal providers yet");
+  });
+
+  it("keeps the shared tab disabled when shared AI is unavailable", async () => {
+    global.configured = false;
+    global.provider = undefined;
+    global.model = undefined;
+
+    const wrapper = mount(AiSettingsView);
+    await flushPromises();
+    expect(wrapper.text()).toContain("Not configured");
+    expect(wrapper.text()).toContain("No personal providers yet");
   });
 
   it("lists configured providers", async () => {

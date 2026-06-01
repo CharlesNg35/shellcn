@@ -67,9 +67,11 @@ or exfiltration path. Rules:
    Stored on the connection.
 4. **Human-in-the-loop for mutations.** When a **write** or **destructive** tool is
    selected, the turn **pauses** and asks the user to confirm in the chat before
-   executing (eino ADK `interrupt/resume`); destructive confirmations are mandatory
-   and visually flagged (cannot be "always allow"-ed away). Reads never pause.
-   Confirmation is per tool call and shows the resolved route + params.
+   executing. The current implementation uses a websocket confirmer at the tool
+   boundary; if orchestration later moves to an ADK graph runner this maps to
+   `interrupt/resume`. Destructive confirmations are mandatory and visually
+   flagged (cannot be "always allow"-ed away). Reads never pause. Confirmation is
+   per tool call and shows the resolved route + params.
 5. **Audit everything.** Every tool call is recorded in the existing audit log
    with the route's real `Risk`/`AuditEvent`, plus an `ai` marker and the
    conversation/turn id, so AI-initiated operations are fully traceable and
@@ -89,10 +91,11 @@ or exfiltration path. Rules:
 ### 3.1 Provider config
 
 A provider config holds: `kind` (open vocabulary, validated at registration:
-`openai`, `anthropic`, `google`, or `openai_compatible`), a display `name`,
+`openai`, `openrouter`, `anthropic`, `google`, or `openai_compatible`), a display `name`,
 encrypted `apiKey`, optional `baseURL`, an allowed `models` list, and a
-`defaultModel`. The `kind` selects the engine adapter; `openai_compatible` + a
-`baseURL` covers Ollama, OpenRouter, vLLM, LM Studio, gateways, etc.
+`defaultModel`. The `kind` selects the engine adapter; `openrouter` is built in,
+while `openai_compatible` + a `baseURL` covers Ollama, vLLM, LM Studio, gateways,
+etc.
 
 **Custom providers are first-class.** Beyond the built-in kinds, a user (or an
 admin, for global) can define **multiple, named custom providers** — each just an
@@ -160,11 +163,9 @@ management, and human-in-the-loop interrupt/resume — reputable and efficient.
 
 Rationale:
 
-- eino (ByteDance) is the most production-proven Go agent framework; its **ADK**
-  natively provides tool use, multi-agent coordination (our subagents), context
-  management, **interrupt/resume** (our write-confirmation HITL), and automatic
-  **streaming** merge/concatenation across the orchestration — precisely the
-  error-prone parts we'd otherwise hand-roll across three provider SDKs.
+- eino (ByteDance) is the most production-proven Go agent framework; its model
+  adapters cover the provider surface we need, and its ADK remains the path for
+  richer graph orchestration if we outgrow the current explicit tool loop.
 - `eino-ext` ships the model adapters we need (OpenAI / OpenAI-compatible / Claude
   / Gemini / Ollama). The OpenAI-compatible adapter covers Ollama, OpenRouter, and
   custom endpoints via base URL.
@@ -276,8 +277,9 @@ route as a user").
   turns `plugin.Schema` into JSON Schema for forms — reuse that conversion for the
   model's tool schema.
 - `Execute(toolName, input)` → resolve to `(params, body)` → `Server.InvokeRoute`
-  → return the result (cleaned/truncated for context). Write tools first emit a
-  `needs_confirmation` event and only run after the user confirms (§6.3).
+  → return the result (cleaned/truncated for context). Write/destructive tools
+  first emit a `needs_confirmation` event and only run after the user confirms
+  (§6.3); without a confirmer they fail closed.
 
 ### 5.4 `memory` — persistence + context budget
 
@@ -318,7 +320,7 @@ Reuse the existing HTTP + `coder/websocket` + ticket infrastructure:
 - `POST /api/connections/:id/ai/conversations` (+ list/get/rename/delete) — CRUD.
 - `WS /api/connections/:id/ai/chat` (ticket-authenticated like other streams) —
   send a user message, stream back `StreamEvent`s; `stop`, `confirm`/`reject`
-  (for write HITL), and `queue` control messages.
+  (for write HITL), and queued user messages while a turn is running.
 - `GET /api/ai/global` — read-only: whether a shared AI is configured + its
   provider/model (**no key**). `GET/PUT/DELETE /api/me/ai/config` (user) — own
   provider config CRUD; `GET …/{id}/models` lists a provider's models. **No global
@@ -443,8 +445,8 @@ timeout })`, so the AI chunk is fetched on demand. The **`loadingComponent`** is
    persist. On a **read** tool call → `tools.Execute` → `Server.InvokeRoute`
    (authz/validate/audit as the user) → result streamed as a tool badge + fed
    back to the model. On a **write** tool call → emit `needs_confirmation`, pause
-   (interrupt); on user `confirm` → resume and execute; on `reject` → tell the
-   model it was declined.
+   at the tool boundary; on user `confirm` → execute; on `reject` → tell the model
+   it was declined.
 5. Subagent tools run nested read-only turns and return summaries.
 6. On completion: finalize the assistant message, update the rolling summary,
    optionally auto-title the conversation.
@@ -455,8 +457,9 @@ Each phase ends green (`make fmt && make lint && make test`) with tests; ship
 behind the feature being inert when no AI config exists.
 
 - **P0 — RouteInvoker refactor.** Extract the secure invocation pipeline from
-  `dispatch.serveHTTP` into `Server.InvokeRoute`; HTTP dispatch uses it; add an
-  audit `source` annotation. Unit + existing e2e stay green. _(Prereq; no AI yet.)_
+  `dispatch.serveHTTP` into shared helpers plus `Server.InvokeRoute`; HTTP
+  dispatch shares the same core path; add an audit `source` annotation. Unit +
+  existing e2e stay green. _(Prereq; no AI yet.)_
 - **P1 — Config + secrets + user UI.** Global config in `internal/config/ai.go`
   (env, no UI/CRUD) + read-only `GET /api/ai/global` indicator; user-scoped
   `AIProviderConfig` model + Vault encryption + user CRUD endpoints + provider/model
@@ -475,7 +478,7 @@ behind the feature being inert when no AI config exists.
   injection/tool. Tests: subagent returns a summary; context stays bounded.
 - **P5 — Per-connection write/destructive opt-in + HITL.** `aiMode` +
   `aiAllowDestructive` on the connection + dialog controls; write & destructive
-  tools gated + confirmation interrupt/resume (destructive = mandatory, flagged);
+  tools gated + confirmation before execution (destructive = mandatory, flagged);
   full audit. Tests: write blocked in `read_only`; destructive blocked unless
   `aiAllowDestructive`; privileged never exposed; RBAC still blocks a user lacking
   the underlying permission; confirmation required; audited as `ai`.
@@ -534,11 +537,11 @@ spec must still obey it:
 2. **Destructive/privileged tools** — confirmed: **destructive** allowed behind a
    separate per-connection `aiAllowDestructive` opt-in + **mandatory** confirmation;
    **privileged** (exec/shell) excluded in v1.
-3. **Engine** — eino behind `engine` interfaces (recommended) vs. thin official-SDK
-   abstraction (fallback). Confirm before P2; both fit the same interface seam.
-4. **Token estimator** — `tiktoken-go` vs. a heuristic; verify maintenance.
-5. **Chat placement** — right Drawer (recommended, overlays, stream-safe) vs. a
-   dock panel tab. Confirm.
+3. **Engine** — confirmed: eino behind `engine` interfaces, with an explicit tool
+   loop at the ShellCN boundary.
+4. **Token estimator** — confirmed: deterministic heuristic for now; a real
+   tokenizer can replace it behind `internal/ai/budget`.
+5. **Chat placement** — confirmed: right Drawer (overlays, stream-safe).
 6. **Chat UI library** — confirmed: **custom** widget on PrimeVue primitives (no
    full Vue chat-UI framework fits; no `@ai-sdk/vue` `useChat` — keep our
    transport/store). Streaming markdown via **`markstream-vue`** (verify) with

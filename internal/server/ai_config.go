@@ -107,6 +107,20 @@ func (s *Server) handleAIProviderModels(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"models": models})
 }
 
+func (s *Server) handlePreviewAIProviderModels(w http.ResponseWriter, r *http.Request) {
+	var req aiProviderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
+		return
+	}
+	models, err := s.deps.AI.ModelsForInput(r.Context(), req.input())
+	if err != nil {
+		writeError(w, s.deps.Logger, aiConfigError(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"models": models})
+}
+
 // aiConfigError maps a validation failure to ErrInvalidInput (400); other errors
 // pass through to their normal status.
 func aiConfigError(err error) error {

@@ -2,6 +2,7 @@ import { api } from "./client";
 
 export type AiProviderKind =
   | "openai"
+  | "openrouter"
   | "anthropic"
   | "google"
   | "openai_compatible";
@@ -43,6 +44,8 @@ export const aiApi = {
   list: () => api.get<AiProviderSummary[]>("/me/ai/config"),
   create: (body: AiProviderInput) =>
     api.post<AiProviderSummary>("/me/ai/config", body),
+  previewModels: (body: AiProviderInput) =>
+    api.post<{ models: string[] }>("/me/ai/models", body),
   update: (id: string, body: AiProviderInput) =>
     api.put<AiProviderSummary>(`/me/ai/config/${id}`, body),
   remove: (id: string) => api.del<void>(`/me/ai/config/${id}`),

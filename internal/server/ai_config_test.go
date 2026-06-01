@@ -122,3 +122,19 @@ func TestUserProviderValidationReturns400(t *testing.T) {
 		t.Fatalf("bad kind: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
 }
+
+func TestPreviewAIProviderModels(t *testing.T) {
+	h := newHarness(t)
+	resp := h.do(t, http.MethodPost, "/api/me/ai/models", "op", strings.NewReader(
+		`{"kind":"openrouter","name":"OpenRouter","apiKey":"sk-user-secret","defaultModel":"openai/gpt-4o"}`))
+	if resp.Status != http.StatusOK {
+		t.Fatalf("preview models: want 200, got %d (%s)", resp.Status, resp.Body)
+	}
+	body := string(resp.Body)
+	if !strings.Contains(body, "openai/gpt-4o") {
+		t.Fatalf("openrouter defaults missing: %s", body)
+	}
+	if strings.Contains(body, "sk-user-secret") {
+		t.Fatalf("key leaked in model preview: %s", body)
+	}
+}

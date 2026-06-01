@@ -136,6 +136,13 @@ func TestModelsPerKind(t *testing.T) {
 	if len(got) == 0 {
 		t.Fatal("anthropic should fall back to static defaults")
 	}
+
+	openRouter := aiconfig.Input{Kind: models.AIProviderOpenRouter, Name: "OpenRouter", APIKey: "k", DefaultModel: "openai/gpt-4o"}
+	sum, _ = svc.Create(ctx, "user-1", openRouter)
+	got, _ = svc.Models(ctx, "user-1", sum.ID)
+	if len(got) == 0 || got[0] != "openai/gpt-4o" {
+		t.Fatalf("openrouter should fall back to static defaults: %v", got)
+	}
 }
 
 func TestValidationRejectsBadInput(t *testing.T) {

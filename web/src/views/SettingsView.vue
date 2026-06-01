@@ -4,7 +4,6 @@ import Button from "primevue/button";
 import { useTheme } from "../composables/useTheme";
 import { useAuthStore } from "../stores/auth";
 import { adminSettingsApi } from "../api/admin";
-import { aiApi, type AiGlobalStatus } from "../api/ai";
 import RoleGate from "../components/RoleGate.vue";
 import AppIcon from "../components/AppIcon.vue";
 
@@ -12,14 +11,8 @@ const { isDark, toggle } = useTheme();
 const auth = useAuthStore();
 
 const emailEnabled = ref<boolean | null>(null);
-const aiGlobal = ref<AiGlobalStatus | null>(null);
 
 onMounted(async () => {
-  try {
-    aiGlobal.value = await aiApi.global();
-  } catch {
-    aiGlobal.value = null;
-  }
   if (!auth.isAdmin) return;
   try {
     emailEnabled.value = (await adminSettingsApi.emailStatus()).enabled;
@@ -91,38 +84,6 @@ const linkClass =
         class="text-surface-300"
       />
     </RouterLink>
-
-    <div
-      class="flex items-center gap-3 rounded-lg border border-surface-200 px-4 py-3 dark:border-surface-800"
-    >
-      <AppIcon
-        :icon="{ type: 'lucide', value: 'bot' }"
-        :size="18"
-        class="text-surface-400"
-      />
-      <div class="flex min-w-0 flex-1 flex-col">
-        <p class="font-medium text-surface-800 dark:text-surface-100">
-          Shared AI
-        </p>
-        <p
-          v-if="aiGlobal?.configured"
-          class="truncate text-xs text-surface-500 dark:text-surface-400"
-        >
-          {{ aiGlobal.provider }} · {{ aiGlobal.model }}
-        </p>
-      </div>
-      <span
-        v-if="aiGlobal !== null"
-        class="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium"
-        :class="
-          aiGlobal.configured
-            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-            : 'bg-surface-100 text-surface-500 dark:bg-surface-800'
-        "
-      >
-        {{ aiGlobal.configured ? "Configured" : "Not configured" }}
-      </span>
-    </div>
 
     <RoleGate admin>
       <RouterLink :to="{ name: 'users' }" :class="linkClass">

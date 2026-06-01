@@ -288,6 +288,8 @@ func registryProvider(kind models.AIProviderKind) string {
 	switch kind {
 	case models.AIProviderOpenAI:
 		return "openai"
+	case models.AIProviderOpenRouter:
+		return "openrouter"
 	case models.AIProviderAnthropic:
 		return "anthropic"
 	case models.AIProviderGoogle:
@@ -301,6 +303,11 @@ func registryProvider(kind models.AIProviderKind) string {
 func buildProvider(ctx context.Context, kind models.AIProviderKind, key, baseURL, model string) (engine.Provider, error) {
 	cfg := einoadapter.Config{APIKey: key, BaseURL: baseURL, Model: model}
 	switch kind {
+	case models.AIProviderOpenRouter:
+		if cfg.BaseURL == "" {
+			cfg.BaseURL = "https://openrouter.ai/api/v1"
+		}
+		return einoadapter.NewOpenAI(ctx, cfg)
 	case models.AIProviderOpenAI, models.AIProviderOpenAICompat:
 		return einoadapter.NewOpenAI(ctx, cfg)
 	case models.AIProviderAnthropic:

@@ -8,6 +8,7 @@ type AIProviderKind string
 
 const (
 	AIProviderOpenAI       AIProviderKind = "openai"
+	AIProviderOpenRouter   AIProviderKind = "openrouter"
 	AIProviderAnthropic    AIProviderKind = "anthropic"
 	AIProviderGoogle       AIProviderKind = "google"
 	AIProviderOpenAICompat AIProviderKind = "openai_compatible"
