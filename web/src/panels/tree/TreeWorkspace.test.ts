@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { nextTick } from "vue";
 import TreeWorkspace from "./TreeWorkspace.vue";
 import { useWorkspaceStore } from "../../stores/workspace";
+import { useScopeStore } from "../../stores/scope";
 
 describe("TreeWorkspace", () => {
   let scrollIntoView: ReturnType<typeof vi.fn>;
@@ -125,7 +126,7 @@ describe("TreeWorkspace", () => {
           Button: { template: "<button><slot /></button>" },
           ResourceTree: true,
           VueDraggable: { template: "<div><slot /></div>" },
-          TablePanel: {
+          PanelHost: {
             props: ["config", "source", "connectionId", "actions"],
             template: "<div data-test='table' />",
             created() {
@@ -153,6 +154,87 @@ describe("TreeWorkspace", () => {
     // Selectable still makes the rows selectable (checkboxes) without row actions.
     expect(captured!.selectable).toBe(true);
     wrapper.unmount();
+  });
+
+  it("remounts tree navigation and active list when connection scope changes", async () => {
+    const scope = useScopeStore();
+    scope.configure("c1", [{ param: "namespace" }]);
+    let treeMounts = 0;
+    let treeUnmounts = 0;
+    let panelMounts = 0;
+
+    mount(TreeWorkspace, {
+      props: {
+        connectionId: "c1",
+        tree: [
+          {
+            key: "workloads",
+            label: "Workloads",
+            source: { routeId: "kubernetes.tree.workloads" },
+          },
+        ],
+        resources: [
+          {
+            kind: "pod",
+            title: "Pods",
+            list: {
+              routeId: "kubernetes.resource.list",
+              params: { kind: "pod" },
+            },
+            columns: [],
+            detail: { header: { title: "Pod" }, tabs: [] },
+          },
+        ] as never,
+        actions: [],
+      },
+      global: {
+        stubs: {
+          AppIcon: true,
+          Button: { template: "<button><slot /></button>" },
+          ResourceTree: {
+            name: "ResourceTree",
+            props: ["connectionId", "groups", "selectedGroup", "selectedUid"],
+            mounted() {
+              treeMounts += 1;
+            },
+            unmounted() {
+              treeUnmounts += 1;
+            },
+            template: "<div data-test='tree' />",
+          },
+          VueDraggable: { template: "<div><slot /></div>" },
+          PanelHost: {
+            name: "PanelHost",
+            props: ["panel", "connectionId", "source", "config", "actions"],
+            mounted() {
+              panelMounts += 1;
+            },
+            template: "<div data-test='panel-host' />",
+          },
+        },
+      },
+    });
+
+    const ws = useWorkspaceStore();
+    ws.openView("c1", {
+      id: "list:pod",
+      title: "Pods",
+      kind: "list",
+      resourceKind: "pod",
+    });
+    await nextTick();
+    await flushPromises();
+
+    expect(treeMounts).toBe(1);
+    expect(panelMounts).toBe(1);
+
+    scope.set("c1", "namespace", "prod");
+    await nextTick();
+    await flushPromises();
+
+    expect(treeUnmounts).toBe(1);
+    expect(treeMounts).toBe(2);
+    expect(panelMounts).toBe(2);
   });
 
   it("pins a preview tab on double-click", async () => {

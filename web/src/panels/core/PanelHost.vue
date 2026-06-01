@@ -35,7 +35,7 @@ const panelKey = computed(() =>
     connectionId: props.connectionId,
     source: props.source,
     resource: props.resource?.uid,
-    scope: scope.params(props.connectionId),
+    scope: scope.key(props.connectionId),
   }),
 );
 

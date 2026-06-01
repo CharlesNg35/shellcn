@@ -1,8 +1,6 @@
 import { reactive } from "vue";
 import { defineStore } from "pinia";
 
-// Wire convention that joins a multiselect scope's values into the one param
-// string; mirrors the backend plugin.ScopeSeparator so handlers split the same way.
 export const SCOPE_SEPARATOR = ",";
 
 interface ScopeDefinition {
@@ -36,6 +34,17 @@ export const useScopeStore = defineStore("scope", () => {
     return out;
   }
 
+  function key(connectionId: string): string {
+    const current = params(connectionId);
+    return Object.keys(current)
+      .sort()
+      .map(
+        (param) =>
+          `${encodeURIComponent(param)}=${encodeURIComponent(current[param])}`,
+      )
+      .join("&");
+  }
+
   function set(connectionId: string, param: string, value: string): void {
     if (!allowed[connectionId]?.[param]) return;
     const current =
@@ -49,5 +58,5 @@ export const useScopeStore = defineStore("scope", () => {
     delete allowed[connectionId];
   }
 
-  return { byConnection, configure, params, set, clear };
+  return { byConnection, configure, params, key, set, clear };
 });
