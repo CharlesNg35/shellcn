@@ -251,7 +251,7 @@ function onConnectionSaved(payload: { id: string; created: boolean }): void {
            consoles and log streams resume exactly as left when navigating back. -->
       <RouterView v-slot="{ Component }">
         <KeepAlive :max="KEEP_ALIVE_CONNECTION_WORKSPACES_MAX">
-          <component :is="Component" :key="route.fullPath" />
+          <component :is="Component" :key="route.path" />
         </KeepAlive>
       </RouterView>
     </main>

@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, toRef, watch } from "vue";
+import {
+  computed,
+  onActivated,
+  onDeactivated,
+  onUnmounted,
+  ref,
+  toRef,
+  watch,
+} from "vue";
 import Button from "primevue/button";
 import { agentApi } from "../../api/agent";
 import type { Enrollment, InstallArtifact } from "../../types/projection";
@@ -13,9 +21,10 @@ const emit = defineEmits<{ online: [] }>();
 const enrollment = ref<Enrollment | null>(null);
 const error = ref<string | null>(null);
 const copied = ref<string | null>(null);
+const active = ref(true);
 let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
-const { status, message, online, refresh, start } = useAgentState(
+const { status, message, online, refresh, start, stop } = useAgentState(
   toRef(props, "connectionId"),
 );
 
@@ -132,10 +141,21 @@ watch(
     copied.value = null;
     enrollment.value = null;
     error.value = null;
-    start();
+    if (active.value) start();
+    else stop();
   },
   { immediate: true },
 );
+
+onActivated(() => {
+  if (active.value) return;
+  active.value = true;
+  start();
+});
+onDeactivated(() => {
+  active.value = false;
+  stop();
+});
 
 onUnmounted(clearCopiedTimer);
 </script>

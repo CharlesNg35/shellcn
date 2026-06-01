@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { defineComponent, ref } from "vue";
 import Button from "primevue/button";
 import { installFetch } from "../../test/fetchMock";
 import ConnectPanel from "./ConnectPanel.vue";
@@ -179,6 +180,43 @@ describe("ConnectPanel", () => {
     await flushPromises();
 
     expect(calls).toHaveLength(1);
+    w.unmount();
+  });
+
+  it("pauses agent polling while deactivated under KeepAlive", async () => {
+    const calls: string[] = [];
+    installFetch((url) => {
+      if (url.includes("/agent/state")) {
+        calls.push(url);
+        return { body: { status: "pending" } };
+      }
+      return { body: {} };
+    });
+    vi.useFakeTimers();
+
+    const Host = defineComponent({
+      components: { ConnectPanel },
+      setup() {
+        const show = ref(true);
+        return { show, agent };
+      },
+      template:
+        "<KeepAlive><ConnectPanel v-if='show' connection-id='edge' :connection='agent' /></KeepAlive>",
+    });
+    const w = mount(Host);
+    await flushPromises();
+    expect(calls).toHaveLength(1);
+
+    w.vm.show = false;
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(4000);
+    await flushPromises();
+    expect(calls).toHaveLength(1);
+
+    w.vm.show = true;
+    await flushPromises();
+    expect(calls).toHaveLength(2);
+
     w.unmount();
   });
 });

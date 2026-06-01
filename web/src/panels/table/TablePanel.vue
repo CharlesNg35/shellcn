@@ -893,8 +893,14 @@ function flushEvents(): void {
 }
 
 let stopWatch: (() => void) | undefined;
-function startWatch(): void {
+function stopResourceWatch(): void {
   stopWatch?.();
+  stopWatch = undefined;
+}
+
+function startWatch(): void {
+  stopResourceWatch();
+  if (!active.value) return;
   // A live table uses either the interval poll or the watch socket, never both.
   const ds = refreshMs.value > 0 ? undefined : watchSource.value;
   stopWatch = ds
@@ -914,8 +920,18 @@ const visibility = useDocumentVisibility();
 // Under KeepAlive an off-screen tab stays mounted; pause its poll so a plugin
 // with many live tabs only refreshes the visible one. No-op when not kept alive.
 const active = ref(true);
-onActivated(() => (active.value = true));
-onDeactivated(() => (active.value = false));
+onActivated(() => {
+  if (active.value) return;
+  active.value = true;
+  if (refreshMs.value === 0 && watchSource.value) {
+    void refresh();
+    startWatch();
+  }
+});
+onDeactivated(() => {
+  active.value = false;
+  stopResourceWatch();
+});
 
 async function refresh(): Promise<void> {
   if (!props.source || loading.value || committing.value) return;
@@ -1003,7 +1019,7 @@ function onFilter(): void {
 }
 
 onUnmounted(() => {
-  stopWatch?.();
+  stopResourceWatch();
   if (debounce) clearTimeout(debounce);
   if (flushHandle !== undefined) cancelAnimationFrame(flushHandle);
 });

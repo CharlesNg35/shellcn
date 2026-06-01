@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { defineComponent, ref } from "vue";
 import { installFetch } from "../../test/fetchMock";
 import EnrollPanel from "./EnrollPanel.vue";
 
@@ -101,6 +102,34 @@ describe("EnrollPanel", () => {
     await flushPromises();
     expect(w.text()).toContain("Agent disconnected");
     expect(w.text()).toContain("offline");
+
+    w.unmount();
+  });
+
+  it("pauses polling while deactivated under KeepAlive", async () => {
+    vi.useFakeTimers();
+    const Host = defineComponent({
+      components: { EnrollPanel },
+      setup() {
+        const show = ref(true);
+        return { show };
+      },
+      template:
+        "<KeepAlive><EnrollPanel v-if='show' connection-id='edge' /></KeepAlive>",
+    });
+    const w = mount(Host);
+    await flushPromises();
+    expect(stateCalls).toBe(1);
+
+    w.vm.show = false;
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(4000);
+    await flushPromises();
+    expect(stateCalls).toBe(1);
+
+    w.vm.show = true;
+    await flushPromises();
+    expect(stateCalls).toBe(2);
 
     w.unmount();
   });

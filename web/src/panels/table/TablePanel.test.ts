@@ -46,6 +46,22 @@ function bodyButton(text: string): HTMLButtonElement | undefined {
   ) as HTMLButtonElement | undefined;
 }
 
+class FakeSocket {
+  readyState = 1;
+  closed = false;
+  listeners = new Map<string, Array<(ev: unknown) => void>>();
+
+  addEventListener(type: string, listener: (ev: unknown) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  send(): void {}
+
+  close(): void {
+    this.closed = true;
+  }
+}
+
 describe("TablePanel", () => {
   it("renders manifest columns and rows, paginates server-side", async () => {
     const w = mount(TablePanel, {
@@ -674,6 +690,59 @@ describe("TablePanel staged edits", () => {
     await w.setProps({ show: true }); // reactivate
     await flushPromises();
     expect(calls).toBe(3); // immediate catch-up refresh
+    w.unmount();
+  });
+
+  it("pauses live watch sockets while deactivated under KeepAlive", async () => {
+    const sockets: FakeSocket[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class extends FakeSocket {
+        constructor() {
+          super();
+          sockets.push(this);
+        }
+      },
+    );
+    installFetch((url) => {
+      if (url.endsWith("/tickets")) return { body: { ticket: "t1" } };
+      return {
+        body: { items: [{ _id: "a", name: "x" }], nextCursor: "", total: 1 },
+      };
+    });
+
+    const Parent = defineComponent({
+      props: { show: { type: Boolean, default: true } },
+      setup(p) {
+        return () =>
+          h(KeepAlive, () =>
+            p.show
+              ? h(TablePanel, {
+                  connectionId: "c1",
+                  source: { routeId: "server_monitor.processes" },
+                  config: {
+                    columns: [{ key: "name", label: "Name" }],
+                    watch: { routeId: "server_monitor.processes.watch" },
+                  },
+                })
+              : null,
+          );
+      },
+    });
+    const w = mount(Parent, { props: { show: true } });
+    await flushPromises();
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0].closed).toBe(false);
+
+    await w.setProps({ show: false });
+    await flushPromises();
+    expect(sockets[0].closed).toBe(true);
+
+    await w.setProps({ show: true });
+    await flushPromises();
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1].closed).toBe(false);
+
     w.unmount();
   });
 
