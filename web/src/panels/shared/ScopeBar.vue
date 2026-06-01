@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from "vue";
+import { reactive, ref, watch } from "vue";
 import Select from "primevue/select";
 import MultiSelect from "primevue/multiselect";
 import InputText from "primevue/inputtext";
@@ -37,6 +37,13 @@ function set(f: ScopeFilter, v: string): void {
   store.set(props.connectionId, f.param, v);
 }
 
+function ensureDefault(f: ScopeFilter): void {
+  if (!f.defaultValue || value(f)) return;
+  if (choices(f).some((option) => option.value === f.defaultValue)) {
+    set(f, f.defaultValue);
+  }
+}
+
 // Members ride in one param string, joined by the shared scope separator.
 function members(f: ScopeFilter): string[] {
   const v = value(f);
@@ -58,6 +65,7 @@ async function loadOptions(): Promise<void> {
     for (const f of props.scope) {
       if (f.options) {
         options[f.param] = f.options;
+        ensureDefault(f);
         continue;
       }
       if (!f.optionsSource || !f.valueField) continue;
@@ -73,14 +81,21 @@ async function loadOptions(): Promise<void> {
           };
         })
         .filter((o) => o.value);
+      ensureDefault(f);
     }
   } finally {
     loading.value = false;
   }
 }
 
-onMounted(loadOptions);
-watch(() => props.connectionId, loadOptions);
+watch(
+  () => [props.connectionId, props.scope],
+  () => {
+    store.configure(props.connectionId, props.scope);
+    void loadOptions();
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

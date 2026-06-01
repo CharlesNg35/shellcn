@@ -4,6 +4,7 @@ import { resolvePanel } from "./registry";
 import FallbackPanel from "./FallbackPanel.vue";
 import PanelError from "../shared/PanelError.vue";
 import { panelConfigError } from "./config";
+import { useScopeStore } from "../../stores/scope";
 import type {
   Action,
   DataSource,
@@ -27,12 +28,14 @@ const emit = defineEmits<{
 
 const component = computed(() => resolvePanel(props.panel));
 const configError = computed(() => panelConfigError(props.panel, props.config));
+const scope = useScopeStore();
 const panelKey = computed(() =>
   JSON.stringify({
     panel: props.panel,
     connectionId: props.connectionId,
     source: props.source,
     resource: props.resource?.uid,
+    scope: scope.params(props.connectionId),
   }),
 );
 

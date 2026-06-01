@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "../test/fetchMock";
 import type { SocketLike } from "../stores/streamChannels";
 import {
@@ -12,6 +13,7 @@ import {
   watch,
 } from "./dataSource";
 import { setCsrfToken } from "./client";
+import { useScopeStore } from "../stores/scope";
 
 class FakeSocket implements SocketLike {
   closed = false;
@@ -50,6 +52,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   setCsrfToken("");
+  setActivePinia(undefined);
 });
 
 describe("dataSource resolver", () => {
@@ -116,6 +119,39 @@ describe("dataSource resolver", () => {
     expect(routePath("conn-1", "docker.container.list")).toBe(
       "/api/connections/conn-1/x/docker.container.list",
     );
+  });
+
+  it("merges global scope into form actions", async () => {
+    setActivePinia(createPinia());
+    const scope = useScopeStore();
+    scope.configure("conn", [{ param: "database" }]);
+    scope.set("conn", "database", "1");
+    const fetchMock = installFetch(() => ({ body: { ok: true } }));
+
+    await runFormAction(
+      "conn",
+      "redis.key.write",
+      {},
+      { value: "hello" },
+      { key: "session:1" },
+      "PUT",
+    );
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("p.database=1");
+    expect(String(url)).toContain("p.key=session%3A1");
+  });
+
+  it("does not inject undeclared scope params", async () => {
+    setActivePinia(createPinia());
+    const scope = useScopeStore();
+    scope.set("conn", "database", "1");
+    const fetchMock = installFetch(() => ({ body: { items: [] } }));
+
+    await fetchPage("conn", { routeId: "docker.container.list" });
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).not.toContain("p.database");
   });
 
   it("posts file uploads as multipart without forcing a JSON content type", async () => {

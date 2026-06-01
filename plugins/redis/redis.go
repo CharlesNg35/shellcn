@@ -26,6 +26,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 		Capabilities:        []plugin.Capability{"kv", "keys", "pubsub", "terminal"},
 		SupportedTransports: []plugin.Transport{plugin.TransportDirect},
 		Layout:              plugin.LayoutTabs,
+		Scope:               []plugin.ScopeFilter{databaseScope()},
 		Tabs: []plugin.Panel{
 			{Key: "overview", Label: "Overview", Icon: icon("gauge"), Type: plugin.PanelDashboard, Config: overviewDashboard()},
 			{Key: "keys", Label: "Keys", Icon: icon("key-round"), Type: plugin.PanelKV, Source: &plugin.DataSource{RouteID: "redis.keys.list"}, Config: plugin.KVConfig{
@@ -49,6 +50,18 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 
 func icon(name string) plugin.Icon {
 	return plugin.Icon{Type: plugin.IconLucide, Value: name}
+}
+
+func databaseScope() plugin.ScopeFilter {
+	return plugin.ScopeFilter{
+		Param:         databaseScopeParam,
+		Label:         "Database",
+		Icon:          icon("database"),
+		OptionsSource: &plugin.DataSource{RouteID: "redis.databases.list"},
+		ValueField:    "value",
+		LabelField:    "label",
+		DefaultValue:  "0",
+	}
 }
 
 // overviewDashboard composes the server summary, connected clients, and pub/sub

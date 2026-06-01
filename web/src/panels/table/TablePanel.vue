@@ -51,7 +51,6 @@ import {
 } from "./mutation";
 import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
 import { useNavigableKinds } from "../core/navigable";
-import { useScopeStore } from "../../stores/scope";
 import { useWorkspaceStore } from "../../stores/workspace";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
@@ -67,7 +66,6 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
-const scope = useScopeStore();
 const workspace = useWorkspaceStore();
 
 // Framework-reserved row keys the grid never renders as data columns. Plugins
@@ -1077,17 +1075,6 @@ vueWatch(
 
 vueWatch([filterText, sortField, sortOrder, first, pageSize], () =>
   saveTableState(),
-);
-
-// A change to the connection's global scope re-scopes every list: refetch and
-// reattach the watch with the new params.
-vueWatch(
-  () => JSON.stringify(scope.params(props.connectionId)),
-  () => {
-    first.value = 0;
-    load(0);
-    startWatch();
-  },
 );
 
 let debounce: ReturnType<typeof setTimeout> | undefined;

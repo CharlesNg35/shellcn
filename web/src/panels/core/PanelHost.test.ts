@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { nextTick } from "vue";
 import { mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 import PanelHost from "./PanelHost.vue";
 import LoadingPanel from "./LoadingPanel.vue";
+import { useScopeStore } from "../../stores/scope";
 
 const lifecycle = vi.hoisted(() => ({
   mounts: 0,
@@ -27,6 +30,7 @@ vi.mock("./registry", () => ({
 
 describe("PanelHost", () => {
   beforeEach(() => {
+    setActivePinia(createPinia());
     lifecycle.mounts = 0;
     lifecycle.unmounts = 0;
   });
@@ -97,5 +101,24 @@ describe("PanelHost", () => {
     expect(lifecycle.unmounts).toBe(1);
     expect(lifecycle.mounts).toBe(2);
     expect(w.text()).toContain("panel c2");
+  });
+
+  it("remounts panels when connection scope changes", async () => {
+    const scope = useScopeStore();
+    scope.configure("c1", [{ param: "database" }]);
+    mount(PanelHost, {
+      props: {
+        panel: "test_panel",
+        connectionId: "c1",
+        source: { routeId: "redis.keys.list" },
+      },
+    });
+
+    expect(lifecycle.mounts).toBe(1);
+    scope.set("c1", "database", "1");
+    await nextTick();
+
+    expect(lifecycle.unmounts).toBe(1);
+    expect(lifecycle.mounts).toBe(2);
   });
 });

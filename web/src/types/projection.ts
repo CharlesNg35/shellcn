@@ -268,6 +268,7 @@ export interface ScopeFilter {
   valueField?: string;
   labelField?: string;
   allLabel?: string;
+  defaultValue?: string;
 }
 
 export interface TablePanelConfig {
