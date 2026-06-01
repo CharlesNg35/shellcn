@@ -171,6 +171,66 @@ func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
 	}
 }
 
+type recordingConfirmer struct {
+	approve bool
+	calls   []tools.ConfirmRequest
+}
+
+func (c *recordingConfirmer) Confirm(_ context.Context, req tools.ConfirmRequest) (bool, error) {
+	c.calls = append(c.calls, req)
+	return c.approve, nil
+}
+
+func TestConfirmerGatesWritesNotReads(t *testing.T) {
+	reg := registry(t)
+
+	// Rejected write: the confirmer is consulted and the route never runs.
+	inv := &recordingInvoker{result: map[string]any{"ok": true}}
+	cf := &recordingConfirmer{approve: false}
+	ts := mustBuild(t, reg, map[plugin.RiskLevel]bool{plugin.RiskSafe: true, plugin.RiskWrite: true}, inv).WithConfirmer(cf)
+
+	out, err := ts.Execute(context.Background(), engine.ToolCall{ID: "tc1", Name: "demo_create", Input: map[string]any{"name": "x"}})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(cf.calls) != 1 || cf.calls[0].ToolCallID != "tc1" || cf.calls[0].Risk != plugin.RiskWrite {
+		t.Fatalf("confirmer not consulted correctly: %+v", cf.calls)
+	}
+	if inv.lastRoute != "" {
+		t.Fatalf("declined write must not invoke the route, got %q", inv.lastRoute)
+	}
+	if m, ok := out.(map[string]any); !ok || m["declined"] != true {
+		t.Fatalf("declined result expected, got %#v", out)
+	}
+
+	// Approved write: the route runs.
+	cf.approve = true
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{ID: "tc2", Name: "demo_create", Input: map[string]any{"name": "y"}}); err != nil {
+		t.Fatalf("approved execute: %v", err)
+	}
+	if inv.lastRoute != "demo.create" {
+		t.Fatalf("approved write should invoke the route, got %q", inv.lastRoute)
+	}
+
+	// Reads never reach the confirmer.
+	before := len(cf.calls)
+	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_list"}); err != nil {
+		t.Fatalf("read execute: %v", err)
+	}
+	if len(cf.calls) != before {
+		t.Fatal("a read must not require confirmation")
+	}
+}
+
+func mustBuild(t *testing.T, reg *plugin.Registry, allowed map[plugin.RiskLevel]bool, inv tools.Invoker) *tools.ToolSet {
+	t.Helper()
+	ts, err := tools.Build(reg, "demo", allowed, inv, models.User{ID: "u"}, "c1")
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	return ts
+}
+
 func TestExecuteTruncatesLargeResult(t *testing.T) {
 	reg := registry(t)
 	big := strings.Repeat("x", 20<<10)

@@ -66,9 +66,12 @@ func (s *Service) WithProviderFactory(f ProviderFactory) *Service {
 }
 
 // Scope selects which provider config a turn uses: a specific user provider, or
-// the shared global config when ProviderID is empty.
+// the shared global config when ProviderID is empty. Model overrides the
+// provider's default model when set (user providers only; the global model is
+// pinned).
 type Scope struct {
 	ProviderID string
+	Model      string
 }
 
 // RunInput is one chat turn's request.
@@ -86,6 +89,8 @@ type RunInput struct {
 	// RecentOps are pre-formatted recent audit lines injected into the prompt so
 	// the agent can explain a just-failed action.
 	RecentOps []string
+	// Confirm gates write/destructive tool calls (nil = no mutations possible).
+	Confirm tools.Confirmer
 }
 
 // Run executes one turn and relays every event to sink. The caller cancels ctx
@@ -100,6 +105,9 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 	toolset, err := tools.Build(s.routes, in.Protocol, allowed, s.invoker, in.User, in.ConnID)
 	if err != nil {
 		return err
+	}
+	if in.Confirm != nil {
+		toolset.WithConfirmer(in.Confirm)
 	}
 
 	// Expose an investigation subagent (nested read-only run) whenever the
@@ -251,8 +259,12 @@ func (s *Service) resolveProvider(ctx context.Context, user models.User, scope S
 		if err != nil {
 			return nil, "", "", err
 		}
-		p, err := s.factory(ctx, cfg.Kind, key, cfg.BaseURL, cfg.DefaultModel)
-		return p, cfg.DefaultModel, cfg.Kind, err
+		model := cfg.DefaultModel
+		if scope.Model != "" && allowsModel(cfg, scope.Model) {
+			model = scope.Model
+		}
+		p, err := s.factory(ctx, cfg.Kind, key, cfg.BaseURL, model)
+		return p, model, cfg.Kind, err
 	}
 	if s.global.Configured() {
 		kind := models.AIProviderKind(s.global.Kind)
@@ -260,6 +272,20 @@ func (s *Service) resolveProvider(ctx context.Context, user models.User, scope S
 		return p, s.global.DefaultModel, kind, err
 	}
 	return nil, "", "", ErrNotConfigured
+}
+
+// allowsModel reports whether a model override is permitted: any model when the
+// provider has no allow-list, otherwise only a listed one.
+func allowsModel(cfg models.AIProviderConfig, model string) bool {
+	if len(cfg.Models) == 0 {
+		return true
+	}
+	for _, m := range cfg.Models {
+		if m == model {
+			return true
+		}
+	}
+	return false
 }
 
 // registryProvider maps a provider kind to the id the model registry indexes by.
@@ -277,12 +303,16 @@ func registryProvider(kind models.AIProviderKind) string {
 	}
 }
 
-// buildProvider maps a provider kind to an engine adapter. OpenAI and
-// OpenAI-compatible run through eino today; other vendors arrive in a later phase.
+// buildProvider maps a provider kind to its engine adapter.
 func buildProvider(ctx context.Context, kind models.AIProviderKind, key, baseURL, model string) (engine.Provider, error) {
+	cfg := einoadapter.Config{APIKey: key, BaseURL: baseURL, Model: model}
 	switch kind {
 	case models.AIProviderOpenAI, models.AIProviderOpenAICompat:
-		return einoadapter.NewOpenAI(ctx, einoadapter.Config{APIKey: key, BaseURL: baseURL, Model: model})
+		return einoadapter.NewOpenAI(ctx, cfg)
+	case models.AIProviderAnthropic:
+		return einoadapter.NewAnthropic(ctx, cfg)
+	case models.AIProviderGoogle:
+		return einoadapter.NewGoogle(ctx, cfg)
 	default:
 		return nil, ErrProviderUnsupported
 	}

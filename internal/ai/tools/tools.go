@@ -27,6 +27,24 @@ type Invoker interface {
 	InvokeRoute(ctx context.Context, user models.User, connID, routeID string, params map[string]string, body []byte) (any, error)
 }
 
+// ConfirmRequest describes a pending write/destructive tool call awaiting the
+// user's decision.
+type ConfirmRequest struct {
+	ToolCallID  string
+	ToolName    string
+	RouteID     string
+	Risk        plugin.RiskLevel
+	Destructive bool
+	Params      map[string]string
+	Body        map[string]any
+}
+
+// Confirmer asks the user to approve a mutation before it runs. It returns true
+// to proceed, false to decline. Reads never reach a confirmer.
+type Confirmer interface {
+	Confirm(ctx context.Context, req ConfirmRequest) (bool, error)
+}
+
 // RouteSource enumerates a protocol's routes (satisfied by *plugin.Registry).
 type RouteSource interface {
 	Get(name string) (plugin.Plugin, bool)
@@ -35,17 +53,25 @@ type RouteSource interface {
 // binding records how to call a route from a sanitized tool name.
 type binding struct {
 	routeID    string
+	risk       plugin.RiskLevel
 	pathParams []string
 }
 
 // ToolSet is the risk-gated tool catalogue for one connection. It implements
 // engine.ToolExecutor.
 type ToolSet struct {
-	specs   []engine.ToolSpec
-	byName  map[string]binding
-	invoker Invoker
-	user    models.User
-	connID  string
+	specs     []engine.ToolSpec
+	byName    map[string]binding
+	invoker   Invoker
+	user      models.User
+	connID    string
+	confirmer Confirmer
+}
+
+// WithConfirmer attaches a confirmer that gates write/destructive tool calls.
+func (ts *ToolSet) WithConfirmer(c Confirmer) *ToolSet {
+	ts.confirmer = c
+	return ts
 }
 
 // Build enumerates the protocol's routes, keeps those whose Risk is allowed and
@@ -66,7 +92,7 @@ func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, 
 			continue
 		}
 		params := templateParamNames(r.Path)
-		ts.byName[name] = binding{routeID: r.ID, pathParams: params}
+		ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, pathParams: params}
 		ts.specs = append(ts.specs, engine.ToolSpec{
 			Name:        name,
 			Description: describe(r),
@@ -103,6 +129,25 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 		}
 		body[k] = v
 	}
+	// Write/destructive calls pause for the user's confirmation before running.
+	if ts.confirmer != nil && (b.risk == plugin.RiskWrite || b.risk == plugin.RiskDestructive) {
+		ok, err := ts.confirmer.Confirm(ctx, ConfirmRequest{
+			ToolCallID:  call.ID,
+			ToolName:    call.Name,
+			RouteID:     b.routeID,
+			Risk:        b.risk,
+			Destructive: b.risk == plugin.RiskDestructive,
+			Params:      params,
+			Body:        body,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return map[string]any{"declined": true, "note": "The user declined this action; it was not performed."}, nil
+		}
+	}
+
 	var raw []byte
 	if len(body) > 0 {
 		var err error

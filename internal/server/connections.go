@@ -37,6 +37,8 @@ type connectionWriteRequest struct {
 	Config              map[string]any    `json:"config"`
 	PreserveCredentials []string          `json:"preserveCredentials"`
 	Recording           map[string]string `json:"recording"`
+	AIMode              string            `json:"aiMode"`
+	AIAllowDestructive  bool              `json:"aiAllowDestructive"`
 }
 
 type connectionSessionDTO struct {
@@ -107,6 +109,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	conn, err := s.deps.Connections.Create(ctx, user.ID, service.ConnectionInput{
 		Name: req.Name, Protocol: req.Protocol, Transport: req.Transport,
 		Config: req.Config, ActorID: user.ID, Recording: req.Recording,
+		AIMode: req.AIMode, AIAllowDestructive: req.AIAllowDestructive,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, "", connCreateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -157,6 +160,7 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		Name: req.Name, Transport: req.Transport, Config: req.Config,
 		ActorID: user.ID, PreserveCredentials: req.PreserveCredentials,
 		Recording: req.Recording,
+		AIMode:    req.AIMode, AIAllowDestructive: req.AIAllowDestructive,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditError, err)

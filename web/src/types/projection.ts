@@ -758,6 +758,8 @@ export interface ConnectionDetail {
   secrets: Record<string, string>;
   credentials?: Record<string, CredentialRefState>;
   recording?: Record<string, string>;
+  aiMode?: string;
+  aiAllowDestructive?: boolean;
 }
 
 export interface CredentialRefState {

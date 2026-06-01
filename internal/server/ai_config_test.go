@@ -75,6 +75,41 @@ func TestUserProviderCRUDOverHTTP(t *testing.T) {
 	}
 }
 
+func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
+	h := newHarness(t)
+
+	// read_write + allow destructive round-trips.
+	resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
+		`{"name":"ai-rw","protocol":"tester","config":{"host":"h"},"aiMode":"read_write","aiAllowDestructive":true}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create: %d (%s)", resp.Status, resp.Body)
+	}
+	id := createConnID(t, resp)
+	detail := h.do(t, http.MethodGet, "/api/connections/"+id, "op", nil)
+	if !strings.Contains(string(detail.Body), `"aiMode":"read_write"`) ||
+		!strings.Contains(string(detail.Body), `"aiAllowDestructive":true`) {
+		t.Fatalf("read_write+destructive not persisted: %s", detail.Body)
+	}
+
+	// read_only must force the destructive opt-in off even if requested.
+	resp = h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
+		`{"name":"ai-ro","protocol":"tester","config":{"host":"h"},"aiMode":"read_only","aiAllowDestructive":true}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create read_only: %d (%s)", resp.Status, resp.Body)
+	}
+	roID := createConnID(t, resp)
+	detail = h.do(t, http.MethodGet, "/api/connections/"+roID, "op", nil)
+	if !strings.Contains(string(detail.Body), `"aiAllowDestructive":false`) {
+		t.Fatalf("read_only must clear destructive opt-in: %s", detail.Body)
+	}
+
+	// An invalid mode is rejected.
+	if resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
+		`{"name":"ai-bad","protocol":"tester","config":{"host":"h"},"aiMode":"bogus"}`)); resp.Status != http.StatusBadRequest {
+		t.Fatalf("invalid ai mode: want 400, got %d", resp.Status)
+	}
+}
+
 func TestUserProviderValidationReturns400(t *testing.T) {
 	h := newHarness(t)
 	resp := h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(`{"kind":"bogus","name":"x","defaultModel":"m"}`))

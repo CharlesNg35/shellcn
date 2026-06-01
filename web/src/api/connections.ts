@@ -12,6 +12,8 @@ export interface ConnectionCreate {
   config: Record<string, unknown>;
   preserveCredentials: string[];
   recording: Record<string, unknown>;
+  aiMode?: string;
+  aiAllowDestructive?: boolean;
 }
 
 export interface ConnectionUpdate {
@@ -20,6 +22,8 @@ export interface ConnectionUpdate {
   config: Record<string, unknown>;
   preserveCredentials: string[];
   recording: Record<string, unknown>;
+  aiMode?: string;
+  aiAllowDestructive?: boolean;
 }
 
 export interface LayoutItem {

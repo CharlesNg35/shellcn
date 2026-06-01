@@ -12,6 +12,7 @@ import (
 
 	"github.com/charlesng35/shellcn/internal/ai"
 	"github.com/charlesng35/shellcn/internal/ai/engine"
+	"github.com/charlesng35/shellcn/internal/ai/tools"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/models"
@@ -51,9 +52,14 @@ const aiChatRouteID = "ai.chat"
 // real per-action gating happens per tool call.
 var aiAccessRoute = plugin.Route{ID: aiChatRouteID, Permission: "connection.ai", Risk: plugin.RiskSafe, AuditEvent: aiChatRouteID}
 
-// connectionAIMode reports the connection's AI mode. Until the per-connection
-// columns land, AI is available read-only whenever a provider is configured.
-func connectionAIMode(_ models.Connection) string { return "read_only" }
+// connectionAIMode reports the connection's effective AI mode: the stored mode,
+// or read-only by default when AI is configured but the owner hasn't chosen one.
+func connectionAIMode(conn models.Connection) string {
+	if conn.AIMode == "" {
+		return models.AIModeReadOnly
+	}
+	return conn.AIMode
+}
 
 type aiTicketResponse struct {
 	Ticket string `json:"ticket"`
@@ -82,10 +88,12 @@ func (s *Server) handleMintAITicket(w http.ResponseWriter, r *http.Request) {
 }
 
 type aiClientFrame struct {
-	Type           string `json:"type"` // user_message | stop
+	Type           string `json:"type"` // user_message | stop | confirm | reject
 	Content        string `json:"content"`
 	ProviderID     string `json:"providerId"`
+	Model          string `json:"model"`
 	ConversationID string `json:"conversationId"`
+	ToolID         string `json:"toolId"` // for confirm/reject
 }
 
 // aiMetaFrame tells the client which conversation a turn belongs to (so a newly
@@ -94,6 +102,61 @@ type aiMetaFrame struct {
 	Type           string `json:"type"`
 	ConversationID string `json:"conversationId"`
 	Title          string `json:"title"`
+}
+
+type aiConfirmFrame struct {
+	Type        string            `json:"type"` // needs_confirmation
+	ToolID      string            `json:"toolId"`
+	ToolName    string            `json:"toolName"`
+	RouteID     string            `json:"routeId"`
+	Risk        string            `json:"risk"`
+	Destructive bool              `json:"destructive"`
+	Params      map[string]string `json:"params,omitempty"`
+	Body        map[string]any    `json:"body,omitempty"`
+}
+
+// wsConfirmer emits a needs_confirmation frame and blocks the tool call until the
+// client answers (or the turn is cancelled).
+type wsConfirmer struct {
+	out       chan<- any
+	mu        sync.Mutex
+	decisions map[string]chan bool
+}
+
+func (cf *wsConfirmer) Confirm(ctx context.Context, req tools.ConfirmRequest) (bool, error) {
+	ch := make(chan bool, 1)
+	cf.mu.Lock()
+	cf.decisions[req.ToolCallID] = ch
+	cf.mu.Unlock()
+	defer func() {
+		cf.mu.Lock()
+		delete(cf.decisions, req.ToolCallID)
+		cf.mu.Unlock()
+	}()
+
+	cf.out <- aiConfirmFrame{
+		Type: "needs_confirmation", ToolID: req.ToolCallID, ToolName: req.ToolName,
+		RouteID: req.RouteID, Risk: string(req.Risk), Destructive: req.Destructive,
+		Params: req.Params, Body: req.Body,
+	}
+	select {
+	case ok := <-ch:
+		return ok, nil
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
+}
+
+func (cf *wsConfirmer) deliver(toolID string, ok bool) {
+	cf.mu.Lock()
+	ch := cf.decisions[toolID]
+	cf.mu.Unlock()
+	if ch != nil {
+		select {
+		case ch <- ok:
+		default:
+		}
+	}
 }
 
 // handleAIChat is the chat WebSocket: it redeems the ticket, then runs a turn per
@@ -135,27 +198,40 @@ func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.User, conn models.Connection) {
-	var mu sync.Mutex // serializes one active turn (queueing arrives later)
-	var cancel context.CancelFunc
+	// All outbound frames go through one writer goroutine, so the streaming turn
+	// and a paused tool-confirmation can both emit without racing on the socket.
+	out := make(chan any, 64)
+	writerDone := make(chan struct{})
+	go func() {
+		defer close(writerDone)
+		for f := range out {
+			_ = wsjson.Write(ctx, c, f)
+		}
+	}()
 
-	send := func(ev engine.StreamEvent) {
-		_ = wsjson.Write(ctx, c, ev)
-	}
-	send2 := func(convID, title string) {
-		_ = wsjson.Write(ctx, c, aiMetaFrame{Type: "conversation", ConversationID: convID, Title: title})
-	}
+	var mu sync.Mutex
+	var cancel context.CancelFunc
+	var wg sync.WaitGroup
+	confirmer := &wsConfirmer{out: out, decisions: map[string]chan bool{}}
+
+	defer func() {
+		mu.Lock()
+		if cancel != nil {
+			cancel()
+		}
+		mu.Unlock()
+		wg.Wait()
+		close(out)
+		<-writerDone
+	}()
+
+	send := func(ev engine.StreamEvent) { out <- ev }
 
 	for {
 		var frame aiClientFrame
 		if err := wsjson.Read(ctx, c, &frame); err != nil {
-			mu.Lock()
-			if cancel != nil {
-				cancel()
-			}
-			mu.Unlock()
 			return
 		}
-
 		switch frame.Type {
 		case "stop":
 			mu.Lock()
@@ -163,41 +239,41 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 				cancel()
 			}
 			mu.Unlock()
+		case "confirm", "reject":
+			confirmer.deliver(frame.ToolID, frame.Type == "confirm")
 		case "user_message":
 			mu.Lock()
-			if cancel != nil { // a turn is already running; ignore (no queue yet)
+			if cancel != nil { // one turn at a time; queueing arrives later
 				mu.Unlock()
 				continue
 			}
 			turnCtx, c2 := context.WithCancel(ctx)
 			cancel = c2
+			wg.Add(1)
 			mu.Unlock()
 
-			// Run the turn off the read loop so a stop frame can still be read and
-			// cancel it mid-stream. Only this goroutine writes to the socket.
 			go func(frame aiClientFrame) {
-				turnID := uuid.NewString()
-				tctx := audit.WithSource(turnCtx, audit.SourceAI, turnID)
+				defer wg.Done()
+				tctx := audit.WithSource(turnCtx, audit.SourceAI, uuid.NewString())
 
-				// Ensure a conversation exists; create one and tell the client its id.
 				convID := frame.ConversationID
 				if convID == "" {
-					if c, err := s.chat.Conversations().Create(tctx, user.ID, conn.ID, frame.ProviderID, ""); err == nil {
-						convID = c.ID
-						send2(c.ID, "")
+					if cv, err := s.chat.Conversations().Create(tctx, user.ID, conn.ID, frame.ProviderID, ""); err == nil {
+						convID = cv.ID
+						out <- aiMetaFrame{Type: "conversation", ConversationID: cv.ID}
 					}
 				}
 
 				in := ai.RunInput{
 					User: user, ConnID: conn.ID, Protocol: conn.Protocol,
 					ConnectionTitle: conn.Name, AIMode: connectionAIMode(conn),
-					Scope:          ai.Scope{ProviderID: frame.ProviderID},
-					ConversationID: convID,
-					UserMessage:    frame.Content,
-					RecentOps:      s.recentAuditLines(tctx, user.ID, conn.ID),
+					AllowDestructive: conn.AIAllowDestructive,
+					Scope:            ai.Scope{ProviderID: frame.ProviderID, Model: frame.Model},
+					ConversationID:   convID,
+					UserMessage:      frame.Content,
+					RecentOps:        s.recentAuditLines(tctx, user.ID, conn.ID),
+					Confirm:          confirmer,
 				}
-				// On success the provider already emits a terminal done; on a setup
-				// error (no stream) we synthesize an error + done so the client ends.
 				if err := s.chat.Run(tctx, in, send); err != nil {
 					send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
 					send(engine.StreamEvent{Type: engine.EventDone})

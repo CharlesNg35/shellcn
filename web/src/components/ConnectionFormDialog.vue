@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import Dialog from "primevue/dialog";
 import Select from "primevue/select";
 import InputText from "primevue/inputtext";
+import Checkbox from "primevue/checkbox";
 import Button from "primevue/button";
 import { ApiError } from "../api/client";
 import { connectionsApi } from "../api/connections";
+import { aiApi } from "../api/ai";
 import { useConnectionsStore } from "../stores/connections";
 import { useNotify } from "../composables/useNotify";
 import SchemaForm from "../panels/form/SchemaForm.vue";
@@ -43,8 +45,26 @@ const configModel = ref<Record<string, unknown>>({});
 const secretsSet = ref<Record<string, boolean>>({});
 const credentialStates = ref<ConnectionDetail["credentials"]>({});
 const recordingModel = ref<Record<string, string>>({});
+const aiMode = ref("");
+const aiAllowDestructive = ref(false);
+const aiConfigured = ref(false);
 const loading = ref(false);
 const busy = ref(false);
+
+const aiModeChoices = [
+  { label: "Disabled", value: "disabled" },
+  { label: "Read-only", value: "read_only" },
+  { label: "Read & write", value: "read_write" },
+];
+
+onMounted(async () => {
+  try {
+    const [global, list] = await Promise.all([aiApi.global(), aiApi.list()]);
+    aiConfigured.value = global.configured || list.length > 0;
+  } catch {
+    aiConfigured.value = false;
+  }
+});
 const formRef = ref<{ submit: () => void } | null>(null);
 
 const transportChoices = computed(() =>
@@ -89,6 +109,8 @@ function reset(): void {
   secretsSet.value = {};
   credentialStates.value = {};
   recordingModel.value = {};
+  aiMode.value = "";
+  aiAllowDestructive.value = false;
 }
 
 async function selectPlugin(nextProtocol: string): Promise<void> {
@@ -122,6 +144,8 @@ async function loadForEdit(id: string): Promise<void> {
     );
     credentialStates.value = detail.credentials ?? {};
     recordingModel.value = { ...(detail.recording ?? {}) };
+    aiMode.value = detail.aiMode ?? "";
+    aiAllowDestructive.value = detail.aiAllowDestructive ?? false;
     protocol.value = detail.protocol;
     projection.value = await conns.projection(detail.protocol);
     configModel.value = mergeSchemaDefaults(
@@ -166,6 +190,8 @@ async function onConfig(
         config,
         preserveCredentials: meta.preserveCredentials ?? [],
         recording: recordingModel.value,
+        aiMode: aiMode.value,
+        aiAllowDestructive: aiAllowDestructive.value,
       });
       await conns.refresh();
       notify.success("Connection updated", updated.name);
@@ -178,6 +204,8 @@ async function onConfig(
         config,
         preserveCredentials: [],
         recording: recordingModel.value,
+        aiMode: aiMode.value,
+        aiAllowDestructive: aiAllowDestructive.value,
       });
       await conns.refresh();
       notify.success("Connection created", created.name);
@@ -346,6 +374,66 @@ async function onConfig(
               />
             </div>
           </div>
+        </fieldset>
+
+        <fieldset
+          class="flex min-w-0 flex-col gap-3 rounded-md border border-surface-200 p-3 dark:border-surface-700"
+        >
+          <legend
+            class="flex items-center gap-1.5 px-1 text-sm font-medium text-surface-700 dark:text-surface-200"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'sparkles' }" :size="14" />
+            AI assistant
+          </legend>
+          <p
+            v-if="!aiConfigured"
+            class="text-xs text-surface-500 dark:text-surface-400"
+          >
+            Configure an AI provider in
+            <RouterLink
+              :to="{ name: 'ai-settings' }"
+              class="text-primary-500 underline"
+              >Settings → AI providers</RouterLink
+            >
+            to enable the assistant for connections.
+          </p>
+          <template v-else>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm text-surface-700 dark:text-surface-200"
+                >Assistant access</span
+              >
+              <div class="w-44 shrink-0">
+                <Select
+                  :model-value="aiMode || 'read_only'"
+                  :options="aiModeChoices"
+                  option-label="label"
+                  option-value="value"
+                  aria-label="AI assistant access"
+                  @update:model-value="aiMode = $event"
+                />
+              </div>
+            </div>
+            <label
+              v-if="aiMode === 'read_write'"
+              class="flex items-start gap-2 text-sm"
+            >
+              <Checkbox
+                :model-value="aiAllowDestructive"
+                binary
+                input-id="ai-allow-destructive"
+                @update:model-value="aiAllowDestructive = $event"
+              />
+              <span class="flex min-w-0 flex-col">
+                <span class="text-surface-700 dark:text-surface-200"
+                  >Allow destructive operations</span
+                >
+                <span class="text-xs text-amber-600 dark:text-amber-400">
+                  Lets the assistant delete/drop/truncate — each still requires
+                  your confirmation. Off by default.
+                </span>
+              </span>
+            </label>
+          </template>
         </fieldset>
       </template>
     </div>

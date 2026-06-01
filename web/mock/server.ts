@@ -895,6 +895,8 @@ function handleHTTP(
         config: (conn.config as Json) ?? {},
         secrets: {},
         recording: (conn.recording as Json) ?? {},
+        aiMode: (conn.aiMode as string) ?? "",
+        aiAllowDestructive: Boolean(conn.aiAllowDestructive),
       });
     }
     if (method === "PUT") {
@@ -904,6 +906,8 @@ function handleHTTP(
         conn.transport = body.transport ?? conn.transport;
         conn.config = body.config ?? {};
         conn.recording = body.recording ?? conn.recording ?? {};
+        conn.aiMode = body.aiMode ?? conn.aiMode ?? "";
+        conn.aiAllowDestructive = Boolean(body.aiAllowDestructive);
         send(res, 200, {
           id,
           name: conn.name,
@@ -913,6 +917,8 @@ function handleHTTP(
           config: conn.config,
           secrets: {},
           recording: conn.recording,
+          aiMode: conn.aiMode,
+          aiAllowDestructive: conn.aiAllowDestructive,
         });
       });
     }

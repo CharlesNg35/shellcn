@@ -74,6 +74,46 @@ func TestLiveStream(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new provider: %v", err)
 	}
+	assertPongStream(ctx, t, p)
+}
+
+// TestLiveAnthropic / TestLiveGoogle exercise the other adapters; env-gated.
+func TestLiveAnthropic(t *testing.T) {
+	key := os.Getenv("SHELLCN_AI_TEST_ANTHROPIC_KEY")
+	if key == "" {
+		t.Skip("set SHELLCN_AI_TEST_ANTHROPIC_KEY to run")
+	}
+	mdl := os.Getenv("SHELLCN_AI_TEST_ANTHROPIC_MODEL")
+	if mdl == "" {
+		mdl = "claude-haiku-4-5"
+	}
+	ctx := context.Background()
+	p, err := NewAnthropic(ctx, Config{APIKey: key, Model: mdl})
+	if err != nil {
+		t.Fatalf("new anthropic: %v", err)
+	}
+	assertPongStream(ctx, t, p)
+}
+
+func TestLiveGoogle(t *testing.T) {
+	key := os.Getenv("SHELLCN_AI_TEST_GOOGLE_KEY")
+	if key == "" {
+		t.Skip("set SHELLCN_AI_TEST_GOOGLE_KEY to run")
+	}
+	mdl := os.Getenv("SHELLCN_AI_TEST_GOOGLE_MODEL")
+	if mdl == "" {
+		mdl = "gemini-2.5-flash"
+	}
+	ctx := context.Background()
+	p, err := NewGoogle(ctx, Config{APIKey: key, Model: mdl})
+	if err != nil {
+		t.Fatalf("new google: %v", err)
+	}
+	assertPongStream(ctx, t, p)
+}
+
+func assertPongStream(ctx context.Context, t *testing.T, p *Provider) {
+	t.Helper()
 	ch, err := p.Stream(ctx, engine.ChatRequest{
 		System:       "You are a test bot. Reply with the single word: pong.",
 		Messages:     []engine.Message{{Role: engine.RoleUser, Content: "ping"}},

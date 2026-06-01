@@ -12,13 +12,19 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/cloudwego/eino-ext/components/model/claude"
+	"github.com/cloudwego/eino-ext/components/model/gemini"
 	"github.com/cloudwego/eino-ext/components/model/openai"
 	"github.com/cloudwego/eino/components/model"
 	"github.com/cloudwego/eino/schema"
 	"github.com/eino-contrib/jsonschema"
+	"google.golang.org/genai"
 
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 )
+
+// anthropicMaxTokens is the required max_tokens Anthropic needs per request.
+const anthropicMaxTokens = 8192
 
 // Config is the minimal provider wiring the adapter needs.
 type Config struct {
@@ -44,6 +50,32 @@ func NewOpenAI(ctx context.Context, cfg Config) (*Provider, error) {
 	})
 	if err != nil {
 		return nil, fmt.Errorf("eino openai: %w", err)
+	}
+	return &Provider{cm: cm, model: cfg.Model}, nil
+}
+
+// NewAnthropic builds a Claude provider.
+func NewAnthropic(ctx context.Context, cfg Config) (*Provider, error) {
+	c := &claude.Config{APIKey: cfg.APIKey, Model: cfg.Model, MaxTokens: anthropicMaxTokens}
+	if cfg.BaseURL != "" {
+		c.BaseURL = &cfg.BaseURL
+	}
+	cm, err := claude.NewChatModel(ctx, c)
+	if err != nil {
+		return nil, fmt.Errorf("eino claude: %w", err)
+	}
+	return &Provider{cm: cm, model: cfg.Model}, nil
+}
+
+// NewGoogle builds a Gemini provider.
+func NewGoogle(ctx context.Context, cfg Config) (*Provider, error) {
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: cfg.APIKey, Backend: genai.BackendGeminiAPI})
+	if err != nil {
+		return nil, fmt.Errorf("eino gemini client: %w", err)
+	}
+	cm, err := gemini.NewChatModel(ctx, &gemini.Config{Client: client, Model: cfg.Model})
+	if err != nil {
+		return nil, fmt.Errorf("eino gemini: %w", err)
 	}
 	return &Provider{cm: cm, model: cfg.Model}, nil
 }

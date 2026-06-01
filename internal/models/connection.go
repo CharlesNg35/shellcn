@@ -34,9 +34,23 @@ type Connection struct {
 	// RetentionDays caps how long this connection's recordings are kept; 0 = keep.
 	RetentionDays int
 
+	// AIMode gates the AI agent for this connection: "" (= read_only when any AI
+	// is configured), "disabled", "read_only", or "read_write". AIAllowDestructive
+	// is a further opt-in (only meaningful with read_write) that exposes
+	// delete/drop/truncate tools, each behind mandatory confirmation.
+	AIMode             string
+	AIAllowDestructive bool
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+// AI mode values stored on Connection.AIMode.
+const (
+	AIModeDisabled  = "disabled"
+	AIModeReadOnly  = "read_only"
+	AIModeReadWrite = "read_write"
+)
 
 func (Connection) TableName() string { return "connections" }
 

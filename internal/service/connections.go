@@ -46,6 +46,23 @@ type ConnectionInput struct {
 	// Recording is the per-class policy (class -> disabled|manual|auto). A nil map
 	// on update preserves the stored policy; on create it means recording is off.
 	Recording map[string]string
+	// AIMode gates the AI agent (disabled|read_only|read_write); AIAllowDestructive
+	// is honored only with read_write.
+	AIMode             string
+	AIAllowDestructive bool
+}
+
+// normalizeAIMode validates the AI mode and clears the destructive opt-in unless
+// the connection is read_write.
+func normalizeAIMode(mode string, allowDestructive bool) (string, bool, error) {
+	switch mode {
+	case "", models.AIModeDisabled, models.AIModeReadOnly:
+		return mode, false, nil
+	case models.AIModeReadWrite:
+		return mode, allowDestructive, nil
+	default:
+		return "", false, fmt.Errorf("%w: invalid ai mode %q", plugin.ErrInvalidInput, mode)
+	}
 }
 
 // ConnectionFolderInput is a sidebar folder create/update request.
@@ -81,15 +98,17 @@ type ConnectionFolderOrderInput struct {
 // ConnectionDetail is the edit/detail read: non-secret config plus a per-secret
 // field presence map ("set" / "not set"). It never carries secret values.
 type ConnectionDetail struct {
-	ID          string                        `json:"id"`
-	Name        string                        `json:"name"`
-	Protocol    string                        `json:"protocol"`
-	Transport   string                        `json:"transport"`
-	OwnerID     string                        `json:"ownerId"`
-	Config      map[string]any                `json:"config"`
-	Secrets     map[string]string             `json:"secrets"`
-	Credentials map[string]CredentialRefState `json:"credentials,omitempty"`
-	Recording   map[string]string             `json:"recording"`
+	ID                 string                        `json:"id"`
+	Name               string                        `json:"name"`
+	Protocol           string                        `json:"protocol"`
+	Transport          string                        `json:"transport"`
+	OwnerID            string                        `json:"ownerId"`
+	Config             map[string]any                `json:"config"`
+	Secrets            map[string]string             `json:"secrets"`
+	Credentials        map[string]CredentialRefState `json:"credentials,omitempty"`
+	Recording          map[string]string             `json:"recording"`
+	AIMode             string                        `json:"aiMode"`
+	AIAllowDestructive bool                          `json:"aiAllowDestructive"`
 }
 
 type CredentialRefState struct {
@@ -146,6 +165,10 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 	if err != nil {
 		return models.Connection{}, err
 	}
+	aiMode, aiAllowDestructive, err := normalizeAIMode(in.AIMode, in.AIAllowDestructive)
+	if err != nil {
+		return models.Connection{}, err
+	}
 
 	config, plain := splitSecrets(m.Config, visibleConfig)
 	enc, err := secrets.EncryptMap(ctx, s.vault, plain)
@@ -155,16 +178,18 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 
 	now := time.Now()
 	conn := models.Connection{
-		ID:        uuid.NewString(),
-		Name:      in.Name,
-		Protocol:  in.Protocol,
-		OwnerID:   ownerID,
-		Transport: transport,
-		Config:    config,
-		Secrets:   enc,
-		Recording: recording,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:                 uuid.NewString(),
+		Name:               in.Name,
+		Protocol:           in.Protocol,
+		OwnerID:            ownerID,
+		Transport:          transport,
+		Config:             config,
+		Secrets:            enc,
+		Recording:          recording,
+		AIMode:             aiMode,
+		AIAllowDestructive: aiAllowDestructive,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 	if err := s.conns.Create(ctx, &conn); err != nil {
 		return models.Connection{}, err
@@ -217,6 +242,10 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	if err != nil {
 		return models.Connection{}, err
 	}
+	aiMode, aiAllowDestructive, err := normalizeAIMode(in.AIMode, in.AIAllowDestructive)
+	if err != nil {
+		return models.Connection{}, err
+	}
 
 	config, plain := splitSecrets(m.Config, visibleConfig)
 	enc := map[string][]byte{}
@@ -237,6 +266,8 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	existing.Config = config
 	existing.Secrets = enc
 	existing.Recording = recording
+	existing.AIMode = aiMode
+	existing.AIAllowDestructive = aiAllowDestructive
 	existing.UpdatedAt = time.Now()
 	if err := s.conns.Update(ctx, &existing); err != nil {
 		return models.Connection{}, err
@@ -425,6 +456,7 @@ func (s *ConnectionService) Detail(ctx context.Context, userID string, conn mode
 		ID: conn.ID, Name: conn.Name, Protocol: conn.Protocol,
 		Transport: conn.Transport, OwnerID: conn.OwnerID,
 		Config: config, Secrets: state, Credentials: credentialStates, Recording: recording,
+		AIMode: conn.AIMode, AIAllowDestructive: conn.AIAllowDestructive,
 	}
 }
 

@@ -4,6 +4,8 @@ import {
   aiApi,
   chatSocketUrl,
   type AiConversation,
+  type AiGlobalStatus,
+  type AiProviderSummary,
   type AiStreamEvent,
 } from "../api/ai";
 
@@ -28,6 +30,16 @@ export interface AiMessage {
   truncated?: boolean;
 }
 
+export interface PendingConfirm {
+  toolId: string;
+  toolName: string;
+  routeId: string;
+  risk: string;
+  destructive: boolean;
+  params: Record<string, string>;
+  body: Record<string, unknown>;
+}
+
 interface ChatState {
   socket: WebSocket | null;
   connected: boolean;
@@ -36,8 +48,11 @@ interface ChatState {
   current: AiMessage | null; // the in-flight assistant message
   error: string | null;
   providerId: string;
+  model: string;
   conversations: AiConversation[];
   activeId: string | null;
+  pendingConfirm: PendingConfirm | null;
+  queue: string[];
 }
 
 function newState(): ChatState {
@@ -49,8 +64,11 @@ function newState(): ChatState {
     current: null,
     error: null,
     providerId: "",
+    model: "",
     conversations: [],
     activeId: null,
+    pendingConfirm: null,
+    queue: [],
   };
 }
 
@@ -61,9 +79,30 @@ const nextId = (): string => `m-${Date.now()}-${seq++}`;
 // id so a chat survives the drawer closing and reopening within a workspace.
 export const useAiChatStore = defineStore("aiChat", () => {
   const byConn = reactive<Record<string, ChatState>>({});
-  // A tick ref so components depending on a connection's state re-render; reactive
-  // map mutation already triggers, this is just a convenience for tests.
   const version = ref(0);
+  // Provider catalogue is shared across connections (the user's own providers +
+  // the shared/global indicator), loaded once.
+  const providers = ref<AiProviderSummary[]>([]);
+  const global = ref<AiGlobalStatus | null>(null);
+  let providersLoaded = false;
+
+  async function loadProviders(): Promise<void> {
+    if (providersLoaded) return;
+    providersLoaded = true;
+    try {
+      const [g, list] = await Promise.all([aiApi.global(), aiApi.list()]);
+      global.value = g;
+      providers.value = list;
+    } catch {
+      providersLoaded = false;
+    }
+  }
+
+  function setProvider(connId: string, providerId: string, model = ""): void {
+    const st = state(connId);
+    st.providerId = providerId;
+    st.model = model;
+  }
 
   function state(connId: string): ChatState {
     if (!byConn[connId]) byConn[connId] = newState();
@@ -91,10 +130,17 @@ export const useAiChatStore = defineStore("aiChat", () => {
         try {
           const frame = JSON.parse((ev as MessageEvent).data) as
             | AiStreamEvent
-            | { type: "conversation"; conversationId: string; title: string };
+            | { type: "conversation"; conversationId: string; title: string }
+            | ({ type: "needs_confirmation" } & PendingConfirm);
           if (frame.type === "conversation") {
             st.activeId = frame.conversationId;
             void loadConversations(connId);
+            return;
+          }
+          if (frame.type === "needs_confirmation") {
+            const { type: _t, ...rest } = frame;
+            void _t;
+            st.pendingConfirm = rest;
             return;
           }
           apply(connId, frame);
@@ -119,7 +165,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const text = content.trim();
     if (!text) return;
     const st = state(connId);
-    if (st.runState !== "idle") return;
+    // Typed mid-stream: queue it and flush when the current turn finishes.
+    if (st.runState !== "idle") {
+      st.queue.push(text);
+      return;
+    }
     st.messages.push({
       id: nextId(),
       role: "user",
@@ -142,6 +192,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
         type: "user_message",
         content: text,
         providerId: st.providerId,
+        model: st.model,
         conversationId: st.activeId ?? "",
       }),
     );
@@ -220,6 +271,19 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.socket?.send(JSON.stringify({ type: "stop" }));
   }
 
+  function resolveConfirm(connId: string, approve: boolean): void {
+    const st = state(connId);
+    const pending = st.pendingConfirm;
+    if (!pending) return;
+    st.socket?.send(
+      JSON.stringify({
+        type: approve ? "confirm" : "reject",
+        toolId: pending.toolId,
+      }),
+    );
+    st.pendingConfirm = null;
+  }
+
   function apply(connId: string, ev: AiStreamEvent): void {
     const st = state(connId);
     const cur = st.current;
@@ -275,6 +339,14 @@ export const useAiChatStore = defineStore("aiChat", () => {
     }
     st.current = null;
     st.runState = "idle";
+    st.pendingConfirm = null;
+    // Auto-send the next queued message, if any.
+    const next = st.queue.shift();
+    if (next) send(connId, next);
+  }
+
+  function dequeue(connId: string, index: number): void {
+    state(connId).queue.splice(index, 1);
   }
 
   function disconnect(connId: string): void {
@@ -291,15 +363,23 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.current = null;
     st.runState = "idle";
     st.error = null;
+    st.pendingConfirm = null;
+    st.queue = [];
   }
 
   return {
     byConn,
     version,
+    providers,
+    global,
+    loadProviders,
+    setProvider,
     state,
     connect,
     send,
     stop,
+    resolveConfirm,
+    dequeue,
     disconnect,
     reset,
     apply,

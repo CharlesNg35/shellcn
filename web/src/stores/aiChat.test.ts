@@ -122,6 +122,40 @@ describe("aiChat store", () => {
     expect(st.messages).toHaveLength(0);
   });
 
+  it("sends the active conversation id and confirms/rejects a pending action", () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+    const sent: Record<string, unknown>[] = [];
+    st.socket = {
+      send: (d: string) => sent.push(JSON.parse(d)),
+    } as unknown as WebSocket;
+
+    st.pendingConfirm = {
+      toolId: "t1",
+      toolName: "demo_delete",
+      routeId: "demo.delete",
+      risk: "destructive",
+      destructive: true,
+      params: {},
+      body: {},
+    };
+    store.resolveConfirm(CONN, false);
+    expect(st.pendingConfirm).toBeNull();
+    expect(sent.at(-1)).toMatchObject({ type: "reject", toolId: "t1" });
+
+    st.pendingConfirm = {
+      toolId: "t2",
+      toolName: "demo_create",
+      routeId: "demo.create",
+      risk: "write",
+      destructive: false,
+      params: {},
+      body: {},
+    };
+    store.resolveConfirm(CONN, true);
+    expect(sent.at(-1)).toMatchObject({ type: "confirm", toolId: "t2" });
+  });
+
   it("sends the active conversation id with the message", () => {
     const store = useAiChatStore();
     const st = store.state(CONN);
@@ -131,5 +165,38 @@ describe("aiChat store", () => {
     store.send(CONN, "hello");
     expect(sent).toHaveLength(1);
     expect(JSON.parse(sent[0]).conversationId).toBe("conv-9");
+  });
+
+  it("queues messages typed mid-stream and flushes on completion", () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+    st.socket = { send: () => {} } as unknown as WebSocket;
+
+    store.send(CONN, "first"); // starts a turn
+    expect(st.runState).toBe("starting");
+    store.send(CONN, "second"); // queued (turn in flight)
+    store.send(CONN, "third");
+    expect(st.queue).toEqual(["second", "third"]);
+
+    // Completing the turn auto-sends the next queued message.
+    store.apply(CONN, { type: "text_delta", text: "ok" });
+    store.apply(CONN, { type: "done" });
+    expect(st.queue).toEqual(["third"]);
+    expect(st.runState).toBe("starting");
+  });
+
+  it("sends the selected provider + model", () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+    const sent: Record<string, unknown>[] = [];
+    st.socket = {
+      send: (d: string) => sent.push(JSON.parse(d)),
+    } as unknown as WebSocket;
+    store.setProvider(CONN, "p1", "gpt-4o-mini");
+    store.send(CONN, "hi");
+    expect(sent.at(-1)).toMatchObject({
+      providerId: "p1",
+      model: "gpt-4o-mini",
+    });
   });
 });

@@ -1,16 +1,30 @@
 <script setup lang="ts">
+import { ref } from "vue";
 import AiMarkdown from "./AiMarkdown.vue";
 import AiToolBadges from "./AiToolBadges.vue";
+import AiReasoning from "./AiReasoning.vue";
+import AppIcon from "../../components/AppIcon.vue";
 import Message from "primevue/message";
 import type { AiMessage } from "../../stores/aiChat";
 
 const props = defineProps<{ message: AiMessage; streaming: boolean }>();
 const isUser = () => props.message.role === "user";
+
+const copied = ref(false);
+async function copy(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(props.message.content);
+    copied.value = true;
+    setTimeout(() => (copied.value = false), 1500);
+  } catch {
+    // clipboard unavailable; ignore
+  }
+}
 </script>
 
 <template>
   <div
-    class="flex"
+    class="group flex"
     :class="isUser() ? 'justify-end' : 'justify-start'"
     :data-role="message.role"
   >
@@ -27,6 +41,7 @@ const isUser = () => props.message.role === "user";
       </p>
 
       <template v-else>
+        <AiReasoning v-if="message.reasoning" :reasoning="message.reasoning" />
         <AiToolBadges :calls="message.toolCalls" />
         <AiMarkdown v-if="message.content" :source="message.content" />
         <span
@@ -34,7 +49,9 @@ const isUser = () => props.message.role === "user";
           class="inline-flex items-center gap-1 text-xs text-surface-400"
           aria-live="polite"
         >
-          <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-surface-400" />
+          <span
+            class="h-1.5 w-1.5 animate-pulse rounded-full bg-surface-400 motion-reduce:animate-none"
+          />
           Thinking…
         </span>
         <p
@@ -52,6 +69,19 @@ const isUser = () => props.message.role === "user";
         >
           {{ message.error }}
         </Message>
+        <button
+          v-if="message.content && !streaming"
+          type="button"
+          class="mt-1 flex items-center gap-1 text-xs text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-surface-700 focus-visible:opacity-100 dark:hover:text-surface-100"
+          :aria-label="copied ? 'Copied' : 'Copy message'"
+          @click="copy"
+        >
+          <AppIcon
+            :icon="{ type: 'lucide', value: copied ? 'check' : 'copy' }"
+            :size="12"
+          />
+          {{ copied ? "Copied" : "Copy" }}
+        </button>
       </template>
     </div>
   </div>
