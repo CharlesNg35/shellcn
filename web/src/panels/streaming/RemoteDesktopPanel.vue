@@ -7,7 +7,7 @@ import {
 } from "../../composables/useDesktopRecorder";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import AppIcon from "../../components/AppIcon.vue";
-import SkeletonList from "../../components/SkeletonList.vue";
+import PanelLoader from "../../components/PanelLoader.vue";
 import type { RemoteDesktopPanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import {
@@ -230,9 +230,9 @@ onUnmounted(() => {
       @reconnect="onReconnect"
     />
     <div ref="container" class="relative min-h-0 flex-1">
-      <SkeletonList
+      <PanelLoader
         v-if="!loaded && status === 'connecting'"
-        :rows="8"
+        label="Connecting"
         class="absolute inset-0"
       />
       <p

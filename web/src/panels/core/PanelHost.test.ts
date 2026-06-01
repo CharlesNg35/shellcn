@@ -3,7 +3,7 @@ import { nextTick } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import PanelHost from "./PanelHost.vue";
-import LoadingPanel from "./LoadingPanel.vue";
+import PanelLoader from "../../components/PanelLoader.vue";
 import { useScopeStore } from "../../stores/scope";
 
 const lifecycle = vi.hoisted(() => ({
@@ -55,9 +55,9 @@ describe("PanelHost", () => {
     expect(w.text()).toContain("config.columns must be an array.");
   });
 
-  it("uses the shared skeleton for async panel loading", () => {
-    const w = mount(LoadingPanel);
-    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+  it("uses the shared panel loader for async panel loading", () => {
+    const w = mount(PanelLoader);
+    expect(w.find('[data-test="panel-loader"]').exists()).toBe(true);
     expect(w.text()).not.toContain("Loading panel");
   });
 

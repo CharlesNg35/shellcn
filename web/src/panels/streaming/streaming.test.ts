@@ -313,19 +313,19 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
-  it("shows a skeleton while the terminal engine is loading", async () => {
+  it("shows a loader while the terminal engine is loading", async () => {
     const w = mount(TerminalPanel, { props });
-    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+    expect(w.find('[data-test="panel-loader"]').exists()).toBe(true);
 
     await flushPromises();
 
-    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    expect(w.find('[data-test="panel-loader"]').exists()).toBe(false);
     w.unmount();
   });
 
-  it("shows a skeleton while the remote desktop engine is connecting", () => {
+  it("shows a loader while the remote desktop engine is connecting", () => {
     const w = mount(RemoteDesktopPanel, { props });
-    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+    expect(w.find('[data-test="panel-loader"]').exists()).toBe(true);
     expect(w.text()).not.toContain(
       "Remote desktop session is waiting for a stream route.",
     );
