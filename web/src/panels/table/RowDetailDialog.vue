@@ -34,7 +34,7 @@ defineEmits<{ "update:visible": [value: boolean] }>();
     >
       <template v-for="item in items" :key="item.key">
         <dt class="text-surface-400">{{ item.label }}</dt>
-        <dd class="min-w-0 break-words text-surface-700 dark:text-surface-200">
+        <dd class="min-w-0 wrap-break-word text-surface-700 dark:text-surface-200">
           <span
             v-if="item.badge"
             class="inline-block rounded-full px-2 py-0.5 text-xs"

@@ -52,6 +52,7 @@ import {
 import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
 import { useNavigableKinds } from "../core/navigable";
 import { useScopeStore } from "../../stores/scope";
+import { useWorkspaceStore } from "../../stores/workspace";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
 import { badgeClassFor } from "../shared/severity";
@@ -67,6 +68,7 @@ const emit = defineEmits<{
 
 const toast = useToast();
 const scope = useScopeStore();
+const workspace = useWorkspaceStore();
 
 // Framework-reserved row keys the grid never renders as data columns. Plugins
 // hide their own fields declaratively via config.hiddenColumns instead.
@@ -121,6 +123,61 @@ const tableConfig = computed(
   () => props.config as TablePanelConfig | undefined,
 );
 const columnsSource = computed(() => tableConfig.value?.columnsSource);
+
+function stableStringify(value: unknown): string {
+  if (!value || typeof value !== "object")
+    return JSON.stringify(value) ?? "undefined";
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(",")}}`;
+}
+
+const stateKey = computed(() =>
+  [
+    props.connectionId,
+    props.source?.routeId ?? "",
+    stableStringify(props.source?.params ?? {}),
+    props.resource?.uid ?? "",
+  ].join("|"),
+);
+
+function defaultSortState(): { sortField?: string; sortOrder?: number } {
+  const ds = tableConfig.value?.defaultSort;
+  return {
+    sortField: ds?.field,
+    sortOrder: ds ? (ds.desc ? -1 : 1) : undefined,
+  };
+}
+
+function restoreTableState(): void {
+  const defaults = defaultSortState();
+  const state = workspace.tableState(stateKey.value, {
+    filterText: "",
+    sortField: defaults.sortField,
+    sortOrder: defaults.sortOrder,
+    first: 0,
+    pageSize: 50,
+  });
+  filterText.value = state.filterText;
+  sortField.value = state.sortField;
+  sortOrder.value = state.sortOrder;
+  first.value = state.first;
+  pageSize.value = state.pageSize;
+}
+
+function saveTableState(): void {
+  if (!stateKey.value) return;
+  workspace.setTableState(stateKey.value, {
+    filterText: filterText.value,
+    sortField: sortField.value,
+    sortOrder: sortOrder.value,
+    first: first.value,
+    pageSize: pageSize.value,
+  });
+}
 
 const watchSource = computed(() => tableConfig.value?.watch);
 const dynamicColumns = ref<ColumnSpec[]>([]);
@@ -684,12 +741,15 @@ async function load(targetFirst = first.value): Promise<void> {
 function onSort(e: DataTableSortEvent): void {
   sortField.value = (e.sortField as string) ?? undefined;
   sortOrder.value = e.sortOrder ?? undefined;
+  first.value = 0;
+  saveTableState();
   void load(0);
 }
 
 function onPage(e: DataTablePageEvent): void {
   first.value = e.first;
   pageSize.value = e.rows;
+  saveTableState();
   void load(e.first);
 }
 
@@ -846,13 +906,35 @@ async function onActionDone(
   emit("actionDone", action, result);
 }
 
+function hasServerViewState(): boolean {
+  return Boolean(
+    filterText.value.trim() ||
+    sortField.value ||
+    first.value > 0 ||
+    pageSize.value !== 50,
+  );
+}
+
 // Watch events arrive one WS frame at a time; we buffer a burst and apply it in
 // a single pass per frame so a flood becomes one reactive update, not N.
 let pendingEvents: ResourceEvent[] = [];
 let flushHandle: number | undefined;
+let watchRefreshHandle: ReturnType<typeof setTimeout> | undefined;
+
+function scheduleWatchRefresh(): void {
+  if (!active.value || watchRefreshHandle) return;
+  watchRefreshHandle = setTimeout(() => {
+    watchRefreshHandle = undefined;
+    void refresh();
+  }, 100);
+}
 
 function applyEvent(ev: ResourceEvent): void {
   if (pendingCount.value > 0) return; // don't clobber buffered staged edits
+  if (hasServerViewState()) {
+    scheduleWatchRefresh();
+    return;
+  }
   pendingEvents.push(ev);
   if (flushHandle === undefined)
     flushHandle = requestAnimationFrame(flushEvents);
@@ -983,22 +1065,18 @@ vueWatch(
   { immediate: true },
 );
 
-function applyDefaultSort(): void {
-  const ds = tableConfig.value?.defaultSort;
-  sortField.value = ds?.field;
-  sortOrder.value = ds ? (ds.desc ? -1 : 1) : undefined;
-}
-
 vueWatch(
-  () => [props.connectionId, props.source?.routeId, props.resource?.uid],
+  () => stateKey.value,
   () => {
-    filterText.value = "";
-    applyDefaultSort();
-    first.value = 0;
-    load(0);
+    restoreTableState();
+    load(first.value);
     startWatch();
   },
   { immediate: true },
+);
+
+vueWatch([filterText, sortField, sortOrder, first, pageSize], () =>
+  saveTableState(),
 );
 
 // A change to the connection's global scope re-scopes every list: refetch and
@@ -1015,12 +1093,17 @@ vueWatch(
 let debounce: ReturnType<typeof setTimeout> | undefined;
 function onFilter(): void {
   if (debounce) clearTimeout(debounce);
-  debounce = setTimeout(() => load(0), 250);
+  debounce = setTimeout(() => {
+    first.value = 0;
+    saveTableState();
+    load(0);
+  }, 250);
 }
 
 onUnmounted(() => {
   stopResourceWatch();
   if (debounce) clearTimeout(debounce);
+  if (watchRefreshHandle) clearTimeout(watchRefreshHandle);
   if (flushHandle !== undefined) cancelAnimationFrame(flushHandle);
 });
 </script>
