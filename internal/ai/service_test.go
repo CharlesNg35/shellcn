@@ -75,8 +75,24 @@ func TestRunWithoutProviderErrors(t *testing.T) {
 }
 
 func TestConfiguredViaGlobal(t *testing.T) {
-	svc := newService(t, config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", DefaultModel: "gpt-4o"})
+	svc := newService(t, config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"})
 	if !svc.Configured(context.Background(), "u1") {
 		t.Fatal("global config should report configured")
+	}
+}
+
+func TestGlobalProviderPinsConfiguredModel(t *testing.T) {
+	var got string
+	svc := newService(t, config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"}).
+		WithProviderFactory(func(_ context.Context, _ models.AIProviderKind, _, _, model string) (engine.Provider, error) {
+			got = model
+			return nil, nil
+		})
+	_ = svc.Run(context.Background(), ai.RunInput{
+		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "missing",
+		AIMode: "read_only", Scope: ai.Scope{Model: "gpt-4o-mini"}, UserMessage: "hi",
+	}, func(engine.StreamEvent) {})
+	if got != "gpt-4o" {
+		t.Fatalf("shared model = %q, want pinned gpt-4o", got)
 	}
 }

@@ -96,7 +96,7 @@ func TestAgentListsResourcesViaTools(t *testing.T) {
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
 	st := store.NewMemory()
-	global := config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", DefaultModel: "gpt-4o"}
+	global := config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"}
 	providers := aiconfig.New(st.AIProviders, vault, global)
 
 	reg := plugin.NewRegistry()
@@ -159,7 +159,7 @@ func TestTurnPersistsConversationHistory(t *testing.T) {
 	key, _ := secrets.GenerateMasterKey()
 	vault, _ := secrets.NewVault(key)
 	st := store.NewMemory()
-	global := config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", DefaultModel: "gpt-4o"}
+	global := config.AIConfig{Kind: "openai", Name: "Shared", APIKey: "k", Model: "gpt-4o"}
 	providers := aiconfig.New(st.AIProviders, vault, global)
 	mem := memory.New(st.AIConversations, st.AIMessages)
 

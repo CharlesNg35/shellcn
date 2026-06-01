@@ -194,7 +194,7 @@ func TestGlobalStatusProjection(t *testing.T) {
 	}
 
 	on, _ := newService(t, config.AIConfig{
-		Kind: "openai", Name: "Shared", APIKey: "sk-x", DefaultModel: "gpt-4o",
+		Kind: "openai", Name: "Shared", APIKey: "sk-x", Model: "gpt-4o",
 	})
 	g := on.Global()
 	if !g.Configured || g.Provider != "Shared" || g.Model != "gpt-4o" {

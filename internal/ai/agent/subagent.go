@@ -8,23 +8,17 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 )
 
-// Subagent caps for a nested investigation: its own, smaller context so a
-// multi-step read task stays out of the parent's window — the key context lever.
 const (
 	subagentMaxSteps     = 8
 	subagentMaxOutTokens = 2048
 )
 
-// toolExecutor is the read-only tool set a subagent runs against (satisfied by
-// *tools.ToolSet).
 type toolExecutor interface {
 	engine.ToolExecutor
 	Specs() []engine.ToolSpec
 }
 
-// Subagent runs a nested, read-only agent turn and returns a concise summary
-// string. Its inner tool progress is streamed to the parent turn (prefixed) so
-// the transcript shows the nested work without bloating the parent's context.
+// Subagent runs a nested, read-only turn and returns a concise summary.
 type Subagent struct {
 	name     string
 	provider engine.Provider
@@ -55,8 +49,7 @@ func (sa *Subagent) Spec() engine.ToolSpec {
 	}
 }
 
-// Execute runs the nested turn and returns the summary. Nested tool events are
-// re-emitted to the parent stream via the progress emitter, prefixed by name.
+// Execute runs the nested turn.
 func (sa *Subagent) Execute(ctx context.Context, call engine.ToolCall) (any, error) {
 	task, _ := call.Input["task"].(string)
 	if strings.TrimSpace(task) == "" {
@@ -101,8 +94,7 @@ func (sa *Subagent) Execute(ctx context.Context, call engine.ToolCall) (any, err
 	return out, nil
 }
 
-// Composite dispatches tool calls to either the connection's route tools or a
-// subagent, presenting both to the model as one tool catalogue.
+// Composite dispatches tool calls to either route tools or subagents.
 type Composite struct {
 	base      toolExecutor
 	subagents map[string]*Subagent

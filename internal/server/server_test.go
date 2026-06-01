@@ -292,7 +292,7 @@ func newHarness(t *testing.T) *harness {
 		Users: users, TwoFactor: twoFactor, Invitations: invitations,
 		Recording: recEngine, Recordings: recordings,
 		AI: aiconfig.New(st.AIProviders, vault, config.AIConfig{
-			Kind: "openai", Name: "Shared", APIKey: "sk-global-secret", DefaultModel: "gpt-4o",
+			Kind: "openai", Name: "Shared", APIKey: "sk-global-secret", Model: "gpt-4o",
 		}),
 	})
 

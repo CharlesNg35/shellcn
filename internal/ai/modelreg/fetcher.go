@@ -2,6 +2,8 @@ package modelreg
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -41,7 +43,7 @@ func (r *Registry) FetchModels(ctx context.Context, kind, baseURL, apiKey string
 	if base == "" {
 		return nil, &httpError{status: http.StatusBadRequest}
 	}
-	cache := r.providerCache(kind, base)
+	cache := r.providerCache(kind, base, apiKey)
 	models, err := cache.getOrFetch(func() ([]ProviderModel, error) {
 		return r.fetchModels(ctx, kind, base, apiKey)
 	})
@@ -175,8 +177,8 @@ func (r *Registry) resolveBaseURL(kind, baseURL string) string {
 	return defaultBaseURLs[kind]
 }
 
-func (r *Registry) providerCache(kind, base string) *ttlCache[[]ProviderModel] {
-	key := kind + "|" + base
+func (r *Registry) providerCache(kind, base, apiKey string) *ttlCache[[]ProviderModel] {
+	key := kind + "|" + base + "|" + cacheKeySecret(apiKey)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.providerCaches == nil {
@@ -188,6 +190,14 @@ func (r *Registry) providerCache(kind, base string) *ttlCache[[]ProviderModel] {
 		r.providerCaches[key] = c
 	}
 	return c
+}
+
+func cacheKeySecret(s string) string {
+	if s == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:8])
 }
 
 func (r *Registry) cacheProviderModelLimits(kind string, models []ProviderModel) {

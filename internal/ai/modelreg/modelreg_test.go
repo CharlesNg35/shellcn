@@ -92,6 +92,39 @@ func TestFetchModelsOpenAICompatible(t *testing.T) {
 	}
 }
 
+func TestFetchModelsCacheIsScopedToAPIKey(t *testing.T) {
+	var calls int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Header.Get("Authorization") {
+		case "Bearer sk-a":
+			_, _ = w.Write([]byte(`{"data":[{"id":"model-a"}]}`))
+		case "Bearer sk-b":
+			_, _ = w.Write([]byte(`{"data":[{"id":"model-b"}]}`))
+		default:
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}))
+	defer srv.Close()
+
+	r := New(WithHTTPClient(srv.Client()))
+	a, err := r.FetchModels(context.Background(), "openai_compatible", srv.URL, "sk-a")
+	if err != nil {
+		t.Fatalf("fetch a: %v", err)
+	}
+	b, err := r.FetchModels(context.Background(), "openai_compatible", srv.URL, "sk-b")
+	if err != nil {
+		t.Fatalf("fetch b: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("model cache should be credential-scoped, calls=%d", calls)
+	}
+	if len(a) != 1 || a[0].ID != "model-a" || len(b) != 1 || b[0].ID != "model-b" {
+		t.Fatalf("unexpected model lists: a=%+v b=%+v", a, b)
+	}
+}
+
 func TestFetchModelsGoogleFilters(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

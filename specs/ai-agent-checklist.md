@@ -25,7 +25,7 @@ make test` are green. Section refs (§) point at the spec.
 ### Backend
 
 - [x] `internal/config/ai.go`: `AIConfig` struct (`kind`, `name`, `baseURL`,
-      `apiKey` from env, `models`, `defaultModel`) added to `Config`; defaults in
+      `apiKey` from env, pinned `model`) added to `Config`; defaults in
       `setDefaults`; `SHELLCN_AI_*` env binding. **Global = env/config, no DB, no UI.**
 - [x] `models.AIProviderConfig` (**user-scoped**: `ownerId`, `kind`, `name`,
       `baseURL`, `models []string`, `defaultModel`, `apiKeyCiphertext []byte`,

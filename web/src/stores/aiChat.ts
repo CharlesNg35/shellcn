@@ -136,7 +136,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
   }
 
   function ensureProviderSelection(st: ChatState): void {
-    if (st.providerId && providers.value.some((p) => p.id === st.providerId)) {
+    if (st.providerId) {
       return;
     }
     if (global.value?.configured) {
@@ -257,8 +257,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const st = state(connId);
     if (st.runState !== "idle") return;
     try {
-      const { page } = await aiApi.getConversation(connId, cid);
+      const { conversation, page } = await aiApi.getConversation(connId, cid);
       st.activeId = cid;
+      st.providerId = conversation.providerId ?? "";
+      st.model = conversation.model ?? "";
+      if (!st.providerId) ensureProviderSelection(st);
       st.messages = page.messages.map(mapStored);
       st.hasMore = page.hasMore;
       st.current = null;

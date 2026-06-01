@@ -1,7 +1,5 @@
-// Package modelreg resolves a model's context window (and max output tokens) by
-// querying public registries — OpenRouter and models.dev — with a 24h cache and
-// candidate-name matching, falling back to a small static table and a safe
-// default when the registries are unreachable.
+// Package modelreg resolves model token limits from live registries, provider
+// catalogues, static metadata, and finally a safe default.
 package modelreg
 
 import (
@@ -40,8 +38,6 @@ type Registry struct {
 	or *ttlCache[[]openRouterModel]
 	md *ttlCache[map[string]Limits]
 
-	// resolved memoizes successful lookups; providerCaches holds each provider's
-	// fetched model list keyed by kind+baseURL.
 	mu             sync.Mutex
 	resolved       map[string]Limits
 	providerCaches map[string]*ttlCache[[]ProviderModel]

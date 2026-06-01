@@ -240,18 +240,33 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 			tctx := audit.WithSource(turnCtx, audit.SourceAI, uuid.NewString())
 
 			convID := frame.ConversationID
+			providerID := frame.ProviderID
+			model := s.aiConversationModel(frame)
 			if convID == "" {
-				if cv, err := s.chat.Conversations().Create(tctx, user.ID, conn.ID, frame.ProviderID, ""); err == nil {
-					convID = cv.ID
-					out <- aiMetaFrame{Type: "conversation", ConversationID: cv.ID}
+				cv, err := s.chat.Conversations().Create(tctx, user.ID, conn.ID, providerID, model)
+				if err != nil {
+					send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
+					send(engine.StreamEvent{Type: engine.EventDone})
+					return
 				}
+				convID = cv.ID
+				out <- aiMetaFrame{Type: "conversation", ConversationID: cv.ID}
+			} else {
+				cv, err := s.chat.Conversations().Get(tctx, user.ID, convID)
+				if err != nil || cv.ConnectionID != conn.ID {
+					send(engine.StreamEvent{Type: engine.EventError, Err: plugin.ErrNotFound.Error()})
+					send(engine.StreamEvent{Type: engine.EventDone})
+					return
+				}
+				providerID = cv.ProviderID
+				model = cv.Model
 			}
 
 			in := ai.RunInput{
 				User: user, ConnID: conn.ID, Protocol: conn.Protocol,
 				ConnectionTitle: conn.Name, AIMode: connectionAIMode(conn),
 				AllowDestructive: conn.AIAllowDestructive,
-				Scope:            ai.Scope{ProviderID: frame.ProviderID, Model: frame.Model},
+				Scope:            ai.Scope{ProviderID: providerID, Model: model},
 				ConversationID:   convID,
 				UserMessage:      frame.Content,
 				RecentOps:        s.recentAuditLines(tctx, user.ID, conn.ID),
@@ -300,4 +315,19 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 			mu.Unlock()
 		}
 	}
+}
+
+func (s *Server) aiConversationModel(frame aiClientFrame) string {
+	if frame.ProviderID != "" {
+		return frame.Model
+	}
+	if s.deps.AI != nil {
+		if g := s.deps.AI.Global(); g.Configured {
+			return g.Model
+		}
+	}
+	if s.deps.AIGlobal.Configured() {
+		return s.deps.AIGlobal.Model
+	}
+	return ""
 }

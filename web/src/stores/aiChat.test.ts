@@ -195,11 +195,17 @@ describe("aiChat store", () => {
   it("loads a conversation page and prepends older messages", async () => {
     const store = useAiChatStore();
     getConversation.mockResolvedValue({
-      conversation: { id: "cv" },
+      conversation: {
+        id: "cv",
+        providerId: "p1",
+        model: "gpt-4o-mini",
+      },
       page: { messages: [storedMsg("m2", "second")], hasMore: true },
     });
     await store.selectConversation(CONN, "cv");
     const st = store.state(CONN);
+    expect(st.providerId).toBe("p1");
+    expect(st.model).toBe("gpt-4o-mini");
     expect(st.messages.map((m) => m.content)).toEqual(["second"]);
     expect(st.hasMore).toBe(true);
 

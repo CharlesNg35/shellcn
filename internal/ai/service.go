@@ -28,8 +28,7 @@ var (
 	ErrProviderUnsupported = errors.New("ai: provider kind not supported")
 )
 
-// ProviderFactory builds an engine.Provider for a resolved config. It is the
-// injection seam: production uses the eino adapter; tests supply a scripted one.
+// ProviderFactory builds an engine.Provider for a resolved config.
 type ProviderFactory func(ctx context.Context, kind models.AIProviderKind, key, baseURL, model string) (engine.Provider, error)
 
 // Service is the public AI surface used by transport.
@@ -61,8 +60,7 @@ func (s *Service) WithProviderFactory(f ProviderFactory) *Service {
 	return s
 }
 
-// Scope selects the provider for a turn (empty ProviderID = shared/global). Model
-// overrides the provider's default; the global model is pinned and ignores it.
+// Scope selects the provider for a turn. Empty ProviderID means shared AI.
 type Scope struct {
 	ProviderID string
 	Model      string
@@ -80,11 +78,8 @@ type RunInput struct {
 	ConversationID   string // when set (with memory wired), history is persisted
 	History          []engine.Message
 	UserMessage      string
-	// RecentOps are pre-formatted recent audit lines injected into the prompt so
-	// the agent can explain a just-failed action.
-	RecentOps []string
-	// Confirm gates write/destructive tool calls (nil = no mutations possible).
-	Confirm tools.Confirmer
+	RecentOps        []string
+	Confirm          tools.Confirmer
 }
 
 // Run executes one turn and relays every event to sink. The caller cancels ctx
@@ -104,8 +99,6 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		toolset.WithConfirmer(in.Confirm)
 	}
 
-	// A subagent (nested read-only run) is offered whenever read tools exist; it
-	// keeps multi-step investigation out of the parent's context window.
 	var exec engine.ToolExecutor = toolset
 	specs := toolset.Specs()
 	hasSubagent := false
@@ -229,9 +222,7 @@ func (a *accumulator) add(ev engine.StreamEvent) {
 	}
 }
 
-// AllowedRisks maps a connection's AI mode + destructive opt-in to the tool risk
-// tiers the agent may use. Privileged is never allowed; streaming routes are
-// excluded by the tools layer.
+// AllowedRisks maps a connection's AI mode + destructive opt-in to allowed tool risks.
 func AllowedRisks(mode string, allowDestructive bool) map[plugin.RiskLevel]bool {
 	switch mode {
 	case "", models.AIModeReadOnly:
@@ -262,14 +253,12 @@ func (s *Service) resolveProvider(ctx context.Context, user models.User, scope S
 	}
 	if s.global.Configured() {
 		kind := models.AIProviderKind(s.global.Kind)
-		p, err := s.factory(ctx, kind, s.global.APIKey, s.global.BaseURL, s.global.DefaultModel)
-		return p, s.global.DefaultModel, kind, err
+		p, err := s.factory(ctx, kind, s.global.APIKey, s.global.BaseURL, s.global.Model)
+		return p, s.global.Model, kind, err
 	}
 	return nil, "", "", ErrNotConfigured
 }
 
-// allowsModel reports whether a model override is permitted: any model when the
-// provider has no allow-list, otherwise only a listed one.
 func allowsModel(cfg models.AIProviderConfig, model string) bool {
 	if len(cfg.Models) == 0 {
 		return true
@@ -282,8 +271,6 @@ func allowsModel(cfg models.AIProviderConfig, model string) bool {
 	return false
 }
 
-// registryProvider maps a provider kind to the id the model registry indexes by.
-// openai_compatible endpoints are not in the registries, so they have no id.
 func registryProvider(kind models.AIProviderKind) string {
 	switch kind {
 	case models.AIProviderOpenAI:

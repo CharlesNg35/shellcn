@@ -130,9 +130,7 @@ func Load(paths ...string) (*Config, error) {
 	// Match the canonical variable names used by the secret loader.
 	_ = v.BindEnv("secrets.master_key", secrets.EnvMasterKey)
 	_ = v.BindEnv("secrets.master_key_file", secrets.EnvMasterKeyFile)
-	// Shared-AI config keys: the API key never leaves env, so bind it (and the
-	// other scalars) explicitly so AutomaticEnv resolves SHELLCN_AI_* reliably.
-	for _, k := range []string{"ai.kind", "ai.name", "ai.base_url", "ai.api_key", "ai.default_model"} {
+	for _, k := range []string{"ai.kind", "ai.name", "ai.base_url", "ai.api_key", "ai.model"} {
 		_ = v.BindEnv(k)
 	}
 

@@ -90,20 +90,19 @@ or exfiltration path. Rules:
 
 ### 3.1 Provider config
 
-A provider config holds: `kind` (open vocabulary, validated at registration:
-`openai`, `openrouter`, `anthropic`, `google`, or `openai_compatible`), a display `name`,
-encrypted `apiKey`, optional `baseURL`, an allowed `models` list, and a
-`defaultModel`. The `kind` selects the engine adapter; `openrouter` is built in,
-while `openai_compatible` + a `baseURL` covers Ollama, vLLM, LM Studio, gateways,
-etc.
+A user provider config holds: `kind` (`openai`, `openrouter`, `anthropic`,
+`google`, or `openai_compatible`), a display `name`, encrypted `apiKey`, optional
+`baseURL`, an allowed `models` list, and a `defaultModel`. The shared operator
+config uses the same provider kind but pins a single `model`. `openrouter` is
+built in; `openai_compatible` + a `baseURL` covers Ollama, vLLM, LM Studio,
+gateways, etc.
 
-**Custom providers are first-class.** Beyond the built-in kinds, a user (or an
-admin, for global) can define **multiple, named custom providers** — each just an
-`openai_compatible` config with its own `name`, `baseURL`, `apiKey`, `models`, and
-`defaultModel`. They are stored as ordinary `AIProviderConfig` rows (no special
-table) and appear in the provider/model picker alongside the built-ins. This
-mirrors the reference's `customProviders[]`. So "configure your own AI" includes
-pointing at any OpenAI-compatible endpoint, not only the named vendors.
+**Custom providers are first-class.** A user can define **multiple, named custom
+providers** — each an `openai_compatible` config with its own `name`, `baseURL`,
+`apiKey`, `models`, and `defaultModel`. They are stored as ordinary
+`AIProviderConfig` rows and appear in the provider/model picker alongside the
+built-ins. "Configure your own AI" includes pointing at any OpenAI-compatible
+endpoint, not only the named vendors.
 
 Two scopes, two different homes:
 

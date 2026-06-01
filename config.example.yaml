@@ -42,7 +42,7 @@ email:
 #   kind: openrouter
 #   name: Shared OpenRouter
 #   api_key: sk-or-v1-example
-#   default_model: openai/gpt-4o
+#   model: openai/gpt-4o
 #   base_url: ""
 
 # OpenAI-compatible example.
@@ -51,7 +51,7 @@ email:
 #   name: Shared Local AI
 #   base_url: http://127.0.0.1:11434/v1
 #   api_key: ollama
-#   default_model: llama3.1:8b
+#   model: llama3.1:8b
 
 recordings:
   dir: recordings

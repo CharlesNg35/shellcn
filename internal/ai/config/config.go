@@ -91,7 +91,7 @@ func (s *Service) Global() GlobalStatus {
 		Configured: true,
 		Provider:   s.global.DisplayName(),
 		Kind:       s.global.Kind,
-		Model:      s.global.DefaultModel,
+		Model:      s.global.Model,
 	}
 }
 

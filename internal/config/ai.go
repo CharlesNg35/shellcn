@@ -2,29 +2,22 @@ package config
 
 import "strings"
 
-// AIConfig is the optional operator-provided "shared AI" configuration. It is an
-// infrastructure decision (vendor, cost, key custody), so it lives with the
-// other bootstrap settings — loaded from config.yaml + SHELLCN_AI_* env — and
-// never touches the database or a runtime admin UI. The API key stays in env /
-// secret-manager and is never returned to clients; only a read-only projection
-// (presence + provider/model) is exposed. The model is pinned: users see which
-// model was used but cannot switch the shared config.
+// AIConfig is the optional operator-provided shared AI configuration. It is
+// loaded from config.yaml + SHELLCN_AI_* env and exposed to clients only as a
+// non-secret status projection.
 type AIConfig struct {
-	Kind         string   `mapstructure:"kind"`          // openai | openrouter | anthropic | google | openai_compatible
-	Name         string   `mapstructure:"name"`          // display name shown as "Shared AI"
-	BaseURL      string   `mapstructure:"base_url"`      // required for openai_compatible endpoints
-	APIKey       string   `mapstructure:"api_key"`       // env-preferred (SHELLCN_AI_API_KEY); never persisted
-	Models       []string `mapstructure:"models"`        // optional allow-list
-	DefaultModel string   `mapstructure:"default_model"` // the pinned model
+	Kind    string `mapstructure:"kind"`
+	Name    string `mapstructure:"name"`
+	BaseURL string `mapstructure:"base_url"`
+	APIKey  string `mapstructure:"api_key"`
+	Model   string `mapstructure:"model"`
 }
 
-// Configured reports whether a usable shared AI provider is present. A key, a
-// kind, and a default model are the minimum; openai_compatible also needs a base
-// URL since it has no implicit endpoint.
+// Configured reports whether a usable shared AI provider is present.
 func (c AIConfig) Configured() bool {
 	if strings.TrimSpace(c.APIKey) == "" ||
 		strings.TrimSpace(c.Kind) == "" ||
-		strings.TrimSpace(c.DefaultModel) == "" {
+		strings.TrimSpace(c.Model) == "" {
 		return false
 	}
 	if c.Kind == "openai_compatible" && strings.TrimSpace(c.BaseURL) == "" {

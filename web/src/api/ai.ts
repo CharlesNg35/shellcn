@@ -58,9 +58,14 @@ export const aiApi = {
   // Conversation CRUD (owner-scoped on the server).
   listConversations: (connectionId: string) =>
     api.get<AiConversation[]>(`/connections/${connectionId}/ai/conversations`),
-  createConversation: (connectionId: string, providerId?: string) =>
+  createConversation: (
+    connectionId: string,
+    providerId?: string,
+    model?: string,
+  ) =>
     api.post<AiConversation>(`/connections/${connectionId}/ai/conversations`, {
       providerId: providerId ?? "",
+      model: model ?? "",
     }),
   getConversation: (connectionId: string, cid: string) =>
     api.get<{ conversation: AiConversation; page: AiMessagePage }>(

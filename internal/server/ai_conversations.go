@@ -50,9 +50,13 @@ func (s *Server) handleCreateConversation(w http.ResponseWriter, r *http.Request
 	user, _ := userFrom(r.Context())
 	var req struct {
 		ProviderID string `json:"providerId"`
+		Model      string `json:"model"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	c, err := s.chat.Conversations().Create(r.Context(), user.ID, conn.ID, req.ProviderID, "")
+	c, err := s.chat.Conversations().Create(r.Context(), user.ID, conn.ID, req.ProviderID, s.aiConversationModel(aiClientFrame{
+		ProviderID: req.ProviderID,
+		Model:      req.Model,
+	}))
 	if err != nil {
 		writeError(w, s.deps.Logger, err)
 		return
