@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, toRef, watch } from "vue";
+import { computed, onActivated, onDeactivated, ref, toRef, watch } from "vue";
 import Button from "primevue/button";
 import { useAgentState } from "../../composables/useAgentState";
 import AppIcon from "../../components/AppIcon.vue";
@@ -16,6 +16,7 @@ const emit = defineEmits<{ connect: []; enroll: [] }>();
 
 const isAgent = computed(() => props.connection?.transport === "agent");
 const connectionError = computed(() => props.errorMessage?.trim() ?? "");
+const active = ref(true);
 
 const agent = useAgentState(toRef(props, "connectionId"));
 const canConnect = computed(() => !isAgent.value || agent.online.value);
@@ -53,17 +54,23 @@ const agentLabel = computed(() => {
   }
 });
 
-watch(
-  [() => props.connectionId, isAgent],
-  () => {
-    if (isAgent.value) {
-      agent.start();
-    } else {
-      agent.stop();
-    }
-  },
-  { immediate: true },
-);
+function syncAgentPolling(): void {
+  if (active.value && isAgent.value) agent.start();
+  else agent.stop();
+}
+
+watch([() => props.connectionId, isAgent], syncAgentPolling, {
+  immediate: true,
+});
+onActivated(() => {
+  if (active.value) return;
+  active.value = true;
+  syncAgentPolling();
+});
+onDeactivated(() => {
+  active.value = false;
+  agent.stop();
+});
 </script>
 
 <template>

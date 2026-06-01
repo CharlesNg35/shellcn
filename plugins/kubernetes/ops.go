@@ -27,7 +27,6 @@ const revisionAnnotation = "deployment.kubernetes.io/revision"
 // request from holding the node indefinitely.
 const maxGracePeriodSeconds = int64(3600)
 
-// DrainRequest is the body for a node drain.
 type DrainRequest struct {
 	GracePeriodSeconds int64 `json:"gracePeriodSeconds"`
 	Force              bool  `json:"force"` // evict bare (unmanaged) pods too

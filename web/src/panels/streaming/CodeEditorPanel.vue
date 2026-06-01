@@ -31,22 +31,19 @@ const saveRouteId = computed(() => editorConfig.value?.saveRouteId);
 const editable = computed(() => Boolean(saveRouteId.value));
 
 async function load(): Promise<void> {
+  loading.value = true;
   const initial = editorConfig.value?.initialContent;
   if (initial !== undefined) {
     text.value = initial;
-    loading.value = false;
     error.value = null;
-    await nextTick();
     await mountEditor();
     return;
   }
   if (!props.source) {
-    loading.value = false;
-    await nextTick();
+    error.value = null;
     await mountEditor();
     return;
   }
-  loading.value = true;
   error.value = null;
   try {
     const doc = await fetchDoc(props.connectionId, props.source, {
@@ -55,18 +52,17 @@ async function load(): Promise<void> {
     text.value = typeof doc === "string" ? doc : JSON.stringify(doc, null, 2);
   } catch (e) {
     error.value = (e as Error).message;
-  } finally {
     loading.value = false;
+    return;
   }
-  if (!error.value) {
-    await nextTick();
-    await mountEditor();
-  }
+  await mountEditor();
 }
 
 async function mountEditor(): Promise<void> {
+  await nextTick();
   if (!container.value) {
     useFallback.value = true;
+    loading.value = false;
     return;
   }
   try {
@@ -85,6 +81,8 @@ async function mountEditor(): Promise<void> {
     });
   } catch {
     useFallback.value = true;
+  } finally {
+    loading.value = false;
   }
 }
 

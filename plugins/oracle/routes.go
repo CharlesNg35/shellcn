@@ -752,7 +752,6 @@ func unlockUser(rc *plugin.RequestContext) (any, error) {
 	return execDDL(rc, "ALTER USER "+quoteIdent(name)+" ACCOUNT UNLOCK")
 }
 
-// grantUser grants one or more roles/system privileges to a user.
 func grantUser(rc *plugin.RequestContext) (any, error) {
 	s, err := oracleSession(rc)
 	if err != nil {

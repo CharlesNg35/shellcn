@@ -50,7 +50,6 @@ type InstallArtifact struct {
 	Filename string `json:"filename,omitempty"`
 }
 
-// Enrollment is the response to creating an enrollment.
 type Enrollment struct {
 	EnrollmentID string            `json:"enrollmentId"`
 	ExpiresAt    time.Time         `json:"expiresAt"`
@@ -76,7 +75,6 @@ type EnrollmentService struct {
 	now     func() time.Time
 }
 
-// NewEnrollmentService wires the dependencies.
 func NewEnrollmentService(s store.EnrollmentStore, conns store.ConnectionStore, plugins *plugin.Registry) *EnrollmentService {
 	return &EnrollmentService{store: s, conns: conns, plugins: plugins, ttl: DefaultEnrollmentTTL, now: time.Now}
 }

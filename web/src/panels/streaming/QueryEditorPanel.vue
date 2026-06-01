@@ -8,6 +8,7 @@ import { exportMatrix, type ExportFormat } from "../shared/exportData";
 import type { QueryEditorConfig } from "../../types/projection";
 import { useStream } from "../../composables/useStream";
 import type { PanelProps } from "../core/types";
+import SkeletonList from "../../components/SkeletonList.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
 import { useTheme } from "../../composables/useTheme";
 import type { CodeMirrorCompletion, CodeMirrorEditor } from "../../codemirror";
@@ -43,6 +44,7 @@ const history = ref<string[]>([]);
 const running = ref(false);
 const error = ref<string | null>(null);
 const container = ref<HTMLElement | null>(null);
+const editorLoading = ref(true);
 const useFallback = ref(false);
 const reconnecting = ref(false);
 const pendingConfirmation = ref(false);
@@ -186,8 +188,10 @@ onMounted(async () => {
   await nextTick();
   if (!container.value) {
     useFallback.value = true;
+    editorLoading.value = false;
     return;
   }
+  editorLoading.value = true;
   try {
     const helpers = await import("../../codemirror");
     codeMirror = helpers;
@@ -203,6 +207,8 @@ onMounted(async () => {
     });
   } catch {
     useFallback.value = true;
+  } finally {
+    editorLoading.value = false;
   }
 });
 
@@ -279,13 +285,14 @@ onUnmounted(() => {
     <div
       class="h-40 shrink-0 border-b border-surface-200 dark:border-surface-800"
     >
+      <SkeletonList v-if="editorLoading" :rows="4" />
       <textarea
-        v-if="useFallback"
+        v-else-if="useFallback"
         v-model="query"
         class="h-full w-full resize-none bg-surface-0 p-3 font-mono text-xs outline-none dark:bg-surface-950"
       />
       <div
-        v-show="!useFallback"
+        v-show="!editorLoading && !useFallback"
         ref="container"
         class="shellcn-codemirror-host h-full"
       />

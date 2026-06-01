@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import SkeletonList from "../SkeletonList.vue";
 
 const props = defineProps<{ src: string }>();
 
 const container = ref<HTMLElement | null>(null);
+const loading = ref(true);
 const failed = ref(false);
 let player: { dispose: () => void } | null = null;
 
@@ -17,8 +19,12 @@ function dispose(): void {
 }
 
 async function mount(): Promise<void> {
-  if (!container.value) return;
+  if (!container.value) {
+    loading.value = false;
+    return;
+  }
   dispose();
+  loading.value = true;
   failed.value = false;
   try {
     const AsciinemaPlayer = await import("asciinema-player");
@@ -30,6 +36,8 @@ async function mount(): Promise<void> {
     });
   } catch {
     failed.value = true;
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -40,6 +48,7 @@ onBeforeUnmount(dispose);
 
 <template>
   <div class="overflow-hidden rounded-lg bg-[#0b0f17]">
+    <SkeletonList v-if="loading" :rows="8" />
     <p v-if="failed" class="p-4 text-sm text-surface-400">
       Playback unavailable in this environment.
     </p>

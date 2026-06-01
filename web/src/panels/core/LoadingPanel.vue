@@ -1,7 +1,9 @@
+<script setup lang="ts">
+import SkeletonList from "../../components/SkeletonList.vue";
+</script>
+
 <template>
-  <div
-    class="flex h-full items-center justify-center p-6 text-sm text-surface-400"
-  >
-    <span class="animate-pulse">Loading panel…</span>
+  <div class="h-full min-h-0">
+    <SkeletonList :rows="8" />
   </div>
 </template>

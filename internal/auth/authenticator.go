@@ -28,7 +28,6 @@ type LocalAuthenticator struct {
 	users store.UserStore
 }
 
-// NewLocalAuthenticator wires the user store.
 func NewLocalAuthenticator(users store.UserStore) *LocalAuthenticator {
 	return &LocalAuthenticator{users: users}
 }

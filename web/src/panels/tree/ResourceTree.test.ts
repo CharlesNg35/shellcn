@@ -95,4 +95,63 @@ describe("ResourceTree", () => {
     await w.vm.$nextTick();
     expect(w.emitted("select-node")?.[0]).toEqual([row, "Containers"]);
   });
+
+  it("keeps the parent category expanded when a child list node is selected", async () => {
+    const w = mountTree();
+    const dt = w.findComponent({ name: "Tree" });
+    dt.vm.$emit("node-select", {
+      key: "workloads",
+      leaf: false,
+      children: [],
+      data: { isGroup: true, source: groups[0].source },
+    });
+    await w.vm.$nextTick();
+    expect(dt.props("expandedKeys")).toMatchObject({ workloads: true });
+
+    dt.vm.$emit("update:expanded-keys", {});
+    dt.vm.$emit("node-select", {
+      key: "kind:pod",
+      leaf: true,
+      data: { resourceKind: "pod" },
+    });
+    await w.vm.$nextTick();
+
+    expect(w.emitted("select-list")?.at(-1)).toEqual(["pod", undefined]);
+    expect(dt.props("expandedKeys")).toMatchObject({ workloads: true });
+  });
+
+  it("does not change expansion when history restores a selected view", async () => {
+    const w = mountTree();
+    const dt = w.findComponent({ name: "Tree" });
+    await w.setProps({ selectedGroup: "workloads" });
+    expect(dt.props("expandedKeys")).toEqual({});
+
+    dt.vm.$emit("node-select", {
+      key: "workloads",
+      leaf: false,
+      children: [],
+      data: { isGroup: true, source: groups[0].source },
+    });
+    await w.vm.$nextTick();
+    expect(dt.props("expandedKeys")).toMatchObject({ workloads: true });
+
+    await w.setProps({ selectedUid: "pod-1", selectedGroup: undefined });
+    expect(dt.props("expandedKeys")).toMatchObject({ workloads: true });
+  });
+
+  it("collapses a category only from the explicit node-collapse event", async () => {
+    const w = mountTree();
+    const dt = w.findComponent({ name: "Tree" });
+    const workloads = {
+      key: "workloads",
+      leaf: false,
+      children: [],
+      data: { isGroup: true, source: groups[0].source },
+    };
+    dt.vm.$emit("node-select", workloads);
+    await w.vm.$nextTick();
+    dt.vm.$emit("node-collapse", workloads);
+    await w.vm.$nextTick();
+    expect(dt.props("expandedKeys")).not.toHaveProperty("workloads");
+  });
 });

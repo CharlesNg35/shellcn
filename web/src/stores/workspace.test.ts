@@ -149,4 +149,33 @@ describe("workspace store", () => {
     expect(ws.view("a").activeTab).toBe("logs");
     expect(ws.view("a").views).toHaveLength(1);
   });
+
+  it("keeps table query state by stable table identity", () => {
+    const ws = useWorkspaceStore();
+    const defaults = {
+      filterText: "",
+      sortField: "name",
+      sortOrder: 1,
+      first: 0,
+      pageSize: 50,
+    };
+    expect(ws.tableState("c1|pods", defaults)).toEqual(defaults);
+
+    ws.setTableState("c1|pods", {
+      filterText: "nginx",
+      sortField: "createdAt",
+      sortOrder: -1,
+      first: 100,
+      pageSize: 100,
+    });
+
+    expect(ws.tableState("c1|pods", defaults)).toEqual({
+      filterText: "nginx",
+      sortField: "createdAt",
+      sortOrder: -1,
+      first: 100,
+      pageSize: 100,
+    });
+    expect(ws.tableState("c1|deployments", defaults)).toEqual(defaults);
+  });
 });

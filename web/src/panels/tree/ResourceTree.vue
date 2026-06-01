@@ -124,8 +124,24 @@ async function loadChildren(node: PVNode): Promise<void> {
   }
 }
 
+function expandNode(node: PVNode): void {
+  expandedKeys.value = { ...expandedKeys.value, [String(node.key)]: true };
+}
+
+async function onNodeExpand(node: PVNode): Promise<void> {
+  expandNode(node);
+  await loadChildren(node);
+}
+
+function onNodeCollapse(node: PVNode): void {
+  const next = { ...expandedKeys.value };
+  delete next[String(node.key)];
+  expandedKeys.value = next;
+}
+
 // Single click selects AND, for a branch, expands + lazy-loads — one gesture to
-// drill in (and a simpler, more predictable interaction).
+// drill in. PrimeVue single-selection emits node-unselect when the highlighted
+// node is clicked again, but that is still an activation in this navigator.
 async function onNodeSelect(node: PVNode): Promise<void> {
   const data = node.data as NodeData;
   selectionKeys.value = { [String(node.key)]: true };
@@ -139,7 +155,7 @@ async function onNodeSelect(node: PVNode): Promise<void> {
     emit("select-list", data.resourceKind, data.listParams);
   else if (data.row) emit("select-node", data.row, nodeQualifier(data));
   if (!node.leaf) {
-    expandedKeys.value = { ...expandedKeys.value, [String(node.key)]: true };
+    expandNode(node);
     await loadChildren(node);
   }
 }
@@ -179,9 +195,10 @@ onMounted(async () => {
     class="h-full"
     :expanded-keys="expandedKeys"
     :selection-keys="selectionKeys"
-    @update:expanded-keys="expandedKeys = $event"
-    @node-expand="loadChildren"
+    @node-expand="onNodeExpand"
+    @node-collapse="onNodeCollapse"
     @node-select="onNodeSelect"
+    @node-unselect="onNodeSelect"
   >
     <template #default="{ node }">
       <span

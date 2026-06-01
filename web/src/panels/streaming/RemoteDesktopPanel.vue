@@ -7,6 +7,7 @@ import {
 } from "../../composables/useDesktopRecorder";
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import AppIcon from "../../components/AppIcon.vue";
+import SkeletonList from "../../components/SkeletonList.vue";
 import type { RemoteDesktopPanelConfig } from "../../types/projection";
 import type { PanelProps } from "../core/types";
 import {
@@ -228,7 +229,12 @@ onUnmounted(() => {
       can-reconnect
       @reconnect="onReconnect"
     />
-    <div ref="container" class="min-h-0 flex-1">
+    <div ref="container" class="relative min-h-0 flex-1">
+      <SkeletonList
+        v-if="!loaded && status === 'connecting'"
+        :rows="8"
+        class="absolute inset-0"
+      />
       <p
         v-if="status === 'recording-unsupported'"
         class="p-4 text-sm text-amber-400"
@@ -265,7 +271,10 @@ onUnmounted(() => {
       >
         Connection to the remote desktop was lost.
       </p>
-      <p v-else-if="!loaded" class="p-4 text-sm text-surface-400">
+      <p
+        v-else-if="!loaded && status !== 'connecting'"
+        class="p-4 text-sm text-surface-400"
+      >
         Remote desktop session is waiting for a stream route.
       </p>
     </div>

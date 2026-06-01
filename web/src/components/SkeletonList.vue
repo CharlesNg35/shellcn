@@ -3,7 +3,11 @@ withDefaults(defineProps<{ rows?: number }>(), { rows: 6 });
 </script>
 
 <template>
-  <div class="flex flex-col gap-2 p-4" aria-hidden="true">
+  <div
+    class="flex flex-col gap-2 p-4"
+    aria-hidden="true"
+    data-test="skeleton-list"
+  >
     <div
       v-for="n in rows"
       :key="n"

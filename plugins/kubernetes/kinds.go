@@ -54,6 +54,7 @@ func col(key, label string, opts ...func(*plugin.Column)) plugin.Column {
 
 func badge(c *plugin.Column)   { c.Type = plugin.ColumnBadge }
 func num(c *plugin.Column)     { c.Type = plugin.ColumnNumber }
+func boolCol(c *plugin.Column) { c.Type = plugin.ColumnBool }
 func notSort(c *plugin.Column) { c.Sortable = false }
 
 func statusBadge(sev map[string]plugin.Severity) func(*plugin.Column) {
@@ -125,7 +126,7 @@ var kinds = []kind{
 	{
 		name: "daemonset", title: "DaemonSets", category: "workloads", icon: "layers", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "apps", Version: "v1", Resource: "daemonsets"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("desired", "Desired", num), col("ready", "Ready", num), col("available", "Available", num), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("desired", "Desired", num), col("current", "Current", num), col("ready", "Ready", num), col("upToDate", "Up-to-date", num), col("available", "Available", num), ageCol()},
 		extra:   daemonSetRow, actionIDs: []string{"kubernetes.resource.restart", "kubernetes.resource.delete"}, detailTabs: []plugin.Panel{workloadPodsTab("daemonset")},
 	},
 	{
@@ -137,13 +138,13 @@ var kinds = []kind{
 	{
 		name: "job", title: "Jobs", category: "workloads", icon: "square-check", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "jobs"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("completions", "Completions", notSort), col("active", "Active", num), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("completions", "Completions", notSort), col("duration", "Duration"), col("active", "Active", num), ageCol()},
 		extra:   jobRow, actionIDs: justDelete,
 	},
 	{
 		name: "cronjob", title: "CronJobs", category: "workloads", icon: "clock", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "batch", Version: "v1", Resource: "cronjobs"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("schedule", "Schedule"), col("suspend", "Suspend"), col("active", "Active", num), col("lastSchedule", "Last schedule", func(c *plugin.Column) { c.Type = plugin.ColumnDateTime }), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("schedule", "Schedule"), col("timezone", "Timezone"), col("suspend", "Suspend", boolCol), col("active", "Active", num), col("lastSchedule", "Last schedule", func(c *plugin.Column) { c.Type = plugin.ColumnDateTime }), ageCol()},
 		extra:   cronJobRow, actionIDs: []string{"kubernetes.cronjob.trigger", "kubernetes.resource.delete"},
 	},
 	{
@@ -155,13 +156,14 @@ var kinds = []kind{
 	{
 		name: "service", title: "Services", category: "network", icon: "network", namespaced: true,
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "services"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("type", "Type", badge), col("clusterIP", "Cluster IP", notSort), col("ports", "Ports", notSort), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("type", "Type", badge), col("clusterIP", "Cluster IP", notSort), col("externalIP", "External IP", notSort), col("ports", "Ports", notSort), ageCol()},
 		extra:   serviceRow, actionIDs: []string{"kubernetes.service.open", "kubernetes.resource.delete"},
 	},
 	{
 		name: "endpoints", title: "Endpoints", category: "network", icon: "network", namespaced: true,
 		gvr:       schema.GroupVersionResource{Version: "v1", Resource: "endpoints"},
-		columns:   []plugin.Column{nameCol(), nsCol(), ageCol()},
+		columns:   []plugin.Column{nameCol(), nsCol(), col("endpoints", "Endpoints", notSort), ageCol()},
+		extra:     endpointsRow,
 		actionIDs: justDelete,
 	},
 	{
@@ -173,37 +175,38 @@ var kinds = []kind{
 	{
 		name: "ingressclass", title: "Ingress Classes", category: "network", icon: "globe",
 		gvr:     schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "ingressclasses"},
-		columns: []plugin.Column{nameCol(), col("controller", "Controller"), ageCol()},
+		columns: []plugin.Column{nameCol(), col("controller", "Controller"), col("parameters", "Parameters"), ageCol()},
 		extra:   ingressClassRow, actionIDs: justDelete,
 	},
 	{
 		name: "ingress", title: "Ingresses", category: "network", icon: "globe", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "ingresses"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("class", "Class"), col("hosts", "Hosts", notSort), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("class", "Class"), col("hosts", "Hosts", notSort), col("address", "Address", notSort), col("ports", "Ports", notSort), ageCol()},
 		extra:   ingressRow, actionIDs: justDelete,
 	},
 	{
 		name: "networkpolicy", title: "Network Policies", category: "network", icon: "shield-check", namespaced: true,
 		gvr:       schema.GroupVersionResource{Group: "networking.k8s.io", Version: "v1", Resource: "networkpolicies"},
-		columns:   []plugin.Column{nameCol(), nsCol(), ageCol()},
+		columns:   []plugin.Column{nameCol(), nsCol(), col("podSelector", "Pod selector", notSort), col("policyTypes", "Policy types"), ageCol()},
+		extra:     networkPolicyRow,
 		actionIDs: justDelete,
 	},
 	{
 		name: "persistentvolumeclaim", title: "Persistent Volume Claims", category: "storage", icon: "hard-drive", namespaced: true,
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "persistentvolumeclaims"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("status", "Status", statusBadge(volumeSeverities)), col("volume", "Volume"), col("capacity", "Capacity", notSort), col("storageClass", "Storage class"), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("status", "Status", statusBadge(volumeSeverities)), col("volume", "Volume"), col("capacity", "Capacity", notSort), col("accessModes", "Access modes"), col("storageClass", "Storage class"), ageCol()},
 		extra:   pvcRow, actionIDs: justDelete,
 	},
 	{
 		name: "persistentvolume", title: "Persistent Volumes", category: "storage", icon: "hard-drive",
 		gvr:     schema.GroupVersionResource{Version: "v1", Resource: "persistentvolumes"},
-		columns: []plugin.Column{nameCol(), col("capacity", "Capacity", notSort), col("status", "Status", statusBadge(volumeSeverities)), col("claim", "Claim"), col("storageClass", "Storage class"), col("reclaim", "Reclaim"), ageCol()},
+		columns: []plugin.Column{nameCol(), col("capacity", "Capacity", notSort), col("accessModes", "Access modes"), col("status", "Status", statusBadge(volumeSeverities)), col("claim", "Claim"), col("storageClass", "Storage class"), col("reclaim", "Reclaim"), col("reason", "Reason"), ageCol()},
 		extra:   pvRow, actionIDs: justDelete,
 	},
 	{
 		name: "storageclass", title: "Storage Classes", category: "storage", icon: "database",
 		gvr:     schema.GroupVersionResource{Group: "storage.k8s.io", Version: "v1", Resource: "storageclasses"},
-		columns: []plugin.Column{nameCol(), col("provisioner", "Provisioner"), col("reclaim", "Reclaim"), col("bindingMode", "Binding mode"), col("allowExpand", "Expandable"), ageCol()},
+		columns: []plugin.Column{nameCol(), col("default", "Default", boolCol), col("provisioner", "Provisioner"), col("reclaim", "Reclaim"), col("bindingMode", "Binding mode"), col("allowExpand", "Expandable", boolCol), ageCol()},
 		extra:   storageClassRow, actionIDs: justDelete,
 	},
 	{
@@ -239,13 +242,13 @@ var kinds = []kind{
 	{
 		name: "poddisruptionbudget", title: "Pod Disruption Budgets", category: "config", icon: "shield-alert", namespaced: true,
 		gvr:     schema.GroupVersionResource{Group: "policy", Version: "v1", Resource: "poddisruptionbudgets"},
-		columns: []plugin.Column{nameCol(), nsCol(), col("minAvailable", "Min available"), col("maxUnavailable", "Max unavailable"), col("currentHealthy", "Healthy", num), ageCol()},
+		columns: []plugin.Column{nameCol(), nsCol(), col("minAvailable", "Min available"), col("maxUnavailable", "Max unavailable"), col("allowedDisruptions", "Allowed disruptions", num), ageCol()},
 		extra:   pdbRow, actionIDs: justDelete,
 	},
 	{
 		name: "priorityclass", title: "Priority Classes", category: "config", icon: "arrow-up-narrow-wide",
 		gvr:     schema.GroupVersionResource{Group: "scheduling.k8s.io", Version: "v1", Resource: "priorityclasses"},
-		columns: []plugin.Column{nameCol(), col("value", "Value", num), col("globalDefault", "Global default"), ageCol()},
+		columns: []plugin.Column{nameCol(), col("value", "Value", num), col("globalDefault", "Global default", boolCol), ageCol()},
 		extra:   priorityClassRow, actionIDs: justDelete,
 	},
 	{

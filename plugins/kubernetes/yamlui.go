@@ -25,7 +25,6 @@ func yamlTab(k kind) plugin.Panel {
 	}
 }
 
-// eventsTab shows the events involving an object.
 func eventsTab(k kind) plugin.Panel {
 	params := map[string]string{"kind": k.name, "name": "${resource.name}"}
 	if k.namespaced {

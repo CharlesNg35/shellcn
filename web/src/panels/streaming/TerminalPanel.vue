@@ -12,6 +12,7 @@ import RecordingControls from "../../components/recordings/RecordingControls.vue
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import type { PanelProps } from "../core/types";
 import type { TerminalPanelConfig } from "../../types/projection";
+import SkeletonList from "../../components/SkeletonList.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
@@ -87,6 +88,7 @@ const showRecording = computed(
 );
 
 const container = ref<HTMLElement | null>(null);
+const terminalLoading = ref(true);
 const failed = ref(false);
 const reconnecting = ref(false);
 const pending: string[] = [];
@@ -218,7 +220,11 @@ async function onReconnect(): Promise<void> {
 }
 
 async function mountTerminal(): Promise<void> {
-  if (!container.value) return;
+  if (!container.value) {
+    terminalLoading.value = false;
+    return;
+  }
+  terminalLoading.value = true;
   try {
     const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
       import("@xterm/xterm"),
@@ -300,6 +306,8 @@ async function mountTerminal(): Promise<void> {
     resizeObserver.observe(container.value);
   } catch {
     failed.value = true;
+  } finally {
+    terminalLoading.value = false;
   }
 }
 
@@ -348,6 +356,11 @@ onUnmounted(() => {
       Terminal preview unavailable in this environment.
     </p>
     <div class="relative min-h-0 flex-1">
+      <SkeletonList
+        v-if="terminalLoading && !failed"
+        :rows="8"
+        class="absolute inset-0"
+      />
       <div
         ref="container"
         role="application"

@@ -20,7 +20,6 @@ type RecordingService struct {
 	blobs recording.BlobStore
 }
 
-// NewRecordingService wires the dependencies.
 func NewRecordingService(recs store.RecordingStore, blobs recording.BlobStore) *RecordingService {
 	return &RecordingService{recs: recs, blobs: blobs}
 }

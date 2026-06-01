@@ -1,3 +1,4 @@
+/* eslint-disable vue/one-component-per-file */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { defineComponent, h, KeepAlive } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
@@ -44,6 +45,26 @@ function bodyButton(text: string): HTMLButtonElement | undefined {
   return [...document.body.querySelectorAll("button")].find(
     (b) => b.textContent?.trim() === text,
   ) as HTMLButtonElement | undefined;
+}
+
+class FakeSocket {
+  readyState = 1;
+  closed = false;
+  listeners = new Map<string, Array<(ev: unknown) => void>>();
+
+  addEventListener(type: string, listener: (ev: unknown) => void): void {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), listener]);
+  }
+
+  send(): void {}
+
+  close(): void {
+    this.closed = true;
+  }
+
+  emit(type: string, ev: unknown): void {
+    for (const listener of this.listeners.get(type) ?? []) listener(ev);
+  }
 }
 
 describe("TablePanel", () => {
@@ -115,6 +136,73 @@ describe("TablePanel", () => {
     await flushPromises();
     expect(w.findAll("tbody tr")).toHaveLength(1);
     expect(w.text()).toContain("beta");
+  });
+
+  it("restores filter, sort, and page after the table is remounted", async () => {
+    const urls: string[] = [];
+    installFetch((url) => {
+      urls.push(url);
+      const u = new URL(url, "http://h");
+      const filter = u.searchParams.get("filter");
+      const sort = u.searchParams.get("sort");
+      const cursor = u.searchParams.get("cursor");
+      if (filter === "beta" && sort === "-name" && cursor === "2") {
+        return {
+          body: { items: [row("b2", "beta-2")], nextCursor: "", total: 2 },
+        };
+      }
+      if (filter === "beta")
+        return {
+          body: { items: [row("b", "beta")], nextCursor: "", total: 1 },
+        };
+      return {
+        body: {
+          items: [row("a", "alpha"), row("b", "beta")],
+          nextCursor: "",
+          total: 2,
+        },
+      };
+    });
+    const props = {
+      connectionId: "c1",
+      source: { routeId: "docker.container.list" },
+      config: { columns },
+    };
+    const first = mount(TablePanel, { props });
+    await flushPromises();
+
+    await first.find('input[type="search"]').setValue("beta");
+    await new Promise((r) => setTimeout(r, 300));
+    await flushPromises();
+    first.findComponent({ name: "DataTable" }).vm.$emit("sort", {
+      sortField: "name",
+      sortOrder: -1,
+    });
+    await flushPromises();
+    first.findComponent({ name: "DataTable" }).vm.$emit("page", {
+      first: 2,
+      rows: 100,
+    });
+    await flushPromises();
+    first.unmount();
+
+    const second = mount(TablePanel, { props });
+    await flushPromises();
+
+    expect(second.find('input[type="search"]').element).toHaveProperty(
+      "value",
+      "beta",
+    );
+    const dt = second.findComponent({ name: "DataTable" });
+    expect(dt.props("sortField")).toBe("name");
+    expect(dt.props("sortOrder")).toBe(-1);
+    expect(dt.props("first")).toBe(2);
+    expect(dt.props("rows")).toBe(100);
+    expect(urls.at(-1)).toContain("filter=beta");
+    expect(urls.at(-1)).toContain("sort=-name");
+    expect(urls.at(-1)).toContain("cursor=2");
+    expect(urls.at(-1)).toContain("limit=100");
+    second.unmount();
   });
 
   it("re-scopes the list when the global connection scope changes", async () => {
@@ -674,6 +762,126 @@ describe("TablePanel staged edits", () => {
     await w.setProps({ show: true }); // reactivate
     await flushPromises();
     expect(calls).toBe(3); // immediate catch-up refresh
+    w.unmount();
+  });
+
+  it("pauses live watch sockets while deactivated under KeepAlive", async () => {
+    const sockets: FakeSocket[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class extends FakeSocket {
+        constructor() {
+          super();
+          sockets.push(this);
+        }
+      },
+    );
+    installFetch((url) => {
+      if (url.endsWith("/tickets")) return { body: { ticket: "t1" } };
+      return {
+        body: { items: [{ _id: "a", name: "x" }], nextCursor: "", total: 1 },
+      };
+    });
+
+    const Parent = defineComponent({
+      props: { show: { type: Boolean, default: true } },
+      setup(p) {
+        return () =>
+          h(KeepAlive, () =>
+            p.show
+              ? h(TablePanel, {
+                  connectionId: "c1",
+                  source: { routeId: "server_monitor.processes" },
+                  config: {
+                    columns: [{ key: "name", label: "Name" }],
+                    watch: { routeId: "server_monitor.processes.watch" },
+                  },
+                })
+              : null,
+          );
+      },
+    });
+    const w = mount(Parent, { props: { show: true } });
+    await flushPromises();
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0].closed).toBe(false);
+
+    await w.setProps({ show: false });
+    await flushPromises();
+    expect(sockets[0].closed).toBe(true);
+
+    await w.setProps({ show: true });
+    await flushPromises();
+    expect(sockets).toHaveLength(2);
+    expect(sockets[1].closed).toBe(false);
+
+    w.unmount();
+  });
+
+  it("refreshes from the server instead of applying watch rows outside the active filter", async () => {
+    const sockets: FakeSocket[] = [];
+    const urls: string[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class extends FakeSocket {
+        constructor() {
+          super();
+          sockets.push(this);
+        }
+      },
+    );
+    installFetch((url) => {
+      urls.push(url);
+      if (url.endsWith("/tickets")) return { body: { ticket: "t1" } };
+      const u = new URL(url, "http://h");
+      if (u.searchParams.get("filter") === "beta") {
+        return {
+          body: { items: [row("b", "beta")], nextCursor: "", total: 1 },
+        };
+      }
+      return {
+        body: {
+          items: [row("a", "alpha"), row("b", "beta")],
+          nextCursor: "",
+          total: 2,
+        },
+      };
+    });
+
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kubernetes.resource.list" },
+        config: {
+          columns,
+          watch: { routeId: "kubernetes.resource.watch" },
+        },
+      },
+    });
+    await flushPromises();
+    expect(sockets).toHaveLength(1);
+
+    await w.find('input[type="search"]').setValue("beta");
+    await new Promise((r) => setTimeout(r, 300));
+    await flushPromises();
+    expect(w.text()).toContain("beta");
+    expect(w.text()).not.toContain("alpha");
+
+    sockets[0].emit("message", {
+      data: JSON.stringify({
+        type: "added",
+        ref: { kind: "pod", name: "alpha-live", uid: "a-live" },
+        resource: row("a-live", "alpha-live"),
+      }),
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    await flushPromises();
+
+    expect(w.text()).toContain("beta");
+    expect(w.text()).not.toContain("alpha-live");
+    expect(
+      urls.filter((url) => url.includes("filter=beta")).length,
+    ).toBeGreaterThan(1);
     w.unmount();
   });
 

@@ -66,6 +66,13 @@ func TestInteractiveShellCommand(t *testing.T) {
 	if got := interactiveShellCommand(rc(nil, map[string]string{"command": "/bin/zsh"}), true); len(got) != 1 || got[0] != "/bin/zsh" {
 		t.Errorf("an explicit command should override, got %v", got)
 	}
+	candidates := interactiveShellCommands(rc(nil, nil), true)
+	if len(candidates) < 2 || candidates[0][0] != "/bin/sh" || candidates[1][0] != "/bin/bash" {
+		t.Errorf("a default TTY shell should include fallback candidates, got %v", candidates)
+	}
+	if got := interactiveShellCommands(rc(nil, map[string]string{"command": "/bin/zsh"}), true); len(got) != 1 || got[0][0] != "/bin/zsh" {
+		t.Errorf("an explicit command should not fallback, got %v", got)
+	}
 }
 
 func TestShellPodIsFixedAndReusable(t *testing.T) {

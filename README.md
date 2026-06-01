@@ -16,7 +16,7 @@
 ShellCN is a single Go binary that gives you one secure, audited place to reach all your
 servers, containers, databases, and desktops. Run it, open a browser, and you're in.
 
-_Demo (placeholder, replace with your own recording):_
+_Demo (coming soon):_
 
 It speaks **40 protocols** out of the box today:
 
