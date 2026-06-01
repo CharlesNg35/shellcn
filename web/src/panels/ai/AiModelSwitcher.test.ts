@@ -33,6 +33,26 @@ describe("AiModelSwitcher", () => {
     expect(wrapper.text()).toContain("gpt-4o");
   });
 
+  it("shows the only personal provider without requiring a provider select", () => {
+    const wrapper = mount(AiModelSwitcher, {
+      props: {
+        providers: [
+          provider({
+            name: "OpenRouter",
+            defaultModel: "openai/gpt-4o",
+            models: ["openai/gpt-4o"],
+          }),
+        ],
+        global: { configured: false },
+        providerId: "p1",
+        model: "",
+      },
+    });
+    expect(wrapper.findAllComponents({ name: "Select" })).toHaveLength(0);
+    expect(wrapper.text()).toContain("OpenRouter");
+    expect(wrapper.text()).toContain("openai/gpt-4o");
+  });
+
   it("offers provider + model selects for a user provider", () => {
     const wrapper = mount(AiModelSwitcher, {
       props: {

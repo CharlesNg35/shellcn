@@ -16,6 +16,14 @@ const props = defineProps<{ connectionId: string }>();
 const store = useAiChatStore();
 const st = computed(() => store.state(props.connectionId));
 const busy = computed(() => st.value.runState !== "idle");
+const providerReady = computed(
+  () =>
+    store.providersReady &&
+    (store.providers.length > 0 || Boolean(store.global?.configured)),
+);
+const composerDisabled = computed(
+  () => !st.value.connected || !providerReady.value,
+);
 const showHistory = ref(false);
 
 function send(text: string): void {
@@ -159,7 +167,7 @@ onMounted(() => {
         </ul>
         <AiComposer
           :busy="busy"
-          :disabled="!st.connected"
+          :disabled="composerDisabled"
           @send="send"
           @stop="stop"
         />

@@ -59,6 +59,7 @@ const kindOptions = providerPresets.map((p) => ({
 
 const isEdit = computed(() => Boolean(props.provider));
 const preset = computed(() => providerPreset(form.kind));
+const isCustomProvider = computed(() => Boolean(preset.value.custom));
 const needsBaseUrl = computed(() => Boolean(preset.value.requiresBaseUrl));
 const keyPlaceholder = computed(() =>
   isEdit.value ? "Leave blank to keep saved key" : "Provider API key",
@@ -100,7 +101,7 @@ watch(
 function applyKind(kind: AiProviderKind): void {
   const next = providerPreset(kind);
   form.kind = kind;
-  if (!isEdit.value || !form.name.trim()) {
+  if (!isEdit.value || !form.name.trim() || !next.custom) {
     form.name = next.defaultName;
   }
   form.baseUrl = next.baseUrl ?? "";
@@ -116,7 +117,7 @@ function buildInput(): AiProviderInput {
   }
   return {
     kind: form.kind,
-    name: form.name.trim(),
+    name: isCustomProvider.value ? form.name.trim() : preset.value.defaultName,
     baseUrl: form.baseUrl.trim() || undefined,
     apiKey: form.apiKey.trim() || undefined,
     models,
@@ -204,7 +205,7 @@ async function save(): Promise<void> {
         />
       </div>
 
-      <div class="grid min-w-0 gap-1.5">
+      <div v-if="isCustomProvider" class="grid min-w-0 gap-1.5">
         <label
           for="ai-provider-name"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"

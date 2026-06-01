@@ -151,9 +151,9 @@ func TestValidationRejectsBadInput(t *testing.T) {
 
 	cases := []aiconfig.Input{
 		{Kind: "bogus", Name: "x", APIKey: "k", DefaultModel: "m"},
-		{Kind: models.AIProviderOpenAI, Name: "", APIKey: "k", DefaultModel: "m"},
 		{Kind: models.AIProviderOpenAI, Name: "x", APIKey: "", DefaultModel: "m"},
 		{Kind: models.AIProviderOpenAICompat, Name: "x", DefaultModel: "m"}, // no base URL
+		{Kind: models.AIProviderOpenAICompat, BaseURL: "http://localhost:11434/v1", DefaultModel: "m"},
 		{Kind: models.AIProviderOpenAI, Name: "x", APIKey: "k", DefaultModel: ""},
 	}
 	for i, c := range cases {
@@ -167,6 +167,23 @@ func TestValidationRejectsBadInput(t *testing.T) {
 		Kind: models.AIProviderOpenAICompat, Name: "Ollama", BaseURL: "http://localhost:11434/v1", DefaultModel: "llama3",
 	}); err != nil {
 		t.Fatalf("compat without key should be allowed: %v", err)
+	}
+}
+
+func TestBuiltinProviderNameDefaults(t *testing.T) {
+	svc, _ := newService(t, config.AIConfig{})
+	ctx := context.Background()
+
+	sum, err := svc.Create(ctx, "user-1", aiconfig.Input{
+		Kind:         models.AIProviderOpenRouter,
+		APIKey:       "sk-router",
+		DefaultModel: "openai/gpt-4o",
+	})
+	if err != nil {
+		t.Fatalf("create openrouter without name: %v", err)
+	}
+	if sum.Name != "OpenRouter" {
+		t.Fatalf("name = %q, want OpenRouter", sum.Name)
 	}
 }
 

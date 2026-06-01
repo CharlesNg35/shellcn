@@ -4,8 +4,12 @@ import { setActivePinia, createPinia } from "pinia";
 const listConversations = vi.fn(async () => [] as unknown[]);
 const getConversation = vi.fn();
 const messages = vi.fn();
+const global = vi.fn(async () => ({ configured: false }));
+const listProviders = vi.fn(async () => [] as unknown[]);
 vi.mock("../api/ai", () => ({
   aiApi: {
+    global: () => global(),
+    list: () => listProviders(),
     listConversations: () => listConversations(),
     getConversation: (...a: unknown[]) => getConversation(...a),
     messages: (...a: unknown[]) => messages(...a),
@@ -22,6 +26,10 @@ beforeEach(() => {
   listConversations.mockClear();
   getConversation.mockReset();
   messages.mockReset();
+  global.mockReset();
+  global.mockResolvedValue({ configured: false });
+  listProviders.mockReset();
+  listProviders.mockResolvedValue([]);
 });
 
 const storedMsg = (id: string, content: string) => ({
@@ -236,6 +244,35 @@ describe("aiChat store", () => {
     expect(sent.at(-1)).toMatchObject({
       providerId: "p1",
       model: "gpt-4o-mini",
+    });
+  });
+
+  it("defaults to the first personal provider when no shared provider exists", async () => {
+    listProviders.mockResolvedValue([
+      {
+        id: "p-local",
+        kind: "openrouter",
+        name: "OpenRouter",
+        models: ["openai/gpt-4o"],
+        defaultModel: "openai/gpt-4o",
+        hasKey: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+    const sent: Record<string, unknown>[] = [];
+    st.socket = {
+      send: (d: string) => sent.push(JSON.parse(d)),
+    } as unknown as WebSocket;
+
+    await store.loadProviders();
+    store.send(CONN, "hi");
+
+    expect(sent.at(-1)).toMatchObject({
+      providerId: "p-local",
+      model: "openai/gpt-4o",
     });
   });
 });

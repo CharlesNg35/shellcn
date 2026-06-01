@@ -13,11 +13,10 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [providerId: string, model: string] }>();
 
-// Provider choices: the shared/global config (locked model) plus each user provider.
 const providerChoices = computed(() => {
   const out: { label: string; value: string }[] = [];
   if (props.global?.configured) {
-    out.push({ label: `Shared · ${props.global.provider}`, value: "" });
+    out.push({ label: "Shared AI", value: "" });
   }
   for (const p of props.providers) {
     out.push({ label: p.name, value: p.id });
@@ -25,12 +24,19 @@ const providerChoices = computed(() => {
   return out;
 });
 
-const selected = computed(() =>
-  props.providers.find((p) => p.id === props.providerId),
+const selected = computed(
+  () =>
+    props.providers.find((p) => p.id === props.providerId) ??
+    (!props.global?.configured && props.providerId === ""
+      ? props.providers[0]
+      : undefined),
 );
 
 const usingGlobal = computed(
   () => props.providerId === "" && !!props.global?.configured,
+);
+const effectiveProviderId = computed(
+  () => selected.value?.id ?? props.providerId,
 );
 
 const modelChoices = computed(() => {
@@ -38,10 +44,17 @@ const modelChoices = computed(() => {
   return models.map((m) => ({ label: m, value: m }));
 });
 
-// Only the user's own providers allow switching the model; the global model is pinned.
 const showModelSelect = computed(
   () => !usingGlobal.value && modelChoices.value.length > 1,
 );
+const activeProviderLabel = computed(() => {
+  if (usingGlobal.value) return props.global?.provider ?? "Shared AI";
+  return selected.value?.name ?? providerChoices.value[0]?.label ?? "";
+});
+const activeModel = computed(() => {
+  if (usingGlobal.value) return props.global?.model ?? "";
+  return props.model || selected.value?.defaultModel || "";
+});
 
 function pickProvider(id: string): void {
   const p = props.providers.find((x) => x.id === id);
@@ -63,8 +76,8 @@ function pickProvider(id: string): void {
       @update:model-value="pickProvider"
     />
     <Tag
-      v-else-if="usingGlobal"
-      :value="`Shared · ${global?.model}`"
+      v-else-if="activeProviderLabel"
+      :value="activeProviderLabel"
       severity="secondary"
     />
 
@@ -77,12 +90,8 @@ function pickProvider(id: string): void {
       :disabled="disabled"
       aria-label="Model"
       :pt="{ root: 'text-xs' }"
-      @update:model-value="emit('select', providerId, $event)"
+      @update:model-value="emit('select', effectiveProviderId, $event)"
     />
-    <span
-      v-else-if="usingGlobal && global?.model"
-      class="text-xs text-surface-400"
-      :title="`Shared model: ${global.model}`"
-    />
+    <Tag v-else-if="activeModel" :value="activeModel" severity="secondary" />
   </div>
 </template>

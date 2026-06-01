@@ -290,6 +290,9 @@ func (s *Service) normalize(in Input, create bool) (Input, error) {
 	if !builtinKinds[in.Kind] {
 		return Input{}, fmt.Errorf("%w: unknown kind %q", errInvalid, in.Kind)
 	}
+	if in.Name == "" && in.Kind != models.AIProviderOpenAICompat {
+		in.Name = defaultProviderName(in.Kind)
+	}
 	if in.Name == "" {
 		return Input{}, fmt.Errorf("%w: name is required", errInvalid)
 	}
@@ -311,4 +314,19 @@ func (s *Service) normalize(in Input, create bool) (Input, error) {
 	}
 	in.Models = cleaned
 	return in, nil
+}
+
+func defaultProviderName(kind models.AIProviderKind) string {
+	switch kind {
+	case models.AIProviderOpenAI:
+		return "OpenAI"
+	case models.AIProviderOpenRouter:
+		return "OpenRouter"
+	case models.AIProviderAnthropic:
+		return "Anthropic"
+	case models.AIProviderGoogle:
+		return "Google"
+	default:
+		return ""
+	}
 }

@@ -106,6 +106,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
   // the shared/global indicator), loaded once.
   const providers = ref<AiProviderSummary[]>([]);
   const global = ref<AiGlobalStatus | null>(null);
+  const providersReady = ref(false);
   let providersLoaded = false;
 
   async function loadProviders(): Promise<void> {
@@ -115,8 +116,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
       const [g, list] = await Promise.all([aiApi.global(), aiApi.list()]);
       global.value = g;
       providers.value = list;
+      providersReady.value = true;
+      Object.values(byConn).forEach(ensureProviderSelection);
     } catch {
       providersLoaded = false;
+      providersReady.value = false;
     }
   }
 
@@ -129,6 +133,22 @@ export const useAiChatStore = defineStore("aiChat", () => {
   function state(connId: string): ChatState {
     if (!byConn[connId]) byConn[connId] = newState();
     return byConn[connId];
+  }
+
+  function ensureProviderSelection(st: ChatState): void {
+    if (st.providerId && providers.value.some((p) => p.id === st.providerId)) {
+      return;
+    }
+    if (global.value?.configured) {
+      st.providerId = "";
+      st.model = "";
+      return;
+    }
+    const first = providers.value[0];
+    if (first) {
+      st.providerId = first.id;
+      st.model = first.defaultModel;
+    }
   }
 
   async function connect(connId: string): Promise<void> {
@@ -187,6 +207,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const text = content.trim();
     if (!text) return;
     const st = state(connId);
+    ensureProviderSelection(st);
     // Typed mid-stream: queue it and flush when the current turn finishes.
     if (st.runState !== "idle") {
       st.queue.push(text);
@@ -405,6 +426,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     version,
     providers,
     global,
+    providersReady,
     loadProviders,
     setProvider,
     state,
