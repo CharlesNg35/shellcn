@@ -1,4 +1,6 @@
+/* eslint-disable vue/one-component-per-file */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { defineComponent, ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
@@ -179,6 +181,96 @@ describe("streaming stub panels", () => {
 
     expect(FakeWS.instances).toHaveLength(2);
     expect(FakeWS.instances[0].closed).toBe(true);
+    w.unmount();
+  });
+
+  it("keeps log streams scrolled to bottom after KeepAlive reactivation", async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollHeight",
+    );
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 500,
+    });
+    const Host = defineComponent({
+      components: { LogStreamPanel },
+      setup() {
+        const show = ref(true);
+        return { show, props };
+      },
+      template:
+        '<KeepAlive><LogStreamPanel v-if="show" v-bind="props" /></KeepAlive>',
+    });
+    const w = mount(Host);
+    await flushPromises();
+
+    FakeWS.instances[0].emit("message", { data: "first line" });
+    await flushPromises();
+    let viewport = w.get('[data-test="log-viewport"]').element as HTMLElement;
+    expect(viewport.scrollTop).toBe(500);
+
+    viewport.scrollTop = 0;
+    (w.vm as unknown as { show: boolean }).show = false;
+    await flushPromises();
+    (w.vm as unknown as { show: boolean }).show = true;
+    await flushPromises();
+
+    viewport = w.get('[data-test="log-viewport"]').element as HTMLElement;
+    expect(viewport.scrollTop).toBe(500);
+
+    if (original) {
+      Object.defineProperty(HTMLElement.prototype, "scrollHeight", original);
+    } else {
+      delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight;
+    }
+    w.unmount();
+  });
+
+  it("does not force log scroll on reactivation when following is off", async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollHeight",
+    );
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 500,
+    });
+    const Host = defineComponent({
+      components: { LogStreamPanel },
+      setup() {
+        const show = ref(true);
+        return { show, props };
+      },
+      template:
+        '<KeepAlive><LogStreamPanel v-if="show" v-bind="props" /></KeepAlive>',
+    });
+    const w = mount(Host);
+    await flushPromises();
+    FakeWS.instances[0].emit("message", { data: "first line" });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Following"))!
+      .trigger("click");
+    const viewport = w.get('[data-test="log-viewport"]').element as HTMLElement;
+    viewport.scrollTop = 0;
+
+    (w.vm as unknown as { show: boolean }).show = false;
+    await flushPromises();
+    (w.vm as unknown as { show: boolean }).show = true;
+    await flushPromises();
+
+    expect(
+      (w.get('[data-test="log-viewport"]').element as HTMLElement).scrollTop,
+    ).toBe(0);
+
+    if (original) {
+      Object.defineProperty(HTMLElement.prototype, "scrollHeight", original);
+    } else {
+      delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight;
+    }
     w.unmount();
   });
 
