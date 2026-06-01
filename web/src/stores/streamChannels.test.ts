@@ -104,4 +104,24 @@ describe("stream channels store", () => {
     expect(a.closed).toBe(true);
     expect(b.closed).toBe(false);
   });
+
+  it("closes only matching connection channels for a scope param", () => {
+    const store = useStreamChannelsStore();
+    const redis0 = new FakeSocket();
+    const redis1 = new FakeSocket();
+    const redisInfo = new FakeSocket();
+    const other = new FakeSocket();
+
+    store.ensure("conn:redis.terminal:database=0", () => redis0);
+    store.ensure("conn:redis.terminal:database=1", () => redis1);
+    store.ensure("conn:redis.info:", () => redisInfo);
+    store.ensure("other:redis.terminal:database=0", () => other);
+
+    store.closeForScopeParam("conn", "database");
+
+    expect(redis0.closed).toBe(true);
+    expect(redis1.closed).toBe(true);
+    expect(redisInfo.closed).toBe(false);
+    expect(other.closed).toBe(false);
+  });
 });

@@ -30,7 +30,8 @@ function frameText(ev: unknown): string {
 
 // Streams are owned here, not by components: a panel attaches on mount and
 // detaches on unmount, but the underlying channel persists across remounts and
-// tab switches. Channels are torn down explicitly when a connection closes.
+// tab switches. Channels are torn down explicitly when a connection closes or
+// when a global scope selector invalidates them.
 // A channel key is `${connectionId}:${routeId}:${params}`; the connection id is
 // everything before the first colon.
 export const useStreamChannelsStore = defineStore("streamChannels", () => {
@@ -119,6 +120,16 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     }
   }
 
+  function closeForScopeParam(connectionId: string, param: string): void {
+    closeWhere((key) => {
+      if (!key.startsWith(`${connectionId}:`)) return false;
+      const first = key.indexOf(":");
+      const second = key.indexOf(":", first + 1);
+      if (second < 0) return false;
+      return new URLSearchParams(key.slice(second + 1)).has(param);
+    });
+  }
+
   return {
     statuses,
     generation,
@@ -131,5 +142,6 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     reason,
     close,
     closeWhere,
+    closeForScopeParam,
   };
 });

@@ -1,5 +1,6 @@
 import { reactive } from "vue";
 import { defineStore } from "pinia";
+import { useStreamChannelsStore } from "./streamChannels";
 
 export const SCOPE_SEPARATOR = ",";
 
@@ -47,10 +48,13 @@ export const useScopeStore = defineStore("scope", () => {
 
   function set(connectionId: string, param: string, value: string): void {
     if (!allowed[connectionId]?.[param]) return;
+    const previous = byConnection[connectionId]?.[param] ?? "";
+    if (previous === value) return;
     const current =
       byConnection[connectionId] ?? (byConnection[connectionId] = {});
     if (value) current[param] = value;
     else delete current[param];
+    useStreamChannelsStore().closeForScopeParam(connectionId, param);
   }
 
   function clear(connectionId: string): void {
