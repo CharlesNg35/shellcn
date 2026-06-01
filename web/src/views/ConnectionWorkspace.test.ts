@@ -570,6 +570,55 @@ describe("ConnectionWorkspace", () => {
     expect(pluginFetches).toBe(1);
   });
 
+  it("replaces (no new history) when switching between already-open workbench tabs", async () => {
+    vi.unstubAllGlobals();
+    installFetch((url) => {
+      if (url.endsWith("/api/connections"))
+        return { body: [{ id: "c1", name: "docker", protocol: "docker", transport: "direct" }] };
+      if (url.endsWith("/api/connections/c1/session"))
+        return { body: { state: "connected", channels: 0, streams: 0 } };
+      if (url.endsWith("/api/connection-folders")) return { body: [] };
+      if (url.endsWith("/api/plugins/docker")) return { body: projection };
+      if (url.endsWith("/api/plugins")) return { body: [] };
+      return { status: 404, body: { error: "not found" } };
+    });
+    const ws = useWorkspaceStore();
+    ws.setConnected("c1", true);
+    const r = router();
+    mount(ConnectionWorkspace, {
+      props: { id: "c1" },
+      global: { plugins: [r], stubs: { AppIcon: true, TreeWorkspace: true } },
+    });
+    await flushPromises();
+
+    // Two views open at once (pinned), each a new resource → each pushed.
+    ws.openView("c1", {
+      id: "group:containers",
+      title: "Containers",
+      kind: "list",
+      groupKey: "containers",
+    });
+    await flushPromises();
+    ws.openView("c1", {
+      id: "detail:abc",
+      title: "web",
+      kind: "detail",
+      ref: { kind: "container", uid: "abc", name: "web" },
+    });
+    await flushPromises();
+    expect(r.currentRoute.value.query.v).toBe("detail:container:abc:n=web");
+
+    // Switching back to the already-open first tab replaces — it does NOT push.
+    ws.activateView("c1", "group:containers");
+    await flushPromises();
+    expect(r.currentRoute.value.query.v).toBe("group:containers");
+
+    // So Back lands on the entry *before* the detail (group), not the detail.
+    await r.back();
+    await flushPromises();
+    expect(r.currentRoute.value.query.v).not.toBe("detail:container:abc:n=web");
+  });
+
   it("renders a single full-bleed panel with no tab bar in the single layout", async () => {
     const single: PluginProjection = {
       ...projection,

@@ -228,19 +228,30 @@ function applyLocator(v?: string): void {
   else ws.openPreviewView(props.id, parsed);
 }
 
-// store → URL. Opening a resource (sidebar_tree) adds a history entry so Back
-// returns to the previous one; switching a top tab just reflects in the URL
-// (replace, still deep-linkable). The first locator always replaces — no spurious
-// entry when a connection opens.
+// store → URL. Opening a *new* resource (sidebar_tree) adds a history entry so
+// Back returns to the previous one; switching to an already-open workbench tab —
+// or any top-tab switch — just replaces, so flipping between open tabs doesn't pile
+// up history. The first locator also replaces (no spurious entry when a connection
+// opens).
+let prevViewIds = new Set<string>();
 watch(activeLocator, (loc) => {
   const current = typeof route.query.v === "string" ? route.query.v : undefined;
-  if (loc === current) return;
+  const openIds = new Set(ws.view(props.id).views.map((v) => v.id));
+  if (loc === current) {
+    prevViewIds = openIds;
+    return;
+  }
   const query = { ...route.query };
   if (loc) query.v = loc;
   else delete query.v;
-  const push =
-    projection.value?.layout === Layout.SidebarTree && current !== undefined;
-  void router[push ? "push" : "replace"]({ query });
+  const activeId = ws.activeView(props.id)?.id;
+  const isNewView =
+    projection.value?.layout === Layout.SidebarTree &&
+    current !== undefined &&
+    Boolean(activeId) &&
+    !prevViewIds.has(activeId as string);
+  prevViewIds = openIds;
+  void router[isNewView ? "push" : "replace"]({ query });
 });
 
 // URL → store: Back/Forward restores the active view (equality-guarded, so the two
