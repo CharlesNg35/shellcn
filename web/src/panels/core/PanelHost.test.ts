@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import PanelHost from "./PanelHost.vue";
+import LoadingPanel from "./LoadingPanel.vue";
 
 const lifecycle = vi.hoisted(() => ({
   mounts: 0,
@@ -48,6 +49,12 @@ describe("PanelHost", () => {
     });
 
     expect(w.text()).toContain("config.columns must be an array.");
+  });
+
+  it("uses the shared skeleton for async panel loading", () => {
+    const w = mount(LoadingPanel);
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+    expect(w.text()).not.toContain("Loading panel");
   });
 
   it("validates dashboard cell config recursively", () => {

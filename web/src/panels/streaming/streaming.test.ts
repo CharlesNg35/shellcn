@@ -302,6 +302,73 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("shows a skeleton while the query editor engine is loading", async () => {
+    const w = mount(QueryEditorPanel, { props });
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+
+    await flushPromises();
+
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    expect(w.find(".shellcn-codemirror-host").isVisible()).toBe(true);
+    w.unmount();
+  });
+
+  it("shows a skeleton while the terminal engine is loading", async () => {
+    const w = mount(TerminalPanel, { props });
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+
+    await flushPromises();
+
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    w.unmount();
+  });
+
+  it("shows a skeleton while the remote desktop engine is connecting", () => {
+    const w = mount(RemoteDesktopPanel, { props });
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+    expect(w.text()).not.toContain(
+      "Remote desktop session is waiting for a stream route.",
+    );
+    w.unmount();
+  });
+
+  it("shows a skeleton while a code editor document is loading", async () => {
+    let resolveFetch: () => void = () => {};
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFetch = () =>
+              resolve(
+                new Response(JSON.stringify("apiVersion: v1\nkind: Pod\n"), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                }),
+              );
+          }),
+      ),
+    );
+
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kubernetes.resource.yaml" },
+        config: { language: "yaml" },
+      },
+    });
+    await flushPromises();
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+
+    resolveFetch();
+    await flushPromises();
+    await flushPromises();
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
+    w.unmount();
+  });
+
   it("saves initial code editor content under a configured JSON body key", async () => {
     const calls: { url: string; method?: string; body: unknown }[] = [];
     vi.unstubAllGlobals();
