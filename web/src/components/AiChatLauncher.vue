@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import { defineAsyncComponent, h, onMounted, ref } from "vue";
+import { computed, defineAsyncComponent, h, onMounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Drawer from "primevue/drawer";
 import AppIcon from "./AppIcon.vue";
 import { aiApi } from "../api/ai";
 
-// AiChatLauncher is the ONLY AI code in the main bundle: a header icon + Drawer
-// shell. The heavy chat panel (store, markdown, highlight) is lazy-loaded on
-// first open, so first paint stays constant whether or not AI is configured.
-defineProps<{ connectionId: string; connected: boolean }>();
+const props = defineProps<{
+  connectionId: string;
+  connected: boolean;
+  aiMode?: string;
+}>();
 
 const available = ref(false);
 const open = ref(false);
 const opened = ref(false); // mount the panel only once the drawer is first opened
+const visible = computed(
+  () => available.value && props.connected && props.aiMode !== "disabled",
+);
 
 const AiChatPanel = defineAsyncComponent({
   loader: () => import("../panels/ai/AiChatPanel.vue"),
@@ -47,15 +51,13 @@ const AiChatPanel = defineAsyncComponent({
           },
           [
             h("span", "Failed to load the assistant."),
-            h(
-              "button",
-              {
-                class:
-                  "rounded-md border border-surface-300 px-3 py-1.5 text-xs dark:border-surface-700",
-                onClick: () => window.location.reload(),
-              },
-              "Reload",
-            ),
+            h(Button, {
+              label: "Reload",
+              size: "small",
+              severity: "secondary",
+              outlined: true,
+              onClick: () => window.location.reload(),
+            }),
           ],
         );
     },
@@ -75,11 +77,15 @@ onMounted(async () => {
     available.value = false;
   }
 });
+
+watch(visible, (next) => {
+  if (!next) open.value = false;
+});
 </script>
 
 <template>
   <Button
-    v-if="available && connected"
+    v-if="visible"
     text
     rounded
     severity="secondary"

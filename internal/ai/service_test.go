@@ -36,6 +36,14 @@ func TestAllowedRisks(t *testing.T) {
 	if !ro[plugin.RiskSafe] || ro[plugin.RiskWrite] || ro[plugin.RiskDestructive] {
 		t.Fatalf("read_only should expose only safe: %v", ro)
 	}
+	unset := ai.AllowedRisks("", true)
+	if !unset[plugin.RiskSafe] || unset[plugin.RiskWrite] || unset[plugin.RiskDestructive] {
+		t.Fatalf("unset mode should default to safe only: %v", unset)
+	}
+	disabled := ai.AllowedRisks("disabled", true)
+	if disabled[plugin.RiskSafe] || disabled[plugin.RiskWrite] || disabled[plugin.RiskDestructive] {
+		t.Fatalf("disabled mode should expose no tools: %v", disabled)
+	}
 	rw := ai.AllowedRisks("read_write", false)
 	if !rw[plugin.RiskSafe] || !rw[plugin.RiskWrite] || rw[plugin.RiskDestructive] {
 		t.Fatalf("read_write w/o destructive: %v", rw)

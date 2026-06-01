@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import Button from "primevue/button";
 import AppIcon from "../../components/AppIcon.vue";
 import type { AiToolCall } from "../../stores/aiChat";
 
@@ -35,8 +36,10 @@ function statusColor(status: AiToolCall["status"]): string {
     v-if="calls.length"
     class="my-1.5 rounded-md border border-surface-200 dark:border-surface-700"
   >
-    <button
+    <Button
       type="button"
+      text
+      severity="secondary"
       class="flex w-full items-center gap-2 px-2.5 py-1.5 text-xs font-medium text-surface-600 dark:text-surface-300"
       :aria-expanded="expanded"
       @click="expanded = !expanded"
@@ -55,7 +58,7 @@ function statusColor(status: AiToolCall["status"]): string {
         :size="14"
         class="text-surface-400"
       />
-    </button>
+    </Button>
     <ul
       v-if="expanded"
       class="flex flex-col gap-1 border-t border-surface-200 px-2.5 py-1.5 dark:border-surface-700"

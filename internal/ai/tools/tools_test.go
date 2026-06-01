@@ -161,7 +161,7 @@ func TestExecuteSplitsPathParamsFromBody(t *testing.T) {
 		t.Fatalf("path-only call should have empty body, got %s", inv.lastBody)
 	}
 
-	// Body route: fields become JSON body.
+	ts.WithConfirmer(&recordingConfirmer{approve: true})
 	if _, err := ts.Execute(context.Background(), engine.ToolCall{Name: "demo_create", Input: map[string]any{"name": "x"}}); err != nil {
 		t.Fatalf("execute create: %v", err)
 	}
@@ -184,8 +184,15 @@ func (c *recordingConfirmer) Confirm(_ context.Context, req tools.ConfirmRequest
 func TestConfirmerGatesWritesNotReads(t *testing.T) {
 	reg := registry(t)
 
-	// Rejected write: the confirmer is consulted and the route never runs.
 	inv := &recordingInvoker{result: map[string]any{"ok": true}}
+	tsNoConfirm := mustBuild(t, reg, map[plugin.RiskLevel]bool{plugin.RiskSafe: true, plugin.RiskWrite: true}, inv)
+	if _, err := tsNoConfirm.Execute(context.Background(), engine.ToolCall{ID: "tc0", Name: "demo_create", Input: map[string]any{"name": "x"}}); err == nil {
+		t.Fatal("write tool without confirmer should fail closed")
+	}
+	if inv.lastRoute != "" {
+		t.Fatalf("unguarded write must not invoke the route, got %q", inv.lastRoute)
+	}
+
 	cf := &recordingConfirmer{approve: false}
 	ts := mustBuild(t, reg, map[plugin.RiskLevel]bool{plugin.RiskSafe: true, plugin.RiskWrite: true}, inv).WithConfirmer(cf)
 

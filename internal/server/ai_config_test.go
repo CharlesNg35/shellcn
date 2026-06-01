@@ -90,6 +90,11 @@ func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
 		!strings.Contains(string(detail.Body), `"aiAllowDestructive":true`) {
 		t.Fatalf("read_write+destructive not persisted: %s", detail.Body)
 	}
+	list := h.do(t, http.MethodGet, "/api/connections", "op", nil)
+	if !strings.Contains(string(list.Body), `"aiMode":"read_write"`) ||
+		!strings.Contains(string(list.Body), `"aiAllowDestructive":true`) {
+		t.Fatalf("connection list must expose ai mode for launcher gating: %s", list.Body)
+	}
 
 	// read_only must force the destructive opt-in off even if requested.
 	resp = h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(

@@ -31,23 +31,25 @@ func (s *Server) handleGetPlugin(w http.ResponseWriter, r *http.Request) {
 }
 
 type connectionDTO struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Protocol     string            `json:"protocol"`
-	Icon         *plugin.Icon      `json:"icon,omitempty"`
-	Transport    string            `json:"transport"`
-	Online       bool              `json:"online"`
-	Status       string            `json:"status,omitempty"`
-	CanManage    bool              `json:"canManage"`
-	CanShare     bool              `json:"canShare"`
-	Access       string            `json:"access"`
-	Owned        bool              `json:"owned"`
-	OwnerName    string            `json:"ownerName,omitempty"`
-	SharedWithMe bool              `json:"sharedWithMe"`
-	SharedByMe   bool              `json:"sharedByMe"`
-	Recording    map[string]string `json:"recording,omitempty"`
-	FolderID     string            `json:"folderId,omitempty"`
-	SortOrder    int               `json:"sortOrder"`
+	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
+	Protocol           string            `json:"protocol"`
+	Icon               *plugin.Icon      `json:"icon,omitempty"`
+	Transport          string            `json:"transport"`
+	Online             bool              `json:"online"`
+	Status             string            `json:"status,omitempty"`
+	CanManage          bool              `json:"canManage"`
+	CanShare           bool              `json:"canShare"`
+	Access             string            `json:"access"`
+	Owned              bool              `json:"owned"`
+	OwnerName          string            `json:"ownerName,omitempty"`
+	SharedWithMe       bool              `json:"sharedWithMe"`
+	SharedByMe         bool              `json:"sharedByMe"`
+	Recording          map[string]string `json:"recording,omitempty"`
+	AIMode             string            `json:"aiMode,omitempty"`
+	AIAllowDestructive bool              `json:"aiAllowDestructive,omitempty"`
+	FolderID           string            `json:"folderId,omitempty"`
+	SortOrder          int               `json:"sortOrder"`
 }
 
 func (s *Server) handleListConnections(w http.ResponseWriter, r *http.Request) {

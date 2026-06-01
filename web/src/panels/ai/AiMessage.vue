@@ -4,6 +4,7 @@ import AiMarkdown from "./AiMarkdown.vue";
 import AiToolBadges from "./AiToolBadges.vue";
 import AiReasoning from "./AiReasoning.vue";
 import AppIcon from "../../components/AppIcon.vue";
+import Button from "primevue/button";
 import Message from "primevue/message";
 import type { AiMessage } from "../../stores/aiChat";
 
@@ -69,9 +70,12 @@ async function copy(): Promise<void> {
         >
           {{ message.error }}
         </Message>
-        <button
+        <Button
           v-if="message.content && !streaming"
           type="button"
+          text
+          severity="secondary"
+          size="small"
           class="mt-1 flex items-center gap-1 text-xs text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-surface-700 focus-visible:opacity-100 dark:hover:text-surface-100"
           :aria-label="copied ? 'Copied' : 'Copy message'"
           @click="copy"
@@ -81,7 +85,7 @@ async function copy(): Promise<void> {
             :size="12"
           />
           {{ copied ? "Copied" : "Copy" }}
-        </button>
+        </Button>
       </template>
     </div>
   </div>

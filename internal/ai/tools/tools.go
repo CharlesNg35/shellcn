@@ -1,7 +1,4 @@
-// Package tools turns a connection's manifest routes into risk-gated LLM tools,
-// derived purely from each route's Risk, Input schema, and path params. Execution
-// runs through the same secure pipeline a human request uses, so the agent can
-// never exceed the user's RBAC or the route's risk gate.
+// Package tools exposes risk-gated connection routes as agent tools.
 package tools
 
 import (
@@ -128,8 +125,10 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 		}
 		body[k] = v
 	}
-	// Write/destructive calls pause for the user's confirmation before running.
-	if ts.confirmer != nil && (b.risk == plugin.RiskWrite || b.risk == plugin.RiskDestructive) {
+	if b.risk == plugin.RiskWrite || b.risk == plugin.RiskDestructive {
+		if ts.confirmer == nil {
+			return nil, fmt.Errorf("tool %q requires user confirmation", call.Name)
+		}
 		ok, err := ts.confirmer.Confirm(ctx, ConfirmRequest{
 			ToolCallID:  call.ID,
 			ToolName:    call.Name,

@@ -1,6 +1,4 @@
-// Package ai resolves a provider, builds a connection's risk-gated tool set,
-// runs a turn through the engine, and relays the stream to transport. It
-// references no plugin by name.
+// Package ai coordinates provider resolution, route tools, memory, and streaming turns.
 package ai
 
 import (
@@ -235,14 +233,18 @@ func (a *accumulator) add(ev engine.StreamEvent) {
 // tiers the agent may use. Privileged is never allowed; streaming routes are
 // excluded by the tools layer.
 func AllowedRisks(mode string, allowDestructive bool) map[plugin.RiskLevel]bool {
-	allowed := map[plugin.RiskLevel]bool{plugin.RiskSafe: true}
-	if mode == "read_write" {
-		allowed[plugin.RiskWrite] = true
+	switch mode {
+	case "", models.AIModeReadOnly:
+		return map[plugin.RiskLevel]bool{plugin.RiskSafe: true}
+	case models.AIModeReadWrite:
+		allowed := map[plugin.RiskLevel]bool{plugin.RiskSafe: true, plugin.RiskWrite: true}
 		if allowDestructive {
 			allowed[plugin.RiskDestructive] = true
 		}
+		return allowed
+	default:
+		return map[plugin.RiskLevel]bool{}
 	}
-	return allowed
 }
 
 func (s *Service) resolveProvider(ctx context.Context, user models.User, scope Scope) (engine.Provider, string, models.AIProviderKind, error) {

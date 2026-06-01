@@ -62,8 +62,10 @@ function remove(c: AiConversation): void {
             : 'hover:bg-surface-50 dark:hover:bg-surface-800/50'
         "
       >
-        <button
+        <Button
           type="button"
+          text
+          severity="secondary"
           class="flex min-w-0 flex-1 items-center gap-1.5 text-left"
           :disabled="busy"
           @click="emit('select', c.id)"
@@ -76,23 +78,31 @@ function remove(c: AiConversation): void {
           <span class="truncate text-surface-700 dark:text-surface-200">{{
             c.title
           }}</span>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          text
+          rounded
+          severity="secondary"
+          size="small"
           class="hidden text-surface-400 group-hover:block hover:text-surface-700 dark:hover:text-surface-100"
           aria-label="Rename"
           @click="rename(c)"
         >
           <AppIcon :icon="{ type: 'lucide', value: 'pencil' }" :size="12" />
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
+          text
+          rounded
+          severity="danger"
+          size="small"
           class="hidden text-surface-400 group-hover:block hover:text-red-500"
           aria-label="Delete"
           @click="remove(c)"
         >
           <AppIcon :icon="{ type: 'lucide', value: 'trash' }" :size="12" />
-        </button>
+        </Button>
       </li>
       <li
         v-if="conversations.length === 0"

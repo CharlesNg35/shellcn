@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { StickToBottom } from "vue-stick-to-bottom";
+import Button from "primevue/button";
 import AiMessageItem from "./AiMessage.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import type { AiMessage } from "../../stores/aiChat";
@@ -34,15 +35,18 @@ const quickStarts = [
       Ask the assistant about this connection.
     </p>
     <div class="flex flex-col gap-2">
-      <button
+      <Button
         v-for="q in quickStarts"
         :key="q"
         type="button"
+        severity="secondary"
+        outlined
+        size="small"
         class="rounded-lg border border-surface-200 px-3 py-2 text-left text-xs text-surface-600 transition-colors hover:bg-surface-100 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800"
         @click="emit('quickStart', q)"
       >
         {{ q }}
-      </button>
+      </Button>
     </div>
   </div>
 
@@ -54,15 +58,18 @@ const quickStarts = [
       aria-live="polite"
       aria-label="Conversation"
     >
-      <button
+      <Button
         v-if="hasMore"
         type="button"
+        text
+        severity="secondary"
+        size="small"
         class="mx-auto rounded-md px-3 py-1 text-xs text-surface-500 hover:bg-surface-100 disabled:opacity-50 dark:text-surface-400 dark:hover:bg-surface-800"
         :disabled="loadingOlder"
         @click="emit('loadOlder')"
       >
         {{ loadingOlder ? "Loading…" : "Load earlier messages" }}
-      </button>
+      </Button>
       <AiMessageItem
         v-for="m in messages"
         :key="m.id"
@@ -72,9 +79,12 @@ const quickStarts = [
     </div>
 
     <template #overlay="{ isAtBottom, scrollToBottom }">
-      <button
+      <Button
         v-if="!isAtBottom"
         type="button"
+        rounded
+        severity="secondary"
+        outlined
         class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-surface-200 bg-surface-0 p-1.5 shadow-md hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-800 dark:hover:bg-surface-700"
         aria-label="Scroll to latest"
         @click="scrollToBottom()"
@@ -84,7 +94,7 @@ const quickStarts = [
           :size="16"
           class="text-surface-500 dark:text-surface-300"
         />
-      </button>
+      </Button>
     </template>
   </StickToBottom>
 </template>

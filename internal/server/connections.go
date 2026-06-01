@@ -56,6 +56,7 @@ func (s *Server) toConnectionDTO(c models.Connection) connectionDTO {
 	dto := connectionDTO{
 		ID: c.ID, Name: c.Name, Protocol: c.Protocol,
 		Transport: c.Transport, Recording: c.Recording,
+		AIMode: c.AIMode, AIAllowDestructive: c.AIAllowDestructive,
 	}
 	// A direct transport is always dialable on demand; an agent transport is
 	// reachable only while its tunnel is registered. `online` gates the enroll

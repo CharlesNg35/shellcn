@@ -652,6 +652,8 @@ export interface ConnectionSummary {
   sharedWithMe?: boolean;
   sharedByMe?: boolean;
   recording?: Record<string, string>;
+  aiMode?: string;
+  aiAllowDestructive?: boolean;
   folderId?: string;
   sortOrder?: number;
 }

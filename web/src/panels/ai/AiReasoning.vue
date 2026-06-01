@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import Button from "primevue/button";
 import AppIcon from "../../components/AppIcon.vue";
 
 const props = defineProps<{ reasoning: string; lines?: number }>();
@@ -15,8 +16,11 @@ const preview = computed(() => {
 
 <template>
   <div class="mb-1">
-    <button
+    <Button
       type="button"
+      text
+      severity="secondary"
+      size="small"
       class="flex items-center gap-1 text-xs text-surface-400 hover:text-surface-600 dark:hover:text-surface-200"
       :aria-expanded="expanded"
       @click="expanded = !expanded"
@@ -29,7 +33,7 @@ const preview = computed(() => {
         :size="12"
       />
       Reasoning
-    </button>
+    </Button>
     <pre
       v-if="expanded"
       class="mt-1 max-h-48 overflow-auto rounded-md bg-surface-100 p-2 text-xs whitespace-pre-wrap text-surface-600 dark:bg-surface-800 dark:text-surface-300"

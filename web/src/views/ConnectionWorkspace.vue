@@ -258,7 +258,11 @@ function onActionDone(action: Action): void {
           <span class="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           Disconnect
         </Button>
-        <AiChatLauncher :connection-id="id" :connected="connected" />
+        <AiChatLauncher
+          :connection-id="id"
+          :connected="connected"
+          :ai-mode="connection?.aiMode"
+        />
         <Button
           v-if="canShare"
           text

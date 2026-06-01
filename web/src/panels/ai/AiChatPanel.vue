@@ -143,14 +143,18 @@ onMounted(() => {
               class="shrink-0 text-surface-400"
             />
             <span class="min-w-0 flex-1 truncate">{{ q }}</span>
-            <button
+            <Button
               type="button"
+              text
+              rounded
+              severity="secondary"
+              size="small"
               class="text-surface-400 hover:text-surface-700 dark:hover:text-surface-100"
               aria-label="Remove queued message"
               @click="store.dequeue(connectionId, i)"
             >
               <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="12" />
-            </button>
+            </Button>
           </li>
         </ul>
         <AiComposer
