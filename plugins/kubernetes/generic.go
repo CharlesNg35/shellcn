@@ -131,7 +131,6 @@ func (s *Session) get(rc *plugin.RequestContext, k kind, name string) (*unstruct
 	return ri.Get(rc.Ctx, name, metav1.GetOptions{})
 }
 
-// DeleteResource deletes any object.
 func DeleteResource(rc *plugin.RequestContext) (any, error) {
 	s, k, name, err := resourceTarget(rc)
 	if err != nil {
@@ -149,7 +148,6 @@ func DeleteResource(rc *plugin.RequestContext) (any, error) {
 	return okResult(), nil
 }
 
-// ScaleRequest is the body for a scale action.
 type ScaleRequest struct {
 	Replicas int64 `json:"replicas"`
 }

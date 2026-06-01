@@ -1,4 +1,6 @@
+/* eslint-disable vue/one-component-per-file */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { defineComponent, ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
@@ -182,6 +184,96 @@ describe("streaming stub panels", () => {
     w.unmount();
   });
 
+  it("keeps log streams scrolled to bottom after KeepAlive reactivation", async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollHeight",
+    );
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 500,
+    });
+    const Host = defineComponent({
+      components: { LogStreamPanel },
+      setup() {
+        const show = ref(true);
+        return { show, props };
+      },
+      template:
+        '<KeepAlive><LogStreamPanel v-if="show" v-bind="props" /></KeepAlive>',
+    });
+    const w = mount(Host);
+    await flushPromises();
+
+    FakeWS.instances[0].emit("message", { data: "first line" });
+    await flushPromises();
+    let viewport = w.get('[data-test="log-viewport"]').element as HTMLElement;
+    expect(viewport.scrollTop).toBe(500);
+
+    viewport.scrollTop = 0;
+    (w.vm as unknown as { show: boolean }).show = false;
+    await flushPromises();
+    (w.vm as unknown as { show: boolean }).show = true;
+    await flushPromises();
+
+    viewport = w.get('[data-test="log-viewport"]').element as HTMLElement;
+    expect(viewport.scrollTop).toBe(500);
+
+    if (original) {
+      Object.defineProperty(HTMLElement.prototype, "scrollHeight", original);
+    } else {
+      delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight;
+    }
+    w.unmount();
+  });
+
+  it("does not force log scroll on reactivation when following is off", async () => {
+    const original = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      "scrollHeight",
+    );
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get: () => 500,
+    });
+    const Host = defineComponent({
+      components: { LogStreamPanel },
+      setup() {
+        const show = ref(true);
+        return { show, props };
+      },
+      template:
+        '<KeepAlive><LogStreamPanel v-if="show" v-bind="props" /></KeepAlive>',
+    });
+    const w = mount(Host);
+    await flushPromises();
+    FakeWS.instances[0].emit("message", { data: "first line" });
+    await flushPromises();
+
+    await w
+      .findAll("button")
+      .find((button) => button.text().includes("Following"))!
+      .trigger("click");
+    const viewport = w.get('[data-test="log-viewport"]').element as HTMLElement;
+    viewport.scrollTop = 0;
+
+    (w.vm as unknown as { show: boolean }).show = false;
+    await flushPromises();
+    (w.vm as unknown as { show: boolean }).show = true;
+    await flushPromises();
+
+    expect(
+      (w.get('[data-test="log-viewport"]').element as HTMLElement).scrollTop,
+    ).toBe(0);
+
+    if (original) {
+      Object.defineProperty(HTMLElement.prototype, "scrollHeight", original);
+    } else {
+      delete (HTMLElement.prototype as { scrollHeight?: number }).scrollHeight;
+    }
+    w.unmount();
+  });
+
   it("shows zoom and search controls only when the manifest enables them", async () => {
     const plain = mount(TerminalPanel, { props });
     await flushPromises();
@@ -207,6 +299,73 @@ describe("streaming stub panels", () => {
 
     expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
     expect(w.find("textarea.resize-none").exists()).toBe(false);
+    w.unmount();
+  });
+
+  it("shows a skeleton while the query editor engine is loading", async () => {
+    const w = mount(QueryEditorPanel, { props });
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+
+    await flushPromises();
+
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    expect(w.find(".shellcn-codemirror-host").isVisible()).toBe(true);
+    w.unmount();
+  });
+
+  it("shows a skeleton while the terminal engine is loading", async () => {
+    const w = mount(TerminalPanel, { props });
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+
+    await flushPromises();
+
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    w.unmount();
+  });
+
+  it("shows a skeleton while the remote desktop engine is connecting", () => {
+    const w = mount(RemoteDesktopPanel, { props });
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+    expect(w.text()).not.toContain(
+      "Remote desktop session is waiting for a stream route.",
+    );
+    w.unmount();
+  });
+
+  it("shows a skeleton while a code editor document is loading", async () => {
+    let resolveFetch: () => void = () => {};
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveFetch = () =>
+              resolve(
+                new Response(JSON.stringify("apiVersion: v1\nkind: Pod\n"), {
+                  status: 200,
+                  headers: { "Content-Type": "application/json" },
+                }),
+              );
+          }),
+      ),
+    );
+
+    const w = mount(CodeEditorPanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "kubernetes.resource.yaml" },
+        config: { language: "yaml" },
+      },
+    });
+    await flushPromises();
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(true);
+
+    resolveFetch();
+    await flushPromises();
+    await flushPromises();
+    expect(w.find('[data-test="skeleton-list"]').exists()).toBe(false);
+    expect(w.find(".shellcn-codemirror-host").exists()).toBe(true);
     w.unmount();
   });
 

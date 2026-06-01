@@ -29,12 +29,21 @@ interface ConnectionView {
   activeViewId?: string;
 }
 
+export interface TableViewState {
+  filterText: string;
+  sortField?: string;
+  sortOrder?: number;
+  first: number;
+  pageSize: number;
+}
+
 // Per-connection workspace state is kept here (not in components) so that
 // remounting a panel or switching connections never loses open views.
 export const useWorkspaceStore = defineStore("workspace", () => {
   const activeConnectionId = ref<string | null>(null);
   const recent = ref<string[]>([]);
   const views = ref<Record<string, ConnectionView>>({});
+  const tableStates = ref<Record<string, TableViewState>>({});
   // Connections the user has explicitly connected this session. Drives the
   // sidebar presence dot without assuming a live stream channel. Cleared on reload.
   const connected = ref<Record<string, boolean>>({});
@@ -152,10 +161,20 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     c.activeViewId = undefined;
   }
 
+  function tableState(key: string, defaults: TableViewState): TableViewState {
+    if (!tableStates.value[key]) tableStates.value[key] = { ...defaults };
+    return tableStates.value[key];
+  }
+
+  function setTableState(key: string, state: TableViewState): void {
+    tableStates.value[key] = { ...state };
+  }
+
   return {
     activeConnectionId,
     recent,
     views,
+    tableStates,
     connected,
     connectedOrder,
     view,
@@ -172,5 +191,7 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     setViews,
     activeView,
     clearViews,
+    tableState,
+    setTableState,
   };
 });

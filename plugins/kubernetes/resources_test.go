@@ -111,6 +111,92 @@ func TestTreeCategoryListsKinds(t *testing.T) {
 	}
 }
 
+func TestBuiltInResourceImportantColumns(t *testing.T) {
+	cases := map[string][]string{
+		"storageclass":          {"default", "provisioner", "reclaim", "bindingMode", "allowExpand"},
+		"daemonset":             {"desired", "current", "ready", "upToDate", "available"},
+		"service":               {"type", "clusterIP", "externalIP", "ports"},
+		"endpoints":             {"endpoints"},
+		"ingress":               {"class", "hosts", "address", "ports"},
+		"networkpolicy":         {"podSelector", "policyTypes"},
+		"persistentvolumeclaim": {"status", "volume", "capacity", "accessModes", "storageClass"},
+		"persistentvolume":      {"capacity", "accessModes", "status", "claim", "storageClass", "reclaim", "reason"},
+		"poddisruptionbudget":   {"minAvailable", "maxUnavailable", "allowedDisruptions"},
+		"job":                   {"completions", "duration", "active"},
+		"cronjob":               {"schedule", "timezone", "suspend", "active", "lastSchedule"},
+		"ingressclass":          {"controller", "parameters"},
+	}
+
+	for kindName, keys := range cases {
+		k, ok := kindByName(kindName)
+		if !ok {
+			t.Fatalf("missing kind %q", kindName)
+		}
+		have := map[string]bool{}
+		for _, c := range k.columns {
+			have[c.Key] = true
+		}
+		for _, key := range keys {
+			if !have[key] {
+				t.Fatalf("%s missing column %q in %+v", kindName, key, k.columns)
+			}
+		}
+	}
+}
+
+func TestStorageClassDefaultRow(t *testing.T) {
+	row := storageClassRow(obj{
+		"metadata": obj{"annotations": obj{"storageclass.kubernetes.io/is-default-class": "true"}},
+	})
+	if row["default"] != true {
+		t.Fatalf("default storage class row = %+v", row)
+	}
+
+	row = storageClassRow(obj{
+		"metadata": obj{"annotations": obj{"storageclass.beta.kubernetes.io/is-default-class": "true"}},
+	})
+	if row["default"] != true {
+		t.Fatalf("beta default storage class row = %+v", row)
+	}
+}
+
+func TestOperationalRowDetails(t *testing.T) {
+	service := serviceRow(obj{
+		"spec": obj{
+			"type":        "LoadBalancer",
+			"clusterIP":   "10.0.0.1",
+			"externalIPs": []any{"203.0.113.10"},
+			"ports":       []any{obj{"port": int64(443), "protocol": "TCP"}},
+		},
+		"status": obj{"loadBalancer": obj{"ingress": []any{obj{"hostname": "lb.example.test"}}}},
+	})
+	if service["externalIP"] != "203.0.113.10, lb.example.test" || service["ports"] != "443/TCP" {
+		t.Fatalf("service row = %+v", service)
+	}
+
+	ingress := ingressRow(obj{
+		"spec": obj{
+			"ingressClassName": "nginx",
+			"tls":              []any{obj{}},
+			"rules":            []any{obj{"host": "app.example.test"}},
+		},
+		"status": obj{"loadBalancer": obj{"ingress": []any{obj{"ip": "198.51.100.20"}}}},
+	})
+	if ingress["address"] != "198.51.100.20" || ingress["ports"] != "80, 443" {
+		t.Fatalf("ingress row = %+v", ingress)
+	}
+
+	networkPolicy := networkPolicyRow(obj{
+		"spec": obj{
+			"podSelector": obj{"matchLabels": obj{"app": "api"}},
+			"policyTypes": []any{"Ingress", "Egress"},
+		},
+	})
+	if networkPolicy["podSelector"] != "app=api" || networkPolicy["policyTypes"] != "Ingress, Egress" {
+		t.Fatalf("network policy row = %+v", networkPolicy)
+	}
+}
+
 func TestCRDDynamicColumns(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/apis/example.com/v1", func(w http.ResponseWriter, _ *http.Request) {

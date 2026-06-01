@@ -69,8 +69,6 @@ func bucketColumns() []plugin.Column {
 	}
 }
 
-// Actions returns the shared object-store admin actions for a plugin. They are
-// referenced by BucketTab and the file browser tab via their IDs.
 func Actions(protocol string) []plugin.Action {
 	return []plugin.Action{
 		{ID: routeID(protocol, "bucket.create"), Label: "Create bucket", Icon: icon("plus"), RouteID: routeID(protocol, "bucket.create")},
@@ -83,8 +81,6 @@ func bucketParams() map[string]string {
 	return map[string]string{"bucket": "${resource.name}"}
 }
 
-// AdminRoutes returns the object-store admin routes for a plugin: bucket
-// list/create/delete, versioning get/set, object-version listing, and presign.
 func AdminRoutes(protocol string) []plugin.Route {
 	return []plugin.Route{
 		{ID: routeID(protocol, "buckets.list"), Method: plugin.MethodGet, Path: "/buckets", Permission: protocol + ".buckets.read", Risk: plugin.RiskSafe, AuditEvent: routeID(protocol, "buckets.list"), Handle: listBuckets},

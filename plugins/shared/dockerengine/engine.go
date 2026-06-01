@@ -544,7 +544,6 @@ func RemoveNetwork(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: err == nil}, DockerErr(err)
 }
 
-// ImagePullSchema returns the input form for the shared image pull handler.
 func ImagePullSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Image", Fields: []plugin.Field{
 		{Key: "image", Label: "Image", Type: plugin.FieldText, Required: true, Placeholder: "nginx:latest", Help: "Image reference (repository:tag)."},
@@ -595,7 +594,6 @@ func PullImage(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: true}, nil
 }
 
-// CreateVolume creates a named volume.
 func CreateVolume(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -617,7 +615,6 @@ func CreateVolume(rc *plugin.RequestContext) (any, error) {
 	return ActionResult{OK: true}, nil
 }
 
-// CreateNetwork creates a network.
 func CreateNetwork(rc *plugin.RequestContext) (any, error) {
 	s, err := sess(rc)
 	if err != nil {
@@ -715,6 +712,7 @@ func LogsStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	ch, err := rc.Session.OpenChannel(rc.Ctx, plugin.ChannelRequest{Kind: plugin.StreamTerminal, Params: streamParams(rc)})
 	if err != nil {
+		termshell.WriteExecError(client, err)
 		return err
 	}
 	defer func() { _ = ch.Close() }()
@@ -733,6 +731,9 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	case err := <-errc:
 		if err == io.EOF {
 			return nil
+		}
+		if err != nil {
+			termshell.WriteExecError(client, err)
 		}
 		return err
 	}
@@ -815,7 +816,22 @@ func (s *Session) openExec(ctx context.Context, params map[string]string) (plugi
 	}
 	cols := uintParam(params, "cols", 80)
 	rows := uintParam(params, "rows", 24)
-	cmd := execCommand(params["command"])
+	commands := execCommands(params["command"])
+	var lastErr error
+	for i, cmd := range commands {
+		ch, err := s.openExecCommand(ctx, id, cmd, cols, rows)
+		if err == nil {
+			return ch, nil
+		}
+		lastErr = err
+		if i >= len(commands)-1 || !termshell.MissingExecutableError(err) {
+			break
+		}
+	}
+	return nil, lastErr
+}
+
+func (s *Session) openExecCommand(ctx context.Context, id string, cmd []string, cols, rows uint) (plugin.Channel, error) {
 	created, err := s.cli.ExecCreate(ctx, id, dockerclient.ExecCreateOptions{
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -1225,7 +1241,6 @@ func streamParams(rc *plugin.RequestContext) map[string]string {
 	return params
 }
 
-// CreateContainerSchema is the manifest input schema for the create form.
 func CreateContainerSchema() *plugin.Schema {
 	onFailure := plugin.Condition{AllOf: []plugin.Rule{{Field: "restart", Op: plugin.OpEq, Value: string(container.RestartPolicyOnFailure)}}}
 	return &plugin.Schema{Groups: []plugin.Group{
@@ -1259,7 +1274,6 @@ func CreateContainerSchema() *plugin.Schema {
 	}}
 }
 
-// LogsSchema is the manifest input schema for the log stream controls.
 func LogsSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Logs", Fields: []plugin.Field{
 		{Key: "tail", Label: "Tail", Type: plugin.FieldNumber},
@@ -1269,7 +1283,6 @@ func LogsSchema() *plugin.Schema {
 	}}}}
 }
 
-// ExecSchema is the manifest input schema for the exec terminal controls.
 func ExecSchema() *plugin.Schema {
 	return &plugin.Schema{Groups: []plugin.Group{{Name: "Exec", Fields: []plugin.Field{
 		{Key: "cols", Label: "Columns", Type: plugin.FieldNumber},
@@ -1555,6 +1568,13 @@ func execCommand(raw string) []string {
 		return []string{"/bin/sh", "-c", termshell.Launch}
 	}
 	return []string{"/bin/sh", "-lc", raw}
+}
+
+func execCommands(raw string) [][]string {
+	if strings.TrimSpace(raw) != "" {
+		return [][]string{execCommand(raw)}
+	}
+	return termshell.Commands("", true)
 }
 
 func ptr[T any](v T) *T {

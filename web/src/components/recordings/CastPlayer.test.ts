@@ -12,6 +12,17 @@ import CastPlayer from "./CastPlayer.vue";
 beforeEach(() => create.mockClear());
 
 describe("CastPlayer", () => {
+  it("shows a skeleton while the player bundle is loading", async () => {
+    const wrapper = mount(CastPlayer, {
+      props: { src: "/api/recordings/r1/content" },
+    });
+    expect(wrapper.find('[data-test="skeleton-list"]').exists()).toBe(true);
+
+    await flushPromises();
+
+    expect(wrapper.find('[data-test="skeleton-list"]').exists()).toBe(false);
+  });
+
   it("mounts the asciinema player against the recording source", async () => {
     mount(CastPlayer, { props: { src: "/api/recordings/r1/content" } });
     await flushPromises();

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, onActivated, ref } from "vue";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import { useStream } from "../../composables/useStream";
@@ -16,6 +16,12 @@ const filterText = ref("");
 const viewport = ref<HTMLElement | null>(null);
 const reconnecting = ref(false);
 
+function scrollToBottom(): void {
+  if (viewport.value && follow.value) {
+    viewport.value.scrollTop = viewport.value.scrollHeight;
+  }
+}
+
 function append(frame: string): void {
   let text = frame;
   try {
@@ -27,10 +33,7 @@ function append(frame: string): void {
   if (paused.value) return;
   lines.value.push(text);
   if (lines.value.length > MAX) lines.value.splice(0, lines.value.length - MAX);
-  void nextTick(() => {
-    if (viewport.value && follow.value)
-      viewport.value.scrollTop = viewport.value.scrollHeight;
-  });
+  void nextTick(scrollToBottom);
 }
 
 const { status, error, reconnect } = useStream(
@@ -59,6 +62,8 @@ const downloadHref = computed(
   () =>
     `data:text/plain;charset=utf-8,${encodeURIComponent(lines.value.join("\n"))}`,
 );
+
+onActivated(() => void nextTick(scrollToBottom));
 </script>
 
 <template>
@@ -106,6 +111,7 @@ const downloadHref = computed(
     </div>
     <div
       ref="viewport"
+      data-test="log-viewport"
       class="min-h-0 flex-1 overflow-auto p-3 font-mono text-xs leading-relaxed text-surface-700 dark:text-surface-200"
     >
       <div

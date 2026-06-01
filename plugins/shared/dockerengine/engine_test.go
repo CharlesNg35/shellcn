@@ -68,6 +68,17 @@ func TestContainerEventKind(t *testing.T) {
 	}
 }
 
+func TestExecCommandsFallbackOnlyForDefaultShell(t *testing.T) {
+	defaults := execCommands("")
+	if len(defaults) != 3 || defaults[0][0] != "/bin/sh" || defaults[1][0] != "/bin/bash" || defaults[2][0] != "/busybox/sh" {
+		t.Fatalf("default exec commands = %v", defaults)
+	}
+	explicit := execCommands("echo ready")
+	if len(explicit) != 1 || explicit[0][0] != "/bin/sh" || explicit[0][2] != "echo ready" {
+		t.Fatalf("explicit exec commands = %v", explicit)
+	}
+}
+
 func TestResourceEventDieKeepsContainerListedAsExited(t *testing.T) {
 	ev := resourceEventFromDocker(events.Message{
 		Action: events.ActionDie,
