@@ -2,8 +2,14 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 
 const listConversations = vi.fn(async () => [] as unknown[]);
+const getConversation = vi.fn();
+const messages = vi.fn();
 vi.mock("../api/ai", () => ({
-  aiApi: { listConversations: () => listConversations() },
+  aiApi: {
+    listConversations: () => listConversations(),
+    getConversation: (...a: unknown[]) => getConversation(...a),
+    messages: (...a: unknown[]) => messages(...a),
+  },
   chatSocketUrl: () => "ws://test",
 }));
 
@@ -14,6 +20,17 @@ const CONN = "c1";
 beforeEach(() => {
   setActivePinia(createPinia());
   listConversations.mockClear();
+  getConversation.mockReset();
+  messages.mockReset();
+});
+
+const storedMsg = (id: string, content: string) => ({
+  id,
+  conversationId: "cv",
+  seq: 0,
+  role: "user" as const,
+  content,
+  createdAt: "",
 });
 
 describe("aiChat store", () => {
@@ -165,6 +182,28 @@ describe("aiChat store", () => {
     store.send(CONN, "hello");
     expect(sent).toHaveLength(1);
     expect(JSON.parse(sent[0]).conversationId).toBe("conv-9");
+  });
+
+  it("loads a conversation page and prepends older messages", async () => {
+    const store = useAiChatStore();
+    getConversation.mockResolvedValue({
+      conversation: { id: "cv" },
+      page: { messages: [storedMsg("m2", "second")], hasMore: true },
+    });
+    await store.selectConversation(CONN, "cv");
+    const st = store.state(CONN);
+    expect(st.messages.map((m) => m.content)).toEqual(["second"]);
+    expect(st.hasMore).toBe(true);
+
+    messages.mockResolvedValue({
+      messages: [storedMsg("m1", "first")],
+      hasMore: false,
+    });
+    await store.loadOlder(CONN);
+    // Older page is prepended; loaded count was the current length.
+    expect(messages).toHaveBeenCalledWith(CONN, "cv", 1);
+    expect(st.messages.map((m) => m.content)).toEqual(["first", "second"]);
+    expect(st.hasMore).toBe(false);
   });
 
   it("queues messages typed mid-stream and flushes on completion", () => {

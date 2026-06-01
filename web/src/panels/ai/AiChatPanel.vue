@@ -119,7 +119,10 @@ onMounted(() => {
           :messages="st.messages"
           :current-id="st.current?.id ?? null"
           :streaming="busy"
+          :has-more="st.hasMore"
+          :loading-older="st.loadingOlder"
           @quick-start="send"
+          @load-older="store.loadOlder(connectionId)"
         />
         <div v-if="st.pendingConfirm" class="px-3 pt-2">
           <AiActionConfirm

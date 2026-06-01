@@ -42,18 +42,14 @@ func (s *Server) recentAuditLines(ctx context.Context, userID, connID string) []
 	return out
 }
 
-// aiChatRouteID is the synthetic route a chat ticket is scoped to. The chat is a
-// core endpoint, not a plugin route; the agent's actual tool calls are each
-// authorized separately through InvokeRoute.
 const aiChatRouteID = "ai.chat"
 
-// aiAccessRoute is the synthetic route used to authorize opening the chat: any
-// user with access to the connection (owner/grant) may use the assistant; the
-// real per-action gating happens per tool call.
+// aiAccessRoute authorizes opening the chat (connection access); per-tool calls
+// are gated separately through InvokeRoute.
 var aiAccessRoute = plugin.Route{ID: aiChatRouteID, Permission: "connection.ai", Risk: plugin.RiskSafe, AuditEvent: aiChatRouteID}
 
-// connectionAIMode reports the connection's effective AI mode: the stored mode,
-// or read-only by default when AI is configured but the owner hasn't chosen one.
+// connectionAIMode is the stored mode, or read-only when AI is configured but the
+// owner hasn't chosen one.
 func connectionAIMode(conn models.Connection) string {
 	if conn.AIMode == "" {
 		return models.AIModeReadOnly

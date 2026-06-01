@@ -665,6 +665,35 @@ func (s *gormAIMessageStore) List(ctx context.Context, conversationID string) ([
 	return list, nil
 }
 
+func (s *gormAIMessageStore) Recent(ctx context.Context, conversationID string, limit int) ([]models.AIMessage, error) {
+	var list []models.AIMessage
+	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).
+		Order("seq DESC").Limit(limit).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
+		list[i], list[j] = list[j], list[i]
+	}
+	return list, nil
+}
+
+func (s *gormAIMessageStore) Range(ctx context.Context, conversationID string, offset, limit int) ([]models.AIMessage, error) {
+	var list []models.AIMessage
+	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).
+		Order("seq").Offset(offset).Limit(limit).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormAIMessageStore) Count(ctx context.Context, conversationID string) (int, error) {
+	var n int64
+	if err := s.db.WithContext(ctx).Model(&models.AIMessage{}).Where("conversation_id = ?", conversationID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
 func (s *gormAIMessageStore) DeleteByConversation(ctx context.Context, conversationID string) error {
 	return s.db.WithContext(ctx).Delete(&models.AIMessage{}, "conversation_id = ?", conversationID).Error
 }

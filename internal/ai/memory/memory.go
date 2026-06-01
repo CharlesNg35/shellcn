@@ -29,6 +29,7 @@ const (
 	toolResultCharLimit      = 600
 	toolResultCountLimit     = 6
 	titleWords               = 8
+	defaultMessagePageSize   = 30
 )
 
 // Store is the conversation/message persistence + context-assembly surface.
@@ -174,19 +175,60 @@ func (s *Store) AppendAssistant(ctx context.Context, convID, content, reasoning 
 }
 
 // History returns the summary (older turns, for the system prompt) and the recent
-// messages kept verbatim within tokenBudget.
+// messages kept verbatim within tokenBudget. Each turn re-trims to the newest
+// maxLoadedMessages so the loaded set never grows with the conversation.
 func (s *Store) History(ctx context.Context, convID string, tokenBudget int) (summary string, msgs []engine.Message, err error) {
-	all, err := s.msg.List(ctx, convID)
+	all, err := s.msg.Recent(ctx, convID, maxLoadedMessages)
 	if err != nil {
 		return "", nil, err
-	}
-	if len(all) > maxLoadedMessages {
-		all = all[len(all)-maxLoadedMessages:]
 	}
 	if tokenBudget <= 0 {
 		tokenBudget = budget.DefaultHistoryBudget
 	}
 	return splitByTokenBudget(all, tokenBudget)
+}
+
+// MessagePage is a window of a conversation's messages for the UI, loaded newest
+// first: the initial call (loadedCount 0) returns the latest page; subsequent
+// calls with the running loadedCount return progressively older windows.
+type MessagePage struct {
+	Messages    []models.AIMessage `json:"messages"`
+	LoadedCount int                `json:"loadedCount"`
+	TotalCount  int                `json:"totalCount"`
+	HasMore     bool               `json:"hasMore"`
+}
+
+// MessagesPage returns one page of an owned conversation's history.
+func (s *Store) MessagesPage(ctx context.Context, ownerID, convID string, limit, loadedCount int) (MessagePage, error) {
+	if _, err := s.Get(ctx, ownerID, convID); err != nil {
+		return MessagePage{}, err
+	}
+	if limit <= 0 {
+		limit = defaultMessagePageSize
+	}
+	if loadedCount < 0 {
+		loadedCount = 0
+	}
+	total, err := s.msg.Count(ctx, convID)
+	if err != nil {
+		return MessagePage{}, err
+	}
+	remaining := max(0, total-loadedCount)
+	pageSize := min(limit, remaining)
+	startOffset := max(0, total-loadedCount-pageSize)
+
+	var msgs []models.AIMessage
+	if pageSize > 0 {
+		if msgs, err = s.msg.Range(ctx, convID, startOffset, pageSize); err != nil {
+			return MessagePage{}, err
+		}
+	}
+	return MessagePage{
+		Messages:    msgs,
+		LoadedCount: loadedCount + len(msgs),
+		TotalCount:  total,
+		HasMore:     startOffset > 0,
+	}, nil
 }
 
 // formatted is a role + flattened content (main text + tool-result lines).

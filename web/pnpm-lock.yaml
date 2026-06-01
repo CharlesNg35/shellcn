@@ -119,6 +119,9 @@ importers:
       vue-router:
         specifier: ^5.0.7
         version: 5.0.7(@vue/compiler-sfc@3.5.34)(pinia@3.0.4(typescript@6.0.3)(vue@3.5.34(typescript@6.0.3)))(vue@3.5.34(typescript@6.0.3))
+      vue-stick-to-bottom:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.34(typescript@6.0.3))
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -2115,6 +2118,11 @@ packages:
       pinia:
         optional: true
 
+  vue-stick-to-bottom@1.0.0:
+    resolution: {integrity: sha512-e6OrT4DGsIEZoQ2wiqBJ61j1CmHJVY4dc8TJrndqbuAE+/m2XQ7fzDyakCu2GCxU2qePOcJivYf9Xua54fC6EA==}
+    peerDependencies:
+      vue: '>=3.3.0'
+
   vue-tsc@3.3.1:
     resolution: {integrity: sha512-webBP3jhlxzhELZ2g+11KJ6pg5OVY1xWhWrj7N/yQMi1CrtxJnW+tUACyRVeDK0cQNLP2Va5HNYK8pe+7c+msw==}
     hasBin: true
@@ -3998,6 +4006,10 @@ snapshots:
     optionalDependencies:
       '@vue/compiler-sfc': 3.5.34
       pinia: 3.0.4(typescript@6.0.3)(vue@3.5.34(typescript@6.0.3))
+
+  vue-stick-to-bottom@1.0.0(vue@3.5.34(typescript@6.0.3)):
+    dependencies:
+      vue: 3.5.34(typescript@6.0.3)
 
   vue-tsc@3.3.1(typescript@6.0.3):
     dependencies:

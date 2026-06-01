@@ -648,12 +648,26 @@ function handleHTTP(
       aiConversations().push(conv);
       return send(res, 201, conv);
     }
+    const msgs = path.match(
+      /^\/api\/connections\/[^/]+\/ai\/conversations\/([^/]+)\/messages$/,
+    );
+    if (msgs && method === "GET") {
+      return send(res, 200, {
+        messages: [],
+        loadedCount: 0,
+        totalCount: 0,
+        hasMore: false,
+      });
+    }
     const one = path.match(
       /^\/api\/connections\/[^/]+\/ai\/conversations\/([^/]+)$/,
     );
     if (one && method === "GET") {
       const conv = aiConversations().find((c) => c.id === one[1]);
-      return send(res, 200, { conversation: conv ?? null, messages: [] });
+      return send(res, 200, {
+        conversation: conv ?? null,
+        page: { messages: [], loadedCount: 0, totalCount: 0, hasMore: false },
+      });
     }
     if (one && method === "PUT") {
       return void readBody(req).then((raw) => {

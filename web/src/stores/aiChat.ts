@@ -6,6 +6,7 @@ import {
   type AiConversation,
   type AiGlobalStatus,
   type AiProviderSummary,
+  type AiStoredMessage,
   type AiStreamEvent,
 } from "../api/ai";
 
@@ -53,6 +54,8 @@ interface ChatState {
   activeId: string | null;
   pendingConfirm: PendingConfirm | null;
   queue: string[];
+  hasMore: boolean;
+  loadingOlder: boolean;
 }
 
 function newState(): ChatState {
@@ -69,6 +72,25 @@ function newState(): ChatState {
     activeId: null,
     pendingConfirm: null,
     queue: [],
+    hasMore: false,
+    loadingOlder: false,
+  };
+}
+
+function mapStored(m: AiStoredMessage): AiMessage {
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    reasoning: m.reasoning ?? "",
+    truncated: m.truncated,
+    toolCalls: (m.toolCalls ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      status: t.err ? "error" : "done",
+      output: t.output,
+      err: t.err,
+    })),
   };
 }
 
@@ -214,25 +236,34 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const st = state(connId);
     if (st.runState !== "idle") return;
     try {
-      const { messages } = await aiApi.getConversation(connId, cid);
+      const { page } = await aiApi.getConversation(connId, cid);
       st.activeId = cid;
-      st.messages = messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        reasoning: m.reasoning ?? "",
-        truncated: m.truncated,
-        toolCalls: (m.toolCalls ?? []).map((t) => ({
-          id: t.id,
-          name: t.name,
-          status: t.err ? ("error" as const) : ("done" as const),
-          output: t.output,
-          err: t.err,
-        })),
-      }));
+      st.messages = page.messages.map(mapStored);
+      st.hasMore = page.hasMore;
       st.current = null;
     } catch {
       st.error = "Failed to load conversation";
+    }
+  }
+
+  // loadOlder prepends the next older page; the client always holds a contiguous
+  // tail, so the loaded count is just the current message length.
+  async function loadOlder(connId: string): Promise<void> {
+    const st = state(connId);
+    if (!st.activeId || !st.hasMore || st.loadingOlder) return;
+    st.loadingOlder = true;
+    try {
+      const page = await aiApi.messages(
+        connId,
+        st.activeId,
+        st.messages.length,
+      );
+      st.messages = [...page.messages.map(mapStored), ...st.messages];
+      st.hasMore = page.hasMore;
+    } catch {
+      // keep what we have
+    } finally {
+      st.loadingOlder = false;
     }
   }
 
@@ -243,6 +274,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.messages = [];
     st.current = null;
     st.error = null;
+    st.hasMore = false;
   }
 
   async function renameConversation(
@@ -365,6 +397,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.error = null;
     st.pendingConfirm = null;
     st.queue = [];
+    st.hasMore = false;
   }
 
   return {
@@ -385,6 +418,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     apply,
     loadConversations,
     selectConversation,
+    loadOlder,
     newChat,
     renameConversation,
     deleteConversation,

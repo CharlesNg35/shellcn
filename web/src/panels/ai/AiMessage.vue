@@ -36,7 +36,7 @@ async function copy(): Promise<void> {
           : 'bg-surface-100 text-surface-800 dark:bg-surface-800 dark:text-surface-100'
       "
     >
-      <p v-if="isUser()" class="text-sm break-words whitespace-pre-wrap">
+      <p v-if="isUser()" class="text-sm wrap-break-word whitespace-pre-wrap">
         {{ message.content }}
       </p>
 

@@ -109,6 +109,22 @@ func TestFetchModelsGoogleFilters(t *testing.T) {
 	}
 }
 
+func TestResolveBaseURLPerKind(t *testing.T) {
+	r := New(WithOffline())
+	for _, kind := range []string{"openai", "anthropic", "google"} {
+		if r.resolveBaseURL(kind, "") == "" {
+			t.Errorf("vendor kind %q has no default base URL", kind)
+		}
+	}
+	// openai_compatible has no default; it requires an explicit base URL.
+	if r.resolveBaseURL("openai_compatible", "") != "" {
+		t.Error("openai_compatible should have no default base URL")
+	}
+	if r.resolveBaseURL("openai_compatible", "http://host/v1/") != "http://host/v1" {
+		t.Error("explicit base URL should be normalized and used")
+	}
+}
+
 func contains(s []string, v string) bool {
 	for _, x := range s {
 		if x == v {

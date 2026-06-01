@@ -118,6 +118,32 @@ func (s *memAIMessageStore) List(_ context.Context, conversationID string) ([]mo
 	return out, nil
 }
 
+func (s *memAIMessageStore) Recent(ctx context.Context, conversationID string, limit int) ([]models.AIMessage, error) {
+	all, _ := s.List(ctx, conversationID)
+	if limit > 0 && len(all) > limit {
+		all = all[len(all)-limit:]
+	}
+	return all, nil
+}
+
+func (s *memAIMessageStore) Range(ctx context.Context, conversationID string, offset, limit int) ([]models.AIMessage, error) {
+	all, _ := s.List(ctx, conversationID)
+	if offset >= len(all) {
+		return nil, nil
+	}
+	end := offset + limit
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[offset:end], nil
+}
+
+func (s *memAIMessageStore) Count(_ context.Context, conversationID string) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.m[conversationID]), nil
+}
+
 func (s *memAIMessageStore) DeleteByConversation(_ context.Context, conversationID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

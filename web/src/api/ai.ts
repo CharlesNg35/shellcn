@@ -60,8 +60,12 @@ export const aiApi = {
       providerId: providerId ?? "",
     }),
   getConversation: (connectionId: string, cid: string) =>
-    api.get<{ conversation: AiConversation; messages: AiStoredMessage[] }>(
+    api.get<{ conversation: AiConversation; page: AiMessagePage }>(
       `/connections/${connectionId}/ai/conversations/${cid}`,
+    ),
+  messages: (connectionId: string, cid: string, loadedCount: number) =>
+    api.get<AiMessagePage>(
+      `/connections/${connectionId}/ai/conversations/${cid}/messages?loadedCount=${loadedCount}`,
     ),
   renameConversation: (connectionId: string, cid: string, title: string) =>
     api.put<AiConversation>(
@@ -102,6 +106,13 @@ export interface AiStoredMessage {
   reasoning?: string;
   truncated?: boolean;
   createdAt: string;
+}
+
+export interface AiMessagePage {
+  messages: AiStoredMessage[];
+  loadedCount: number;
+  totalCount: number;
+  hasMore: boolean;
 }
 
 // chatSocketUrl builds the connection's chat WebSocket URL with a redeemed ticket.

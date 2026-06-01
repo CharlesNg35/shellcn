@@ -1,7 +1,6 @@
-// Package ai is the core AI agent service: it resolves a provider (the user's or
-// the shared global config), builds the connection's risk-gated tool set, runs a
-// turn through the engine, and relays the stream to transport. It is wired in
-// cmd/server like other core services and references no plugin by name.
+// Package ai resolves a provider, builds a connection's risk-gated tool set,
+// runs a turn through the engine, and relays the stream to transport. It
+// references no plugin by name.
 package ai
 
 import (
@@ -46,9 +45,8 @@ type Service struct {
 	factory   ProviderFactory
 }
 
-// New wires the provider-config service, the shared global config, the plugin
-// registry (route source), the secure route invoker, conversation memory, and
-// the model-limit registry.
+// New wires the config service, global config, route source, secure invoker,
+// conversation memory, and the model-limit registry.
 func New(providers *aiconfig.Service, global config.AIConfig, routes tools.RouteSource, invoker tools.Invoker, mem *memory.Store, models *modelreg.Registry) *Service {
 	if models == nil {
 		models = modelreg.New()
@@ -65,10 +63,8 @@ func (s *Service) WithProviderFactory(f ProviderFactory) *Service {
 	return s
 }
 
-// Scope selects which provider config a turn uses: a specific user provider, or
-// the shared global config when ProviderID is empty. Model overrides the
-// provider's default model when set (user providers only; the global model is
-// pinned).
+// Scope selects the provider for a turn (empty ProviderID = shared/global). Model
+// overrides the provider's default; the global model is pinned and ignores it.
 type Scope struct {
 	ProviderID string
 	Model      string
@@ -110,8 +106,8 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		toolset.WithConfirmer(in.Confirm)
 	}
 
-	// Expose an investigation subagent (nested read-only run) whenever the
-	// connection has any read tools — the primary context-window optimization.
+	// A subagent (nested read-only run) is offered whenever read tools exist; it
+	// keeps multi-step investigation out of the parent's context window.
 	var exec engine.ToolExecutor = toolset
 	specs := toolset.Specs()
 	hasSubagent := false
@@ -135,8 +131,6 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 		HasSubagent:     hasSubagent,
 	})
 
-	// Resolve the token budget from the model's limits, the system prompt, and the
-	// tool schemas; reserve output tokens and give the rest to history.
 	limits := budget.Limits{ContextWindow: s.models.ContextWindow(ctx, model, registryProvider(kind))}
 	if lk, ok := s.models.Lookup(ctx, model, registryProvider(kind)); ok {
 		limits.MaxOutputTokens = lk.MaxOutputTokens
@@ -145,8 +139,6 @@ func (s *Service) Run(ctx context.Context, in RunInput, sink func(engine.StreamE
 	historyBudget := budget.HistoryBudget(limits, overheadTokens, 0)
 	maxOut := budget.ResolveOutputTokens(limits, overheadTokens, 0)
 
-	// With memory wired + a conversation id, persist the user message and load the
-	// compacted context; otherwise use the caller's history.
 	var msgs []engine.Message
 	persist := s.mem != nil && in.ConversationID != ""
 	if persist {

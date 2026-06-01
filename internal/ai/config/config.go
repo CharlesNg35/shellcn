@@ -1,7 +1,6 @@
-// Package aiconfig manages AI provider configuration. The global/shared provider
-// is read-only and sourced from internal/config (env/YAML); per-user providers
-// are DB-backed, owner-scoped, and have their API keys encrypted via the Vault
-// before they reach the store. Keys are never returned to clients.
+// Package aiconfig manages AI provider configuration: a read-only global provider
+// from internal/config, and owner-scoped per-user providers whose API keys are
+// Vault-encrypted before the store and never returned to clients.
 package aiconfig
 
 import (
@@ -20,8 +19,6 @@ import (
 	"github.com/charlesng35/shellcn/internal/store"
 )
 
-// errInvalid wraps validation failures so the HTTP boundary maps them to 400.
-// It is built on the same sentinel the plugin layer uses.
 var errInvalid = errors.New("invalid ai provider config")
 
 // ErrInvalid is the validation sentinel callers can match.
@@ -36,9 +33,8 @@ var builtinKinds = map[models.AIProviderKind]bool{
 	models.AIProviderOpenAICompat: true,
 }
 
-// defaultModels is a small static fallback used for the model picker before the
-// engine can query a provider's live catalogue. A configured allow-list always
-// wins over this.
+// defaultModels is the static fallback for the picker when no live catalogue or
+// configured allow-list is available.
 var defaultModels = map[models.AIProviderKind][]string{
 	models.AIProviderOpenAI:    {"gpt-4o", "gpt-4o-mini", "o3-mini"},
 	models.AIProviderAnthropic: {"claude-opus-4-1", "claude-sonnet-4-5", "claude-haiku-4-5"},

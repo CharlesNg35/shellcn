@@ -211,6 +211,7 @@ func (s *Server) routes() chi.Router {
 					pr.Get("/connections/{id}/ai/conversations", s.handleListConversations)
 					pr.Post("/connections/{id}/ai/conversations", s.handleCreateConversation)
 					pr.Get("/connections/{id}/ai/conversations/{cid}", s.handleGetConversation)
+					pr.Get("/connections/{id}/ai/conversations/{cid}/messages", s.handleConversationMessages)
 					pr.Put("/connections/{id}/ai/conversations/{cid}", s.handleRenameConversation)
 					pr.Delete("/connections/{id}/ai/conversations/{cid}", s.handleDeleteConversation)
 				}

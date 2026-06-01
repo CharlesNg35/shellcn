@@ -203,6 +203,11 @@ type AIConversationStore interface {
 type AIMessageStore interface {
 	Append(ctx context.Context, m *models.AIMessage) error
 	List(ctx context.Context, conversationID string) ([]models.AIMessage, error)
+	// Recent returns the newest limit messages, ordered oldest→newest.
+	Recent(ctx context.Context, conversationID string, limit int) ([]models.AIMessage, error)
+	// Range returns messages [offset, offset+limit) ordered oldest→newest.
+	Range(ctx context.Context, conversationID string, offset, limit int) ([]models.AIMessage, error)
+	Count(ctx context.Context, conversationID string) (int, error)
 	DeleteByConversation(ctx context.Context, conversationID string) error
 }
 

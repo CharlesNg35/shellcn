@@ -1,8 +1,7 @@
-// Package tools turns a connection plugin's manifest routes into risk-gated LLM
-// tools. It is plugin-agnostic: tools derive purely from each route's Risk,
-// Input schema, and path params. Execution runs through the same secure pipeline
-// a human request uses (the Invoker), so the agent can never exceed the user's
-// RBAC or the route's risk gate.
+// Package tools turns a connection's manifest routes into risk-gated LLM tools,
+// derived purely from each route's Risk, Input schema, and path params. Execution
+// runs through the same secure pipeline a human request uses, so the agent can
+// never exceed the user's RBAC or the route's risk gate.
 package tools
 
 import (

@@ -1,72 +1,68 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
+import { StickToBottom } from "vue-stick-to-bottom";
 import AiMessageItem from "./AiMessage.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import type { AiMessage } from "../../stores/aiChat";
 
-const props = defineProps<{
+defineProps<{
   messages: AiMessage[];
   currentId: string | null;
   streaming: boolean;
+  hasMore: boolean;
+  loadingOlder: boolean;
 }>();
-const emit = defineEmits<{ quickStart: [prompt: string] }>();
-
-const scroller = ref<HTMLElement | null>(null);
+const emit = defineEmits<{ quickStart: [prompt: string]; loadOlder: [] }>();
 
 const quickStarts = [
   "What resources are available on this connection?",
   "Summarize the current state.",
   "List recent items.",
 ];
-
-function scrollToBottom(): void {
-  const el = scroller.value;
-  if (el) el.scrollTop = el.scrollHeight;
-}
-
-watch(
-  () => [props.messages.length, props.messages.at(-1)?.content],
-  async () => {
-    await nextTick();
-    scrollToBottom();
-  },
-);
 </script>
 
 <template>
   <div
-    ref="scroller"
-    class="flex-1 overflow-y-auto px-4 py-3"
-    role="log"
-    aria-live="polite"
-    aria-label="Conversation"
+    v-if="messages.length === 0"
+    class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-4 text-center"
   >
-    <div
-      v-if="messages.length === 0"
-      class="flex h-full flex-col items-center justify-center gap-4 text-center"
-    >
-      <AppIcon
-        :icon="{ type: 'lucide', value: 'sparkles' }"
-        :size="32"
-        class="text-surface-300"
-      />
-      <p class="text-sm text-surface-500 dark:text-surface-400">
-        Ask the assistant about this connection.
-      </p>
-      <div class="flex flex-col gap-2">
-        <button
-          v-for="q in quickStarts"
-          :key="q"
-          type="button"
-          class="rounded-lg border border-surface-200 px-3 py-2 text-left text-xs text-surface-600 transition-colors hover:bg-surface-100 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800"
-          @click="emit('quickStart', q)"
-        >
-          {{ q }}
-        </button>
-      </div>
+    <AppIcon
+      :icon="{ type: 'lucide', value: 'sparkles' }"
+      :size="32"
+      class="text-surface-300"
+    />
+    <p class="text-sm text-surface-500 dark:text-surface-400">
+      Ask the assistant about this connection.
+    </p>
+    <div class="flex flex-col gap-2">
+      <button
+        v-for="q in quickStarts"
+        :key="q"
+        type="button"
+        class="rounded-lg border border-surface-200 px-3 py-2 text-left text-xs text-surface-600 transition-colors hover:bg-surface-100 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800"
+        @click="emit('quickStart', q)"
+      >
+        {{ q }}
+      </button>
     </div>
+  </div>
 
-    <div v-else class="flex flex-col gap-3">
+  <!-- Sticks to the newest message while at the bottom; releases on scroll-up. -->
+  <StickToBottom v-else class="relative min-h-0 flex-1 overflow-hidden">
+    <div
+      class="flex flex-col gap-3 px-4 py-3"
+      role="log"
+      aria-live="polite"
+      aria-label="Conversation"
+    >
+      <button
+        v-if="hasMore"
+        type="button"
+        class="mx-auto rounded-md px-3 py-1 text-xs text-surface-500 hover:bg-surface-100 disabled:opacity-50 dark:text-surface-400 dark:hover:bg-surface-800"
+        :disabled="loadingOlder"
+        @click="emit('loadOlder')"
+      >
+        {{ loadingOlder ? "Loading…" : "Load earlier messages" }}
+      </button>
       <AiMessageItem
         v-for="m in messages"
         :key="m.id"
@@ -74,5 +70,21 @@ watch(
         :streaming="streaming && m.id === currentId"
       />
     </div>
-  </div>
+
+    <template #overlay="{ isAtBottom, scrollToBottom }">
+      <button
+        v-if="!isAtBottom"
+        type="button"
+        class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-surface-200 bg-surface-0 p-1.5 shadow-md hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-800 dark:hover:bg-surface-700"
+        aria-label="Scroll to latest"
+        @click="scrollToBottom()"
+      >
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'chevrons-down' }"
+          :size="16"
+          class="text-surface-500 dark:text-surface-300"
+        />
+      </button>
+    </template>
+  </StickToBottom>
 </template>

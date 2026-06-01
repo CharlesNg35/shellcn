@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -70,12 +71,34 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	msgs, err := s.chat.Conversations().Messages(r.Context(), user.ID, id)
+	page, err := s.chat.Conversations().MessagesPage(r.Context(), user.ID, id, atoiDefault(r.URL.Query().Get("limit"), 0), 0)
 	if err != nil {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"conversation": conv, "messages": msgs})
+	writeJSON(w, http.StatusOK, map[string]any{"conversation": conv, "page": page})
+}
+
+func (s *Server) handleConversationMessages(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.aiConn(w, r); !ok {
+		return
+	}
+	user, _ := userFrom(r.Context())
+	q := r.URL.Query()
+	page, err := s.chat.Conversations().MessagesPage(r.Context(), user.ID, chi.URLParam(r, "cid"),
+		atoiDefault(q.Get("limit"), 0), atoiDefault(q.Get("loadedCount"), 0))
+	if err != nil {
+		writeError(w, s.deps.Logger, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func atoiDefault(s string, def int) int {
+	if n, err := strconv.Atoi(s); err == nil && n >= 0 {
+		return n
+	}
+	return def
 }
 
 func (s *Server) handleRenameConversation(w http.ResponseWriter, r *http.Request) {

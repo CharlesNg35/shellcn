@@ -111,6 +111,63 @@ func TestHistoryKeepsRecentAndCompactsOlder(t *testing.T) {
 	}
 }
 
+func TestMessagesPagePaginatesNewestFirst(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+	for i := 0; i < 25; i++ {
+		_ = m.AppendUser(ctx, c.ID, "msg "+itoa(i))
+	}
+
+	// First page: the newest 10, oldest→newest within the page.
+	p1, err := m.MessagesPage(ctx, "u1", c.ID, 10, 0)
+	if err != nil {
+		t.Fatalf("page1: %v", err)
+	}
+	if p1.TotalCount != 25 || len(p1.Messages) != 10 || !p1.HasMore || p1.LoadedCount != 10 {
+		t.Fatalf("page1 wrong: %+v", p1)
+	}
+	if p1.Messages[len(p1.Messages)-1].Content != "msg 24" {
+		t.Fatalf("page1 should end at the newest message: %q", p1.Messages[len(p1.Messages)-1].Content)
+	}
+
+	// Next older page using the running loadedCount.
+	p2, _ := m.MessagesPage(ctx, "u1", c.ID, 10, p1.LoadedCount)
+	if len(p2.Messages) != 10 || !p2.HasMore || p2.Messages[len(p2.Messages)-1].Content != "msg 14" {
+		t.Fatalf("page2 wrong: %+v", p2)
+	}
+
+	// Final page exhausts the history.
+	p3, _ := m.MessagesPage(ctx, "u1", c.ID, 10, p2.LoadedCount)
+	if len(p3.Messages) != 5 || p3.HasMore {
+		t.Fatalf("page3 wrong: %+v", p3)
+	}
+
+	// Owner scoping holds.
+	if _, err := m.MessagesPage(ctx, "u2", c.ID, 10, 0); err == nil {
+		t.Fatal("cross-owner page should fail")
+	}
+}
+
+func TestHistoryTrimsToRecentWindow(t *testing.T) {
+	m := newStore()
+	ctx := context.Background()
+	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
+	for i := 0; i < 60; i++ {
+		_ = m.AppendUser(ctx, c.ID, "u"+itoa(i))
+		_ = m.AppendAssistant(ctx, c.ID, "a"+itoa(i), "", nil, false)
+	}
+	// A generous budget keeps everything loaded verbatim, but the loaded set is
+	// capped at the recent window (40), not the full 120 messages.
+	_, msgs, err := m.History(ctx, c.ID, 1_000_000)
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+	if len(msgs) > 40 {
+		t.Fatalf("history not trimmed to recent window: %d", len(msgs))
+	}
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

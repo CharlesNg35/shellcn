@@ -1,8 +1,6 @@
-// Package eino is the ONLY package that imports cloudwego/eino + eino-ext. It
-// adapts the framework to ShellCN's engine.Provider seam, running an explicit
-// tool-calling loop so each tool invocation flows through our risk-gated
-// executor. The rest of internal/ai depends only on engine interfaces, so the
-// framework stays a swappable implementation detail.
+// Package eino is the only package that imports cloudwego/eino; it adapts the
+// framework to the engine.Provider seam with an explicit tool-calling loop so
+// each tool call flows through the risk-gated executor.
 package eino
 
 import (
