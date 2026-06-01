@@ -60,6 +60,10 @@ func interactiveShellCommand(rc *plugin.RequestContext, tty bool) []string {
 	return termshell.Command(param(rc, "command"), tty)
 }
 
+func interactiveShellCommands(rc *plugin.RequestContext, tty bool) [][]string {
+	return termshell.Commands(param(rc, "command"), tty)
+}
+
 // ensureShellPod reuses a healthy shell pod, recreating it only when missing or
 // dead, then blocks until it is ready to exec into.
 func ensureShellPod(ctx, waitCtx context.Context, s *Session) error {

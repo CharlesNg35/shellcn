@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/streaming/pkg/httpstream"
 
 	"github.com/charlesng35/shellcn/internal/plugin"
+	"github.com/charlesng35/shellcn/plugins/shared/termshell"
 )
 
 // ExecStream runs an interactive exec into a pod container, bridged to the
@@ -28,23 +30,42 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 		return errors.New("pod name is required")
 	}
 	tty := boolParam(rc, "tty", true)
-	exec, err := s.podExecutor(ns, pod, &corev1.PodExecOptions{
+	opts := corev1.PodExecOptions{
 		Container: param(rc, "container"),
-		Command:   interactiveShellCommand(rc, tty),
 		Stdin:     true,
 		Stdout:    true,
 		Stderr:    !tty,
 		TTY:       tty,
-	})
-	if err != nil {
-		return err
 	}
-	return streamExec(client, exec, tty, intParam(rc, "cols"), intParam(rc, "rows"))
+	return streamExecCommands(
+		client,
+		func(command []string) (remotecommand.Executor, error) {
+			opts.Command = command
+			return s.podExecutor(ns, pod, &opts)
+		},
+		interactiveShellCommands(rc, tty),
+		tty,
+		intParam(rc, "cols"),
+		intParam(rc, "rows"),
+	)
 }
 
 // streamExec bridges an exec executor to the terminal panel: stdin (with resize
 // control frames) flows in, multiplexed stdout/stderr flows out.
 func streamExec(client plugin.ClientStream, exec remotecommand.Executor, tty bool, cols, rows int) error {
+	return streamExecCommands(
+		client,
+		func([]string) (remotecommand.Executor, error) { return exec, nil },
+		[][]string{{}},
+		tty,
+		cols,
+		rows,
+	)
+}
+
+type execFactory func(command []string) (remotecommand.Executor, error)
+
+func streamExecCommands(client plugin.ClientStream, newExec execFactory, commands [][]string, tty bool, cols, rows int) error {
 	stdinR, stdinW := io.Pipe()
 	sizes := &termSizeQueue{ch: make(chan remotecommand.TerminalSize, 4)}
 	if cols > 0 && rows > 0 {
@@ -52,15 +73,37 @@ func streamExec(client plugin.ClientStream, exec remotecommand.Executor, tty boo
 	}
 	go pipeTerminalInput(client, stdinW, sizes)
 
+	var lastErr error
+	for i, command := range commands {
+		exec, err := newExec(command)
+		if err != nil {
+			termshell.WriteExecError(client, err)
+			return err
+		}
+		err = runExec(client.Context(), client, exec, tty, stdinR, sizes)
+		if err == nil || errors.Is(err, io.EOF) {
+			return nil
+		}
+		lastErr = err
+		if i < len(commands)-1 && termshell.MissingExecutableError(err) {
+			continue
+		}
+		termshell.WriteExecError(client, err)
+		return err
+	}
+	if lastErr != nil {
+		termshell.WriteExecError(client, lastErr)
+	}
+	return lastErr
+}
+
+func runExec(ctx context.Context, client plugin.ClientStream, exec remotecommand.Executor, tty bool, stdin io.Reader, sizes *termSizeQueue) error {
 	out := &lockedWriter{w: client}
-	opts := remotecommand.StreamOptions{Stdin: stdinR, Stdout: out, Tty: tty, TerminalSizeQueue: sizes}
+	opts := remotecommand.StreamOptions{Stdin: stdin, Stdout: out, Tty: tty, TerminalSizeQueue: sizes}
 	if !tty {
 		opts.Stderr = out
 	}
-	if err := exec.StreamWithContext(client.Context(), opts); err != nil && !errors.Is(err, io.EOF) {
-		return err
-	}
-	return nil
+	return exec.StreamWithContext(ctx, opts)
 }
 
 // podExecutor builds a fallback (WebSocket → SPDY) executor against the upgrade

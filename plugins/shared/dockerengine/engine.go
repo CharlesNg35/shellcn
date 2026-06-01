@@ -712,6 +712,7 @@ func LogsStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	ch, err := rc.Session.OpenChannel(rc.Ctx, plugin.ChannelRequest{Kind: plugin.StreamTerminal, Params: streamParams(rc)})
 	if err != nil {
+		termshell.WriteExecError(client, err)
 		return err
 	}
 	defer func() { _ = ch.Close() }()
@@ -730,6 +731,9 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 	case err := <-errc:
 		if err == io.EOF {
 			return nil
+		}
+		if err != nil {
+			termshell.WriteExecError(client, err)
 		}
 		return err
 	}
@@ -812,7 +816,22 @@ func (s *Session) openExec(ctx context.Context, params map[string]string) (plugi
 	}
 	cols := uintParam(params, "cols", 80)
 	rows := uintParam(params, "rows", 24)
-	cmd := execCommand(params["command"])
+	commands := execCommands(params["command"])
+	var lastErr error
+	for i, cmd := range commands {
+		ch, err := s.openExecCommand(ctx, id, cmd, cols, rows)
+		if err == nil {
+			return ch, nil
+		}
+		lastErr = err
+		if i >= len(commands)-1 || !termshell.MissingExecutableError(err) {
+			break
+		}
+	}
+	return nil, lastErr
+}
+
+func (s *Session) openExecCommand(ctx context.Context, id string, cmd []string, cols, rows uint) (plugin.Channel, error) {
 	created, err := s.cli.ExecCreate(ctx, id, dockerclient.ExecCreateOptions{
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -1549,6 +1568,13 @@ func execCommand(raw string) []string {
 		return []string{"/bin/sh", "-c", termshell.Launch}
 	}
 	return []string{"/bin/sh", "-lc", raw}
+}
+
+func execCommands(raw string) [][]string {
+	if strings.TrimSpace(raw) != "" {
+		return [][]string{execCommand(raw)}
+	}
+	return termshell.Commands("", true)
 }
 
 func ptr[T any](v T) *T {

@@ -1,7 +1,11 @@
 // Package termshell builds the command for an interactive container/pod shell.
 package termshell
 
-import "strings"
+import (
+	"fmt"
+	"io"
+	"strings"
+)
 
 // Launch prefers an interactive bash (most images ship it) and falls back to
 // POSIX sh. It sets a sane TERM and, since minimal images carry no terminfo,
@@ -34,4 +38,38 @@ func Command(request string, tty bool) []string {
 		return []string{"/bin/sh", "-c", Launch}
 	}
 	return []string{"/bin/sh"}
+}
+
+func Commands(request string, tty bool) [][]string {
+	if strings.TrimSpace(request) != "" || !tty {
+		return [][]string{Command(request, tty)}
+	}
+	return [][]string{
+		Command("", true),
+		{"/bin/bash", "-lc", Launch},
+		{"/busybox/sh", "-c", Launch},
+	}
+}
+
+func MissingExecutableError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "executable file not found") ||
+		strings.Contains(msg, "no such file or directory") ||
+		strings.Contains(msg, "stat /bin/sh") ||
+		strings.Contains(msg, "stat /bin/bash")
+}
+
+func DisplayError(err error) string {
+	msg := strings.TrimSpace(err.Error())
+	for {
+		next := strings.TrimSpace(strings.TrimPrefix(msg, "Internal error occurred:"))
+		if next == msg {
+			return msg
+		}
+		msg = next
+	}
+}
+
+func WriteExecError(w io.Writer, err error) {
+	_, _ = fmt.Fprintf(w, "\r\nexec failed: %s\r\n", DisplayError(err))
 }
