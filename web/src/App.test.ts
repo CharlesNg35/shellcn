@@ -60,7 +60,7 @@ function testRouter(): Router {
             component: () => import("./views/CredentialsView.vue"),
           },
           {
-            path: "profile",
+            path: "settings/profile",
             name: "profile",
             component: () => import("./views/ProfileView.vue"),
           },

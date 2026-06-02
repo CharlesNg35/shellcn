@@ -23,6 +23,7 @@ import {
 
 const props = defineProps<{
   visible: boolean;
+  providers: AiProviderSummary[];
   provider?: AiProviderSummary | null;
 }>();
 
@@ -41,13 +42,13 @@ const form = reactive<{
   name: string;
   baseUrl: string;
   apiKey: string;
-  defaultModel: string;
+  model: string;
 }>({
   kind: "openrouter",
   name: "",
   baseUrl: "",
   apiKey: "",
-  defaultModel: "",
+  model: "",
 });
 
 const busy = ref(false);
@@ -70,7 +71,7 @@ function reset(): void {
       name: p.name,
       baseUrl: p.baseUrl ?? "",
       apiKey: "",
-      defaultModel: p.defaultModel,
+      model: p.model,
     });
     modelOptions.value = [...p.models];
   } else {
@@ -79,7 +80,7 @@ function reset(): void {
       name: defaultProviderName("openrouter"),
       baseUrl: "",
       apiKey: "",
-      defaultModel: "",
+      model: "",
     });
     modelOptions.value = [];
   }
@@ -102,15 +103,15 @@ function applyKind(kind: AiProviderKind): void {
   if (!requiresBaseUrl(kind)) {
     form.baseUrl = "";
   }
-  form.defaultModel = "";
+  form.model = "";
   modelOptions.value = [];
   filteredModels.value = [...modelOptions.value];
 }
 
 function buildInput(): AiProviderInput {
   const models = [...modelOptions.value];
-  if (form.defaultModel && !models.includes(form.defaultModel)) {
-    models.unshift(form.defaultModel);
+  if (form.model && !models.includes(form.model)) {
+    models.unshift(form.model);
   }
   return {
     kind: form.kind,
@@ -118,7 +119,7 @@ function buildInput(): AiProviderInput {
     baseUrl: form.baseUrl.trim() || undefined,
     apiKey: form.apiKey.trim() || undefined,
     models,
-    defaultModel: form.defaultModel.trim(),
+    model: form.model.trim(),
   };
 }
 
@@ -132,8 +133,8 @@ async function fetchModels(): Promise<void> {
         : await aiApi.previewModels(buildInput());
     modelOptions.value = source.models;
     filteredModels.value = source.models;
-    if (!form.defaultModel && source.models[0]) {
-      form.defaultModel = source.models[0];
+    if (!form.model && source.models[0]) {
+      form.model = source.models[0];
     }
   } catch (err) {
     formError.value =
@@ -154,13 +155,26 @@ function searchModels(event: { query: string }): void {
   );
 }
 
+function providerNameExists(name: string): boolean {
+  const normalized = name.trim().toLowerCase();
+  return props.providers.some(
+    (provider) =>
+      provider.id !== props.provider?.id &&
+      provider.name.trim().toLowerCase() === normalized,
+  );
+}
+
 async function save(): Promise<void> {
   formError.value = "";
   if (!form.name.trim()) {
     formError.value = "Provider name is required";
     return;
   }
-  if (!form.defaultModel.trim()) {
+  if (providerNameExists(form.name)) {
+    formError.value = "Provider name already exists";
+    return;
+  }
+  if (!form.model.trim()) {
     formError.value = "Choose or type a model";
     return;
   }
@@ -264,7 +278,7 @@ async function save(): Promise<void> {
             for="ai-provider-model"
             class="text-sm font-medium text-surface-700 dark:text-surface-200"
           >
-            Default model <span class="text-red-500">*</span>
+            Model <span class="text-red-500">*</span>
           </label>
           <Button
             size="small"
@@ -283,12 +297,12 @@ async function save(): Promise<void> {
         </div>
         <AutoComplete
           input-id="ai-provider-model"
-          :model-value="form.defaultModel"
+          :model-value="form.model"
           :suggestions="filteredModels"
           dropdown
           placeholder="Select or type a model"
           @complete="searchModels"
-          @update:model-value="form.defaultModel = String($event ?? '')"
+          @update:model-value="form.model = String($event ?? '')"
           @dropdown-click="fetchModels"
         />
         <p class="text-xs text-surface-400">

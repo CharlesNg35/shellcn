@@ -34,9 +34,9 @@ var builtinKinds = map[models.AIProviderKind]bool{
 	models.AIProviderOpenAICompat: true,
 }
 
-// defaultModels is the static fallback for the picker when no live catalogue or
-// configured allow-list is available.
-var defaultModels = map[models.AIProviderKind][]string{
+// vendorModelCatalog is the static fallback for the picker when no live
+// catalogue or configured allow-list is available.
+var vendorModelCatalog = map[models.AIProviderKind][]string{
 	models.AIProviderOpenAI:     {"gpt-4o", "gpt-4o-mini", "o3-mini"},
 	models.AIProviderOpenRouter: {"openai/gpt-4o", "anthropic/claude-sonnet-4.5", "google/gemini-2.5-pro"},
 	models.AIProviderAnthropic:  {"claude-opus-4-1", "claude-sonnet-4-5", "claude-haiku-4-5"},
@@ -46,12 +46,12 @@ var defaultModels = map[models.AIProviderKind][]string{
 // Input is a create/update request for a user provider. On update an empty
 // APIKey keeps the stored ciphertext (write-only key semantics).
 type Input struct {
-	Kind         models.AIProviderKind
-	Name         string
-	BaseURL      string
-	APIKey       string
-	Models       []string
-	DefaultModel string
+	Kind    models.AIProviderKind
+	Name    string
+	BaseURL string
+	APIKey  string
+	Models  []string
+	Model   string
 }
 
 // GlobalStatus is the read-only projection of the shared AI config exposed to
@@ -114,17 +114,20 @@ func (s *Service) Create(ctx context.Context, ownerID string, in Input) (models.
 	if err != nil {
 		return models.AIProviderSummary{}, err
 	}
+	if err := s.ensureUniqueName(ctx, ownerID, "", norm.Name); err != nil {
+		return models.AIProviderSummary{}, err
+	}
 	now := time.Now()
 	row := models.AIProviderConfig{
-		ID:           uuid.NewString(),
-		OwnerID:      ownerID,
-		Kind:         norm.Kind,
-		Name:         norm.Name,
-		BaseURL:      norm.BaseURL,
-		Models:       norm.Models,
-		DefaultModel: norm.DefaultModel,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        uuid.NewString(),
+		OwnerID:   ownerID,
+		Kind:      norm.Kind,
+		Name:      norm.Name,
+		BaseURL:   norm.BaseURL,
+		Models:    norm.Models,
+		Model:     norm.Model,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	if norm.APIKey != "" {
 		enc, err := s.vault.Encrypt(ctx, []byte(norm.APIKey))
@@ -149,11 +152,14 @@ func (s *Service) Update(ctx context.Context, ownerID, id string, in Input) (mod
 	if err != nil {
 		return models.AIProviderSummary{}, err
 	}
+	if err := s.ensureUniqueName(ctx, ownerID, id, norm.Name); err != nil {
+		return models.AIProviderSummary{}, err
+	}
 	row.Kind = norm.Kind
 	row.Name = norm.Name
 	row.BaseURL = norm.BaseURL
 	row.Models = norm.Models
-	row.DefaultModel = norm.DefaultModel
+	row.Model = norm.Model
 	row.UpdatedAt = time.Now()
 	if norm.APIKey != "" {
 		enc, err := s.vault.Encrypt(ctx, []byte(norm.APIKey))
@@ -196,11 +202,11 @@ func (s *Service) Models(ctx context.Context, ownerID, id string) ([]string, err
 	if len(row.Models) > 0 {
 		return row.Models, nil
 	}
-	if m, ok := defaultModels[row.Kind]; ok {
+	if m, ok := vendorModelCatalog[row.Kind]; ok {
 		return m, nil
 	}
-	if row.DefaultModel != "" {
-		return []string{row.DefaultModel}, nil
+	if row.Model != "" {
+		return []string{row.Model}, nil
 	}
 	return []string{}, nil
 }
@@ -229,11 +235,11 @@ func (s *Service) ModelsForInput(ctx context.Context, in Input) ([]string, error
 	if len(in.Models) > 0 {
 		return in.Models, nil
 	}
-	if m, ok := defaultModels[in.Kind]; ok {
+	if m, ok := vendorModelCatalog[in.Kind]; ok {
 		return m, nil
 	}
-	if in.DefaultModel != "" {
-		return []string{in.DefaultModel}, nil
+	if in.Model != "" {
+		return []string{in.Model}, nil
 	}
 	return []string{}, nil
 }
@@ -281,11 +287,25 @@ func (s *Service) owned(ctx context.Context, ownerID, id string) (models.AIProvi
 	return row, nil
 }
 
+func (s *Service) ensureUniqueName(ctx context.Context, ownerID, ignoreID, name string) error {
+	rows, err := s.store.ListByOwner(ctx, ownerID)
+	if err != nil {
+		return err
+	}
+	want := strings.ToLower(name)
+	for _, row := range rows {
+		if row.ID != ignoreID && strings.ToLower(row.Name) == want {
+			return fmt.Errorf("%w: provider name already exists", models.ErrConflict)
+		}
+	}
+	return nil
+}
+
 func (s *Service) normalize(in Input, create bool) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.BaseURL = strings.TrimSpace(in.BaseURL)
 	in.APIKey = strings.TrimSpace(in.APIKey)
-	in.DefaultModel = strings.TrimSpace(in.DefaultModel)
+	in.Model = strings.TrimSpace(in.Model)
 
 	if !builtinKinds[in.Kind] {
 		return Input{}, fmt.Errorf("%w: unknown kind %q", errInvalid, in.Kind)
@@ -299,8 +319,8 @@ func (s *Service) normalize(in Input, create bool) (Input, error) {
 	if in.Kind == models.AIProviderOpenAICompat && in.BaseURL == "" {
 		return Input{}, fmt.Errorf("%w: base URL is required for an openai-compatible provider", errInvalid)
 	}
-	if in.DefaultModel == "" {
-		return Input{}, fmt.Errorf("%w: default model is required", errInvalid)
+	if in.Model == "" {
+		return Input{}, fmt.Errorf("%w: model is required", errInvalid)
 	}
 	// Named vendors require a key; openai_compatible (e.g. local Ollama) may not.
 	if create && in.APIKey == "" && in.Kind != models.AIProviderOpenAICompat {

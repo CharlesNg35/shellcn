@@ -14,7 +14,7 @@ export interface AiProviderSummary {
   name: string;
   baseUrl?: string;
   models: string[];
-  defaultModel: string;
+  model: string;
   hasKey: boolean;
   createdAt: string;
   updatedAt: string;
@@ -36,7 +36,7 @@ export interface AiProviderInput {
   baseUrl?: string;
   apiKey?: string;
   models: string[];
-  defaultModel: string;
+  model: string;
 }
 
 export const aiApi = {

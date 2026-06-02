@@ -597,7 +597,7 @@ func (s *gormAIProviderStore) Update(ctx context.Context, c *models.AIProviderCo
 			"name":               c.Name,
 			"base_url":           c.BaseURL,
 			"models":             c.Models,
-			"default_model":      c.DefaultModel,
+			"model":              c.Model,
 			"api_key_ciphertext": c.APIKeyCiphertext,
 			"updated_at":         c.UpdatedAt,
 		})

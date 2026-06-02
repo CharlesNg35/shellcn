@@ -35,7 +35,7 @@ func TestUserProviderCRUDOverHTTP(t *testing.T) {
 	h := newHarness(t)
 
 	// Create.
-	body := `{"kind":"openai","name":"Mine","apiKey":"sk-user-secret","models":["gpt-4o"],"defaultModel":"gpt-4o"}`
+	body := `{"kind":"openai","name":"Mine","apiKey":"sk-user-secret","models":["gpt-4o"],"model":"gpt-4o"}`
 	resp := h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(body))
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("create: want 201, got %d (%s)", resp.Status, resp.Body)
@@ -48,6 +48,11 @@ func TestUserProviderCRUDOverHTTP(t *testing.T) {
 		t.Fatalf("create response should report hasKey: %s", created)
 	}
 	id := createConnID(t, resp) // reuses the {"id":...} extractor
+
+	dup := `{"kind":"openai","name":"mine","apiKey":"sk-user-secret","models":["gpt-4o"],"model":"gpt-4o"}`
+	if resp := h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(dup)); resp.Status != http.StatusConflict {
+		t.Fatalf("duplicate provider name: want 409, got %d (%s)", resp.Status, resp.Body)
+	}
 
 	// List (op sees their own; the response carries no key).
 	resp = h.do(t, http.MethodGet, "/api/me/ai/config", "op", nil)
@@ -117,20 +122,20 @@ func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
 
 func TestUserProviderValidationReturns400(t *testing.T) {
 	h := newHarness(t)
-	resp := h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(`{"kind":"bogus","name":"x","defaultModel":"m"}`))
+	resp := h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(`{"kind":"bogus","name":"x","model":"m"}`))
 	if resp.Status != http.StatusBadRequest {
 		t.Fatalf("bad kind: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
 	resp = h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(`{"kind":"openai","name":"x","apiKey":"sk-user-secret"}`))
 	if resp.Status != http.StatusBadRequest {
-		t.Fatalf("missing default model: want 400, got %d (%s)", resp.Status, resp.Body)
+		t.Fatalf("missing model: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
 }
 
 func TestPreviewAIProviderModels(t *testing.T) {
 	h := newHarness(t)
 	resp := h.do(t, http.MethodPost, "/api/me/ai/models", "op", strings.NewReader(
-		`{"kind":"openrouter","name":"OpenRouter","apiKey":"sk-user-secret","defaultModel":"openai/gpt-4o"}`))
+		`{"kind":"openrouter","name":"OpenRouter","apiKey":"sk-user-secret","model":"openai/gpt-4o"}`))
 	if resp.Status != http.StatusOK {
 		t.Fatalf("preview models: want 200, got %d (%s)", resp.Status, resp.Body)
 	}

@@ -5,7 +5,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 test("enable two-factor authentication from the profile", async ({ page }) => {
-  await page.goto("/profile");
+  await page.goto("/settings/profile");
 
   await expect(
     page.getByRole("heading", { name: "Two-factor authentication" }),

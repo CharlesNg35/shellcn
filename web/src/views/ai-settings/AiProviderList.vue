@@ -88,7 +88,7 @@ const emit = defineEmits<{
             />
           </div>
           <p class="truncate text-xs text-surface-500 dark:text-surface-400">
-            {{ p.defaultModel }}{{ p.hasKey ? "" : " · no key" }}
+            {{ p.model }}{{ p.hasKey ? "" : " · no key" }}
           </p>
         </div>
         <Button

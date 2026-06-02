@@ -140,6 +140,7 @@ onMounted(load);
 
     <AiProviderDialog
       v-model:visible="dialogOpen"
+      :providers="providers"
       :provider="editingProvider"
       @saved="afterSave"
     />

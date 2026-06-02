@@ -9,7 +9,7 @@ function provider(over: Partial<AiProviderSummary> = {}): AiProviderSummary {
     kind: "openai",
     name: "My OpenAI",
     models: ["gpt-4o", "gpt-4o-mini"],
-    defaultModel: "gpt-4o",
+    model: "gpt-4o",
     hasKey: true,
     createdAt: "",
     updatedAt: "",
@@ -38,7 +38,7 @@ describe("AiModelSwitcher", () => {
         providers: [
           provider({
             name: "OpenRouter",
-            defaultModel: "openai/gpt-4o",
+            model: "openai/gpt-4o",
             models: ["openai/gpt-4o"],
           }),
         ],

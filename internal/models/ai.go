@@ -19,13 +19,13 @@ const (
 // Vault) and never serializes to clients. Global/shared AI is config-only and
 // has no row here.
 type AIProviderConfig struct {
-	ID           string         `gorm:"primaryKey"`
-	OwnerID      string         `gorm:"index"`
-	Kind         AIProviderKind `gorm:"index"`
-	Name         string
-	BaseURL      string
-	Models       []string `gorm:"serializer:json"`
-	DefaultModel string
+	ID      string         `gorm:"primaryKey"`
+	OwnerID string         `gorm:"index;uniqueIndex:idx_ai_provider_owner_name"`
+	Kind    AIProviderKind `gorm:"index"`
+	Name    string         `gorm:"uniqueIndex:idx_ai_provider_owner_name"`
+	BaseURL string
+	Models  []string `gorm:"serializer:json"`
+	Model   string
 	// APIKeyCiphertext is opaque ciphertext; the store never sees the plaintext key.
 	APIKeyCiphertext []byte `json:"-"`
 	CreatedAt        time.Time
@@ -37,15 +37,15 @@ func (AIProviderConfig) TableName() string { return "ai_provider_configs" }
 // AIProviderSummary is the non-secret projection returned to clients: it never
 // includes the key, only whether one is set.
 type AIProviderSummary struct {
-	ID           string         `json:"id"`
-	Kind         AIProviderKind `json:"kind"`
-	Name         string         `json:"name"`
-	BaseURL      string         `json:"baseUrl,omitempty"`
-	Models       []string       `json:"models"`
-	DefaultModel string         `json:"defaultModel"`
-	HasKey       bool           `json:"hasKey"`
-	CreatedAt    time.Time      `json:"createdAt"`
-	UpdatedAt    time.Time      `json:"updatedAt"`
+	ID        string         `json:"id"`
+	Kind      AIProviderKind `json:"kind"`
+	Name      string         `json:"name"`
+	BaseURL   string         `json:"baseUrl,omitempty"`
+	Models    []string       `json:"models"`
+	Model     string         `json:"model"`
+	HasKey    bool           `json:"hasKey"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
 }
 
 // AIConversation is one chat thread, scoped to a user + connection. Summary holds
@@ -96,14 +96,14 @@ func (AIMessage) TableName() string { return "ai_messages" }
 // Summary projects the row to its non-secret client form.
 func (c AIProviderConfig) Summary() AIProviderSummary {
 	return AIProviderSummary{
-		ID:           c.ID,
-		Kind:         c.Kind,
-		Name:         c.Name,
-		BaseURL:      c.BaseURL,
-		Models:       c.Models,
-		DefaultModel: c.DefaultModel,
-		HasKey:       len(c.APIKeyCiphertext) > 0,
-		CreatedAt:    c.CreatedAt,
-		UpdatedAt:    c.UpdatedAt,
+		ID:        c.ID,
+		Kind:      c.Kind,
+		Name:      c.Name,
+		BaseURL:   c.BaseURL,
+		Models:    c.Models,
+		Model:     c.Model,
+		HasKey:    len(c.APIKeyCiphertext) > 0,
+		CreatedAt: c.CreatedAt,
+		UpdatedAt: c.UpdatedAt,
 	}
 }

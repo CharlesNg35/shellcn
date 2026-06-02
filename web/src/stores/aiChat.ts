@@ -147,7 +147,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const first = providers.value[0];
     if (first) {
       st.providerId = first.id;
-      st.model = first.defaultModel;
+      st.model = first.model;
     }
   }
 

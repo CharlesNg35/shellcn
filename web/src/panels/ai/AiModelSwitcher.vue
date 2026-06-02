@@ -41,7 +41,7 @@ const activeProviderLabel = computed(() => {
 
 function pickProvider(id: string): void {
   const p = props.providers.find((x) => x.id === id);
-  emit("select", id, p?.defaultModel ?? "");
+  emit("select", id, p?.model ?? "");
 }
 </script>
 

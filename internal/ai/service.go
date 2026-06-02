@@ -244,7 +244,7 @@ func (s *Service) resolveProvider(ctx context.Context, user models.User, scope S
 		if err != nil {
 			return nil, "", "", err
 		}
-		model := cfg.DefaultModel
+		model := cfg.Model
 		if scope.Model != "" && allowsModel(cfg, scope.Model) {
 			model = scope.Model
 		}

@@ -92,17 +92,19 @@ or exfiltration path. Rules:
 
 A user provider config holds: `kind` (`openai`, `openrouter`, `anthropic`,
 `google`, or `openai_compatible`), a display `name`, encrypted `apiKey`, optional
-`baseURL`, an allowed `models` list, and a `defaultModel`. The shared operator
+`baseURL`, an allowed `models` list, and a `model`. The shared operator
 config uses the same provider kind but pins a single `model`. `openrouter` is
 built in; `openai_compatible` + a `baseURL` covers Ollama, vLLM, LM Studio,
 gateways, etc.
 
 **Custom providers are first-class.** A user can define **multiple, named custom
 providers** — each an `openai_compatible` config with its own `name`, `baseURL`,
-`apiKey`, `models`, and `defaultModel`. They are stored as ordinary
-`AIProviderConfig` rows and appear in the provider/model picker alongside the
+`apiKey`, `models`, and `model`. They are stored as ordinary
+`AIProviderConfig` rows and appear in the provider selector alongside the
 built-ins. "Configure your own AI" includes pointing at any OpenAI-compatible
-endpoint, not only the named vendors.
+endpoint, not only the named vendors. Provider names are unique within a user,
+so the chat provider selector never shows ambiguous duplicate labels for the same
+owner.
 
 Two scopes, two different homes:
 
@@ -372,9 +374,9 @@ chosen markdown lib's maintenance/API via context7 before committing.
 - `AiActionConfirm.vue` — inline confirmation card for a pending **write or
   destructive** tool (route + resolved params; Approve / Reject). Destructive calls
   render with a danger style and an explicit warning; no "always allow".
-- `AiModelSwitcher.vue` — provider + model selector across the user's configured
-  providers (built-in **and** custom); **only** for user-scoped config; for global
-  config show a read-only "Provider · Model" indicator.
+- `AiModelSwitcher.vue` — provider selector across the user's configured
+  providers (built-in **and** custom); the provider's configured `model` is used
+  for chat. For global config, show a read-only provider indicator.
 - States: empty (quick-start prompts), error (`Message`/retry), AI-not-configured
   (link to settings), disabled-for-connection.
 
@@ -403,8 +405,8 @@ pattern as _My activity_ → `activity` and _Users & access_ → `users`): a
   set), sourced from `GET /api/ai/global`.
 - **User** AI config: a new nested page `settings/ai` (`AiSettingsView.vue`, route
   name `ai-settings`, linked from `SettingsView.vue` — **not** admin-gated) to
-  add/edit/delete own providers — key write-only/secret, model allow-list, default
-  model — including an **"Add custom provider"** flow (name + base URL + key +
+  add/edit/delete own providers — key write-only/secret, model allow-list, model
+  — including an **"Add custom provider"** flow (name + base URL + key +
   models) for any OpenAI-compatible endpoint. Reuse the declarative `SchemaForm`.
 - **Per-connection**: an `aiMode` control (Disabled / Read-only / Read & write) in
   `ConnectionFormDialog.vue`, owner/manager only, plus an **"Allow destructive
@@ -435,7 +437,7 @@ timeout })`, so the AI chunk is fetched on demand. The **`loadingComponent`** is
 ## 7. Data flow (one turn)
 
 1. User opens the chat (header icon) → drawer; selects/creates a conversation,
-   picks config scope (if both exist) and model (user scope only).
+   picks provider scope when both shared and personal providers exist.
 2. User sends a message over the chat WS.
 3. `AIService` resolves provider/model + key (Vault-decrypted), builds the
    risk-gated tool set for the connection's `aiMode`, loads conversation memory

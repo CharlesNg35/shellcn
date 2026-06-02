@@ -200,7 +200,7 @@ func (s *memAIProviderStore) Update(_ context.Context, c *models.AIProviderConfi
 	prev.Name = c.Name
 	prev.BaseURL = c.BaseURL
 	prev.Models = c.Models
-	prev.DefaultModel = c.DefaultModel
+	prev.Model = c.Model
 	prev.APIKeyCiphertext = c.APIKeyCiphertext
 	prev.UpdatedAt = time.Now()
 	s.m[c.ID] = prev

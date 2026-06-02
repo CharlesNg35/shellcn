@@ -48,7 +48,7 @@ const router = createRouter({
           meta: { admin: true },
         },
         {
-          path: "profile",
+          path: "settings/profile",
           name: "profile",
           component: () => import("../views/ProfileView.vue"),
         },

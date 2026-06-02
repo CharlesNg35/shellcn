@@ -71,7 +71,7 @@ async function savePassword(): Promise<void> {
 <template>
   <div class="mx-auto flex h-full max-w-2xl flex-col gap-6 overflow-auto p-8">
     <h1 class="text-2xl font-semibold text-surface-900 dark:text-surface-0">
-      Your profile
+      My Profile
     </h1>
 
     <section

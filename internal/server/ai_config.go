@@ -13,22 +13,22 @@ import (
 )
 
 type aiProviderRequest struct {
-	Kind         models.AIProviderKind `json:"kind"`
-	Name         string                `json:"name"`
-	BaseURL      string                `json:"baseUrl"`
-	APIKey       string                `json:"apiKey"`
-	Models       []string              `json:"models"`
-	DefaultModel string                `json:"defaultModel"`
+	Kind    models.AIProviderKind `json:"kind"`
+	Name    string                `json:"name"`
+	BaseURL string                `json:"baseUrl"`
+	APIKey  string                `json:"apiKey"`
+	Models  []string              `json:"models"`
+	Model   string                `json:"model"`
 }
 
 func (r aiProviderRequest) input() aiconfig.Input {
 	return aiconfig.Input{
-		Kind:         r.Kind,
-		Name:         r.Name,
-		BaseURL:      r.BaseURL,
-		APIKey:       r.APIKey,
-		Models:       r.Models,
-		DefaultModel: r.DefaultModel,
+		Kind:    r.Kind,
+		Name:    r.Name,
+		BaseURL: r.BaseURL,
+		APIKey:  r.APIKey,
+		Models:  r.Models,
+		Model:   r.Model,
 	}
 }
 

@@ -220,7 +220,7 @@ async function onConnectionSaved(payload: {
                 ? 'bg-primary-50 dark:bg-primary-950/40'
                 : ''
             "
-            title="Your profile"
+            :title="userLabel"
           >
             <span
               class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface-200 text-surface-600 dark:bg-surface-800 dark:text-surface-300"
@@ -229,7 +229,6 @@ async function onConnectionSaved(payload: {
             </span>
             <span
               class="min-w-0 flex-1 truncate text-sm text-surface-700 dark:text-surface-200"
-              :title="userLabel"
             >
               {{ userLabel }}
             </span>

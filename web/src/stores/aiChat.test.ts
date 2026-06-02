@@ -260,7 +260,7 @@ describe("aiChat store", () => {
         kind: "openrouter",
         name: "OpenRouter",
         models: ["openai/gpt-4o"],
-        defaultModel: "openai/gpt-4o",
+        model: "openai/gpt-4o",
         hasKey: true,
         createdAt: "",
         updatedAt: "",

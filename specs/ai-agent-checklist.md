@@ -28,8 +28,9 @@ make test` are green. Section refs (§) point at the spec.
       `apiKey` from env, pinned `model`) added to `Config`; defaults in
       `setDefaults`; `SHELLCN_AI_*` env binding. **Global = env/config, no DB, no UI.**
 - [x] `models.AIProviderConfig` (**user-scoped**: `ownerId`, `kind`, `name`,
-      `baseURL`, `models []string`, `defaultModel`, `apiKeyCiphertext []byte`,
-      timestamps); add to `allModels()` in `internal/store/db.go`.
+      `baseURL`, `models []string`, `model`, `apiKeyCiphertext []byte`,
+      timestamps; provider names unique per owner); add to `allModels()` in
+      `internal/store/db.go`.
 - [x] `internal/ai/config`: user-config CRUD; encrypt/decrypt keys via
       `secrets.Vault` (DB stores ciphertext only). Global keys never touch the DB.
 - [x] Built-in `kind`s: `openai`, `openrouter`, `anthropic`, `google`, `openai_compatible`;
@@ -44,7 +45,7 @@ make test` are green. Section refs (§) point at the spec.
       (name `ai-settings`), linked from `SettingsView.vue` with a `RouterLink` row
       (same pattern as _My activity_ / _Users & access_; not admin-gated).
 - [x] In it: list/add/edit/delete own providers; key field write-only/secret; model
-      allow-list; default model; **Add custom provider** (name + base URL + key + models).
+      allow-list; model; **Add custom provider** (name + base URL + key + models).
 - [x] Read-only **global** status row on `SettingsView.vue` mirroring the existing
       **Email** row ("Configured / Not configured" + model), from `GET /api/ai/global`.
 - [x] PrimeVue components used for settings controls; `SchemaForm` was not a good

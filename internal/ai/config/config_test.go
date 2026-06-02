@@ -26,11 +26,11 @@ func newService(t *testing.T, global config.AIConfig) (*aiconfig.Service, *store
 
 func validInput() aiconfig.Input {
 	return aiconfig.Input{
-		Kind:         models.AIProviderOpenAI,
-		Name:         "My OpenAI",
-		APIKey:       "sk-secret-123",
-		Models:       []string{"gpt-4o", "gpt-4o-mini"},
-		DefaultModel: "gpt-4o",
+		Kind:   models.AIProviderOpenAI,
+		Name:   "My OpenAI",
+		APIKey: "sk-secret-123",
+		Models: []string{"gpt-4o", "gpt-4o-mini"},
+		Model:  "gpt-4o",
 	}
 }
 
@@ -100,6 +100,37 @@ func TestUpdateEmptyKeyPreservesStored(t *testing.T) {
 	}
 }
 
+func TestProviderNamesAreUniquePerOwner(t *testing.T) {
+	svc, _ := newService(t, config.AIConfig{})
+	ctx := context.Background()
+
+	first, err := svc.Create(ctx, "user-1", validInput())
+	if err != nil {
+		t.Fatalf("create first: %v", err)
+	}
+	dup := validInput()
+	dup.Name = "my openai"
+	if _, err := svc.Create(ctx, "user-1", dup); !errors.Is(err, models.ErrConflict) {
+		t.Fatalf("duplicate same owner: want ErrConflict, got %v", err)
+	}
+	if _, err := svc.Create(ctx, "user-2", dup); err != nil {
+		t.Fatalf("same name for another owner should be allowed: %v", err)
+	}
+
+	second := validInput()
+	second.Name = "Backup"
+	second.Model = "gpt-4o-mini"
+	second.Models = []string{"gpt-4o-mini"}
+	sum, err := svc.Create(ctx, "user-1", second)
+	if err != nil {
+		t.Fatalf("create second: %v", err)
+	}
+	second.Name = first.Name
+	if _, err := svc.Update(ctx, "user-1", sum.ID, second); !errors.Is(err, models.ErrConflict) {
+		t.Fatalf("rename duplicate: want ErrConflict, got %v", err)
+	}
+}
+
 func TestOwnerScopingHidesOthers(t *testing.T) {
 	svc, _ := newService(t, config.AIConfig{})
 	ctx := context.Background()
@@ -130,14 +161,14 @@ func TestModelsPerKind(t *testing.T) {
 		t.Fatalf("allow-list should win: %v", got)
 	}
 
-	noList := aiconfig.Input{Kind: models.AIProviderAnthropic, Name: "Claude", APIKey: "k", DefaultModel: "claude-sonnet-4-5"}
+	noList := aiconfig.Input{Kind: models.AIProviderAnthropic, Name: "Claude", APIKey: "k", Model: "claude-sonnet-4-5"}
 	sum, _ := svc.Create(ctx, "user-1", noList)
 	got, _ = svc.Models(ctx, "user-1", sum.ID)
 	if len(got) == 0 {
 		t.Fatal("anthropic should fall back to static defaults")
 	}
 
-	openRouter := aiconfig.Input{Kind: models.AIProviderOpenRouter, Name: "OpenRouter", APIKey: "k", DefaultModel: "openai/gpt-4o"}
+	openRouter := aiconfig.Input{Kind: models.AIProviderOpenRouter, Name: "OpenRouter", APIKey: "k", Model: "openai/gpt-4o"}
 	sum, _ = svc.Create(ctx, "user-1", openRouter)
 	got, _ = svc.Models(ctx, "user-1", sum.ID)
 	if len(got) == 0 || got[0] != "openai/gpt-4o" {
@@ -150,11 +181,11 @@ func TestValidationRejectsBadInput(t *testing.T) {
 	ctx := context.Background()
 
 	cases := []aiconfig.Input{
-		{Kind: "bogus", Name: "x", APIKey: "k", DefaultModel: "m"},
-		{Kind: models.AIProviderOpenAI, Name: "x", APIKey: "", DefaultModel: "m"},
-		{Kind: models.AIProviderOpenAICompat, Name: "x", DefaultModel: "m"}, // no base URL
-		{Kind: models.AIProviderOpenAICompat, BaseURL: "http://localhost:11434/v1", DefaultModel: "m"},
-		{Kind: models.AIProviderOpenAI, Name: "x", APIKey: "k", DefaultModel: ""},
+		{Kind: "bogus", Name: "x", APIKey: "k", Model: "m"},
+		{Kind: models.AIProviderOpenAI, Name: "x", APIKey: "", Model: "m"},
+		{Kind: models.AIProviderOpenAICompat, Name: "x", Model: "m"}, // no base URL
+		{Kind: models.AIProviderOpenAICompat, BaseURL: "http://localhost:11434/v1", Model: "m"},
+		{Kind: models.AIProviderOpenAI, Name: "x", APIKey: "k", Model: ""},
 	}
 	for i, c := range cases {
 		if _, err := svc.Create(ctx, "user-1", c); !errors.Is(err, aiconfig.ErrInvalid()) {
@@ -164,7 +195,7 @@ func TestValidationRejectsBadInput(t *testing.T) {
 
 	// openai_compatible with base URL but no key is allowed (local endpoints).
 	if _, err := svc.Create(ctx, "user-1", aiconfig.Input{
-		Kind: models.AIProviderOpenAICompat, Name: "Ollama", BaseURL: "http://localhost:11434/v1", DefaultModel: "llama3",
+		Kind: models.AIProviderOpenAICompat, Name: "Ollama", BaseURL: "http://localhost:11434/v1", Model: "llama3",
 	}); err != nil {
 		t.Fatalf("compat without key should be allowed: %v", err)
 	}
@@ -175,9 +206,9 @@ func TestBuiltinProviderNameDefaults(t *testing.T) {
 	ctx := context.Background()
 
 	sum, err := svc.Create(ctx, "user-1", aiconfig.Input{
-		Kind:         models.AIProviderOpenRouter,
-		APIKey:       "sk-router",
-		DefaultModel: "openai/gpt-4o",
+		Kind:   models.AIProviderOpenRouter,
+		APIKey: "sk-router",
+		Model:  "openai/gpt-4o",
 	})
 	if err != nil {
 		t.Fatalf("create openrouter without name: %v", err)
