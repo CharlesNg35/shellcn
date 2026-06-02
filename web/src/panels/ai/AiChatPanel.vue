@@ -66,7 +66,7 @@ onMounted(() => {
 <template>
   <div class="flex h-full min-h-0 flex-col">
     <div
-      class="flex items-center gap-2 border-b border-surface-200 px-4 py-2.5 dark:border-surface-800"
+      class="flex min-w-0 items-center gap-2 border-b border-surface-200 px-3 py-2.5 dark:border-surface-800"
     >
       <Button
         text
@@ -82,20 +82,31 @@ onMounted(() => {
       <AppIcon
         :icon="{ type: 'lucide', value: 'sparkles' }"
         :size="16"
-        class="text-primary-500"
+        class="hidden shrink-0 text-primary-500 min-[380px]:block"
       />
-      <span
-        class="flex-1 truncate text-sm font-semibold text-surface-800 dark:text-surface-100"
-      >
-        Assistant
-      </span>
-      <span
-        v-if="statusLabel"
-        class="text-xs text-surface-400"
-        aria-live="polite"
-      >
-        {{ statusLabel }}
-      </span>
+      <div class="grid min-w-0 flex-1 gap-0.5">
+        <span
+          class="truncate text-sm font-semibold text-surface-800 dark:text-surface-100"
+        >
+          Assistant
+        </span>
+        <span
+          v-if="statusLabel"
+          class="truncate text-xs text-surface-400"
+          aria-live="polite"
+        >
+          {{ statusLabel }}
+        </span>
+      </div>
+      <AiModelSwitcher
+        v-if="store.providers.length || store.global?.configured"
+        class="max-w-[8.5rem] shrink min-[420px]:max-w-[11rem]"
+        :providers="store.providers"
+        :global="store.global"
+        :provider-id="st.providerId"
+        :disabled="busy"
+        @select="(p) => store.setProvider(connectionId, p)"
+      />
       <Button
         text
         rounded
@@ -117,19 +128,6 @@ onMounted(() => {
       >
         <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="15" />
       </Button>
-    </div>
-
-    <div
-      v-if="store.providers.length || store.global?.configured"
-      class="flex items-center justify-end border-b border-surface-200 px-3 py-1.5 dark:border-surface-800"
-    >
-      <AiModelSwitcher
-        :providers="store.providers"
-        :global="store.global"
-        :provider-id="st.providerId"
-        :disabled="busy"
-        @select="(p) => store.setProvider(connectionId, p)"
-      />
     </div>
 
     <div class="relative flex min-h-0 flex-1 overflow-hidden">

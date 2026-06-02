@@ -1,14 +1,14 @@
 import { defineStore } from "pinia";
-import { reactive, ref } from "vue";
+import { useStorage } from "@vueuse/core";
+import { computed, reactive, ref, watch } from "vue";
 import {
   aiApi,
   chatSocketUrl,
   type AiConversation,
-  type AiGlobalStatus,
-  type AiProviderSummary,
   type AiStoredMessage,
   type AiStreamEvent,
 } from "../api/ai";
+import { useAiProvidersStore } from "./aiProviders";
 
 export type AiRunState = "idle" | "starting" | "streaming" | "stopping";
 
@@ -98,35 +98,41 @@ const isOpenSocket = (socket: WebSocket | null): socket is WebSocket =>
   !!socket && socket.readyState === WebSocket.OPEN;
 
 export const useAiChatStore = defineStore("aiChat", () => {
+  const aiProviders = useAiProvidersStore();
+  const selectedProviders = useStorage<Record<string, string>>(
+    "shellcn:ai:selected-provider",
+    {},
+  );
   const byConn = reactive<Record<string, ChatState>>({});
   const version = ref(0);
-  const providers = ref<AiProviderSummary[]>([]);
-  const global = ref<AiGlobalStatus | null>(null);
-  const providersReady = ref(false);
-  let providersLoaded = false;
+  const providers = computed(() => aiProviders.providers);
+  const global = computed(() => aiProviders.global);
+  const providersReady = computed(() => aiProviders.ready);
 
-  async function loadProviders(): Promise<void> {
-    if (providersLoaded) return;
-    providersLoaded = true;
+  async function loadProviders(force = false): Promise<void> {
     try {
-      const [g, list] = await Promise.all([aiApi.global(), aiApi.list()]);
-      global.value = g;
-      providers.value = list;
-      providersReady.value = true;
-      Object.values(byConn).forEach(ensureProviderSelection);
+      await aiProviders.load(force);
+      Object.entries(byConn).forEach(([connId, st]) =>
+        ensureProviderSelection(connId, st),
+      );
     } catch {
-      providersLoaded = false;
-      providersReady.value = false;
+      return;
     }
   }
 
   function setProvider(connId: string, providerId: string): void {
     const st = state(connId);
     st.providerId = providerId;
+    rememberProvider(connId, providerId);
   }
 
   function state(connId: string): ChatState {
-    if (!byConn[connId]) byConn[connId] = newState();
+    if (!byConn[connId]) {
+      const st = newState();
+      st.providerId = storedProvider(connId);
+      byConn[connId] = st;
+      ensureProviderSelection(connId, st);
+    }
     return byConn[connId];
   }
 
@@ -149,19 +155,51 @@ export const useAiChatStore = defineStore("aiChat", () => {
     }
   }
 
-  function ensureProviderSelection(st: ChatState): void {
-    if (st.providerId) {
-      return;
-    }
-    if (global.value?.configured) {
-      st.providerId = "";
-      return;
-    }
-    const first = providers.value[0];
-    if (first) {
-      st.providerId = first.id;
-    }
+  function storedProvider(connId: string): string {
+    return Object.prototype.hasOwnProperty.call(selectedProviders.value, connId)
+      ? (selectedProviders.value[connId] ?? "")
+      : "";
   }
+
+  function rememberProvider(connId: string, providerId: string): void {
+    selectedProviders.value = {
+      ...selectedProviders.value,
+      [connId]: providerId,
+    };
+  }
+
+  function ensureProviderSelection(connId: string, st: ChatState): void {
+    if (!aiProviders.ready) return;
+    if (
+      st.providerId &&
+      aiProviders.providers.some((provider) => provider.id === st.providerId)
+    ) {
+      rememberProvider(connId, st.providerId);
+      return;
+    }
+    if (st.providerId === "" && aiProviders.global?.configured) {
+      rememberProvider(connId, "");
+      return;
+    }
+    if (aiProviders.global?.configured) {
+      st.providerId = "";
+      rememberProvider(connId, "");
+      return;
+    }
+    st.providerId = aiProviders.providers[0]?.id ?? "";
+    rememberProvider(connId, st.providerId);
+  }
+
+  watch(
+    () => [
+      aiProviders.global?.configured ?? false,
+      aiProviders.providers.map((provider) => provider.id).join("\u0000"),
+    ],
+    () =>
+      Object.entries(byConn).forEach(([connId, st]) =>
+        ensureProviderSelection(connId, st),
+      ),
+  );
 
   async function connect(connId: string): Promise<void> {
     const st = state(connId);
@@ -223,7 +261,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const text = content.trim();
     if (!text) return;
     const st = state(connId);
-    ensureProviderSelection(st);
+    ensureProviderSelection(connId, st);
     if (st.runState !== "idle") {
       if (!st.connected || !isOpenSocket(st.socket)) {
         st.error = "Assistant is not connected.";
@@ -295,7 +333,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
       const { conversation, page } = await aiApi.getConversation(connId, cid);
       st.activeId = cid;
       st.providerId = conversation.providerId ?? "";
-      if (!st.providerId) ensureProviderSelection(st);
+      ensureProviderSelection(connId, st);
       st.messages = page.messages.map(mapStored);
       st.hasMore = page.hasMore;
       st.current = null;

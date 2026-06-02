@@ -3,8 +3,8 @@ import { computed, defineAsyncComponent, h, onMounted, ref, watch } from "vue";
 import Button from "primevue/button";
 import Drawer from "primevue/drawer";
 import AppIcon from "./AppIcon.vue";
-import { aiApi } from "../api/ai";
 import { drawerRoot } from "../primevue/preset";
+import { useAiProvidersStore } from "../stores/aiProviders";
 
 const props = defineProps<{
   connectionId: string;
@@ -12,11 +12,11 @@ const props = defineProps<{
   aiMode?: string;
 }>();
 
-const available = ref(false);
+const aiProviders = useAiProvidersStore();
 const open = ref(false);
 const opened = ref(false); // mount the panel only once the drawer is first opened
 const visible = computed(
-  () => available.value && props.connected && props.aiMode !== "disabled",
+  () => aiProviders.available && props.connected && props.aiMode !== "disabled",
 );
 
 const AiChatPanel = defineAsyncComponent({
@@ -72,10 +72,9 @@ function toggle(): void {
 
 onMounted(async () => {
   try {
-    const [global, list] = await Promise.all([aiApi.global(), aiApi.list()]);
-    available.value = global.configured || list.length > 0;
+    await aiProviders.load();
   } catch {
-    available.value = false;
+    return;
   }
 });
 

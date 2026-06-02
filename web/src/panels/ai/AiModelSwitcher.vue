@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import Tag from "primevue/tag";
 import Select from "primevue/select";
+import Tag from "primevue/tag";
+import AppIcon from "../../components/AppIcon.vue";
 import type { AiGlobalStatus, AiProviderSummary } from "../../api/ai";
 
 const props = defineProps<{
@@ -15,7 +16,10 @@ const emit = defineEmits<{ select: [providerId: string] }>();
 const providerChoices = computed(() => {
   const out: { label: string; value: string }[] = [];
   if (props.global?.configured) {
-    out.push({ label: "Shared AI", value: "" });
+    out.push({
+      label: props.global.provider ?? "Shared AI",
+      value: "",
+    });
   }
   for (const p of props.providers) {
     out.push({ label: p.name, value: p.id });
@@ -23,21 +27,13 @@ const providerChoices = computed(() => {
   return out;
 });
 
-const selected = computed(
+const activeChoice = computed(
   () =>
-    props.providers.find((p) => p.id === props.providerId) ??
-    (!props.global?.configured && props.providerId === ""
-      ? props.providers[0]
-      : undefined),
+    providerChoices.value.find((choice) => choice.value === props.providerId) ??
+    providerChoices.value[0],
 );
 
-const usingGlobal = computed(
-  () => props.providerId === "" && !!props.global?.configured,
-);
-const activeProviderLabel = computed(() => {
-  if (usingGlobal.value) return props.global?.provider ?? "Shared AI";
-  return selected.value?.name ?? providerChoices.value[0]?.label ?? "";
-});
+const canSwitch = computed(() => providerChoices.value.length > 1);
 
 function pickProvider(id: string): void {
   emit("select", id);
@@ -45,22 +41,40 @@ function pickProvider(id: string): void {
 </script>
 
 <template>
-  <div class="flex items-center gap-1.5">
+  <div v-if="activeChoice" class="min-w-0">
     <Select
-      v-if="providerChoices.length > 1"
+      v-if="canSwitch"
       :model-value="providerId"
       :options="providerChoices"
       option-label="label"
       option-value="value"
+      append-to="body"
+      scroll-height="12rem"
       :disabled="disabled"
       aria-label="AI provider"
-      :pt="{ root: 'text-xs' }"
+      class="max-w-full"
+      :pt="{
+        root: 'flex h-8 max-w-full w-full min-w-0 items-center overflow-hidden rounded-md border border-surface-300 bg-surface-0 text-xs shadow-sm transition-colors focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-500/20 dark:border-surface-700 dark:bg-surface-950',
+        label:
+          'flex h-full min-w-0 flex-1 items-center truncate px-2.5 text-left text-xs leading-none text-surface-700 dark:text-surface-100',
+        dropdown:
+          'flex h-full w-7 shrink-0 items-center justify-center text-surface-400',
+      }"
       @update:model-value="pickProvider"
-    />
+    >
+      <template #dropdownicon>
+        <AppIcon :icon="{ type: 'lucide', value: 'chevron-down' }" :size="13" />
+      </template>
+    </Select>
     <Tag
-      v-else-if="activeProviderLabel"
-      :value="activeProviderLabel"
+      v-else
       severity="secondary"
+      :value="activeChoice.label"
+      class="max-w-full"
+      :pt="{
+        root: 'flex h-8 max-w-full items-center px-2',
+        label: 'truncate text-xs leading-none',
+      }"
     />
   </div>
 </template>

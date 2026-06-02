@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
+import { nextTick } from "vue";
 
 const listConversations = vi.fn(async () => [] as unknown[]);
 const getConversation = vi.fn();
@@ -26,6 +27,7 @@ import { useAiChatStore } from "./aiChat";
 const CONN = "c1";
 
 beforeEach(() => {
+  localStorage.clear();
   setActivePinia(createPinia());
   listConversations.mockClear();
   getConversation.mockReset();
@@ -331,6 +333,93 @@ describe("aiChat store", () => {
       providerId: "p-local",
     });
     expect(sent.at(-1)).not.toHaveProperty("model");
+  });
+
+  it("can force-refresh providers after settings change", async () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+    await store.loadProviders();
+    expect(store.providers).toHaveLength(0);
+
+    listProviders.mockResolvedValue([
+      {
+        id: "p-new",
+        kind: "openrouter",
+        name: "OpenRouter",
+        models: ["openai/gpt-4o"],
+        model: "openai/gpt-4o",
+        hasKey: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+    await store.loadProviders(true);
+
+    expect(store.providers).toHaveLength(1);
+    expect(st.providerId).toBe("p-new");
+  });
+
+  it("remembers the selected provider across store instances", async () => {
+    listProviders.mockResolvedValue([
+      {
+        id: "p1",
+        kind: "openai",
+        name: "OpenAI",
+        models: ["gpt-4o"],
+        model: "gpt-4o",
+        hasKey: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+      {
+        id: "p2",
+        kind: "openrouter",
+        name: "OpenRouter",
+        models: ["openai/gpt-4o"],
+        model: "openai/gpt-4o",
+        hasKey: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+
+    const store = useAiChatStore();
+    await store.loadProviders();
+    store.setProvider(CONN, "p2");
+
+    setActivePinia(createPinia());
+    const next = useAiChatStore();
+    await next.loadProviders();
+
+    expect(next.state(CONN).providerId).toBe("p2");
+  });
+
+  it("falls back when the remembered provider no longer exists", async () => {
+    localStorage.setItem(
+      "shellcn:ai:selected-provider",
+      JSON.stringify({ [CONN]: "p-missing" }),
+    );
+    listProviders.mockResolvedValue([
+      {
+        id: "p-new",
+        kind: "openrouter",
+        name: "OpenRouter",
+        models: ["openai/gpt-4o"],
+        model: "openai/gpt-4o",
+        hasKey: true,
+        createdAt: "",
+        updatedAt: "",
+      },
+    ]);
+
+    const store = useAiChatStore();
+    await store.loadProviders();
+
+    expect(store.state(CONN).providerId).toBe("p-new");
+    await nextTick();
+    expect(
+      JSON.parse(localStorage.getItem("shellcn:ai:selected-provider") ?? "{}"),
+    ).toMatchObject({ [CONN]: "p-new" });
   });
 
   it("does not call conversation endpoints with an empty id", async () => {

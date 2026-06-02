@@ -47,6 +47,10 @@ import AiSettingsView from "./AiSettingsView.vue";
 beforeEach(() => {
   setActivePinia(createPinia());
   providers.length = 0;
+  global.configured = true;
+  global.provider = "Shared OpenAI";
+  global.kind = "openai";
+  global.model = "gpt-4o";
   create.mockClear();
 });
 

@@ -26,10 +26,9 @@ describe("AiModelSwitcher", () => {
         providerId: "",
       },
     });
-    // No provider <select>; a Tag indicator instead.
-    expect(wrapper.findAllComponents({ name: "Select" })).toHaveLength(0);
     expect(wrapper.text()).toContain("Shared");
     expect(wrapper.text()).not.toContain("gpt-4o");
+    expect(wrapper.findComponent({ name: "Select" }).exists()).toBe(false);
   });
 
   it("shows the only personal provider without requiring a provider select", () => {
@@ -46,9 +45,9 @@ describe("AiModelSwitcher", () => {
         providerId: "p1",
       },
     });
-    expect(wrapper.findAllComponents({ name: "Select" })).toHaveLength(0);
     expect(wrapper.text()).toContain("OpenRouter");
     expect(wrapper.text()).not.toContain("openai/gpt-4o");
+    expect(wrapper.findComponent({ name: "Select" }).exists()).toBe(false);
   });
 
   it("offers provider selection only", () => {
@@ -59,6 +58,25 @@ describe("AiModelSwitcher", () => {
         providerId: "p1",
       },
     });
-    expect(wrapper.findAllComponents({ name: "Select" })).toHaveLength(1);
+    expect(wrapper.findComponent({ name: "Select" }).exists()).toBe(true);
+  });
+
+  it("offers provider selection when multiple personal providers exist", async () => {
+    const wrapper = mount(AiModelSwitcher, {
+      props: {
+        providers: [
+          provider({ id: "p1", name: "OpenAI" }),
+          provider({ id: "p2", name: "OpenRouter" }),
+        ],
+        global: { configured: false },
+        providerId: "p1",
+      },
+    });
+    const select = wrapper.findComponent({ name: "Select" });
+    expect(select.exists()).toBe(true);
+
+    select.vm.$emit("update:modelValue", "p2");
+
+    expect(wrapper.emitted("select")).toEqual([["p2"]]);
   });
 });

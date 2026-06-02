@@ -7,21 +7,20 @@ import TabPanels from "primevue/tabpanels";
 import TabPanel from "primevue/tabpanel";
 import Tag from "primevue/tag";
 import { ApiError } from "../api/client";
-import { aiApi, type AiGlobalStatus, type AiProviderSummary } from "../api/ai";
+import { aiApi, type AiProviderSummary } from "../api/ai";
 import AppBreadcrumb from "../components/AppBreadcrumb.vue";
 import AppIcon from "../components/AppIcon.vue";
 import { useConfirmAction } from "../composables/useConfirmAction";
 import { useNotify } from "../composables/useNotify";
+import { useAiProvidersStore } from "../stores/aiProviders";
 import AiProviderDialog from "./ai-settings/AiProviderDialog.vue";
 import AiProviderList from "./ai-settings/AiProviderList.vue";
 import SharedAiPanel from "./ai-settings/SharedAiPanel.vue";
 
 const notify = useNotify();
 const { confirmDanger } = useConfirmAction();
+const aiProviders = useAiProvidersStore();
 
-const loading = ref(true);
-const providers = ref<AiProviderSummary[]>([]);
-const global = ref<AiGlobalStatus | null>(null);
 const tab = ref("providers");
 const dialogOpen = ref(false);
 const editingProvider = ref<AiProviderSummary | null>(null);
@@ -31,24 +30,38 @@ const crumbs = [
   { label: "AI providers" },
 ];
 
+const providers = computed(() => aiProviders.providers);
+const global = computed(() => aiProviders.global);
+const loading = computed(() => aiProviders.loading);
 const sharedConfigured = computed(() => Boolean(global.value?.configured));
 
+function syncSharedTab(): void {
+  if (!aiProviders.global?.configured && tab.value === "shared") {
+    tab.value = "providers";
+  }
+}
+
+function errorMessage(err: unknown): string | undefined {
+  return err instanceof ApiError || err instanceof Error
+    ? err.message
+    : undefined;
+}
+
 async function load(): Promise<void> {
-  loading.value = true;
   try {
-    const [g, list] = await Promise.all([aiApi.global(), aiApi.list()]);
-    global.value = g;
-    providers.value = list;
-    if (!g.configured && tab.value === "shared") {
-      tab.value = "providers";
-    }
+    await aiProviders.load();
+    syncSharedTab();
   } catch (err) {
-    notify.error(
-      "Failed to load AI settings",
-      err instanceof ApiError ? err.message : undefined,
-    );
-  } finally {
-    loading.value = false;
+    notify.error("Failed to load AI settings", errorMessage(err));
+  }
+}
+
+async function refreshSettings(): Promise<void> {
+  try {
+    await aiProviders.refresh();
+    syncSharedTab();
+  } catch (err) {
+    notify.error("Failed to refresh AI settings", errorMessage(err));
   }
 }
 
@@ -64,7 +77,7 @@ function openEdit(provider: AiProviderSummary): void {
 
 async function afterSave(): Promise<void> {
   notify.success(editingProvider.value ? "Provider updated" : "Provider added");
-  await load();
+  await refreshSettings();
 }
 
 function remove(provider: AiProviderSummary): void {
@@ -75,12 +88,9 @@ function remove(provider: AiProviderSummary): void {
       try {
         await aiApi.remove(provider.id);
         notify.success("Provider deleted");
-        await load();
+        await refreshSettings();
       } catch (err) {
-        notify.error(
-          "Failed to delete",
-          err instanceof ApiError ? err.message : undefined,
-        );
+        notify.error("Failed to delete", errorMessage(err));
       }
     },
   });
