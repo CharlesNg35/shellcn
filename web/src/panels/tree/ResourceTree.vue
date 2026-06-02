@@ -21,8 +21,6 @@ interface NodeData {
   source?: DataSource;
   resourceKind?: string;
   listParams?: Record<string, string>;
-  // Tab qualifier: the intermediate ancestor labels (db / schema), or the root
-  // group label when the node sits directly under it (Containers, Compose).
   groupLabel?: string;
   parentPath?: string[];
 }
@@ -32,7 +30,6 @@ interface LoadChildrenOptions {
   loading?: boolean;
 }
 
-// Intermediate ancestors when present, else the category (root group) name.
 function nodeQualifier(data: NodeData): string {
   return data.parentPath?.length
     ? data.parentPath.join(" / ")
@@ -98,8 +95,6 @@ function resetRootNodes(): void {
   nodes.value = props.groups.map((g) => ({
     key: g.key,
     label: g.label,
-    // A group with no children source is a leaf: it opens its destination
-    // directly (a kind list, or a resource detail via ref) without expanding.
     leaf: !g.source?.routeId,
     data: {
       isGroup: true,
@@ -121,7 +116,6 @@ async function loadChildren(
   if (showLoading) node.loading = true;
   try {
     const page = await fetchPage<TreeNode>(props.connectionId, data.source);
-    // The root group names the category; deeper nodes add their label to the path.
     const groupLabel = data.isGroup
       ? String(node.label ?? "")
       : data.groupLabel;
@@ -160,15 +154,10 @@ function onNodeCollapse(node: PVNode): void {
   expandedKeys.value = next;
 }
 
-// Single click selects AND, for a branch, expands + lazy-loads — one gesture to
-// drill in. PrimeVue single-selection emits node-unselect when the highlighted
-// node is clicked again, but that is still an activation in this navigator.
 async function onNodeSelect(node: PVNode): Promise<void> {
   const data = node.data as NodeData;
   selectionKeys.value = { [String(node.key)]: true };
   if (data.isGroup) {
-    // A leaf group pointing at a specific resource opens that detail directly;
-    // otherwise it opens its list (or expands, for a group with children).
     if (data.ref && data.row)
       emit("select-node", data.row, nodeQualifier(data));
     else emit("select-group", String(node.key));
@@ -184,8 +173,6 @@ async function onNodeSelect(node: PVNode): Promise<void> {
 watch(
   () => [props.selectedGroup, props.selectedUid] as const,
   ([group, uid]) => {
-    // Sync highlight to a group/detail selection; leave a click-driven
-    // selection (e.g. a list-opening node) untouched when neither matches.
     const selected = uid ? selectedNodeKey(uid) : group;
     if (selected) selectionKeys.value = { [selected]: true };
   },
@@ -218,7 +205,7 @@ onMounted(async () => {
       );
       badges[g.key] = res.value;
     } catch {
-      // best-effort
+      continue;
     }
   }
 });

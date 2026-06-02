@@ -25,7 +25,6 @@ test("SSH (tabs): terminal stream, home files, snippets", async ({ page }) => {
     "Connected to mock shell. Type and press enter.",
   );
 
-  // Files tab: list + type-based preview.
   await page.getByRole("tab", { name: "Files" }).click();
   await expect(page.locator("main")).toContainText("app.json");
   await expect(page.locator("main")).toContainText("home");
@@ -59,11 +58,9 @@ test("Docker (sidebar tree): list table + resource detail", async ({
     .getByRole("button", { name: "Connect", exact: true })
     .click();
 
-  // Select the Containers group → resource list table.
   await page.getByRole("treeitem", { name: /Containers/ }).click();
   await expect(page.locator("main")).toContainText("nginx-1");
 
-  // Click a row → detail view with its tabs.
   await page.getByRole("cell", { name: "nginx-1", exact: true }).click();
   await expect(page.locator("main")).toContainText("Logs");
   await expect(page.locator("main")).toContainText("Inspect");

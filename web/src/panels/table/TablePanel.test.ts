@@ -397,8 +397,6 @@ describe("TablePanel", () => {
 
     bodyButton("Add row")!.click();
     await flushPromises();
-    // A boolean column renders a toggle, an integer column a number input —
-    // not the old one-size-fits-all text box.
     expect(w.findComponent({ name: "ToggleSwitch" }).exists()).toBe(true);
     expect(w.findComponent({ name: "InputNumber" }).exists()).toBe(true);
     w.unmount();

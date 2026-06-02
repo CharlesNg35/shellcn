@@ -25,7 +25,6 @@ test("admin invites a user and the invitee accepts via the link", async ({
   await page.locator("#invite-email").fill("invitee@example.com");
   await page.getByRole("button", { name: "Create invitation" }).click();
 
-  // The copyable link is revealed; derive the accept route from it.
   const link = await page.getByText(/\/invite\//).innerText();
   const token = link.split("/invite/")[1];
   expect(token).toBeTruthy();
@@ -36,7 +35,5 @@ test("admin invites a user and the invitee accepts via the link", async ({
   await page.locator('input[type="password"]').fill("s3cret-pw");
   await page.getByRole("button", { name: "Create account" }).click();
 
-  // Account created → the invitee leaves the accept page (in mock mode the
-  // always-on session then lands on home rather than the login screen).
   await expect(page).not.toHaveURL(/\/invite\//);
 });

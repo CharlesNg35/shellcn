@@ -1,9 +1,6 @@
 import dagre from "@dagrejs/dagre";
 import { MarkerType, type Edge, type Node } from "@vue-flow/core";
 
-// A field listed inside a node box. Generic: any plugin may attach fields to a
-// node (relational columns, document keys, …); `key` simply marks a field as
-// significant so the panel can badge it (no relational semantics here).
 export interface GraphField {
   name: string;
   type?: string;
@@ -49,8 +46,6 @@ const EDGE_PALETTE = [
   "#14b8a6",
 ];
 
-// edgeColor maps an edge label (relationship type, foreign key, …) to a stable
-// colour so edges of the same kind read as a group. Unlabelled edges stay grey.
 export function edgeColor(label?: string): string {
   if (!label) return "#94a3b8";
   let hash = 0;
@@ -60,9 +55,6 @@ export function edgeColor(label?: string): string {
   return EDGE_PALETTE[hash % EDGE_PALETTE.length];
 }
 
-// mergeGraph folds an incoming payload (e.g. an expanded node's neighbourhood)
-// into the current one, deduping nodes by id and edges by id/endpoints, so
-// repeated expansions accumulate without duplicates.
 export function mergeGraph(
   base: GraphPayload,
   incoming: GraphPayload,
@@ -89,9 +81,6 @@ export function mergeGraph(
   return { nodes, edges };
 }
 
-// nodeSize derives a node's footprint from its content so the layout engine can
-// pack boxes without overlap: a node that lists fields grows with that list, a
-// plain node is a fixed box.
 function nodeSize(node: GraphNode): { width: number; height: number } {
   if (node.fields?.length) {
     return {
@@ -102,10 +91,6 @@ function nodeSize(node: GraphNode): { width: number; height: number } {
   return { width: PLAIN_WIDTH, height: PLAIN_HEIGHT };
 }
 
-// buildGraph lays nodes out left-to-right with dagre so connected nodes sit in
-// adjacent ranks and edges flow one direction, then maps the result to Vue Flow
-// nodes/edges. It is pure — selection highlighting is layered on by the panel
-// via Vue Flow's own selection state.
 export function buildGraph(payload: GraphPayload): {
   nodes: Node[];
   edges: Edge[];

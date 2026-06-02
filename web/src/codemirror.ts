@@ -79,10 +79,7 @@ interface HighlightPalette {
   invalid: string;
 }
 
-// Atom One Dark / One Light palette, mapped across every tag the supported devops
-// formats emit (YAML/JSON/shell/dockerfile/nginx/toml/ini/xml). Covers `content`
-// — lang-yaml's tag for plain scalar values — which earlier left YAML mostly
-// uncolored. In YAML this reads as red keys, green values, grey comments.
+// Includes `content`, lang-yaml's tag for plain scalar values.
 function buildHighlight(c: HighlightPalette): Extension {
   return syntaxHighlighting(
     HighlightStyle.define([
@@ -230,11 +227,7 @@ interface EditorPalette {
 
 const monoFont = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
-// The CodeMirror base theme styles selection, cursor, brackets, tooltips and
-// the completion list with generic greys at high specificity (e.g. the focused
-// `&dark.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground`
-// rule). To win without `!important` we mirror those selectors so our rules
-// match the same specificity and are mounted later.
+// Match CodeMirror's selector specificity so these theme colors win cleanly.
 function editorTheme(c: EditorPalette, dark: boolean): Extension {
   return EditorView.theme(
     {

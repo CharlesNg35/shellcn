@@ -3,20 +3,14 @@ import { ref } from "vue";
 import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "./sessionLimits";
 import type { Icon, ResourceRef, Row } from "../types/projection";
 
-// An open view in the sidebar-tree workspace: either a resource detail or a
-// resource-kind list. Multiple stay open as a closable tab strip.
 export interface OpenView {
   id: string;
   title: string;
-  // Dim qualifier shown beside the title to disambiguate same-named tabs
-  // (e.g. a table's "database / schema").
   subtitle?: string;
   icon?: Icon;
   kind: "detail" | "list";
-  // detail
   ref?: ResourceRef;
   row?: Row;
-  // list
   resourceKind?: string;
   groupKey?: string;
   params?: Record<string, string>;
@@ -37,15 +31,11 @@ export interface TableViewState {
   pageSize: number;
 }
 
-// Per-connection workspace state is kept here (not in components) so that
-// remounting a panel or switching connections never loses open views.
 export const useWorkspaceStore = defineStore("workspace", () => {
   const activeConnectionId = ref<string | null>(null);
   const recent = ref<string[]>([]);
   const views = ref<Record<string, ConnectionView>>({});
   const tableStates = ref<Record<string, TableViewState>>({});
-  // Connections the user has explicitly connected this session. Drives the
-  // sidebar presence dot without assuming a live stream channel. Cleared on reload.
   const connected = ref<Record<string, boolean>>({});
   const connectedOrder = ref<string[]>([]);
 
@@ -92,9 +82,6 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     view(id).activeTab = tab;
   }
 
-  // openView adds a view (or re-activates an already-open one) and makes it
-  // active — the basis of the multi-open workbench tab strip. Past the cap, the
-  // oldest non-active tab is auto-closed.
   function openView(id: string, v: OpenView): void {
     const c = view(id);
     if (!c.views.some((x) => x.id === v.id))
@@ -145,7 +132,6 @@ export const useWorkspaceStore = defineStore("workspace", () => {
     if (c.views.some((v) => v.id === viewId)) c.activeViewId = viewId;
   }
 
-  // Replace the open-views order (drag-to-reorder via the v-model binding).
   function setViews(id: string, next: OpenView[]): void {
     view(id).views = next;
   }

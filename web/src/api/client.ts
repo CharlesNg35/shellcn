@@ -1,5 +1,3 @@
-// Same-origin API base. The mock↔real swap happens in the Vite layer
-// (mock plugin vs. proxy), so panels never branch on it.
 export const API_BASE = "/api";
 
 export class ApiError extends Error {
@@ -14,7 +12,6 @@ export class ApiError extends Error {
   }
 }
 
-// Attached to every state-changing request; set/cleared by the auth store.
 let csrfToken = "";
 export function setCsrfToken(token: string): void {
   csrfToken = token;
@@ -23,7 +20,6 @@ export function getCsrfToken(): string {
   return csrfToken;
 }
 
-// One app-installed hook that runs on every API error (401→re-login, etc.).
 export type ApiErrorHandler = (err: ApiError) => void;
 let errorHandler: ApiErrorHandler | null = null;
 export function setApiErrorHandler(fn: ApiErrorHandler | null): void {

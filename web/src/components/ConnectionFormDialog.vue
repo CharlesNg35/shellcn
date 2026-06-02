@@ -239,7 +239,6 @@ async function onConfig(
     </p>
 
     <div v-else class="flex min-w-0 flex-col gap-5">
-      <!-- Step 1: pick a protocol (create only, until one is chosen). -->
       <div v-if="!isEdit && !protocol" class="flex min-w-0 flex-col gap-1.5">
         <label
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -257,7 +256,6 @@ async function onConfig(
         />
       </div>
 
-      <!-- Loading the chosen protocol's configuration. -->
       <div
         v-else-if="!projection"
         class="flex items-center justify-center gap-2 py-12 text-sm text-surface-400"
@@ -271,7 +269,6 @@ async function onConfig(
       </div>
 
       <template v-if="projection">
-        <!-- Breadcrumb: the chosen protocol, with a way back to the picker. -->
         <nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-sm">
           <Button v-if="!isEdit" link @click="clearProtocol">
             Protocols

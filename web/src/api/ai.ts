@@ -7,7 +7,6 @@ export type AiProviderKind =
   | "google"
   | "openai_compatible";
 
-// Non-secret projection of a user provider — the API never returns the key.
 export interface AiProviderSummary {
   id: string;
   kind: AiProviderKind;
@@ -20,7 +19,6 @@ export interface AiProviderSummary {
   updatedAt: string;
 }
 
-// Read-only shared-AI status (presence + provider/model, never the key).
 export interface AiGlobalStatus {
   configured: boolean;
   provider?: string;
@@ -28,8 +26,6 @@ export interface AiGlobalStatus {
   model?: string;
 }
 
-// Write payload. apiKey is write-only; an empty string on update keeps the
-// stored key.
 export interface AiProviderInput {
   kind: AiProviderKind;
   name: string;
@@ -55,11 +51,9 @@ export const aiApi = {
     api.post<{ ok: boolean; error?: string }>("/me/ai/test", body),
   testProvider: (id: string) =>
     api.post<{ ok: boolean; error?: string }>(`/me/ai/config/${id}/test`),
-  // Mint a single-use ticket for the chat WebSocket of one connection.
   chatTicket: (connectionId: string) =>
     api.post<{ ticket: string }>(`/connections/${connectionId}/ai/ticket`),
 
-  // Conversation CRUD (owner-scoped on the server).
   listConversations: (connectionId: string) =>
     api.get<AiConversation[]>(`/connections/${connectionId}/ai/conversations`),
   createConversation: (connectionId: string, providerId?: string) =>
@@ -122,7 +116,6 @@ export interface AiMessagePage {
   hasMore: boolean;
 }
 
-// chatSocketUrl builds the connection's chat WebSocket URL with a redeemed ticket.
 export function chatSocketUrl(connectionId: string, ticket: string): string {
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${location.host}/api/connections/${connectionId}/ai/chat?ticket=${encodeURIComponent(ticket)}`;

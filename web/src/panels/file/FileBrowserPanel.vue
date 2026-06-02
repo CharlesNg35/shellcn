@@ -150,8 +150,6 @@ const canEdit = computed(
     !selected.value.isDir,
 );
 
-// Bulk operations work over the multi-selection. Each is offered only when its
-// route slot is configured; delete/move/copy/chmod additionally require write.
 const selectionCount = computed(() => selectedPaths.value.size);
 const hasSelection = computed(() => selectionCount.value > 0);
 const selectedEntries = computed(() =>
@@ -220,8 +218,6 @@ const { isOverDropZone } = useDropZone(panelEl, {
 });
 const dropActive = computed(() => isOverDropZone.value && canUpload.value);
 
-// Submit is gated so a no-op (empty, or a rename to the same name) can't be
-// triggered — the disabled button signals "nothing to apply".
 const canSubmitMkdir = computed(
   () => Boolean(newFolderName.value.trim()) && !mutating.value,
 );
@@ -290,7 +286,6 @@ async function selectEntry(entry: FileEntry): Promise<void> {
   contentError.value = null;
   editContent.value = "";
   if (entry.isDir) return;
-  // Media streams via the download URL; only text/unknown fetch inline content.
   const viewer = viewerFor(entry.name, entry.mime);
   if (["image", "pdf", "audio", "video"].includes(viewer)) {
     content.value = { path: entry.path, mime: entry.mime, size: entry.size };
@@ -548,7 +543,6 @@ async function bulkDelete(): Promise<void> {
   mutating.value = true;
   operation.value = "delete";
   try {
-    // Delete has no batch route; run it once per selected entry.
     for (const path of paths) {
       await runAction(
         props.connectionId,
@@ -632,8 +626,6 @@ function archiveSelected(): void {
   const routeId = archiveRouteId.value;
   const paths = selectedEntries.value.map((e) => e.path);
   if (!routeId || paths.length === 0) return;
-  // Archive streams a zip; POST the selection and trigger a browser download
-  // from the response blob.
   operation.value = "archive";
   mutating.value = true;
   downloadArchive(routeId, paths)

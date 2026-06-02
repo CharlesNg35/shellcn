@@ -24,27 +24,17 @@ const props = defineProps<{
   connectionId: string;
   actions: Action[];
   resource?: ResourceRef | null;
-  record?: Row | null; // the active row, so actions can gate on its fields
-  // Multi-target selection: when set, route actions run once per resource
-  // (bulk); records gate them. resource/record stay the single-target path.
+  record?: Row | null;
   resources?: ResourceRef[] | null;
   records?: Row[] | null;
-  // Default params contributed by the surrounding context (e.g. the params of
-  // the list the action sits on). Actions without their own resource inherit
-  // these, so an action declared on a scoped view operates within that scope
-  // without restating it; an action's explicit params always take precedence.
   scope?: Record<string, string> | null;
 }>();
 
-// The resources an action targets: the multi-selection if present, else the
-// single resource.
 function targets(): ResourceRef[] {
   if (props.resources?.length) return props.resources;
   return props.resource ? [props.resource] : [];
 }
 
-// A row satisfies a condition when it lacks the gated fields (can't judge) or
-// passes the predicate.
 function recordMatches(
   cond: NonNullable<Action["enabledWhen"]>,
   rec: Row,
@@ -55,8 +45,6 @@ function recordMatches(
   return isVisible(cond, r);
 }
 
-// Enabled unless the condition fails; for a multi-selection it must hold for
-// every selected row (so a bulk action only applies when valid for all).
 function isEnabled(action: Action): boolean {
   const cond = action.enabledWhen;
   if (!cond) return true;
@@ -84,8 +72,6 @@ const riskClass: Record<RiskLevel, string> = {
   privileged: "bg-amber-600 text-white hover:bg-amber-700",
 };
 
-// Chip count (buttons + group menus) past which extra standalone buttons fold
-// into a single "More" overflow menu.
 const MAX_INLINE = 5;
 const triggerClass =
   "inline-flex min-w-0 items-center justify-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors " +
@@ -95,8 +81,6 @@ type RenderUnit =
   | { kind: "button"; action: Action }
   | { kind: "menu"; key: string; label: string; actions: Action[] };
 
-// Cluster same-group actions into one menu unit (placed at the group's first
-// occurrence); ungrouped actions stay standalone buttons.
 const renderUnits = computed<RenderUnit[]>(() => {
   const groups = new Map<string, Extract<RenderUnit, { kind: "menu" }>>();
   const units: RenderUnit[] = [];
@@ -121,8 +105,6 @@ const renderUnits = computed<RenderUnit[]>(() => {
   return units;
 });
 
-// Group menus stay visible; once the chip count exceeds the limit, fold trailing
-// standalone buttons into a single "More" overflow menu.
 const layout = computed<{ visible: RenderUnit[]; overflow: Action[] }>(() => {
   const units = renderUnits.value;
   if (units.length <= MAX_INLINE) return { visible: units, overflow: [] };
@@ -159,7 +141,6 @@ function menuItemClass(action: Action): string {
     : "text-surface-700 dark:text-surface-200";
 }
 
-// Popup Menu instances register by key so their trigger button can open them.
 const menus = ref(new Map<string, { toggle: (event: Event) => void }>());
 function setMenu(key: string, el: unknown): void {
   if (el) menus.value.set(key, el as { toggle: (event: Event) => void });
@@ -169,10 +150,6 @@ function toggleMenu(key: string, event: Event): void {
   menus.value.get(key)?.toggle(event);
 }
 
-// Stable identity for the dock tab an action opens, so repeat clicks focus the
-// existing tab instead of stacking duplicates. An action tied to a resource
-// keys on that resource; otherwise it keys on its resolved params, so the same
-// action run against different scopes opens distinct tabs.
 function dockKey(action: Action): string {
   if (props.resource?.uid) return props.resource.uid;
   const params = actionParams(action);
@@ -242,7 +219,6 @@ function actionParams(
   return params;
 }
 
-// open="url": run the route, then open the returned {url} in a new tab.
 async function openURL(action: Action): Promise<void> {
   error.value = null;
   busyAction.value = action.id;

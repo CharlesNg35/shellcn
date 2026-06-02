@@ -95,13 +95,9 @@ function mapStored(m: AiStoredMessage): AiMessage {
 let seq = 0;
 const nextId = (): string => `m-${Date.now()}-${seq++}`;
 
-// The chat store owns one WebSocket per connection. State is keyed by connection
-// id so a chat survives the drawer closing and reopening within a workspace.
 export const useAiChatStore = defineStore("aiChat", () => {
   const byConn = reactive<Record<string, ChatState>>({});
   const version = ref(0);
-  // Provider catalogue is shared across connections (the user's own providers +
-  // the shared/global indicator), loaded once.
   const providers = ref<AiProviderSummary[]>([]);
   const global = ref<AiGlobalStatus | null>(null);
   const providersReady = ref(false);
@@ -182,7 +178,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
           }
           apply(connId, frame);
         } catch {
-          // ignore malformed frame
+          return;
         }
       });
       ws.addEventListener("close", () => {
@@ -203,7 +199,6 @@ export const useAiChatStore = defineStore("aiChat", () => {
     if (!text) return;
     const st = state(connId);
     ensureProviderSelection(st);
-    // Typed mid-stream: queue it and flush when the current turn finishes.
     if (st.runState !== "idle") {
       st.queue.push(text);
       return;
@@ -240,7 +235,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     try {
       st.conversations = await aiApi.listConversations(connId);
     } catch {
-      // leave existing list on failure
+      return;
     }
   }
 
@@ -263,8 +258,6 @@ export const useAiChatStore = defineStore("aiChat", () => {
     }
   }
 
-  // loadOlder prepends the next older page; the client always holds a contiguous
-  // tail, so the loaded count is just the current message length.
   async function loadOlder(connId: string): Promise<void> {
     const st = state(connId);
     if (!st.activeId || !st.hasMore || st.loadingOlder) return;
@@ -278,7 +271,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
       st.messages = [...page.messages.map(mapStored), ...st.messages];
       st.hasMore = page.hasMore;
     } catch {
-      // keep what we have
+      return;
     } finally {
       st.loadingOlder = false;
     }
@@ -377,7 +370,6 @@ export const useAiChatStore = defineStore("aiChat", () => {
 
   function finalize(connId: string): void {
     const st = state(connId);
-    // Drop an assistant message that produced nothing (e.g. immediate error).
     if (
       st.current &&
       !st.current.content &&
@@ -389,7 +381,6 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.current = null;
     st.runState = "idle";
     st.pendingConfirm = null;
-    // Auto-send the next queued message, if any.
     const next = st.queue.shift();
     if (next) send(connId, next);
   }

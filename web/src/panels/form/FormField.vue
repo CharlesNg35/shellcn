@@ -36,16 +36,12 @@ const props = defineProps<{
   secretSet?: boolean;
   credentialState?: CredentialRefState;
   protocol?: string;
-  // Context for a field whose options come from a route (optionsSource).
   connectionId?: string;
   resource?: ResourceRef | null;
-  // Suppress the field label (used for the value control of a map/array row).
   hideLabel?: boolean;
 }>();
 const emit = defineEmits<{ "update:modelValue": [value: unknown] }>();
 
-// A field's choices: route-sourced options when declared and loaded, else the
-// static manifest options. Rows map to {value,label} by convention.
 const fetchedOptions = ref<Option[] | null>(null);
 const options = computed<Option[]>(
   () => fetchedOptions.value ?? props.field.options ?? [],
@@ -84,8 +80,6 @@ const showSecretValue = computed(
   () => !props.field.secret || !props.secretSet || editingSecret.value,
 );
 
-// Numeric bounds/step drive the stepper and slider; min/max come from the
-// field's validators so the control and server agree on the limits.
 function bound(type: ValidatorType): number | undefined {
   const v = props.field.validators?.find((x) => x.type === type);
   const n = v === undefined ? NaN : Number(v.value);
@@ -98,8 +92,6 @@ const sliderValue = computed(() =>
   typeof props.modelValue === "number" ? props.modelValue : (min.value ?? 0),
 );
 
-// Text-like fields share one input, differing only by the native input type
-// (so email/url/tel get the right keyboard and browser validation).
 const TEXT_INPUT_TYPES: Record<string, string> = {
   email: "email",
   url: "url",
@@ -111,8 +103,6 @@ function update(value: unknown): void {
   emit("update:modelValue", value);
 }
 
-// Free-text autocomplete: filter the static option labels by the typed query,
-// showing all on an empty query (dropdown click).
 const suggestions = ref<string[]>([]);
 function onComplete(event: { query: string }): void {
   const all = options.value.map((o) => String(o.value));
@@ -120,8 +110,6 @@ function onComplete(event: { query: string }): void {
   suggestions.value = q ? all.filter((s) => s.toLowerCase().includes(q)) : all;
 }
 
-// JSON fields edit as text; an object default is pretty-printed for display and
-// re-parsed on submit (SchemaForm), so the editor always holds a string.
 const jsonText = computed(() => {
   const v = props.modelValue;
   if (v === undefined || v === null) return "";

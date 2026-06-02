@@ -1,12 +1,6 @@
-// Tailwind pass-through classes for PrimeVue's unstyled components. This is the
-// single place component styling lives; panels use PrimeVue components and
-// inherit these classes.
-
 import type { ButtonPassThroughMethodOptions } from "primevue/button";
 import { cn } from "../utils/cn";
 
-// Shared field building blocks — composed below and re-exported so hand-rolled
-// inputs (search boxes, etc.) reuse the exact same look instead of duplicating it.
 export const fieldSurface =
   "rounded-md border border-surface-300 bg-surface-0 dark:border-surface-700 dark:bg-surface-950";
 const focusRing =
@@ -20,18 +14,14 @@ const inputBase = cn(
   focusRing,
 );
 
-// A standalone text input matching the PrimeVue inputs (for plain <input>s).
 export const inputClass = inputBase;
 
-// A search box with room for a leading icon — shared by the sidebar and pickers.
 export const searchInputClass = cn(
   "w-full py-1.5 pl-9 pr-3 text-sm text-surface-800 outline-none transition duration-150 placeholder:text-surface-400 dark:text-surface-100",
   fieldSurface,
   focusRing,
 );
 
-// The dialog box surface — single source for every modal so width is the only
-// per-dialog difference (avoids repeating the box classes in each component).
 export const dialogRoot = (maxWidth = "max-w-md"): string =>
   cn(
     "flex max-h-[calc(100vh-2rem)] w-full flex-col overflow-hidden rounded-xl border border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-900 dark:ring-surface-0/5",
@@ -44,22 +34,18 @@ export const drawerRoot = (maxWidth = "max-w-md"): string =>
     maxWidth,
   );
 
-// Shared button looks, reused across dialogs/action bars instead of re-listing
-// the same utility chains.
 export const btnPrimary =
   "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50";
 export const btnGhost =
   "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 disabled:opacity-50 dark:text-surface-300 dark:hover:bg-surface-800";
 export const btnDanger =
   "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-md bg-rose-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:opacity-50";
-// A full-width primary call-to-action (auth forms, single-button dialogs).
 export const btnPrimaryBlock =
   "flex w-full items-center justify-center gap-1.5 rounded-md bg-primary-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary-700 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:opacity-50";
 
 const buttonBase =
   "inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-50";
 
-// A square spinner button for InputNumber's increment/decrement controls.
 const stepperButton =
   "inline-flex w-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-surface-300 text-surface-600 outline-none transition-colors hover:bg-surface-100 focus-visible:ring-2 focus-visible:ring-primary-500/40 disabled:pointer-events-none disabled:opacity-40 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800";
 const buttonSize = {
@@ -170,11 +156,8 @@ function buttonRoot(options: ButtonPassThroughMethodOptions<unknown>): string {
 
 const overlay =
   "mt-1.5 origin-top overflow-hidden rounded-lg border border-surface-200 bg-surface-0 p-1 shadow-lg ring-1 ring-surface-950/5 dark:border-surface-700 dark:bg-surface-900 dark:ring-surface-0/5";
-// Rounded, inset option rows with a clear selected state in BOTH themes (the old
-// selected style had no dark override → a bright light-blue bar in dark mode).
 const option =
   "cursor-pointer truncate rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 data-[p-selected=true]:bg-primary-50 data-[p-selected=true]:font-medium data-[p-selected=true]:text-primary-700 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800 dark:data-[p-selected=true]:bg-primary-500/15 dark:data-[p-selected=true]:text-primary-300";
-// Smooth dropdown open/close — applied via each overlay component's transition pt.
 const overlayTransition = {
   enterFromClass: "opacity-0 scale-95",
   enterActiveClass: "transition duration-100 ease-out",
@@ -183,9 +166,6 @@ const overlayTransition = {
   leaveToClass: "opacity-0",
 };
 
-// Shared dialog chrome, reused by both Dialog and ConfirmDialog (which render the
-// same header/footer/transition). Mask carries no z-index so each consumer can set
-// its own stacking order.
 const dialogMask =
   "fixed inset-0 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm";
 const dialogHeader =
@@ -194,8 +174,6 @@ const dialogTitle =
   "text-base font-semibold tracking-tight text-surface-900 dark:text-surface-0";
 const dialogFooter =
   "flex shrink-0 items-center justify-end gap-2 border-t border-surface-200 px-5 py-3.5 dark:border-surface-800";
-// Natural rise + fade + subtle scale on open/close; the global prefers-reduced-motion
-// rule neutralizes it.
 const dialogTransition = {
   enterFromClass: "opacity-0 translate-y-2 scale-[0.97]",
   enterActiveClass: "transition duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
@@ -205,7 +183,6 @@ const dialogTransition = {
   leaveToClass: "opacity-0 translate-y-1 scale-[0.98]",
 };
 
-// Shared checkbox visuals (standalone Checkbox + MultiSelect option/header checks).
 const checkbox = {
   root: "relative inline-flex h-4 w-4 shrink-0",
   input: "absolute inset-0 cursor-pointer opacity-0",
@@ -255,8 +232,6 @@ function messageRoot(options: SeverityOptions): string {
   );
 }
 
-// The active page is flagged with data-p-active (not data-p-selected); it gets a
-// solid primary fill so the current page reads clearly.
 const paginatorButton =
   "inline-flex h-8 min-w-8 cursor-pointer items-center justify-center rounded-md px-2 text-sm text-surface-600 transition-colors hover:bg-surface-100 disabled:pointer-events-none disabled:opacity-40 data-[p-active=true]:bg-primary-600 data-[p-active=true]:font-medium data-[p-active=true]:text-white data-[p-active=true]:hover:bg-primary-700 dark:text-surface-300 dark:hover:bg-surface-800 dark:data-[p-active=true]:bg-primary-500 dark:data-[p-active=true]:text-white dark:data-[p-active=true]:hover:bg-primary-400";
 const paginator = {
@@ -298,20 +273,16 @@ export const primeVuePassthrough = {
     separator:
       "mx-0.5 inline-flex items-center text-surface-300 dark:text-surface-600",
   },
-  // Chart (chart.js) renders a canvas; the pass-through only sizes its wrapper —
-  // colors come from theme-aware chart options, not classes.
   chart: { root: "relative h-full w-full" },
   textarea: { root: cn(inputBase, "min-h-20 font-mono") },
   inputnumber: {
     root: "flex w-full items-stretch gap-1.5",
     pcInputText: { root: cn(inputBase, "min-w-0 flex-1") },
-    // Spinner buttons (showButtons): square icon buttons flanking the input.
     incrementButton: stepperButton,
     decrementButton: stepperButton,
   },
   password: {
     root: "relative block w-full",
-    // Leave room on the right for the absolutely-positioned show/hide toggle.
     pcInputText: { root: cn(inputBase, "pr-9") },
     maskIcon:
       "absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-surface-400 transition-colors hover:text-surface-600 dark:hover:text-surface-300",
@@ -320,8 +291,6 @@ export const primeVuePassthrough = {
   },
 
   select: {
-    // min-w-0 lets the flex-1 label actually shrink so `truncate` can ellipsize
-    // a long selected value instead of overflowing/pushing the dropdown icon out.
     root: cn(
       "flex w-full min-w-0 items-center justify-between text-sm transition duration-150",
       fieldSurface,
@@ -337,7 +306,6 @@ export const primeVuePassthrough = {
     emptyMessage: "px-3 py-2 text-sm text-surface-400",
   },
 
-  // Standalone Checkbox (also reused inside MultiSelect rows).
   checkbox,
   radiobutton: radioButton,
   multiselect: {
@@ -356,14 +324,11 @@ export const primeVuePassthrough = {
       "flex items-center gap-2 border-b border-surface-200 px-3 py-2 dark:border-surface-800",
     pcHeaderCheckbox: checkbox,
     listContainer: "max-h-60 overflow-auto p-1",
-    // MultiSelect options are a checkbox + label row, so they need inline flex
-    // layout (the plain Select `option` style stacked them).
     option:
       "flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm text-surface-700 transition-colors data-[p-focused=true]:bg-surface-100 dark:text-surface-200 dark:data-[p-focused=true]:bg-surface-800",
     optionLabel: "min-w-0 flex-1 truncate",
     pcOptionCheckbox: checkbox,
     emptyMessage: "px-3 py-2 text-sm text-surface-400",
-    // Selected values render as inline chips (label + remove icon side by side).
     pcChip: {
       root: "inline-flex items-center gap-1 rounded bg-surface-100 py-0.5 pl-2 pr-1 text-xs text-surface-700 dark:bg-surface-800 dark:text-surface-200",
       removeIcon:
@@ -447,9 +412,6 @@ export const primeVuePassthrough = {
   },
 
   toast: {
-    // AppToast renders each message through the #container slot, so the message
-    // wrapper stays a bare layout element — the card lives in AppToast, avoiding
-    // a card-in-a-card.
     root: "fixed z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2",
     message: "",
   },
@@ -507,8 +469,6 @@ export const primeVuePassthrough = {
     },
   },
 
-  // Shares the dialog's chrome; mask sits above open dialogs (z-60) so a confirm
-  // raised from within a dialog (e.g. revoke inside Share) is never occluded.
   confirmdialog: {
     mask: cn(dialogMask, "z-[60]"),
     root: dialogRoot("max-w-md"),
@@ -645,12 +605,8 @@ export const primeVuePassthrough = {
     root: "shrink-0 border-b border-surface-200 dark:border-surface-800",
     content: "flex",
     tabList: "flex gap-1 px-1",
-    // We indicate the active tab with a per-tab underline, so hide PrimeVue's
-    // sliding active bar (it would render unstyled in unstyled mode).
     activeBar: "hidden",
   },
-  // Object form (not a bare string): a string under a global pt component key is
-  // ignored, which left tabs completely unstyled.
   tab: {
     root: "-mb-px flex cursor-pointer items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-surface-500 transition-colors hover:text-surface-800 data-[p-active=true]:border-primary-500 data-[p-active=true]:text-surface-900 dark:hover:text-surface-200 dark:data-[p-active=true]:text-surface-0",
   },

@@ -464,8 +464,6 @@ function handleHTTP(
     return send(res, 200, { ok: true });
   }
 
-  // Auth: the mock is always "signed in" as an admin so the dev/e2e UX stays
-  // open. The real backend gates this behind a session cookie + CSRF token.
   const mockSession = () => ({
     user: {
       id: "u-demo",
@@ -487,7 +485,6 @@ function handleHTTP(
   if (path === "/api/auth/login/mfa" && method === "POST") {
     return send(res, 200, { mfaRequired: false, session: mockSession() });
   }
-  // Two-factor (TOTP), self-service. The mock skips real code validation.
   if (path === "/api/auth/totp/setup" && method === "POST") {
     return send(res, 200, {
       secret: "JBSWY3DPEHPK3PXP",
@@ -555,7 +552,6 @@ function handleHTTP(
     return send(res, 200, readJSON(`${pluginMatch[1]}.json`));
   }
 
-  // --- admin: users, invitations, email status ---
   if (path === "/api/admin/users/search" && method === "GET") {
     const q = (url.searchParams.get("query") ?? "").toLowerCase();
     return send(
@@ -575,7 +571,6 @@ function handleHTTP(
     return send(res, 200, { enabled: false });
   }
 
-  // --- AI providers --------------------------------------------------------
   if (path === "/api/ai/global" && method === "GET") {
     return send(res, 200, {
       configured: true,
@@ -771,7 +766,6 @@ function handleHTTP(
     return send(res, 200, { ok: true });
   }
 
-  // --- public: invitation accept ---
   const acceptMatch = path.match(/^\/api\/invitations\/([^/]+)\/accept$/);
   if (acceptMatch && method === "POST") {
     const inv = invitationsState.find(

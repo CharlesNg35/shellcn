@@ -4,8 +4,7 @@ import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import hljs from "highlight.js/lib/common";
 
-// All heavy markdown deps are imported here so they ride the lazy AI chunk, not
-// the main bundle (ShellCN first-paint invariant).
+// Keep markdown dependencies in the lazy AI chunk.
 const props = defineProps<{ source: string }>();
 
 function escapeHtml(s: string): string {

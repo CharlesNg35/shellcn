@@ -17,17 +17,11 @@ import type {
   TreeGroup,
 } from "../../types/projection";
 
-// Fallback qualifier for items opened outside the tree (the tree ancestor path
-// is preferred). Leads with the kind so the tab says what the resource is, then
-// its location (namespace/scope) to disambiguate same-named resources.
 function refSubtitle(ref: ResourceRef): string {
   const location = [ref.scope, ref.namespace].filter(Boolean).join(" / ");
   return [ref.kind, location].filter(Boolean).join(" · ");
 }
 
-// The sidebar-tree layout: a resource tree on the left and a closable workbench
-// tab strip on the right, where each open view is a resource detail or a kind
-// list. Extracted from ConnectionWorkspace so the orchestrator stays lean.
 const props = defineProps<{
   connectionId: string;
   tree: TreeGroup[];
@@ -69,7 +63,6 @@ const activeListResource = computed(() => {
   return v.groupKey ? resolveGroupResource(v.groupKey) : undefined;
 });
 
-// The opened kind list's source, scoped by any params the nav node carried.
 const activeListSource = computed(() => {
   const res = activeListResource.value;
   if (!res) return undefined;
@@ -79,8 +72,6 @@ const activeListSource = computed(() => {
     : res.list;
 });
 
-// A runtime columns source, scoped by the same nav params as the list (so a CRD
-// list fetches the columns for its specific kind).
 const activeColumnsSource = computed(() => {
   const res = activeListResource.value;
   if (!res?.columnsSource) return undefined;
@@ -119,7 +110,6 @@ function openDetail(row: Row, qualifier?: string): void {
 function onSelectGroup(key: string): void {
   const group = props.tree.find((g) => g.key === key);
   if (!group) return;
-  // A container group (no resolvable resource) only expands — no view/tab.
   if (!resolveGroupResource(key)) return;
   ws.openPreviewView(props.connectionId, {
     id: "group:" + key,
@@ -130,8 +120,6 @@ function onSelectGroup(key: string): void {
   });
 }
 
-// Drag-to-reorder the workbench tabs, reusing the same vue-draggable-plus
-// mechanism as the connection sidebar. Order is session-only (workspace store).
 const tabs = computed<OpenView[]>({
   get: () => view.value.views,
   set: (next) => ws.setViews(props.connectionId, next),
@@ -157,8 +145,6 @@ watch(
   },
 );
 
-// After an action asks to navigate "list" (e.g. a delete), close the now-stale
-// detail tab and surface the kind's list, which reloads fresh.
 function onDetailActionDone(action: Action): void {
   if (action.onSuccess?.navigate !== "list") return;
   const v = activeView.value;

@@ -1,7 +1,3 @@
-// The single FE/BE contract: the browser projection the renderer consumes.
-// Mirrors the Go manifest projection. Carries no server-only fields
-// (handlers, raw mount paths, permission keys, audit-event names).
-
 import type { Role } from "../constants/roles";
 
 export type IconType = "lucide" | "url" | "base64" | "emoji" | "svg";
@@ -53,12 +49,9 @@ export type KnownPanelType =
   | "http_client"
   | "dashboard";
 
-// Open union: the renderer must handle a type it does not recognize.
 export type PanelType = KnownPanelType | (string & {});
 
 export type StreamKind = "terminal" | "logs" | "desktop" | "metrics" | "file";
-
-// Recording (plugin-declared capability + per-connection policy)
 
 export type RecordingClass = "terminal" | "desktop";
 
@@ -66,8 +59,6 @@ export type RecordingFormat = "asciicast_v2" | "webm_canvas";
 
 export type RecordingPolicy = "disabled" | "manual" | "auto";
 
-// What a plugin can record for one stream class. The browser never sees the
-// server-only stream binding — only which classes/formats are offered.
 export interface RecordingCapability {
   class: RecordingClass;
   formats: RecordingFormat[];
@@ -108,8 +99,6 @@ export interface RecordingFilters {
   status?: RecordingStatus;
 }
 
-// Schema & declarative form
-
 export type FieldType =
   | "text"
   | "email"
@@ -138,7 +127,6 @@ export interface Option {
   value: string | number | boolean;
 }
 
-// Credential kinds are registry data, not a frontend enum.
 export type CredentialKind = string;
 
 export interface CredentialKindInfo {
@@ -150,8 +138,6 @@ export interface CredentialKindInfo {
   compatibleProtocols?: string[];
 }
 
-// Describes which reusable credentials a `credential_ref` field accepts. The
-// field carries only the chosen credential's id — never secret material.
 export interface CredentialSelector {
   kinds: CredentialKind[];
   protocols?: string[];
@@ -184,23 +170,16 @@ export interface Field {
   label: string;
   type: FieldType;
   required?: boolean;
-  // Encrypted at rest, write-only over the API: never carries a value back.
   secret?: boolean;
   default?: unknown;
   placeholder?: string;
   help?: string;
   options?: Option[];
-  // Populates choices from a route at form-open time (rows -> {value,label});
-  // its params interpolate ${resource.*} from the form's resource context.
   optionsSource?: DataSource;
   credential?: CredentialSelector;
   visibleWhen?: Condition;
   validators?: Validator[];
-  // Increment for number/slider inputs (defaults to 1); min/max come from the
-  // min/max validators.
   step?: number;
-  // Composite fields: `fields` are an object's sub-fields; `item` is an array's
-  // element (recurses). minItems/maxItems bound an array.
   fields?: Field[];
   item?: Field;
   minItems?: number;
@@ -219,8 +198,6 @@ export interface Group {
 export interface Schema {
   groups: Group[];
 }
-
-// Data binding
 
 export interface DataSource {
   routeId: string;
@@ -254,10 +231,6 @@ export interface FilterOption {
   label?: string;
 }
 
-// A global header selector whose chosen value is injected as a route param into
-// every read/stream for the connection. `control` picks the input widget (open
-// vocabulary; unknown falls back to a select). Choices come from optionsSource
-// rows or static options; the empty value (allLabel) clears the scope.
 export interface ScopeFilter {
   param: string;
   label: string;
@@ -275,35 +248,20 @@ export interface TablePanelConfig {
   columns?: Column[];
   columnsSource?: DataSource;
   watch?: DataSource;
-  // refreshIntervalMs re-fetches the current page on a cadence and replaces it
-  // in place — used instead of `watch` for high-churn tables.
   refreshIntervalMs?: number;
-  // defaultSort is the column the table sorts by on first load.
   defaultSort?: SortKey;
   actionIds?: string[];
   rowActionIds?: string[];
-  // selectable offers row checkboxes without row actions (browse table whose
-  // actions live in the detail view). Implied when rowActionIds is set.
   selectable?: boolean;
-  // Inline data-grid editing (plugin-agnostic). When `editable` is set and
-  // `rowKey` names the identifying columns, the grid offers cell editing,
-  // add-row, and delete-row wired to these mutation routes. Bodies are uniform:
-  // insert {values}, update {key, values}, delete {key}.
   editable?: boolean;
   rowKey?: string[];
   insert?: DataSource;
   update?: DataSource;
   delete?: DataSource;
   emptyText?: string;
-  // Opt-in: buffer edits/inserts/deletes locally for review and commit or
-  // discard them as a batch instead of applying each change immediately.
   stagedEdits?: boolean;
-  // Row field keys to omit when the grid derives columns from the data.
   hiddenColumns?: string[];
-  // Opt-in: show the generic CSV/JSON export control for loaded rows.
   exportable?: boolean;
-  // Overrides the automatic row-body click (navigate a navigable row, else
-  // select); empty uses that default.
   rowClick?: RowClickAction;
 }
 
@@ -336,16 +294,12 @@ export interface QueryEditorConfig {
   cancelParams?: Record<string, string>;
   completionRouteId?: string;
   completionParams?: Record<string, string>;
-  // Opt-in: show the CSV/JSON export control for query results.
   exportable?: boolean;
 }
 
 export interface GraphPanelConfig {
   layout?: "grid" | "manual";
   fitView?: boolean;
-  // When set, nodes are expandable: the panel fetches a node's neighbourhood
-  // from this read route (passing the node id as expandParam, default "node")
-  // and merges the result into the graph.
   expandRouteId?: string;
   expandParam?: string;
 }
@@ -428,14 +382,9 @@ export interface Column {
   sortable?: boolean;
   type?: ColumnType;
   width?: string;
-  // readOnly keeps a column non-editable even when its table is editable.
-  // nullable lets the inline editor clear the cell to an empty/null value.
   readOnly?: boolean;
   nullable?: boolean;
-  // precision fixes fraction digits for number/percent cells.
   precision?: number;
-  // Maps a lower-cased badge value to a severity for color (e.g. running →
-  // success); unmapped values render neutral.
   severities?: Record<string, Severity>;
 }
 
@@ -447,12 +396,8 @@ export interface Badge {
   severity?: Severity;
 }
 
-// Resources
-
 export interface ResourceRef {
   kind: string;
-  // Optional outer container (e.g. database/cluster) for hierarchies deeper than
-  // namespace/name. Interpolates as ${resource.scope}.
   scope?: string;
   namespace?: string;
   name: string;
@@ -461,7 +406,6 @@ export interface ResourceRef {
 
 export interface ActionSuccess {
   selectTab?: string;
-  // "list" returns a resource detail to its list after the action (e.g. delete).
   navigate?: "list";
 }
 
@@ -477,14 +421,12 @@ export interface Action {
   confirmText?: string;
   input?: Schema;
   onSuccess?: ActionSuccess;
-  // open="dock"/"dialog" opens `panel` (sourced from this action's route) in the
-  // workspace dock or a modal instead of executing the route inline.
   open?: "view" | "dock" | "dialog" | "url";
   panel?: PanelType;
-  config?: Record<string, unknown>; // panel config for a dock/dialog-opened panel
-  enabledWhen?: Condition; // gate on the active row's fields; false = disabled
-  iconOnly?: boolean; // render as the icon alone; label becomes the tooltip
-  group?: string; // cluster same-group actions into one labeled dropdown menu
+  config?: Record<string, unknown>;
+  enabledWhen?: Condition;
+  iconOnly?: boolean;
+  group?: string;
 }
 
 export interface Stream {
@@ -500,12 +442,9 @@ export interface Tab {
   panel: PanelType;
   source?: DataSource;
   config?: Record<string, unknown>;
-  // Dashboard-layout sizing hint: >= 2 fills the row, otherwise one column.
   span?: number;
 }
 
-// One panel inside a `dashboard` panel grid (mirrors a Tab minus tab-bar
-// semantics). Generic — any plugin composes an at-a-glance view from its panels.
 export interface DashboardCell {
   key: string;
   label?: string;
@@ -524,9 +463,6 @@ export interface TreeGroup {
   key: string;
   label: string;
   icon?: Icon;
-  // A group with a source is expandable (children load on expand). Omit it for a
-  // leaf that opens directly: resourceKind opens that kind's list, ref opens a
-  // specific resource's detail.
   source?: DataSource;
   resourceKind?: string;
   ref?: ResourceRef;
@@ -541,26 +477,22 @@ export interface TreeNode {
   leaf?: boolean;
   childrenSource?: DataSource;
   badge?: Badge;
-  // Opens the resource type's list view (like a top-level group) instead of a
-  // single-resource detail; listParams scope that list (e.g. a namespace).
   resourceKind?: string;
   listParams?: Record<string, string>;
-  data?: Record<string, unknown>; // row fields, so a tree-opened detail matches a table row
+  data?: Record<string, unknown>;
 }
 
 export interface HeaderSpec {
   title?: string;
   statusField?: string;
-  // Colors the status badge by value (same value->severity map as a badge column).
   severities?: Record<string, Severity>;
 }
 
-// ResourceActions groups a resource's action IDs by render surface.
 export interface ResourceActions {
-  toolbar?: string[]; // list toolbar (create, prune)
-  row?: string[]; // bulk over selected rows (delete); implies selectable
-  detail?: string[]; // the one open resource, in its detail header
-  selectable?: boolean; // row checkboxes without a row bar; row implies it
+  toolbar?: string[];
+  row?: string[];
+  detail?: string[];
+  selectable?: boolean;
 }
 
 export interface DetailView {
@@ -575,13 +507,10 @@ export interface ResourceType {
   list: DataSource;
   watch?: DataSource;
   columns: Column[];
-  columnsSource?: DataSource; // runtime column defs when columns is empty (e.g. CRDs)
-  // Actions grouped by render surface (toolbar / row / detail).
+  columnsSource?: DataSource;
   actions?: ResourceActions;
   detail: DetailView;
 }
-
-// Plugin projection
 
 export interface AgentProfile {
   modes: string[];
@@ -625,16 +554,11 @@ export interface PluginProjection {
   tree?: TreeGroup[];
   resources?: ResourceType[];
   actions?: Action[];
-  // Action IDs shown centered in the connection workspace header (connection-wide
-  // affordances not bound to a selected resource).
   headerActions?: string[];
-  // Global header selectors that scope every request.
   scope?: ScopeFilter[];
   streams?: Stream[];
   recording?: RecordingCapability[];
 }
-
-// Connection instances (stored configs the user reaches the plugin through)
 
 export interface ConnectionSummary {
   id: string;
@@ -642,8 +566,6 @@ export interface ConnectionSummary {
   protocol: string;
   icon?: Icon;
   transport: Transport;
-  // online gates the agent enroll panel; "offline" (agent with no tunnel) shows
-  // a red dot. The green "connected" state is client-side (the connect gate).
   online?: boolean;
   status?: "offline";
   canManage?: boolean;
@@ -680,8 +602,6 @@ export interface ConnectionFolder {
 
 export type GrantAccess = "use" | "manage";
 
-// A sharing grant on a connection or credential, with the subject resolved for
-// display. Never carries secret material.
 export interface ShareGrant {
   id: string;
   subjectId: string;
@@ -690,14 +610,12 @@ export interface ShareGrant {
   access: GrantAccess;
 }
 
-// Minimal subject record returned by the user-lookup endpoint for grant assignment.
 export interface UserSummary {
   id: string;
   username: string;
   displayName?: string;
 }
 
-// Admin account management.
 export interface AdminUser {
   id: string;
   username: string;
@@ -709,8 +627,6 @@ export interface AdminUser {
   twoFactorEnabled?: boolean;
 }
 
-// Metadata-only view of a user's connection (admin user-detail inventory) — never
-// config, secrets, or access.
 export interface UserConnectionSummary {
   id: string;
   name: string;
@@ -750,8 +666,6 @@ export interface InviteResult {
   emailSent: boolean;
 }
 
-// The edit/detail read: non-secret config plus a per-secret-field presence map
-// ("set" / "not set"). Secret values are never carried back.
 export interface ConnectionDetail {
   id: string;
   name: string;
@@ -772,8 +686,6 @@ export interface CredentialRefState {
   summary?: CredentialSummary;
 }
 
-// Lists, pagination, watch
-
 export interface SortKey {
   field: string;
   desc?: boolean;
@@ -792,19 +704,12 @@ export interface Page<T> {
   total?: number;
 }
 
-// A table row. Beyond display columns, a row may carry reserved framework keys
-// the generic grid understands (and never renders as columns):
-//   `ref`   — the row's own resource identity (row-click navigation).
-//   `_key`  — opaque key map identifying the row for inline edit/delete.
-//   `_links`— map of column key -> related resource ref; the grid renders those
-//             cells as links that open the related resource.
 export type Row = Record<string, unknown> & {
   ref?: ResourceRef;
   _key?: Record<string, unknown>;
   _links?: Record<string, ResourceRef>;
 };
 
-// One entry in a file_browser directory listing.
 export interface FileEntry {
   name: string;
   path: string;
@@ -816,7 +721,6 @@ export interface FileEntry {
   symlink?: string;
 }
 
-// Returned by a file_browser readRouteId for inline preview.
 export interface FileContent {
   path: string;
   mime?: string;
@@ -835,14 +739,11 @@ export interface ResourceEvent {
   resource?: unknown;
 }
 
-// Agent enrollment
-
 export interface InstallArtifact {
   label: string;
   kind: string;
   command?: string;
   url?: string;
-  // content is an inline file body shown in the panel; filename names it.
   content?: string;
   filename?: string;
 }

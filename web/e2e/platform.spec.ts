@@ -13,14 +13,12 @@ test("add a connection from a protocol and open it", async ({ page }) => {
 
   await page.getByRole("button", { name: "Add connection" }).click();
 
-  // Pick a protocol → its config schema renders.
   await page.getByRole("radio", { name: /^SSH/ }).click();
 
   await page.locator("#conn-name").fill("e2e-box");
   await page.getByPlaceholder("10.0.0.1").fill("10.0.0.9");
   await page.getByRole("button", { name: /Create connection/ }).click();
 
-  // It is routed into the workspace and appears in the sidebar.
   await expect(page).toHaveURL(/\/c\/conn-/);
   await expect(page.locator("aside")).toContainText("e2e-box");
 });
