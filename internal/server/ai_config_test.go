@@ -177,8 +177,13 @@ func TestDraftAIProviderTestValidation(t *testing.T) {
 			t.Fatalf("%s: want 400, got %d (%s)", name, resp.Status, resp.Body)
 		}
 	}
-
 	resp := h.do(t, http.MethodPost, "/api/me/ai/test", "op", strings.NewReader(
+		`{"kind":"openrouter","name":"OpenRouter","model":"z-ai/glm-4.5-air","models":["z-ai/glm-4.5-air"]}`))
+	if resp.Status != http.StatusBadRequest || !strings.Contains(string(resp.Body), "api key is required") {
+		t.Fatalf("missing openrouter key: want clear 400, got %d (%s)", resp.Status, resp.Body)
+	}
+
+	resp = h.do(t, http.MethodPost, "/api/me/ai/test", "op", strings.NewReader(
 		`{"kind":"openai_compatible","baseUrl":"`+models.URL+`","model":"llama3"}`))
 	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"ok":true`) {
 		t.Fatalf("valid draft test: status=%d body=%s", resp.Status, resp.Body)

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
+import { nextTick } from "vue";
 import AutoComplete from "primevue/autocomplete";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
@@ -108,6 +109,126 @@ describe("AiProviderDialog", () => {
       }),
     );
     expect(wrapper.text()).toContain("Connection OK");
+  });
+
+  it("shows a footer loading state while testing a provider", async () => {
+    let resolveTest!: (value: { ok: boolean }) => void;
+    testProviderDraft.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveTest = resolve;
+      }),
+    );
+    const wrapper = mountDialog();
+    await flushPromises();
+    wrapper
+      .findComponent(Select)
+      .vm.$emit("update:modelValue", "openai_compatible");
+    await flushPromises();
+    wrapper
+      .findAllComponents(InputText)[1]
+      .vm.$emit("update:modelValue", "http://127.0.0.1:11434/v1");
+    wrapper.findComponent(AutoComplete).vm.$emit("update:modelValue", "llama3");
+    await flushPromises();
+
+    await wrapper.find("[data-testid='test-ai-provider']").trigger("click");
+    await nextTick();
+
+    expect(wrapper.text()).toContain("Testing...");
+    expect(
+      wrapper.find("[data-testid='save-ai-provider']").attributes(),
+    ).toHaveProperty("disabled");
+
+    resolveTest({ ok: true });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Connection OK");
+  });
+
+  it("requires an API key before testing a built-in provider draft", async () => {
+    const wrapper = mountDialog();
+    await flushPromises();
+    wrapper
+      .findComponent(AutoComplete)
+      .vm.$emit("update:modelValue", "z-ai/glm-4.5-air");
+    await flushPromises();
+
+    await wrapper.find("[data-testid='test-ai-provider']").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("API key is required");
+    expect(testProviderDraft).not.toHaveBeenCalled();
+  });
+
+  it("requires an API key before creating a built-in provider", async () => {
+    const wrapper = mountDialog();
+    await flushPromises();
+    wrapper
+      .findComponent(AutoComplete)
+      .vm.$emit("update:modelValue", "z-ai/glm-4.5-air");
+    await flushPromises();
+
+    await wrapper.find("[data-testid='save-ai-provider']").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("API key is required");
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("shows a footer loading state while saving a provider", async () => {
+    let resolveCreate!: (value: AiProviderSummary) => void;
+    create.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    const wrapper = mountDialog();
+    await flushPromises();
+    wrapper
+      .findComponent(Select)
+      .vm.$emit("update:modelValue", "openai_compatible");
+    await flushPromises();
+    wrapper
+      .findAllComponents(InputText)[1]
+      .vm.$emit("update:modelValue", "http://127.0.0.1:11434/v1");
+    wrapper.findComponent(AutoComplete).vm.$emit("update:modelValue", "llama3");
+    await flushPromises();
+
+    await wrapper.find("[data-testid='save-ai-provider']").trigger("click");
+    await nextTick();
+
+    expect(wrapper.text()).toContain("Saving...");
+    expect(wrapper.text()).toContain("Saving provider...");
+    expect(
+      wrapper.find("[data-testid='test-ai-provider']").attributes(),
+    ).toHaveProperty("disabled");
+
+    resolveCreate(provider({ kind: "openai_compatible", model: "llama3" }));
+    await flushPromises();
+    expect(wrapper.emitted("saved")).toBeTruthy();
+  });
+
+  it("requires an API key when changing a saved provider to a built-in kind", async () => {
+    const wrapper = mountDialog({
+      provider: provider({
+        id: "p-saved",
+        kind: "openai_compatible",
+        name: "Local",
+        baseUrl: "http://127.0.0.1:11434/v1",
+        model: "llama3",
+        models: ["llama3"],
+      }),
+    });
+    await flushPromises();
+    wrapper.findComponent(Select).vm.$emit("update:modelValue", "openrouter");
+    wrapper
+      .findComponent(AutoComplete)
+      .vm.$emit("update:modelValue", "openai/gpt-4o");
+    await flushPromises();
+
+    await wrapper.find("[data-testid='save-ai-provider']").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("API key is required");
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("uses the saved-provider test when editing unchanged connection settings", async () => {

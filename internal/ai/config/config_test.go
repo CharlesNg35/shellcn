@@ -100,6 +100,24 @@ func TestUpdateEmptyKeyPreservesStored(t *testing.T) {
 	}
 }
 
+func TestUpdateProviderKindRequiresNewKey(t *testing.T) {
+	svc, _ := newService(t, config.AIConfig{})
+	ctx := context.Background()
+	sum, err := svc.Create(ctx, "user-1", validInput())
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	in := validInput()
+	in.Kind = models.AIProviderOpenRouter
+	in.Name = "OpenRouter"
+	in.APIKey = ""
+	in.Model = "openai/gpt-4o"
+	if _, err := svc.Update(ctx, "user-1", sum.ID, in); !errors.Is(err, aiconfig.ErrInvalid()) {
+		t.Fatalf("provider kind change without key: want ErrInvalid, got %v", err)
+	}
+}
+
 func TestProviderNamesAreUniquePerOwner(t *testing.T) {
 	svc, _ := newService(t, config.AIConfig{})
 	ctx := context.Background()

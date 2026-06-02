@@ -28,3 +28,7 @@ export function defaultProviderName(kind: AiProviderKind): string {
 export function requiresBaseUrl(kind: AiProviderKind): boolean {
   return kind === "openai_compatible";
 }
+
+export function requiresApiKey(kind: AiProviderKind): boolean {
+  return kind !== "openai_compatible";
+}

@@ -17,6 +17,7 @@ import AppIcon from "../../components/AppIcon.vue";
 import { btnGhost, btnPrimary, dialogRoot } from "../../primevue/preset";
 import {
   defaultProviderName,
+  requiresApiKey,
   providerKindOptions,
   requiresBaseUrl,
 } from "./providerKinds";
@@ -59,8 +60,16 @@ const testStatus = ref<{ ok: boolean; message: string } | null>(null);
 const modelOptions = ref<string[]>([]);
 const filteredModels = ref<string[]>([]);
 
+const formLocked = computed(
+  () => busy.value || fetchingModels.value || testingProvider.value,
+);
 const isEdit = computed(() => Boolean(props.provider));
 const needsBaseUrl = computed(() => requiresBaseUrl(form.kind));
+const needsApiKey = computed(() => requiresApiKey(form.kind));
+const needsNewApiKeyForSave = computed(
+  () =>
+    needsApiKey.value && (!props.provider || props.provider.kind !== form.kind),
+);
 const keyPlaceholder = computed(() =>
   isEdit.value ? "Leave blank to keep saved key" : "Provider API key",
 );
@@ -72,6 +81,15 @@ const canUseSavedProvider = computed(() => {
     form.kind === p.kind &&
     form.baseUrl.trim() === (p.baseUrl ?? "").trim(),
   );
+});
+const footerStatus = computed(() => {
+  if (busy.value) {
+    return { ok: null, message: "Saving provider..." };
+  }
+  if (testingProvider.value) {
+    return { ok: null, message: "Testing provider..." };
+  }
+  return testStatus.value;
 });
 
 function reset(): void {
@@ -193,6 +211,10 @@ async function testProvider(): Promise<void> {
     formError.value = "Choose or type a model";
     return;
   }
+  if (!canUseSavedProvider.value && needsApiKey.value && !form.apiKey.trim()) {
+    formError.value = "API key is required";
+    return;
+  }
   testingProvider.value = true;
   try {
     const result = canUseSavedProvider.value
@@ -229,6 +251,10 @@ async function save(): Promise<void> {
   }
   if (!form.model.trim()) {
     formError.value = "Choose or type a model";
+    return;
+  }
+  if (needsNewApiKeyForSave.value && !form.apiKey.trim()) {
+    formError.value = "API key is required";
     return;
   }
   busy.value = true;
@@ -273,6 +299,7 @@ async function save(): Promise<void> {
           :options="providerKindOptions"
           option-label="label"
           option-value="value"
+          :disabled="formLocked"
           @update:model-value="applyKind($event)"
         />
       </div>
@@ -288,6 +315,7 @@ async function save(): Promise<void> {
           id="ai-provider-name"
           :model-value="form.name"
           placeholder="Provider display name"
+          :disabled="formLocked"
           @update:model-value="form.name = $event ?? ''"
         />
       </div>
@@ -303,6 +331,7 @@ async function save(): Promise<void> {
           id="ai-provider-base-url"
           :model-value="form.baseUrl"
           placeholder="http://127.0.0.1:11434/v1"
+          :disabled="formLocked"
           @update:model-value="form.baseUrl = $event ?? ''"
         />
       </div>
@@ -320,6 +349,7 @@ async function save(): Promise<void> {
           :feedback="false"
           toggle-mask
           :placeholder="keyPlaceholder"
+          :disabled="formLocked"
           fluid
           @update:model-value="form.apiKey = $event ?? ''"
         />
@@ -337,15 +367,15 @@ async function save(): Promise<void> {
             size="small"
             text
             severity="secondary"
-            :loading="fetchingModels"
-            :disabled="fetchingModels"
+            :disabled="formLocked"
             @click="fetchModels"
           >
             <AppIcon
               :icon="{ type: 'lucide', value: 'refresh-cw' }"
+              :loading="fetchingModels"
               :size="14"
             />
-            Fetch models
+            {{ fetchingModels ? "Fetching..." : "Fetch models" }}
           </Button>
         </div>
         <AutoComplete
@@ -354,6 +384,7 @@ async function save(): Promise<void> {
           :suggestions="filteredModels"
           dropdown
           placeholder="Select or type a model"
+          :disabled="formLocked"
           @complete="searchModels"
           @update:model-value="form.model = String($event ?? '')"
           @dropdown-click="fetchModels"
@@ -374,42 +405,53 @@ async function save(): Promise<void> {
             severity="secondary"
             outlined
             size="small"
-            :loading="testingProvider"
-            :disabled="busy || fetchingModels"
+            :disabled="formLocked"
             data-testid="test-ai-provider"
             @click="testProvider"
           >
-            <AppIcon :icon="{ type: 'lucide', value: 'plug-zap' }" :size="14" />
-            Test provider
+            <AppIcon
+              :icon="{ type: 'lucide', value: 'plug-zap' }"
+              :loading="testingProvider"
+              :size="14"
+            />
+            {{ testingProvider ? "Testing..." : "Test provider" }}
           </Button>
           <p
-            v-if="testStatus"
+            v-if="footerStatus"
             class="truncate text-xs"
             :class="
-              testStatus.ok
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-red-500'
+              footerStatus.ok === null
+                ? 'text-surface-500 dark:text-surface-400'
+                : footerStatus.ok
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-red-500'
             "
             role="status"
+            aria-live="polite"
           >
-            {{ testStatus.message }}
+            {{ footerStatus.message }}
           </p>
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <Button
             :pt="{ root: btnGhost }"
-            :disabled="busy"
+            :disabled="formLocked"
             @click="visible = false"
           >
             Cancel
           </Button>
           <Button
             :pt="{ root: btnPrimary }"
-            :loading="busy"
+            :disabled="testingProvider || fetchingModels"
             data-testid="save-ai-provider"
             @click="save"
           >
-            {{ isEdit ? "Save" : "Add provider" }}
+            <AppIcon
+              :icon="{ type: 'lucide', value: isEdit ? 'save' : 'plus' }"
+              :loading="busy"
+              :size="14"
+            />
+            {{ busy ? "Saving..." : isEdit ? "Save" : "Add provider" }}
           </Button>
         </div>
       </div>

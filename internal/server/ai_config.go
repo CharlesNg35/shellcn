@@ -3,7 +3,9 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -105,7 +107,7 @@ func (s *Server) handleTestAIProviderDraft(w http.ResponseWriter, r *http.Reques
 	}
 	if err := s.deps.AI.TestInput(r.Context(), req.input()); err != nil {
 		if errors.Is(err, aiconfig.ErrInvalid()) {
-			writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
+			writeError(w, s.deps.Logger, aiConfigError(err))
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
@@ -142,7 +144,16 @@ func (s *Server) handlePreviewAIProviderModels(w http.ResponseWriter, r *http.Re
 // pass through to their normal status.
 func aiConfigError(err error) error {
 	if errors.Is(err, aiconfig.ErrInvalid()) {
-		return plugin.ErrInvalidInput
+		return fmt.Errorf("%w: %s", plugin.ErrInvalidInput, validationDetail(err))
 	}
 	return err
+}
+
+func validationDetail(err error) string {
+	msg := err.Error()
+	prefix := aiconfig.ErrInvalid().Error() + ": "
+	if strings.HasPrefix(msg, prefix) {
+		return strings.TrimPrefix(msg, prefix)
+	}
+	return msg
 }

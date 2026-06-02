@@ -158,6 +158,9 @@ func (s *Service) Update(ctx context.Context, ownerID, id string, in Input) (mod
 	if err != nil {
 		return models.AIProviderSummary{}, err
 	}
+	if norm.APIKey == "" && requiresAPIKey(norm.Kind) && row.Kind != norm.Kind {
+		return models.AIProviderSummary{}, fmt.Errorf("%w: api key is required", errInvalid)
+	}
 	row.Kind = norm.Kind
 	row.Name = norm.Name
 	row.BaseURL = norm.BaseURL
@@ -363,6 +366,10 @@ func (s *Service) validate(ctx context.Context, ownerID, ignoreID string, in Inp
 		}
 	}
 	return in, nil
+}
+
+func requiresAPIKey(kind models.AIProviderKind) bool {
+	return kind != models.AIProviderOpenAICompat
 }
 
 func cleanModels(models []string) []string {
