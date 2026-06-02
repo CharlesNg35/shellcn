@@ -33,6 +33,8 @@ vi.mock("../api/ai", () => ({
     remove: vi.fn(),
     models: vi.fn(),
     previewModels: vi.fn(),
+    testProviderDraft: vi.fn(),
+    testProvider: vi.fn(),
   },
 }));
 

@@ -36,7 +36,8 @@ make test` are green. Section refs (§) point at the spec.
 - [x] Built-in `kind`s: `openai`, `openrouter`, `anthropic`, `google`, `openai_compatible`;
       custom providers = named `openai_compatible` (config or user row) (§3.1).
 - [x] Endpoints: `GET /api/ai/global` (read-only: present? + provider/model, **no
-      key**); `GET/PUT/DELETE /api/me/ai/config` (user); `GET …/{id}/models`.
+      key**); `GET/PUT/DELETE /api/me/ai/config` (user); `GET …/{id}/models`;
+      `POST /api/me/ai/models`; `POST /api/me/ai/test`; `POST …/{id}/test`.
 - [x] Authz: users manage **only their own** config; there is **no global write path**.
 
 ### Frontend
@@ -45,7 +46,8 @@ make test` are green. Section refs (§) point at the spec.
       (name `ai-settings`), linked from `SettingsView.vue` with a `RouterLink` row
       (same pattern as _My activity_ / _Users & access_; not admin-gated).
 - [x] In it: list/add/edit/delete own providers; key field write-only/secret; model
-      allow-list; model; **Add custom provider** (name + base URL + key + models).
+      allow-list; required model; test provider; **Add custom provider** (name +
+      base URL + key + models).
 - [x] Read-only **global** status row on `SettingsView.vue` mirroring the existing
       **Email** row ("Configured / Not configured" + model), from `GET /api/ai/global`.
 - [x] PrimeVue components used for settings controls; `SchemaForm` was not a good
@@ -173,7 +175,7 @@ make test` are green. Section refs (§) point at the spec.
 - [x] RBAC still blocks a user lacking the underlying permission via the agent.
 - [x] Confirmation required before execution; audited as `ai`.
 
-## P6 — Multi-provider + model switcher + polish — §3.1, §6
+## P6 — Multi-provider + provider switcher + polish — §3.1, §6
 
 ### Backend
 
@@ -182,8 +184,9 @@ make test` are green. Section refs (§) point at the spec.
 
 ### Frontend
 
-- [x] `AiModelSwitcher.vue`: provider+model switch across the user's providers
-      (built-in **and** custom); read-only "Provider · Model" indicator for global.
+- [x] `AiModelSwitcher.vue`: provider switch across the user's providers
+      (built-in **and** custom); read-only shared indicator for global; the selected
+      provider's required model is used by the backend.
 - [x] `AiReasoning.vue` (collapsible reasoning, last-N lines).
 - [x] Composer **message queue** (mid-stream input), send/stop, Enter/Shift+Enter.
 - [x] Retry-on-hover, scroll-to-bottom, empty state (quick-starts), error/retry,
@@ -194,7 +197,7 @@ make test` are green. Section refs (§) point at the spec.
 ### Tests
 
 - [ ] Each provider adapter streams + tool-calls.
-- [x] Model switch (user) vs locked indicator (global).
+- [x] Provider switch (user) vs locked indicator (global).
 - [x] Vitest for chat components (badges, confirm, switcher, queue, reasoning).
 
 ## Cross-cutting (apply across phases) — §9

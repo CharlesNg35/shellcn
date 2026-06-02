@@ -63,7 +63,6 @@ func (s *Service) WithProviderFactory(f ProviderFactory) *Service {
 // Scope selects the provider for a turn. Empty ProviderID means shared AI.
 type Scope struct {
 	ProviderID string
-	Model      string
 }
 
 // RunInput is one chat turn's request.
@@ -244,12 +243,8 @@ func (s *Service) resolveProvider(ctx context.Context, user models.User, scope S
 		if err != nil {
 			return nil, "", "", err
 		}
-		model := cfg.Model
-		if scope.Model != "" && allowsModel(cfg, scope.Model) {
-			model = scope.Model
-		}
-		p, err := s.factory(ctx, cfg.Kind, key, cfg.BaseURL, model)
-		return p, model, cfg.Kind, err
+		p, err := s.factory(ctx, cfg.Kind, key, cfg.BaseURL, cfg.Model)
+		return p, cfg.Model, cfg.Kind, err
 	}
 	if s.global.Configured() {
 		kind := models.AIProviderKind(s.global.Kind)
@@ -257,18 +252,6 @@ func (s *Service) resolveProvider(ctx context.Context, user models.User, scope S
 		return p, s.global.Model, kind, err
 	}
 	return nil, "", "", ErrNotConfigured
-}
-
-func allowsModel(cfg models.AIProviderConfig, model string) bool {
-	if len(cfg.Models) == 0 {
-		return true
-	}
-	for _, m := range cfg.Models {
-		if m == model {
-			return true
-		}
-	}
-	return false
 }
 
 func registryProvider(kind models.AIProviderKind) string {

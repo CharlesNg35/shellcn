@@ -185,6 +185,16 @@ func (s *Service) Delete(ctx context.Context, ownerID, id string) error {
 	return s.store.Delete(ctx, id)
 }
 
+// ProviderModel returns the configured model for an owned provider without
+// decrypting its API key.
+func (s *Service) ProviderModel(ctx context.Context, ownerID, id string) (string, error) {
+	row, err := s.owned(ctx, ownerID, id)
+	if err != nil {
+		return "", err
+	}
+	return row.Model, nil
+}
+
 // Models lists a provider's selectable models. It queries the provider's live
 // catalogue when possible, falling back to the configured allow-list, then a
 // static per-kind default.

@@ -87,7 +87,6 @@ type aiClientFrame struct {
 	Type           string `json:"type"` // user_message | stop | confirm | reject
 	Content        string `json:"content"`
 	ProviderID     string `json:"providerId"`
-	Model          string `json:"model"`
 	ConversationID string `json:"conversationId"`
 	ToolID         string `json:"toolId"` // for confirm/reject
 }
@@ -241,8 +240,13 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 
 			convID := frame.ConversationID
 			providerID := frame.ProviderID
-			model := s.aiConversationModel(frame)
 			if convID == "" {
+				model, err := s.aiConversationModel(tctx, user.ID, providerID)
+				if err != nil {
+					send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
+					send(engine.StreamEvent{Type: engine.EventDone})
+					return
+				}
 				cv, err := s.chat.Conversations().Create(tctx, user.ID, conn.ID, providerID, model)
 				if err != nil {
 					send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
@@ -259,14 +263,13 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 					return
 				}
 				providerID = cv.ProviderID
-				model = cv.Model
 			}
 
 			in := ai.RunInput{
 				User: user, ConnID: conn.ID, Protocol: conn.Protocol,
 				ConnectionTitle: conn.Name, AIMode: connectionAIMode(conn),
 				AllowDestructive: conn.AIAllowDestructive,
-				Scope:            ai.Scope{ProviderID: providerID, Model: model},
+				Scope:            ai.Scope{ProviderID: providerID},
 				ConversationID:   convID,
 				UserMessage:      frame.Content,
 				RecentOps:        s.recentAuditLines(tctx, user.ID, conn.ID),
@@ -317,17 +320,20 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 	}
 }
 
-func (s *Server) aiConversationModel(frame aiClientFrame) string {
-	if frame.ProviderID != "" {
-		return frame.Model
+func (s *Server) aiConversationModel(ctx context.Context, userID, providerID string) (string, error) {
+	if providerID != "" {
+		if s.deps.AI == nil {
+			return "", plugin.ErrNotFound
+		}
+		return s.deps.AI.ProviderModel(ctx, userID, providerID)
 	}
 	if s.deps.AI != nil {
 		if g := s.deps.AI.Global(); g.Configured {
-			return g.Model
+			return g.Model, nil
 		}
 	}
 	if s.deps.AIGlobal.Configured() {
-		return s.deps.AIGlobal.Model
+		return s.deps.AIGlobal.Model, nil
 	}
-	return ""
+	return "", nil
 }

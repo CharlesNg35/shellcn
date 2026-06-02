@@ -29,10 +29,10 @@ type Limits struct {
 
 // Registry resolves model limits. It is safe for concurrent use.
 type Registry struct {
-	http    *http.Client
-	logger  *slog.Logger
-	orURL   string
-	mdURL   string
+	http   *http.Client
+	logger *slog.Logger
+	orURL  string
+	mdURL  string
 
 	or *ttlCache[[]openRouterModel]
 	md *ttlCache[map[string]Limits]

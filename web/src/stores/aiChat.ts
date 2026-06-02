@@ -49,7 +49,6 @@ interface ChatState {
   current: AiMessage | null; // the in-flight assistant message
   error: string | null;
   providerId: string;
-  model: string;
   conversations: AiConversation[];
   activeId: string | null;
   pendingConfirm: PendingConfirm | null;
@@ -67,7 +66,6 @@ function newState(): ChatState {
     current: null,
     error: null,
     providerId: "",
-    model: "",
     conversations: [],
     activeId: null,
     pendingConfirm: null,
@@ -124,10 +122,9 @@ export const useAiChatStore = defineStore("aiChat", () => {
     }
   }
 
-  function setProvider(connId: string, providerId: string, model = ""): void {
+  function setProvider(connId: string, providerId: string): void {
     const st = state(connId);
     st.providerId = providerId;
-    st.model = model;
   }
 
   function state(connId: string): ChatState {
@@ -141,13 +138,11 @@ export const useAiChatStore = defineStore("aiChat", () => {
     }
     if (global.value?.configured) {
       st.providerId = "";
-      st.model = "";
       return;
     }
     const first = providers.value[0];
     if (first) {
       st.providerId = first.id;
-      st.model = first.model;
     }
   }
 
@@ -235,7 +230,6 @@ export const useAiChatStore = defineStore("aiChat", () => {
         type: "user_message",
         content: text,
         providerId: st.providerId,
-        model: st.model,
         conversationId: st.activeId ?? "",
       }),
     );
@@ -260,7 +254,6 @@ export const useAiChatStore = defineStore("aiChat", () => {
       const { conversation, page } = await aiApi.getConversation(connId, cid);
       st.activeId = cid;
       st.providerId = conversation.providerId ?? "";
-      st.model = conversation.model ?? "";
       if (!st.providerId) ensureProviderSelection(st);
       st.messages = page.messages.map(mapStored);
       st.hasMore = page.hasMore;

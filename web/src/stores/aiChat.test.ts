@@ -205,7 +205,6 @@ describe("aiChat store", () => {
     await store.selectConversation(CONN, "cv");
     const st = store.state(CONN);
     expect(st.providerId).toBe("p1");
-    expect(st.model).toBe("gpt-4o-mini");
     expect(st.messages.map((m) => m.content)).toEqual(["second"]);
     expect(st.hasMore).toBe(true);
 
@@ -238,19 +237,19 @@ describe("aiChat store", () => {
     expect(st.runState).toBe("starting");
   });
 
-  it("sends the selected provider + model", () => {
+  it("sends only the selected provider", () => {
     const store = useAiChatStore();
     const st = store.state(CONN);
     const sent: Record<string, unknown>[] = [];
     st.socket = {
       send: (d: string) => sent.push(JSON.parse(d)),
     } as unknown as WebSocket;
-    store.setProvider(CONN, "p1", "gpt-4o-mini");
+    store.setProvider(CONN, "p1");
     store.send(CONN, "hi");
     expect(sent.at(-1)).toMatchObject({
       providerId: "p1",
-      model: "gpt-4o-mini",
     });
+    expect(sent.at(-1)).not.toHaveProperty("model");
   });
 
   it("defaults to the first personal provider when no shared provider exists", async () => {
@@ -278,7 +277,7 @@ describe("aiChat store", () => {
 
     expect(sent.at(-1)).toMatchObject({
       providerId: "p-local",
-      model: "openai/gpt-4o",
     });
+    expect(sent.at(-1)).not.toHaveProperty("model");
   });
 });

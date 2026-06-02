@@ -118,7 +118,8 @@ Two scopes, two different homes:
   is just `kind: openai_compatible` + `baseURL` in that config.
 - **User** (`scope=user`, `ownerId`): self-service, DB-backed (`AIProviderConfig`),
   keys encrypted via the Vault, managed in a **user settings UI**. Built-in and/or
-  custom providers; the user **may switch** freely among their providers and models.
+  custom providers; the user may switch among their providers. Each provider has
+  one required configured `model`; turns do not accept a per-request model override.
 
 The client receives a **read-only** projection of the global config (presence +
 provider name + model, **never the key**) so the chat can show "Shared AI · <model>"
@@ -128,7 +129,8 @@ Resolution at chat time:
 
 - If only one is configured → use it.
 - If both → the user **chooses** per conversation: "Use my AI" vs "Use shared AI".
-  Stored on the conversation. Shared = locked model; mine = switchable.
+  Stored on the conversation. Shared and user providers both use their configured
+  model.
 - If neither → the header AI icon is hidden; connection works as today.
 
 ### 3.2 Per-connection AI setting
@@ -324,8 +326,11 @@ Reuse the existing HTTP + `coder/websocket` + ticket infrastructure:
   (for write HITL), and queued user messages while a turn is running.
 - `GET /api/ai/global` — read-only: whether a shared AI is configured + its
   provider/model (**no key**). `GET/PUT/DELETE /api/me/ai/config` (user) — own
-  provider config CRUD; `GET …/{id}/models` lists a provider's models. **No global
-  CRUD** — global config is env/`internal/config` (§3).
+  provider config CRUD; `GET …/{id}/models` lists a saved provider's models;
+  `POST /api/me/ai/models` previews an unsaved provider's models;
+  `POST /api/me/ai/test` tests an unsaved provider draft; `POST …/{id}/test`
+  tests a saved provider. **No global CRUD** — global config is
+  env/`internal/config` (§3).
   The chat WS authorizes the connection (must be `aiMode != disabled` and the user
   must have access) before opening.
 
@@ -376,7 +381,8 @@ chosen markdown lib's maintenance/API via context7 before committing.
   render with a danger style and an explicit warning; no "always allow".
 - `AiModelSwitcher.vue` — provider selector across the user's configured
   providers (built-in **and** custom); the provider's configured `model` is used
-  for chat. For global config, show a read-only provider indicator.
+  for chat. There is no separate chat model selector. For global config, show a
+  read-only provider indicator.
 - States: empty (quick-start prompts), error (`Message`/retry), AI-not-configured
   (link to settings), disabled-for-connection.
 

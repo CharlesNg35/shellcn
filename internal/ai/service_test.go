@@ -90,7 +90,7 @@ func TestGlobalProviderPinsConfiguredModel(t *testing.T) {
 		})
 	_ = svc.Run(context.Background(), ai.RunInput{
 		User: models.User{ID: "u1"}, ConnID: "c1", Protocol: "missing",
-		AIMode: "read_only", Scope: ai.Scope{Model: "gpt-4o-mini"}, UserMessage: "hi",
+		AIMode: "read_only", UserMessage: "hi",
 	}, func(engine.StreamEvent) {})
 	if got != "gpt-4o" {
 		t.Fatalf("shared model = %q, want pinned gpt-4o", got)

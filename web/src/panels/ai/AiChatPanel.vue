@@ -113,7 +113,7 @@ onMounted(() => {
         :global="store.global"
         :provider-id="st.providerId"
         :disabled="busy"
-        @select="(p, m) => store.setProvider(connectionId, p, m)"
+        @select="(p) => store.setProvider(connectionId, p)"
       />
     </div>
 

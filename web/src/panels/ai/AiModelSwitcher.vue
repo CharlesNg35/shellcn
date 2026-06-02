@@ -10,7 +10,7 @@ const props = defineProps<{
   providerId: string;
   disabled?: boolean;
 }>();
-const emit = defineEmits<{ select: [providerId: string, model: string] }>();
+const emit = defineEmits<{ select: [providerId: string] }>();
 
 const providerChoices = computed(() => {
   const out: { label: string; value: string }[] = [];
@@ -40,8 +40,7 @@ const activeProviderLabel = computed(() => {
 });
 
 function pickProvider(id: string): void {
-  const p = props.providers.find((x) => x.id === id);
-  emit("select", id, p?.model ?? "");
+  emit("select", id);
 }
 </script>
 

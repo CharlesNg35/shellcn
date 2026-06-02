@@ -64,6 +64,15 @@ const needsBaseUrl = computed(() => requiresBaseUrl(form.kind));
 const keyPlaceholder = computed(() =>
   isEdit.value ? "Leave blank to keep saved key" : "Provider API key",
 );
+const canUseSavedProvider = computed(() => {
+  const p = props.provider;
+  return Boolean(
+    p &&
+    !form.apiKey.trim() &&
+    form.kind === p.kind &&
+    form.baseUrl.trim() === (p.baseUrl ?? "").trim(),
+  );
+});
 
 function reset(): void {
   const p = props.provider;
@@ -96,6 +105,7 @@ watch(
   (open) => {
     if (open) reset();
   },
+  { immediate: true },
 );
 
 function applyKind(kind: AiProviderKind): void {
@@ -136,10 +146,9 @@ async function fetchModels(): Promise<void> {
   }
   fetchingModels.value = true;
   try {
-    const source =
-      props.provider && !form.apiKey.trim()
-        ? await aiApi.models(props.provider.id)
-        : await aiApi.previewModels(buildInput());
+    const source = canUseSavedProvider.value
+      ? await aiApi.models(props.provider!.id)
+      : await aiApi.previewModels(buildInput());
     modelOptions.value = source.models;
     filteredModels.value = source.models;
     if (!form.model && source.models[0]) {
@@ -186,10 +195,9 @@ async function testProvider(): Promise<void> {
   }
   testingProvider.value = true;
   try {
-    const result =
-      props.provider && !form.apiKey.trim()
-        ? await aiApi.testProvider(props.provider.id)
-        : await aiApi.testProviderDraft(buildInput());
+    const result = canUseSavedProvider.value
+      ? await aiApi.testProvider(props.provider!.id)
+      : await aiApi.testProviderDraft(buildInput());
     testStatus.value = {
       ok: result.ok,
       message: result.ok
@@ -368,6 +376,7 @@ async function save(): Promise<void> {
             size="small"
             :loading="testingProvider"
             :disabled="busy || fetchingModels"
+            data-testid="test-ai-provider"
             @click="testProvider"
           >
             <AppIcon :icon="{ type: 'lucide', value: 'plug-zap' }" :size="14" />
@@ -394,7 +403,12 @@ async function save(): Promise<void> {
           >
             Cancel
           </Button>
-          <Button :pt="{ root: btnPrimary }" :loading="busy" @click="save">
+          <Button
+            :pt="{ root: btnPrimary }"
+            :loading="busy"
+            data-testid="save-ai-provider"
+            @click="save"
+          >
             {{ isEdit ? "Save" : "Add provider" }}
           </Button>
         </div>
