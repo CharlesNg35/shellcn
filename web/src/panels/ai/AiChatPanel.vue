@@ -12,6 +12,7 @@ import { useAiChatStore } from "../../stores/aiChat";
 // This component (and everything it imports — the chat store, markdown stack,
 // highlight.js) rides the lazy AI chunk. It is never in the main bundle.
 const props = defineProps<{ connectionId: string }>();
+const emit = defineEmits<{ close: [] }>();
 
 const store = useAiChatStore();
 const st = computed(() => store.state(props.connectionId));
@@ -91,6 +92,16 @@ onMounted(() => {
       >
         <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="15" />
       </Button>
+      <Button
+        text
+        rounded
+        severity="secondary"
+        size="small"
+        aria-label="Close assistant"
+        @click="emit('close')"
+      >
+        <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="15" />
+      </Button>
     </div>
 
     <div
@@ -101,7 +112,6 @@ onMounted(() => {
         :providers="store.providers"
         :global="store.global"
         :provider-id="st.providerId"
-        :model="st.model"
         :disabled="busy"
         @select="(p, m) => store.setProvider(connectionId, p, m)"
       />

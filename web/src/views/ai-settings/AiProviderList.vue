@@ -4,7 +4,7 @@ import Tag from "primevue/tag";
 import type { AiProviderSummary } from "../../api/ai";
 import AppIcon from "../../components/AppIcon.vue";
 import { btnGhost, btnPrimary } from "../../primevue/preset";
-import { providerKindLabel } from "./providerCatalog";
+import { providerKindLabel } from "./providerKinds";
 
 defineProps<{
   providers: AiProviderSummary[];

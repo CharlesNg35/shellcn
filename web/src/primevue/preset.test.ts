@@ -41,6 +41,7 @@ describe("primeVuePassthrough", () => {
       "card",
       "datepicker",
       "divider",
+      "drawer",
       "message",
       "panel",
       "progressspinner",
@@ -66,6 +67,15 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.dialog.content).toContain("overflow-auto");
     expect(primeVuePassthrough.confirmdialog.content).toContain(
       "overflow-auto",
+    );
+  });
+
+  it("styles drawers in unstyled mode", () => {
+    expect(primeVuePassthrough.drawer.root).toContain("fixed");
+    expect(primeVuePassthrough.drawer.root).toContain("bg-surface-0");
+    expect(primeVuePassthrough.drawer.content).toContain("min-h-0");
+    expect(primeVuePassthrough.drawer.pcCloseButton.root).toContain(
+      "rounded-full",
     );
   });
 

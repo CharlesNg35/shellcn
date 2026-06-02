@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import Select from "primevue/select";
 import Tag from "primevue/tag";
+import Select from "primevue/select";
 import type { AiGlobalStatus, AiProviderSummary } from "../../api/ai";
 
 const props = defineProps<{
   providers: AiProviderSummary[];
   global: AiGlobalStatus | null;
   providerId: string;
-  model: string;
   disabled?: boolean;
 }>();
 const emit = defineEmits<{ select: [providerId: string, model: string] }>();
@@ -35,25 +34,9 @@ const selected = computed(
 const usingGlobal = computed(
   () => props.providerId === "" && !!props.global?.configured,
 );
-const effectiveProviderId = computed(
-  () => selected.value?.id ?? props.providerId,
-);
-
-const modelChoices = computed(() => {
-  const models = selected.value?.models ?? [];
-  return models.map((m) => ({ label: m, value: m }));
-});
-
-const showModelSelect = computed(
-  () => !usingGlobal.value && modelChoices.value.length > 1,
-);
 const activeProviderLabel = computed(() => {
   if (usingGlobal.value) return props.global?.provider ?? "Shared AI";
   return selected.value?.name ?? providerChoices.value[0]?.label ?? "";
-});
-const activeModel = computed(() => {
-  if (usingGlobal.value) return props.global?.model ?? "";
-  return props.model || selected.value?.defaultModel || "";
 });
 
 function pickProvider(id: string): void {
@@ -80,18 +63,5 @@ function pickProvider(id: string): void {
       :value="activeProviderLabel"
       severity="secondary"
     />
-
-    <Select
-      v-if="showModelSelect"
-      :model-value="model || selected?.defaultModel"
-      :options="modelChoices"
-      option-label="label"
-      option-value="value"
-      :disabled="disabled"
-      aria-label="Model"
-      :pt="{ root: 'text-xs' }"
-      @update:model-value="emit('select', effectiveProviderId, $event)"
-    />
-    <Tag v-else-if="activeModel" :value="activeModel" severity="secondary" />
   </div>
 </template>

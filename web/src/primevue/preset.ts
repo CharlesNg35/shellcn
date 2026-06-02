@@ -38,6 +38,12 @@ export const dialogRoot = (maxWidth = "max-w-md"): string =>
     maxWidth,
   );
 
+export const drawerRoot = (maxWidth = "max-w-md"): string =>
+  cn(
+    "fixed right-0 top-0 z-50 flex h-dvh w-full flex-col overflow-hidden border-l border-surface-200 bg-surface-0 text-surface-900 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-950 dark:text-surface-0 dark:ring-surface-0/5",
+    maxWidth,
+  );
+
 // Shared button looks, reused across dialogs/action bars instead of re-listing
 // the same utility chains.
 export const btnPrimary =
@@ -477,6 +483,28 @@ export const primeVuePassthrough = {
       root: "rounded-md p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600 dark:hover:bg-surface-800 dark:hover:text-surface-200",
     },
     transition: dialogTransition,
+  },
+
+  drawer: {
+    mask: "fixed inset-0 z-50 bg-surface-950/30 backdrop-blur-[1px]",
+    root: drawerRoot(),
+    header:
+      "flex shrink-0 items-center justify-between border-b border-surface-200 px-4 py-3 dark:border-surface-800",
+    title: "min-w-0 flex-1 truncate text-sm font-semibold",
+    content: "min-h-0 flex-1 overflow-auto",
+    pcCloseButton: {
+      root: cn(buttonBase, "h-8 w-8 rounded-full", buttonText.secondary),
+      icon: "h-4 w-4",
+    },
+    transition: {
+      enterFromClass: "translate-x-full",
+      enterActiveClass:
+        "transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]",
+      enterToClass: "translate-x-0",
+      leaveFromClass: "translate-x-0",
+      leaveActiveClass: "transition-transform duration-150 ease-in",
+      leaveToClass: "translate-x-full",
+    },
   },
 
   // Shares the dialog's chrome; mask sits above open dialogs (z-60) so a confirm

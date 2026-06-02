@@ -15,7 +15,11 @@ import {
 } from "../../api/ai";
 import AppIcon from "../../components/AppIcon.vue";
 import { btnGhost, btnPrimary, dialogRoot } from "../../primevue/preset";
-import { providerPreset, providerPresets } from "./providerCatalog";
+import {
+  defaultProviderName,
+  providerKindOptions,
+  requiresBaseUrl,
+} from "./providerKinds";
 
 const props = defineProps<{
   visible: boolean;
@@ -52,15 +56,8 @@ const formError = ref("");
 const modelOptions = ref<string[]>([]);
 const filteredModels = ref<string[]>([]);
 
-const kindOptions = providerPresets.map((p) => ({
-  label: p.label,
-  value: p.kind,
-}));
-
 const isEdit = computed(() => Boolean(props.provider));
-const preset = computed(() => providerPreset(form.kind));
-const isCustomProvider = computed(() => Boolean(preset.value.custom));
-const needsBaseUrl = computed(() => Boolean(preset.value.requiresBaseUrl));
+const needsBaseUrl = computed(() => requiresBaseUrl(form.kind));
 const keyPlaceholder = computed(() =>
   isEdit.value ? "Leave blank to keep saved key" : "Provider API key",
 );
@@ -77,15 +74,14 @@ function reset(): void {
     });
     modelOptions.value = [...p.models];
   } else {
-    const next = providerPreset("openrouter");
     Object.assign(form, {
-      kind: next.kind,
-      name: next.defaultName,
-      baseUrl: next.baseUrl ?? "",
+      kind: "openrouter",
+      name: defaultProviderName("openrouter"),
+      baseUrl: "",
       apiKey: "",
-      defaultModel: next.defaultModel,
+      defaultModel: "",
     });
-    modelOptions.value = [...next.models];
+    modelOptions.value = [];
   }
   filteredModels.value = [...modelOptions.value];
   formError.value = "";
@@ -99,14 +95,15 @@ watch(
 );
 
 function applyKind(kind: AiProviderKind): void {
-  const next = providerPreset(kind);
   form.kind = kind;
-  if (!isEdit.value || !form.name.trim() || !next.custom) {
-    form.name = next.defaultName;
+  if (!isEdit.value || !form.name.trim()) {
+    form.name = defaultProviderName(kind);
   }
-  form.baseUrl = next.baseUrl ?? "";
-  form.defaultModel = next.defaultModel;
-  modelOptions.value = [...next.models];
+  if (!requiresBaseUrl(kind)) {
+    form.baseUrl = "";
+  }
+  form.defaultModel = "";
+  modelOptions.value = [];
   filteredModels.value = [...modelOptions.value];
 }
 
@@ -117,7 +114,7 @@ function buildInput(): AiProviderInput {
   }
   return {
     kind: form.kind,
-    name: isCustomProvider.value ? form.name.trim() : preset.value.defaultName,
+    name: form.name.trim(),
     baseUrl: form.baseUrl.trim() || undefined,
     apiKey: form.apiKey.trim() || undefined,
     models,
@@ -159,6 +156,14 @@ function searchModels(event: { query: string }): void {
 
 async function save(): Promise<void> {
   formError.value = "";
+  if (!form.name.trim()) {
+    formError.value = "Provider name is required";
+    return;
+  }
+  if (!form.defaultModel.trim()) {
+    formError.value = "Choose or type a model";
+    return;
+  }
   busy.value = true;
   try {
     const input = buildInput();
@@ -198,14 +203,14 @@ async function save(): Promise<void> {
         </label>
         <Select
           :model-value="form.kind"
-          :options="kindOptions"
+          :options="providerKindOptions"
           option-label="label"
           option-value="value"
           @update:model-value="applyKind($event)"
         />
       </div>
 
-      <div v-if="isCustomProvider" class="grid min-w-0 gap-1.5">
+      <div class="grid min-w-0 gap-1.5">
         <label
           for="ai-provider-name"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
@@ -215,6 +220,7 @@ async function save(): Promise<void> {
         <InputText
           id="ai-provider-name"
           :model-value="form.name"
+          placeholder="Provider display name"
           @update:model-value="form.name = $event ?? ''"
         />
       </div>
@@ -229,7 +235,7 @@ async function save(): Promise<void> {
         <InputText
           id="ai-provider-base-url"
           :model-value="form.baseUrl"
-          placeholder="https://host/v1"
+          placeholder="http://127.0.0.1:11434/v1"
           @update:model-value="form.baseUrl = $event ?? ''"
         />
       </div>
@@ -258,7 +264,7 @@ async function save(): Promise<void> {
             for="ai-provider-model"
             class="text-sm font-medium text-surface-700 dark:text-surface-200"
           >
-            Model
+            Default model <span class="text-red-500">*</span>
           </label>
           <Button
             size="small"
@@ -286,7 +292,8 @@ async function save(): Promise<void> {
           @dropdown-click="fetchModels"
         />
         <p class="text-xs text-surface-400">
-          Choose from the provider list, or type a model name directly.
+          This model is required and will be used by conversations that select
+          this provider.
         </p>
       </div>
 

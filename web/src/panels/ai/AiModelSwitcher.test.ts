@@ -24,13 +24,12 @@ describe("AiModelSwitcher", () => {
         providers: [],
         global: { configured: true, provider: "Shared", model: "gpt-4o" },
         providerId: "",
-        model: "",
       },
     });
     // No provider <select>; a Tag indicator instead.
     expect(wrapper.findAllComponents({ name: "Select" })).toHaveLength(0);
     expect(wrapper.text()).toContain("Shared");
-    expect(wrapper.text()).toContain("gpt-4o");
+    expect(wrapper.text()).not.toContain("gpt-4o");
   });
 
   it("shows the only personal provider without requiring a provider select", () => {
@@ -45,26 +44,21 @@ describe("AiModelSwitcher", () => {
         ],
         global: { configured: false },
         providerId: "p1",
-        model: "",
       },
     });
     expect(wrapper.findAllComponents({ name: "Select" })).toHaveLength(0);
     expect(wrapper.text()).toContain("OpenRouter");
-    expect(wrapper.text()).toContain("openai/gpt-4o");
+    expect(wrapper.text()).not.toContain("openai/gpt-4o");
   });
 
-  it("offers provider + model selects for a user provider", () => {
+  it("offers provider selection only", () => {
     const wrapper = mount(AiModelSwitcher, {
       props: {
         providers: [provider()],
         global: { configured: true, provider: "Shared", model: "gpt-4o" },
         providerId: "p1",
-        model: "gpt-4o",
       },
     });
-    // Shared + the user provider → provider select; multi-model → model select.
-    expect(
-      wrapper.findAllComponents({ name: "Select" }).length,
-    ).toBeGreaterThanOrEqual(2);
+    expect(wrapper.findAllComponents({ name: "Select" })).toHaveLength(1);
   });
 });

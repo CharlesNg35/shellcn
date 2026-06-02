@@ -121,6 +121,10 @@ func TestUserProviderValidationReturns400(t *testing.T) {
 	if resp.Status != http.StatusBadRequest {
 		t.Fatalf("bad kind: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
+	resp = h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(`{"kind":"openai","name":"x","apiKey":"sk-user-secret"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("missing default model: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
 }
 
 func TestPreviewAIProviderModels(t *testing.T) {

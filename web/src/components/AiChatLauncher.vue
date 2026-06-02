@@ -4,6 +4,7 @@ import Button from "primevue/button";
 import Drawer from "primevue/drawer";
 import AppIcon from "./AppIcon.vue";
 import { aiApi } from "../api/ai";
+import { drawerRoot } from "../primevue/preset";
 
 const props = defineProps<{
   connectionId: string;
@@ -90,7 +91,7 @@ watch(visible, (next) => {
     rounded
     severity="secondary"
     title="AI assistant"
-    aria-label="Open AI assistant"
+    :aria-label="open ? 'Close AI assistant' : 'Open AI assistant'"
     @click="toggle"
   >
     <AppIcon :icon="{ type: 'lucide', value: 'sparkles' }" :size="17" />
@@ -103,11 +104,16 @@ watch(visible, (next) => {
     :dismissable="false"
     header="Assistant"
     :pt="{
-      root: 'w-full max-w-md',
+      root: drawerRoot('max-w-lg'),
       header: 'hidden',
       content: 'flex min-h-0 flex-1 flex-col p-0',
     }"
   >
-    <AiChatPanel v-if="opened" :connection-id="connectionId" class="h-full" />
+    <AiChatPanel
+      v-if="opened"
+      :connection-id="connectionId"
+      class="h-full"
+      @close="open = false"
+    />
   </Drawer>
 </template>
