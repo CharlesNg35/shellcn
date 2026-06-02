@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, h } from "vue";
 import Button from "primevue/button";
@@ -36,23 +36,20 @@ const Harness = defineComponent({
 });
 
 describe("AiConversationList", () => {
-  it("renames through a PrimeVue input dialog instead of a browser prompt", async () => {
-    const prompt = vi.spyOn(window, "prompt");
+  it("renames inline in the conversation title row", async () => {
     const wrapper = mount(Harness);
 
     await wrapper.get('[aria-label="Rename"]').trigger("click");
     await flushPromises();
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(wrapper.findComponent(InputText).exists()).toBe(true);
+
     wrapper.findComponent(InputText).vm.$emit("update:modelValue", "Renamed");
     await flushPromises();
-    await wrapper
-      .findAllComponents(Button)
-      .find((b) => b.text().trim() === "Rename")
-      ?.trigger("click");
+    await wrapper.get("form").trigger("submit");
 
     const list = wrapper.findComponent(AiConversationList);
-    expect(prompt).not.toHaveBeenCalled();
     expect(list.emitted("rename")?.[0]).toEqual(["cv-1", "Renamed"]);
-    prompt.mockRestore();
   });
 
   it("emits the conversation id when delete is confirmed", async () => {

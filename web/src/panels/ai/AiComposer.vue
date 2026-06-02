@@ -15,9 +15,6 @@ const emit = defineEmits<{ send: [text: string]; stop: [] }>();
 const text = ref("");
 const busy = computed(() => props.runState !== "idle");
 const stopping = computed(() => props.runState === "stopping");
-const statusText = computed(() =>
-  stopping.value ? "Stopping..." : busy.value ? "Streaming" : "",
-);
 
 function submit(): void {
   if (props.disabled) return;
@@ -56,17 +53,7 @@ function onKeydown(e: KeyboardEvent): void {
       />
       <div class="flex min-w-0 items-center justify-between gap-2 px-1 pt-1">
         <span
-          v-if="statusText"
-          class="inline-flex min-w-0 items-center gap-1.5 text-xs text-surface-500 dark:text-surface-400"
-          aria-live="polite"
-        >
-          <span
-            class="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary-500 motion-reduce:animate-none"
-          />
-          {{ statusText }}
-        </span>
-        <span
-          v-else-if="disabledReason"
+          v-if="disabledReason"
           class="min-w-0 truncate text-xs text-surface-400"
         >
           {{ disabledReason }}

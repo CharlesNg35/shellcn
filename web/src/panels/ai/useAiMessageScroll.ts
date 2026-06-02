@@ -11,6 +11,7 @@ export function useAiMessageScroll(
     contentRef,
     isAtBottom,
     isNearBottom,
+    escapedFromLock,
     scrollToBottom,
     stopScroll,
   } = useStickToBottom({
@@ -32,11 +33,13 @@ export function useAiMessageScroll(
     (count, prev) => {
       if (count <= prev) return;
       const added = messages.value.slice(prev);
-      if (added.some((m) => m.role === "user") || isNearBottom.value) {
+      if (
+        !escapedFromLock.value &&
+        (added.some((m) => m.role === "user") || isNearBottom.value)
+      ) {
         void scrollToBottom({
           animation: "smooth",
           wait: true,
-          ignoreEscapes: added.some((m) => m.role === "user"),
         });
       }
     },
@@ -46,7 +49,14 @@ export function useAiMessageScroll(
   watch(
     () => lastMessage.value?.content.length ?? 0,
     (length, prev) => {
-      if (!streaming.value || length === prev || !isNearBottom.value) return;
+      if (
+        !streaming.value ||
+        length === prev ||
+        escapedFromLock.value ||
+        !isNearBottom.value
+      ) {
+        return;
+      }
       void scrollToBottom({
         preserveScrollPosition: true,
         duration: 80,
@@ -62,7 +72,7 @@ export function useAiMessageScroll(
         stopScroll();
         return;
       }
-      if (isNearBottom.value) {
+      if (!escapedFromLock.value && isNearBottom.value) {
         void scrollToBottom("instant");
       }
     },

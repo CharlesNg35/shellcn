@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import Button from "primevue/button";
-import Dialog from "primevue/dialog";
 import InputText from "primevue/inputtext";
-import { computed, ref } from "vue";
+import { nextTick, ref, type VNodeRef } from "vue";
 import AppIcon from "../../components/AppIcon.vue";
 import { useConfirmAction } from "../../composables/useConfirmAction";
-import { dialogRoot } from "../../primevue/preset";
 import type { AiConversation } from "../../api/ai";
 
 defineProps<{
@@ -23,37 +21,46 @@ const emit = defineEmits<{
 }>();
 
 const { confirmDanger } = useConfirmAction();
-const renameVisible = ref(false);
-const renameTarget = ref<AiConversation | null>(null);
+const editingId = ref<string | null>(null);
 const renameTitle = ref("");
-const trimmedRenameTitle = computed(() => renameTitle.value.trim());
-const canRename = computed(() => {
-  const current = renameTarget.value?.title.trim() ?? "";
-  return Boolean(
-    renameTarget.value?.id &&
-    trimmedRenameTitle.value &&
-    trimmedRenameTitle.value !== current,
-  );
-});
+const renameInputEl = ref<HTMLInputElement | null>(null);
 
-function openRename(c: AiConversation): void {
+const setRenameInput: VNodeRef = (el) => {
+  const input =
+    el instanceof HTMLInputElement
+      ? el
+      : el &&
+          typeof el === "object" &&
+          "$el" in el &&
+          el.$el instanceof HTMLInputElement
+        ? el.$el
+        : null;
+  renameInputEl.value = input;
+};
+
+function startRename(c: AiConversation): void {
   if (!c.id) return;
-  renameTarget.value = c;
+  editingId.value = c.id;
   renameTitle.value = c.title || "New chat";
-  renameVisible.value = true;
+  void nextTick(() => {
+    renameInputEl.value?.focus();
+    renameInputEl.value?.select();
+  });
 }
 
-function closeRename(): void {
-  renameVisible.value = false;
-  renameTarget.value = null;
+function cancelRename(): void {
+  editingId.value = null;
   renameTitle.value = "";
 }
 
-function submitRename(): void {
-  const target = renameTarget.value;
-  if (!target?.id || !canRename.value) return;
-  emit("rename", target.id, trimmedRenameTitle.value);
-  closeRename();
+function submitRename(c: AiConversation): void {
+  if (editingId.value !== c.id) return;
+  const nextTitle = renameTitle.value.trim();
+  const currentTitle = (c.title || "New chat").trim();
+  if (c.id && nextTitle && nextTitle !== currentTitle) {
+    emit("rename", c.id, nextTitle);
+  }
+  cancelRename();
 }
 
 function remove(c: AiConversation): void {
@@ -114,7 +121,7 @@ function remove(c: AiConversation): void {
       <li
         v-for="c in conversations"
         :key="c.id"
-        class="group flex min-w-0 items-center gap-1 rounded-lg border px-2 py-1.5 text-xs transition-colors"
+        class="group relative flex min-w-0 items-center gap-1 rounded-lg border px-2 py-1.5 text-xs transition-colors"
         :class="
           c.id === activeId
             ? 'border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-900/70 dark:bg-primary-500/10 dark:text-primary-200'
@@ -127,6 +134,7 @@ function remove(c: AiConversation): void {
           severity="secondary"
           class="flex min-w-0 flex-1 items-center gap-2 text-left"
           :disabled="busy"
+          :class="editingId === c.id ? 'pointer-events-none opacity-40' : ''"
           @click="emit('select', c.id)"
         >
           <span
@@ -147,6 +155,44 @@ function remove(c: AiConversation): void {
             {{ c.title || "New chat" }}
           </span>
         </Button>
+        <form
+          v-if="editingId === c.id"
+          class="absolute inset-x-2 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1 rounded-lg bg-surface-0 dark:bg-surface-950"
+          @submit.prevent="submitRename(c)"
+          @keydown.esc.prevent.stop="cancelRename"
+          @click.stop
+        >
+          <InputText
+            :ref="setRenameInput"
+            v-model="renameTitle"
+            class="min-w-0 flex-1 px-2 py-1 text-xs"
+            autocomplete="off"
+            aria-label="Conversation title"
+            @blur="submitRename(c)"
+          />
+          <Button
+            type="submit"
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            aria-label="Save title"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'check' }" :size="12" />
+          </Button>
+          <Button
+            type="button"
+            text
+            rounded
+            severity="secondary"
+            size="small"
+            aria-label="Cancel rename"
+            @mousedown.prevent
+            @click="cancelRename"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="12" />
+          </Button>
+        </form>
         <Button
           type="button"
           text
@@ -155,7 +201,7 @@ function remove(c: AiConversation): void {
           size="small"
           class="text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-surface-700 focus-visible:opacity-100 dark:hover:text-surface-100"
           aria-label="Rename"
-          @click.stop="openRename(c)"
+          @click.stop="startRename(c)"
         >
           <AppIcon :icon="{ type: 'lucide', value: 'pencil' }" :size="12" />
         </Button>
@@ -184,41 +230,5 @@ function remove(c: AiConversation): void {
         <span>No conversations yet.</span>
       </li>
     </ul>
-    <Dialog
-      v-model:visible="renameVisible"
-      modal
-      dismissable-mask
-      header="Rename conversation"
-      :pt="{ root: dialogRoot('max-w-sm') }"
-      @hide="closeRename"
-    >
-      <form class="space-y-4" @submit.prevent="submitRename">
-        <div class="space-y-2">
-          <label
-            for="ai-conversation-title"
-            class="text-xs font-medium text-surface-600 dark:text-surface-300"
-          >
-            Title
-          </label>
-          <InputText
-            id="ai-conversation-title"
-            v-model="renameTitle"
-            autofocus
-            class="w-full"
-            autocomplete="off"
-          />
-        </div>
-        <div class="flex justify-end gap-2">
-          <Button
-            type="button"
-            label="Cancel"
-            severity="secondary"
-            text
-            @click="closeRename"
-          />
-          <Button type="submit" label="Rename" :disabled="!canRename" />
-        </div>
-      </form>
-    </Dialog>
   </div>
 </template>
