@@ -215,8 +215,8 @@ func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
 	if r.Input != nil {
 		for _, g := range r.Input.Groups {
 			for _, f := range g.Fields {
-				if f.Secret {
-					continue // never let the model supply secret material
+				if f.Secret || f.Type == plugin.FieldCredentialRef {
+					continue // never let the model supply secret material or choose credentials
 				}
 				props[f.Key] = fieldSchema(f)
 				if f.Required {

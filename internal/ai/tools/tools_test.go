@@ -46,6 +46,10 @@ func (demoPlugin) Routes() []plugin.Route {
 			Input: &plugin.Schema{Groups: []plugin.Group{{Name: "i", Fields: []plugin.Field{
 				{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
 				{Key: "token", Label: "Token", Type: plugin.FieldPassword, Secret: true},
+				{
+					Key: "credential_id", Label: "Stored credential", Type: plugin.FieldCredentialRef, Required: true,
+					Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}},
+				},
 			}}}},
 			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
 		},
@@ -121,7 +125,7 @@ func TestWriteTierExposesWriteNotDestructiveOrPrivileged(t *testing.T) {
 	}
 }
 
-func TestToolSchemaExcludesSecretsAndIncludesPathParams(t *testing.T) {
+func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	reg := registry(t)
 	ts, _ := tools.Build(reg, "demo", map[plugin.RiskLevel]bool{plugin.RiskSafe: true, plugin.RiskWrite: true}, &recordingInvoker{}, models.User{ID: "u"}, "c1")
 
@@ -136,6 +140,9 @@ func TestToolSchemaExcludesSecretsAndIncludesPathParams(t *testing.T) {
 	}
 	if _, ok := create["token"]; ok {
 		t.Fatal("secret field must not be exposed to the model")
+	}
+	if _, ok := create["credential_id"]; ok {
+		t.Fatal("credential_ref field must not be exposed to the model")
 	}
 
 	get := specs["demo_get"].Parameters
