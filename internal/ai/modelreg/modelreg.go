@@ -33,7 +33,6 @@ type Registry struct {
 	logger  *slog.Logger
 	orURL   string
 	mdURL   string
-	offline bool
 
 	or *ttlCache[[]openRouterModel]
 	md *ttlCache[map[string]Limits]
@@ -56,9 +55,6 @@ func WithURLs(openRouter, modelsDev string) Option {
 
 // WithLogger sets the logger.
 func WithLogger(l *slog.Logger) Option { return func(r *Registry) { r.logger = l } }
-
-// WithOffline disables remote lookups; every model resolves to the safe default.
-func WithOffline() Option { return func(r *Registry) { r.offline = true } }
 
 // New builds a registry.
 func New(opts ...Option) *Registry {
@@ -133,23 +129,25 @@ func staleOr[T any](c *ttlCache[T]) (T, bool) {
 }
 
 func (r *Registry) ensureRegistries(ctx context.Context) {
-	if r.offline {
-		return
-	}
 	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if _, err := r.or.getOrFetch(func() ([]openRouterModel, error) { return r.fetchOpenRouter(ctx) }); err != nil {
-			r.logger.Warn("model registry fetch failed", "source", "openrouter", "err", err)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		if _, err := r.md.getOrFetch(func() (map[string]Limits, error) { return r.fetchModelsDev(ctx) }); err != nil {
-			r.logger.Warn("model registry fetch failed", "source", "models.dev", "err", err)
-		}
-	}()
+	if r.orURL != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := r.or.getOrFetch(func() ([]openRouterModel, error) { return r.fetchOpenRouter(ctx) }); err != nil {
+				r.logger.Warn("model registry fetch failed", "source", "openrouter", "err", err)
+			}
+		}()
+	}
+	if r.mdURL != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := r.md.getOrFetch(func() (map[string]Limits, error) { return r.fetchModelsDev(ctx) }); err != nil {
+				r.logger.Warn("model registry fetch failed", "source", "models.dev", "err", err)
+			}
+		}()
+	}
 	wg.Wait()
 }
 

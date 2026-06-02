@@ -176,6 +176,29 @@ func TestModelsPerKind(t *testing.T) {
 	}
 }
 
+func TestDraftProviderTestValidation(t *testing.T) {
+	svc, _ := newService(t, config.AIConfig{})
+	ctx := context.Background()
+
+	cases := []aiconfig.Input{
+		{Kind: "bogus", APIKey: "k", Model: "m"},
+		{Kind: models.AIProviderOpenAI, APIKey: "", Model: "m"},
+		{Kind: models.AIProviderOpenAI, APIKey: "k", Model: ""},
+		{Kind: models.AIProviderOpenAICompat, BaseURL: "", Model: "m"},
+	}
+	for i, c := range cases {
+		if err := svc.TestInput(ctx, c); !errors.Is(err, aiconfig.ErrInvalid()) {
+			t.Errorf("case %d: want ErrInvalid, got %v", i, err)
+		}
+	}
+
+	if err := svc.TestInput(ctx, aiconfig.Input{
+		Kind: models.AIProviderOpenAICompat, BaseURL: "http://localhost:11434/v1", Model: "llama3",
+	}); err != nil {
+		t.Fatalf("compat draft without key should be testable: %v", err)
+	}
+}
+
 func TestValidationRejectsBadInput(t *testing.T) {
 	svc, _ := newService(t, config.AIConfig{})
 	ctx := context.Background()

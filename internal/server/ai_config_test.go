@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -130,20 +131,56 @@ func TestUserProviderValidationReturns400(t *testing.T) {
 	if resp.Status != http.StatusBadRequest {
 		t.Fatalf("missing model: want 400, got %d (%s)", resp.Status, resp.Body)
 	}
+	resp = h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(`{"kind":"openai_compatible","name":"x","model":"m"}`))
+	if resp.Status != http.StatusBadRequest {
+		t.Fatalf("missing compatible base URL: want 400, got %d (%s)", resp.Status, resp.Body)
+	}
 }
 
 func TestPreviewAIProviderModels(t *testing.T) {
 	h := newHarness(t)
+	models := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"llama3"}]}`))
+	}))
+	defer models.Close()
+
 	resp := h.do(t, http.MethodPost, "/api/me/ai/models", "op", strings.NewReader(
-		`{"kind":"openrouter","name":"OpenRouter","apiKey":"sk-user-secret","model":"openai/gpt-4o"}`))
+		`{"kind":"openai_compatible","name":"Local","baseUrl":"`+models.URL+`","model":"llama3"}`))
 	if resp.Status != http.StatusOK {
 		t.Fatalf("preview models: want 200, got %d (%s)", resp.Status, resp.Body)
 	}
 	body := string(resp.Body)
-	if !strings.Contains(body, "openai/gpt-4o") {
-		t.Fatalf("openrouter defaults missing: %s", body)
+	if !strings.Contains(body, "llama3") {
+		t.Fatalf("provider models missing: %s", body)
 	}
 	if strings.Contains(body, "sk-user-secret") {
 		t.Fatalf("key leaked in model preview: %s", body)
+	}
+}
+
+func TestDraftAIProviderTestValidation(t *testing.T) {
+	h := newHarness(t)
+	models := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"llama3"}]}`))
+	}))
+	defer models.Close()
+
+	for name, body := range map[string]string{
+		"missing model":    `{"kind":"openai","apiKey":"sk-user-secret"}`,
+		"missing key":      `{"kind":"openai","model":"gpt-4o"}`,
+		"missing base URL": `{"kind":"openai_compatible","model":"llama3"}`,
+	} {
+		resp := h.do(t, http.MethodPost, "/api/me/ai/test", "op", strings.NewReader(body))
+		if resp.Status != http.StatusBadRequest {
+			t.Fatalf("%s: want 400, got %d (%s)", name, resp.Status, resp.Body)
+		}
+	}
+
+	resp := h.do(t, http.MethodPost, "/api/me/ai/test", "op", strings.NewReader(
+		`{"kind":"openai_compatible","baseUrl":"`+models.URL+`","model":"llama3"}`))
+	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"ok":true`) {
+		t.Fatalf("valid draft test: status=%d body=%s", resp.Status, resp.Body)
 	}
 }

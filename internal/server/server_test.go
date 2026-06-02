@@ -17,6 +17,7 @@ import (
 	"github.com/coder/websocket"
 
 	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/config"
@@ -294,6 +295,7 @@ func newHarness(t *testing.T) *harness {
 		AI: aiconfig.New(st.AIProviders, vault, config.AIConfig{
 			Kind: "openai", Name: "Shared", APIKey: "sk-global-secret", Model: "gpt-4o",
 		}),
+		ModelRegistry: modelreg.New(modelreg.WithURLs("", "")),
 	})
 
 	ts := httptest.NewServer(srv.Handler())

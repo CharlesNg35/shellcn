@@ -43,6 +43,15 @@ var vendorModelCatalog = map[models.AIProviderKind][]string{
 	models.AIProviderGoogle:     {"gemini-2.5-pro", "gemini-2.5-flash"},
 }
 
+type validationMode int
+
+const (
+	validateCreate validationMode = iota
+	validateUpdate
+	validateDraftTest
+	validateCatalog
+)
+
 // Input is a create/update request for a user provider. On update an empty
 // APIKey keeps the stored ciphertext (write-only key semantics).
 type Input struct {
@@ -110,11 +119,8 @@ func (s *Service) List(ctx context.Context, ownerID string) ([]models.AIProvider
 
 // Create validates input, encrypts the key, and persists a new owned provider.
 func (s *Service) Create(ctx context.Context, ownerID string, in Input) (models.AIProviderSummary, error) {
-	norm, err := s.normalize(in, true)
+	norm, err := s.validate(ctx, ownerID, "", in, validateCreate)
 	if err != nil {
-		return models.AIProviderSummary{}, err
-	}
-	if err := s.ensureUniqueName(ctx, ownerID, "", norm.Name); err != nil {
 		return models.AIProviderSummary{}, err
 	}
 	now := time.Now()
@@ -148,11 +154,8 @@ func (s *Service) Update(ctx context.Context, ownerID, id string, in Input) (mod
 	if err != nil {
 		return models.AIProviderSummary{}, err
 	}
-	norm, err := s.normalize(in, false)
+	norm, err := s.validate(ctx, ownerID, id, in, validateUpdate)
 	if err != nil {
-		return models.AIProviderSummary{}, err
-	}
-	if err := s.ensureUniqueName(ctx, ownerID, id, norm.Name); err != nil {
 		return models.AIProviderSummary{}, err
 	}
 	row.Kind = norm.Kind
@@ -190,17 +193,15 @@ func (s *Service) Models(ctx context.Context, ownerID, id string) ([]string, err
 	if err != nil {
 		return nil, err
 	}
-	if s.models != nil {
-		if live, err := s.models.FetchModels(ctx, string(row.Kind), row.BaseURL, key); err == nil && len(live) > 0 {
-			ids := make([]string, 0, len(live))
-			for _, m := range live {
-				ids = append(ids, m.ID)
-			}
-			return ids, nil
-		}
-	}
 	if len(row.Models) > 0 {
 		return row.Models, nil
+	}
+	if s.models != nil {
+		live, err := s.models.FetchModels(ctx, string(row.Kind), row.BaseURL, key)
+		if err != nil {
+			return nil, err
+		}
+		return modelIDs(live), nil
 	}
 	if m, ok := vendorModelCatalog[row.Kind]; ok {
 		return m, nil
@@ -214,23 +215,16 @@ func (s *Service) Models(ctx context.Context, ownerID, id string) ([]string, err
 // ModelsForInput lists models for an unsaved provider draft. It is used by the
 // settings UI to fetch a provider catalog before persisting the key.
 func (s *Service) ModelsForInput(ctx context.Context, in Input) ([]string, error) {
-	in.Kind = models.AIProviderKind(strings.TrimSpace(string(in.Kind)))
-	in.BaseURL = strings.TrimSpace(in.BaseURL)
-	in.APIKey = strings.TrimSpace(in.APIKey)
-	if !builtinKinds[in.Kind] {
-		return nil, fmt.Errorf("%w: unknown kind %q", errInvalid, in.Kind)
-	}
-	if in.Kind == models.AIProviderOpenAICompat && in.BaseURL == "" {
-		return nil, fmt.Errorf("%w: base URL is required for an openai-compatible provider", errInvalid)
+	in, err := s.validate(ctx, "", "", in, validateCatalog)
+	if err != nil {
+		return nil, err
 	}
 	if s.models != nil {
-		if live, err := s.models.FetchModels(ctx, string(in.Kind), in.BaseURL, in.APIKey); err == nil && len(live) > 0 {
-			ids := make([]string, 0, len(live))
-			for _, m := range live {
-				ids = append(ids, m.ID)
-			}
-			return ids, nil
+		live, err := s.models.FetchModels(ctx, string(in.Kind), in.BaseURL, in.APIKey)
+		if err != nil {
+			return nil, err
 		}
+		return modelIDs(live), nil
 	}
 	if len(in.Models) > 0 {
 		return in.Models, nil
@@ -242,6 +236,29 @@ func (s *Service) ModelsForInput(ctx context.Context, in Input) ([]string, error
 		return []string{in.Model}, nil
 	}
 	return []string{}, nil
+}
+
+// TestInput verifies an unsaved provider draft without persisting the API key.
+func (s *Service) TestInput(ctx context.Context, in Input) error {
+	in, err := s.validate(ctx, "", "", in, validateDraftTest)
+	if err != nil {
+		return err
+	}
+	if s.models == nil {
+		return nil
+	}
+	_, err = s.models.FetchModels(ctx, string(in.Kind), in.BaseURL, in.APIKey)
+	return err
+}
+
+func modelIDs(models []modelreg.ProviderModel) []string {
+	ids := make([]string, 0, len(models))
+	for _, m := range models {
+		if strings.TrimSpace(m.ID) != "" {
+			ids = append(ids, m.ID)
+		}
+	}
+	return ids
 }
 
 // Test verifies a provider's credentials and endpoint by listing its models. It
@@ -301,7 +318,7 @@ func (s *Service) ensureUniqueName(ctx context.Context, ownerID, ignoreID, name 
 	return nil
 }
 
-func (s *Service) normalize(in Input, create bool) (Input, error) {
+func (s *Service) validate(ctx context.Context, ownerID, ignoreID string, in Input, mode validationMode) (Input, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	in.BaseURL = strings.TrimSpace(in.BaseURL)
 	in.APIKey = strings.TrimSpace(in.APIKey)
@@ -310,30 +327,42 @@ func (s *Service) normalize(in Input, create bool) (Input, error) {
 	if !builtinKinds[in.Kind] {
 		return Input{}, fmt.Errorf("%w: unknown kind %q", errInvalid, in.Kind)
 	}
-	if in.Name == "" && in.Kind != models.AIProviderOpenAICompat {
-		in.Name = defaultProviderName(in.Kind)
-	}
-	if in.Name == "" {
-		return Input{}, fmt.Errorf("%w: name is required", errInvalid)
-	}
 	if in.Kind == models.AIProviderOpenAICompat && in.BaseURL == "" {
 		return Input{}, fmt.Errorf("%w: base URL is required for an openai-compatible provider", errInvalid)
 	}
-	if in.Model == "" {
+	if mode == validateCatalog {
+		in.Models = cleanModels(in.Models)
+		return in, nil
+	}
+	if in.Name == "" && in.Kind != models.AIProviderOpenAICompat {
+		in.Name = defaultProviderName(in.Kind)
+	}
+	if mode != validateDraftTest && in.Name == "" {
+		return Input{}, fmt.Errorf("%w: name is required", errInvalid)
+	}
+	if mode != validateCatalog && in.Model == "" {
 		return Input{}, fmt.Errorf("%w: model is required", errInvalid)
 	}
-	// Named vendors require a key; openai_compatible (e.g. local Ollama) may not.
-	if create && in.APIKey == "" && in.Kind != models.AIProviderOpenAICompat {
+	if (mode == validateCreate || mode == validateDraftTest) && in.APIKey == "" && in.Kind != models.AIProviderOpenAICompat {
 		return Input{}, fmt.Errorf("%w: api key is required", errInvalid)
 	}
-	cleaned := make([]string, 0, len(in.Models))
-	for _, m := range in.Models {
+	in.Models = cleanModels(in.Models)
+	if mode == validateCreate || mode == validateUpdate {
+		if err := s.ensureUniqueName(ctx, ownerID, ignoreID, in.Name); err != nil {
+			return Input{}, err
+		}
+	}
+	return in, nil
+}
+
+func cleanModels(models []string) []string {
+	cleaned := make([]string, 0, len(models))
+	for _, m := range models {
 		if m = strings.TrimSpace(m); m != "" {
 			cleaned = append(cleaned, m)
 		}
 	}
-	in.Models = cleaned
-	return in, nil
+	return cleaned
 }
 
 func defaultProviderName(kind models.AIProviderKind) string {

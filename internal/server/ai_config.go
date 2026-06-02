@@ -97,6 +97,23 @@ func (s *Server) handleTestAIProvider(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (s *Server) handleTestAIProviderDraft(w http.ResponseWriter, r *http.Request) {
+	var req aiProviderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
+		return
+	}
+	if err := s.deps.AI.TestInput(r.Context(), req.input()); err != nil {
+		if errors.Is(err, aiconfig.ErrInvalid()) {
+			writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (s *Server) handleAIProviderModels(w http.ResponseWriter, r *http.Request) {
 	user, _ := userFrom(r.Context())
 	models, err := s.deps.AI.Models(r.Context(), user.ID, chi.URLParam(r, "id"))

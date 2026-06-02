@@ -91,6 +91,7 @@ func New(d Deps) *Server {
 	// ~5 login attempts/min per IP with a small burst — generous for humans,
 	// punishing for online password guessing.
 	s := &Server{deps: d, loginLimiter: newRateLimiter(rate.Every(12*time.Second), 5)}
+
 	// The chat agent runs route tools through the server's own secure pipeline
 	// (s implements the invoker); building it here breaks the construction cycle.
 	if d.AI != nil {
@@ -98,9 +99,11 @@ func New(d Deps) *Server {
 		if reg == nil {
 			reg = modelreg.New(modelreg.WithLogger(d.Logger))
 		}
+		d.AI.WithModels(reg)
 		mem := memory.New(d.Store.AIConversations, d.Store.AIMessages)
 		s.chat = ai.New(d.AI, d.AIGlobal, d.Plugins, s, mem, reg)
 	}
+
 	s.router = s.routes()
 	return s
 }
@@ -202,6 +205,7 @@ func (s *Server) routes() chi.Router {
 				pr.Get("/me/ai/config", s.handleListAIProviders)
 				pr.Post("/me/ai/config", s.handleCreateAIProvider)
 				pr.Post("/me/ai/models", s.handlePreviewAIProviderModels)
+				pr.Post("/me/ai/test", s.handleTestAIProviderDraft)
 				pr.Put("/me/ai/config/{id}", s.handleUpdateAIProvider)
 				pr.Delete("/me/ai/config/{id}", s.handleDeleteAIProvider)
 				pr.Get("/me/ai/config/{id}/models", s.handleAIProviderModels)

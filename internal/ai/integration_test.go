@@ -104,7 +104,7 @@ func TestAgentListsResourcesViaTools(t *testing.T) {
 	inv := &recordingInvoker{}
 
 	prov := &scriptedProvider{}
-	svc := ai.New(providers, global, reg, inv, nil, modelreg.New(modelreg.WithOffline())).WithProviderFactory(
+	svc := ai.New(providers, global, reg, inv, nil, modelreg.New(modelreg.WithURLs("", ""))).WithProviderFactory(
 		func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
 			return prov, nil
 		},
@@ -166,7 +166,7 @@ func TestTurnPersistsConversationHistory(t *testing.T) {
 	reg := plugin.NewRegistry()
 	reg.MustRegister(demoPlugin{})
 
-	svc := ai.New(providers, global, reg, &recordingInvoker{}, mem, modelreg.New(modelreg.WithOffline())).WithProviderFactory(
+	svc := ai.New(providers, global, reg, &recordingInvoker{}, mem, modelreg.New(modelreg.WithURLs("", ""))).WithProviderFactory(
 		func(context.Context, models.AIProviderKind, string, string, string) (engine.Provider, error) {
 			return &scriptedProvider{}, nil
 		},

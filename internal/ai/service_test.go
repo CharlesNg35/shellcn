@@ -28,7 +28,7 @@ func newService(t *testing.T, global config.AIConfig) *ai.Service {
 	vault, _ := secrets.NewVault(key)
 	st := store.NewMemory()
 	providers := aiconfig.New(st.AIProviders, vault, global)
-	return ai.New(providers, global, plugin.NewRegistry(), nopInvoker{}, nil, modelreg.New(modelreg.WithOffline()))
+	return ai.New(providers, global, plugin.NewRegistry(), nopInvoker{}, nil, modelreg.New(modelreg.WithURLs("", "")))
 }
 
 func TestAllowedRisks(t *testing.T) {

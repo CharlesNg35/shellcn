@@ -51,6 +51,10 @@ export const aiApi = {
   remove: (id: string) => api.del<void>(`/me/ai/config/${id}`),
   models: (id: string) =>
     api.get<{ models: string[] }>(`/me/ai/config/${id}/models`),
+  testProviderDraft: (body: AiProviderInput) =>
+    api.post<{ ok: boolean; error?: string }>("/me/ai/test", body),
+  testProvider: (id: string) =>
+    api.post<{ ok: boolean; error?: string }>(`/me/ai/config/${id}/test`),
   // Mint a single-use ticket for the chat WebSocket of one connection.
   chatTicket: (connectionId: string) =>
     api.post<{ ticket: string }>(`/connections/${connectionId}/ai/ticket`),

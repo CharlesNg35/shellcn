@@ -56,10 +56,10 @@ func TestLookupResolvesFromRegistries(t *testing.T) {
 	}
 }
 
-func TestContextWindowFallsBackToDefaultOffline(t *testing.T) {
-	r := New(WithOffline())
+func TestContextWindowFallsBackToDefaultWithoutMetadata(t *testing.T) {
+	r := New(WithURLs("", ""))
 	if cw := r.ContextWindow(context.Background(), "some-unknown-model", "openai"); cw != defaultWindow {
-		t.Fatalf("offline should fall back to default, got %d", cw)
+		t.Fatalf("no registry metadata should fall back to default, got %d", cw)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestFetchModelsGoogleFilters(t *testing.T) {
 }
 
 func TestResolveBaseURLPerKind(t *testing.T) {
-	r := New(WithOffline())
+	r := New(WithURLs("", ""))
 	for _, kind := range []string{"openai", "openrouter", "anthropic", "google"} {
 		if r.resolveBaseURL(kind, "") == "" {
 			t.Errorf("vendor kind %q has no default base URL", kind)

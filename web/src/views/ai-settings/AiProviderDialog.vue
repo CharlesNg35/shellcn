@@ -53,7 +53,9 @@ const form = reactive<{
 
 const busy = ref(false);
 const fetchingModels = ref(false);
+const testingProvider = ref(false);
 const formError = ref("");
+const testStatus = ref<{ ok: boolean; message: string } | null>(null);
 const modelOptions = ref<string[]>([]);
 const filteredModels = ref<string[]>([]);
 
@@ -86,6 +88,7 @@ function reset(): void {
   }
   filteredModels.value = [...modelOptions.value];
   formError.value = "";
+  testStatus.value = null;
 }
 
 watch(
@@ -106,6 +109,7 @@ function applyKind(kind: AiProviderKind): void {
   form.model = "";
   modelOptions.value = [];
   filteredModels.value = [...modelOptions.value];
+  testStatus.value = null;
 }
 
 function buildInput(): AiProviderInput {
@@ -125,6 +129,11 @@ function buildInput(): AiProviderInput {
 
 async function fetchModels(): Promise<void> {
   formError.value = "";
+  testStatus.value = null;
+  if (needsBaseUrl.value && !form.baseUrl.trim()) {
+    formError.value = "Base URL is required";
+    return;
+  }
   fetchingModels.value = true;
   try {
     const source =
@@ -164,14 +173,50 @@ function providerNameExists(name: string): boolean {
   );
 }
 
+async function testProvider(): Promise<void> {
+  formError.value = "";
+  testStatus.value = null;
+  if (needsBaseUrl.value && !form.baseUrl.trim()) {
+    formError.value = "Base URL is required";
+    return;
+  }
+  if (!form.model.trim()) {
+    formError.value = "Choose or type a model";
+    return;
+  }
+  testingProvider.value = true;
+  try {
+    const result =
+      props.provider && !form.apiKey.trim()
+        ? await aiApi.testProvider(props.provider.id)
+        : await aiApi.testProviderDraft(buildInput());
+    testStatus.value = {
+      ok: result.ok,
+      message: result.ok
+        ? "Connection OK"
+        : (result.error ?? "Provider test failed"),
+    };
+  } catch (err) {
+    formError.value =
+      err instanceof ApiError ? err.message : "Failed to test provider";
+  } finally {
+    testingProvider.value = false;
+  }
+}
+
 async function save(): Promise<void> {
   formError.value = "";
+  testStatus.value = null;
   if (!form.name.trim()) {
     formError.value = "Provider name is required";
     return;
   }
   if (providerNameExists(form.name)) {
     formError.value = "Provider name already exists";
+    return;
+  }
+  if (needsBaseUrl.value && !form.baseUrl.trim()) {
+    formError.value = "Base URL is required";
     return;
   }
   if (!form.model.trim()) {
@@ -244,7 +289,7 @@ async function save(): Promise<void> {
           for="ai-provider-base-url"
           class="text-sm font-medium text-surface-700 dark:text-surface-200"
         >
-          Base URL
+          Base URL <span class="text-red-500">*</span>
         </label>
         <InputText
           id="ai-provider-base-url"
@@ -315,16 +360,45 @@ async function save(): Promise<void> {
     </div>
 
     <template #footer>
-      <Button
-        :pt="{ root: btnGhost }"
-        :disabled="busy"
-        @click="visible = false"
-      >
-        Cancel
-      </Button>
-      <Button :pt="{ root: btnPrimary }" :loading="busy" @click="save">
-        {{ isEdit ? "Save" : "Add provider" }}
-      </Button>
+      <div class="flex w-full min-w-0 items-center justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-2">
+          <Button
+            severity="secondary"
+            outlined
+            size="small"
+            :loading="testingProvider"
+            :disabled="busy || fetchingModels"
+            @click="testProvider"
+          >
+            <AppIcon :icon="{ type: 'lucide', value: 'plug-zap' }" :size="14" />
+            Test provider
+          </Button>
+          <p
+            v-if="testStatus"
+            class="truncate text-xs"
+            :class="
+              testStatus.ok
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-red-500'
+            "
+            role="status"
+          >
+            {{ testStatus.message }}
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <Button
+            :pt="{ root: btnGhost }"
+            :disabled="busy"
+            @click="visible = false"
+          >
+            Cancel
+          </Button>
+          <Button :pt="{ root: btnPrimary }" :loading="busy" @click="save">
+            {{ isEdit ? "Save" : "Add provider" }}
+          </Button>
+        </div>
+      </div>
     </template>
   </Dialog>
 </template>
