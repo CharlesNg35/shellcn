@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, watch } from "vue";
+import type { VNodeRef } from "vue";
 import { useStickToBottom } from "vue-stick-to-bottom";
 import Button from "primevue/button";
 import AiMessageItem from "./AiMessage.vue";
@@ -18,6 +19,12 @@ const emit = defineEmits<{ quickStart: [prompt: string]; loadOlder: [] }>();
 const { scrollRef, contentRef, isAtBottom, isNearBottom, scrollToBottom } =
   useStickToBottom({ initial: "instant", resize: "instant" });
 const lastMessage = computed(() => props.messages.at(-1));
+const setScrollRef: VNodeRef = (el) => {
+  scrollRef.value = el instanceof HTMLElement ? el : null;
+};
+const setContentRef: VNodeRef = (el) => {
+  contentRef.value = el instanceof HTMLElement ? el : null;
+};
 
 watch(
   () => props.messages.length,
@@ -82,9 +89,9 @@ const quickStarts = [
   </div>
 
   <div v-else class="relative min-h-0 flex-1 overflow-hidden">
-    <div ref="scrollRef" class="h-full overflow-y-auto scroll-smooth">
+    <div :ref="setScrollRef" class="h-full overflow-y-auto scroll-smooth">
       <div
-        ref="contentRef"
+        :ref="setContentRef"
         class="flex flex-col gap-3 px-4 py-3"
         role="log"
         aria-live="polite"
