@@ -100,7 +100,6 @@ watch(visible, (next) => {
   <Drawer
     v-model:visible="open"
     position="right"
-    :modal="false"
     :dismissable="false"
     header="Assistant"
     :pt="{

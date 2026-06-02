@@ -6,11 +6,11 @@ import AiComposer from "./AiComposer.vue";
 import AiConversationList from "./AiConversationList.vue";
 import AiActionConfirm from "./AiActionConfirm.vue";
 import AiModelSwitcher from "./AiModelSwitcher.vue";
+import AiQueuedMessages from "./AiQueuedMessages.vue";
+import AppAlert from "../../components/AppAlert.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import { useAiChatStore } from "../../stores/aiChat";
 
-// This component (and everything it imports — the chat store, markdown stack,
-// highlight.js) rides the lazy AI chunk. It is never in the main bundle.
 const props = defineProps<{ connectionId: string }>();
 const emit = defineEmits<{ close: [] }>();
 
@@ -25,6 +25,18 @@ const providerReady = computed(
 const composerDisabled = computed(
   () => !st.value.connected || !providerReady.value,
 );
+const disabledReason = computed(() => {
+  if (!store.providersReady) return "Loading AI settings...";
+  if (!providerReady.value) return "No AI provider configured";
+  if (!st.value.connected) return "Connecting assistant...";
+  return "";
+});
+const statusLabel = computed(() => {
+  if (st.value.runState === "stopping") return "stopping...";
+  if (st.value.runState !== "idle") return "streaming...";
+  if (!st.value.connected) return "connecting...";
+  return "";
+});
 const showHistory = ref(false);
 
 function send(text: string): void {
@@ -40,6 +52,9 @@ function selectConversation(id: string): void {
 function newChat(): void {
   store.newChat(props.connectionId);
   showHistory.value = false;
+}
+function retryConnection(): void {
+  void store.connect(props.connectionId);
 }
 
 onMounted(() => {
@@ -75,11 +90,11 @@ onMounted(() => {
         Assistant
       </span>
       <span
-        v-if="!st.connected"
+        v-if="statusLabel"
         class="text-xs text-surface-400"
         aria-live="polite"
       >
-        connecting…
+        {{ statusLabel }}
       </span>
       <Button
         text
@@ -133,21 +148,41 @@ onMounted(() => {
         @remove="(id) => store.deleteConversation(connectionId, id)"
         @close="showHistory = false"
       />
-      <button
+      <Button
         v-if="showHistory"
         type="button"
-        class="absolute inset-0 z-10 bg-surface-950/10 backdrop-blur-[1px] dark:bg-surface-950/30"
+        text
+        severity="secondary"
+        class="absolute inset-0 z-10 h-full w-full rounded-none border-0 bg-surface-950/10 p-0 backdrop-blur-[1px] hover:bg-surface-950/10 dark:bg-surface-950/30 dark:hover:bg-surface-950/30"
         aria-label="Close conversation history"
         @click="showHistory = false"
       />
 
       <div class="flex min-h-0 flex-1 flex-col">
+        <div v-if="st.error" class="px-3 pt-3">
+          <AppAlert tone="danger" title="Assistant error">
+            <div class="flex min-w-0 items-center gap-2">
+              <span class="min-w-0 flex-1">{{ st.error }}</span>
+              <Button
+                v-if="!st.connected"
+                type="button"
+                size="small"
+                severity="secondary"
+                outlined
+                @click="retryConnection"
+              >
+                Retry
+              </Button>
+            </div>
+          </AppAlert>
+        </div>
         <AiMessageList
           :messages="st.messages"
           :current-id="st.current?.id ?? null"
           :streaming="busy"
           :has-more="st.hasMore"
           :loading-older="st.loadingOlder"
+          :disabled="composerDisabled"
           @quick-start="send"
           @load-older="store.loadOlder(connectionId)"
         />
@@ -158,35 +193,14 @@ onMounted(() => {
             @reject="store.resolveConfirm(connectionId, false)"
           />
         </div>
-        <ul v-if="st.queue.length" class="flex flex-col gap-1 px-3 pt-2">
-          <li
-            v-for="(q, i) in st.queue"
-            :key="i"
-            class="flex items-center gap-2 rounded-md bg-surface-100 px-2 py-1 text-xs text-surface-600 dark:bg-surface-800 dark:text-surface-300"
-          >
-            <AppIcon
-              :icon="{ type: 'lucide', value: 'clock' }"
-              :size="12"
-              class="shrink-0 text-surface-400"
-            />
-            <span class="min-w-0 flex-1 truncate">{{ q }}</span>
-            <Button
-              type="button"
-              text
-              rounded
-              severity="secondary"
-              size="small"
-              class="text-surface-400 hover:text-surface-700 dark:hover:text-surface-100"
-              aria-label="Remove queued message"
-              @click="store.dequeue(connectionId, i)"
-            >
-              <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="12" />
-            </Button>
-          </li>
-        </ul>
+        <AiQueuedMessages
+          :messages="st.queue"
+          @remove="(index) => store.dequeue(connectionId, index)"
+        />
         <AiComposer
-          :busy="busy"
+          :run-state="st.runState"
           :disabled="composerDisabled"
+          :disabled-reason="disabledReason"
           @send="send"
           @stop="stop"
         />

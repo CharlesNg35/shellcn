@@ -1,13 +1,23 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import Textarea from "primevue/textarea";
 import Button from "primevue/button";
 import AppIcon from "../../components/AppIcon.vue";
+import type { AiRunState } from "../../stores/aiChat";
 
-const props = defineProps<{ busy: boolean; disabled: boolean }>();
+const props = defineProps<{
+  runState: AiRunState;
+  disabled: boolean;
+  disabledReason?: string;
+}>();
 const emit = defineEmits<{ send: [text: string]; stop: [] }>();
 
 const text = ref("");
+const busy = computed(() => props.runState !== "idle");
+const stopping = computed(() => props.runState === "stopping");
+const statusText = computed(() =>
+  stopping.value ? "Stopping..." : busy.value ? "Streaming" : "",
+);
 
 function submit(): void {
   if (props.disabled) return;
@@ -18,7 +28,6 @@ function submit(): void {
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  // Enter sends; Shift+Enter inserts a newline.
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
     submit();
@@ -47,14 +56,20 @@ function onKeydown(e: KeyboardEvent): void {
       />
       <div class="flex min-w-0 items-center justify-between gap-2 px-1 pt-1">
         <span
-          v-if="busy"
+          v-if="statusText"
           class="inline-flex min-w-0 items-center gap-1.5 text-xs text-surface-500 dark:text-surface-400"
           aria-live="polite"
         >
           <span
             class="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary-500 motion-reduce:animate-none"
           />
-          Streaming
+          {{ statusText }}
+        </span>
+        <span
+          v-else-if="disabledReason"
+          class="min-w-0 truncate text-xs text-surface-400"
+        >
+          {{ disabledReason }}
         </span>
         <span v-else class="min-w-0" />
         <div class="flex shrink-0 items-center gap-1.5">
@@ -64,7 +79,8 @@ function onKeydown(e: KeyboardEvent): void {
             outlined
             rounded
             size="small"
-            aria-label="Stop"
+            :disabled="stopping"
+            :aria-label="stopping ? 'Stopping response' : 'Stop response'"
             @click="emit('stop')"
           >
             <AppIcon :icon="{ type: 'lucide', value: 'square' }" :size="14" />
@@ -73,7 +89,7 @@ function onKeydown(e: KeyboardEvent): void {
             rounded
             size="small"
             :disabled="disabled || !text.trim()"
-            :aria-label="busy ? 'Queue message' : 'Send'"
+            :aria-label="busy ? 'Queue message' : 'Send message'"
             @click="submit"
           >
             <AppIcon :icon="{ type: 'lucide', value: 'arrow-up' }" :size="15" />

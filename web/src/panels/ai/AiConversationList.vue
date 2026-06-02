@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import Button from "primevue/button";
+import Dialog from "primevue/dialog";
+import InputText from "primevue/inputtext";
+import { computed, ref } from "vue";
 import AppIcon from "../../components/AppIcon.vue";
 import { useConfirmAction } from "../../composables/useConfirmAction";
+import { dialogRoot } from "../../primevue/preset";
 import type { AiConversation } from "../../api/ai";
 
 defineProps<{
@@ -19,18 +23,47 @@ const emit = defineEmits<{
 }>();
 
 const { confirmDanger } = useConfirmAction();
+const renameVisible = ref(false);
+const renameTarget = ref<AiConversation | null>(null);
+const renameTitle = ref("");
+const trimmedRenameTitle = computed(() => renameTitle.value.trim());
+const canRename = computed(() => {
+  const current = renameTarget.value?.title.trim() ?? "";
+  return Boolean(
+    renameTarget.value?.id &&
+    trimmedRenameTitle.value &&
+    trimmedRenameTitle.value !== current,
+  );
+});
 
-function rename(c: AiConversation): void {
-  const next = window.prompt("Rename conversation", c.title);
-  if (next && next.trim() && next.trim() !== c.title)
-    emit("rename", c.id, next.trim());
+function openRename(c: AiConversation): void {
+  if (!c.id) return;
+  renameTarget.value = c;
+  renameTitle.value = c.title || "New chat";
+  renameVisible.value = true;
+}
+
+function closeRename(): void {
+  renameVisible.value = false;
+  renameTarget.value = null;
+  renameTitle.value = "";
+}
+
+function submitRename(): void {
+  const target = renameTarget.value;
+  if (!target?.id || !canRename.value) return;
+  emit("rename", target.id, trimmedRenameTitle.value);
+  closeRename();
 }
 
 function remove(c: AiConversation): void {
+  if (!c.id) return;
+  const id = c.id;
+  const title = c.title || "New chat";
   confirmDanger({
     header: "Delete conversation",
-    message: `Delete "${c.title}"? This cannot be undone.`,
-    accept: () => emit("remove", c.id),
+    message: `Delete "${title}"? This cannot be undone.`,
+    accept: () => emit("remove", id),
   });
 }
 </script>
@@ -122,7 +155,7 @@ function remove(c: AiConversation): void {
           size="small"
           class="text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-surface-700 focus-visible:opacity-100 dark:hover:text-surface-100"
           aria-label="Rename"
-          @click="rename(c)"
+          @click.stop="openRename(c)"
         >
           <AppIcon :icon="{ type: 'lucide', value: 'pencil' }" :size="12" />
         </Button>
@@ -134,7 +167,7 @@ function remove(c: AiConversation): void {
           size="small"
           class="text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500 focus-visible:opacity-100"
           aria-label="Delete"
-          @click="remove(c)"
+          @click.stop="remove(c)"
         >
           <AppIcon :icon="{ type: 'lucide', value: 'trash' }" :size="12" />
         </Button>
@@ -151,5 +184,41 @@ function remove(c: AiConversation): void {
         <span>No conversations yet.</span>
       </li>
     </ul>
+    <Dialog
+      v-model:visible="renameVisible"
+      modal
+      dismissable-mask
+      header="Rename conversation"
+      :pt="{ root: dialogRoot('max-w-sm') }"
+      @hide="closeRename"
+    >
+      <form class="space-y-4" @submit.prevent="submitRename">
+        <div class="space-y-2">
+          <label
+            for="ai-conversation-title"
+            class="text-xs font-medium text-surface-600 dark:text-surface-300"
+          >
+            Title
+          </label>
+          <InputText
+            id="ai-conversation-title"
+            v-model="renameTitle"
+            autofocus
+            class="w-full"
+            autocomplete="off"
+          />
+        </div>
+        <div class="flex justify-end gap-2">
+          <Button
+            type="button"
+            label="Cancel"
+            severity="secondary"
+            text
+            @click="closeRename"
+          />
+          <Button type="submit" label="Rename" :disabled="!canRename" />
+        </div>
+      </form>
+    </Dialog>
   </div>
 </template>

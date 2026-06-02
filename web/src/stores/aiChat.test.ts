@@ -4,6 +4,8 @@ import { setActivePinia, createPinia } from "pinia";
 const listConversations = vi.fn(async () => [] as unknown[]);
 const getConversation = vi.fn();
 const messages = vi.fn();
+const renameConversation = vi.fn();
+const deleteConversation = vi.fn();
 const global = vi.fn(async () => ({ configured: false }));
 const listProviders = vi.fn(async () => [] as unknown[]);
 vi.mock("../api/ai", () => ({
@@ -13,6 +15,8 @@ vi.mock("../api/ai", () => ({
     listConversations: () => listConversations(),
     getConversation: (...a: unknown[]) => getConversation(...a),
     messages: (...a: unknown[]) => messages(...a),
+    renameConversation: (...a: unknown[]) => renameConversation(...a),
+    deleteConversation: (...a: unknown[]) => deleteConversation(...a),
   },
   chatSocketUrl: () => "ws://test",
 }));
@@ -26,6 +30,8 @@ beforeEach(() => {
   listConversations.mockClear();
   getConversation.mockReset();
   messages.mockReset();
+  renameConversation.mockReset();
+  deleteConversation.mockReset();
   global.mockReset();
   global.mockResolvedValue({ configured: false });
   listProviders.mockReset();
@@ -41,9 +47,23 @@ const storedMsg = (id: string, content: string) => ({
   createdAt: "",
 });
 
+function openSocket(
+  store: ReturnType<typeof useAiChatStore>,
+  sent: string[] = [],
+) {
+  const st = store.state(CONN);
+  st.connected = true;
+  st.socket = {
+    readyState: WebSocket.OPEN,
+    send: (d: string) => sent.push(d),
+  } as unknown as WebSocket;
+  return st;
+}
+
 describe("aiChat store", () => {
   it("creates user + assistant messages on send and streams text", () => {
     const store = useAiChatStore();
+    openSocket(store);
     store.send(CONN, "list resources");
     const st = store.state(CONN);
     expect(st.messages).toHaveLength(2);
@@ -61,6 +81,7 @@ describe("aiChat store", () => {
 
   it("tracks tool calls and their results", () => {
     const store = useAiChatStore();
+    openSocket(store);
     store.send(CONN, "go");
     store.apply(CONN, {
       type: "tool_call",
@@ -87,6 +108,7 @@ describe("aiChat store", () => {
 
   it("marks an error and keeps the partial assistant message", () => {
     const store = useAiChatStore();
+    openSocket(store);
     store.send(CONN, "go");
     store.apply(CONN, { type: "text_delta", text: "partial" });
     store.apply(CONN, { type: "error", err: "boom" });
@@ -99,6 +121,7 @@ describe("aiChat store", () => {
 
   it("drops an empty assistant message that produced nothing", () => {
     const store = useAiChatStore();
+    openSocket(store);
     store.send(CONN, "go");
     store.apply(CONN, { type: "done" });
     // Only the user message survives; the empty assistant bubble is pruned.
@@ -109,6 +132,7 @@ describe("aiChat store", () => {
 
   it("flags a truncated response", () => {
     const store = useAiChatStore();
+    openSocket(store);
     store.send(CONN, "go");
     store.apply(CONN, { type: "text_delta", text: "capped" });
     store.apply(CONN, { type: "done", truncated: true });
@@ -117,6 +141,7 @@ describe("aiChat store", () => {
 
   it("tags nested subagent tool calls", () => {
     const store = useAiChatStore();
+    openSocket(store);
     store.send(CONN, "investigate");
     store.apply(CONN, {
       type: "tool_call",
@@ -137,6 +162,7 @@ describe("aiChat store", () => {
 
   it("newChat clears the active conversation and messages", () => {
     const store = useAiChatStore();
+    openSocket(store);
     store.send(CONN, "hi");
     store.apply(CONN, { type: "text_delta", text: "yo" });
     store.apply(CONN, { type: "done" });
@@ -149,9 +175,10 @@ describe("aiChat store", () => {
 
   it("sends the active conversation id and confirms/rejects a pending action", () => {
     const store = useAiChatStore();
-    const st = store.state(CONN);
     const sent: Record<string, unknown>[] = [];
+    const st = openSocket(store);
     st.socket = {
+      readyState: WebSocket.OPEN,
       send: (d: string) => sent.push(JSON.parse(d)),
     } as unknown as WebSocket;
 
@@ -183,9 +210,8 @@ describe("aiChat store", () => {
 
   it("sends the active conversation id with the message", () => {
     const store = useAiChatStore();
-    const st = store.state(CONN);
     const sent: string[] = [];
-    st.socket = { send: (d: string) => sent.push(d) } as unknown as WebSocket;
+    const st = openSocket(store, sent);
     st.activeId = "conv-9";
     store.send(CONN, "hello");
     expect(sent).toHaveLength(1);
@@ -221,8 +247,7 @@ describe("aiChat store", () => {
 
   it("queues messages typed mid-stream and flushes on completion", () => {
     const store = useAiChatStore();
-    const st = store.state(CONN);
-    st.socket = { send: () => {} } as unknown as WebSocket;
+    const st = openSocket(store);
 
     store.send(CONN, "first"); // starts a turn
     expect(st.runState).toBe("starting");
@@ -237,11 +262,37 @@ describe("aiChat store", () => {
     expect(st.runState).toBe("starting");
   });
 
-  it("sends only the selected provider", () => {
+  it("sends a stop frame and exposes stopping state", () => {
+    const store = useAiChatStore();
+    const sent: string[] = [];
+    const st = openSocket(store, sent);
+
+    store.send(CONN, "first");
+    store.apply(CONN, { type: "text_delta", text: "partial" });
+    store.stop(CONN);
+
+    expect(st.runState).toBe("stopping");
+    expect(JSON.parse(sent.at(-1) ?? "{}")).toMatchObject({ type: "stop" });
+  });
+
+  it("does not send stop when the socket is closed", () => {
     const store = useAiChatStore();
     const st = store.state(CONN);
+    st.runState = "streaming";
+    st.socket = { readyState: WebSocket.CLOSED } as unknown as WebSocket;
+
+    store.stop(CONN);
+
+    expect(st.runState).toBe("streaming");
+    expect(st.error).toBe("Assistant is not connected.");
+  });
+
+  it("sends only the selected provider", () => {
+    const store = useAiChatStore();
     const sent: Record<string, unknown>[] = [];
+    const st = openSocket(store);
     st.socket = {
+      readyState: WebSocket.OPEN,
       send: (d: string) => sent.push(JSON.parse(d)),
     } as unknown as WebSocket;
     store.setProvider(CONN, "p1");
@@ -266,9 +317,10 @@ describe("aiChat store", () => {
       },
     ]);
     const store = useAiChatStore();
-    const st = store.state(CONN);
     const sent: Record<string, unknown>[] = [];
+    const st = openSocket(store);
     st.socket = {
+      readyState: WebSocket.OPEN,
       send: (d: string) => sent.push(JSON.parse(d)),
     } as unknown as WebSocket;
 
@@ -279,5 +331,15 @@ describe("aiChat store", () => {
       providerId: "p-local",
     });
     expect(sent.at(-1)).not.toHaveProperty("model");
+  });
+
+  it("does not call conversation endpoints with an empty id", async () => {
+    const store = useAiChatStore();
+    await store.deleteConversation(CONN, "");
+    await store.renameConversation(CONN, "", "Next");
+
+    expect(deleteConversation).not.toHaveBeenCalled();
+    expect(renameConversation).not.toHaveBeenCalled();
+    expect(store.state(CONN).error).toBe("Conversation title is required.");
   });
 });

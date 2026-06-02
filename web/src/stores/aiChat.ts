@@ -46,7 +46,7 @@ interface ChatState {
   connected: boolean;
   messages: AiMessage[];
   runState: AiRunState;
-  current: AiMessage | null; // the in-flight assistant message
+  current: AiMessage | null;
   error: string | null;
   providerId: string;
   conversations: AiConversation[];
@@ -94,6 +94,8 @@ function mapStored(m: AiStoredMessage): AiMessage {
 
 let seq = 0;
 const nextId = (): string => `m-${Date.now()}-${seq++}`;
+const isOpenSocket = (socket: WebSocket | null): socket is WebSocket =>
+  !!socket && socket.readyState === WebSocket.OPEN;
 
 export const useAiChatStore = defineStore("aiChat", () => {
   const byConn = reactive<Record<string, ChatState>>({});
@@ -126,6 +128,25 @@ export const useAiChatStore = defineStore("aiChat", () => {
   function state(connId: string): ChatState {
     if (!byConn[connId]) byConn[connId] = newState();
     return byConn[connId];
+  }
+
+  function sendControlFrame(
+    connId: string,
+    payload: Record<string, unknown>,
+  ): boolean {
+    const st = state(connId);
+    if (!isOpenSocket(st.socket)) {
+      st.error = "Assistant is not connected.";
+      return false;
+    }
+    try {
+      st.socket.send(JSON.stringify(payload));
+      st.error = null;
+      return true;
+    } catch (err) {
+      st.error = err instanceof Error ? err.message : "Failed to send command";
+      return false;
+    }
   }
 
   function ensureProviderSelection(st: ChatState): void {
@@ -166,6 +187,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
             | { type: "conversation"; conversationId: string; title: string }
             | ({ type: "needs_confirmation" } & PendingConfirm);
           if (frame.type === "conversation") {
+            if (!frame.conversationId) return;
             st.activeId = frame.conversationId;
             void loadConversations(connId);
             return;
@@ -184,7 +206,10 @@ export const useAiChatStore = defineStore("aiChat", () => {
       ws.addEventListener("close", () => {
         st.connected = false;
         st.socket = null;
-        if (st.runState !== "idle") finalize(connId);
+        if (st.runState !== "idle") {
+          st.error = "Assistant disconnected.";
+          finalize(connId);
+        }
       });
       ws.addEventListener("error", () => {
         st.error = "Connection error";
@@ -200,9 +225,18 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const st = state(connId);
     ensureProviderSelection(st);
     if (st.runState !== "idle") {
+      if (!st.connected || !isOpenSocket(st.socket)) {
+        st.error = "Assistant is not connected.";
+        return;
+      }
       st.queue.push(text);
       return;
     }
+    if (!st.connected || !isOpenSocket(st.socket)) {
+      st.error = "Assistant is not connected.";
+      return;
+    }
+    st.error = null;
     st.messages.push({
       id: nextId(),
       role: "user",
@@ -220,14 +254,22 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.messages.push(assistant);
     st.current = assistant;
     st.runState = "starting";
-    st.socket?.send(
-      JSON.stringify({
-        type: "user_message",
-        content: text,
-        providerId: st.providerId,
-        conversationId: st.activeId ?? "",
-      }),
-    );
+    try {
+      st.socket.send(
+        JSON.stringify({
+          type: "user_message",
+          content: text,
+          providerId: st.providerId,
+          conversationId: st.activeId ?? "",
+        }),
+      );
+    } catch (err) {
+      assistant.error =
+        err instanceof Error ? err.message : "Failed to send message";
+      st.error = "Failed to send message";
+      st.current = null;
+      st.runState = "idle";
+    }
   }
 
   async function loadConversations(connId: string): Promise<void> {
@@ -244,6 +286,10 @@ export const useAiChatStore = defineStore("aiChat", () => {
     cid: string,
   ): Promise<void> {
     const st = state(connId);
+    if (!cid) {
+      st.error = "Conversation id is required.";
+      return;
+    }
     if (st.runState !== "idle") return;
     try {
       const { conversation, page } = await aiApi.getConversation(connId, cid);
@@ -292,38 +338,60 @@ export const useAiChatStore = defineStore("aiChat", () => {
     cid: string,
     title: string,
   ): Promise<void> {
-    await aiApi.renameConversation(connId, cid, title);
-    await loadConversations(connId);
+    const st = state(connId);
+    const next = title.trim();
+    if (!cid || !next) {
+      st.error = "Conversation title is required.";
+      return;
+    }
+    try {
+      await aiApi.renameConversation(connId, cid, next);
+      await loadConversations(connId);
+    } catch (err) {
+      st.error =
+        err instanceof Error ? err.message : "Failed to rename conversation";
+    }
   }
 
   async function deleteConversation(
     connId: string,
     cid: string,
   ): Promise<void> {
-    await aiApi.deleteConversation(connId, cid);
     const st = state(connId);
-    if (st.activeId === cid) newChat(connId);
-    await loadConversations(connId);
+    if (!cid) {
+      st.error = "Conversation id is required.";
+      return;
+    }
+    try {
+      await aiApi.deleteConversation(connId, cid);
+      if (st.activeId === cid) newChat(connId);
+      await loadConversations(connId);
+    } catch (err) {
+      st.error =
+        err instanceof Error ? err.message : "Failed to delete conversation";
+    }
   }
 
   function stop(connId: string): void {
     const st = state(connId);
     if (st.runState === "idle") return;
-    st.runState = "stopping";
-    st.socket?.send(JSON.stringify({ type: "stop" }));
+    if (sendControlFrame(connId, { type: "stop" })) {
+      st.runState = "stopping";
+    }
   }
 
   function resolveConfirm(connId: string, approve: boolean): void {
     const st = state(connId);
     const pending = st.pendingConfirm;
     if (!pending) return;
-    st.socket?.send(
-      JSON.stringify({
+    if (
+      sendControlFrame(connId, {
         type: approve ? "confirm" : "reject",
         toolId: pending.toolId,
-      }),
-    );
-    st.pendingConfirm = null;
+      })
+    ) {
+      st.pendingConfirm = null;
+    }
   }
 
   function apply(connId: string, ev: AiStreamEvent): void {
@@ -381,8 +449,10 @@ export const useAiChatStore = defineStore("aiChat", () => {
     st.current = null;
     st.runState = "idle";
     st.pendingConfirm = null;
-    const next = st.queue.shift();
-    if (next) send(connId, next);
+    if (st.connected && isOpenSocket(st.socket)) {
+      const next = st.queue.shift();
+      if (next) send(connId, next);
+    }
   }
 
   function dequeue(connId: string, index: number): void {

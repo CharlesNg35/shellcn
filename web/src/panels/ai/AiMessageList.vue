@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, watch } from "vue";
-import type { VNodeRef } from "vue";
-import { useStickToBottom } from "vue-stick-to-bottom";
+import { toRef } from "vue";
 import Button from "primevue/button";
 import AiMessageItem from "./AiMessage.vue";
 import AppIcon from "../../components/AppIcon.vue";
+import { useAiMessageScroll } from "./useAiMessageScroll";
 import type { AiMessage } from "../../stores/aiChat";
 
 const props = defineProps<{
@@ -13,44 +12,12 @@ const props = defineProps<{
   streaming: boolean;
   hasMore: boolean;
   loadingOlder: boolean;
+  disabled?: boolean;
 }>();
 const emit = defineEmits<{ quickStart: [prompt: string]; loadOlder: [] }>();
 
-const { scrollRef, contentRef, isAtBottom, isNearBottom, scrollToBottom } =
-  useStickToBottom({ initial: "instant", resize: "instant" });
-const lastMessage = computed(() => props.messages.at(-1));
-const setScrollRef: VNodeRef = (el) => {
-  scrollRef.value = el instanceof HTMLElement ? el : null;
-};
-const setContentRef: VNodeRef = (el) => {
-  contentRef.value = el instanceof HTMLElement ? el : null;
-};
-
-watch(
-  () => props.messages.length,
-  async (count, prev) => {
-    if (count <= prev) return;
-    const shouldFollow =
-      lastMessage.value?.role === "user" ||
-      isAtBottom.value ||
-      isNearBottom.value;
-    if (!shouldFollow) return;
-    await nextTick();
-    scrollToBottom({ animation: "smooth", ignoreEscapes: true, wait: true });
-  },
-  { flush: "post" },
-);
-
-watch(
-  () => lastMessage.value?.content.length ?? 0,
-  async (length, prev) => {
-    if (length === prev || !props.streaming) return;
-    if (!isAtBottom.value && !isNearBottom.value) return;
-    await nextTick();
-    scrollToBottom({ animation: "instant", preserveScrollPosition: true });
-  },
-  { flush: "post" },
-);
+const { scrollRef, contentRef, showScrollToLatest, jumpToBottom } =
+  useAiMessageScroll(toRef(props, "messages"), toRef(props, "streaming"));
 
 const quickStarts = [
   "What resources are available on this connection?",
@@ -81,6 +48,7 @@ const quickStarts = [
         outlined
         size="small"
         class="rounded-lg border border-surface-200 px-3 py-2 text-left text-xs text-surface-600 transition-colors hover:bg-surface-100 dark:border-surface-700 dark:text-surface-300 dark:hover:bg-surface-800"
+        :disabled="disabled"
         @click="emit('quickStart', q)"
       >
         {{ q }}
@@ -89,9 +57,9 @@ const quickStarts = [
   </div>
 
   <div v-else class="relative min-h-0 flex-1 overflow-hidden">
-    <div :ref="setScrollRef" class="h-full overflow-y-auto scroll-smooth">
+    <div ref="scrollRef" class="h-full overflow-y-auto">
       <div
-        :ref="setContentRef"
+        ref="contentRef"
         class="flex flex-col gap-3 px-4 py-3"
         role="log"
         aria-live="polite"
@@ -119,14 +87,14 @@ const quickStarts = [
     </div>
 
     <Button
-      v-if="!isAtBottom"
+      v-show="showScrollToLatest"
       type="button"
       rounded
       severity="secondary"
       outlined
-      class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-surface-200 bg-surface-0 p-1.5 shadow-md hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-800 dark:hover:bg-surface-700"
+      class="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-surface-200 bg-surface-0 p-2 shadow-lg transition hover:bg-surface-100 dark:border-surface-700 dark:bg-surface-800 dark:hover:bg-surface-700"
       aria-label="Scroll to latest"
-      @click="scrollToBottom({ animation: 'smooth', ignoreEscapes: true })"
+      @click="jumpToBottom"
     >
       <AppIcon
         :icon="{ type: 'lucide', value: 'chevrons-down' }"

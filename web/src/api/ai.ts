@@ -1,5 +1,10 @@
 import { api } from "./client";
 
+function conversationPath(connectionId: string, cid: string): string {
+  if (!cid) throw new Error("Conversation id is required");
+  return `/connections/${connectionId}/ai/conversations/${cid}`;
+}
+
 export type AiProviderKind =
   | "openai"
   | "openrouter"
@@ -62,19 +67,16 @@ export const aiApi = {
     }),
   getConversation: (connectionId: string, cid: string) =>
     api.get<{ conversation: AiConversation; page: AiMessagePage }>(
-      `/connections/${connectionId}/ai/conversations/${cid}`,
+      conversationPath(connectionId, cid),
     ),
   messages: (connectionId: string, cid: string, loadedCount: number) =>
     api.get<AiMessagePage>(
-      `/connections/${connectionId}/ai/conversations/${cid}/messages?loadedCount=${loadedCount}`,
+      `${conversationPath(connectionId, cid)}/messages?loadedCount=${loadedCount}`,
     ),
   renameConversation: (connectionId: string, cid: string, title: string) =>
-    api.put<AiConversation>(
-      `/connections/${connectionId}/ai/conversations/${cid}`,
-      { title },
-    ),
+    api.put<AiConversation>(conversationPath(connectionId, cid), { title }),
   deleteConversation: (connectionId: string, cid: string) =>
-    api.del<void>(`/connections/${connectionId}/ai/conversations/${cid}`),
+    api.del<void>(conversationPath(connectionId, cid)),
 };
 
 export interface AiConversation {

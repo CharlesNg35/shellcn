@@ -167,7 +167,7 @@ const overlayTransition = {
 };
 
 const dialogMask =
-  "fixed inset-0 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm";
+  "pointer-events-auto fixed inset-0 flex items-center justify-center bg-surface-950/50 p-4 backdrop-blur-sm";
 const dialogHeader =
   "flex shrink-0 items-center justify-between border-b border-surface-200 px-5 py-3.5 dark:border-surface-800";
 const dialogTitle =
@@ -448,7 +448,7 @@ export const primeVuePassthrough = {
   },
 
   drawer: {
-    mask: "fixed inset-0 z-50 bg-surface-950/30 backdrop-blur-[1px]",
+    mask: "pointer-events-auto fixed inset-0 z-50 bg-surface-950/30 backdrop-blur-[1px]",
     root: drawerRoot(),
     header:
       "flex shrink-0 items-center justify-between border-b border-surface-200 px-4 py-3 dark:border-surface-800",
