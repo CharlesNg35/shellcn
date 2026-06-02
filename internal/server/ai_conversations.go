@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -66,7 +67,8 @@ func (s *Server) handleCreateConversation(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.aiConn(w, r); !ok {
+	conn, ok := s.aiConn(w, r)
+	if !ok {
 		return
 	}
 	user, _ := userFrom(r.Context())
@@ -74,6 +76,10 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request) {
 	conv, err := s.chat.Conversations().Get(r.Context(), user.ID, id)
 	if err != nil {
 		writeError(w, s.deps.Logger, err)
+		return
+	}
+	if conv.ConnectionID != conn.ID {
+		writeError(w, s.deps.Logger, plugin.ErrNotFound)
 		return
 	}
 	page, err := s.chat.Conversations().MessagesPage(r.Context(), user.ID, id, atoiDefault(r.URL.Query().Get("limit"), 0), 0)
@@ -85,10 +91,14 @@ func (s *Server) handleGetConversation(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConversationMessages(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.aiConn(w, r); !ok {
+	conn, ok := s.aiConn(w, r)
+	if !ok {
 		return
 	}
 	user, _ := userFrom(r.Context())
+	if !s.aiConversationBelongsToConnection(r.Context(), user.ID, chi.URLParam(r, "cid"), conn.ID, w) {
+		return
+	}
 	q := r.URL.Query()
 	page, err := s.chat.Conversations().MessagesPage(r.Context(), user.ID, chi.URLParam(r, "cid"),
 		atoiDefault(q.Get("limit"), 0), atoiDefault(q.Get("loadedCount"), 0))
@@ -107,10 +117,14 @@ func atoiDefault(s string, def int) int {
 }
 
 func (s *Server) handleRenameConversation(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.aiConn(w, r); !ok {
+	conn, ok := s.aiConn(w, r)
+	if !ok {
 		return
 	}
 	user, _ := userFrom(r.Context())
+	if !s.aiConversationBelongsToConnection(r.Context(), user.ID, chi.URLParam(r, "cid"), conn.ID, w) {
+		return
+	}
 	var req struct {
 		Title string `json:"title"`
 	}
@@ -127,13 +141,26 @@ func (s *Server) handleRenameConversation(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleDeleteConversation(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.aiConn(w, r); !ok {
+	conn, ok := s.aiConn(w, r)
+	if !ok {
 		return
 	}
 	user, _ := userFrom(r.Context())
+	if !s.aiConversationBelongsToConnection(r.Context(), user.ID, chi.URLParam(r, "cid"), conn.ID, w) {
+		return
+	}
 	if err := s.chat.Conversations().Delete(r.Context(), user.ID, chi.URLParam(r, "cid")); err != nil {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) aiConversationBelongsToConnection(ctx context.Context, ownerID, convID, connID string, w http.ResponseWriter) bool {
+	conv, err := s.chat.Conversations().Get(ctx, ownerID, convID)
+	if err != nil || conv.ConnectionID != connID {
+		writeError(w, s.deps.Logger, plugin.ErrNotFound)
+		return false
+	}
+	return true
 }

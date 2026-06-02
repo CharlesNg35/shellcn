@@ -180,3 +180,41 @@ func TestDraftAIProviderTestValidation(t *testing.T) {
 		t.Fatalf("valid draft test: status=%d body=%s", resp.Status, resp.Body)
 	}
 }
+
+func TestAIConversationRoutesAreConnectionScoped(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
+		`{"name":"other-ai","protocol":"tester","config":{"host":"h"}}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create other connection: %d (%s)", resp.Status, resp.Body)
+	}
+	otherConnID := createConnID(t, resp)
+
+	resp = h.do(t, http.MethodPost, "/api/connections/c-op/ai/conversations", "op", strings.NewReader(`{}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create conversation: %d (%s)", resp.Status, resp.Body)
+	}
+	convID := createConnID(t, resp)
+
+	for name, tc := range map[string]struct {
+		method string
+		path   string
+		body   string
+	}{
+		"get":      {method: http.MethodGet, path: "/api/connections/" + otherConnID + "/ai/conversations/" + convID},
+		"messages": {method: http.MethodGet, path: "/api/connections/" + otherConnID + "/ai/conversations/" + convID + "/messages"},
+		"rename":   {method: http.MethodPut, path: "/api/connections/" + otherConnID + "/ai/conversations/" + convID, body: `{"title":"wrong"}`},
+		"delete":   {method: http.MethodDelete, path: "/api/connections/" + otherConnID + "/ai/conversations/" + convID},
+	} {
+		resp := h.do(t, tc.method, tc.path, "op", strings.NewReader(tc.body))
+		if resp.Status != http.StatusNotFound {
+			t.Fatalf("%s through wrong connection: want 404, got %d (%s)", name, resp.Status, resp.Body)
+		}
+	}
+
+	resp = h.do(t, http.MethodGet, "/api/connections/c-op/ai/conversations/"+convID, "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("original conversation should remain accessible: %d (%s)", resp.Status, resp.Body)
+	}
+}

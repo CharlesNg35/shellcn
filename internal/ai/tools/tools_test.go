@@ -46,10 +46,17 @@ func (demoPlugin) Routes() []plugin.Route {
 			Input: &plugin.Schema{Groups: []plugin.Group{{Name: "i", Fields: []plugin.Field{
 				{Key: "name", Label: "Name", Type: plugin.FieldText, Required: true},
 				{Key: "token", Label: "Token", Type: plugin.FieldPassword, Secret: true},
+				{Key: "password", Label: "Password", Type: plugin.FieldPassword},
 				{
 					Key: "credential_id", Label: "Stored credential", Type: plugin.FieldCredentialRef, Required: true,
 					Credential: &plugin.CredentialSelector{Kinds: []plugin.CredentialKind{plugin.CredentialAPIToken}},
 				},
+				{Key: "profile", Label: "Profile", Type: plugin.FieldObject, Fields: []plugin.Field{
+					{Key: "display_name", Label: "Display name", Type: plugin.FieldText, Required: true},
+					{Key: "nested_token", Label: "Nested token", Type: plugin.FieldPassword, Secret: true},
+					{Key: "nested_credential", Label: "Nested credential", Type: plugin.FieldCredentialRef},
+				}},
+				{Key: "recovery_codes", Label: "Recovery codes", Type: plugin.FieldArray, Item: &plugin.Field{Type: plugin.FieldPassword}},
 			}}}},
 			Handle: func(*plugin.RequestContext) (any, error) { return nil, nil },
 		},
@@ -141,8 +148,24 @@ func TestToolSchemaExcludesSensitiveFieldsAndIncludesPathParams(t *testing.T) {
 	if _, ok := create["token"]; ok {
 		t.Fatal("secret field must not be exposed to the model")
 	}
+	if _, ok := create["password"]; ok {
+		t.Fatal("password field must not be exposed to the model")
+	}
 	if _, ok := create["credential_id"]; ok {
 		t.Fatal("credential_ref field must not be exposed to the model")
+	}
+	if _, ok := create["recovery_codes"]; ok {
+		t.Fatal("array of sensitive values must not be exposed to the model")
+	}
+	profile := create["profile"].(map[string]any)["properties"].(map[string]any)
+	if _, ok := profile["display_name"]; !ok {
+		t.Fatal("safe nested field should be exposed to the model")
+	}
+	if _, ok := profile["nested_token"]; ok {
+		t.Fatal("nested secret field must not be exposed to the model")
+	}
+	if _, ok := profile["nested_credential"]; ok {
+		t.Fatal("nested credential_ref field must not be exposed to the model")
 	}
 
 	get := specs["demo_get"].Parameters

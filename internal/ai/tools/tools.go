@@ -215,10 +215,11 @@ func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
 	if r.Input != nil {
 		for _, g := range r.Input.Groups {
 			for _, f := range g.Fields {
-				if f.Secret || f.Type == plugin.FieldCredentialRef {
-					continue // never let the model supply secret material or choose credentials
+				schema, ok := fieldSchema(f)
+				if !ok {
+					continue
 				}
-				props[f.Key] = fieldSchema(f)
+				props[f.Key] = schema
 				if f.Required {
 					required = append(required, f.Key)
 				}
@@ -233,7 +234,10 @@ func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
 	return schema
 }
 
-func fieldSchema(f plugin.Field) map[string]any {
+func fieldSchema(f plugin.Field) (map[string]any, bool) {
+	if sensitiveField(f) {
+		return nil, false
+	}
 	out := map[string]any{}
 	if d := strings.TrimSpace(f.Label); d != "" {
 		out["description"] = d
@@ -251,11 +255,44 @@ func fieldSchema(f plugin.Field) map[string]any {
 	case plugin.FieldArray:
 		out["type"] = "array"
 		if f.Item != nil {
-			out["items"] = fieldSchema(*f.Item)
+			item, ok := fieldSchema(*f.Item)
+			if !ok {
+				return nil, false
+			}
+			out["items"] = item
 		} else {
 			out["items"] = map[string]any{"type": "string"}
 		}
-	case plugin.FieldObject, plugin.FieldMap, plugin.FieldJSON:
+	case plugin.FieldObject:
+		out["type"] = "object"
+		props := map[string]any{}
+		var required []string
+		for _, child := range f.Fields {
+			schema, ok := fieldSchema(child)
+			if !ok {
+				continue
+			}
+			props[child.Key] = schema
+			if child.Required {
+				required = append(required, child.Key)
+			}
+		}
+		if len(props) > 0 {
+			out["properties"] = props
+		}
+		if len(required) > 0 {
+			out["required"] = required
+		}
+	case plugin.FieldMap:
+		out["type"] = "object"
+		if f.Item != nil {
+			item, ok := fieldSchema(*f.Item)
+			if !ok {
+				return nil, false
+			}
+			out["additionalProperties"] = item
+		}
+	case plugin.FieldJSON:
 		out["type"] = "object"
 	default:
 		out["type"] = "string"
@@ -267,7 +304,11 @@ func fieldSchema(f plugin.Field) map[string]any {
 		}
 		out["enum"] = vals
 	}
-	return out
+	return out, true
+}
+
+func sensitiveField(f plugin.Field) bool {
+	return f.Secret || f.Type == plugin.FieldPassword || f.Type == plugin.FieldCredentialRef
 }
 
 // templateParamNames extracts {name} segments from a route path, in order.
