@@ -148,6 +148,17 @@ func TestPreviewAIProviderModels(t *testing.T) {
 	if strings.Contains(body, "sk-user-secret") {
 		t.Fatalf("key leaked in model preview: %s", body)
 	}
+
+	anthropic := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer anthropic.Close()
+
+	resp = h.do(t, http.MethodPost, "/api/me/ai/models", "op", strings.NewReader(
+		`{"kind":"anthropic","name":"Anthropic","baseUrl":"`+anthropic.URL+`","model":"claude-sonnet-4-5"}`))
+	if resp.Status != http.StatusBadRequest || !strings.Contains(string(resp.Body), "provider returned HTTP 401 Unauthorized") {
+		t.Fatalf("provider HTTP error: want clear 400, got %d (%s)", resp.Status, resp.Body)
+	}
 }
 
 func TestDraftAIProviderTestValidation(t *testing.T) {

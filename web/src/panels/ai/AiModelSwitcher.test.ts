@@ -29,6 +29,9 @@ describe("AiModelSwitcher", () => {
     expect(wrapper.text()).toContain("Shared");
     expect(wrapper.text()).not.toContain("gpt-4o");
     expect(wrapper.findComponent({ name: "Select" }).exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "Tag" }).attributes("title")).toBe(
+      "Shared - gpt-4o",
+    );
   });
 
   it("shows the only personal provider without requiring a provider select", () => {
@@ -48,6 +51,9 @@ describe("AiModelSwitcher", () => {
     expect(wrapper.text()).toContain("OpenRouter");
     expect(wrapper.text()).not.toContain("openai/gpt-4o");
     expect(wrapper.findComponent({ name: "Select" }).exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "Tag" }).attributes("title")).toBe(
+      "OpenRouter - openai/gpt-4o",
+    );
   });
 
   it("offers provider selection only", () => {
@@ -58,7 +64,25 @@ describe("AiModelSwitcher", () => {
         providerId: "p1",
       },
     });
-    expect(wrapper.findComponent({ name: "Select" }).exists()).toBe(true);
+    const select = wrapper.findComponent({ name: "Select" });
+    expect(select.exists()).toBe(true);
+    expect(select.attributes("title")).toBe("My OpenAI - gpt-4o");
+    const pt = select.props("pt") as {
+      option: (options: {
+        context: { option: { label: string; value: string; model: string } };
+      }) => { title?: string };
+    };
+    expect(
+      pt.option({
+        context: {
+          option: {
+            label: "Shared",
+            value: "",
+            model: "gpt-4o",
+          },
+        },
+      }).title,
+    ).toBe("Shared - gpt-4o");
   });
 
   it("offers provider selection when multiple personal providers exist", async () => {

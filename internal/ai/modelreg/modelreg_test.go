@@ -145,6 +145,20 @@ func TestFetchModelsGoogleFilters(t *testing.T) {
 	}
 }
 
+func TestProviderHTTPStatus(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	r := New(WithHTTPClient(srv.Client()))
+	if _, err := r.FetchModels(context.Background(), "anthropic", srv.URL, ""); err == nil {
+		t.Fatal("fetch should fail")
+	} else if status, ok := ProviderHTTPStatus(err); !ok || status != http.StatusUnauthorized {
+		t.Fatalf("status = %d ok=%v err=%v", status, ok, err)
+	}
+}
+
 func TestResolveBaseURLPerKind(t *testing.T) {
 	r := New(WithURLs("", ""))
 	for _, kind := range []string{"openai", "openrouter", "anthropic", "google"} {

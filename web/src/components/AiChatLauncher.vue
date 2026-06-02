@@ -4,6 +4,7 @@ import Button from "primevue/button";
 import Drawer from "primevue/drawer";
 import AppIcon from "./AppIcon.vue";
 import { drawerRoot } from "../primevue/preset";
+import { useAiChatStore } from "../stores/aiChat";
 import { useAiProvidersStore } from "../stores/aiProviders";
 
 const props = defineProps<{
@@ -13,10 +14,15 @@ const props = defineProps<{
 }>();
 
 const aiProviders = useAiProvidersStore();
+const aiChat = useAiChatStore();
 const open = ref(false);
 const opened = ref(false); // mount the panel only once the drawer is first opened
 const visible = computed(
   () => aiProviders.available && props.connected && props.aiMode !== "disabled",
+);
+const chatState = computed(() => aiChat.state(props.connectionId));
+const drawerDismissable = computed(
+  () => chatState.value.runState === "idle" && !chatState.value.pendingConfirm,
 );
 
 const AiChatPanel = defineAsyncComponent({
@@ -99,7 +105,7 @@ watch(visible, (next) => {
   <Drawer
     v-model:visible="open"
     position="right"
-    :dismissable="false"
+    :dismissable="drawerDismissable"
     header="Assistant"
     :pt="{
       root: drawerRoot('max-w-lg'),

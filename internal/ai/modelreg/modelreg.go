@@ -5,6 +5,7 @@ package modelreg
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -302,6 +303,16 @@ func (r *Registry) doJSON(req *http.Request, dst any) error {
 type httpError struct{ status int }
 
 func (e *httpError) Error() string { return "model registry: HTTP " + http.StatusText(e.status) }
+
+// ProviderHTTPStatus exposes upstream provider/catalogue HTTP failures to
+// service boundaries without leaking transport implementation details.
+func ProviderHTTPStatus(err error) (int, bool) {
+	var httpErr *httpError
+	if errors.As(err, &httpErr) {
+		return httpErr.status, true
+	}
+	return 0, false
+}
 
 func posInt(v int) int {
 	if v > 0 {

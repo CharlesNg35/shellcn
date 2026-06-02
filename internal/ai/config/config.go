@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -204,7 +205,7 @@ func (s *Service) Models(ctx context.Context, ownerID, id string) ([]string, err
 	if s.models != nil {
 		live, err := s.models.FetchModels(ctx, string(row.Kind), row.BaseURL, key)
 		if err != nil {
-			return nil, err
+			return nil, providerModelFetchError(err)
 		}
 		return modelIDs(live), nil
 	}
@@ -226,7 +227,7 @@ func (s *Service) ModelsForInput(ctx context.Context, in Input) ([]string, error
 	if s.models != nil {
 		live, err := s.models.FetchModels(ctx, string(in.Kind), in.BaseURL, in.APIKey)
 		if err != nil {
-			return nil, err
+			return nil, providerModelFetchError(err)
 		}
 		return modelIDs(live), nil
 	}
@@ -263,6 +264,18 @@ func modelIDs(models []modelreg.ProviderModel) []string {
 		}
 	}
 	return ids
+}
+
+func providerModelFetchError(err error) error {
+	status, ok := modelreg.ProviderHTTPStatus(err)
+	if !ok {
+		return err
+	}
+	message := fmt.Sprintf("provider returned HTTP %d", status)
+	if text := http.StatusText(status); text != "" {
+		message += " " + text
+	}
+	return fmt.Errorf("%w: %s", errInvalid, message)
 }
 
 // Test verifies a provider's credentials and endpoint by listing models.
