@@ -218,3 +218,36 @@ func TestAIConversationRoutesAreConnectionScoped(t *testing.T) {
 		t.Fatalf("original conversation should remain accessible: %d (%s)", resp.Status, resp.Body)
 	}
 }
+
+func TestAIConversationResponsesUseClientJSONShape(t *testing.T) {
+	h := newHarness(t)
+
+	resp := h.do(t, http.MethodPost, "/api/connections/c-op/ai/conversations", "op", strings.NewReader(`{}`))
+	if resp.Status != http.StatusCreated {
+		t.Fatalf("create conversation: %d (%s)", resp.Status, resp.Body)
+	}
+	convID := createConnID(t, resp)
+	body := string(resp.Body)
+	for _, want := range []string{`"id":"`, `"connectionId":"c-op"`, `"title":"New conversation"`, `"providerId":""`, `"model":"gpt-4o"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("conversation response missing %s: %s", want, body)
+		}
+	}
+	for _, forbidden := range []string{`"ID"`, `"ConnectionID"`, `"Title"`, `"Summary"`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("conversation response leaked server field %s: %s", forbidden, body)
+		}
+	}
+
+	resp = h.do(t, http.MethodGet, "/api/connections/c-op/ai/conversations", "op", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("list conversations: %d (%s)", resp.Status, resp.Body)
+	}
+	body = string(resp.Body)
+	if !strings.Contains(body, `"id":"`+convID+`"`) || !strings.Contains(body, `"title":"New conversation"`) {
+		t.Fatalf("conversation list missing client keys: %s", body)
+	}
+	if strings.Contains(body, `"ID"`) || strings.Contains(body, `"Title"`) {
+		t.Fatalf("conversation list used server keys: %s", body)
+	}
+}

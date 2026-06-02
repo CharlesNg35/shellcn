@@ -51,19 +51,19 @@ type AIProviderSummary struct {
 // AIConversation is one chat thread, scoped to a user + connection. Summary holds
 // the rolling compaction of older turns kept within the model's context window.
 type AIConversation struct {
-	ID           string `gorm:"primaryKey"`
-	OwnerID      string `gorm:"index"`
-	ConnectionID string `gorm:"index"`
-	Title        string
-	AutoTitled   bool
+	ID           string `gorm:"primaryKey" json:"id"`
+	OwnerID      string `gorm:"index" json:"ownerId"`
+	ConnectionID string `gorm:"index" json:"connectionId"`
+	Title        string `json:"title"`
+	AutoTitled   bool   `json:"autoTitled"`
 	// ProviderID is the user provider used (empty = shared/global). Model records
 	// which model served the thread.
-	ProviderID string
-	Model      string
+	ProviderID string `json:"providerId"`
+	Model      string `json:"model"`
 	// Summary is the rolling compaction of older turns (see internal/ai/memory).
-	Summary   string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Summary   string    `json:"-"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 func (AIConversation) TableName() string { return "ai_conversations" }
@@ -80,15 +80,15 @@ type AIToolCallRecord struct {
 // AIMessage is one persisted turn message. ToolCalls capture the assistant's tool
 // activity; Reasoning is optional model thinking.
 type AIMessage struct {
-	ID             string `gorm:"primaryKey"`
-	ConversationID string `gorm:"index"`
-	Seq            int    `gorm:"index"`
-	Role           string // user | assistant
-	Content        string
-	ToolCalls      []AIToolCallRecord `gorm:"serializer:json"`
-	Reasoning      string
-	Truncated      bool
-	CreatedAt      time.Time
+	ID             string             `gorm:"primaryKey" json:"id"`
+	ConversationID string             `gorm:"index" json:"conversationId"`
+	Seq            int                `gorm:"index" json:"seq"`
+	Role           string             `json:"role"` // user | assistant
+	Content        string             `json:"content"`
+	ToolCalls      []AIToolCallRecord `gorm:"serializer:json" json:"toolCalls"`
+	Reasoning      string             `json:"reasoning,omitempty"`
+	Truncated      bool               `json:"truncated,omitempty"`
+	CreatedAt      time.Time          `json:"createdAt"`
 }
 
 func (AIMessage) TableName() string { return "ai_messages" }

@@ -278,6 +278,8 @@ func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.U
 			if err := s.chat.Run(tctx, in, send); err != nil {
 				send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
 				send(engine.StreamEvent{Type: engine.EventDone})
+			} else if cv, err := s.chat.Conversations().Get(tctx, user.ID, convID); err == nil {
+				out <- aiMetaFrame{Type: "conversation", ConversationID: cv.ID, Title: cv.Title}
 			}
 
 			mu.Lock()
