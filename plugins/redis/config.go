@@ -60,7 +60,6 @@ func configSchema() plugin.Schema {
 		{Name: "Server", Fields: []plugin.Field{
 			{Key: "host", Label: "Host", Type: plugin.FieldText, Required: true, Placeholder: "redis.example.internal"},
 			{Key: "port", Label: "Port", Type: plugin.FieldNumber, Required: true, Default: defaultPort, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 1}, {Type: plugin.ValidatorMax, Value: 65535}}},
-			{Key: "database", Label: "Database", Type: plugin.FieldNumber, Default: 0, Validators: []plugin.Validator{{Type: plugin.ValidatorMin, Value: 0}, {Type: plugin.ValidatorMax, Value: 15}}},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: authNone, Options: []plugin.Option{
@@ -110,13 +109,6 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	if port < 1 || port > 65535 {
 		return options{}, fmt.Errorf("%w: port must be between 1 and 65535", plugin.ErrInvalidInput)
 	}
-	database, ok := cfg.Int("database")
-	if !ok {
-		database = 0
-	}
-	if database < 0 {
-		return options{}, fmt.Errorf("%w: database must be >= 0", plugin.ErrInvalidInput)
-	}
 	auth := dbcred.AuthMaterial{}
 	switch strings.TrimSpace(cfg.String("auth")) {
 	case "", authNone:
@@ -141,7 +133,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	return options{
 		Host:              host,
 		Port:              port,
-		Database:          database,
+		Database:          0,
 		Username:          auth.Username,
 		Password:          auth.Password,
 		TLSMode:           tlsMode,

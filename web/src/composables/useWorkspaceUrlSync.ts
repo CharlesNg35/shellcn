@@ -50,6 +50,9 @@ export function useWorkspaceUrlSync({ connectionId, projection }: Options) {
 
   function restoreFromUrl(): void {
     const v = typeof route.query.v === "string" ? route.query.v : undefined;
+    const owner =
+      typeof route.query.vc === "string" ? route.query.vc : undefined;
+    if (v && owner !== connectionId()) return;
     applyLocator(v);
   }
 
@@ -60,8 +63,12 @@ export function useWorkspaceUrlSync({ connectionId, projection }: Options) {
     if (!proj) return;
 
     const id = connectionId();
+    const currentOwner =
+      typeof route.query.vc === "string" ? route.query.vc : undefined;
     const current =
-      typeof route.query.v === "string" ? route.query.v : undefined;
+      currentOwner === id && typeof route.query.v === "string"
+        ? route.query.v
+        : undefined;
     const openIds = new Set(ws.view(id).views.map((view) => view.id));
     if (loc === current) {
       prevViewIds = openIds;
@@ -69,8 +76,13 @@ export function useWorkspaceUrlSync({ connectionId, projection }: Options) {
     }
 
     const query = { ...route.query };
-    if (loc) query.v = loc;
-    else delete query.v;
+    if (loc) {
+      query.v = loc;
+      query.vc = id;
+    } else {
+      delete query.v;
+      delete query.vc;
+    }
 
     const activeId = ws.activeView(id)?.id;
     const isNewView =
@@ -86,6 +98,9 @@ export function useWorkspaceUrlSync({ connectionId, projection }: Options) {
     () => route.query.v,
     (raw) => {
       const v = typeof raw === "string" ? raw : undefined;
+      const owner =
+        typeof route.query.vc === "string" ? route.query.vc : undefined;
+      if (v && owner !== connectionId()) return;
       if (v === activeLocator.value) return;
       applyLocator(v);
     },

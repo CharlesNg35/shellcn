@@ -73,6 +73,7 @@ const (
 	ColumnPercent  ColumnType = "percent"
 	ColumnBool     ColumnType = "bool"
 	ColumnJSON     ColumnType = "json"
+	ColumnIcon     ColumnType = "icon"
 )
 
 type Column struct {
@@ -541,6 +542,7 @@ type ScopeFilter struct {
 	ValueField    string         `json:"valueField,omitempty"`
 	LabelField    string         `json:"labelField,omitempty"`
 	AllLabel      string         `json:"allLabel,omitempty"`
+	DefaultValue  string         `json:"defaultValue,omitempty"`
 }
 
 type FilterOption struct {

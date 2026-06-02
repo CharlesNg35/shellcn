@@ -66,7 +66,7 @@ describe("useWorkspaceUrlSync", () => {
 
   it("restores the active sidebar-tree view from the URL", async () => {
     const router = testRouter();
-    await router.push("/?v=group:containers");
+    await router.push("/?v=group:containers&vc=c1");
     const wrapper = mountSync(router);
 
     wrapper.vm.restoreFromUrl();
@@ -87,6 +87,7 @@ describe("useWorkspaceUrlSync", () => {
     });
     await flushPromises();
     expect(router.currentRoute.value.query.v).toBe("group:containers");
+    expect(router.currentRoute.value.query.vc).toBe("c1");
 
     ws.openView("c1", {
       id: "detail:abc",
@@ -114,12 +115,22 @@ describe("useWorkspaceUrlSync", () => {
 
   it("does not rewrite the URL while the projection is unavailable", async () => {
     const router = testRouter();
-    await router.push("/?v=group:containers");
+    await router.push("/?v=group:containers&vc=c1");
     const wrapper = mountSync(router);
 
     wrapper.vm.proj = null;
     await flushPromises();
 
     expect(router.currentRoute.value.query.v).toBe("group:containers");
+  });
+
+  it("ignores a sidebar-tree locator owned by another connection", async () => {
+    const router = testRouter();
+    await router.push("/?v=detail:container:abc:n=web&vc=other");
+    const wrapper = mountSync(router);
+
+    wrapper.vm.restoreFromUrl();
+
+    expect(useWorkspaceStore().activeView("c1")).toBeUndefined();
   });
 });

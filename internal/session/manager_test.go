@@ -18,6 +18,7 @@ type fakeSession struct {
 	mu        sync.Mutex
 	closed    bool
 	healthErr error
+	channel   plugin.Channel
 }
 
 func (f *fakeSession) HealthCheck(context.Context) error {
@@ -33,6 +34,9 @@ func (f *fakeSession) setHealthErr(err error) {
 }
 
 func (f *fakeSession) OpenChannel(context.Context, plugin.ChannelRequest) (plugin.Channel, error) {
+	if f.channel != nil {
+		return f.channel, nil
+	}
 	return &fakeChannel{}, nil
 }
 
@@ -55,6 +59,15 @@ func (c *fakeChannel) Read([]byte) (int, error)    { return 0, io.EOF }
 func (c *fakeChannel) Write(p []byte) (int, error) { return len(p), nil }
 func (c *fakeChannel) Close() error                { c.closed.Store(true); return nil }
 func (c *fakeChannel) Kind() plugin.StreamKind     { return plugin.StreamTerminal }
+func (c *fakeChannel) Resize(int, int) error       { return nil }
+func (c *fakeChannel) ServerInit() []byte          { return []byte("rfb") }
+
+type basicChannel struct{ closed atomic.Bool }
+
+func (c *basicChannel) Read([]byte) (int, error)    { return 0, io.EOF }
+func (c *basicChannel) Write(p []byte) (int, error) { return len(p), nil }
+func (c *basicChannel) Close() error                { c.closed.Store(true); return nil }
+func (c *basicChannel) Kind() plugin.StreamKind     { return plugin.StreamLogs }
 
 func connector(s plugin.Session, hits *int32) session.ConnectFunc {
 	return func(context.Context) (plugin.Session, error) {
@@ -231,6 +244,42 @@ func TestChannelTrackingAndLimit(t *testing.T) {
 	}
 	if _, err := h.OpenChannel(context.Background(), plugin.ChannelRequest{}); err != nil {
 		t.Errorf("open after freeing a slot: %v", err)
+	}
+}
+
+func TestTrackedChannelPreservesOptionalCapabilities(t *testing.T) {
+	m := session.New(session.Options{})
+	defer m.Shutdown()
+	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	h, _ := m.Acquire(context.Background(), key, "u1", connector(&fakeSession{}, nil))
+
+	ch, err := h.OpenChannel(context.Background(), plugin.ChannelRequest{Kind: plugin.StreamTerminal})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if got := ch.(interface{ ServerInit() []byte }).ServerInit(); string(got) != "rfb" {
+		t.Fatalf("server init = %q", got)
+	}
+	if err := ch.(interface{ Resize(int, int) error }).Resize(120, 40); err != nil {
+		t.Fatalf("resize: %v", err)
+	}
+}
+
+func TestTrackedChannelDoesNotInventOptionalCapabilities(t *testing.T) {
+	m := session.New(session.Options{})
+	defer m.Shutdown()
+	key := session.Key{ConnectionID: "c1", OwnerScope: "u1"}
+	h, _ := m.Acquire(context.Background(), key, "u1", connector(&fakeSession{channel: &basicChannel{}}, nil))
+
+	ch, err := h.OpenChannel(context.Background(), plugin.ChannelRequest{})
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if _, ok := ch.(interface{ ServerInit() []byte }); ok {
+		t.Fatal("tracked channel invented ServerInit")
+	}
+	if _, ok := ch.(interface{ Resize(int, int) error }); ok {
+		t.Fatal("tracked channel invented Resize")
 	}
 }
 

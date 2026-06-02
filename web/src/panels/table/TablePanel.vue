@@ -34,6 +34,7 @@ import type {
   DataSource,
   Field,
   FieldType,
+  Icon,
   ResourceEvent,
   ResourceRef,
   Row,
@@ -51,7 +52,6 @@ import {
 } from "./mutation";
 import RowDetailDialog, { type DetailItem } from "./RowDetailDialog.vue";
 import { useNavigableKinds } from "../core/navigable";
-import { useScopeStore } from "../../stores/scope";
 import { useWorkspaceStore } from "../../stores/workspace";
 import SkeletonList from "../../components/SkeletonList.vue";
 import ActionBar from "../shared/ActionBar.vue";
@@ -67,7 +67,6 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
-const scope = useScopeStore();
 const workspace = useWorkspaceStore();
 
 // Framework-reserved row keys the grid never renders as data columns. Plugins
@@ -195,6 +194,7 @@ const TYPE_COLUMN_WIDTH: Partial<
   bool: "8rem",
   bytes: "9rem",
   datetime: "14rem",
+  icon: "3rem",
   number: "9rem",
   json: "22rem",
 };
@@ -664,6 +664,11 @@ function formatNumber(v: number, col: ColumnSpec): string {
 function display(row: Row, col: ColumnSpec): string {
   const v = row[col.key];
   if (v === undefined || v === null || v === "") return "—";
+  if (col.type === "icon") {
+    if (typeof v === "string") return v;
+    if (typeof v === "object" && "value" in v) return String(v.value);
+    return "—";
+  }
   if (col.type === "bytes" && typeof v === "number") return formatBytes(v);
   if (
     (col.type === "number" || col.type === "percent") &&
@@ -680,6 +685,22 @@ function badgeClass(row: Row, col: ColumnSpec): string {
   return badgeClassFor(col.severities, row[col.key]);
 }
 
+function iconCell(row: Row, col: ColumnSpec): Icon | null {
+  const v = row[col.key];
+  if (!v) return null;
+  if (typeof v === "string") return { type: "lucide", value: v };
+  if (
+    typeof v === "object" &&
+    "type" in v &&
+    "value" in v &&
+    typeof v.type === "string" &&
+    typeof v.value === "string"
+  ) {
+    return v as Icon;
+  }
+  return null;
+}
+
 function columnWidth(col: ColumnSpec): string {
   return (
     col.width || TYPE_COLUMN_WIDTH[col.type ?? "text"] || DEFAULT_COLUMN_WIDTH
@@ -689,13 +710,14 @@ function columnWidth(col: ColumnSpec): string {
 function columnStyle(col: ColumnSpec): Record<string, string> {
   const width = columnWidth(col);
   return {
-    minWidth: col.width ? width : "7.5rem",
+    minWidth: col.width || col.type === "icon" ? width : "7.5rem",
     width,
     maxWidth: width,
   };
 }
 
 function cellClass(row: Row, col: ColumnSpec): string {
+  if (col.type === "icon") return "flex min-w-0 justify-center";
   const base = "block min-w-0 truncate";
   if (staged.value && isEdited(row, col.key)) {
     return cn(
@@ -1079,17 +1101,6 @@ vueWatch([filterText, sortField, sortOrder, first, pageSize], () =>
   saveTableState(),
 );
 
-// A change to the connection's global scope re-scopes every list: refetch and
-// reattach the watch with the new params.
-vueWatch(
-  () => JSON.stringify(scope.params(props.connectionId)),
-  () => {
-    first.value = 0;
-    load(0);
-    startWatch();
-  },
-);
-
 let debounce: ReturnType<typeof setTimeout> | undefined;
 function onFilter(): void {
   if (debounce) clearTimeout(debounce);
@@ -1300,6 +1311,11 @@ onUnmounted(() => {
                 :class="badgeClass(data as Row, col)"
                 >{{ display(data as Row, col) }}</span
               >
+              <AppIcon
+                v-else-if="col.type === 'icon' && iconCell(data as Row, col)"
+                :icon="iconCell(data as Row, col)"
+                :size="16"
+              />
               <template v-else>{{ display(data as Row, col) }}</template>
             </span>
           </template>

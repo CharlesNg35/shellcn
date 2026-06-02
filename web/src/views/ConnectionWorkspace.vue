@@ -11,6 +11,7 @@ import { useConnectionsStore } from "../stores/connections";
 import { useWorkspaceStore } from "../stores/workspace";
 import { useConnectionSessionsStore } from "../stores/connectionSessions";
 import { useConnectionStatusStore } from "../stores/connectionStatus";
+import { useScopeStore } from "../stores/scope";
 import { KEEP_ALIVE_TOP_LEVEL_PANELS_MAX } from "../stores/sessionLimits";
 import { useNotify } from "../composables/useNotify";
 import { useWorkspaceUrlSync } from "../composables/useWorkspaceUrlSync";
@@ -44,6 +45,7 @@ const props = defineProps<{ id: string }>();
 const conns = useConnectionsStore();
 const ws = useWorkspaceStore();
 const dock = useDockStore();
+const scope = useScopeStore();
 const dockState = computed(() => dock.state(props.id));
 const connectionSessions = useConnectionSessionsStore();
 const liveStatus = useConnectionStatusStore();
@@ -106,6 +108,7 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = null;
   projection.value = null;
+  scope.configure(props.id, []);
   try {
     if (!conns.loaded) await conns.load();
     const c = conns.byId(props.id);
@@ -113,6 +116,7 @@ async function load(): Promise<void> {
     ws.open(props.id);
     const proj = await conns.projection(c.protocol);
     projection.value = proj;
+    scope.configure(props.id, proj.scope ?? []);
     // Restore the view from the URL (deep link / refresh) before defaulting.
     workspaceUrl.restoreFromUrl();
     if (!ws.view(props.id).activeTab && proj.tabs?.length) {

@@ -43,6 +43,7 @@ describe("primeVuePassthrough", () => {
       "divider",
       "message",
       "panel",
+      "progressspinner",
       "radiobutton",
       "skeleton",
       "slider",

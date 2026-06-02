@@ -104,4 +104,24 @@ describe("stream channels store", () => {
     expect(a.closed).toBe(true);
     expect(b.closed).toBe(false);
   });
+
+  it("closes all channels for a connection", () => {
+    const store = useStreamChannelsStore();
+    const redis0 = new FakeSocket();
+    const clusterShell = new FakeSocket();
+    const redisInfo = new FakeSocket();
+    const other = new FakeSocket();
+
+    store.ensure("conn:redis.terminal:database=0", () => redis0);
+    store.ensure("conn:kubernetes.cluster.shell:", () => clusterShell);
+    store.ensure("conn:redis.info:", () => redisInfo);
+    store.ensure("other:redis.terminal:database=0", () => other);
+
+    store.closeForConnection("conn");
+
+    expect(redis0.closed).toBe(true);
+    expect(clusterShell.closed).toBe(true);
+    expect(redisInfo.closed).toBe(true);
+    expect(other.closed).toBe(false);
+  });
 });

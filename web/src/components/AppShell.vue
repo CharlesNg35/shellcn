@@ -66,9 +66,13 @@ const activeId = computed(() =>
 const showCreate = ref(false);
 const sidebarMenuOpen = useStorage("shellcn:sidebar-menu:open", true);
 
-function onConnectionSaved(payload: { id: string; created: boolean }): void {
+async function onConnectionSaved(payload: {
+  id: string;
+  created: boolean;
+}): Promise<void> {
+  showCreate.value = false;
   if (payload.created) {
-    void router.push({ name: "connection", params: { id: payload.id } });
+    await router.push({ name: "connection", params: { id: payload.id } });
   }
 }
 </script>

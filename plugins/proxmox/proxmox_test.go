@@ -123,6 +123,9 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		if len(page.Items) != 1 || page.Items[0]["name"] != "web" {
 			t.Fatalf("qemu rows = %+v", page.Items)
 		}
+		if page.Items[0]["kindIcon"] != "monitor" || page.Items[0]["mode"] != "Template" {
+			t.Fatalf("qemu presentation fields = %+v", page.Items[0])
+		}
 		ref := page.Items[0]["ref"].(plugin.ResourceRef)
 		if ref.Namespace != "pve" || ref.UID != "100" {
 			t.Fatalf("qemu ref = %+v", ref)
@@ -133,6 +136,9 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 		page := callList(t, sess, listGuests("lxc"), nil)
 		if len(page.Items) != 1 || page.Items[0]["name"] != "ct1" {
 			t.Fatalf("lxc rows = %+v", page.Items)
+		}
+		if page.Items[0]["kindIcon"] != "box" || page.Items[0]["mode"] != "Instance" {
+			t.Fatalf("lxc presentation fields = %+v", page.Items[0])
 		}
 	})
 
@@ -148,13 +154,37 @@ func TestRoutesAgainstFakeProxmox(t *testing.T) {
 	})
 
 	t.Run("tree node children", func(t *testing.T) {
-		result, err := treeNodeChildren(newRC(sess, map[string]string{"node": "pve"}))
+		result, err := treeNodes(newRC(sess, nil))
 		if err != nil {
 			t.Fatalf("tree: %v", err)
 		}
 		page := result.(plugin.Page[plugin.TreeNode])
-		if len(page.Items) < 2 {
-			t.Fatalf("expected guests + storage, got %+v", page.Items)
+		if len(page.Items) != 1 {
+			t.Fatalf("expected one node, got %+v", page.Items)
+		}
+		if page.Items[0].ResourceKind != "guest" || page.Items[0].ChildrenSource != nil {
+			t.Fatalf("node should open guest list without expanding: %+v", page.Items[0])
+		}
+		if page.Items[0].ListParams["node"] != "pve" {
+			t.Fatalf("node list params = %+v", page.Items[0].ListParams)
+		}
+	})
+
+	t.Run("list node guests", func(t *testing.T) {
+		page := callList(t, sess, listGuests(""), map[string]string{"node": "pve"})
+		if len(page.Items) != 2 {
+			t.Fatalf("guest rows = %+v", page.Items)
+		}
+		var ref plugin.ResourceRef
+		for _, item := range page.Items {
+			candidate := item["ref"].(plugin.ResourceRef)
+			if candidate.Kind == "qemu" {
+				ref = candidate
+				break
+			}
+		}
+		if ref.Kind != "qemu" || ref.Namespace != "pve" || ref.UID != "100" {
+			t.Fatalf("guest ref = %+v", ref)
 		}
 	})
 
@@ -182,10 +212,11 @@ func fakeProxmox(t *testing.T) *httptest.Server {
 			return
 		}
 		_, _ = w.Write([]byte(`{"data":[
-			{"type":"qemu","vmid":100,"name":"web","node":"pve","status":"running","cpu":0.25,"mem":1073741824,"maxmem":2147483648,"uptime":3600},
+			{"type":"qemu","vmid":100,"name":"web","node":"pve","status":"running","template":1,"cpu":0.25,"mem":1073741824,"maxmem":2147483648,"uptime":3600},
 			{"type":"lxc","vmid":200,"name":"ct1","node":"pve","status":"stopped","cpu":0,"mem":0,"maxmem":536870912}
-		]}`))
+			]}`))
 	})
+	mux.HandleFunc("/api2/json/nodes", jsonHandler(`{"data":[{"node":"pve","status":"online","cpu":0.1,"mem":1073741824,"maxmem":4294967296,"uptime":7200}]}`))
 	mux.HandleFunc("/api2/json/nodes/pve/storage", jsonHandler(`{"data":[{"storage":"local","type":"dir","content":"backup,iso","used":10,"total":100,"active":1}]}`))
 	mux.HandleFunc("/api2/json/nodes/pve/qemu/100/snapshot", jsonHandler(`{"data":[{"name":"pre-upgrade","description":"before update","snaptime":1700000000,"parent":""}]}`))
 	srv := httptest.NewTLSServer(mux)

@@ -16,10 +16,10 @@ func Routes() []plugin.Route {
 	routes := []plugin.Route{
 		// Tree.
 		{ID: "proxmox.tree.nodes", Method: plugin.MethodGet, Path: "/tree/nodes", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.tree.nodes", Handle: treeNodes},
-		{ID: "proxmox.tree.node", Method: plugin.MethodGet, Path: "/tree/nodes/{node}", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.tree.node", Handle: treeNodeChildren},
 		{ID: "proxmox.tree.storage", Method: plugin.MethodGet, Path: "/tree/storage", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.tree.storage", Handle: treeStorage},
 
 		// Lists.
+		{ID: "proxmox.guest.list", Method: plugin.MethodGet, Path: "/guests", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.guest.list", Handle: listGuests("")},
 		{ID: "proxmox.qemu.list", Method: plugin.MethodGet, Path: "/qemu", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.qemu.list", Handle: listGuests("qemu")},
 		{ID: "proxmox.lxc.list", Method: plugin.MethodGet, Path: "/lxc", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.lxc.list", Handle: listGuests("lxc")},
 		{ID: "proxmox.node.list", Method: plugin.MethodGet, Path: "/nodes", Permission: "proxmox.read", Risk: plugin.RiskSafe, AuditEvent: "proxmox.node.list", Handle: listNodes},
@@ -130,56 +130,13 @@ func treeNodes(rc *plugin.RequestContext) (any, error) {
 			continue
 		}
 		out = append(out, plugin.TreeNode{
-			Key:            "node:" + name,
-			Label:          name,
-			Icon:           icon("server"),
-			Ref:            &plugin.ResourceRef{Kind: "node", Namespace: name, Name: name, UID: name},
-			ChildrenSource: &plugin.DataSource{RouteID: "proxmox.tree.node", Params: map[string]string{"node": name}},
+			Key:          "node:" + name,
+			Label:        name,
+			Icon:         icon("server"),
+			ResourceKind: "guest",
+			ListParams:   map[string]string{"node": name},
+			Leaf:         true,
 		})
-	}
-	return plugin.Page[plugin.TreeNode]{Items: out, Total: ptr(len(out))}, nil
-}
-
-func treeNodeChildren(rc *plugin.RequestContext) (any, error) {
-	s, err := sess(rc)
-	if err != nil {
-		return nil, err
-	}
-	node := rc.Param("node")
-	guests, err := s.list(rc.Ctx, "/cluster/resources?type=vm")
-	if err != nil {
-		return nil, err
-	}
-	out := []plugin.TreeNode{}
-	for _, g := range guests {
-		if str(g["node"]) != node {
-			continue
-		}
-		kind := str(g["type"])
-		vmid := str(g["vmid"])
-		name := guestName(g, kind, vmid)
-		out = append(out, plugin.TreeNode{
-			Key:   kind + ":" + node + ":" + vmid,
-			Label: name,
-			Icon:  guestIcon(kind),
-			Ref:   &plugin.ResourceRef{Kind: kind, Namespace: node, Name: name, UID: vmid},
-			Leaf:  true,
-			Badge: &plugin.Badge{Value: str(g["status"]), Severity: statusSeverity(str(g["status"]))},
-			Data:  g,
-		})
-	}
-	stores, err := s.list(rc.Ctx, "/nodes/"+node+"/storage")
-	if err == nil {
-		for _, st := range stores {
-			storage := str(st["storage"])
-			out = append(out, plugin.TreeNode{
-				Key:   "storage:" + node + ":" + storage,
-				Label: storage,
-				Icon:  icon("database"),
-				Ref:   &plugin.ResourceRef{Kind: "storage", Namespace: node, Name: storage, UID: storage},
-				Leaf:  true,
-			})
-		}
 	}
 	return plugin.Page[plugin.TreeNode]{Items: out, Total: ptr(len(out))}, nil
 }
@@ -224,27 +181,57 @@ func listGuests(kind string) plugin.Handler {
 			return nil, err
 		}
 		rows := make([]row, 0, len(items))
+		onlyNode := rc.Query().Get("p.node")
+		if onlyNode == "" {
+			onlyNode = rc.Param("node")
+		}
 		for _, g := range items {
-			if str(g["type"]) != kind {
+			guestKind := str(g["type"])
+			if guestKind == "" {
+				continue
+			}
+			if kind != "" && guestKind != kind {
 				continue
 			}
 			node := str(g["node"])
+			if onlyNode != "" && node != onlyNode {
+				continue
+			}
 			vmid := str(g["vmid"])
-			name := guestName(g, kind, vmid)
+			name := guestName(g, guestKind, vmid)
 			rows = append(rows, row{
-				"name":   name,
-				"vmid":   numInt(g["vmid"]),
-				"node":   node,
-				"status": str(g["status"]),
-				"cpu":    round1(numFloat(g["cpu"]) * 100),
-				"mem":    numInt(g["mem"]),
-				"maxmem": numInt(g["maxmem"]),
-				"uptime": numInt(g["uptime"]),
-				"tags":   str(g["tags"]),
-				"ref":    plugin.ResourceRef{Kind: kind, Namespace: node, Name: name, UID: vmid},
+				"kindIcon": guestKindIcon(guestKind),
+				"name":     name,
+				"type":     guestKind,
+				"mode":     guestMode(g),
+				"vmid":     numInt(g["vmid"]),
+				"node":     node,
+				"status":   str(g["status"]),
+				"cpu":      round1(numFloat(g["cpu"]) * 100),
+				"mem":      numInt(g["mem"]),
+				"maxmem":   numInt(g["maxmem"]),
+				"uptime":   numInt(g["uptime"]),
+				"tags":     str(g["tags"]),
+				"ref":      plugin.ResourceRef{Kind: guestKind, Namespace: node, Name: name, UID: vmid},
 			})
 		}
 		return pageRows(rc, rows)
+	}
+}
+
+func guestKindIcon(kind string) string {
+	if kind == "lxc" {
+		return "box"
+	}
+	return "monitor"
+}
+
+func guestMode(g row) string {
+	switch strings.ToLower(str(g["template"])) {
+	case "1", "true", "yes":
+		return "Template"
+	default:
+		return "Instance"
 	}
 }
 
@@ -686,24 +673,6 @@ func refForVolume(kind, node, storage, volid string) plugin.ResourceRef {
 }
 
 func icon(name string) plugin.Icon { return plugin.Icon{Type: plugin.IconLucide, Value: name} }
-
-func guestIcon(kind string) plugin.Icon {
-	if kind == "lxc" {
-		return icon("box")
-	}
-	return icon("monitor")
-}
-
-func statusSeverity(status string) plugin.Severity {
-	switch status {
-	case "running", "online":
-		return plugin.SeveritySuccess
-	case "stopped", "offline":
-		return plugin.SeveritySecondary
-	default:
-		return plugin.SeverityInfo
-	}
-}
 
 func rfcTime(v any) string {
 	sec := numInt(v)
