@@ -569,8 +569,19 @@ func TestAgentEnrollmentIsAudited(t *testing.T) {
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("create enrollment: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
-	if !strings.Contains(string(resp.Body), "SHELLCN") && !strings.Contains(string(resp.Body), "agent/connect") {
+	body := string(resp.Body)
+	if !strings.Contains(body, "SHELLCN") && !strings.Contains(body, "agent/connect") {
 		t.Fatalf("enrollment response missing install artifact: %s", resp.Body)
+	}
+	for _, want := range []string{`"enrollmentId":"`, `"expiresAt":"`, `"artifacts":[`, `"downloadUrl":"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("enrollment response missing client key %s: %s", want, body)
+		}
+	}
+	for _, forbidden := range []string{`"EnrollmentID"`, `"ConnectionID"`, `"TokenHash"`, `"DownloadURL"`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("enrollment response leaked server field %s: %s", forbidden, body)
+		}
 	}
 
 	rows, err := h.store.Audit.List(context.Background(), store.AuditFilter{ConnectionID: "c-op"})
@@ -647,6 +658,9 @@ func TestAgentStateTreatsTunnelRegistryAsAuthoritative(t *testing.T) {
 	}
 	if !strings.Contains(string(resp.Body), `"status":"offline"`) {
 		t.Fatalf("state should be offline without a live tunnel: %s", resp.Body)
+	}
+	if strings.Contains(string(resp.Body), `"Status"`) || strings.Contains(string(resp.Body), `"Message"`) {
+		t.Fatalf("state response used server keys: %s", resp.Body)
 	}
 	enr, err := h.store.Enrollments.Get(context.Background(), "stale-online")
 	if err != nil {
