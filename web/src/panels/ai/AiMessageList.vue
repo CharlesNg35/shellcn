@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { toRef } from "vue";
+import { toRef, type VNodeRef } from "vue";
 import Button from "primevue/button";
 import AiMessageItem from "./AiMessage.vue";
 import AppIcon from "../../components/AppIcon.vue";
@@ -18,6 +18,14 @@ const emit = defineEmits<{ quickStart: [prompt: string]; loadOlder: [] }>();
 
 const { scrollRef, contentRef, showScrollToLatest, jumpToBottom } =
   useAiMessageScroll(toRef(props, "messages"), toRef(props, "streaming"));
+
+const setScrollRef: VNodeRef = (el) => {
+  scrollRef.value = el instanceof HTMLElement ? el : null;
+};
+
+const setContentRef: VNodeRef = (el) => {
+  contentRef.value = el instanceof HTMLElement ? el : null;
+};
 
 const quickStarts = [
   "What resources are available on this connection?",
@@ -57,9 +65,9 @@ const quickStarts = [
   </div>
 
   <div v-else class="relative min-h-0 flex-1 overflow-hidden">
-    <div ref="scrollRef" class="h-full overflow-y-auto">
+    <div :ref="setScrollRef" class="h-full overflow-y-auto">
       <div
-        ref="contentRef"
+        :ref="setContentRef"
         class="flex flex-col gap-3 px-4 py-3"
         role="log"
         aria-live="polite"
