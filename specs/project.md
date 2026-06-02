@@ -146,10 +146,14 @@ type Plugin interface {
 // ConnectConfig is built by the core: decrypted config + a transport wired for
 // the connection's mode. The plugin picks the layer its client needs.
 type ConnectConfig struct {
-    Transport Transport      // "direct" | "agent"
+    ConnectionID string      // stable connection id, for plugin-owned caches/log labels
+    Transport    Transport   // "direct" | "agent"
     Config    map[string]any // decrypted connection config (typed via Schema)
     Net       NetTransport   // how to reach the target (same API for both modes)
 }
+
+func (c ConnectConfig) String(key string) string
+func (c ConnectConfig) Int(key string) (int, bool)
 
 // NetTransport exposes the upstream at the layer the protocol needs. A bare
 // dialer is enough for socket/TCP protocols but NOT for fat HTTP clients (e.g.
@@ -383,6 +387,7 @@ type ScopeFilter struct {
     ValueField    string
     LabelField    string
     AllLabel      string // label for the empty value that clears the scope
+    DefaultValue  string // optional initial value; empty means the cleared/all state
 }
 ```
 
@@ -404,15 +409,18 @@ validates at registration that a select/multiselect has choices, so a malformed
 scope can't ship.
 
 The renderer shows the selectors in the header toolbar (next to header actions)
-and keeps the chosen values in a **per-connection scope state**. The data layer
-merges that state into every read and stream request as `p.<Param>` — under any
-explicit params, which always win — so lists, watches, detail docs, and streams
-all observe one scope without any panel knowing about it. Changing a selector
-re-fetches open lists and re-attaches their watches. It is **plugin-agnostic**:
-the core treats the params as opaque, and the route handlers read them where
-relevant (a cluster-scoped kind simply ignores its scope param). This is strictly
-better than a per-table filter: one selector, one source of truth, every resource
-consistently scoped.
+and keeps the chosen values in a **per-connection scope state** only when the
+manifest declares `Scope`. Plugins that do not declare scope have no selector and
+receive no injected scope params. The data layer merges that state into every
+read and stream request as `p.<Param>` — under any explicit params, which always
+win — so lists, watches, detail docs, and streams observe one scope without each
+panel remembering to wire it. Changing a selector re-fetches open list-style data
+and re-attaches watches; it must not collapse expanded tree nodes or remount a
+resource detail that is already identified by its own `ResourceRef`. It is
+**plugin-agnostic**: the core treats the params as opaque, and route handlers read
+them where relevant (a cluster-scoped kind simply ignores its scope param). This
+is strictly better than a per-table filter: one selector, one source of truth,
+every scoped request receives the same value.
 
 `Open: "url"` runs the action's route and opens the returned `{"url": "…"}` in a
 new browser tab. The route decides the URL — it may be any link (e.g. an external
@@ -668,8 +676,8 @@ email field otherwise.
 manage users (create/role/deactivate/invite, email status) — it confers **no
 implicit access** to other users' connections, credentials, or recordings.
 Resource access is purely ownership + grants: the role/risk policy (Casbin) decides
-*what risk tier* a role may perform on resources it can reach, while
-ownership/grants decide *which* resources. `canAccessConnection`,
+_what risk tier_ a role may perform on resources it can reach, while
+ownership/grants decide _which_ resources. `canAccessConnection`,
 `canManageConnection`, `canManageCredential`, and connection/credential sharing are
 all owner/grant-based with no admin bypass.
 
@@ -753,11 +761,14 @@ const (
 //     knows its ref, and state-dependent UI can't evaluate.
 //   - The sidebar_tree workspace keeps MULTIPLE open views as a closable tab strip
 //     (details + lists), not one selection at a time — switch/close, state kept.
-//   - The ACTIVE location syncs to the URL (`/c/:id?v=…`): the top tab (tabs layout)
-//     or the active workbench view (sidebar_tree), encoded self-sufficiently so
-//     browser Back/Forward walk the visited resources and a pasted/refreshed link
-//     restores the view. Navigation is query-only (same `/c/:id`), so the workspace
-//     never remounts — live terminals/streams survive. single/dashboard carry no `v`.
+//   - The ACTIVE location syncs to the URL (`/c/:id?v=…&vc=:connectionID`): the
+//     top tab (tabs layout) or active workbench view (sidebar_tree), encoded
+//     self-sufficiently so browser Back/Forward walk the visited resources and a
+//     pasted/refreshed link restores the view. `vc` owns the locator; a workspace
+//     ignores `v` when `vc` is for another connection, even if both plugins have a
+//     resource kind with the same name. Navigation is query-only (same `/c/:id`),
+//     so the workspace never remounts — live terminals/streams survive.
+//     single/dashboard carry no `v`.
 //   - MetricsConfig drives the metrics panel (stat cards, gauges, time-series)
 //     entirely from declared field keys; the renderer hardcodes none.
 //   - TerminalConfig opts a terminal panel into zoom and/or scrollback search;
@@ -881,6 +892,12 @@ on its own:
 Columns the grid should not display are declared with `HiddenColumns` — the
 renderer never hard-codes field names beyond its own reserved keys.
 
+`Column.Type = "icon"` renders a compact icon-only cell. The row value may be a
+Lucide icon name string or a full `Icon` object, and the cell is rendered through
+the same sanitized icon pipeline as every other manifest icon. This is for visual
+kind/status hints that are still data-driven; the renderer must not infer icons
+from plugin names, resource kinds, or column keys.
+
 **Add-row inputs are typed by column.** The add-row form derives each input
 widget from its column's declared type — a numeric column gets a number input, a
 boolean a toggle, JSON a code area, the rest a text box — rather than a
@@ -947,6 +964,19 @@ type TreeGroup struct {
     Ref          *ResourceRef // leaf: click opens this resource's detail
     Badge        *Badge       // optional count/status, route-backed
 }
+
+type TreeNode struct {
+    Key            string
+    Label          string
+    Icon           Icon
+    Ref            *ResourceRef       // opens this resource's detail
+    Leaf           bool               // true means no expandable children
+    ChildrenSource *DataSource        // expandable: returns child TreeNode rows
+    Badge          *Badge
+    ResourceKind   string             // opens this resource kind's list
+    ListParams     map[string]string  // merged into that list's DataSource params
+    Data           map[string]any     // row fields for detail header/actions
+}
 ```
 
 A group is **expandable** when it declares a `Source` (children load on expand).
@@ -962,6 +992,15 @@ A group **opens a view only if it resolves to a resource** — via `ResourceKind
 (a `Source` that only yields child nodes, e.g. a category like Workloads) has no
 view of its own: clicking it just expands, never opening an empty tab. A group
 may set both `Source` and a destination to expand _and_ open a view.
+
+A returned `TreeNode` follows the same rule. A node with `ChildrenSource` is
+expandable unless `Leaf` is true. A node with `ResourceKind` opens that kind's
+list, with `ListParams` merged under the resource list's own `DataSource.Params`;
+this is for drill-down navigation where the node itself is a category or parent
+object but the next screen is still a generic table. A node with `Ref` opens a
+detail. A node can be a non-expandable list destination by setting
+`ResourceKind`, `ListParams`, and `Leaf: true`; no plugin-specific renderer code
+is allowed for this.
 
 The core validates every route/action/source reference during plugin
 registration. `DataSource.Method`, when declared, must match the referenced
@@ -1276,7 +1315,7 @@ type FileBrowserConfig struct {
   bare media-element `src` loads a protected stream.
 
 - **Safety.** Read is size-bounded; inline responses send `X-Content-Type-Options:
-  nosniff` and `Content-Security-Policy: sandbox` (neutralizing inline SVG/HTML);
+nosniff` and `Content-Security-Policy: sandbox` (neutralizing inline SVG/HTML);
   ranges are clamped to the file size; path traversal is validated server-side;
   every read/download is audited.
 
@@ -1447,6 +1486,15 @@ type Channel interface {
     Kind() StreamKind
 }
 
+// Optional Channel capabilities are preserved by the session tracker but never
+// invented by it. Handlers may type-assert only when their stream kind needs it.
+type ResizableChannel interface {
+    Resize(cols, rows int) error
+}
+type ServerInitChannel interface {
+    ServerInit() []byte // initial desktop/RFB server bytes after gateway auth
+}
+
 // What a WS StreamHandler receives — the browser side of the pipe.
 type ClientStream interface {
     io.ReadWriteCloser
@@ -1455,9 +1503,12 @@ type ClientStream interface {
 ```
 
 - **Registry:** sessions live in an in-memory registry keyed by
-  `(connectionID, ownerScope)`. v1 is single-instance (§2); future scale path is
-  session-affinity routing or a session broker — explicitly deferred.
-- **Shared vs per-user:** live sessions are keyed by `(connectionID, userID)`.
+  `(connectionID, ownerScope)`. In v1 `ownerScope` is the acting user's id, so a
+  shared connection does **not** share a live upstream session between users. v1
+  is single-instance (§2); future scale path is session-affinity routing or a
+  session broker — explicitly deferred.
+- **Shared vs per-user:** live sessions are effectively keyed by
+  `(connectionID, userID)`.
   Shared connections let another user connect through the saved connection
   without reading its credentials, but **every request carries the acting `User`
   and is independently authorized and audited**. Authorization is never inherited
@@ -1480,6 +1531,17 @@ type ClientStream interface {
   WebSocket stream even if the plugin does not open a tracked upstream
   `Channel`. This keeps watch/log/desktop/terminal-style streams from being
   reclaimed as idle while the browser socket is still open.
+- **Tracked channel wrappers:** `Handle.OpenChannel` wraps plugin channels to
+  enforce channel limits and decrement the count exactly once on `Close`. The
+  wrapper must preserve optional capabilities such as `ResizableChannel` and
+  `ServerInitChannel`, because terminal and remote-desktop handlers discover
+  those capabilities by type assertion. It must not expose those methods when the
+  original channel did not implement them.
+- **Transport keepalive:** the core may run WebSocket ping/pong keepalive on
+  gateway/browser and gateway/agent hops. Keepalive frames are transport control
+  frames, never plugin payload bytes, so they cannot change terminal input, query
+  text, or log output. If a plugin's upstream protocol has its own idle timeout,
+  the plugin session owns that protocol-specific keepalive.
 - **Concurrency (fixes the data race in the transcript):** plugin structs are
   stateless singletons; all mutable per-connection state lives in the `Session`,
   and lazily-opened sub-clients (e.g. SFTP over an existing SSH client) are
@@ -1573,12 +1635,12 @@ type AgentProfile struct {
 ```
 
 **Per-stream forwarding (`ProxyTarget.Forward`).** Normally the agent proxies every
-stream to its one declared `Address`. Some plugins need to reach *more* of the
+stream to its one declared `Address`. Some plugins need to reach _more_ of the
 target's own network than a single endpoint — e.g. opening a Docker container's web
 port (the §8.1 browser proxy): the container's IP is reachable from the daemon host
 where the agent runs, but it isn't the daemon socket. With `Forward`, the gateway
 prefixes each L4 stream with a tiny target preamble (`network` + `address`) and the
-agent dials *that* instead of `Address`. It stays plugin-agnostic — the agent gains
+agent dials _that_ instead of `Address`. It stays plugin-agnostic — the agent gains
 no protocol knowledge, just "dial what the gateway names." It is **negotiated and
 opt-in**: the agent advertises support in its hello and the gateway enables it only
 when the plugin set `Forward`, so older agents keep the single-endpoint behavior.
@@ -1586,7 +1648,7 @@ Reach widens only within the same target the agent already fronts (a docker.sock
 agent can already run any container), so it adds no new trust boundary. A Docker
 agent must run with **host networking** to route to container IPs across networks.
 
-**Upgrades/hijacks over the agent use a loopback bridge.** Connection *upgrades* —
+**Upgrades/hijacks over the agent use a loopback bridge.** Connection _upgrades_ —
 client-go's SPDY/WebSocket executor (k8s exec, attach, port-forward) and moby's
 HTTP **hijack** (Docker/Podman exec) — bypass a custom `DialContext` and require a
 real socket. So for agent transport the tunnel is fronted by a tiny **loopback
@@ -1881,6 +1943,14 @@ The frontend is a fixed renderer driven entirely by the browser projection (§5.
 **Long-lived runtime (terminals, VNC, log streams) lives in a Pinia session/
 channel store, never inside components.** Components attach/detach; switching
 tabs or rearranging panes never drops a stream.
+
+**Renderer state is connection-bounded.** URL locators, open workbench views,
+scope values, tree expansion, selected rows, and stream/channel instances are
+owned by a connection id. A renderer may reuse the same generic component for
+every plugin, but it must key any state that can survive navigation by
+`connectionID` plus the view/resource identity. This prevents two connections
+with overlapping resource kinds or ids from restoring each other's detail views,
+expanded nodes, dock tabs, or live streams.
 
 **Build the frontend first, fixture-driven — for the declarative surface.**
 Because the renderer is the load-bearing bet ("handles any plugin"), build it

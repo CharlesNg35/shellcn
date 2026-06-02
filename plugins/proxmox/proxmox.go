@@ -24,6 +24,11 @@ var statusSeverities = map[string]plugin.Severity{
 	"error": plugin.SeverityDanger,
 }
 
+var templateSeverities = map[string]plugin.Severity{
+	"template": plugin.SeverityInfo,
+	"instance": plugin.SeveritySecondary,
+}
+
 func (p *Plugin) Manifest() plugin.Manifest {
 	return plugin.Manifest{
 		APIVersion:          plugin.CurrentAPIVersion,
@@ -66,12 +71,15 @@ func (p *Plugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.
 }
 
 func resources() []plugin.ResourceType {
-	return []plugin.ResourceType{qemuResource(), lxcResource(), nodeResource(), storageResource()}
+	return []plugin.ResourceType{guestResource(), qemuResource(), lxcResource(), nodeResource(), storageResource()}
 }
 
 func guestColumns() []plugin.Column {
 	return []plugin.Column{
+		{Key: "kindIcon", Label: "", Type: plugin.ColumnIcon, Width: "3rem"},
 		{Key: "name", Label: "Name", Sortable: true},
+		{Key: "type", Label: "Type", Sortable: true},
+		{Key: "mode", Label: "Mode", Type: plugin.ColumnBadge, Sortable: true, Severities: templateSeverities},
 		{Key: "vmid", Label: "VMID", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "node", Label: "Node", Sortable: true},
 		{Key: "status", Label: "Status", Type: plugin.ColumnBadge, Sortable: true, Severities: statusSeverities},
@@ -79,6 +87,15 @@ func guestColumns() []plugin.Column {
 		{Key: "mem", Label: "Memory", Type: plugin.ColumnBytes, Sortable: true},
 		{Key: "uptime", Label: "Uptime", Type: plugin.ColumnNumber, Sortable: true},
 		{Key: "tags", Label: "Tags"},
+	}
+}
+
+func guestResource() plugin.ResourceType {
+	return plugin.ResourceType{
+		Kind:    "guest",
+		Title:   "Guests",
+		List:    plugin.DataSource{RouteID: "proxmox.guest.list"},
+		Columns: guestColumns(),
 	}
 }
 

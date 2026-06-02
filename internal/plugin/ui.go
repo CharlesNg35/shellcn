@@ -73,6 +73,7 @@ const (
 	ColumnPercent  ColumnType = "percent"
 	ColumnBool     ColumnType = "bool"
 	ColumnJSON     ColumnType = "json"
+	ColumnIcon     ColumnType = "icon"
 )
 
 type Column struct {

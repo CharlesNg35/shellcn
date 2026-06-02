@@ -82,14 +82,14 @@ func (h *Handle) OpenChannel(ctx context.Context, req plugin.ChannelRequest) (pl
 		e.mu.Unlock()
 		return nil, err
 	}
-	return &trackedChannel{Channel: ch, release: func() {
+	return wrapTrackedChannel(ch, func() {
 		e.mu.Lock()
 		if e.channels > 0 {
 			e.channels--
 		}
 		e.lastUsed = h.m.now()
 		e.mu.Unlock()
-	}}, nil
+	}), nil
 }
 
 func (h *Handle) Close() error {
@@ -107,4 +107,60 @@ func (c *trackedChannel) Close() error {
 	err := c.Channel.Close()
 	c.once.Do(c.release)
 	return err
+}
+
+type resizeChannel interface {
+	Resize(int, int) error
+}
+
+type serverInitChannel interface {
+	ServerInit() []byte
+}
+
+func wrapTrackedChannel(ch plugin.Channel, release func()) plugin.Channel {
+	base := &trackedChannel{Channel: ch, release: release}
+	resizer, canResize := ch.(resizeChannel)
+	serverInit, hasServerInit := ch.(serverInitChannel)
+	switch {
+	case canResize && hasServerInit:
+		return &trackedResizableDesktopChannel{trackedChannel: base, resizer: resizer, serverInit: serverInit}
+	case canResize:
+		return &trackedResizableChannel{trackedChannel: base, resizer: resizer}
+	case hasServerInit:
+		return &trackedDesktopChannel{trackedChannel: base, serverInit: serverInit}
+	default:
+		return base
+	}
+}
+
+type trackedResizableChannel struct {
+	*trackedChannel
+	resizer resizeChannel
+}
+
+func (c *trackedResizableChannel) Resize(cols, rows int) error {
+	return c.resizer.Resize(cols, rows)
+}
+
+type trackedDesktopChannel struct {
+	*trackedChannel
+	serverInit serverInitChannel
+}
+
+func (c *trackedDesktopChannel) ServerInit() []byte {
+	return c.serverInit.ServerInit()
+}
+
+type trackedResizableDesktopChannel struct {
+	*trackedChannel
+	resizer    resizeChannel
+	serverInit serverInitChannel
+}
+
+func (c *trackedResizableDesktopChannel) Resize(cols, rows int) error {
+	return c.resizer.Resize(cols, rows)
+}
+
+func (c *trackedResizableDesktopChannel) ServerInit() []byte {
+	return c.serverInit.ServerInit()
 }

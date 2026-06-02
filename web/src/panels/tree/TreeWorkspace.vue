@@ -272,7 +272,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
               activeDetailResource &&
               activeView.row
             "
-            :key="activeView.id"
+            :key="`${connectionId}:${activeView.id}`"
             :connection-id="connectionId"
             :detail="activeDetailResource.detail"
             :detail-action-ids="activeDetailResource.actions?.detail ?? []"
@@ -283,7 +283,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
           />
           <PanelHost
             v-else-if="activeListResource && activeListSource"
-            :key="`${activeView!.id}:${scopeKey}`"
+            :key="`${connectionId}:${activeView!.id}:${scopeKey}`"
             panel="table"
             :connection-id="connectionId"
             :source="activeListSource"

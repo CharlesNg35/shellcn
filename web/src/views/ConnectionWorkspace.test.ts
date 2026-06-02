@@ -488,7 +488,7 @@ describe("ConnectionWorkspace", () => {
     const ws = useWorkspaceStore();
     ws.setConnected("c1", true);
     const r = router();
-    await r.push("/?v=keys");
+    await r.push("/?v=keys&vc=c1");
 
     mount(ConnectionWorkspace, {
       props: { id: "c1" },
@@ -501,6 +501,7 @@ describe("ConnectionWorkspace", () => {
     ws.setActiveTab("c1", "overview");
     await flushPromises();
     expect(r.currentRoute.value.query.v).toBe("overview");
+    expect(r.currentRoute.value.query.vc).toBe("c1");
 
     // A tab switch uses replace, so Back does NOT step to the previous tab.
     await r.back();

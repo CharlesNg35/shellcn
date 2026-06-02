@@ -419,7 +419,8 @@ export type ColumnType =
   | "number"
   | "percent"
   | "bool"
-  | "json";
+  | "json"
+  | "icon";
 
 export interface Column {
   key: string;

@@ -121,6 +121,34 @@ describe("TablePanel", () => {
     expect(w.get("thead th").attributes("style")).toContain("min-width: 12rem");
   });
 
+  it("renders icon columns with compact cells", async () => {
+    vi.unstubAllGlobals();
+    installFetch(() => ({
+      body: {
+        items: [{ name: "web", kindIcon: "monitor" }],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "proxmox.guest.list" },
+        config: {
+          columns: [
+            { key: "kindIcon", label: "", type: "icon" },
+            { key: "name", label: "Name" },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.get("thead th").attributes("style")).toContain("width: 3rem");
+    expect(w.get('[data-test="table-cell-value"] svg').exists()).toBe(true);
+  });
+
   it("filters server-side and resets the list", async () => {
     const w = mount(TablePanel, {
       props: {
