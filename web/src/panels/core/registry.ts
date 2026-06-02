@@ -4,7 +4,7 @@ import {
   type Component,
 } from "vue";
 import type { PanelType } from "../../types/projection";
-import LoadingPanel from "./LoadingPanel.vue";
+import PanelLoader from "../../components/PanelLoader.vue";
 import TablePanel from "../table/TablePanel.vue";
 import FormPanel from "../form/FormPanel.vue";
 import EnrollPanel from "../enroll/EnrollPanel.vue";
@@ -13,7 +13,7 @@ import DocumentPanel from "../document/DocumentPanel.vue";
 import DashboardPanel from "../dashboard/DashboardPanel.vue";
 
 const lazy = (loader: AsyncComponentLoader): Component =>
-  defineAsyncComponent({ loader, loadingComponent: LoadingPanel });
+  defineAsyncComponent({ loader, loadingComponent: PanelLoader });
 
 // Lightweight declarative panels are bundled up front; heavy panel engines are
 // dynamically imported on first use so first paint stays constant regardless of

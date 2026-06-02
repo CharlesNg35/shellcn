@@ -268,6 +268,7 @@ export interface ScopeFilter {
   valueField?: string;
   labelField?: string;
   allLabel?: string;
+  defaultValue?: string;
 }
 
 export interface TablePanelConfig {
@@ -418,7 +419,8 @@ export type ColumnType =
   | "number"
   | "percent"
   | "bool"
-  | "json";
+  | "json"
+  | "icon";
 
 export interface Column {
   key: string;

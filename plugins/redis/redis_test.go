@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 )
@@ -32,6 +33,12 @@ func TestManifestRegistersAndStaysDirectOnly(t *testing.T) {
 	}
 	if got := m.Config.Defaults()["read_only"]; got != true {
 		t.Fatalf("read_only manifest default = %#v, want true", got)
+	}
+	if _, ok := m.Config.Defaults()["database"]; ok {
+		t.Fatal("database should be selected from the workspace scope, not connection config")
+	}
+	if len(m.Scope) != 1 || m.Scope[0].Param != databaseScopeParam || m.Scope[0].DefaultValue != "0" {
+		t.Fatalf("database scope not declared correctly: %+v", m.Scope)
 	}
 	if err := plugin.Validate(m, New().Routes()); err != nil {
 		t.Fatalf("manifest invalid: %v", err)
@@ -68,7 +75,11 @@ func TestParseCommand(t *testing.T) {
 }
 
 func TestCommandSafetyStopsBeforeRedis(t *testing.T) {
-	_, err := executeCommandRequest(context.Background(), &Session{opts: options{ReadOnly: true}}, sqldb.QueryRequest{Query: "DEL session:1"})
+	_, err := executeCommandRequest(context.Background(), &Session{}, sqldb.QueryRequest{Query: "SELECT 1"})
+	if !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("SELECT should be handled by the Database scope, got %v", err)
+	}
+	_, err = executeCommandRequest(context.Background(), &Session{opts: options{ReadOnly: true}}, sqldb.QueryRequest{Query: "DEL session:1"})
 	if !errors.Is(err, plugin.ErrForbidden) {
 		t.Fatalf("expected read-only forbidden error, got %v", err)
 	}
@@ -104,6 +115,23 @@ func TestReadOnlyModeDefaultsOn(t *testing.T) {
 	}
 	if opts.ReadOnly {
 		t.Fatal("read-only mode should be disabled when configured")
+	}
+}
+
+func TestSelectedDatabaseDefaultsAndValidates(t *testing.T) {
+	rc := plugin.NewRequestContext(context.Background(), models.User{}, nil, nil, nil, nil)
+	db, err := selectedDatabase(rc, 0)
+	if err != nil || db != 0 {
+		t.Fatalf("default database = %d, err %v", db, err)
+	}
+	rc = plugin.NewRequestContext(context.Background(), models.User{}, nil, map[string]string{databaseScopeParam: "2"}, nil, nil)
+	db, err = selectedDatabase(rc, 0)
+	if err != nil || db != 2 {
+		t.Fatalf("scoped database = %d, err %v", db, err)
+	}
+	rc = plugin.NewRequestContext(context.Background(), models.User{}, nil, map[string]string{databaseScopeParam: "-1"}, nil, nil)
+	if _, err = selectedDatabase(rc, 0); !errors.Is(err, plugin.ErrInvalidInput) {
+		t.Fatalf("negative database should be invalid, got %v", err)
 	}
 }
 

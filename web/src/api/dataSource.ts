@@ -135,10 +135,8 @@ export function routeURL(
   ctx: ResolveContext = {},
   params: Record<string, string> = {},
 ): string {
-  return withQuery(
-    routePath(connectionId, routeId),
-    queryParams(resolveParams(params, ctx)),
-  );
+  const resolved = withScope(connectionId, resolveParams(params, ctx));
+  return withQuery(routePath(connectionId, routeId), queryParams(resolved));
 }
 
 async function getJSON<T>(url: string): Promise<T> {
@@ -200,9 +198,10 @@ export async function runAction(
   params: Record<string, string> = {},
   method = "POST",
 ): Promise<ActionResult> {
+  const resolved = withScope(connectionId, resolveParams(params, ctx));
   const url = withQuery(
     routePath(connectionId, routeId),
-    queryParams(resolveParams(params, ctx)),
+    queryParams(resolved),
   );
   return track(
     connectionId,

@@ -4,9 +4,10 @@ import Button from "primevue/button";
 import { VueDraggable } from "vue-draggable-plus";
 import { KEEP_ALIVE_WORKBENCH_TABS_MAX } from "../../stores/sessionLimits";
 import { useWorkspaceStore, type OpenView } from "../../stores/workspace";
+import { useScopeStore } from "../../stores/scope";
 import ResourceTree from "./ResourceTree.vue";
 import DetailView from "../detail/DetailView.vue";
-import TablePanel from "../table/TablePanel.vue";
+import PanelHost from "../core/PanelHost.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import type {
   Action,
@@ -35,9 +36,11 @@ const props = defineProps<{
 }>();
 
 const ws = useWorkspaceStore();
+const scope = useScopeStore();
 const view = computed(() => ws.view(props.connectionId));
 const activeView = computed(() => ws.activeView(props.connectionId));
 const tabStrip = ref<HTMLElement | null>(null);
+const scopeKey = computed(() => scope.key(props.connectionId));
 
 const resourceByKind = computed(() => {
   const map = new Map<string, ResourceType>();
@@ -191,6 +194,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
       class="w-64 shrink-0 border-r border-surface-200 dark:border-surface-800"
     >
       <ResourceTree
+        :refresh-key="scopeKey"
         :connection-id="connectionId"
         :groups="tree"
         :selected-group="treeSelectedGroup"
@@ -268,7 +272,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
               activeDetailResource &&
               activeView.row
             "
-            :key="activeView.id"
+            :key="`${connectionId}:${activeView.id}`"
             :connection-id="connectionId"
             :detail="activeDetailResource.detail"
             :detail-action-ids="activeDetailResource.actions?.detail ?? []"
@@ -277,9 +281,10 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
             @select="openDetail"
             @action-done="onDetailActionDone"
           />
-          <TablePanel
+          <PanelHost
             v-else-if="activeListResource && activeListSource"
-            :key="activeView!.id"
+            :key="`${connectionId}:${activeView!.id}:${scopeKey}`"
+            panel="table"
             :connection-id="connectionId"
             :source="activeListSource"
             :config="{

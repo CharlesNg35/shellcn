@@ -4,7 +4,6 @@ import { defineComponent, h, KeepAlive } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
 import { installFetch } from "../../test/fetchMock";
-import { useScopeStore } from "../../stores/scope";
 import TablePanel from "./TablePanel.vue";
 import type { Action, Column } from "../../types/projection";
 
@@ -122,6 +121,34 @@ describe("TablePanel", () => {
     expect(w.get("thead th").attributes("style")).toContain("min-width: 12rem");
   });
 
+  it("renders icon columns with compact cells", async () => {
+    vi.unstubAllGlobals();
+    installFetch(() => ({
+      body: {
+        items: [{ name: "web", kindIcon: "monitor" }],
+        nextCursor: "",
+        total: 1,
+      },
+    }));
+
+    const w = mount(TablePanel, {
+      props: {
+        connectionId: "c1",
+        source: { routeId: "proxmox.guest.list" },
+        config: {
+          columns: [
+            { key: "kindIcon", label: "", type: "icon" },
+            { key: "name", label: "Name" },
+          ],
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(w.get("thead th").attributes("style")).toContain("width: 3rem");
+    expect(w.find('[data-test="table-cell-value"] svg').exists()).toBe(true);
+  });
+
   it("filters server-side and resets the list", async () => {
     const w = mount(TablePanel, {
       props: {
@@ -203,29 +230,6 @@ describe("TablePanel", () => {
     expect(urls.at(-1)).toContain("cursor=2");
     expect(urls.at(-1)).toContain("limit=100");
     second.unmount();
-  });
-
-  it("re-scopes the list when the global connection scope changes", async () => {
-    const namespaceParams: string[] = [];
-    installFetch((url) => {
-      const u = new URL(url, "http://h");
-      namespaceParams.push(u.searchParams.get("p.namespace") ?? "");
-      return { body: { items: [row("a", "alpha")], nextCursor: "", total: 1 } };
-    });
-    const scope = useScopeStore();
-    mount(TablePanel, {
-      props: {
-        connectionId: "c1",
-        source: { routeId: "pod.list", params: { kind: "pod" } },
-        config: { columns },
-      },
-    });
-    await flushPromises();
-    expect(namespaceParams[0]).toBe("");
-
-    scope.set("c1", "namespace", "ns-b");
-    await flushPromises();
-    expect(namespaceParams.at(-1)).toBe("ns-b");
   });
 
   it("emits the full row on click", async () => {

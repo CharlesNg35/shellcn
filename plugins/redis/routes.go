@@ -38,16 +38,31 @@ type actionResult struct {
 	OK bool `json:"ok"`
 }
 
+type databaseOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+	Keys  int64  `json:"keys,omitempty"`
+}
+
+type scopedRedis struct {
+	session  *Session
+	client   *redisclient.Client
+	database int
+}
+
 type confirmationError struct {
 	message string
 }
 
 func (e confirmationError) Error() string { return e.message }
 
+const databaseScopeParam = "database"
+
 func routes() []plugin.Route {
 	return []plugin.Route{
 		{ID: "redis.overview", Method: plugin.MethodGet, Path: "/overview", Permission: "redis.read", Risk: plugin.RiskSafe, AuditEvent: "redis.overview", Handle: overview},
 		{ID: "redis.info", Method: plugin.MethodGet, Path: "/info", Permission: "redis.read", Risk: plugin.RiskSafe, AuditEvent: "redis.info", Handle: infoRoute},
+		{ID: "redis.databases.list", Method: plugin.MethodGet, Path: "/databases", Permission: "redis.read", Risk: plugin.RiskSafe, AuditEvent: "redis.databases.list", Handle: listDatabases},
 		{ID: "redis.keys.list", Method: plugin.MethodGet, Path: "/keys", Permission: "redis.keys.read", Risk: plugin.RiskSafe, AuditEvent: "redis.keys.list", Handle: listKeys},
 		{ID: "redis.key.read", Method: plugin.MethodGet, Path: "/keys/{key}", Permission: "redis.keys.read", Risk: plugin.RiskSafe, AuditEvent: "redis.key.read", Handle: readKey},
 		{ID: "redis.key.write", Method: plugin.MethodPut, Path: "/keys/{key}", Permission: "redis.keys.write", Risk: plugin.RiskWrite, AuditEvent: "redis.key.write", Handle: writeKey},
@@ -70,23 +85,64 @@ func redisSession(rc *plugin.RequestContext) (*Session, error) {
 	return s, nil
 }
 
-func overview(rc *plugin.RequestContext) (any, error) {
+func scopedRedisClient(rc *plugin.RequestContext) (*scopedRedis, error) {
 	s, err := redisSession(rc)
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := commandContext(rc.Ctx, s)
+	db, err := selectedDatabase(rc, s.opts.Database)
+	if err != nil {
+		return nil, err
+	}
+	return scopedRedisForDB(s, db, false), nil
+}
+
+func scopedRedisForDB(s *Session, db int, dedicated bool) *scopedRedis {
+	if db == s.opts.Database && !dedicated {
+		return &scopedRedis{session: s, client: s.client, database: db}
+	}
+	opts := *s.client.Options()
+	opts.DB = db
+	return &scopedRedis{session: s, client: redisclient.NewClient(&opts), database: db}
+}
+
+func (sr *scopedRedis) Close() {
+	if sr == nil || sr.client == nil || sr.client == sr.session.client {
+		return
+	}
+	_ = sr.client.Close()
+}
+
+func selectedDatabase(rc *plugin.RequestContext, fallback int) (int, error) {
+	raw := strings.TrimSpace(rc.Param(databaseScopeParam))
+	if raw == "" {
+		return fallback, nil
+	}
+	db, err := strconv.Atoi(raw)
+	if err != nil || db < 0 {
+		return 0, fmt.Errorf("%w: database must be a non-negative number", plugin.ErrInvalidInput)
+	}
+	return db, nil
+}
+
+func overview(rc *plugin.RequestContext) (any, error) {
+	sr, err := scopedRedisClient(rc)
+	if err != nil {
+		return nil, err
+	}
+	defer sr.Close()
+	ctx, cancel := commandContext(rc.Ctx, sr.session)
 	defer cancel()
-	info, err := s.client.Info(ctx, "server", "clients", "memory", "stats", "keyspace").Result()
+	info, err := sr.client.Info(ctx, "server", "clients", "memory", "stats", "keyspace").Result()
 	if err != nil {
 		return nil, redisErr(err)
 	}
 	sections := parseInfo(info)
-	db := "db" + strconv.Itoa(s.opts.Database)
+	db := "db" + strconv.Itoa(sr.database)
 	out := map[string]any{
-		"database": s.opts.Database,
-		"address":  s.client.Options().Addr,
-		"readOnly": s.opts.ReadOnly,
+		"database": sr.database,
+		"address":  sr.client.Options().Addr,
+		"readOnly": sr.session.opts.ReadOnly,
 	}
 	for _, key := range []string{"redis_version", "redis_mode", "connected_clients", "used_memory_human", "total_commands_processed"} {
 		if v, ok := sections[key]; ok {
@@ -97,6 +153,48 @@ func overview(rc *plugin.RequestContext) (any, error) {
 		out["keyspace"] = v
 	}
 	return out, nil
+}
+
+func listDatabases(rc *plugin.RequestContext) (any, error) {
+	s, err := redisSession(rc)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := commandContext(rc.Ctx, s)
+	defer cancel()
+	keyCounts := map[int]int64{}
+	if info, err := s.client.Info(ctx, "keyspace").Result(); err == nil {
+		for name, values := range parseInfo(info) {
+			if !strings.HasPrefix(name, "db") {
+				continue
+			}
+			db, err := strconv.Atoi(strings.TrimPrefix(name, "db"))
+			if err != nil {
+				continue
+			}
+			fields := parseInfoFields(values)
+			if keys, ok := fields["keys"]; ok {
+				if n, err := strconv.ParseInt(keys, 10, 64); err == nil {
+					keyCounts[db] = n
+				}
+			}
+		}
+	}
+	count := 16
+	if cfg, err := s.client.ConfigGet(ctx, "databases").Result(); err == nil {
+		if n, err := strconv.Atoi(cfg["databases"]); err == nil && n > 0 {
+			count = n
+		}
+	}
+	items := make([]databaseOption, 0, count)
+	for db := 0; db < count; db++ {
+		items = append(items, databaseOption{
+			Value: strconv.Itoa(db),
+			Label: "Database " + strconv.Itoa(db),
+			Keys:  keyCounts[db],
+		})
+	}
+	return plugin.Page[databaseOption]{Items: items}, nil
 }
 
 func infoRoute(rc *plugin.RequestContext) (any, error) {
@@ -114,17 +212,18 @@ func infoRoute(rc *plugin.RequestContext) (any, error) {
 }
 
 func listKeys(rc *plugin.RequestContext) (any, error) {
-	s, err := redisSession(rc)
+	sr, err := scopedRedisClient(rc)
 	if err != nil {
 		return nil, err
 	}
+	defer sr.Close()
 	req, err := rc.Page()
 	if err != nil {
 		return nil, err
 	}
 	pattern := req.Search()
 	if pattern == "" {
-		pattern = s.opts.KeyPattern
+		pattern = sr.session.opts.KeyPattern
 	}
 	if !strings.ContainsAny(pattern, "*?[") {
 		pattern = "*" + pattern + "*"
@@ -134,18 +233,18 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 		return nil, err
 	}
 	limit := req.Limit
-	if limit > s.opts.ScanCount {
-		limit = s.opts.ScanCount
+	if limit <= 0 || limit > sr.session.opts.ScanCount {
+		limit = sr.session.opts.ScanCount
 	}
-	ctx, cancel := commandContext(rc.Ctx, s)
+	ctx, cancel := commandContext(rc.Ctx, sr.session)
 	defer cancel()
-	keys, next, err := s.client.Scan(ctx, cursor, pattern, int64(limit)).Result()
+	keys, next, err := sr.client.Scan(ctx, cursor, pattern, int64(limit)).Result()
 	if err != nil {
 		return nil, redisErr(err)
 	}
 	items := make([]keyEntry, 0, len(keys))
 	for _, key := range keys {
-		entry, err := keySummary(ctx, s, key)
+		entry, err := keySummary(ctx, sr.client, key)
 		if err != nil {
 			return nil, err
 		}
@@ -160,17 +259,18 @@ func listKeys(rc *plugin.RequestContext) (any, error) {
 }
 
 func readKey(rc *plugin.RequestContext) (any, error) {
-	s, err := redisSession(rc)
+	sr, err := scopedRedisClient(rc)
 	if err != nil {
 		return nil, err
 	}
+	defer sr.Close()
 	key := strings.TrimSpace(rc.Param("key"))
 	if key == "" {
 		return nil, fmt.Errorf("%w: key is required", plugin.ErrInvalidInput)
 	}
-	ctx, cancel := commandContext(rc.Ctx, s)
+	ctx, cancel := commandContext(rc.Ctx, sr.session)
 	defer cancel()
-	detail, err := keyValue(ctx, s, key)
+	detail, err := keyValue(ctx, sr.session, sr.client, key)
 	if err != nil {
 		return nil, err
 	}
@@ -178,10 +278,12 @@ func readKey(rc *plugin.RequestContext) (any, error) {
 }
 
 func writeKey(rc *plugin.RequestContext) (any, error) {
-	s, err := redisSession(rc)
+	sr, err := scopedRedisClient(rc)
 	if err != nil {
 		return nil, err
 	}
+	defer sr.Close()
+	s := sr.session
 	if err := ensureWritable(s); err != nil {
 		return nil, err
 	}
@@ -202,12 +304,12 @@ func writeKey(rc *plugin.RequestContext) (any, error) {
 	}
 	ctx, cancel := commandContext(rc.Ctx, s)
 	defer cancel()
-	ttl, _ := s.client.TTL(ctx, key).Result()
-	if err := replaceValue(ctx, s, key, kind, req.Value); err != nil {
+	ttl, _ := sr.client.TTL(ctx, key).Result()
+	if err := replaceValue(ctx, sr.client, key, kind, req.Value); err != nil {
 		return nil, err
 	}
 	if ttl > 0 {
-		if err := s.client.Expire(ctx, key, ttl).Err(); err != nil {
+		if err := sr.client.Expire(ctx, key, ttl).Err(); err != nil {
 			return nil, redisErr(err)
 		}
 	}
@@ -215,10 +317,12 @@ func writeKey(rc *plugin.RequestContext) (any, error) {
 }
 
 func deleteKey(rc *plugin.RequestContext) (any, error) {
-	s, err := redisSession(rc)
+	sr, err := scopedRedisClient(rc)
 	if err != nil {
 		return nil, err
 	}
+	defer sr.Close()
+	s := sr.session
 	if err := ensureWritable(s); err != nil {
 		return nil, err
 	}
@@ -228,7 +332,7 @@ func deleteKey(rc *plugin.RequestContext) (any, error) {
 	}
 	ctx, cancel := commandContext(rc.Ctx, s)
 	defer cancel()
-	if err := s.client.Del(ctx, key).Err(); err != nil {
+	if err := sr.client.Del(ctx, key).Err(); err != nil {
 		return nil, redisErr(err)
 	}
 	return actionResult{OK: true}, nil
@@ -284,7 +388,13 @@ func terminalStream(rc *plugin.RequestContext, client plugin.ClientStream) error
 	if err != nil {
 		return err
 	}
-	prompt := redisPrompt(s)
+	db, err := selectedDatabase(rc, s.opts.Database)
+	if err != nil {
+		return err
+	}
+	sr := scopedRedisForDB(s, db, true)
+	defer sr.Close()
+	prompt := redisPrompt(sr.database)
 	if err := writeTerminal(client, "\r\nRedis console\r\n"+prompt); err != nil {
 		return err
 	}
@@ -308,7 +418,7 @@ func terminalStream(rc *plugin.RequestContext, client plugin.ClientStream) error
 						return writeTerminal(client, "Bye.\r\n")
 					}
 					if command != "" {
-						result, err := executeCommandRequest(client.Context(), s, sqldb.QueryRequest{Query: command})
+						result, err := executeCommand(client.Context(), sr.session, sr.client, sqldb.QueryRequest{Query: command})
 						rc.Audit(commandAuditResult(err), commandAuditParams(command, result, err), err)
 						if err != nil {
 							if err := writeTerminal(client, terminalError(err)); err != nil {
@@ -375,6 +485,10 @@ func completionRoute(*plugin.RequestContext) (any, error) {
 }
 
 func executeCommandRequest(parent context.Context, s *Session, req sqldb.QueryRequest) (sqldb.QueryResult, error) {
+	return executeCommand(parent, s, s.client, req)
+}
+
+func executeCommand(parent context.Context, s *Session, client *redisclient.Client, req sqldb.QueryRequest) (sqldb.QueryResult, error) {
 	if err := s.ensureOpen(); err != nil {
 		return sqldb.QueryResult{}, err
 	}
@@ -386,6 +500,9 @@ func executeCommandRequest(parent context.Context, s *Session, req sqldb.QueryRe
 		return sqldb.QueryResult{}, fmt.Errorf("%w: command is empty", plugin.ErrInvalidInput)
 	}
 	command := strings.ToUpper(args[0])
+	if command == "SELECT" {
+		return sqldb.QueryResult{}, fmt.Errorf("%w: use the Database selector to change databases", plugin.ErrInvalidInput)
+	}
 	if s.opts.ReadOnly && !isReadOnlyCommand(args) {
 		return sqldb.QueryResult{}, fmt.Errorf("%w: read-only mode blocks write commands", plugin.ErrForbidden)
 	}
@@ -399,7 +516,7 @@ func executeCommandRequest(parent context.Context, s *Session, req sqldb.QueryRe
 	for i, arg := range args {
 		values[i] = arg
 	}
-	value, err := s.client.Do(ctx, values...).Result()
+	value, err := client.Do(ctx, values...).Result()
 	if err != nil {
 		return sqldb.QueryResult{}, redisErr(err)
 	}
@@ -414,55 +531,55 @@ func executeCommandRequest(parent context.Context, s *Session, req sqldb.QueryRe
 	}, nil
 }
 
-func keySummary(ctx context.Context, s *Session, key string) (keyEntry, error) {
-	kind, err := s.client.Type(ctx, key).Result()
+func keySummary(ctx context.Context, client *redisclient.Client, key string) (keyEntry, error) {
+	kind, err := client.Type(ctx, key).Result()
 	if err != nil {
 		return keyEntry{}, redisErr(err)
 	}
-	ttl, err := s.client.TTL(ctx, key).Result()
+	ttl, err := client.TTL(ctx, key).Result()
 	if err != nil {
 		return keyEntry{}, redisErr(err)
 	}
-	size, _ := keySize(ctx, s, key, kind)
+	size, _ := keySize(ctx, client, key, kind)
 	return keyEntry{Key: key, Type: kind, TTL: int64(ttl.Seconds()), Size: size}, nil
 }
 
-func keyValue(ctx context.Context, s *Session, key string) (keyDetail, error) {
-	kind, err := s.client.Type(ctx, key).Result()
+func keyValue(ctx context.Context, s *Session, client *redisclient.Client, key string) (keyDetail, error) {
+	kind, err := client.Type(ctx, key).Result()
 	if err != nil {
 		return keyDetail{}, redisErr(err)
 	}
 	if kind == "none" {
 		return keyDetail{}, plugin.ErrNotFound
 	}
-	ttl, err := s.client.TTL(ctx, key).Result()
+	ttl, err := client.TTL(ctx, key).Result()
 	if err != nil {
 		return keyDetail{}, redisErr(err)
 	}
-	encoding, _ := s.client.ObjectEncoding(ctx, key).Result()
-	value, err := readValue(ctx, s, key, kind)
+	encoding, _ := client.ObjectEncoding(ctx, key).Result()
+	value, err := readValue(ctx, s, client, key, kind)
 	if err != nil {
 		return keyDetail{}, err
 	}
-	size, _ := keySize(ctx, s, key, kind)
+	size, _ := keySize(ctx, client, key, kind)
 	return keyDetail{Key: key, Type: kind, TTL: int64(ttl.Seconds()), Size: size, Encoding: encoding, Value: value}, nil
 }
 
-func readValue(ctx context.Context, s *Session, key, kind string) (any, error) {
+func readValue(ctx context.Context, s *Session, client *redisclient.Client, key, kind string) (any, error) {
 	limit := int64(s.opts.ValueLimit)
 	switch kind {
 	case "string":
-		return s.client.Get(ctx, key).Result()
+		return client.Get(ctx, key).Result()
 	case "hash":
-		return s.client.HGetAll(ctx, key).Result()
+		return client.HGetAll(ctx, key).Result()
 	case "list":
-		return s.client.LRange(ctx, key, 0, limit-1).Result()
+		return client.LRange(ctx, key, 0, limit-1).Result()
 	case "set":
-		values, err := s.client.SMembers(ctx, key).Result()
+		values, err := client.SMembers(ctx, key).Result()
 		sort.Strings(values)
 		return values, err
 	case "zset":
-		values, err := s.client.ZRangeWithScores(ctx, key, 0, limit-1).Result()
+		values, err := client.ZRangeWithScores(ctx, key, 0, limit-1).Result()
 		if err != nil {
 			return nil, redisErr(err)
 		}
@@ -472,7 +589,7 @@ func readValue(ctx context.Context, s *Session, key, kind string) (any, error) {
 		}
 		return out, nil
 	case "stream":
-		values, err := s.client.XRange(ctx, key, "-", "+").Result()
+		values, err := client.XRange(ctx, key, "-", "+").Result()
 		if err != nil {
 			return nil, redisErr(err)
 		}
@@ -489,10 +606,10 @@ func readValue(ctx context.Context, s *Session, key, kind string) (any, error) {
 	}
 }
 
-func replaceValue(ctx context.Context, s *Session, key, kind string, value any) error {
+func replaceValue(ctx context.Context, client *redisclient.Client, key, kind string, value any) error {
 	switch kind {
 	case "string":
-		if err := s.client.Set(ctx, key, stringValue(value), 0).Err(); err != nil {
+		if err := client.Set(ctx, key, stringValue(value), 0).Err(); err != nil {
 			return redisErr(err)
 		}
 	case "hash":
@@ -500,11 +617,11 @@ func replaceValue(ctx context.Context, s *Session, key, kind string, value any) 
 		if err != nil {
 			return err
 		}
-		if err := s.client.Del(ctx, key).Err(); err != nil {
+		if err := client.Del(ctx, key).Err(); err != nil {
 			return redisErr(err)
 		}
 		if len(values) > 0 {
-			if err := s.client.HSet(ctx, key, values).Err(); err != nil {
+			if err := client.HSet(ctx, key, values).Err(); err != nil {
 				return redisErr(err)
 			}
 		}
@@ -513,11 +630,11 @@ func replaceValue(ctx context.Context, s *Session, key, kind string, value any) 
 		if err != nil {
 			return err
 		}
-		if err := s.client.Del(ctx, key).Err(); err != nil {
+		if err := client.Del(ctx, key).Err(); err != nil {
 			return redisErr(err)
 		}
 		if len(values) > 0 {
-			if err := s.client.RPush(ctx, key, values).Err(); err != nil {
+			if err := client.RPush(ctx, key, values).Err(); err != nil {
 				return redisErr(err)
 			}
 		}
@@ -526,11 +643,11 @@ func replaceValue(ctx context.Context, s *Session, key, kind string, value any) 
 		if err != nil {
 			return err
 		}
-		if err := s.client.Del(ctx, key).Err(); err != nil {
+		if err := client.Del(ctx, key).Err(); err != nil {
 			return redisErr(err)
 		}
 		if len(values) > 0 {
-			if err := s.client.SAdd(ctx, key, values).Err(); err != nil {
+			if err := client.SAdd(ctx, key, values).Err(); err != nil {
 				return redisErr(err)
 			}
 		}
@@ -539,11 +656,11 @@ func replaceValue(ctx context.Context, s *Session, key, kind string, value any) 
 		if err != nil {
 			return err
 		}
-		if err := s.client.Del(ctx, key).Err(); err != nil {
+		if err := client.Del(ctx, key).Err(); err != nil {
 			return redisErr(err)
 		}
 		if len(values) > 0 {
-			if err := s.client.ZAdd(ctx, key, values...).Err(); err != nil {
+			if err := client.ZAdd(ctx, key, values...).Err(); err != nil {
 				return redisErr(err)
 			}
 		}
@@ -553,20 +670,20 @@ func replaceValue(ctx context.Context, s *Session, key, kind string, value any) 
 	return nil
 }
 
-func keySize(ctx context.Context, s *Session, key, kind string) (int64, error) {
+func keySize(ctx context.Context, client *redisclient.Client, key, kind string) (int64, error) {
 	switch kind {
 	case "string":
-		return s.client.StrLen(ctx, key).Result()
+		return client.StrLen(ctx, key).Result()
 	case "hash":
-		return s.client.HLen(ctx, key).Result()
+		return client.HLen(ctx, key).Result()
 	case "list":
-		return s.client.LLen(ctx, key).Result()
+		return client.LLen(ctx, key).Result()
 	case "set":
-		return s.client.SCard(ctx, key).Result()
+		return client.SCard(ctx, key).Result()
 	case "zset":
-		return s.client.ZCard(ctx, key).Result()
+		return client.ZCard(ctx, key).Result()
 	case "stream":
-		return s.client.XLen(ctx, key).Result()
+		return client.XLen(ctx, key).Result()
 	default:
 		return 0, nil
 	}
@@ -688,8 +805,8 @@ func parseCommand(input string) ([]string, error) {
 	return args, nil
 }
 
-func redisPrompt(s *Session) string {
-	return fmt.Sprintf("redis:%d> ", s.opts.Database)
+func redisPrompt(database int) string {
+	return fmt.Sprintf("redis:%d> ", database)
 }
 
 func writeTerminal(w io.Writer, text string) error {
@@ -865,6 +982,17 @@ func parseInfo(raw string) map[string]string {
 			continue
 		}
 		key, value, ok := strings.Cut(line, ":")
+		if ok {
+			out[key] = value
+		}
+	}
+	return out
+}
+
+func parseInfoFields(raw string) map[string]string {
+	out := map[string]string{}
+	for _, field := range strings.Split(raw, ",") {
+		key, value, ok := strings.Cut(field, "=")
 		if ok {
 			out[key] = value
 		}

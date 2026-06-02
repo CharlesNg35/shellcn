@@ -12,7 +12,7 @@ import RecordingControls from "../../components/recordings/RecordingControls.vue
 import type { RecordingDescriptor } from "../../composables/useRecordingControl";
 import type { PanelProps } from "../core/types";
 import type { TerminalPanelConfig } from "../../types/projection";
-import SkeletonList from "../../components/SkeletonList.vue";
+import PanelLoader from "../../components/PanelLoader.vue";
 import StreamStatusBar from "./StreamStatusBar.vue";
 
 const props = defineProps<PanelProps>();
@@ -356,9 +356,9 @@ onUnmounted(() => {
       Terminal preview unavailable in this environment.
     </p>
     <div class="relative min-h-0 flex-1">
-      <SkeletonList
+      <PanelLoader
         v-if="terminalLoading && !failed"
-        :rows="8"
+        label="Connecting"
         class="absolute inset-0"
       />
       <div

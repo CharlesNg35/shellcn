@@ -136,7 +136,7 @@ function onActionDone(action: Action, result?: Record<string, unknown>): void {
       <KeepAlive :max="KEEP_ALIVE_DETAIL_PANELS_MAX">
         <PanelHost
           v-if="current"
-          :key="`${row.ref?.uid}:${current.key}`"
+          :key="`${connectionId}:${row.ref?.uid}:${current.key}`"
           :panel="current.panel"
           :connection-id="connectionId"
           :source="current.source"

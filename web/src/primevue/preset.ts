@@ -542,6 +542,12 @@ export const primeVuePassthrough = {
     root: "animate-pulse rounded-md bg-surface-100 dark:bg-surface-800",
   },
 
+  progressspinner: {
+    root: "h-8 w-8 text-primary-500",
+    spin: "h-full w-full motion-safe:animate-spin [animation-duration:.8s]",
+    circle: "fill-transparent stroke-current [stroke-width:3]",
+  },
+
   datepicker: {
     root: "relative block w-full",
     pcInputText: { root: inputBase },
