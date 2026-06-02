@@ -146,7 +146,7 @@ describe("TablePanel", () => {
     await flushPromises();
 
     expect(w.get("thead th").attributes("style")).toContain("width: 3rem");
-    expect(w.get('[data-test="table-cell-value"] svg').exists()).toBe(true);
+    expect(w.find('[data-test="table-cell-value"] svg').exists()).toBe(true);
   });
 
   it("filters server-side and resets the list", async () => {
