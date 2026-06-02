@@ -20,9 +20,7 @@ type storeFactory struct {
 	open func(t *testing.T) *store.Store
 }
 
-// factories returns every backend the suite runs against. SQLite + the in-memory
-// fake are the per-PR gate; Postgres/MySQL run only when their DSN env is set
-// (nightly / M1 hardening).
+// factories returns every configured backend for the store suite.
 func factories() []storeFactory {
 	fs := []storeFactory{
 		{name: "memory", open: func(_ *testing.T) *store.Store { return store.NewMemory() }},

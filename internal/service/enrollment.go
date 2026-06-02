@@ -64,9 +64,7 @@ type AgentState struct {
 	Message string `json:"message,omitempty"`
 }
 
-// EnrollmentService issues connection-scoped agent enrollment tokens and tracks
-// the lifecycle of the resulting tunnels. The raw token only ever appears in a
-// rendered install artifact; the store keeps a hash.
+// EnrollmentService issues connection-scoped agent enrollment tokens.
 type EnrollmentService struct {
 	store   store.EnrollmentStore
 	conns   store.ConnectionStore
@@ -88,9 +86,7 @@ func hashToken(token string) string {
 // artifact (supplied by the server, which owns ticket minting and the host).
 type ArtifactURLFunc func(enrollmentID, kind string) (string, error)
 
-// Create issues an enrollment and renders the plugin's install artifacts. URL
-// artifacts defer token minting to the fetch (the record gets a non-redeemable
-// placeholder hash) so the token only ever lands in the fetched body.
+// Create issues an enrollment and renders install artifacts.
 func (s *EnrollmentService) Create(ctx context.Context, connectionID, connectURL string, artifactURL ArtifactURLFunc) (Enrollment, error) {
 	conn, err := s.conns.Get(ctx, connectionID)
 	if err != nil {
@@ -116,8 +112,7 @@ func (s *EnrollmentService) Create(ctx context.Context, connectionID, connectURL
 	}
 	var token string
 	if urlMode {
-		// No real token yet — store a unique, non-redeemable placeholder so the
-		// unique index holds; the real token is minted when the body is fetched.
+		// URL artifacts mint the real token when the body is fetched.
 		placeholder, err := randomToken()
 		if err != nil {
 			return Enrollment{}, err
@@ -148,9 +143,7 @@ func randomToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// deliveryMode reports whether the artifact set is URL-delivered. Mixing inline
-// and URL delivery in one enrollment is unsupported: a URL set mints its token
-// lazily and so has no token to inline.
+// deliveryMode rejects mixed inline and URL-delivered artifact sets.
 func deliveryMode(specs []plugin.InstallArtifact) (urlMode bool, err error) {
 	var sawURL, sawInline bool
 	for _, a := range specs {
@@ -213,9 +206,7 @@ func renderTemplate(name, tmpl string, data artifactData) (string, error) {
 	return sb.String(), nil
 }
 
-// RenderArtifactContent mints the real enrollment token and renders a
-// URL-delivered artifact's body. The caller's single-use ticket bounds it to one
-// fetch per enrollment.
+// RenderArtifactContent mints the token and renders a URL-delivered artifact.
 func (s *EnrollmentService) RenderArtifactContent(ctx context.Context, connectionID, enrollmentID, kind, connectURL string) (string, error) {
 	enr, err := s.store.Get(ctx, enrollmentID)
 	if err != nil || enr.ConnectionID != connectionID {

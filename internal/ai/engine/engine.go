@@ -1,17 +1,11 @@
-// Package engine is the framework-agnostic seam between ShellCN and whatever
-// LLM/agent library backs it. The rest of internal/ai depends only on these
-// small interfaces; the concrete implementation (eino) lives in engine/eino and
-// is imported nowhere else, so the framework is a swappable detail.
+// Package engine defines the framework-agnostic AI provider interfaces.
 package engine
 
 import "context"
 
 type progressKey struct{}
 
-// WithProgress attaches an emitter that a tool executor may use to stream
-// intermediate events (e.g. a subagent's nested tool progress) into the running
-// turn. The provider sets this on the context it passes to ToolExecutor.Execute,
-// so emits land on the same event stream the turn is already relaying.
+// WithProgress attaches an emitter for nested tool progress.
 func WithProgress(ctx context.Context, emit func(StreamEvent)) context.Context {
 	return context.WithValue(ctx, progressKey{}, emit)
 }
@@ -104,8 +98,7 @@ type ChatRequest struct {
 	MaxOutTokens int
 }
 
-// ToolExecutor runs a model-requested tool call and returns its result. The
-// tools package implements this so the engine never learns about routes/security.
+// ToolExecutor runs a model-requested tool call.
 type ToolExecutor interface {
 	Execute(ctx context.Context, call ToolCall) (any, error)
 }

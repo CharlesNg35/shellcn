@@ -45,7 +45,7 @@ func pParams(r *http.Request) map[string]string {
 	return out
 }
 
-// resolved bundles everything the wrapper looks up for a route request.
+// resolved bundles route request state.
 type resolved struct {
 	user   models.User
 	conn   models.Connection
@@ -54,8 +54,7 @@ type resolved struct {
 	params map[string]string
 }
 
-// resolve loads the connection + route and authorizes the request. It returns an
-// error already mapped to a sentinel; the caller normalizes + audits.
+// resolve loads and authorizes a route request.
 func (s *Server) resolve(r *http.Request) (resolved, error) {
 	ctx := r.Context()
 	user, _ := userFrom(ctx)
@@ -64,9 +63,7 @@ func (s *Server) resolve(r *http.Request) (resolved, error) {
 	return s.resolveRoute(ctx, user, connID, routeID, pParams(r))
 }
 
-// resolveRoute is the transport-agnostic core of resolve: it loads the
-// connection + route, validates path params, and authorizes the user. Both the
-// HTTP dispatcher and InvokeRoute (AI agent) share it for identical authz.
+// resolveRoute is shared by HTTP dispatch and AI tool invocation.
 func (s *Server) resolveRoute(ctx context.Context, user models.User, connID, routeID string, rawParams map[string]string) (resolved, error) {
 	conn, err := s.deps.Store.Connections.Get(ctx, connID)
 	if err != nil {
@@ -146,9 +143,7 @@ func (s *Server) authorize(ctx context.Context, user models.User, conn models.Co
 	return s.deps.Policy.Authorize(in)
 }
 
-// handleConnectionProxy reverse-proxies a browser request through a connection's
-// session (a plugin.HTTPProxy) to an upstream it exposes. The core does
-// authn/authz/audit + strips the prefix; the plugin maps the target and streams.
+// handleConnectionProxy reverse-proxies a browser request through a connection.
 func (s *Server) handleConnectionProxy(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := userFrom(ctx)
@@ -215,9 +210,8 @@ func (s *Server) auditEventParams(ctx context.Context, res resolved, result mode
 	})
 }
 
-// handleRoute is the full middleware chain for a plugin route:
-// authn (middleware) → authz → session resolve → bind/validate → audit → handler
-// → normalized response.
+// handleRoute runs a plugin route through authz, session resolve, validation,
+// audit, handler execution, and response normalization.
 func (s *Server) handleRoute(w http.ResponseWriter, r *http.Request) {
 	res, err := s.resolve(r)
 	if err != nil {
@@ -276,10 +270,7 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request, res resolved)
 	writeJSON(w, http.StatusOK, result)
 }
 
-// invoke runs the validate → handle → metrics → audit core of the secure
-// pipeline against an already-resolved route and bound request context. It is
-// the single source of truth shared by HTTP dispatch and the AI agent: both get
-// identical schema validation, handler execution, and audit recording.
+// invoke is the shared validation, handler, metrics, and audit core.
 func (s *Server) invoke(ctx context.Context, res resolved, rc *plugin.RequestContext) (any, error) {
 	if err := rc.ValidateSchema(res.route.Input); err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
@@ -304,13 +295,8 @@ func (s *Server) invoke(ctx context.Context, res resolved, rc *plugin.RequestCon
 	return result, nil
 }
 
-// InvokeRoute runs one plugin route through the full secure pipeline
-// (resolve → authorize → acquire session → validate → handle → audit) as the
-// given user, returning the handler result. It is transport-agnostic: the AI
-// agent calls it to execute a connection route as a tool with exactly the same
-// authorization, validation, and audit a direct HTTP call receives. The caller
-// marks the audit source/turn via audit.WithSource on ctx. Streaming routes are
-// not invocable here.
+// InvokeRoute runs one non-streaming plugin route as the given user through the
+// same authorization, validation, and audit path as HTTP dispatch.
 func (s *Server) InvokeRoute(ctx context.Context, user models.User, connID, routeID string, params map[string]string, body []byte) (any, error) {
 	res, err := s.resolveRoute(ctx, user, connID, routeID, params)
 	if err != nil {
@@ -406,8 +392,7 @@ func (s *Server) writeDownload(w http.ResponseWriter, r *http.Request, dl *plugi
 	}
 }
 
-// resolveRange parses a single byte range: StatusOK = whole resource (absent,
-// malformed, or multi-range), StatusPartialContent, or 416.
+// resolveRange parses a single byte range.
 func resolveRange(header string, size int64) (start, length int64, status int) {
 	if !strings.HasPrefix(header, "bytes=") {
 		return 0, 0, http.StatusOK
@@ -530,9 +515,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 		return
 	}
 
-	// Enforce the route's declared input schema on the WS query params up front —
-	// the same contract HTTP routes get — so a malformed request is rejected
-	// before any upstream session or recording is opened.
+	// Reject malformed WS params before any upstream session or recording opens.
 	vc := plugin.NewRequestContext(ctx, res.user, nil, res.params, r.URL.Query(), nil)
 	if err := vc.ValidateSchema(res.route.Input); err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
@@ -562,9 +545,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 		defer s.deps.Metrics.WSClosed()
 	}
 
-	// Open the upstream only after the socket is accepted: a failed WS *upgrade*
-	// carries no body the browser can read, so a dial/auth failure here is sent as
-	// a close reason instead — giving the UI an actual reason for the disconnect.
+	// After accept, dial/auth failures can be sent as readable close reasons.
 	handle, err := s.acquireSession(ctx, res)
 	if err != nil {
 		s.auditEvent(ctx, res, models.AuditError, err)
@@ -597,8 +578,7 @@ func (s *Server) serveStream(w http.ResponseWriter, r *http.Request, res resolve
 	_ = c.Close(websocket.StatusNormalClosure, "")
 }
 
-// streamCloseReason renders an error as a WebSocket close reason, trimmed to the
-// 123-byte close-frame limit on a rune boundary so the browser receives it whole.
+// streamCloseReason fits an error into a WebSocket close reason.
 func streamCloseReason(err error) string {
 	msg := err.Error()
 	const maxCloseReasonBytes = 120
@@ -619,8 +599,7 @@ func routeContext(parent context.Context, route plugin.Route) (context.Context, 
 	return context.WithTimeout(parent, route.Timeout)
 }
 
-// prepareRecording resolves the stream's recording decision from plugin
-// capability + connection policy. A nil engine yields a no-op Pending.
+// prepareRecording resolves the stream recording decision.
 func (s *Server) prepareRecording(ctx context.Context, r *http.Request, res resolved) (*recording.Pending, error) {
 	manifest, ok := s.deps.Plugins.Manifest(res.conn.Protocol)
 	if !ok {

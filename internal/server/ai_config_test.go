@@ -24,7 +24,6 @@ func TestAIGlobalNeverExposesKey(t *testing.T) {
 
 func TestNoGlobalWritePath(t *testing.T) {
 	h := newHarness(t)
-	// There is intentionally no write endpoint for the shared config.
 	for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
 		if resp := h.do(t, m, "/api/ai/global", "op", strings.NewReader(`{}`)); resp.Status < 400 {
 			t.Fatalf("%s /api/ai/global should not succeed, got %d", m, resp.Status)
@@ -35,7 +34,6 @@ func TestNoGlobalWritePath(t *testing.T) {
 func TestUserProviderCRUDOverHTTP(t *testing.T) {
 	h := newHarness(t)
 
-	// Create.
 	body := `{"kind":"openai","name":"Mine","apiKey":"sk-user-secret","models":["gpt-4o"],"model":"gpt-4o"}`
 	resp := h.do(t, http.MethodPost, "/api/me/ai/config", "op", strings.NewReader(body))
 	if resp.Status != http.StatusCreated {
@@ -55,7 +53,6 @@ func TestUserProviderCRUDOverHTTP(t *testing.T) {
 		t.Fatalf("duplicate provider name: want 409, got %d (%s)", resp.Status, resp.Body)
 	}
 
-	// List (op sees their own; the response carries no key).
 	resp = h.do(t, http.MethodGet, "/api/me/ai/config", "op", nil)
 	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), `"name":"Mine"`) {
 		t.Fatalf("list: status=%d body=%s", resp.Status, resp.Body)
@@ -64,18 +61,15 @@ func TestUserProviderCRUDOverHTTP(t *testing.T) {
 		t.Fatalf("user key leaked in list: %s", resp.Body)
 	}
 
-	// Models listing.
 	resp = h.do(t, http.MethodGet, "/api/me/ai/config/"+id+"/models", "op", nil)
 	if resp.Status != http.StatusOK || !strings.Contains(string(resp.Body), "gpt-4o") {
 		t.Fatalf("models: status=%d body=%s", resp.Status, resp.Body)
 	}
 
-	// Another user cannot see or mutate it (owner-scoped → 404).
 	if resp := h.do(t, http.MethodDelete, "/api/me/ai/config/"+id, "viewer", nil); resp.Status != http.StatusNotFound {
 		t.Fatalf("cross-owner delete: want 404, got %d", resp.Status)
 	}
 
-	// Owner deletes.
 	if resp := h.do(t, http.MethodDelete, "/api/me/ai/config/"+id, "op", nil); resp.Status != http.StatusNoContent {
 		t.Fatalf("delete: want 204, got %d", resp.Status)
 	}
@@ -84,7 +78,6 @@ func TestUserProviderCRUDOverHTTP(t *testing.T) {
 func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
 	h := newHarness(t)
 
-	// read_write + allow destructive round-trips.
 	resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
 		`{"name":"ai-rw","protocol":"tester","config":{"host":"h"},"aiMode":"read_write","aiAllowDestructive":true}`))
 	if resp.Status != http.StatusCreated {
@@ -102,7 +95,6 @@ func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
 		t.Fatalf("connection list must expose ai mode for launcher gating: %s", list.Body)
 	}
 
-	// read_only must force the destructive opt-in off even if requested.
 	resp = h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
 		`{"name":"ai-ro","protocol":"tester","config":{"host":"h"},"aiMode":"read_only","aiAllowDestructive":true}`))
 	if resp.Status != http.StatusCreated {
@@ -114,7 +106,6 @@ func TestConnectionAIModePersistsAndClearsDestructive(t *testing.T) {
 		t.Fatalf("read_only must clear destructive opt-in: %s", detail.Body)
 	}
 
-	// An invalid mode is rejected.
 	if resp := h.do(t, http.MethodPost, "/api/connections", "op", strings.NewReader(
 		`{"name":"ai-bad","protocol":"tester","config":{"host":"h"},"aiMode":"bogus"}`)); resp.Status != http.StatusBadRequest {
 		t.Fatalf("invalid ai mode: want 400, got %d", resp.Status)

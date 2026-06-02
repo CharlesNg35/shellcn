@@ -23,9 +23,8 @@ const (
 	PanelHTTPClient PanelType = "http_client"
 )
 
-// PanelConfig is a sealed marker every panel config struct implements, so a
-// Panel/Action Config field accepts only a real config — never arbitrary data.
-// The unexported method keeps the set closed to this package.
+// PanelConfig is closed to this package so config fields cannot accept arbitrary
+// data.
 type PanelConfig interface{ panelConfig() }
 
 func (TableConfig) panelConfig()         {}
@@ -82,16 +81,13 @@ type Column struct {
 	Sortable bool       `json:"sortable,omitempty"`
 	Type     ColumnType `json:"type,omitempty"`
 	Width    string     `json:"width,omitempty"`
-	// ReadOnly keeps a column non-editable even when its table is Editable
-	// (e.g. server-managed values). Nullable lets the inline editor clear a
-	// cell to an empty/null value rather than an empty string.
+	// ReadOnly keeps server-managed values out of the inline editor. Nullable
+	// lets the editor clear a cell to empty/null.
 	ReadOnly bool `json:"readOnly,omitempty"`
 	Nullable bool `json:"nullable,omitempty"`
 	// Precision fixes fraction digits for number/percent cells.
 	Precision *int `json:"precision,omitempty"`
-	// Severities colors a badge column by value: it maps a lower-cased cell value
-	// to a Severity (e.g. "running" -> success). Unmapped values stay neutral;
-	// ignored for non-badge columns.
+	// Severities maps lower-cased badge values to colors.
 	Severities map[string]Severity `json:"severities,omitempty"`
 }
 
@@ -105,14 +101,8 @@ const (
 	RowClickNone     RowClickAction = "none"
 )
 
-// TableConfig is the declarative config consumed by the generic table panel.
-//
-// The editing affordances are plugin-agnostic: when Editable is true and RowKey
-// names the columns that uniquely identify a row, the generic data grid offers
-// inline cell editing, add-row, and delete-row controls wired to the declared
-// Insert/Update/Delete routes. Mutation request bodies are uniform across every
-// plugin: Insert sends {"values":{col:val}}, Update sends {"key":{col:val},
-// "values":{col:val}}, and Delete sends {"key":{col:val}}.
+// TableConfig drives the generic table panel. Editable tables use RowKey plus
+// Insert/Update/Delete routes with uniform mutation bodies.
 type TableConfig struct {
 	Columns       []Column    `json:"columns,omitempty"`
 	ColumnsSource *DataSource `json:"columnsSource,omitempty"`
@@ -138,14 +128,10 @@ type TableConfig struct {
 	Delete    *DataSource `json:"delete,omitempty"`
 	EmptyText string      `json:"emptyText,omitempty"`
 
-	// StagedEdits buffers edits, added rows, and deletions locally so the user
-	// reviews them and commits or discards as a batch, rather than each change
-	// hitting its route immediately. Opt-in; when off, edits apply on the spot.
+	// StagedEdits batches local row edits until the user commits or discards them.
 	StagedEdits bool `json:"stagedEdits,omitempty"`
 
-	// HiddenColumns lists row field keys to omit when the grid derives its
-	// columns from the data (no declared Columns). Lets a plugin keep helper
-	// fields out of the view without the renderer hard-coding any field names.
+	// HiddenColumns omits helper fields when columns are inferred from row data.
 	HiddenColumns []string `json:"hiddenColumns,omitempty"`
 
 	// Exportable opts the table into the generic CSV/JSON export of loaded rows.
@@ -166,10 +152,7 @@ type FileBrowserConfig struct {
 	MkdirRouteID    string `json:"mkdirRouteId,omitempty"`
 	RenameRouteID   string `json:"renameRouteId,omitempty"`
 	DeleteRouteID   string `json:"deleteRouteId,omitempty"`
-	// Bulk-operation slots over a multi-selection. Each is optional; the renderer
-	// shows a bulk action only when its slot is set. Move/Copy take
-	// {"paths":[...],"dest":"<dir>"}; Chmod takes {"paths":[...],"mode":"0644"};
-	// Archive takes {"paths":[...]} and streams a zip download.
+	// Bulk-operation slots over a multi-selection; each slot is optional.
 	MoveRouteID     string `json:"moveRouteId,omitempty"`
 	CopyRouteID     string `json:"copyRouteId,omitempty"`
 	ChmodRouteID    string `json:"chmodRouteId,omitempty"`
@@ -187,8 +170,7 @@ type FormPanelConfig struct {
 	Params        map[string]string `json:"params,omitempty"`
 }
 
-// DashboardConfig is the declarative config for a PanelDashboard: a responsive
-// grid that renders every Panel at once. Usable as a detail/connection panel.
+// DashboardConfig renders multiple panels in one responsive grid.
 type DashboardConfig struct {
 	Cells []Panel `json:"cells,omitempty"`
 }
@@ -216,10 +198,8 @@ type MetricSeries struct {
 	Unit  string `json:"unit,omitempty"`
 }
 
-// MetricsConfig drives the generic metrics panel — KPI stat cards, doughnut
-// gauges, and a multi-series time-series — all fed by the JSON frames the
-// metrics stream emits (each keyed by the configured field keys). Plugin-
-// agnostic: the renderer knows no field names; a plugin declares what to show.
+// MetricsConfig selects the stat, gauge, and series keys rendered from metric
+// stream frames.
 type MetricsConfig struct {
 	Stats   []MetricStat   `json:"stats,omitempty"`
 	Gauges  []MetricGauge  `json:"gauges,omitempty"`
@@ -237,9 +217,7 @@ const (
 type GraphConfig struct {
 	Layout  GraphLayout `json:"layout,omitempty"`
 	FitView bool        `json:"fitView,omitempty"`
-	// ExpandRouteID, when set, makes nodes expandable: the panel fetches a node's
-	// neighbourhood from this read route (passing the node id as ExpandParam,
-	// default "node") and merges the result into the graph.
+	// ExpandRouteID makes nodes expandable through a read route.
 	ExpandRouteID string `json:"expandRouteId,omitempty"`
 	ExpandParam   string `json:"expandParam,omitempty"`
 }
@@ -255,9 +233,7 @@ type KVConfig struct {
 	DeleteRouteID string `json:"deleteRouteId,omitempty"`
 	KeyParam      string `json:"keyParam,omitempty"`
 	Writable      bool   `json:"writable,omitempty"`
-	// ValueTypes are the value kinds a plugin's store supports (e.g. Redis
-	// string/hash/list/set/zset). The renderer offers them in the type picker;
-	// when empty it shows a plain value editor with no type concept.
+	// ValueTypes enables a type picker; empty means plain value editing.
 	ValueTypes []string `json:"valueTypes,omitempty"`
 }
 
@@ -331,10 +307,8 @@ type Badge struct {
 	Severity Severity    `json:"severity,omitempty"`
 }
 
-// ResourceRef is a managed object's stable identity vs display label. Scope is
-// an optional outer container the resource belongs to (e.g. a database or
-// cluster) for hierarchies deeper than namespace/name; it interpolates as
-// ${resource.scope} wherever ${resource.namespace} does.
+// ResourceRef is a managed object's stable identity and display label. Scope is
+// an optional outer container for hierarchies deeper than namespace/name.
 type ResourceRef struct {
 	Kind      string `json:"kind"`
 	Scope     string `json:"scope,omitempty"`
@@ -350,8 +324,7 @@ type ResourceEvent struct {
 	Resource any         `json:"resource,omitempty"`
 }
 
-// Panel is one renderable panel: a detail/connection tab, or a dashboard cell.
-// (Tabs and dashboard cells are the same shape — this is the single type.)
+// Panel is a renderable tab, detail panel, or dashboard cell.
 type Panel struct {
 	Key    string      `json:"key"`
 	Label  string      `json:"label,omitempty"`
@@ -359,18 +332,12 @@ type Panel struct {
 	Type   PanelType   `json:"panel"`
 	Source *DataSource `json:"source,omitempty"`
 	Config PanelConfig `json:"config,omitempty"`
-	// Span is a sizing hint for the dashboard layout only: a value >= 2 makes
-	// the panel fill the row; otherwise it occupies one grid column. Other
-	// layouts ignore it.
+	// Span is a dashboard-only sizing hint.
 	Span int `json:"span,omitempty"`
 }
 
-// TreeGroup is a connection-level sidebar root, loaded lazily.
-//
-// A group with a Source is expandable: its children are fetched on expand. Omit
-// Source to make it a leaf — a direct destination that opens on click with no
-// expandable children: set ResourceKind to open that kind's list, or Ref to open
-// a specific resource's detail (e.g. a single dashboard/landing view).
+// TreeGroup is a lazy connection-sidebar root. With Source it expands; without
+// Source it opens ResourceKind or Ref directly.
 type TreeGroup struct {
 	Key          string       `json:"key"`
 	Label        string       `json:"label"`
@@ -390,34 +357,26 @@ type TreeNode struct {
 	Leaf           bool         `json:"leaf,omitempty"`
 	ChildrenSource *DataSource  `json:"childrenSource,omitempty"`
 	Badge          *Badge       `json:"badge,omitempty"`
-	// ResourceKind makes the node open that resource type's list view (like a
-	// top-level tree group) instead of a single-resource detail — for nesting a
-	// category that drills into a kind list.
+	// ResourceKind opens a resource list instead of a single-resource detail.
 	ResourceKind string `json:"resourceKind,omitempty"`
-	// ListParams scope that list (merged into the resource's list DataSource
-	// params), e.g. a namespace — so a nested node opens a filtered list.
+	// ListParams merge into the resource list DataSource params.
 	ListParams map[string]string `json:"listParams,omitempty"`
-	// Data carries the node's row fields so a tree-opened detail matches a table
-	// row (status badge, action gating).
+	// Data carries row fields for status badges and action gating.
 	Data map[string]any `json:"data,omitempty"`
 }
 
-// OpenTarget selects where an action's result surfaces. The default (view) runs
-// the route (or its form/confirm); Dock opens a panel in the workspace dock;
-// Dialog opens a panel in a modal.
+// OpenTarget selects where an action's result surfaces.
 type OpenTarget string
 
 const (
 	OpenView   OpenTarget = "view"
 	OpenDock   OpenTarget = "dock"
 	OpenDialog OpenTarget = "dialog"
-	// OpenURL runs the action's route, which returns {"url": "..."}, and opens
-	// that URL in a new browser tab. The route decides the URL.
+	// OpenURL opens the route-returned URL in a new browser tab.
 	OpenURL OpenTarget = "url"
 )
 
-// Action is a UI affordance over a route. Permission/risk/input live on the
-// route (single source of truth); this only references it plus UI metadata.
+// Action is a UI affordance over a route.
 type Action struct {
 	ID          string            `json:"id"`
 	Label       string            `json:"label"`
@@ -427,36 +386,28 @@ type Action struct {
 	Confirm     bool              `json:"confirm,omitempty"`
 	ConfirmText string            `json:"confirmText,omitempty"`
 	OnSuccess   *ActionSuccess    `json:"onSuccess,omitempty"`
-	// Open=OpenDock/OpenDialog makes the action open Panel (a generic panel type,
-	// e.g. terminal/log_stream/code_editor) in the workspace dock or a modal,
-	// sourced from the action's route — instead of executing the route inline.
+	// OpenDock/OpenDialog opens a panel in the workspace dock or a modal.
 	Open  OpenTarget `json:"open,omitempty"`
 	Panel PanelType  `json:"panel,omitempty"`
-	// Config is the panel config for a dock/dialog-opened Panel (e.g. a
-	// code_editor's saveRouteId), so an action can open an editable panel.
+	// Config is the panel config for dock/dialog-opened panels.
 	Config PanelConfig `json:"config,omitempty"`
-	// EnabledWhen gates the button on the active row's fields (e.g. state ==
-	// "running"); false shows it disabled, not hidden. Empty = always enabled.
+	// EnabledWhen disables the button unless active-row fields match.
 	EnabledWhen *Condition `json:"enabledWhen,omitempty"`
 	// IconOnly renders the button as its icon alone; Label becomes the tooltip.
 	IconOnly bool `json:"iconOnly,omitempty"`
-	// Group clusters actions on a surface into one labeled dropdown menu (the
-	// label is the group string); empty renders the action as a standalone
-	// button. The renderer also collapses overflow buttons into a "More" menu.
+	// Group clusters actions into a labeled dropdown.
 	Group string `json:"group,omitempty"`
 }
 
 // NavigateTarget is where the UI moves after an action succeeds.
 type NavigateTarget string
 
-// NavigateList returns from a resource detail to its list — e.g. after a delete,
-// so the now-gone resource's detail doesn't linger.
+// NavigateList returns from a resource detail to its list.
 const NavigateList NavigateTarget = "list"
 
 type ActionSuccess struct {
 	SelectTab string `json:"selectTab,omitempty"`
-	// Navigate moves the workbench after success (e.g. a deleted resource's detail
-	// returns to the list). Empty leaves the current view in place.
+	// Navigate moves the workbench after success.
 	Navigate NavigateTarget `json:"navigate,omitempty"`
 }
 
@@ -477,9 +428,7 @@ type HeaderSpec struct {
 	Severities map[string]Severity `json:"severities,omitempty"`
 }
 
-// ResourceActions groups a resource's action IDs by where the renderer shows
-// them — the single, non-overlapping action contract for a resource. Each ID
-// references Manifest.Actions.
+// ResourceActions groups action IDs by render surface.
 type ResourceActions struct {
 	Toolbar    []string `json:"toolbar,omitempty"`    // list toolbar, no row context (create, prune)
 	Row        []string `json:"row,omitempty"`        // bulk over selected rows (delete); implies Selectable
@@ -524,14 +473,10 @@ const (
 	ScopeToggle      ScopeControl = "toggle" // on sets the first Option's value
 )
 
-// ScopeSeparator joins a multiselect scope's values into the one param string.
-// It is a fixed wire convention (like the p.* param prefix), so plugins read the
-// list with rc.ParamList(param, ScopeSeparator) rather than inventing their own.
+// ScopeSeparator joins multiselect scope values in one route param.
 const ScopeSeparator = ","
 
-// ScopeFilter is a global header selector; the renderer injects its value as route
-// param Param into every read/stream. Choices come from OptionsSource rows
-// (ValueField/LabelField) or static Options; the empty choice (AllLabel) clears it.
+// ScopeFilter is a global selector injected into read and stream route params.
 type ScopeFilter struct {
 	Param         string         `json:"param"`
 	Label         string         `json:"label"`

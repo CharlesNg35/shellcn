@@ -2,8 +2,7 @@ package plugin
 
 import "slices"
 
-// RecordingClass groups streams by how they are recorded. Recording is always
-// plugin-declared and connection-enabled — never inferred from a panel type.
+// RecordingClass groups streams by recording format family.
 type RecordingClass string
 
 const (
@@ -28,9 +27,7 @@ const (
 	PolicyAuto     RecordingPolicy = "auto"
 )
 
-// RecordingCapability is one recordable stream class a plugin declares. The core
-// records a stream only when a capability covers it AND the connection policy
-// enables it — never because a panel happens to be terminal/remote_desktop.
+// RecordingCapability is one recordable stream class a plugin declares.
 type RecordingCapability struct {
 	Class   RecordingClass
 	Formats []RecordingFormat // ordered preference; Formats[0] is the default

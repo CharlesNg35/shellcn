@@ -13,6 +13,7 @@ defineProps<{
 const emit = defineEmits<{
   select: [id: string];
   create: [];
+  close: [];
   rename: [id: string, title: string];
   remove: [id: string];
 }>();
@@ -36,7 +37,7 @@ function remove(c: AiConversation): void {
 
 <template>
   <div
-    class="flex h-full min-h-0 w-64 flex-col border-r border-surface-200 bg-surface-50/80 dark:border-surface-800 dark:bg-surface-950"
+    class="flex h-full min-h-0 w-72 max-w-[82vw] flex-col border-r border-surface-200 bg-surface-0 shadow-2xl ring-1 ring-surface-950/5 dark:border-surface-800 dark:bg-surface-950 dark:ring-surface-0/10"
   >
     <div
       class="flex items-center justify-between gap-2 border-b border-surface-200 px-3 py-2.5 dark:border-surface-800"
@@ -53,16 +54,28 @@ function remove(c: AiConversation): void {
           History
         </span>
       </div>
-      <Button
-        text
-        rounded
-        size="small"
-        :disabled="busy"
-        aria-label="New chat"
-        @click="emit('create')"
-      >
-        <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="14" />
-      </Button>
+      <div class="flex shrink-0 items-center gap-1">
+        <Button
+          text
+          rounded
+          size="small"
+          :disabled="busy"
+          aria-label="New chat"
+          @click="emit('create')"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="14" />
+        </Button>
+        <Button
+          text
+          rounded
+          severity="secondary"
+          size="small"
+          aria-label="Close history"
+          @click="emit('close')"
+        >
+          <AppIcon :icon="{ type: 'lucide', value: 'x' }" :size="14" />
+        </Button>
+      </div>
     </div>
     <ul class="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
       <li
@@ -94,8 +107,11 @@ function remove(c: AiConversation): void {
             :size="13"
             class="shrink-0 text-current/55"
           />
-          <span class="min-w-0 flex-1 truncate font-medium">
-            {{ c.title }}
+          <span
+            class="min-w-0 flex-1 truncate font-medium"
+            :title="c.title || 'New chat'"
+          >
+            {{ c.title || "New chat" }}
           </span>
         </Button>
         <Button

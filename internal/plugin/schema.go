@@ -21,15 +21,12 @@ const (
 	FieldJSON          FieldType = "json"
 	FieldDuration      FieldType = "duration"
 	FieldCredentialRef FieldType = "credential_ref"
-	// FieldObject nests a sub-form (Fields); FieldArray is a repeatable list of Item.
+	// FieldObject nests Fields; FieldArray repeats Item.
 	FieldObject FieldType = "object"
 	FieldArray  FieldType = "array"
-	// FieldAutocomplete is a free-text input with Options/OptionsSource suggestions
-	// (e.g. a DB column type: pick a common one or type a parameterized custom).
+	// FieldAutocomplete is free text with Options/OptionsSource suggestions.
 	FieldAutocomplete FieldType = "autocomplete"
-	// FieldMap is repeatable key/value rows whose value type is Item; it submits
-	// an object {key: value} (e.g. config entries, labels), so a handler binding
-	// a map is unchanged.
+	// FieldMap is repeatable key/value rows whose value type is Item.
 	FieldMap FieldType = "map"
 )
 
@@ -91,7 +88,7 @@ type Rule struct {
 	Value any      `json:"value,omitempty"`
 }
 
-// Condition is a structured visibility predicate — never a string expression.
+// Condition is a structured visibility predicate.
 type Condition struct {
 	AllOf []Rule `json:"allOf,omitempty"`
 	AnyOf []Rule `json:"anyOf,omitempty"`
@@ -113,21 +110,15 @@ type Field struct {
 	Placeholder string    `json:"placeholder,omitempty"`
 	Help        string    `json:"help,omitempty"`
 	Options     []Option  `json:"options,omitempty"`
-	// OptionsSource populates a select/multiselect/radio field's choices from a
-	// route at form-open time (rows -> {value,label}), so a field can offer the
-	// live values of a related resource (e.g. a table's real columns) instead of
-	// a static list or free-typed name. Its params interpolate ${resource.*} from
-	// the form's resource context. Static Options still apply when set.
+	// OptionsSource populates choices from a route at form-open time.
 	OptionsSource *DataSource         `json:"optionsSource,omitempty"`
 	Credential    *CredentialSelector `json:"credential,omitempty"`
 	VisibleWhen   *Condition          `json:"visibleWhen,omitempty"`
 	Validators    []Validator         `json:"validators,omitempty"`
-	// Step is the increment for number/slider inputs (defaults to 1). Min/max
-	// bounds come from the min/max validators.
+	// Step is the increment for number/slider inputs.
 	Step any `json:"step,omitempty"`
 
-	// Composite fields: Fields holds an object's sub-fields; Item describes an
-	// array's element (recurses). MinItems/MaxItems bound an array.
+	// Composite fields: Fields holds object fields; Item describes array items.
 	Fields    []Field `json:"fields,omitempty"`
 	Item      *Field  `json:"item,omitempty"`
 	MinItems  int     `json:"minItems,omitempty"`

@@ -16,10 +16,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/store"
 )
 
-// CredentialService owns reusable credentials: it encrypts secret material on
-// write, resolves it for connect-time injection (authorized callers only), and
-// lists the non-secret summaries a user may select from. Secret values never
-// leave this layer toward the client.
+// CredentialService owns reusable credential encryption, resolution, and
+// non-secret summaries.
 type CredentialService struct {
 	creds          store.CredentialStore
 	grants         store.CredentialGrantStore
@@ -58,8 +56,7 @@ func (s *CredentialService) SetSecretAccessHook(fn func()) {
 	s.onSecretAccess = fn
 }
 
-// NewCredentialInput describes a credential to create (secret in plaintext;
-// encrypted before it touches the store).
+// NewCredentialInput describes a credential to create.
 type NewCredentialInput struct {
 	OwnerID  string
 	Name     string
@@ -96,8 +93,7 @@ func (s *CredentialService) Create(ctx context.Context, in NewCredentialInput) (
 	return cred, nil
 }
 
-// UpdateCredentialInput updates a credential's metadata and optionally rotates
-// its secret. A blank Secret keeps the stored material (write-only).
+// UpdateCredentialInput updates metadata and optionally rotates the secret.
 type UpdateCredentialInput struct {
 	Name     string
 	Kind     string
@@ -105,9 +101,7 @@ type UpdateCredentialInput struct {
 	Secret   string
 }
 
-// Update applies metadata changes and, when Secret is non-blank, rotates the
-// encrypted material. Rotation updates the single record; every connection that
-// references it resolves the new value on its next connect.
+// Update applies metadata changes and rotates the encrypted material when set.
 func (s *CredentialService) Update(ctx context.Context, id string, in UpdateCredentialInput) (models.Credential, error) {
 	cred, err := s.creds.Get(ctx, id)
 	if err != nil {
@@ -168,8 +162,7 @@ func (s *CredentialService) normalizeCredentialInput(name, kind, identity string
 	return out, nil
 }
 
-// Delete removes a credential. Callers must enforce the not-referenced
-// invariant — a credential still referenced by a connection cannot be deleted.
+// Delete removes a credential after callers enforce reference checks.
 func (s *CredentialService) Delete(ctx context.Context, id string) error {
 	return s.creds.Delete(ctx, id)
 }
@@ -182,10 +175,7 @@ func (s *CredentialService) canUse(ctx context.Context, userID string, cred mode
 	return s.grants.Has(ctx, cred.ID, userID)
 }
 
-// EnsureUsable verifies that userID may use credentialID — used by the
-// connection control plane when a config references a reusable credential. It
-// returns ErrForbidden when the user lacks owner/use access and the store's
-// not-found error for an unknown credential.
+// EnsureUsable verifies owner/use access to a credential.
 func (s *CredentialService) EnsureUsable(ctx context.Context, userID, credentialID string) error {
 	cred, err := s.creds.Get(ctx, credentialID)
 	if err != nil {
@@ -194,9 +184,7 @@ func (s *CredentialService) EnsureUsable(ctx context.Context, userID, credential
 	return s.ensureUsableCredential(ctx, userID, cred)
 }
 
-// SummaryIfUsable returns the non-secret credential summary only when userID
-// has direct use access. It intentionally collapses not-found/forbidden/errors
-// to false for redacted edit views.
+// SummaryIfUsable returns a non-secret summary only when userID has use access.
 func (s *CredentialService) SummaryIfUsable(ctx context.Context, userID, credentialID string) (models.CredentialSummary, bool) {
 	cred, err := s.creds.Get(ctx, credentialID)
 	if err != nil {
@@ -240,16 +228,13 @@ func (s *CredentialService) ensureUsableCredential(ctx context.Context, userID s
 	return nil
 }
 
-// Resolve returns the decrypted secret material for connect-time injection IF
-// the user may use the credential. The value is for the plugin's ConnectConfig
-// only and must never be serialized back to the client.
+// Resolve returns decrypted material for connect-time injection after use access.
 func (s *CredentialService) Resolve(ctx context.Context, userID, credentialID string) ([]byte, error) {
 	_, secret, err := s.ResolveWithMetadata(ctx, userID, credentialID)
 	return secret, err
 }
 
-// ResolveWithMetadata returns non-secret credential metadata plus decrypted
-// material for connect-time injection after the same use check as Resolve.
+// ResolveWithMetadata returns metadata plus decrypted material after use access.
 func (s *CredentialService) ResolveWithMetadata(ctx context.Context, userID, credentialID string) (models.Credential, []byte, error) {
 	cred, err := s.creds.Get(ctx, credentialID)
 	if err != nil {

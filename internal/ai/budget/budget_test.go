@@ -7,19 +7,15 @@ import (
 )
 
 func TestHistoryBudgetClamped(t *testing.T) {
-	// Unknown window → default.
 	if b := HistoryBudget(Limits{}, 100, 100); b != DefaultHistoryBudget {
 		t.Fatalf("unknown window should yield default, got %d", b)
 	}
-	// Large window → clamped to MaxHistoryBudget.
 	if b := HistoryBudget(Limits{ContextWindow: 2_000_000}, 100, 100); b != MaxHistoryBudget {
 		t.Fatalf("large window should clamp to max, got %d", b)
 	}
-	// Tiny window → clamped to MinHistoryBudget.
 	if b := HistoryBudget(Limits{ContextWindow: 20_000}, 100, 100); b < MinHistoryBudget {
 		t.Fatalf("budget below min: %d", b)
 	}
-	// A normal window leaves room for history after overhead + output reserve.
 	b := HistoryBudget(Limits{ContextWindow: 128_000}, 1000, 500)
 	if b <= 0 || b > 128_000 {
 		t.Fatalf("unexpected budget %d", b)
@@ -27,15 +23,12 @@ func TestHistoryBudgetClamped(t *testing.T) {
 }
 
 func TestResolveOutputTokens(t *testing.T) {
-	// Ample window → full output cap.
 	if o := ResolveOutputTokens(Limits{ContextWindow: 128_000}, 100, 100); o != MaxOutputTokens {
 		t.Fatalf("want max output, got %d", o)
 	}
-	// A provider max-output cap is honored.
 	if o := ResolveOutputTokens(Limits{ContextWindow: 128_000, MaxOutputTokens: 4096}, 100, 100); o != 4096 {
 		t.Fatalf("provider cap should win, got %d", o)
 	}
-	// Unknown window, no cap → default max.
 	if o := ResolveOutputTokens(Limits{}, 0, 0); o != MaxOutputTokens {
 		t.Fatalf("want default max, got %d", o)
 	}

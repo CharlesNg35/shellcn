@@ -16,10 +16,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/store"
 )
 
-// ConnectionService owns the control-plane lifecycle of a connection: it
-// validates submitted config against the plugin's schema, splits secret from
-// non-secret fields, encrypts secrets before the store, and enforces write-only
-// secret semantics on update. Secret values never travel back toward the client.
+// ConnectionService owns connection config validation, secret encryption, and
+// write-only secret update semantics.
 type ConnectionService struct {
 	conns   store.ConnectionStore
 	plugins *plugin.Registry
@@ -31,8 +29,7 @@ func NewConnectionService(conns store.ConnectionStore, plugins *plugin.Registry,
 	return &ConnectionService{conns: conns, plugins: plugins, creds: creds, vault: vault}
 }
 
-// ConnectionInput is a create/update request. Config carries the full submitted
-// form values: non-secret fields, inline secret values, and credential refs.
+// ConnectionInput is a create/update request.
 type ConnectionInput struct {
 	Name      string
 	Protocol  string
@@ -51,8 +48,7 @@ type ConnectionInput struct {
 	AIAllowDestructive bool
 }
 
-// normalizeAIMode validates the AI mode and clears the destructive opt-in unless
-// the connection is read_write.
+// normalizeAIMode clears destructive opt-in unless the mode is read_write.
 func normalizeAIMode(mode string, allowDestructive bool) (string, bool, error) {
 	switch mode {
 	case "", models.AIModeDisabled, models.AIModeReadOnly:
@@ -94,8 +90,7 @@ type ConnectionFolderOrderInput struct {
 	SortOrder int    `json:"sortOrder"`
 }
 
-// ConnectionDetail is the edit/detail read: non-secret config plus a per-secret
-// field presence map ("set" / "not set"). It never carries secret values.
+// ConnectionDetail is the client edit/detail view; it never carries secret values.
 type ConnectionDetail struct {
 	ID                 string                        `json:"id"`
 	Name               string                        `json:"name"`
@@ -133,8 +128,7 @@ var folderColors = map[string]bool{
 
 const defaultFolderColor = "slate"
 
-// Create validates the input against the plugin schema, encrypts inline secrets,
-// and persists a new connection owned by ownerID.
+// Create validates, encrypts inline secrets, and persists a new connection.
 func (s *ConnectionService) Create(ctx context.Context, ownerID string, in ConnectionInput) (models.Connection, error) {
 	m, ok := s.plugins.Manifest(in.Protocol)
 	if !ok {
@@ -196,9 +190,8 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 	return conn, nil
 }
 
-// Update re-validates and persists changes to an existing connection. Secret
-// fields follow write-only rules: a blank/omitted value keeps the stored
-// ciphertext; a non-blank value replaces it.
+// Update re-validates and persists connection changes. Blank secrets keep the
+// stored ciphertext.
 func (s *ConnectionService) Update(ctx context.Context, existing models.Connection, in ConnectionInput) (models.Connection, error) {
 	m, ok := s.plugins.Manifest(existing.Protocol)
 	if !ok {
@@ -406,8 +399,7 @@ func SaveConnectionFolderOrder(ctx context.Context, folderStore store.Connection
 	return nil
 }
 
-// ReferencesCredential reports whether any connection references credentialID
-// through its config (the control plane uses this to block credential deletion).
+// ReferencesCredential reports whether any connection config uses credentialID.
 func (s *ConnectionService) ReferencesCredential(ctx context.Context, credentialID string) (bool, error) {
 	conns, err := s.conns.List(ctx)
 	if err != nil {

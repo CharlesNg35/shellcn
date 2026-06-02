@@ -365,37 +365,29 @@ func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp 
 	return apiResp{Status: resp.StatusCode, Body: b}
 }
 
-// --- tests ------------------------------------------------------------------
-
 func TestWrapperOrder(t *testing.T) {
 	h := newHarness(t)
 
-	// unauthenticated → 401
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "", nil); resp.Status != http.StatusUnauthorized {
 		t.Errorf("unauthenticated: want 401, got %d", resp.Status)
 	}
 
-	// unknown RouteID → 404
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/ghost", "op", nil); resp.Status != http.StatusNotFound {
 		t.Errorf("unknown route: want 404, got %d", resp.Status)
 	}
 
-	// unauthorized by risk → 403 (viewer DELETE destructive on a connection they own)
 	if resp := h.do(t, http.MethodDelete, "/api/connections/c-view/x/t.danger", "viewer", nil); resp.Status != http.StatusForbidden {
 		t.Errorf("viewer destructive: want 403, got %d", resp.Status)
 	}
 
-	// missing/failed session → 503 (boom plugin Connect fails)
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-boom/x/boom.list", "op", nil); resp.Status != http.StatusServiceUnavailable {
 		t.Errorf("connect failure: want 503, got %d", resp.Status)
 	}
 
-	// bad input → 400 (required field missing)
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/x/t.input", "op", strings.NewReader(`{}`)); resp.Status != http.StatusBadRequest {
 		t.Errorf("bad input: want 400, got %d", resp.Status)
 	}
 
-	// happy → 200 + audit row
 	resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil)
 	if resp.Status != http.StatusOK {
 		t.Fatalf("happy: want 200, got %d", resp.Status)
@@ -700,8 +692,6 @@ func TestProjectionEndpoints(t *testing.T) {
 	}
 }
 
-// --- WebSocket ticket enforcement ------------------------------------------
-
 func (h *harness) wsURL(path string) string {
 	return "ws" + strings.TrimPrefix(h.ts.URL, "http") + path
 }
@@ -756,7 +746,6 @@ func (h *harness) mintTicket(t *testing.T, userID, connID, routeID string, param
 		t.Fatalf("mint ticket: want 201, got %d", resp.Status)
 	}
 	b := resp.Body
-	// crude extraction of "ticket":"..."
 	const k = `"ticket":"`
 	i := strings.Index(string(b), k)
 	if i < 0 {
@@ -1007,7 +996,6 @@ func TestPluginRoute401IsNotMarkedAsPlatformAuth(t *testing.T) {
 
 func TestWSRequiresTicket(t *testing.T) {
 	h := newHarness(t)
-	// No ticket → upgrade rejected.
 	if _, err := h.dialWS(t, "op", "/api/connections/c-op/x/t.ws"); err == nil {
 		t.Error("WS without a ticket should be rejected")
 	}
@@ -1053,7 +1041,6 @@ func TestWSStreamRecordedWhenPolicyForced(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
 
-	// A connection whose terminal stream is force-recorded (no plugin-specific code).
 	resp := h.do(t, http.MethodPost, "/api/connections", "op",
 		strings.NewReader(`{"name":"rec","protocol":"tester","config":{"host":"h"},"recording":{"terminal":"auto"}}`))
 	if resp.Status != http.StatusCreated {

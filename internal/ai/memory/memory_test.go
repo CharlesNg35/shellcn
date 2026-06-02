@@ -28,7 +28,6 @@ func TestCreateListGetRenameDelete(t *testing.T) {
 		t.Fatalf("want 1 conversation, got %d", len(list))
 	}
 
-	// Owner scoping: another user cannot see/get it.
 	if _, err := m.Get(ctx, "u2", c.ID); !errors.Is(err, store.ErrNotFound) {
 		t.Fatalf("cross-owner get: want ErrNotFound, got %v", err)
 	}
@@ -60,7 +59,6 @@ func TestSetAutoTitleOnlyReplacesDefault(t *testing.T) {
 		t.Fatalf("auto-title should set a system title: %+v", got)
 	}
 
-	// A user rename wins and is never overwritten by a later auto-title.
 	if _, err := m.Rename(ctx, "u1", c.ID, "My thread"); err != nil {
 		t.Fatalf("rename: %v", err)
 	}
@@ -83,13 +81,11 @@ func TestHistoryKeepsRecentAndCompactsOlder(t *testing.T) {
 	ctx := context.Background()
 	c, _ := m.Create(ctx, "u1", "c1", "", "gpt-4o")
 
-	// Append many turns so older ones must compact under a tiny window.
 	for i := 0; i < 12; i++ {
 		_ = m.AppendUser(ctx, c.ID, "user message number "+itoa(i)+" "+strings.Repeat("x", 200))
 		_ = m.AppendAssistant(ctx, c.ID, "assistant reply "+itoa(i)+" "+strings.Repeat("y", 200), "", nil, false)
 	}
 
-	// Small budget forces compaction; recent messages stay verbatim.
 	summary, msgs, err := m.History(ctx, c.ID, 500)
 	if err != nil {
 		t.Fatalf("history: %v", err)
@@ -100,12 +96,10 @@ func TestHistoryKeepsRecentAndCompactsOlder(t *testing.T) {
 	if len(msgs) == 0 {
 		t.Fatal("expected recent messages kept verbatim")
 	}
-	// The most recent message must be present in full (not compacted).
 	last := msgs[len(msgs)-1]
 	if !strings.Contains(last.Content, "11") {
 		t.Fatalf("most recent turn missing from history: %q", last.Content)
 	}
-	// Budget bound: kept messages should be far fewer than the full 24.
 	if len(msgs) >= 24 {
 		t.Fatalf("history not bounded: kept %d of 24", len(msgs))
 	}
@@ -119,7 +113,6 @@ func TestMessagesPagePaginatesNewestFirst(t *testing.T) {
 		_ = m.AppendUser(ctx, c.ID, "msg "+itoa(i))
 	}
 
-	// First page: the newest 10, oldest→newest within the page.
 	p1, err := m.MessagesPage(ctx, "u1", c.ID, 10, 0)
 	if err != nil {
 		t.Fatalf("page1: %v", err)
@@ -131,19 +124,16 @@ func TestMessagesPagePaginatesNewestFirst(t *testing.T) {
 		t.Fatalf("page1 should end at the newest message: %q", p1.Messages[len(p1.Messages)-1].Content)
 	}
 
-	// Next older page using the running loadedCount.
 	p2, _ := m.MessagesPage(ctx, "u1", c.ID, 10, p1.LoadedCount)
 	if len(p2.Messages) != 10 || !p2.HasMore || p2.Messages[len(p2.Messages)-1].Content != "msg 14" {
 		t.Fatalf("page2 wrong: %+v", p2)
 	}
 
-	// Final page exhausts the history.
 	p3, _ := m.MessagesPage(ctx, "u1", c.ID, 10, p2.LoadedCount)
 	if len(p3.Messages) != 5 || p3.HasMore {
 		t.Fatalf("page3 wrong: %+v", p3)
 	}
 
-	// Owner scoping holds.
 	if _, err := m.MessagesPage(ctx, "u2", c.ID, 10, 0); err == nil {
 		t.Fatal("cross-owner page should fail")
 	}
@@ -157,8 +147,6 @@ func TestHistoryTrimsToRecentWindow(t *testing.T) {
 		_ = m.AppendUser(ctx, c.ID, "u"+itoa(i))
 		_ = m.AppendAssistant(ctx, c.ID, "a"+itoa(i), "", nil, false)
 	}
-	// A generous budget keeps everything loaded verbatim, but the loaded set is
-	// capped at the recent window (40), not the full 120 messages.
 	_, msgs, err := m.History(ctx, c.ID, 1_000_000)
 	if err != nil {
 		t.Fatalf("history: %v", err)

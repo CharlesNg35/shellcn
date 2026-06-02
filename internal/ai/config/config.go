@@ -1,6 +1,4 @@
-// Package aiconfig manages AI provider configuration: a read-only global provider
-// from internal/config, and owner-scoped per-user providers whose API keys are
-// Vault-encrypted before the store and never returned to clients.
+// Package aiconfig manages shared and user-scoped AI provider configuration.
 package aiconfig
 
 import (
@@ -24,8 +22,7 @@ var errInvalid = errors.New("invalid ai provider config")
 // ErrInvalid is the validation sentinel callers can match.
 func ErrInvalid() error { return errInvalid }
 
-// builtinKinds is the closed vocabulary validated at registration. Custom
-// providers are openai_compatible rows with their own name + base URL.
+// builtinKinds is the closed provider-kind vocabulary.
 var builtinKinds = map[models.AIProviderKind]bool{
 	models.AIProviderOpenAI:       true,
 	models.AIProviderOpenRouter:   true,
@@ -34,8 +31,7 @@ var builtinKinds = map[models.AIProviderKind]bool{
 	models.AIProviderOpenAICompat: true,
 }
 
-// vendorModelCatalog is the static fallback for the picker when no live
-// catalogue or configured allow-list is available.
+// vendorModelCatalog is the static model picker fallback.
 var vendorModelCatalog = map[models.AIProviderKind][]string{
 	models.AIProviderOpenAI:     {"gpt-4o", "gpt-4o-mini", "o3-mini"},
 	models.AIProviderOpenRouter: {"openai/gpt-4o", "anthropic/claude-sonnet-4.5", "google/gemini-2.5-pro"},
@@ -52,8 +48,7 @@ const (
 	validateCatalog
 )
 
-// Input is a create/update request for a user provider. On update an empty
-// APIKey keeps the stored ciphertext (write-only key semantics).
+// Input is a create/update request for a user provider.
 type Input struct {
 	Kind    models.AIProviderKind
 	Name    string
@@ -63,8 +58,7 @@ type Input struct {
 	Model   string
 }
 
-// GlobalStatus is the read-only projection of the shared AI config exposed to
-// clients: presence + provider/model, never the key.
+// GlobalStatus is the read-only shared AI config projection.
 type GlobalStatus struct {
 	Configured bool   `json:"configured"`
 	Provider   string `json:"provider,omitempty"`
@@ -198,9 +192,7 @@ func (s *Service) ProviderModel(ctx context.Context, ownerID, id string) (string
 	return row.Model, nil
 }
 
-// Models lists a provider's selectable models. It queries the provider's live
-// catalogue when possible, falling back to the configured allow-list, then a
-// static per-kind default.
+// Models lists a provider's selectable models.
 func (s *Service) Models(ctx context.Context, ownerID, id string) ([]string, error) {
 	row, key, err := s.Resolve(ctx, ownerID, id)
 	if err != nil {
@@ -225,8 +217,7 @@ func (s *Service) Models(ctx context.Context, ownerID, id string) ([]string, err
 	return []string{}, nil
 }
 
-// ModelsForInput lists models for an unsaved provider draft. It is used by the
-// settings UI to fetch a provider catalog before persisting the key.
+// ModelsForInput lists models for an unsaved provider draft.
 func (s *Service) ModelsForInput(ctx context.Context, in Input) ([]string, error) {
 	in, err := s.validate(ctx, "", "", in, validateCatalog)
 	if err != nil {
@@ -274,8 +265,7 @@ func modelIDs(models []modelreg.ProviderModel) []string {
 	return ids
 }
 
-// Test verifies a provider's credentials and endpoint by listing its models. It
-// returns nil when the provider is reachable and authorized.
+// Test verifies a provider's credentials and endpoint by listing models.
 func (s *Service) Test(ctx context.Context, ownerID, id string) error {
 	row, key, err := s.Resolve(ctx, ownerID, id)
 	if err != nil {

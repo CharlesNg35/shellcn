@@ -1,6 +1,4 @@
-// Package server is the HTTP/WS adapter: it mounts plugin routes behind the full
-// middleware chain (authn → authz → session → validate → audit → handler →
-// normalize), exposes the projection + catalog APIs, and serves the embedded UI.
+// Package server is the HTTP/WS adapter for APIs, plugin routes, and the UI.
 package server
 
 import (
@@ -38,8 +36,7 @@ type Deps struct {
 	Auth       auth.Authenticator
 	SessionMgr *auth.SessionManager
 	Tickets    *auth.TicketStore
-	// ArtifactTickets guards public install-artifact fetches. It has a longer TTL
-	// than Tickets (a human copies a URL and runs it) and never expires a WS.
+	// ArtifactTickets guards public install-artifact fetches.
 	ArtifactTickets   *auth.TicketStore
 	Policy            *policy.Enforcer
 	Connector         *service.Connector
@@ -54,18 +51,16 @@ type Deps struct {
 	Recording         *recording.Engine
 	RecordingMaxChunk int64
 	AI                *aiconfig.Service
-	// AIGlobal is the env/config shared-AI provider; combined with AI (user
-	// providers) it backs the chat agent. Inert when no provider is configured.
+	// AIGlobal is the env/config shared-AI provider.
 	AIGlobal config.AIConfig
-	// ModelRegistry resolves model context windows + live model lists; shared by
-	// the config service and the chat agent. Created on demand when nil.
+	// ModelRegistry resolves model context windows and live model lists.
 	ModelRegistry *modelreg.Registry
 	Audit         audit.Sink
 	Metrics       *telemetry.Metrics
 	Health        *telemetry.Health
 	Logger        *slog.Logger
 
-	// StaticFS is the embedded web/dist (nil in dev mode, where Vite serves the UI).
+	// StaticFS is the embedded web/dist; nil in dev mode.
 	StaticFS fs.FS
 	Dev      bool
 	// AllowedOrigins are extra WS origins beyond same-site (usually empty).
@@ -92,8 +87,7 @@ func New(d Deps) *Server {
 	// punishing for online password guessing.
 	s := &Server{deps: d, loginLimiter: newRateLimiter(rate.Every(12*time.Second), 5)}
 
-	// The chat agent runs route tools through the server's own secure pipeline
-	// (s implements the invoker); building it here breaks the construction cycle.
+	// Build chat here because it calls back into the server route invoker.
 	if d.AI != nil {
 		reg := d.ModelRegistry
 		if reg == nil {
@@ -117,7 +111,7 @@ func (s *Server) routes() chi.Router {
 	r.Use(telemetry.RequestIDMiddleware)
 	r.Use(s.withRemoteAddr)
 
-	// Observability endpoints (unauthenticated, like any /metrics + /healthz).
+	// Observability endpoints are unauthenticated.
 	if s.deps.Health != nil {
 		r.Get("/healthz", s.deps.Health.Handler())
 	} else {
@@ -128,20 +122,15 @@ func (s *Server) routes() chi.Router {
 	}
 
 	r.Route("/api", func(api chi.Router) {
-		// Auth (login is public; the rest require a session). Rate-limited per IP
-		// to blunt online brute force.
+		// Login is public and rate-limited per IP.
 		api.With(s.loginRateLimit).Post("/auth/login", s.handleLogin)
 		api.With(s.loginRateLimit).Post("/auth/login/mfa", s.handleLoginMFA)
 
-		// The agent connect endpoint authenticates with its enrollment token in
-		// the handshake (it is not a browser session), so it sits outside the
-		// session-guarded group.
+		// Agent connect authenticates with its enrollment token.
 		if s.deps.Enrollments != nil && s.deps.Tunnels != nil {
 			api.Get("/agent/connect", s.handleAgentConnect)
 		}
-		// Install-artifact fetch is public: it is run by a tool with no browser
-		// session (e.g. kubectl/curl) and is authorized solely by a single-use,
-		// signed ticket. The credential lands only in the fetched body.
+		// Install-artifact fetch uses only its single-use signed ticket.
 		if s.deps.Enrollments != nil && s.deps.ArtifactTickets != nil {
 			api.Get("/connections/{id}/agent/enrollments/{enrollmentId}/artifacts/{kind}", s.handleFetchArtifact)
 		}
@@ -198,8 +187,7 @@ func (s *Server) routes() chi.Router {
 
 			pr.Get("/audit/me", s.handleMyAudit)
 
-			// AI: read-only shared-config status + owner-scoped provider CRUD. No
-			// global write path — the shared config lives in env/internal/config.
+			// AI exposes shared status plus owner-scoped provider CRUD.
 			if s.deps.AI != nil {
 				pr.Get("/ai/global", s.handleAIGlobal)
 				pr.Get("/me/ai/config", s.handleListAIProviders)

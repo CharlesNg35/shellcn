@@ -7,19 +7,15 @@ import (
 	"net/http"
 )
 
-// NetTransport exposes the upstream at the layer the protocol needs. The core
-// builds it wired for the connection's mode; the plugin picks a layer and never
-// branches on direct-vs-agent.
+// NetTransport exposes the upstream at the layer the protocol needs.
 type NetTransport interface {
-	// L4 socket/TCP protocols. Identical for direct and agent transport.
+	// L4 socket/TCP protocols.
 	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
-	// L7 clients that need an injected HTTP transport. ok=false unless an L7
-	// agent mode is in use.
+	// L7 clients that need an injected HTTP transport.
 	HTTP() (baseURL string, rt http.RoundTripper, ok bool)
 }
 
-// ConnectConfig is built by the core: decrypted config + a transport wired for
-// the connection's mode. The plugin uses the layer its client needs.
+// ConnectConfig is the decrypted config plus core-built transport.
 type ConnectConfig struct {
 	ConnectionID string
 	Transport    Transport
@@ -76,22 +72,14 @@ type Session interface {
 	Close() error
 }
 
-// Plugin is a stateless, compiled-in singleton. It DECLARES (Manifest), exposes
-// typed ROUTES (handlers), and CONNECTS (returns a Session holding all
-// per-connection state). One instance serves every connection.
+// Plugin is a stateless, compiled-in protocol implementation.
 type Plugin interface {
 	Manifest() Manifest
 	Routes() []Route
 	Connect(ctx context.Context, cfg ConnectConfig) (Session, error)
 }
 
-// HTTPProxy is an optional Session capability: it reverse-proxies a browser
-// request to an upstream the session can reach (e.g. a web service behind the
-// connection's network). The core authenticates + authorizes the user and
-// strips the connection-proxy route prefix; r.URL.Path is the remaining
-// plugin-defined target path. The session maps it to its upstream and streams
-// the response (supporting redirects, assets, and WebSocket upgrades). It enables
-// generated "open in browser" links without any protocol-specific core code.
+// HTTPProxy is an optional Session capability for browser-accessible upstreams.
 type HTTPProxy interface {
 	ServeHTTPProxy(w http.ResponseWriter, r *http.Request)
 }

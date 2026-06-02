@@ -13,12 +13,10 @@ import (
 	"github.com/charlesng35/shellcn/internal/plugin"
 )
 
-// maxToolResultBytes caps a tool result before it enters the model context, so a
-// large listing can't blow the context window. Truncation is signalled, never silent.
+// maxToolResultBytes caps tool output before it enters model context.
 const maxToolResultBytes = 8 << 10
 
-// Invoker runs a route as the user through the full secure pipeline. *server.Server
-// satisfies it; depending on the interface (not the server) avoids an import cycle.
+// Invoker runs a route as the user through the secure pipeline.
 type Invoker interface {
 	InvokeRoute(ctx context.Context, user models.User, connID, routeID string, params map[string]string, body []byte) (any, error)
 }
@@ -70,9 +68,7 @@ func (ts *ToolSet) WithConfirmer(c Confirmer) *ToolSet {
 	return ts
 }
 
-// Build enumerates the protocol's routes, keeps those whose Risk is allowed and
-// which are non-streaming, and produces a tool per route. allowed is the set of
-// permitted risk tiers (read-only agents pass {RiskSafe:true}).
+// Build produces tools from allowed, non-streaming protocol routes.
 func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, invoker Invoker, user models.User, connID string) (*ToolSet, error) {
 	plg, ok := src.Get(protocol)
 	if !ok {
@@ -105,8 +101,7 @@ func (ts *ToolSet) Specs() []engine.ToolSpec { return ts.specs }
 // Has reports whether a tool name is in the set.
 func (ts *ToolSet) Has(name string) bool { _, ok := ts.byName[name]; return ok }
 
-// Execute runs a tool call: it splits path params from the JSON body, invokes the
-// route as the user, and returns a cleaned/truncated result for the model context.
+// Execute invokes a route tool and returns a model-safe result.
 func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, error) {
 	b, ok := ts.byName[call.Name]
 	if !ok {
@@ -160,8 +155,7 @@ func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, erro
 	return clean(result), nil
 }
 
-// clean truncates an oversized result and marks it, so the model is told the
-// data was capped rather than silently losing rows.
+// clean marks and truncates oversized tool output.
 func clean(result any) any {
 	encoded, err := json.Marshal(result)
 	if err != nil || len(encoded) <= maxToolResultBytes {
@@ -174,8 +168,7 @@ func clean(result any) any {
 	}
 }
 
-// describe builds a concise, model-facing description from the route's stable id,
-// method, and risk — no plugin-specific knowledge.
+// describe builds a model-facing description from route metadata.
 func describe(r plugin.Route) string {
 	action := humanize(r.ID)
 	verb := map[plugin.Method]string{
@@ -209,8 +202,7 @@ func sanitizeName(id string) string {
 	return b.String()
 }
 
-// toJSONSchema flattens the route's Input groups plus its path params into a flat
-// JSON Schema object the model can fill. Path params are required strings.
+// toJSONSchema flattens route input and path params for the model.
 func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
 	props := map[string]any{}
 	var required []string

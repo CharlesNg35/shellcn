@@ -19,8 +19,7 @@ type Icon struct {
 	Value string   `json:"value"`
 }
 
-// Capability is a declarative feature tag — for panel selection only, never
-// behavior dispatch.
+// Capability is a declarative feature tag, not behavior dispatch.
 type Capability string
 
 // Layout selects how the connection workspace is arranged.
@@ -51,18 +50,14 @@ const (
 	AgentHostMonitor AgentMode = "host_monitor"
 )
 
-// ProxyTarget describes the single endpoint an agent exposes back to the gateway.
-// For http_proxy mode, TokenFile/CAFile are generic target-side paths the agent
-// uses to inject a bearer token (empty = none) and verify TLS (empty = system
-// roots) — no protocol vocabulary, so any private-HTTP-API plugin can reuse it.
+// ProxyTarget describes the endpoint an agent exposes back to the gateway.
 type ProxyTarget struct {
 	Mode      AgentMode
 	Address   string
 	Risk      RiskLevel
 	TokenFile string
 	CAFile    string
-	// Forward lets the gateway dial arbitrary target-side addresses through the
-	// agent per-stream (e.g. a container's network), not just Address. Opt-in.
+	// Forward allows per-stream target-side addresses instead of only Address.
 	Forward bool
 }
 
@@ -72,15 +67,11 @@ type ArtifactDelivery string
 const (
 	// DeliveryInline injects the token directly into Template (the default).
 	DeliveryInline ArtifactDelivery = ""
-	// DeliveryURL serves Content from a single-use signed-ticket URL; Template
-	// becomes the fetch command ({{.ArtifactURL}}), so the token appears only in
-	// the fetched body. Generic — any plugin may use it.
+	// DeliveryURL serves Content from a single-use signed-ticket URL.
 	DeliveryURL ArtifactDelivery = "url"
 )
 
-// InstallArtifact is a launch recipe shown to the user to start an agent. An
-// inline Content (e.g. a Compose YAML) renders directly in the panel to save/copy
-// under Filename; Template is the shown command instead.
+// InstallArtifact is a launch recipe shown to start an agent.
 type InstallArtifact struct {
 	Label      string
 	Kind       string
@@ -101,8 +92,7 @@ type AgentProfile struct {
 	Install []InstallArtifact
 }
 
-// Manifest is a plugin's single versioned contract — pure declarative data.
-// Route metadata (permission/risk/audit/input) lives on Routes, not here.
+// Manifest is a plugin's single versioned declarative contract.
 type Manifest struct {
 	APIVersion  int
 	Name        string
@@ -128,17 +118,13 @@ type Manifest struct {
 	Actions   []Action
 	Streams   []Stream
 
-	// HeaderActions reference Actions by ID; the renderer shows them in the
-	// connection workspace header, centered, for connection-wide affordances that
-	// aren't tied to a selected resource.
+	// HeaderActions reference Actions shown in the connection workspace header.
 	HeaderActions []string
 
-	// Scope declares global header selectors whose chosen value the renderer
-	// injects into every request, so all resources share one scope.
+	// Scope declares global selectors injected into every request.
 	Scope []ScopeFilter
 
-	// Recording declares which stream classes this plugin can record. Empty means
-	// the plugin supports no recording (the default).
+	// Recording declares which stream classes this plugin can record.
 	Recording []RecordingCapability
 }
 

@@ -27,9 +27,7 @@ var ErrAgentUnavailable = errors.New("transport: agent tunnel unavailable")
 // DialFunc is a context-aware L4 dialer.
 type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
 
-// Direct dials the target straight from the gateway. It satisfies the L4 needs
-// of socket/TCP protocols; an HTTP client is built by the plugin over
-// DialContext, so HTTP() reports unavailable.
+// Direct dials the target straight from the gateway.
 type Direct struct {
 	dialer *net.Dialer
 	target targetAllowlist
@@ -54,8 +52,7 @@ func (d *Direct) DialContext(ctx context.Context, network, addr string) (net.Con
 	return d.dialer.DialContext(ctx, network, addr)
 }
 
-// HTTP reports ok=false: a direct-mode plugin builds its own HTTP client over
-// DialContext. An L7 base URL + RoundTripper is only injected by an L7 agent.
+// HTTP reports ok=false for direct transport.
 func (d *Direct) HTTP() (string, http.RoundTripper, bool) {
 	return "", nil, false
 }
@@ -258,9 +255,7 @@ type TunnelRegistry interface {
 	Dialer(connectionID string) (DialFunc, bool)
 }
 
-// Registry is the in-memory tunnel registry. An agent that has dialed back
-// registers its L4 dialer here under its connection id; Build resolves it for
-// agent-mode connections. It is safe for concurrent use.
+// Registry is the concurrent in-memory tunnel registry.
 type Registry struct {
 	mu      sync.RWMutex
 	seq     uint64
@@ -279,10 +274,7 @@ func NewRegistry() *Registry {
 	return &Registry{dialers: make(map[string]registration)}
 }
 
-// Register binds a connection's agent dialer, replacing any previous one, and
-// returns a release func that removes only this registration. A teardown that
-// fires after another tunnel has replaced this one is a no-op, so it cannot
-// drop the live tunnel.
+// Register binds an agent dialer and returns a release func for this registration.
 func (r *Registry) Register(connectionID string, dial DialFunc) (release func()) {
 	r.mu.Lock()
 	r.seq++
@@ -318,10 +310,7 @@ func (r *Registry) Dialer(connectionID string) (DialFunc, bool) {
 // transport dials the tunnel regardless of this value.
 const agentL7Host = app.AgentInternalHost
 
-// agentNet routes traffic through an agent tunnel dialer. For L4 modes
-// (tcp/unix) it exposes DialContext; for the L7 http_proxy mode it additionally
-// exposes a base URL + RoundTripper so fat HTTP clients (client-go) can reach an
-// upstream the gateway cannot dial, with credential injection done agent-side.
+// agentNet routes traffic through an agent tunnel dialer.
 type agentNet struct {
 	dial DialFunc
 	mode plugin.AgentMode
@@ -330,17 +319,14 @@ type agentNet struct {
 func (a *agentNet) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	conn, err := a.dial(ctx, network, addr)
 	if err != nil {
-		// A dial failure through the tunnel means the agent path is gone (e.g.
-		// yamux "session shutdown" after the agent disconnected).
+		// A tunnel dial failure means the agent path is gone.
 		return nil, fmt.Errorf("%w: %w", ErrAgentUnavailable, err)
 	}
 	return conn, nil
 }
 
-// HTTP returns an L7 base URL + RoundTripper for http_proxy-style modes (else ok=false).
-// The "http" scheme is logical: DialContext opens a yamux stream over the agent's
-// already-encrypted wss tunnel, which re-originates to the upstream over https —
-// so an inner TLS layer would only be TLS-in-TLS with no gain.
+// HTTP returns an L7 base URL and RoundTripper for http_proxy-style modes.
+// The "http" scheme is logical; the underlying path is the encrypted agent tunnel.
 func (a *agentNet) HTTP() (string, http.RoundTripper, bool) {
 	if a.mode != plugin.AgentHTTP && a.mode != plugin.AgentHostMonitor {
 		return "", nil, false
@@ -355,10 +341,7 @@ func (a *agentNet) HTTP() (string, http.RoundTripper, bool) {
 	return "http://" + agentL7Host, rt, true
 }
 
-// Build returns the NetTransport for a connection based on its transport mode.
-// agentMode is the plugin's declared agent proxy mode; it selects whether an
-// agent-transport connection exposes an L7 HTTP() endpoint (http_proxy) or only
-// L4 DialContext (tcp/unix). It is ignored for direct transport.
+// Build returns the NetTransport for a connection.
 func Build(conn models.Connection, reg TunnelRegistry, agentMode plugin.AgentMode) (plugin.NetTransport, error) {
 	switch conn.Transport {
 	case "", string(plugin.TransportDirect):

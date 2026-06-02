@@ -1,8 +1,4 @@
-// Package recording owns session-recording capture and storage: the blob store
-// for recording bytes, the format-specific recorders, and the core stream
-// wrapper that decides — from plugin capability + connection policy — whether a
-// stream is recorded. Recording metadata lives in the control-plane store; the
-// bytes live behind the BlobStore interface so the backend is replaceable.
+// Package recording owns session-recording capture and storage.
 package recording
 
 import (
@@ -18,9 +14,7 @@ import (
 // ErrInvalidKey is returned when a storage key would escape the blob root.
 var ErrInvalidKey = errors.New("recording: invalid storage key")
 
-// BlobStore stores recording bytes under server-generated keys. The local
-// filesystem backend is the default; an object-storage backend implements the
-// same interface without touching callers.
+// BlobStore stores recording bytes under server-generated keys.
 type BlobStore interface {
 	// Create opens key for writing, truncating any existing object.
 	Create(ctx context.Context, key string) (io.WriteCloser, error)
@@ -51,8 +45,7 @@ func NewLocalBlobStore(root string) (*LocalBlobStore, error) {
 	return &LocalBlobStore{root: abs}, nil
 }
 
-// resolve maps a key to an absolute path, rejecting empty keys and any traversal
-// (".." segments or absolute paths) before it can escape the blob root.
+// resolve maps a key to an absolute path under the blob root.
 func (s *LocalBlobStore) resolve(key string) (string, error) {
 	if key == "" || strings.Contains(key, "\x00") {
 		return "", ErrInvalidKey

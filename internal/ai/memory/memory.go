@@ -1,6 +1,4 @@
-// Package memory persists AI conversations and messages and assembles a turn's
-// context: recent turns verbatim, older turns folded into a summary, all within
-// a token budget.
+// Package memory persists AI conversations and assembles context windows.
 package memory
 
 import (
@@ -18,8 +16,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/store"
 )
 
-// Compaction limits: older turns are truncated to these char limits when folded
-// into the summary; compaction keeps at least minKeptTurns recent turns intact.
+// Compaction keeps at least minKeptTurns recent turns intact.
 const (
 	maxLoadedMessages        = 40
 	minKeptTurns             = 4
@@ -32,7 +29,7 @@ const (
 	defaultMessagePageSize   = 30
 )
 
-// Store is the conversation/message persistence + context-assembly surface.
+// Store is the conversation persistence and context-assembly surface.
 type Store struct {
 	conv store.AIConversationStore
 	msg  store.AIMessageStore
@@ -174,9 +171,7 @@ func (s *Store) AppendAssistant(ctx context.Context, convID, content, reasoning 
 	return nil
 }
 
-// History returns the summary (older turns, for the system prompt) and the recent
-// messages kept verbatim within tokenBudget. Each turn re-trims to the newest
-// maxLoadedMessages so the loaded set never grows with the conversation.
+// History returns compacted older turns plus recent messages within tokenBudget.
 func (s *Store) History(ctx context.Context, convID string, tokenBudget int) (summary string, msgs []engine.Message, err error) {
 	all, err := s.msg.Recent(ctx, convID, maxLoadedMessages)
 	if err != nil {
@@ -188,9 +183,7 @@ func (s *Store) History(ctx context.Context, convID string, tokenBudget int) (su
 	return splitByTokenBudget(all, tokenBudget)
 }
 
-// MessagePage is a window of a conversation's messages for the UI, loaded newest
-// first: the initial call (loadedCount 0) returns the latest page; subsequent
-// calls with the running loadedCount return progressively older windows.
+// MessagePage is one UI window of conversation messages.
 type MessagePage struct {
 	Messages    []models.AIMessage `json:"messages"`
 	LoadedCount int                `json:"loadedCount"`
@@ -237,8 +230,7 @@ type formatted struct {
 	content string
 }
 
-// splitByTokenBudget moves the oldest messages into a compacted summary until the
-// remaining history fits the token budget, always keeping >= minKeptTurns turns.
+// splitByTokenBudget compacts old messages until recent history fits the budget.
 func splitByTokenBudget(messages []models.AIMessage, tokenBudget int) (string, []engine.Message, error) {
 	full := make([]formatted, len(messages))
 	for i, m := range messages {
@@ -277,8 +269,7 @@ func splitByTokenBudget(messages []models.AIMessage, tokenBudget int) (string, [
 	return buildSummary(older, summaryCharBudget), recent, nil
 }
 
-// formatMessage flattens a message into role + content. Tool results are summarized
-// (compact) or rendered raw (recent); compact additionally truncates to limit.
+// formatMessage flattens a message into role plus content.
 func formatMessage(m models.AIMessage, limit int, compact bool) formatted {
 	main := normalizeWhitespace(m.Content)
 	var lines []string
@@ -330,8 +321,7 @@ func formatToolCallRaw(tc models.AIToolCallRecord) string {
 	return "[Tool:" + tc.Name + "] " + body
 }
 
-// buildSummary keeps the newest compacted lines that fit charBudget, prefixed with
-// a marker noting how many earlier messages were dropped.
+// buildSummary keeps the newest compacted lines that fit charBudget.
 func buildSummary(messages []formatted, charBudget int) string {
 	if len(messages) == 0 {
 		return ""

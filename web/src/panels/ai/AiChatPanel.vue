@@ -117,9 +117,10 @@ onMounted(() => {
       />
     </div>
 
-    <div class="flex min-h-0 flex-1">
+    <div class="relative flex min-h-0 flex-1 overflow-hidden">
       <AiConversationList
         v-if="showHistory"
+        class="absolute inset-y-0 left-0 z-20"
         :conversations="st.conversations"
         :active-id="st.activeId"
         :streaming-id="busy ? st.activeId : null"
@@ -130,6 +131,14 @@ onMounted(() => {
           (id, title) => store.renameConversation(connectionId, id, title)
         "
         @remove="(id) => store.deleteConversation(connectionId, id)"
+        @close="showHistory = false"
+      />
+      <button
+        v-if="showHistory"
+        type="button"
+        class="absolute inset-0 z-10 bg-surface-950/10 backdrop-blur-[1px] dark:bg-surface-950/30"
+        aria-label="Close conversation history"
+        @click="showHistory = false"
       />
 
       <div class="flex min-h-0 flex-1 flex-col">
