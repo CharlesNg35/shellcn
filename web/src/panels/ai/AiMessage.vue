@@ -25,19 +25,25 @@ async function copy(): Promise<void> {
 
 <template>
   <div
-    class="group flex"
+    class="group flex gap-2"
     :class="isUser() ? 'justify-end' : 'justify-start'"
     :data-role="message.role"
   >
+    <span
+      v-if="!isUser()"
+      class="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary-200 bg-primary-50 text-primary-600 dark:border-primary-900/70 dark:bg-primary-500/10 dark:text-primary-300"
+    >
+      <AppIcon :icon="{ type: 'lucide', value: 'sparkles' }" :size="13" />
+    </span>
     <div
-      class="max-w-[85%] min-w-0 rounded-xl px-3 py-2"
+      class="min-w-0 px-3 py-2 text-sm shadow-sm"
       :class="
         isUser()
-          ? 'bg-primary-500 text-white'
-          : 'bg-surface-100 text-surface-800 dark:bg-surface-800 dark:text-surface-100'
+          ? 'max-w-[82%] rounded-2xl rounded-br-md bg-primary-600 text-white'
+          : 'max-w-[88%] rounded-2xl rounded-tl-md border border-surface-200 bg-surface-0 text-surface-800 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-100'
       "
     >
-      <p v-if="isUser()" class="text-sm wrap-break-word whitespace-pre-wrap">
+      <p v-if="isUser()" class="wrap-break-word whitespace-pre-wrap">
         {{ message.content }}
       </p>
 

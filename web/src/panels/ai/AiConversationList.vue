@@ -36,37 +36,50 @@ function remove(c: AiConversation): void {
 
 <template>
   <div
-    class="flex h-full min-h-0 w-56 flex-col border-r border-surface-200 dark:border-surface-800"
+    class="flex h-full min-h-0 w-64 flex-col border-r border-surface-200 bg-surface-50/80 dark:border-surface-800 dark:bg-surface-950"
   >
-    <div class="flex items-center gap-1 p-2">
+    <div
+      class="flex items-center justify-between gap-2 border-b border-surface-200 px-3 py-2.5 dark:border-surface-800"
+    >
+      <div class="flex min-w-0 items-center gap-2">
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'messages-square' }"
+          :size="15"
+          class="text-surface-500 dark:text-surface-400"
+        />
+        <span
+          class="truncate text-xs font-semibold tracking-wide text-surface-500 uppercase dark:text-surface-400"
+        >
+          History
+        </span>
+      </div>
       <Button
-        :pt="{ root: 'flex-1' }"
-        severity="secondary"
-        outlined
+        text
+        rounded
         size="small"
         :disabled="busy"
+        aria-label="New chat"
         @click="emit('create')"
       >
         <AppIcon :icon="{ type: 'lucide', value: 'plus' }" :size="14" />
-        New chat
       </Button>
     </div>
-    <ul class="min-h-0 flex-1 overflow-y-auto px-1 pb-2">
+    <ul class="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
       <li
         v-for="c in conversations"
         :key="c.id"
-        class="group flex items-center gap-1 rounded-md px-2 py-1.5 text-xs"
+        class="group flex min-w-0 items-center gap-1 rounded-lg border px-2 py-1.5 text-xs transition-colors"
         :class="
           c.id === activeId
-            ? 'bg-surface-100 dark:bg-surface-800'
-            : 'hover:bg-surface-50 dark:hover:bg-surface-800/50'
+            ? 'border-primary-200 bg-primary-50 text-primary-800 dark:border-primary-900/70 dark:bg-primary-500/10 dark:text-primary-200'
+            : 'border-transparent text-surface-600 hover:border-surface-200 hover:bg-surface-0 dark:text-surface-300 dark:hover:border-surface-800 dark:hover:bg-surface-900'
         "
       >
         <Button
           type="button"
           text
           severity="secondary"
-          class="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+          class="flex min-w-0 flex-1 items-center gap-2 text-left"
           :disabled="busy"
           @click="emit('select', c.id)"
         >
@@ -75,9 +88,15 @@ function remove(c: AiConversation): void {
             class="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-primary-500"
             aria-label="streaming"
           />
-          <span class="truncate text-surface-700 dark:text-surface-200">{{
-            c.title
-          }}</span>
+          <AppIcon
+            v-else
+            :icon="{ type: 'lucide', value: 'message-square' }"
+            :size="13"
+            class="shrink-0 text-current/55"
+          />
+          <span class="min-w-0 flex-1 truncate font-medium">
+            {{ c.title }}
+          </span>
         </Button>
         <Button
           type="button"
@@ -85,7 +104,7 @@ function remove(c: AiConversation): void {
           rounded
           severity="secondary"
           size="small"
-          class="hidden text-surface-400 group-hover:block hover:text-surface-700 dark:hover:text-surface-100"
+          class="text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-surface-700 focus-visible:opacity-100 dark:hover:text-surface-100"
           aria-label="Rename"
           @click="rename(c)"
         >
@@ -97,7 +116,7 @@ function remove(c: AiConversation): void {
           rounded
           severity="danger"
           size="small"
-          class="hidden text-surface-400 group-hover:block hover:text-red-500"
+          class="text-surface-400 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500 focus-visible:opacity-100"
           aria-label="Delete"
           @click="remove(c)"
         >
@@ -106,9 +125,14 @@ function remove(c: AiConversation): void {
       </li>
       <li
         v-if="conversations.length === 0"
-        class="px-2 py-3 text-center text-xs text-surface-400"
+        class="grid gap-1 rounded-lg border border-dashed border-surface-200 px-3 py-5 text-center text-xs text-surface-400 dark:border-surface-800"
       >
-        No conversations yet.
+        <AppIcon
+          :icon="{ type: 'lucide', value: 'message-circle' }"
+          :size="18"
+          class="mx-auto text-surface-300 dark:text-surface-600"
+        />
+        <span>No conversations yet.</span>
       </li>
     </ul>
   </div>
