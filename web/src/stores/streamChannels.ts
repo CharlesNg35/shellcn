@@ -120,14 +120,8 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     }
   }
 
-  function closeForScopeParam(connectionId: string, param: string): void {
-    closeWhere((key) => {
-      if (!key.startsWith(`${connectionId}:`)) return false;
-      const first = key.indexOf(":");
-      const second = key.indexOf(":", first + 1);
-      if (second < 0) return false;
-      return new URLSearchParams(key.slice(second + 1)).has(param);
-    });
+  function closeForConnection(connectionId: string): void {
+    closeWhere((key) => key.startsWith(`${connectionId}:`));
   }
 
   return {
@@ -142,6 +136,6 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     reason,
     close,
     closeWhere,
-    closeForScopeParam,
+    closeForConnection,
   };
 });

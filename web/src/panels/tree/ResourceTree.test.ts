@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import ResourceTree from "./ResourceTree.vue";
+import { installFetch } from "../../test/fetchMock";
 import type { TreeGroup } from "../../types/projection";
 
 const groups: TreeGroup[] = [
@@ -153,5 +154,39 @@ describe("ResourceTree", () => {
     dt.vm.$emit("node-collapse", workloads);
     await w.vm.$nextTick();
     expect(dt.props("expandedKeys")).not.toHaveProperty("workloads");
+  });
+
+  it("reloads expanded branches on refresh without collapsing them", async () => {
+    const requests: string[] = [];
+    installFetch((url) => {
+      requests.push(String(url));
+      return {
+        body: {
+          items: [
+            {
+              key: "kind:pod",
+              label: "Pods",
+              resourceKind: "pod",
+            },
+          ],
+        },
+      };
+    });
+    const w = mountTree();
+    const dt = w.findComponent({ name: "Tree" });
+    const root = dt.props("value")[0];
+
+    dt.vm.$emit("node-expand", root);
+    await flushPromises();
+    expect(dt.props("expandedKeys")).toMatchObject({ workloads: true });
+    expect(requests).toHaveLength(1);
+
+    await w.setProps({ refreshKey: "namespace=prod" });
+    await w.vm.$nextTick();
+    expect(dt.props("value")[0].loading).not.toBe(true);
+    await flushPromises();
+
+    expect(dt.props("expandedKeys")).toMatchObject({ workloads: true });
+    expect(requests).toHaveLength(2);
   });
 });

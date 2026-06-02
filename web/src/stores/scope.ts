@@ -54,7 +54,7 @@ export const useScopeStore = defineStore("scope", () => {
       byConnection[connectionId] ?? (byConnection[connectionId] = {});
     if (value) current[param] = value;
     else delete current[param];
-    useStreamChannelsStore().closeForScopeParam(connectionId, param);
+    useStreamChannelsStore().closeForConnection(connectionId);
   }
 
   function clear(connectionId: string): void {

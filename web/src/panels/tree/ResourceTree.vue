@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch, watchEffect } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 import Tree from "primevue/tree";
 import type { TreeNode as PVNode } from "primevue/treenode";
 import { fetchDoc, fetchPage } from "../../api/dataSource";
@@ -27,6 +27,11 @@ interface NodeData {
   parentPath?: string[];
 }
 
+interface LoadChildrenOptions {
+  force?: boolean;
+  loading?: boolean;
+}
+
 // Intermediate ancestors when present, else the category (root group) name.
 function nodeQualifier(data: NodeData): string {
   return data.parentPath?.length
@@ -39,6 +44,7 @@ const props = defineProps<{
   groups: TreeGroup[];
   selectedUid?: string;
   selectedGroup?: string;
+  refreshKey?: string;
 }>();
 const emit = defineEmits<{
   "select-group": [key: string];
@@ -88,7 +94,7 @@ function findNodeByUid(items: PVNode[], uid: string): PVNode | undefined {
   return undefined;
 }
 
-watchEffect(() => {
+function resetRootNodes(): void {
   nodes.value = props.groups.map((g) => ({
     key: g.key,
     label: g.label,
@@ -103,12 +109,16 @@ watchEffect(() => {
       row: g.ref ? { ref: g.ref } : undefined,
     },
   }));
-});
+}
 
-async function loadChildren(node: PVNode): Promise<void> {
+async function loadChildren(
+  node: PVNode,
+  options: LoadChildrenOptions = {},
+): Promise<void> {
   const data = node.data as NodeData;
-  if (node.children || !data.source?.routeId) return;
-  node.loading = true;
+  const showLoading = options.loading ?? true;
+  if ((node.children && !options.force) || !data.source?.routeId) return;
+  if (showLoading) node.loading = true;
   try {
     const page = await fetchPage<TreeNode>(props.connectionId, data.source);
     // The root group names the category; deeper nodes add their label to the path.
@@ -120,7 +130,18 @@ async function loadChildren(node: PVNode): Promise<void> {
       : [...(data.parentPath ?? []), String(node.label ?? "")];
     node.children = page.items.map((n) => toNode(n, childPath, groupLabel));
   } finally {
-    node.loading = false;
+    if (showLoading) node.loading = false;
+  }
+}
+
+async function reloadExpanded(
+  nodesToReload: PVNode[],
+  options: LoadChildrenOptions = {},
+): Promise<void> {
+  for (const node of nodesToReload) {
+    if (!expandedKeys.value[String(node.key)]) continue;
+    await loadChildren(node, options);
+    if (node.children?.length) await reloadExpanded(node.children, options);
   }
 }
 
@@ -169,6 +190,22 @@ watch(
     if (selected) selectionKeys.value = { [selected]: true };
   },
   { immediate: true },
+);
+
+watch(
+  () => props.groups,
+  async () => {
+    resetRootNodes();
+    await reloadExpanded(nodes.value);
+  },
+  { immediate: true },
+);
+
+watch(
+  () => props.refreshKey,
+  async () => {
+    await reloadExpanded(nodes.value, { force: true, loading: false });
+  },
 );
 
 onMounted(async () => {

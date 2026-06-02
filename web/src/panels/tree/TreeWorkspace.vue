@@ -194,7 +194,7 @@ function onSelectList(kind: string, params?: Record<string, string>): void {
       class="w-64 shrink-0 border-r border-surface-200 dark:border-surface-800"
     >
       <ResourceTree
-        :key="scopeKey"
+        :refresh-key="scopeKey"
         :connection-id="connectionId"
         :groups="tree"
         :selected-group="treeSelectedGroup"

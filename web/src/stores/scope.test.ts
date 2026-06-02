@@ -18,20 +18,23 @@ beforeEach(() => {
 });
 
 describe("scope store", () => {
-  it("closes scoped stream channels when a declared scope changes", () => {
+  it("closes connection stream channels when a declared scope changes", () => {
     const scope = useScopeStore();
     const streams = useStreamChannelsStore();
     const db0 = new FakeSocket();
-    const db1 = new FakeSocket();
+    const allScope = new FakeSocket();
+    const other = new FakeSocket();
 
     streams.ensure("conn:redis.terminal:database=0", () => db0);
-    streams.ensure("conn:redis.terminal:database=1", () => db1);
+    streams.ensure("conn:kubernetes.cluster.shell:", () => allScope);
+    streams.ensure("other:redis.terminal:database=0", () => other);
 
     scope.configure("conn", [{ param: "database" }]);
     scope.set("conn", "database", "0");
 
     expect(db0.closed).toBe(true);
-    expect(db1.closed).toBe(true);
+    expect(allScope.closed).toBe(true);
+    expect(other.closed).toBe(false);
   });
 
   it("does not close streams for undeclared or unchanged scope values", () => {

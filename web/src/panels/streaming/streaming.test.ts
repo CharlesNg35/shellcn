@@ -105,6 +105,12 @@ const props = {
   source: { routeId: "docker.container.exec", method: "WS" as const },
 };
 
+function streamSockets(): FakeWS[] {
+  return FakeWS.instances.filter((ws) =>
+    ws.url.includes("/api/connections/c1/x/docker.container.exec"),
+  );
+}
+
 beforeEach(() => {
   setActivePinia(createPinia());
   FakeWS.instances = [];
@@ -142,35 +148,35 @@ describe("streaming stub panels", () => {
   it("reuses the open channel on remount (stream survives navigation away/back)", async () => {
     const first = mount(TerminalPanel, { props });
     await flushPromises();
-    expect(FakeWS.instances).toHaveLength(1);
-    FakeWS.instances[0].emit("open");
+    expect(streamSockets()).toHaveLength(1);
+    streamSockets()[0].emit("open");
     first.unmount(); // navigate away — channel must persist
 
     const second = mount(TerminalPanel, { props });
     await flushPromises();
-    expect(FakeWS.instances).toHaveLength(1); // no new socket — resumed
+    expect(streamSockets()).toHaveLength(1); // no new socket — resumed
     second.unmount();
   });
 
   it("replaces a failed channel with a fresh ticket on remount", async () => {
     const first = mount(TerminalPanel, { props });
     await flushPromises();
-    expect(FakeWS.instances).toHaveLength(1);
-    FakeWS.instances[0].emit("error");
+    expect(streamSockets()).toHaveLength(1);
+    streamSockets()[0].emit("error");
     first.unmount();
 
     const second = mount(TerminalPanel, { props });
     await flushPromises();
-    expect(FakeWS.instances).toHaveLength(2);
-    expect(FakeWS.instances[0].closed).toBe(true);
+    expect(streamSockets()).toHaveLength(2);
+    expect(streamSockets()[0].closed).toBe(true);
     second.unmount();
   });
 
   it("reconnects a failed stream from the status bar", async () => {
     const w = mount(TerminalPanel, { props });
     await flushPromises();
-    expect(FakeWS.instances).toHaveLength(1);
-    FakeWS.instances[0].emit("error");
+    expect(streamSockets()).toHaveLength(1);
+    streamSockets()[0].emit("error");
     await flushPromises();
 
     await w
@@ -179,8 +185,8 @@ describe("streaming stub panels", () => {
       .trigger("click");
     await flushPromises();
 
-    expect(FakeWS.instances).toHaveLength(2);
-    expect(FakeWS.instances[0].closed).toBe(true);
+    expect(streamSockets()).toHaveLength(2);
+    expect(streamSockets()[0].closed).toBe(true);
     w.unmount();
   });
 

@@ -156,11 +156,12 @@ describe("TreeWorkspace", () => {
     wrapper.unmount();
   });
 
-  it("remounts tree navigation and active list when connection scope changes", async () => {
+  it("keeps tree navigation expanded and refreshes the active list when connection scope changes", async () => {
     const scope = useScopeStore();
     scope.configure("c1", [{ param: "namespace" }]);
     let treeMounts = 0;
     let treeUnmounts = 0;
+    let treeRefreshKey = "";
     let panelMounts = 0;
 
     mount(TreeWorkspace, {
@@ -193,9 +194,20 @@ describe("TreeWorkspace", () => {
           Button: { template: "<button><slot /></button>" },
           ResourceTree: {
             name: "ResourceTree",
-            props: ["connectionId", "groups", "selectedGroup", "selectedUid"],
+            props: [
+              "connectionId",
+              "groups",
+              "selectedGroup",
+              "selectedUid",
+              "refreshKey",
+            ],
             mounted() {
               treeMounts += 1;
+            },
+            updated() {
+              treeRefreshKey = String(
+                (this as { refreshKey?: string }).refreshKey ?? "",
+              );
             },
             unmounted() {
               treeUnmounts += 1;
@@ -232,8 +244,9 @@ describe("TreeWorkspace", () => {
     await nextTick();
     await flushPromises();
 
-    expect(treeUnmounts).toBe(1);
-    expect(treeMounts).toBe(2);
+    expect(treeUnmounts).toBe(0);
+    expect(treeMounts).toBe(1);
+    expect(treeRefreshKey).toBe("namespace=prod");
     expect(panelMounts).toBe(2);
   });
 
