@@ -31,6 +31,27 @@ make lint && make test` are green. Section refs (§) point at the plan.
       modules — **73 pkgs pass, 0 fail**, incl. moved `sdk/plugin` contract tests;
       builds with **and** without the workspace (`GOWORK=off`); zero behavior change.
 
+## Step 0.5 — Built-ins are SDK-only (no `internal/*`), enforced — **Done**
+
+Built-ins are the reference for out-of-tree plugins, which (being a separate
+module) cannot import `internal/*`. Enforce the same on built-ins so they stay a
+faithful template.
+
+- [x] Moved gateway-owned constants (`AgentBinary`, `AgentImageLatest`,
+      `AgentInternalAddress`, `DefaultClientName`) to `sdk/plugin`; `internal/app`
+      aliases them (single source of truth, core unchanged); 13 plugin prod files
+      use `plugin.*`, drop `internal/app`.
+- [x] Added `sdk/plugintest` (`DirectTransport`, `TransportFunc`); rewrote ~26
+      plugin test files off `internal/transport` + `internal/models.Connection`.
+- [x] Relocated `plugins/docker/enrollment_test.go` → `internal/service`
+      (`service_test`, imports `plugins/docker`) — it tests the enrollment service,
+      not the plugin contract.
+- [x] **`plugins/` is now 100% free of `internal/*` (prod AND test).**
+- [x] **depguard** rule `plugins-sdk-only` in `.golangci.yml` bans
+      `github.com/charlesng35/shellcn/internal` from `plugins/**` — verified it
+      fires on a planted import; lint clean on real code.
+- [x] Gate green: build/vet/lint/test pass on both modules.
+
 ## Step 1 — Wire contract (`.proto` for `Plugin` + `Host`) + stubs — §3.4
 
 - [ ] `proto/plugin/v1/plugin.proto` with **both** services: `Plugin` (served by

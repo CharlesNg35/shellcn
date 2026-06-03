@@ -17,10 +17,9 @@ import (
 
 	"golang.org/x/crypto/ssh"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/sftp"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 const (
@@ -50,7 +49,7 @@ func TestSFTPPluginIntegration(t *testing.T) {
 	p := sftp.New()
 	sess, err := p.Connect(ctx, plugin.ConnectConfig{
 		Config: cfg,
-		Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+		Net:    plugintest.DirectTransport(),
 	})
 	if err != nil {
 		t.Fatalf("connect: %v", err)

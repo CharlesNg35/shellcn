@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
@@ -33,7 +32,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Label:      "Container",
 				Kind:       "docker-run",
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
-				Template: "docker run --rm --name " + app.AgentBinary + " " +
+				Template: "docker run --rm --name " + plugin.AgentBinary + " " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 					"--pid=host " +
 					"-e HOST_PROC=/host/proc -e HOST_SYS=/host/sys -e HOST_ETC=/host/etc " +
@@ -45,14 +44,14 @@ func (p *Plugin) Manifest() plugin.Manifest {
 			}, {
 				Label: "Native binary",
 				Kind:  "shell",
-				Template: "./" + app.AgentBinary + " " +
+				Template: "./" + plugin.AgentBinary + " " +
 					"-connect {{shellquote .ConnectURL}} " +
 					"{{if .Insecure}}-insecure {{end}}" +
 					"-token {{shellquote .Token}}",
 			}, {
 				Label: "PowerShell",
 				Kind:  "powershell",
-				Template: ".\\" + app.AgentBinary + ".exe " +
+				Template: ".\\" + plugin.AgentBinary + ".exe " +
 					"-connect {{shellquote .ConnectURL}} " +
 					"{{if .Insecure}}-insecure {{end}}" +
 					"-token {{shellquote .Token}}",

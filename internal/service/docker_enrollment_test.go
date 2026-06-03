@@ -1,4 +1,4 @@
-package docker
+package service_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/service"
 	"github.com/charlesng35/shellcn/internal/store"
+	"github.com/charlesng35/shellcn/plugins/docker"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
 
@@ -17,7 +18,7 @@ func TestEnrollmentCommandUsesPublishedAgentImage(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
 	reg := plugin.NewRegistry()
-	reg.MustRegister(New())
+	reg.MustRegister(docker.New())
 	if err := st.Connections.Create(ctx, &models.Connection{
 		ID: "docker-agent", Name: "Docker", Protocol: "docker", OwnerID: "owner",
 		Transport: string(plugin.TransportAgent),
@@ -53,7 +54,7 @@ func TestEnrollmentCommandAdaptsLocalhostForContainer(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
 	reg := plugin.NewRegistry()
-	reg.MustRegister(New())
+	reg.MustRegister(docker.New())
 	if err := st.Connections.Create(ctx, &models.Connection{
 		ID: "docker-agent", Name: "Docker", Protocol: "docker", OwnerID: "owner",
 		Transport: string(plugin.TransportAgent),
@@ -88,7 +89,7 @@ func TestEnrollmentOffersComposeFile(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewMemory()
 	reg := plugin.NewRegistry()
-	reg.MustRegister(New())
+	reg.MustRegister(docker.New())
 	if err := st.Connections.Create(ctx, &models.Connection{
 		ID: "docker-agent", Name: "Docker", Protocol: "docker", OwnerID: "owner",
 		Transport: string(plugin.TransportAgent),

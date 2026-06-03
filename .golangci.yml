@@ -4,9 +4,23 @@ linters:
   default: standard
   enable:
     - bodyclose
+    - depguard
     - misspell
     - revive
     - unconvert
+  settings:
+    depguard:
+      rules:
+        # Plugins are the reference for out-of-tree plugins, which live in their
+        # own module and cannot import internal/*. Enforce the same for built-ins
+        # so they stay a faithful, SDK-only template.
+        plugins-sdk-only:
+          files:
+            - "**/plugins/**"
+            - "plugins/**"
+          deny:
+            - pkg: github.com/charlesng35/shellcn/internal
+              desc: plugins must depend only on the SDK (github.com/charlesng35/shellcn/sdk), never internal/*
   exclusions:
     rules:
       # The project standard is minimal comments (comment only a non-obvious

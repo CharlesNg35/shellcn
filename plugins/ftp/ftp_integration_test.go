@@ -15,10 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/ftp"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 const (
@@ -57,7 +56,7 @@ func TestFTPPluginIntegration(t *testing.T) {
 	p := ftp.New()
 	sess, err := p.Connect(ctx, plugin.ConnectConfig{
 		Config: cfg,
-		Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+		Net:    plugintest.DirectTransport(),
 	})
 	if err != nil {
 		t.Fatalf("connect: %v", err)

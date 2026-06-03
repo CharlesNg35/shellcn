@@ -15,10 +15,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/escompat"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestElasticsearchPluginIntegration(t *testing.T) {
@@ -30,7 +29,7 @@ func TestElasticsearchPluginIntegration(t *testing.T) {
 
 	cfg := elasticsearchIntegrationConfig(ctx, t)
 	p := New()
-	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -174,7 +173,7 @@ func startElasticsearchContainer(ctx context.Context, t *testing.T) string {
 	cfg := map[string]any{"endpoint": endpoint, "auth": "none", "tls_mode": "disable", "read_only": false, "page_limit": 100, "timeout": "60s"}
 	deadline := time.Now().Add(240 * time.Second)
 	for {
-		sess, err := escompat.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})}, escompat.Provider{Protocol: "elasticsearch", DefaultURL: endpoint, Product: escompat.ProductElasticsearch})
+		sess, err := escompat.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()}, escompat.Provider{Protocol: "elasticsearch", DefaultURL: endpoint, Product: escompat.ProductElasticsearch})
 		if err == nil {
 			_ = sess.Close()
 			healthCtx, cancel := context.WithTimeout(ctx, 120*time.Second)

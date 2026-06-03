@@ -20,10 +20,9 @@ import (
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/filesystem"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 const (
@@ -52,7 +51,7 @@ func TestMinIOPluginIntegration(t *testing.T) {
 	}
 
 	p := New()
-	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}

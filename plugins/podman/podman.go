@@ -6,7 +6,6 @@ package podman
 import (
 	"context"
 
-	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -38,7 +37,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 				Kind:       "docker-run",
 				ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.containers.internal"},
 				// Host networking lets the agent reach container IPs when proxying.
-				Template: "podman run --rm --name " + app.AgentBinary + " --network host " +
+				Template: "podman run --rm --name " + plugin.AgentBinary + " --network host " +
 					"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 					"--security-opt label=disable " +
 					"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +

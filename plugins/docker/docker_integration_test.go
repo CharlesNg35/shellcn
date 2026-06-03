@@ -15,10 +15,9 @@ import (
 
 	dockerclient "github.com/moby/moby/client"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func trimName(names []string) string {
@@ -99,17 +98,10 @@ func TestDockerPluginIntegrationAgentTransport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	reg := transport.NewRegistry()
-	release := reg.Register("docker-agent", func(ctx context.Context, _, _ string) (net.Conn, error) {
+	nt := plugintest.TransportFunc(func(ctx context.Context, _, _ string) (net.Conn, error) {
 		var d net.Dialer
 		return d.DialContext(ctx, "unix", "/var/run/docker.sock")
 	})
-	defer release()
-
-	nt, err := transport.Build(models.Connection{ID: "docker-agent", Transport: string(plugin.TransportAgent)}, reg, plugin.AgentUnix)
-	if err != nil {
-		t.Fatalf("agent transport build: %v", err)
-	}
 	sess, err := Connect(ctx, plugin.ConnectConfig{
 		ConnectionID: "docker-agent",
 		Transport:    plugin.TransportAgent,

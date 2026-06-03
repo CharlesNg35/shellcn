@@ -18,7 +18,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	metricsclient "k8s.io/metrics/pkg/client/clientset/versioned"
 
-	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/plugins/shared/loopback"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -58,7 +57,7 @@ func Connect(ctx context.Context, cfg plugin.ConnectConfig) (plugin.Session, err
 	}
 	restCfg.QPS = 50
 	restCfg.Burst = 100
-	restCfg.UserAgent = app.DefaultClientName
+	restCfg.UserAgent = plugin.DefaultClientName
 
 	clientset, err := kubeclient.NewForConfig(restCfg)
 	if err != nil {
@@ -208,7 +207,7 @@ func (s *Session) upgradeConfig() (*rest.Config, error) {
 }
 
 // agentUpgradeAddr is a placeholder address the agent tunnel dialer ignores.
-const agentUpgradeAddr = app.AgentInternalAddress
+const agentUpgradeAddr = plugin.AgentInternalAddress
 
 // Clientset exposes the typed client for built-in API groups.
 func (s *Session) Clientset() *kubeclient.Clientset { return s.clientset }

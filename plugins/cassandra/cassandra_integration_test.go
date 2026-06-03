@@ -13,10 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestCassandraPluginIntegration(t *testing.T) {
@@ -36,7 +35,7 @@ func TestCassandraPluginIntegration(t *testing.T) {
 
 	sess, err := connect(ctx, plugin.ConnectConfig{
 		Config: cfg,
-		Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+		Net:    plugintest.DirectTransport(),
 	})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -321,7 +320,7 @@ func integrationConfig(ctx context.Context, t *testing.T) map[string]any {
 	for {
 		sess, err := connect(ctx, plugin.ConnectConfig{
 			Config: cfg,
-			Net:    transport.NewDirectForConnection(models.Connection{Config: cfg}),
+			Net:    plugintest.DirectTransport(),
 		})
 		if err == nil {
 			_ = sess.Close()

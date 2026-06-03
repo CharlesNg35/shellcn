@@ -13,9 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 const integrationKey = "shellcn_typesense_key"
@@ -29,7 +28,7 @@ func TestTypesensePluginIntegration(t *testing.T) {
 
 	cfg := typesenseIntegrationConfig(ctx, t)
 	p := New()
-	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -150,7 +149,7 @@ func startTypesenseContainer(ctx context.Context, t *testing.T, key string) stri
 	deadline := time.Now().Add(60 * time.Second)
 	for {
 		p := New()
-		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 		if err == nil {
 			_ = sess.Close()
 			return endpoint

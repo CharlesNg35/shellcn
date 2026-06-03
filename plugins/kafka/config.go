@@ -8,7 +8,6 @@ import (
 
 	"github.com/IBM/sarama"
 
-	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/plugins/shared/broker"
 	"github.com/charlesng35/shellcn/plugins/shared/dbcred"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
@@ -39,7 +38,7 @@ func configSchema() plugin.Schema {
 	return plugin.Schema{Groups: []plugin.Group{
 		{Name: "Cluster", Fields: []plugin.Field{
 			{Key: "brokers", Label: "Bootstrap brokers", Type: plugin.FieldTextarea, Required: true, Default: "localhost:9092", Placeholder: "kafka-1:9092, kafka-2:9092", Help: "One or more host:port brokers, comma-separated."},
-			{Key: "client_id", Label: "Client ID", Type: plugin.FieldText, Default: app.DefaultClientName},
+			{Key: "client_id", Label: "Client ID", Type: plugin.FieldText, Default: plugin.DefaultClientName},
 		}},
 		{Name: "Authentication", Fields: []plugin.Field{
 			{Key: "auth", Label: "Authentication", Type: plugin.FieldSelect, Required: true, Default: "none", Options: []plugin.Option{
@@ -78,7 +77,7 @@ func parseOptions(cfg plugin.ConnectConfig) (options, error) {
 	}
 	opts := options{
 		Brokers:       addrs,
-		ClientID:      broker.StringValue(cfg.Config, "client_id", app.DefaultClientName),
+		ClientID:      broker.StringValue(cfg.Config, "client_id", plugin.DefaultClientName),
 		Timeout:       broker.DurationValue(cfg.Config, "timeout", defaultTimeout),
 		MessageLimit:  broker.IntValue(cfg.Config, "message_limit", defaultMessageLimit, 1, plugin.MaxPageLimit),
 		ReadOnly:      broker.BoolValue(cfg.Config, "read_only", true),

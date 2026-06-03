@@ -15,10 +15,9 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsdynamodb "github.com/aws/aws-sdk-go-v2/service/dynamodb"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestDynamoDBPluginIntegration(t *testing.T) {
@@ -30,7 +29,7 @@ func TestDynamoDBPluginIntegration(t *testing.T) {
 
 	cfg := dynamoDBIntegrationConfig(ctx, t)
 	p := New()
-	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -139,7 +138,7 @@ func startDynamoDBContainer(ctx context.Context, t *testing.T) string {
 	deadline := time.Now().Add(60 * time.Second)
 	for {
 		p := New()
-		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 		if err == nil {
 			_ = sess.Close()
 			return endpoint

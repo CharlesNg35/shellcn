@@ -12,9 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestSolrPluginIntegration(t *testing.T) {
@@ -45,7 +44,7 @@ func TestSolrPluginCloudIntegration(t *testing.T) {
 func runSolrScenario(ctx context.Context, t *testing.T, cfg map[string]any) {
 	t.Helper()
 	p := New()
-	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -158,7 +157,7 @@ func waitForSolrEndpoint(ctx context.Context, t *testing.T, name string) string 
 	deadline := time.Now().Add(90 * time.Second)
 	for {
 		p := New()
-		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 		if err == nil {
 			_ = sess.Close()
 			return endpoint

@@ -12,10 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/escompat"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 func TestOpenSearchPluginIntegration(t *testing.T) {
@@ -27,7 +26,7 @@ func TestOpenSearchPluginIntegration(t *testing.T) {
 
 	cfg := openSearchIntegrationConfig(ctx, t)
 	p := New()
-	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -154,7 +153,7 @@ func startOpenSearchContainer(ctx context.Context, t *testing.T) string {
 	cfg := map[string]any{"endpoint": endpoint, "auth": "none", "tls_mode": "disable", "read_only": false, "page_limit": 100, "timeout": "60s"}
 	deadline := time.Now().Add(150 * time.Second)
 	for {
-		sess, err := escompat.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})}, escompat.Provider{Protocol: "opensearch", DefaultURL: endpoint, Product: escompat.ProductOpenSearch})
+		sess, err := escompat.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()}, escompat.Provider{Protocol: "opensearch", DefaultURL: endpoint, Product: escompat.ProductOpenSearch})
 		if err == nil {
 			_ = sess.Close()
 			return endpoint

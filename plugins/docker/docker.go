@@ -4,7 +4,6 @@ package docker
 import (
 	"context"
 
-	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/plugins/shared/dockerengine"
 	"github.com/charlesng35/shellcn/sdk/plugin"
 )
@@ -55,7 +54,7 @@ func (p *Plugin) Manifest() plugin.Manifest {
 					ConnectURL: plugin.ArtifactConnectURL{LocalhostHost: "host.docker.internal"},
 					// Host networking lets the agent reach container IPs on every Docker
 					// network when proxying a web port.
-					Template: "docker run --rm --name " + app.AgentBinary + " --network host " +
+					Template: "docker run --rm --name " + plugin.AgentBinary + " --network host " +
 						"{{if .LocalhostHostRequired}}--add-host={{.LocalhostHost}}:host-gateway {{end}}" +
 						`--group-add "$(stat -c '%g' /var/run/docker.sock)" ` +
 						"-e SHELLCN_CONNECT_URL={{shellquote .ConnectURL}} " +

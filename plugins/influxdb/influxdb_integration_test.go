@@ -12,10 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charlesng35/shellcn/internal/models"
-	"github.com/charlesng35/shellcn/internal/transport"
 	"github.com/charlesng35/shellcn/plugins/shared/sqldb"
 	"github.com/charlesng35/shellcn/sdk/plugin"
+	"github.com/charlesng35/shellcn/sdk/plugintest"
 )
 
 const (
@@ -33,7 +32,7 @@ func TestInfluxDBPluginIntegration(t *testing.T) {
 
 	cfg, bucket := influxDBIntegrationConfig(ctx, t)
 	p := New()
-	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+	sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
@@ -162,7 +161,7 @@ func startInfluxDBContainer(ctx context.Context, t *testing.T, org, bucket, toke
 	deadline := time.Now().Add(90 * time.Second)
 	for {
 		p := New()
-		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: transport.NewDirectForConnection(models.Connection{Config: cfg})})
+		sess, err := p.Connect(ctx, plugin.ConnectConfig{Config: cfg, Net: plugintest.DirectTransport()})
 		if err == nil {
 			_ = sess.Close()
 			return endpoint
