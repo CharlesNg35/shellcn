@@ -4,7 +4,14 @@ import { createRouter, createMemoryHistory, type Router } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
 import { installFetch } from "./test/fetchMock";
 import { useAuthStore } from "./stores/auth";
+import { ApiError, reportApiError } from "./api/client";
 import App from "./App.vue";
+
+const addToast = vi.hoisted(() => vi.fn());
+
+vi.mock("primevue/usetoast", () => ({
+  useToast: () => ({ add: addToast }),
+}));
 
 const connections = [
   {
@@ -82,6 +89,7 @@ function testRouter(): Router {
 
 beforeEach(() => {
   localStorage.clear();
+  addToast.mockClear();
   installFetch((url) => {
     if (url.endsWith("/api/connections")) return { body: connections };
     if (url.endsWith("/api/connection-folders")) return { body: [] };
@@ -91,6 +99,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -187,5 +196,38 @@ describe("App shell", () => {
     expect(restored.get('button[aria-label="Sign out"]').isVisible()).toBe(
       true,
     );
+  });
+
+  it("dedupes repeated global network error toasts", async () => {
+    const now = vi.spyOn(Date, "now");
+    now.mockReturnValue(1_000);
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const auth = useAuthStore();
+    auth.user = { id: "u", username: "op", roles: ["viewer"] };
+    auth.ready = true;
+
+    const router = testRouter();
+    router.push("/");
+    await router.isReady();
+    mount(App, {
+      global: { plugins: [pinia, router] },
+    });
+    await flushPromises();
+
+    const message = "Network error. Is the gateway reachable?";
+    reportApiError(new ApiError(0, message));
+    await flushPromises();
+    expect(addToast).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(2_000);
+    reportApiError(new ApiError(0, message));
+    await flushPromises();
+    expect(addToast).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(12_001);
+    reportApiError(new ApiError(0, message));
+    await flushPromises();
+    expect(addToast).toHaveBeenCalledTimes(2);
   });
 });

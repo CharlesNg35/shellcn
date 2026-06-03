@@ -17,6 +17,8 @@ let routeLoadingTimer: ReturnType<typeof window.setTimeout> | undefined;
 let removeBeforeGuard: (() => void) | undefined;
 let removeAfterGuard: (() => void) | undefined;
 let removeErrorGuard: (() => void) | undefined;
+const API_ERROR_TOAST_DEDUPE_MS = 10_000;
+let lastApiErrorToast: { key: string; shownAt: number } | undefined;
 
 function stopRouteLoading(): void {
   if (routeLoadingTimer) {
@@ -26,9 +28,23 @@ function stopRouteLoading(): void {
   routeLoading.value = false;
 }
 
+function shouldShowApiErrorToast(err: ApiError): boolean {
+  const now = Date.now();
+  const key = `${err.status}:${err.message}`;
+  if (
+    lastApiErrorToast?.key === key &&
+    now - lastApiErrorToast.shownAt < API_ERROR_TOAST_DEDUPE_MS
+  ) {
+    return false;
+  }
+  lastApiErrorToast = { key, shownAt: now };
+  return true;
+}
+
 // 401 → re-login; 403/network/server errors → toast. 400/404/409 pass through
 // to the caller for inline handling so feedback isn't duplicated.
 onMounted(() => {
+  lastApiErrorToast = undefined;
   removeBeforeGuard = router.beforeEach((to, from) => {
     if (to.fullPath === from.fullPath) return;
     stopRouteLoading();
@@ -57,6 +73,7 @@ onMounted(() => {
       err.status === 0 ||
       (err.status >= 500 && err.status !== 503)
     ) {
+      if (!shouldShowApiErrorToast(err)) return;
       toast.add({
         severity: "error",
         summary: err.status === 403 ? "Not allowed" : "Something went wrong",
@@ -68,6 +85,7 @@ onMounted(() => {
 });
 onUnmounted(() => {
   setApiErrorHandler(null);
+  lastApiErrorToast = undefined;
   removeBeforeGuard?.();
   removeAfterGuard?.();
   removeErrorGuard?.();

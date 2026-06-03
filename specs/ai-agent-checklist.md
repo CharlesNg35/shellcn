@@ -75,8 +75,9 @@ make test` are green. Section refs (§) point at the spec.
       with `MaxSteps` + output cap; relay `StreamEvent`s (buffered ~40ms/160ch).
 - [x] `internal/ai/service.go`: resolve provider/model/key, build tool set, run a
       turn, stream out.
-- [x] Transport: `WS /api/connections/:id/ai/chat` (ticket-auth, same infra as
-      other streams); authorize connection + `aiMode != disabled`.
+- [x] Transport: `POST /api/connections/:id/ai/turns` streams one turn as NDJSON;
+      `POST …/turns/{turnID}/control` handles stop/confirm/reject; authorize
+      connection + `aiMode != disabled`.
 
 ### Frontend
 
@@ -92,7 +93,7 @@ make test` are green. Section refs (§) point at the spec.
       when AI absent.
 - [x] `AiToolBadges.vue` (grouped, collapsible, status).
 - [x] `stores/aiChat.ts` (Pinia): run state, streaming buffers.
-- [x] Consume chat WS; apply `text_delta`/`tool_call`/
+- [x] Consume streamed turn responses; apply `text_delta`/`tool_call`/
       `tool_result`/`step`/`error`/`done`. Streaming markdown via **`markstream-vue`**
       (verify) or `markdown-it`+DOMPurify+highlight.js fallback. Custom widget on
       PrimeVue — **no** `@ai-sdk/vue` `useChat`, **no** external chat-UI framework.

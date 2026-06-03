@@ -1,25 +1,58 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { nextTick } from "vue";
+import type { AiTurnRequest, StreamAiTurnOptions } from "../api/ai";
 
 const listConversations = vi.fn(async () => [] as unknown[]);
 const getConversation = vi.fn();
 const messages = vi.fn();
 const renameConversation = vi.fn();
 const deleteConversation = vi.fn();
+const turnControl = vi.fn();
 const global = vi.fn(async () => ({ configured: false }));
 const listProviders = vi.fn(async () => [] as unknown[]);
+
+interface StreamCall {
+  connectionId: string;
+  body: AiTurnRequest;
+  options: StreamAiTurnOptions;
+  resolve: () => void;
+  reject: (err: unknown) => void;
+}
+
+let turnSeq = 0;
+const streamCalls: StreamCall[] = [];
+const streamAiTurn = vi.fn(
+  async (
+    connectionId: string,
+    body: AiTurnRequest,
+    options: StreamAiTurnOptions,
+  ) =>
+    new Promise<void>((resolve, reject) => {
+      const turnId = `turn-${++turnSeq}`;
+      options.onTurnId?.(turnId);
+      options.onEvent({ type: "turn", turnId });
+      streamCalls.push({ connectionId, body, options, resolve, reject });
+    }),
+);
+
 vi.mock("../api/ai", () => ({
   aiApi: {
     global: () => global(),
     list: () => listProviders(),
+    turnControl: (...a: unknown[]) => turnControl(...a),
     listConversations: () => listConversations(),
     getConversation: (...a: unknown[]) => getConversation(...a),
     messages: (...a: unknown[]) => messages(...a),
     renameConversation: (...a: unknown[]) => renameConversation(...a),
     deleteConversation: (...a: unknown[]) => deleteConversation(...a),
   },
-  chatSocketUrl: () => "ws://test",
+  streamAiTurn: (...a: Parameters<typeof streamAiTurn>) => streamAiTurn(...a),
+  isAbort: (err: unknown) =>
+    typeof err === "object" &&
+    err !== null &&
+    "name" in err &&
+    (err as { name?: string }).name === "AbortError",
 }));
 
 import { useAiChatStore } from "./aiChat";
@@ -34,10 +67,14 @@ beforeEach(() => {
   messages.mockReset();
   renameConversation.mockReset();
   deleteConversation.mockReset();
+  turnControl.mockReset();
   global.mockReset();
   global.mockResolvedValue({ configured: false });
   listProviders.mockReset();
   listProviders.mockResolvedValue([]);
+  streamCalls.splice(0);
+  streamAiTurn.mockClear();
+  turnSeq = 0;
 });
 
 const storedMsg = (id: string, content: string) => ({
@@ -49,23 +86,9 @@ const storedMsg = (id: string, content: string) => ({
   createdAt: "",
 });
 
-function openSocket(
-  store: ReturnType<typeof useAiChatStore>,
-  sent: string[] = [],
-) {
-  const st = store.state(CONN);
-  st.connected = true;
-  st.socket = {
-    readyState: WebSocket.OPEN,
-    send: (d: string) => sent.push(d),
-  } as unknown as WebSocket;
-  return st;
-}
-
 describe("aiChat store", () => {
   it("creates user + assistant messages on send and streams text", () => {
     const store = useAiChatStore();
-    openSocket(store);
     store.send(CONN, "list resources");
     const st = store.state(CONN);
     expect(st.messages).toHaveLength(2);
@@ -75,15 +98,14 @@ describe("aiChat store", () => {
     });
     expect(st.runState).toBe("starting");
 
-    store.apply(CONN, { type: "text_delta", text: "Hello " });
-    store.apply(CONN, { type: "text_delta", text: "world" });
+    streamCalls[0].options.onEvent({ type: "text_delta", text: "Hello " });
+    streamCalls[0].options.onEvent({ type: "text_delta", text: "world" });
     expect(st.messages[1].content).toBe("Hello world");
     expect(st.runState).toBe("streaming");
   });
 
   it("tracks tool calls and their results", () => {
     const store = useAiChatStore();
-    openSocket(store);
     store.send(CONN, "go");
     store.apply(CONN, {
       type: "tool_call",
@@ -110,7 +132,6 @@ describe("aiChat store", () => {
 
   it("marks an error and keeps the partial assistant message", () => {
     const store = useAiChatStore();
-    openSocket(store);
     store.send(CONN, "go");
     store.apply(CONN, { type: "text_delta", text: "partial" });
     store.apply(CONN, { type: "error", err: "boom" });
@@ -123,7 +144,6 @@ describe("aiChat store", () => {
 
   it("drops an empty assistant message that produced nothing", () => {
     const store = useAiChatStore();
-    openSocket(store);
     store.send(CONN, "go");
     store.apply(CONN, { type: "done" });
     // Only the user message survives; the empty assistant bubble is pruned.
@@ -134,7 +154,6 @@ describe("aiChat store", () => {
 
   it("flags a truncated response", () => {
     const store = useAiChatStore();
-    openSocket(store);
     store.send(CONN, "go");
     store.apply(CONN, { type: "text_delta", text: "capped" });
     store.apply(CONN, { type: "done", truncated: true });
@@ -143,7 +162,6 @@ describe("aiChat store", () => {
 
   it("tags nested subagent tool calls", () => {
     const store = useAiChatStore();
-    openSocket(store);
     store.send(CONN, "investigate");
     store.apply(CONN, {
       type: "tool_call",
@@ -164,7 +182,6 @@ describe("aiChat store", () => {
 
   it("newChat clears the active conversation and messages", () => {
     const store = useAiChatStore();
-    openSocket(store);
     store.send(CONN, "hi");
     store.apply(CONN, { type: "text_delta", text: "yo" });
     store.apply(CONN, { type: "done" });
@@ -177,12 +194,8 @@ describe("aiChat store", () => {
 
   it("sends the active conversation id and confirms/rejects a pending action", () => {
     const store = useAiChatStore();
-    const sent: Record<string, unknown>[] = [];
-    const st = openSocket(store);
-    st.socket = {
-      readyState: WebSocket.OPEN,
-      send: (d: string) => sent.push(JSON.parse(d)),
-    } as unknown as WebSocket;
+    const st = store.state(CONN);
+    st.turnId = "turn-1";
 
     st.pendingConfirm = {
       toolId: "t1",
@@ -195,7 +208,10 @@ describe("aiChat store", () => {
     };
     store.resolveConfirm(CONN, false);
     expect(st.pendingConfirm).toBeNull();
-    expect(sent.at(-1)).toMatchObject({ type: "reject", toolId: "t1" });
+    expect(turnControl).toHaveBeenLastCalledWith(CONN, "turn-1", {
+      type: "reject",
+      toolId: "t1",
+    });
 
     st.pendingConfirm = {
       toolId: "t2",
@@ -207,17 +223,18 @@ describe("aiChat store", () => {
       body: {},
     };
     store.resolveConfirm(CONN, true);
-    expect(sent.at(-1)).toMatchObject({ type: "confirm", toolId: "t2" });
+    expect(turnControl).toHaveBeenLastCalledWith(CONN, "turn-1", {
+      type: "confirm",
+      toolId: "t2",
+    });
   });
 
   it("sends the active conversation id with the message", () => {
     const store = useAiChatStore();
-    const sent: string[] = [];
-    const st = openSocket(store, sent);
+    const st = store.state(CONN);
     st.activeId = "conv-9";
     store.send(CONN, "hello");
-    expect(sent).toHaveLength(1);
-    expect(JSON.parse(sent[0]).conversationId).toBe("conv-9");
+    expect(streamCalls[0].body.conversationId).toBe("conv-9");
   });
 
   it("loads a conversation page and prepends older messages", async () => {
@@ -249,7 +266,7 @@ describe("aiChat store", () => {
 
   it("queues messages typed mid-stream and flushes on completion", () => {
     const store = useAiChatStore();
-    const st = openSocket(store);
+    const st = store.state(CONN);
 
     store.send(CONN, "first"); // starts a turn
     expect(st.runState).toBe("starting");
@@ -262,47 +279,45 @@ describe("aiChat store", () => {
     store.apply(CONN, { type: "done" });
     expect(st.queue).toEqual(["third"]);
     expect(st.runState).toBe("starting");
+    expect(streamCalls[1].body.content).toBe("second");
   });
 
-  it("sends a stop frame and exposes stopping state", () => {
+  it("sends a stop control and exposes stopping state", () => {
     const store = useAiChatStore();
-    const sent: string[] = [];
-    const st = openSocket(store, sent);
 
     store.send(CONN, "first");
+    const st = store.state(CONN);
     store.apply(CONN, { type: "text_delta", text: "partial" });
     store.stop(CONN);
 
     expect(st.runState).toBe("stopping");
-    expect(JSON.parse(sent.at(-1) ?? "{}")).toMatchObject({ type: "stop" });
+    expect(turnControl).toHaveBeenCalledWith(CONN, "turn-1", {
+      type: "stop",
+    });
+    expect(st.abort?.signal.aborted).toBe(true);
   });
 
-  it("does not send stop when the socket is closed", () => {
+  it("can stop before the server turn id arrives", () => {
     const store = useAiChatStore();
     const st = store.state(CONN);
     st.runState = "streaming";
-    st.socket = { readyState: WebSocket.CLOSED } as unknown as WebSocket;
+    st.abort = new AbortController();
 
     store.stop(CONN);
 
-    expect(st.runState).toBe("streaming");
-    expect(st.error).toBe("Assistant is not connected.");
+    expect(st.runState).toBe("stopping");
+    expect(turnControl).not.toHaveBeenCalled();
+    expect(st.abort.signal.aborted).toBe(true);
   });
 
   it("sends only the selected provider", () => {
     const store = useAiChatStore();
-    const sent: Record<string, unknown>[] = [];
-    const st = openSocket(store);
-    st.socket = {
-      readyState: WebSocket.OPEN,
-      send: (d: string) => sent.push(JSON.parse(d)),
-    } as unknown as WebSocket;
     store.setProvider(CONN, "p1");
     store.send(CONN, "hi");
-    expect(sent.at(-1)).toMatchObject({
+    expect(streamCalls.at(-1)?.body).toMatchObject({
       providerId: "p1",
     });
-    expect(sent.at(-1)).not.toHaveProperty("model");
+    expect(streamCalls.at(-1)?.body).not.toHaveProperty("model");
   });
 
   it("defaults to the first personal provider when no shared provider exists", async () => {
@@ -319,20 +334,14 @@ describe("aiChat store", () => {
       },
     ]);
     const store = useAiChatStore();
-    const sent: Record<string, unknown>[] = [];
-    const st = openSocket(store);
-    st.socket = {
-      readyState: WebSocket.OPEN,
-      send: (d: string) => sent.push(JSON.parse(d)),
-    } as unknown as WebSocket;
 
     await store.loadProviders();
     store.send(CONN, "hi");
 
-    expect(sent.at(-1)).toMatchObject({
+    expect(streamCalls.at(-1)?.body).toMatchObject({
       providerId: "p-local",
     });
-    expect(sent.at(-1)).not.toHaveProperty("model");
+    expect(streamCalls.at(-1)?.body).not.toHaveProperty("model");
   });
 
   it("can force-refresh providers after settings change", async () => {

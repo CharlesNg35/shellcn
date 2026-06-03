@@ -67,8 +67,10 @@ or exfiltration path. Rules:
    Stored on the connection.
 4. **Human-in-the-loop for mutations.** When a **write** or **destructive** tool is
    selected, the turn **pauses** and asks the user to confirm in the chat before
-   executing. The current implementation uses a websocket confirmer at the tool
-   boundary; if orchestration later moves to an ADK graph runner this maps to
+   executing. The current implementation uses an active turn confirmer at the
+   tool boundary: the streamed turn emits `needs_confirmation`, and a separate
+   authenticated control request resumes or rejects that tool call. If
+   orchestration later moves to an ADK graph runner this maps to
    `interrupt/resume`. Destructive confirmations are mandatory and visually
    flagged (cannot be "always allow"-ed away). Reads never pause. Confirmation is
    per tool call and shows the resolved route + params.
@@ -318,12 +320,17 @@ reasoning?}`. Stream deltas are appended; finalize on completion.
 
 ### 5.6 Transport (core endpoints, not a plugin)
 
-Reuse the existing HTTP + `coder/websocket` + ticket infrastructure:
+Use ordinary authenticated HTTP endpoints. Chat turns stream their response body;
+the frontend queue is client-side only.
 
 - `POST /api/connections/:id/ai/conversations` (+ list/get/rename/delete) — CRUD.
-- `WS /api/connections/:id/ai/chat` (ticket-authenticated like other streams) —
-  send a user message, stream back `StreamEvent`s; `stop`, `confirm`/`reject`
-  (for write HITL), and queued user messages while a turn is running.
+- `POST /api/connections/:id/ai/turns` — starts one user message turn and streams
+  newline-delimited JSON frames (`turn`, `conversation`, `needs_confirmation`,
+  and `StreamEvent`). The request is normal CSRF-protected HTTP; no chat ticket
+  or WebSocket is used.
+- `POST /api/connections/:id/ai/turns/:turnID/control` — sends `stop`,
+  `confirm`, or `reject` for the active turn. The server scopes controls by
+  authenticated user, connection id, and turn id.
 - `GET /api/ai/global` — read-only: whether a shared AI is configured + its
   provider/model (**no key**). `GET/PUT/DELETE /api/me/ai/config` (user) — own
   provider config CRUD; `GET …/{id}/models` lists a saved provider's models;
@@ -331,8 +338,8 @@ Reuse the existing HTTP + `coder/websocket` + ticket infrastructure:
   `POST /api/me/ai/test` tests an unsaved provider draft; `POST …/{id}/test`
   tests a saved provider. **No global CRUD** — global config is
   env/`internal/config` (§3).
-  The chat WS authorizes the connection (must be `aiMode != disabled` and the user
-  must have access) before opening.
+  Each streamed turn authorizes the connection (must be `aiMode != disabled` and
+  the user must have access) before starting.
 
 ## 6. Frontend architecture (Vue 3 + PrimeVue + Tailwind)
 
@@ -346,8 +353,8 @@ young and would fight our PrimeVue + Tailwind preset and our domain UX (risk-gat
 tool badges, write/destructive confirmation, subagents, queue). So the chat
 **container/UX is custom** on PrimeVue primitives (as wmb-table did with antd).
 Likewise **do not** use `@ai-sdk/vue`'s `useChat` — it expects the server to speak
-Vercel's data-stream wire protocol; our transport is our own websocket+ticket infra
-with a ported Pinia store. **Where a library genuinely fits — streaming-markdown
+Vercel's data-stream wire protocol; our transport is our own NDJSON streamed-turn
+API with a Pinia store. **Where a library genuinely fits — streaming-markdown
 rendering** (naïve re-parsing per token jitters) — adopt **`markstream-vue`**
 (incremental, jitter-free, code/KaTeX/Mermaid, safe-HTML), with
 `markdown-it` + DOMPurify + highlight.js as the conservative fallback. Verify the
@@ -391,7 +398,10 @@ chosen markdown lib's maintenance/API via context7 before committing.
 - A Pinia store `stores/aiChat.ts` mirrors the reference's store: conversations,
   per-conversation run state (`starting|streaming|stopping`), queued messages,
   reasoning-by-message, streaming buffers.
-- Consume the chat WS via the existing `useStream` composable; apply
+- `send()` starts one `POST /ai/turns` request and consumes the response
+  `ReadableStream`; messages typed while a turn is running stay queued in the
+  client and start the next streamed request when the current turn finishes.
+- Apply
   `text_delta`/`tool_call`/`tool_result`/`reasoning_delta`/`step`/`error`/`done`
   events to the store. Streaming markdown via **`markstream-vue`** (jitter-free
   incremental render) — fallback `markdown-it` + DOMPurify + highlight.js; reuse the
@@ -444,7 +454,8 @@ timeout })`, so the AI chunk is fetched on demand. The **`loadingComponent`** is
 
 1. User opens the chat (header icon) → drawer; selects/creates a conversation,
    picks provider scope when both shared and personal providers exist.
-2. User sends a message over the chat WS.
+2. User sends a message; the client starts `POST /api/connections/:id/ai/turns`
+   and reads the streamed NDJSON response.
 3. `AIService` resolves provider/model + key (Vault-decrypted), builds the
    risk-gated tool set for the connection's `aiMode`, loads conversation memory
    (compacted), and assembles the system prompt + recent-ops context.
@@ -453,7 +464,7 @@ timeout })`, so the AI chunk is fetched on demand. The **`loadingComponent`** is
    (authz/validate/audit as the user) → result streamed as a tool badge + fed
    back to the model. On a **write** tool call → emit `needs_confirmation`, pause
    at the tool boundary; on user `confirm` → execute; on `reject` → tell the model
-   it was declined.
+   it was declined. Stop and confirm/reject use the active turn control endpoint.
 5. Subagent tools run nested read-only turns and return summaries.
 6. On completion: finalize the assistant message, update the rolling summary,
    optionally auto-title the conversation.
@@ -475,8 +486,9 @@ behind the feature being inert when no AI config exists.
   exposed via API; no global write path; model list.
 - **P2 — Engine + read-only agent + chat MVP.** `internal/ai/engine` (+ eino
   adapter, one provider end-to-end), `tools` (RiskSafe only), `agent` turn loop,
-  chat WS, minimal `AiChatPanel` with streaming + tool badges. Integration test:
-  a real connection, the agent lists resources via tools; authz enforced.
+  streamed-turn HTTP transport, minimal `AiChatPanel` with streaming + tool
+  badges. Integration test: a real connection, the agent lists resources via
+  tools; authz enforced.
 - **P3 — Memory + conversations.** Persistence, conversation CRUD UI, token
   budgeting + compaction, auto-title. Tests: compaction keeps recent turns;
   budget math.

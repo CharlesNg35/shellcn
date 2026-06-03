@@ -73,6 +73,7 @@ type Server struct {
 	router       chi.Router
 	loginLimiter *rateLimiter
 	chat         *ai.Service
+	aiTurns      *aiTurnRegistry
 }
 
 // New builds the server and its routes.
@@ -85,7 +86,7 @@ func New(d Deps) *Server {
 	}
 	// ~5 login attempts/min per IP with a small burst — generous for humans,
 	// punishing for online password guessing.
-	s := &Server{deps: d, loginLimiter: newRateLimiter(rate.Every(12*time.Second), 5)}
+	s := &Server{deps: d, loginLimiter: newRateLimiter(rate.Every(12*time.Second), 5), aiTurns: newAITurnRegistry()}
 
 	// Build chat here because it calls back into the server route invoker.
 	if d.AI != nil {
@@ -199,8 +200,8 @@ func (s *Server) routes() chi.Router {
 				pr.Get("/me/ai/config/{id}/models", s.handleAIProviderModels)
 				pr.Post("/me/ai/config/{id}/test", s.handleTestAIProvider)
 				if s.deps.Connections != nil {
-					pr.Post("/connections/{id}/ai/ticket", s.handleMintAITicket)
-					pr.Get("/connections/{id}/ai/chat", s.handleAIChat)
+					pr.Post("/connections/{id}/ai/turns", s.handleAITurn)
+					pr.Post("/connections/{id}/ai/turns/{turnID}/control", s.handleAITurnControl)
 					pr.Get("/connections/{id}/ai/conversations", s.handleListConversations)
 					pr.Post("/connections/{id}/ai/conversations", s.handleCreateConversation)
 					pr.Get("/connections/{id}/ai/conversations/{cid}", s.handleGetConversation)

@@ -2,11 +2,12 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 	"sync"
 
-	"github.com/coder/websocket"
-	"github.com/coder/websocket/wsjson"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
@@ -14,21 +15,164 @@ import (
 	"github.com/charlesng35/shellcn/internal/ai/engine"
 	"github.com/charlesng35/shellcn/internal/ai/tools"
 	"github.com/charlesng35/shellcn/internal/audit"
-	"github.com/charlesng35/shellcn/internal/auth"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/store"
 )
 
-// recentAuditLines returns the user's recent operations on a connection, oldest
-// last, as compact lines for the agent's prompt (so it can explain failures).
+const aiChatRouteID = "ai.chat"
+
+var aiAccessRoute = plugin.Route{ID: aiChatRouteID, Permission: "connection.ai", Risk: plugin.RiskSafe, AuditEvent: aiChatRouteID}
+
+func connectionAIMode(conn models.Connection) string {
+	if conn.AIMode == "" {
+		return models.AIModeReadOnly
+	}
+	return conn.AIMode
+}
+
+type aiTurnRegistry struct {
+	mu    sync.Mutex
+	turns map[string]*aiTurn
+}
+
+type aiTurn struct {
+	id        string
+	userID    string
+	connID    string
+	cancel    context.CancelFunc
+	confirmer *aiTurnConfirmer
+}
+
+func newAITurnRegistry() *aiTurnRegistry {
+	return &aiTurnRegistry{turns: map[string]*aiTurn{}}
+}
+
+func (r *aiTurnRegistry) add(turn *aiTurn) {
+	r.mu.Lock()
+	r.turns[turn.id] = turn
+	r.mu.Unlock()
+}
+
+func (r *aiTurnRegistry) remove(turnID string) {
+	r.mu.Lock()
+	delete(r.turns, turnID)
+	r.mu.Unlock()
+}
+
+func (r *aiTurnRegistry) control(userID, connID, turnID string, req aiTurnControlRequest) error {
+	r.mu.Lock()
+	turn := r.turns[turnID]
+	r.mu.Unlock()
+	if turn == nil || turn.userID != userID || turn.connID != connID {
+		return plugin.ErrNotFound
+	}
+	switch req.Type {
+	case "stop":
+		turn.cancel()
+		return nil
+	case "confirm":
+		turn.confirmer.deliver(req.ToolID, true)
+		return nil
+	case "reject":
+		turn.confirmer.deliver(req.ToolID, false)
+		return nil
+	default:
+		return plugin.ErrInvalidInput
+	}
+}
+
+type aiTurnConfirmer struct {
+	turnID    string
+	emit      func(any) bool
+	mu        sync.Mutex
+	decisions map[string]chan bool
+}
+
+func newAITurnConfirmer(turnID string, emit func(any) bool) *aiTurnConfirmer {
+	return &aiTurnConfirmer{turnID: turnID, emit: emit, decisions: map[string]chan bool{}}
+}
+
+func (cf *aiTurnConfirmer) Confirm(ctx context.Context, req tools.ConfirmRequest) (bool, error) {
+	ch := make(chan bool, 1)
+	cf.mu.Lock()
+	cf.decisions[req.ToolCallID] = ch
+	cf.mu.Unlock()
+	defer func() {
+		cf.mu.Lock()
+		delete(cf.decisions, req.ToolCallID)
+		cf.mu.Unlock()
+	}()
+
+	if !cf.emit(aiConfirmFrame{
+		Type: "needs_confirmation", TurnID: cf.turnID,
+		ToolID: req.ToolCallID, ToolName: req.ToolName,
+		RouteID: req.RouteID, Risk: string(req.Risk), Destructive: req.Destructive,
+		Params: req.Params, Body: req.Body,
+	}) {
+		return false, context.Canceled
+	}
+	select {
+	case ok := <-ch:
+		return ok, nil
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
+}
+
+func (cf *aiTurnConfirmer) deliver(toolID string, ok bool) {
+	cf.mu.Lock()
+	ch := cf.decisions[toolID]
+	cf.mu.Unlock()
+	if ch != nil {
+		select {
+		case ch <- ok:
+		default:
+		}
+	}
+}
+
+type aiTurnRequest struct {
+	Content        string `json:"content"`
+	ProviderID     string `json:"providerId"`
+	ConversationID string `json:"conversationId"`
+}
+
+type aiTurnControlRequest struct {
+	Type   string `json:"type"`
+	ToolID string `json:"toolId"`
+}
+
+type aiTurnFrame struct {
+	Type   string `json:"type"`
+	TurnID string `json:"turnId"`
+}
+
+type aiMetaFrame struct {
+	Type           string `json:"type"`
+	ConversationID string `json:"conversationId"`
+	Title          string `json:"title,omitempty"`
+}
+
+type aiConfirmFrame struct {
+	Type        string            `json:"type"`
+	TurnID      string            `json:"turnId"`
+	ToolID      string            `json:"toolId"`
+	ToolName    string            `json:"toolName"`
+	RouteID     string            `json:"routeId"`
+	Risk        string            `json:"risk"`
+	Destructive bool              `json:"destructive"`
+	Params      map[string]string `json:"params,omitempty"`
+	Body        map[string]any    `json:"body,omitempty"`
+}
+
 func (s *Server) recentAuditLines(ctx context.Context, userID, connID string) []string {
 	rows, err := s.deps.Store.Audit.List(ctx, store.AuditFilter{UserID: userID, ConnectionID: connID, Limit: 8})
 	if err != nil {
 		return nil
 	}
 	out := make([]string, 0, len(rows))
-	for i := len(rows) - 1; i >= 0; i-- { // reverse: newest last
+	for i := len(rows) - 1; i >= 0; i-- {
 		r := rows[i]
 		if r.Event == aiChatRouteID {
 			continue
@@ -42,28 +186,7 @@ func (s *Server) recentAuditLines(ctx context.Context, userID, connID string) []
 	return out
 }
 
-const aiChatRouteID = "ai.chat"
-
-// aiAccessRoute authorizes opening the chat (connection access); per-tool calls
-// are gated separately through InvokeRoute.
-var aiAccessRoute = plugin.Route{ID: aiChatRouteID, Permission: "connection.ai", Risk: plugin.RiskSafe, AuditEvent: aiChatRouteID}
-
-// connectionAIMode is the stored mode, or read-only when AI is configured but the
-// owner hasn't chosen one.
-func connectionAIMode(conn models.Connection) string {
-	if conn.AIMode == "" {
-		return models.AIModeReadOnly
-	}
-	return conn.AIMode
-}
-
-type aiTicketResponse struct {
-	Ticket string `json:"ticket"`
-}
-
-// handleMintAITicket authorizes connection access + AI availability, then mints a
-// single-use WS ticket for the chat stream.
-func (s *Server) handleMintAITicket(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAITurn(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, _ := userFrom(ctx)
 	conn, err := s.deps.Store.Connections.Get(ctx, chi.URLParam(r, "id"))
@@ -79,247 +202,114 @@ func (s *Server) handleMintAITicket(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.deps.Logger, plugin.ErrNotFound)
 		return
 	}
-	token, _ := s.deps.Tickets.Mint(auth.TicketScope{ConnectionID: conn.ID, RouteID: aiChatRouteID, UserID: user.ID})
-	writeJSON(w, http.StatusCreated, aiTicketResponse{Ticket: token})
-}
 
-type aiClientFrame struct {
-	Type           string `json:"type"` // user_message | stop | confirm | reject
-	Content        string `json:"content"`
-	ProviderID     string `json:"providerId"`
-	ConversationID string `json:"conversationId"`
-	ToolID         string `json:"toolId"` // for confirm/reject
-}
+	var req aiTurnRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.Content) == "" {
+		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
+		return
+	}
 
-// aiMetaFrame tells the client which conversation a turn belongs to (so a newly
-// created thread can be selected/persisted client-side).
-type aiMetaFrame struct {
-	Type           string `json:"type"`
-	ConversationID string `json:"conversationId"`
-	Title          string `json:"title"`
-}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, s.deps.Logger, errors.New("streaming response unsupported"))
+		return
+	}
 
-type aiConfirmFrame struct {
-	Type        string            `json:"type"` // needs_confirmation
-	ToolID      string            `json:"toolId"`
-	ToolName    string            `json:"toolName"`
-	RouteID     string            `json:"routeId"`
-	Risk        string            `json:"risk"`
-	Destructive bool              `json:"destructive"`
-	Params      map[string]string `json:"params,omitempty"`
-	Body        map[string]any    `json:"body,omitempty"`
-}
-
-// wsConfirmer emits a needs_confirmation frame and blocks the tool call until the
-// client answers (or the turn is cancelled).
-type wsConfirmer struct {
-	out       chan<- any
-	mu        sync.Mutex
-	decisions map[string]chan bool
-}
-
-func (cf *wsConfirmer) Confirm(ctx context.Context, req tools.ConfirmRequest) (bool, error) {
-	ch := make(chan bool, 1)
-	cf.mu.Lock()
-	cf.decisions[req.ToolCallID] = ch
-	cf.mu.Unlock()
+	turnID := uuid.NewString()
+	turnCtx, cancel := context.WithCancel(ctx)
+	enc := json.NewEncoder(w)
+	writeFrame := func(frame any) bool {
+		if err := enc.Encode(frame); err != nil {
+			cancel()
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+	confirmer := newAITurnConfirmer(turnID, writeFrame)
+	s.aiTurns.add(&aiTurn{id: turnID, userID: user.ID, connID: conn.ID, cancel: cancel, confirmer: confirmer})
 	defer func() {
-		cf.mu.Lock()
-		delete(cf.decisions, req.ToolCallID)
-		cf.mu.Unlock()
+		cancel()
+		s.aiTurns.remove(turnID)
 	}()
 
-	cf.out <- aiConfirmFrame{
-		Type: "needs_confirmation", ToolID: req.ToolCallID, ToolName: req.ToolName,
-		RouteID: req.RouteID, Risk: string(req.Risk), Destructive: req.Destructive,
-		Params: req.Params, Body: req.Body,
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.Header().Set("X-ShellCN-AI-Turn-ID", turnID)
+	if !writeFrame(aiTurnFrame{Type: "turn", TurnID: turnID}) {
+		return
 	}
-	select {
-	case ok := <-ch:
-		return ok, nil
-	case <-ctx.Done():
-		return false, ctx.Err()
-	}
-}
 
-func (cf *wsConfirmer) deliver(toolID string, ok bool) {
-	cf.mu.Lock()
-	ch := cf.decisions[toolID]
-	cf.mu.Unlock()
-	if ch != nil {
-		select {
-		case ch <- ok:
-		default:
+	convID, providerID, ok := s.prepareAITurn(turnCtx, user, conn, req, writeFrame)
+	if !ok {
+		return
+	}
+	in := ai.RunInput{
+		User: user, ConnID: conn.ID, Protocol: conn.Protocol,
+		ConnectionTitle: conn.Name, AIMode: connectionAIMode(conn),
+		AllowDestructive: conn.AIAllowDestructive,
+		Scope:            ai.Scope{ProviderID: providerID},
+		ConversationID:   convID,
+		UserMessage:      req.Content,
+		RecentOps:        s.recentAuditLines(turnCtx, user.ID, conn.ID),
+		Confirm:          confirmer,
+	}
+	if err := s.chat.Run(audit.WithSource(turnCtx, audit.SourceAI, turnID), in, func(ev engine.StreamEvent) {
+		writeFrame(ev)
+	}); err != nil {
+		writeFrame(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
+		writeFrame(engine.StreamEvent{Type: engine.EventDone})
+		return
+	}
+	if turnCtx.Err() == nil {
+		if cv, err := s.chat.Conversations().Get(turnCtx, user.ID, convID); err == nil {
+			writeFrame(aiMetaFrame{Type: "conversation", ConversationID: cv.ID, Title: cv.Title})
 		}
 	}
 }
 
-// handleAIChat is the chat WebSocket: it redeems the ticket, then runs a turn per
-// user_message frame, streaming engine events back as JSON. A stop frame cancels
-// the active turn.
-func (s *Server) handleAIChat(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	user, _ := userFrom(ctx)
-	conn, err := s.deps.Store.Connections.Get(ctx, chi.URLParam(r, "id"))
+func (s *Server) prepareAITurn(ctx context.Context, user models.User, conn models.Connection, req aiTurnRequest, emit func(any) bool) (string, string, bool) {
+	convID := req.ConversationID
+	providerID := req.ProviderID
+	if convID == "" {
+		model, err := s.aiConversationModel(ctx, user.ID, providerID)
+		if err != nil {
+			emit(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
+			emit(engine.StreamEvent{Type: engine.EventDone})
+			return "", "", false
+		}
+		cv, err := s.chat.Conversations().Create(ctx, user.ID, conn.ID, providerID, model)
+		if err != nil {
+			emit(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
+			emit(engine.StreamEvent{Type: engine.EventDone})
+			return "", "", false
+		}
+		emit(aiMetaFrame{Type: "conversation", ConversationID: cv.ID})
+		return cv.ID, providerID, true
+	}
+	cv, err := s.chat.Conversations().Get(ctx, user.ID, convID)
+	if err != nil || cv.ConnectionID != conn.ID {
+		emit(engine.StreamEvent{Type: engine.EventError, Err: plugin.ErrNotFound.Error()})
+		emit(engine.StreamEvent{Type: engine.EventDone})
+		return "", "", false
+	}
+	return convID, cv.ProviderID, true
+}
+
+func (s *Server) handleAITurnControl(w http.ResponseWriter, r *http.Request) {
+	user, _ := userFrom(r.Context())
+	var req aiTurnControlRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, s.deps.Logger, plugin.ErrInvalidInput)
+		return
+	}
+	err := s.aiTurns.control(user.ID, chi.URLParam(r, "id"), chi.URLParam(r, "turnID"), req)
 	if err != nil {
 		writeError(w, s.deps.Logger, err)
 		return
 	}
-	scope := auth.TicketScope{ConnectionID: conn.ID, RouteID: aiChatRouteID, UserID: user.ID}
-	if err := s.deps.Tickets.Redeem(r.URL.Query().Get("ticket"), scope); err != nil {
-		writeError(w, s.deps.Logger, plugin.ErrUnauthorized)
-		return
-	}
-	if !auth.CheckWSOrigin(r, s.deps.AllowedOrigins) {
-		writeError(w, s.deps.Logger, plugin.ErrForbidden)
-		return
-	}
-	if connectionAIMode(conn) == "disabled" {
-		writeError(w, s.deps.Logger, plugin.ErrForbidden)
-		return
-	}
-
-	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{})
-	if err != nil {
-		return
-	}
-	if s.deps.Metrics != nil {
-		s.deps.Metrics.WSOpened()
-		defer s.deps.Metrics.WSClosed()
-	}
-	defer func() { _ = c.Close(websocket.StatusNormalClosure, "") }()
-
-	s.runAIChat(ctx, c, user, conn)
-}
-
-func (s *Server) runAIChat(ctx context.Context, c *websocket.Conn, user models.User, conn models.Connection) {
-	// All outbound frames go through one writer goroutine, so the streaming turn
-	// and a paused tool-confirmation can both emit without racing on the socket.
-	out := make(chan any, 64)
-	writerDone := make(chan struct{})
-	go func() {
-		defer close(writerDone)
-		for f := range out {
-			_ = wsjson.Write(ctx, c, f)
-		}
-	}()
-
-	var mu sync.Mutex
-	var cancel context.CancelFunc
-	var activeTurn uint64
-	var wg sync.WaitGroup
-	var queued []aiClientFrame
-	confirmer := &wsConfirmer{out: out, decisions: map[string]chan bool{}}
-
-	defer func() {
-		mu.Lock()
-		queued = nil
-		if cancel != nil {
-			cancel()
-		}
-		mu.Unlock()
-		wg.Wait()
-		close(out)
-		<-writerDone
-	}()
-
-	send := func(ev engine.StreamEvent) { out <- ev }
-	var startTurnLocked func(aiClientFrame)
-	startTurnLocked = func(frame aiClientFrame) {
-		if ctx.Err() != nil {
-			return
-		}
-		turnCtx, c2 := context.WithCancel(ctx)
-		activeTurn++
-		turnID := activeTurn
-		cancel = c2
-		wg.Add(1)
-		go func(frame aiClientFrame) {
-			defer wg.Done()
-			tctx := audit.WithSource(turnCtx, audit.SourceAI, uuid.NewString())
-
-			convID := frame.ConversationID
-			providerID := frame.ProviderID
-			if convID == "" {
-				model, err := s.aiConversationModel(tctx, user.ID, providerID)
-				if err != nil {
-					send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
-					send(engine.StreamEvent{Type: engine.EventDone})
-					return
-				}
-				cv, err := s.chat.Conversations().Create(tctx, user.ID, conn.ID, providerID, model)
-				if err != nil {
-					send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
-					send(engine.StreamEvent{Type: engine.EventDone})
-					return
-				}
-				convID = cv.ID
-				out <- aiMetaFrame{Type: "conversation", ConversationID: cv.ID}
-			} else {
-				cv, err := s.chat.Conversations().Get(tctx, user.ID, convID)
-				if err != nil || cv.ConnectionID != conn.ID {
-					send(engine.StreamEvent{Type: engine.EventError, Err: plugin.ErrNotFound.Error()})
-					send(engine.StreamEvent{Type: engine.EventDone})
-					return
-				}
-				providerID = cv.ProviderID
-			}
-
-			in := ai.RunInput{
-				User: user, ConnID: conn.ID, Protocol: conn.Protocol,
-				ConnectionTitle: conn.Name, AIMode: connectionAIMode(conn),
-				AllowDestructive: conn.AIAllowDestructive,
-				Scope:            ai.Scope{ProviderID: providerID},
-				ConversationID:   convID,
-				UserMessage:      frame.Content,
-				RecentOps:        s.recentAuditLines(tctx, user.ID, conn.ID),
-				Confirm:          confirmer,
-			}
-			if err := s.chat.Run(tctx, in, send); err != nil {
-				send(engine.StreamEvent{Type: engine.EventError, Err: err.Error()})
-				send(engine.StreamEvent{Type: engine.EventDone})
-			} else if cv, err := s.chat.Conversations().Get(tctx, user.ID, convID); err == nil {
-				out <- aiMetaFrame{Type: "conversation", ConversationID: cv.ID, Title: cv.Title}
-			}
-
-			mu.Lock()
-			c2()
-			if activeTurn == turnID {
-				cancel = nil
-			}
-			if len(queued) > 0 && ctx.Err() == nil {
-				next := queued[0]
-				queued = queued[1:]
-				startTurnLocked(next)
-			}
-			mu.Unlock()
-		}(frame)
-	}
-
-	for {
-		var frame aiClientFrame
-		if err := wsjson.Read(ctx, c, &frame); err != nil {
-			return
-		}
-		switch frame.Type {
-		case "stop":
-			mu.Lock()
-			if cancel != nil {
-				cancel()
-			}
-			mu.Unlock()
-		case "confirm", "reject":
-			confirmer.deliver(frame.ToolID, frame.Type == "confirm")
-		case "user_message":
-			mu.Lock()
-			if cancel != nil {
-				queued = append(queued, frame)
-			} else {
-				startTurnLocked(frame)
-			}
-			mu.Unlock()
-		}
-	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) aiConversationModel(ctx context.Context, userID, providerID string) (string, error) {

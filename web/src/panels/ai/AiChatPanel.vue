@@ -22,19 +22,15 @@ const providerReady = computed(
     store.providersReady &&
     (store.providers.length > 0 || Boolean(store.global?.configured)),
 );
-const composerDisabled = computed(
-  () => !st.value.connected || !providerReady.value,
-);
+const composerDisabled = computed(() => !providerReady.value);
 const disabledReason = computed(() => {
   if (!store.providersReady) return "Loading AI settings...";
   if (!providerReady.value) return "No AI provider configured";
-  if (!st.value.connected) return "Connecting assistant...";
   return "";
 });
 const statusLabel = computed(() => {
   if (st.value.runState === "stopping") return "stopping...";
   if (st.value.runState !== "idle") return "streaming...";
-  if (!st.value.connected) return "connecting...";
   return "";
 });
 const showHistory = ref(false);
@@ -53,13 +49,9 @@ function newChat(): void {
   store.newChat(props.connectionId);
   showHistory.value = false;
 }
-function retryConnection(): void {
-  void store.connect(props.connectionId);
-}
-
 onMounted(() => {
-  void store.connect(props.connectionId);
   void store.loadProviders();
+  void store.loadConversations(props.connectionId);
 });
 </script>
 
@@ -161,16 +153,6 @@ onMounted(() => {
           <AppAlert tone="danger" title="Assistant error">
             <div class="flex min-w-0 items-center gap-2">
               <span class="min-w-0 flex-1">{{ st.error }}</span>
-              <Button
-                v-if="!st.connected"
-                type="button"
-                size="small"
-                severity="secondary"
-                outlined
-                @click="retryConnection"
-              >
-                Retry
-              </Button>
             </div>
           </AppAlert>
         </div>

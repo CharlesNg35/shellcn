@@ -14,8 +14,10 @@ vi.mock("../api/ai", () => ({
       model: "gpt-4o",
     })),
     list: vi.fn(async () => []),
+    turnControl: vi.fn(),
   },
-  chatSocketUrl: () => "ws://test",
+  streamAiTurn: vi.fn(),
+  isAbort: vi.fn(() => false),
 }));
 
 const CONN = "conn-1";
