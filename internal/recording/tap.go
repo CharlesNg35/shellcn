@@ -76,12 +76,27 @@ func (t *tap) Read(p []byte) (int, error) {
 			if startErr := t.startFromInteraction(); startErr != nil {
 				return 0, startErr
 			}
-		}
-		if lr := t.live.Load(); lr != nil && lr.captureInput {
-			lr.input(frame)
+			if lr := t.live.Load(); lr != nil && lr.captureInput {
+				lr.input(frame)
+			}
+		} else if cols, rows, ok := resizeControl(frame); ok {
+			// Control frames are protocol, not keystrokes: record the resize event
+			// (asciicast 'r') instead of capturing the frame as input. The frame
+			// still flows to the plugin, which owns the actual PTY resize.
+			if lr := t.live.Load(); lr != nil {
+				lr.resize(cols, rows)
+			}
 		}
 	}
 	return n, err
+}
+
+// resizeControl decodes a 0x00-prefixed terminal control frame's resize payload.
+func resizeControl(frame []byte) (cols, rows int, ok bool) {
+	if len(frame) < 2 || frame[0] != 0 {
+		return 0, 0, false
+	}
+	return plugin.ParseResizeControl(frame[1:])
 }
 
 func (t *tap) Write(p []byte) (int, error) {

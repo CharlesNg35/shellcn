@@ -102,7 +102,7 @@ func terminalConsole(kind string) plugin.StreamHandler {
 
 		errc := make(chan error, 2)
 		go func() { _, err := io.Copy(client, ch); errc <- err }()
-		go func() { errc <- copyTerminalInput(ch, client) }()
+		go func() { errc <- plugin.CopyTerminalInput(ch, client) }()
 		select {
 		case <-client.Context().Done():
 			return nil
@@ -122,43 +122,4 @@ func splice(client plugin.ClientStream, ch plugin.Channel) error {
 	case err := <-errc:
 		return ignoreEOF(err)
 	}
-}
-
-type resizer interface {
-	Resize(cols, rows int) error
-}
-
-// copyTerminalInput forwards browser keystrokes to the channel, intercepting the
-// `\x00`-prefixed JSON resize control frame the terminal panel emits.
-func copyTerminalInput(ch plugin.Channel, client plugin.ClientStream) error {
-	buf := make([]byte, 32<<10)
-	for {
-		n, err := client.Read(buf)
-		if n > 0 {
-			frame := buf[:n]
-			if len(frame) > 1 && frame[0] == 0 {
-				_ = handleTerminalControl(ch, frame[1:])
-			} else if _, werr := ch.Write(frame); werr != nil {
-				return werr
-			}
-		}
-		if err != nil {
-			return err
-		}
-	}
-}
-
-func handleTerminalControl(ch plugin.Channel, frame []byte) error {
-	var msg struct {
-		Type string `json:"type"`
-		Cols int    `json:"cols"`
-		Rows int    `json:"rows"`
-	}
-	if err := json.Unmarshal(frame, &msg); err != nil || msg.Type != "resize" {
-		return err
-	}
-	if r, ok := ch.(resizer); ok {
-		return r.Resize(msg.Cols, msg.Rows)
-	}
-	return nil
 }

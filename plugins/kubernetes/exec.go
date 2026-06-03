@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"sync"
@@ -187,12 +186,7 @@ func (q *termSizeQueue) push(cols, rows int) {
 }
 
 func (q *termSizeQueue) control(frame []byte) {
-	var m struct {
-		Type string `json:"type"`
-		Cols int    `json:"cols"`
-		Rows int    `json:"rows"`
-	}
-	if json.Unmarshal(frame, &m) == nil && m.Type == "resize" {
-		q.push(m.Cols, m.Rows)
+	if cols, rows, ok := plugin.ParseResizeControl(frame); ok {
+		q.push(cols, rows)
 	}
 }
