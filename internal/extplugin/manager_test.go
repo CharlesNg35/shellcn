@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -364,5 +365,48 @@ func TestPluginHTTPProxy(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if string(body) != "upstream:/page" {
 		t.Fatalf("proxied body got %q (want upstream:/page)", body)
+	}
+}
+
+// TestExampleMemoLoads proves the docs' promise: the out-of-tree reference plugin
+// (its own module, SDK-only) builds and loads with no core changes.
+func TestExampleMemoLoads(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "memo")
+	build := exec.Command("go", "build", "-o", bin, ".")
+	build.Dir = "../../examples/memo"
+	build.Env = append(os.Environ(), "GOWORK=off") // build it as the standalone module it is
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build example: %v\n%s", err, out)
+	}
+
+	reg := plugin.NewRegistry()
+	m := extplugin.NewManager(dir)
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, ok := reg.Get("memo")
+	if !ok {
+		t.Fatal("memo plugin not registered")
+	}
+
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{ConnectionID: "c1", Transport: plugin.TransportDirect})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+
+	create := plugin.NewRequestContext(context.Background(), plugin.User{}, sess, nil, nil, []byte(`{"title":"hi","body":"there"}`))
+	if _, err := routeByID(p, "memo.create").Handle(create); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	res, err := routeByID(p, "memo.list").Handle(plugin.NewRequestContext(context.Background(), plugin.User{}, sess, nil, nil, nil))
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	items, _ := res.(map[string]any)["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["title"] != "hi" {
+		t.Fatalf("memo round-trip over subprocess: %v", res)
 	}
 }

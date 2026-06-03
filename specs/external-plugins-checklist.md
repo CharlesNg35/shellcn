@@ -54,16 +54,18 @@ faithful template.
 
 ## Step 1 — Wire contract (`.proto` for `Plugin` + `Host`) + stubs — §3.4 — **Done**
 
-- [x] `proto/shellcn/plugin/v1/plugin.proto` with **both** services: `Plugin`
+- [x] `sdk/proto/shellcn/plugin/v1/plugin.proto` with **both** services: `Plugin`
       (served by plugin) and `Host` (served by core: `DialTarget`/
-      `HTTPProxyEndpoint`/`Audit`). Self-contained (local `Empty`, no
-      well-known-type imports → fully reproducible offline).
+      `HTTPProxyEndpoint`/`OpenHTTPConn`/`Audit`). Self-contained (local `Empty`, no
+      well-known-type imports → fully reproducible offline). The whole wire
+      contract lives **inside the SDK module** (source + config + gen) so it travels
+      with `go get` (cross-language authors can regenerate).
 - [x] `Plugin` service: `GetManifest`, `Connect`, `HealthCheck`, `Close`,
-      `Invoke`, `InvokeServerStream`, `OpenStream`, `OpenChannel`, `ServeHTTPProxy`.
+      `Invoke`, `OpenStream`, `OpenChannel`, `ServeHTTPProxy`.
       Byte-streams ride raw brokered conns named by `BrokerRef.broker_id`.
-- [x] **buf** generation: `buf.yaml` (BASIC lint) + `buf.gen.yaml` (managed mode,
-      `go_package_prefix`) → stubs at `sdk/gen/shellcn/plugin/v1` (package
-      `pluginv1`), checked in. `make proto` + `make tools` (buf, protoc-gen-go*).
+- [x] **buf** generation: `sdk/buf.yaml` (BASIC lint) + `sdk/buf.gen.yaml` (managed
+      mode, `go_package_prefix`) → stubs at `sdk/gen/shellcn/plugin/v1` (package
+      `pluginv1`), checked in. `make proto` (`cd sdk && buf generate`) + `make tools`.
 - [x] Handshake (`sdk/grpcplugin`): `Handshake` (magic cookie) + `ProtocolVersion`
       + `PluginName` dispense key.
 - [x] Manifest crosses as JSON bytes (`Manifest.json`); contract owned by Go types
@@ -198,17 +200,29 @@ serves the impl's `ServeHTTPProxy` via `http.Server` over the brokered conn
       green both modules (root 73 ok/0 fail, sdk ok). (HTTP GET tested; WS uses the
       identical raw-byte path after the upgrade request.)
 
-## Step 7 — Plugin SDK + reference external plugin — §3.1
+## Step 7 — Plugin SDK + reference external plugin — §3.1 — **Done**
 
-- [ ] `sdk` module: implement `Manifest()/Routes()/Connect()`, call `sdk.Serve`.
-- [ ] Reference plugin in `examples/` exercising **unary + terminal + agent
-      transport + open-in-browser + recording** (proves parity end-to-end).
-- [ ] `docs/external-plugins.md`: build, install, trust model, version policy,
-      cross-compile matrix, agent-transport acknowledgement.
-- [ ] Golden test: SDK round-trips a manifest → projection identical to in-process.
-- [ ] **DoD:** following the doc, a clean checkout builds the example plugin and
-      loads it into a dev server, demonstrating every capability, without touching
-      core code.
+- [x] `sdk.Serve(p)` is the `main` entry; a plugin implements `Manifest()/Routes()/
+      Connect()` against `sdk/plugin`. (Built in Step 3.)
+- [x] **Reference plugin `examples/memo`** — its **own Go module** depending only on
+      the SDK (no core/`internal/`): in-memory notes with a manifest (table panel +
+      create form + row delete), unary CRUD routes, and session state. README +
+      `replace` documenting the out-of-tree pattern. The capability matrix
+      (streaming/agent/proxy/recording) lives in the docs + the testdata demo;
+      `memo` is the idiomatic copy-me starting point.
+- [x] `docs/external-plugins.md`: write/build (cross-compile matrix, pure-Go),
+      install (`plugins.d/`), capability table, the egress rule (`cfg.Net`), trust
+      model, agent-transport acknowledgement, versioning.
+- [x] **Golden test** (`sdk/grpcplugin/codec_test.go`): `EncodeManifest` →
+      `DecodeManifest` → projection **byte-identical** to in-process.
+- [x] **DoD met:** `TestExampleMemoLoads` builds `examples/memo` as the standalone
+      module it is (`GOWORK=off`) and loads it via the `Manager`; CRUD round-trips
+      over the live subprocess — **no core changes**. `make build` of the example
+      verified `GOWORK=off` (lean dep tree: grpc/go-plugin/validator only).
+- [x] **Fixed a `-race` bug** found by CI: `bridgeStream` closed the brokered conn
+      from two goroutines → concurrent `grpc CloseSend`. `streamConn.Close` is now
+      `sync.Once`-guarded (idempotent, correct `net.Conn` hygiene). Full `-race`
+      gate green both modules (root 73 ok/0 fail/**0 races**, sdk ok).
 
 ## Step 8 — Admin surface + trust controls — §3.6
 

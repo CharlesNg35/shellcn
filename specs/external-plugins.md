@@ -273,14 +273,18 @@ the whole package (rather than splitting contract vs machinery) avoids a
 `package plugin` self-import collision and is purely mechanical.
 
 ```
-sdk/                         # module github.com/charlesng35/shellcn/sdk
-  go.mod                     #   deps: go-playground/validator (grpc + go-plugin in Step 1)
+sdk/                         # module github.com/charlesng35/shellcn/sdk — owns the
+                             #   whole wire contract (source + config + generated code)
+  go.mod
+  buf.yaml  buf.gen.yaml     # codegen config (run via `cd sdk && buf generate`)
+  proto/shellcn/plugin/v1/plugin.proto   # the .proto source (travels with go get)
+  gen/shellcn/plugin/v1/                 # generated stubs (package pluginv1), checked in
   plugin/                    # package plugin — the whole contract + machinery, zero internal/* deps:
                              #   manifest, schema, ui, route, session interfaces, category,
                              #   recording, credentials, errors, sort/filter, RequestContext,
                              #   lean User/AuditResult/Snippet, AND registry/validate/projection
-  serve.go                   # (Step 1) sdk.Serve(p): go-plugin glue, gRPC stubs, SDK-side
-                             #   RequestContext / NetTransport / ClientStream impls
+  grpcplugin/                # go-plugin glue: handshake, codec, conn/pipe, transport, server, proxy
+  serve.go                   # sdk.Serve(p): the plugin main entry
 
 internal/server/plugin_bridge.go   # boundary mappers: models.User→plugin.User,
                                     #   plugin.Snippet↔models.Snippet, plugin.AuditResult→models.AuditResult

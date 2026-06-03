@@ -22,8 +22,9 @@ type chunkStream interface {
 // streamConn presents a Conn.Pipe byte stream as a net.Conn. Deadlines are
 // no-ops: the stream's lifetime is governed by its context and Close.
 type streamConn struct {
-	stream chunkStream
-	cancel context.CancelFunc
+	stream    chunkStream
+	cancel    context.CancelFunc
+	closeOnce sync.Once
 
 	rmu sync.Mutex
 	buf []byte
@@ -59,12 +60,14 @@ func (c *streamConn) Write(p []byte) (int, error) {
 }
 
 func (c *streamConn) Close() error {
-	if cs, ok := c.stream.(interface{ CloseSend() error }); ok {
-		_ = cs.CloseSend()
-	}
-	if c.cancel != nil {
-		c.cancel()
-	}
+	c.closeOnce.Do(func() {
+		if cs, ok := c.stream.(interface{ CloseSend() error }); ok {
+			_ = cs.CloseSend()
+		}
+		if c.cancel != nil {
+			c.cancel()
+		}
+	})
 	return nil
 }
 

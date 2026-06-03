@@ -114,5 +114,5 @@ tools:
 
 proto:
 	@echo "Generating plugin protobuf stubs..."
-	@buf generate
+	@cd $(SDK_DIR) && buf generate
 	@echo "✓ stubs at sdk/gen"
