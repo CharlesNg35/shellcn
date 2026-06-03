@@ -13,10 +13,9 @@ service Plugin {
 
   // Invoke runs one non-streaming route; result_json is the handler's value.
   rpc Invoke(InvokeRequest) returns (InvokeResponse);
-  // InvokeServerStream serves a server-streaming route (logs, query results).
-  rpc InvokeServerStream(InvokeRequest) returns (stream Frame);
-  // OpenStream is the control plane of a bidirectional route (terminal, exec);
-  // its data plane is a raw brokered conn named by the returned broker_id.
+  // OpenStream is the control plane of a streaming route (terminal, exec, logs,
+  // results); its data plane is a raw brokered conn named by the returned
+  // broker_id. Every WS route is bidirectional in the contract.
   rpc OpenStream(StreamStart) returns (BrokerRef);
   // OpenChannel opens a tracked upstream Channel as a raw brokered conn.
   rpc OpenChannel(ChannelRequest) returns (BrokerRef);
@@ -90,11 +89,6 @@ message InvokeRequest {
 
 message InvokeResponse {
   bytes result_json = 1;
-}
-
-// Frame is one chunk of a server stream.
-message Frame {
-  bytes data = 1;
 }
 
 message StreamStart {

@@ -7,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	goplugin "github.com/hashicorp/go-plugin"
+	"google.golang.org/grpc"
+
 	pluginv1 "github.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1"
 )
 
@@ -76,26 +79,61 @@ type pipeAddr struct{}
 func (pipeAddr) Network() string { return "shellcn-broker" }
 func (pipeAddr) String() string  { return "broker" }
 
-// connBridge serves Conn.Pipe by copying the stream to and from a real conn.
-type connBridge struct {
+// pipeServer adapts a per-conn handler to the Conn service: handle runs once per
+// brokered Pipe with the stream presented as a net.Conn and the stream context.
+type pipeServer struct {
 	pluginv1.UnimplementedConnServer
-	target net.Conn
+	handle func(ctx context.Context, conn net.Conn) error
 }
 
-// NewConnBridge serves the target conn over a brokered Conn.Pipe stream.
+// NewPipeServer serves handle over a brokered Conn.Pipe (one call per conn).
+func NewPipeServer(handle func(ctx context.Context, conn net.Conn) error) pluginv1.ConnServer {
+	return &pipeServer{handle: handle}
+}
+
+func (p *pipeServer) Pipe(stream pluginv1.Conn_PipeServer) error {
+	return p.handle(stream.Context(), newStreamConn(stream, nil))
+}
+
+// NewConnBridge serves a real conn over a brokered Conn.Pipe stream.
 func NewConnBridge(target net.Conn) pluginv1.ConnServer {
-	return &connBridge{target: target}
+	return NewPipeServer(func(_ context.Context, conn net.Conn) error {
+		bridge(target, conn)
+		return nil
+	})
 }
 
-func (b *connBridge) Pipe(stream pluginv1.Conn_PipeServer) error {
-	bridge(b.target, newStreamConn(stream, nil))
-	return nil
+// ServeConn registers srv on a fresh brokered id and returns it for the peer to Dial.
+func ServeConn(broker *goplugin.GRPCBroker, srv pluginv1.ConnServer) uint32 {
+	id := broker.NextId()
+	go broker.AcceptAndServe(id, func(opts []grpc.ServerOption) *grpc.Server {
+		s := grpc.NewServer(opts...)
+		pluginv1.RegisterConnServer(s, srv)
+		return s
+	})
+	return id
 }
 
-// bridge copies bytes both ways between two conns until either side ends.
-func bridge(a, b net.Conn) {
+// DialConn dials a brokered Conn served under id and presents it as a net.Conn.
+func DialConn(broker *goplugin.GRPCBroker, id uint32) (net.Conn, error) {
+	cc, err := broker.Dial(id)
+	if err != nil {
+		return nil, err
+	}
+	streamCtx, cancel := context.WithCancel(context.Background())
+	stream, err := pluginv1.NewConnClient(cc).Pipe(streamCtx)
+	if err != nil {
+		cancel()
+		_ = cc.Close()
+		return nil, err
+	}
+	return newStreamConn(stream, cancel), nil
+}
+
+// bridge copies bytes both ways until either side ends, then closes both.
+func bridge(a, b io.ReadWriteCloser) {
 	done := make(chan struct{}, 2)
-	cp := func(dst, src net.Conn) {
+	cp := func(dst io.Writer, src io.Reader) {
 		_, _ = io.Copy(dst, src)
 		done <- struct{}{}
 	}

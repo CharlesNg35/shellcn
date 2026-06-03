@@ -4,7 +4,6 @@ import (
 	"context"
 
 	goplugin "github.com/hashicorp/go-plugin"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -35,7 +34,7 @@ func (h *hostServer) DialTarget(ctx context.Context, req *pluginv1.DialRequest) 
 	if err != nil {
 		return nil, grpcplugin.StatusFromError(err)
 	}
-	return h.serveConn(grpcplugin.NewConnBridge(conn)), nil
+	return &pluginv1.BrokerRef{BrokerId: grpcplugin.ServeConn(h.broker, grpcplugin.NewConnBridge(conn))}, nil
 }
 
 func (h *hostServer) HTTPProxyEndpoint(context.Context, *pluginv1.SessionHandle) (*pluginv1.ProxyEndpoint, error) {
@@ -55,7 +54,7 @@ func (h *hostServer) OpenHTTPConn(context.Context, *pluginv1.SessionHandle) (*pl
 	if err != nil {
 		return nil, grpcplugin.StatusFromError(err)
 	}
-	return h.serveConn(bridge), nil
+	return &pluginv1.BrokerRef{BrokerId: grpcplugin.ServeConn(h.broker, bridge)}, nil
 }
 
 func (h *hostServer) Audit(_ context.Context, rec *pluginv1.AuditRecord) (*pluginv1.Empty, error) {
@@ -63,14 +62,4 @@ func (h *hostServer) Audit(_ context.Context, rec *pluginv1.AuditRecord) (*plugi
 		h.audit(plugin.AuditResult(rec.GetResult()), rec.GetParams(), rec.GetError())
 	}
 	return &pluginv1.Empty{}, nil
-}
-
-func (h *hostServer) serveConn(srv pluginv1.ConnServer) *pluginv1.BrokerRef {
-	id := h.broker.NextId()
-	go h.broker.AcceptAndServe(id, func(opts []grpc.ServerOption) *grpc.Server {
-		s := grpc.NewServer(opts...)
-		pluginv1.RegisterConnServer(s, srv)
-		return s
-	})
-	return &pluginv1.BrokerRef{BrokerId: id}
 }

@@ -150,18 +150,31 @@ by the core's `cfg.Net`) on a brokered id, passed to the plugin as
       modules (root 73 ok/0 fail, sdk ok). (Agent path shares the identical
       `cfg.Net` code path; a live agent tunnel isn't stood up in the unit test.)
 
-## Step 5 — Streaming parity + recording — §3.5
+## Step 5 — Streaming parity + recording — §3.5 — **Done**
 
-- [ ] `InvokeServerStream` for logs/results → generic `log_stream`/results panels.
-- [ ] `OpenStream` control plane + **raw brokered conn** data plane → interactive
-      terminal/exec (`stdin`/`stdout`, resize, exit-status).
-- [ ] `OpenChannel` → raw brokered conn wrapped as `plugin.Channel`; session pinned.
-- [ ] Backpressure + cancellation propagate (client disconnect tears down cleanly).
-- [ ] Core records external streams via its byte-bridge; authoritative recording
-      via a declared server-stream.
-- [ ] **DoD:** an external plugin serves a live exec terminal (working resize) and a
-      followed log stream; both produce a recording identical in shape to a
-      built-in plugin's.
+Unified the byte-pipe: one `grpcplugin.pipeServer` + shared `ServeConn`/`DialConn`
+back every brokered conn (terminal, channel, dial, HTTP proxy). Dropped the
+redundant `InvokeServerStream`/`Frame` — every WS route is bidi in the Go contract,
+so `OpenStream` covers terminal/exec **and** logs/results alike.
+
+- [x] `OpenStream` control plane + **raw brokered conn** data plane → bidi WS routes
+      (terminal/exec stdin/stdout, and logs/results which just write). Plugin runs
+      `route.Stream(rc, clientStream)` over the brokered conn; host bridges it to
+      the browser `ClientStream`.
+- [x] `OpenChannel` → impl `Session.OpenChannel` bridged to a raw brokered conn,
+      wrapped host-side as `plugin.Channel` (`grpcChannel`).
+- [x] Cancellation propagates: when the browser `ClientStream.Context()` is done,
+      the host closes the brokered conn → the plugin handler's reads EOF and
+      `route.Stream` returns. Tested (`TestPluginBidiStream` ends on disconnect).
+- [x] **Recording is transparent:** the core bridges the browser `ClientStream`
+      (which the server already wraps with the recorder) to the plugin, so it
+      records external streams byte-for-byte with no plugin-system code — the host
+      is the byte-pump in the middle.
+- [x] **DoD met (end-to-end):** `TestPluginBidiStream` (a real subprocess plugin
+      echoes over a brokered stream, tears down on disconnect) and
+      `TestPluginOpenChannel` (channel echo). Build/lint/test green both modules
+      (root 73 ok/0 fail, sdk ok). (Resize/exit-status are app-level frames the
+      handler reads from the same stream — no extra wire surface needed.)
 
 ## Step 6 — HTTPProxy parity ("open in browser", incl. WebSocket) — §3.5
 

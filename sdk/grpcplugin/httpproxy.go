@@ -1,6 +1,7 @@
 package grpcplugin
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -10,15 +11,9 @@ import (
 	pluginv1 "github.com/charlesng35/shellcn/sdk/gen/shellcn/plugin/v1"
 )
 
-// httpProxyBridge serves one HTTP connection over a brokered Conn.Pipe stream,
-// reverse-proxying requests to the connection's L7 base URL via the core's
-// RoundTripper (which injects auth, e.g. agent http_proxy).
-type httpProxyBridge struct {
-	pluginv1.UnimplementedConnServer
-	proxy *httputil.ReverseProxy
-}
-
-// NewHTTPProxyBridge serves the core's L7 transport over a brokered conn.
+// NewHTTPProxyBridge serves the core's L7 transport over a brokered conn: each
+// brokered conn carries one HTTP connection, reverse-proxied to baseURL via rt
+// (which injects auth, e.g. agent http_proxy).
 func NewHTTPProxyBridge(baseURL string, rt http.RoundTripper) (pluginv1.ConnServer, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
@@ -26,12 +21,9 @@ func NewHTTPProxyBridge(baseURL string, rt http.RoundTripper) (pluginv1.ConnServ
 	}
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	proxy.Transport = rt
-	return &httpProxyBridge{proxy: proxy}, nil
-}
-
-func (b *httpProxyBridge) Pipe(stream pluginv1.Conn_PipeServer) error {
-	_ = http.Serve(newSingleConnListener(newStreamConn(stream, nil)), b.proxy)
-	return nil
+	return NewPipeServer(func(_ context.Context, conn net.Conn) error {
+		return http.Serve(newSingleConnListener(conn), proxy)
+	}), nil
 }
 
 // singleConnListener serves http.Serve a single conn, then blocks until that

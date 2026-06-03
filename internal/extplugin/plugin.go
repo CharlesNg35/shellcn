@@ -78,11 +78,13 @@ func (g *grpcPlugin) Connect(ctx context.Context, cfg plugin.ConnectConfig) (plu
 }
 
 func (g *grpcPlugin) bind(r *plugin.Route) {
+	routeID := r.ID
 	if r.IsStream() {
-		r.Stream = unsupportedStream // wired in Step 5
+		r.Stream = func(rc *plugin.RequestContext, client plugin.ClientStream) error {
+			return g.stream(rc, client, routeID)
+		}
 		return
 	}
-	routeID := r.ID
 	r.Handle = func(rc *plugin.RequestContext) (any, error) {
 		return g.invoke(rc, routeID)
 	}
@@ -113,10 +115,6 @@ func (g *grpcPlugin) invoke(rc *plugin.RequestContext, routeID string) (any, err
 		return nil, err
 	}
 	return result, nil
-}
-
-func unsupportedStream(*plugin.RequestContext, plugin.ClientStream) error {
-	return plugin.ErrNotSupported
 }
 
 func wireUser(u plugin.User) *pluginv1.ActingUser {

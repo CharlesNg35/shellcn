@@ -242,3 +242,86 @@ func TestPluginAuditForwardsToCore(t *testing.T) {
 		t.Fatalf("audit not forwarded to core: %v", got)
 	}
 }
+
+type testClientStream struct {
+	net.Conn
+	ctx context.Context
+}
+
+func (s *testClientStream) Context() context.Context { return s.ctx }
+
+func TestPluginBidiStream(t *testing.T) {
+	reg := plugin.NewRegistry()
+	m := extplugin.NewManager(buildDemo(t))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1", Transport: plugin.TransportDirect, Net: plugintest.DirectTransport(),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+
+	testEnd, streamEnd := net.Pipe()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client := &testClientStream{Conn: streamEnd, ctx: ctx}
+	rc := plugin.NewRequestContext(ctx, plugin.User{}, sess, nil, nil, nil)
+	errCh := make(chan error, 1)
+	go func() { errCh <- routeByID(p, "demo.stream").Stream(rc, client) }()
+
+	go func() { _, _ = testEnd.Write([]byte("hello")) }()
+	buf := make([]byte, 5)
+	if _, err := io.ReadFull(testEnd, buf); err != nil {
+		t.Fatalf("read echo: %v", err)
+	}
+	if string(buf) != "hello" {
+		t.Fatalf("bidi stream echo got %q", buf)
+	}
+
+	cancel()
+	_ = testEnd.Close()
+	select {
+	case <-errCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("stream handler did not return after disconnect")
+	}
+}
+
+func TestPluginOpenChannel(t *testing.T) {
+	reg := plugin.NewRegistry()
+	m := extplugin.NewManager(buildDemo(t))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1", Transport: plugin.TransportDirect, Net: plugintest.DirectTransport(),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+
+	ch, err := sess.OpenChannel(context.Background(), plugin.ChannelRequest{Kind: plugin.StreamLogs})
+	if err != nil {
+		t.Fatalf("open channel: %v", err)
+	}
+	defer func() { _ = ch.Close() }()
+	if ch.Kind() != plugin.StreamLogs {
+		t.Fatalf("channel kind: %v", ch.Kind())
+	}
+	go func() { _, _ = ch.Write([]byte("ping")) }()
+	buf := make([]byte, 4)
+	if _, err := io.ReadFull(ch, buf); err != nil {
+		t.Fatalf("read channel echo: %v", err)
+	}
+	if string(buf) != "ping" {
+		t.Fatalf("channel echo got %q", buf)
+	}
+}

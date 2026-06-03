@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 
@@ -28,6 +29,7 @@ func (demo) Manifest() plugin.Manifest {
 			Source: &plugin.DataSource{RouteID: "demo.list"},
 			Config: plugin.TableConfig{Editable: true, RowKey: []string{"id"}},
 		}},
+		Streams: []plugin.Stream{{ID: "demo.stream", Kind: plugin.StreamLogs, RouteID: "demo.stream"}},
 	}
 }
 
@@ -56,6 +58,14 @@ func (demo) Routes() []plugin.Route {
 			Handle: func(rc *plugin.RequestContext) (any, error) {
 				rc.Audit(plugin.AuditError, map[string]string{"op": "test"}, fmt.Errorf("boom"))
 				return map[string]any{"ok": true}, nil
+			},
+		},
+		{
+			ID: "demo.stream", Method: plugin.MethodWS, Path: "/stream",
+			Permission: "demo.read", Risk: plugin.RiskSafe, AuditEvent: "demo.stream",
+			Stream: func(_ *plugin.RequestContext, c plugin.ClientStream) error {
+				_, err := io.Copy(c, c)
+				return err
 			},
 		},
 		{
@@ -118,10 +128,23 @@ type demoSession struct {
 
 func (demoSession) HealthCheck(context.Context) error { return nil }
 
-func (demoSession) OpenChannel(context.Context, plugin.ChannelRequest) (plugin.Channel, error) {
-	return nil, plugin.ErrNotSupported
+// OpenChannel returns an echo channel so the channel bridge can be exercised.
+func (demoSession) OpenChannel(_ context.Context, req plugin.ChannelRequest) (plugin.Channel, error) {
+	a, b := net.Pipe()
+	go func() { _, _ = io.Copy(b, b); _ = b.Close() }()
+	return &pipeChannel{conn: a, kind: req.Kind}, nil
 }
 
 func (demoSession) Close() error { return nil }
+
+type pipeChannel struct {
+	conn net.Conn
+	kind plugin.StreamKind
+}
+
+func (c *pipeChannel) Read(p []byte) (int, error)  { return c.conn.Read(p) }
+func (c *pipeChannel) Write(p []byte) (int, error) { return c.conn.Write(p) }
+func (c *pipeChannel) Close() error                { return c.conn.Close() }
+func (c *pipeChannel) Kind() plugin.StreamKind     { return c.kind }
 
 func main() { sdk.Serve(demo{}) }

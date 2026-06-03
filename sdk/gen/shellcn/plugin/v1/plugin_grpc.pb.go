@@ -19,15 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Plugin_GetManifest_FullMethodName        = "/shellcn.plugin.v1.Plugin/GetManifest"
-	Plugin_Connect_FullMethodName            = "/shellcn.plugin.v1.Plugin/Connect"
-	Plugin_HealthCheck_FullMethodName        = "/shellcn.plugin.v1.Plugin/HealthCheck"
-	Plugin_Close_FullMethodName              = "/shellcn.plugin.v1.Plugin/Close"
-	Plugin_Invoke_FullMethodName             = "/shellcn.plugin.v1.Plugin/Invoke"
-	Plugin_InvokeServerStream_FullMethodName = "/shellcn.plugin.v1.Plugin/InvokeServerStream"
-	Plugin_OpenStream_FullMethodName         = "/shellcn.plugin.v1.Plugin/OpenStream"
-	Plugin_OpenChannel_FullMethodName        = "/shellcn.plugin.v1.Plugin/OpenChannel"
-	Plugin_ServeHTTPProxy_FullMethodName     = "/shellcn.plugin.v1.Plugin/ServeHTTPProxy"
+	Plugin_GetManifest_FullMethodName    = "/shellcn.plugin.v1.Plugin/GetManifest"
+	Plugin_Connect_FullMethodName        = "/shellcn.plugin.v1.Plugin/Connect"
+	Plugin_HealthCheck_FullMethodName    = "/shellcn.plugin.v1.Plugin/HealthCheck"
+	Plugin_Close_FullMethodName          = "/shellcn.plugin.v1.Plugin/Close"
+	Plugin_Invoke_FullMethodName         = "/shellcn.plugin.v1.Plugin/Invoke"
+	Plugin_OpenStream_FullMethodName     = "/shellcn.plugin.v1.Plugin/OpenStream"
+	Plugin_OpenChannel_FullMethodName    = "/shellcn.plugin.v1.Plugin/OpenChannel"
+	Plugin_ServeHTTPProxy_FullMethodName = "/shellcn.plugin.v1.Plugin/ServeHTTPProxy"
 )
 
 // PluginClient is the client API for Plugin service.
@@ -44,10 +43,9 @@ type PluginClient interface {
 	Close(ctx context.Context, in *SessionHandle, opts ...grpc.CallOption) (*Empty, error)
 	// Invoke runs one non-streaming route; result_json is the handler's value.
 	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
-	// InvokeServerStream serves a server-streaming route (logs, query results).
-	InvokeServerStream(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Frame], error)
-	// OpenStream is the control plane of a bidirectional route (terminal, exec);
-	// its data plane is a raw brokered conn named by the returned broker_id.
+	// OpenStream is the control plane of a streaming route (terminal, exec, logs,
+	// results); its data plane is a raw brokered conn named by the returned
+	// broker_id. Every WS route is bidirectional in the contract.
 	OpenStream(ctx context.Context, in *StreamStart, opts ...grpc.CallOption) (*BrokerRef, error)
 	// OpenChannel opens a tracked upstream Channel as a raw brokered conn.
 	OpenChannel(ctx context.Context, in *ChannelRequest, opts ...grpc.CallOption) (*BrokerRef, error)
@@ -114,25 +112,6 @@ func (c *pluginClient) Invoke(ctx context.Context, in *InvokeRequest, opts ...gr
 	return out, nil
 }
 
-func (c *pluginClient) InvokeServerStream(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[Frame], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Plugin_ServiceDesc.Streams[0], Plugin_InvokeServerStream_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[InvokeRequest, Frame]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Plugin_InvokeServerStreamClient = grpc.ServerStreamingClient[Frame]
-
 func (c *pluginClient) OpenStream(ctx context.Context, in *StreamStart, opts ...grpc.CallOption) (*BrokerRef, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(BrokerRef)
@@ -177,10 +156,9 @@ type PluginServer interface {
 	Close(context.Context, *SessionHandle) (*Empty, error)
 	// Invoke runs one non-streaming route; result_json is the handler's value.
 	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
-	// InvokeServerStream serves a server-streaming route (logs, query results).
-	InvokeServerStream(*InvokeRequest, grpc.ServerStreamingServer[Frame]) error
-	// OpenStream is the control plane of a bidirectional route (terminal, exec);
-	// its data plane is a raw brokered conn named by the returned broker_id.
+	// OpenStream is the control plane of a streaming route (terminal, exec, logs,
+	// results); its data plane is a raw brokered conn named by the returned
+	// broker_id. Every WS route is bidirectional in the contract.
 	OpenStream(context.Context, *StreamStart) (*BrokerRef, error)
 	// OpenChannel opens a tracked upstream Channel as a raw brokered conn.
 	OpenChannel(context.Context, *ChannelRequest) (*BrokerRef, error)
@@ -211,9 +189,6 @@ func (UnimplementedPluginServer) Close(context.Context, *SessionHandle) (*Empty,
 }
 func (UnimplementedPluginServer) Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Invoke not implemented")
-}
-func (UnimplementedPluginServer) InvokeServerStream(*InvokeRequest, grpc.ServerStreamingServer[Frame]) error {
-	return status.Error(codes.Unimplemented, "method InvokeServerStream not implemented")
 }
 func (UnimplementedPluginServer) OpenStream(context.Context, *StreamStart) (*BrokerRef, error) {
 	return nil, status.Error(codes.Unimplemented, "method OpenStream not implemented")
@@ -335,17 +310,6 @@ func _Plugin_Invoke_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Plugin_InvokeServerStream_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(InvokeRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(PluginServer).InvokeServerStream(m, &grpc.GenericServerStream[InvokeRequest, Frame]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Plugin_InvokeServerStreamServer = grpc.ServerStreamingServer[Frame]
-
 func _Plugin_OpenStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StreamStart)
 	if err := dec(in); err != nil {
@@ -440,13 +404,7 @@ var Plugin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Plugin_ServeHTTPProxy_Handler,
 		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "InvokeServerStream",
-			Handler:       _Plugin_InvokeServerStream_Handler,
-			ServerStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "shellcn/plugin/v1/plugin.proto",
 }
 

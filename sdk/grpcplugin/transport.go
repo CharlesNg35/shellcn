@@ -27,7 +27,7 @@ func (t *brokerTransport) DialContext(ctx context.Context, network, address stri
 	if err != nil {
 		return nil, err
 	}
-	return t.dialPipe(ref)
+	return DialConn(t.broker, ref.GetBrokerId())
 }
 
 func (t *brokerTransport) HTTP() (string, http.RoundTripper, bool) {
@@ -41,23 +41,8 @@ func (t *brokerTransport) HTTP() (string, http.RoundTripper, bool) {
 			if err != nil {
 				return nil, err
 			}
-			return t.dialPipe(ref)
+			return DialConn(t.broker, ref.GetBrokerId())
 		},
 	}
 	return ep.GetBaseUrl(), rt, true
-}
-
-func (t *brokerTransport) dialPipe(ref *pluginv1.BrokerRef) (net.Conn, error) {
-	cc, err := t.broker.Dial(ref.GetBrokerId())
-	if err != nil {
-		return nil, err
-	}
-	streamCtx, cancel := context.WithCancel(context.Background())
-	stream, err := pluginv1.NewConnClient(cc).Pipe(streamCtx)
-	if err != nil {
-		cancel()
-		_ = cc.Close()
-		return nil, err
-	}
-	return newStreamConn(stream, cancel), nil
 }
