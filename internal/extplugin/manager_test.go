@@ -325,3 +325,44 @@ func TestPluginOpenChannel(t *testing.T) {
 		t.Fatalf("channel echo got %q", buf)
 	}
 }
+
+func TestPluginHTTPProxy(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "upstream:"+r.URL.Path)
+	}))
+	t.Cleanup(upstream.Close)
+
+	reg := plugin.NewRegistry()
+	m := extplugin.NewManager(buildDemo(t))
+	t.Cleanup(m.Close)
+	if err := m.LoadAll(context.Background(), reg); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	p, _ := reg.Get("demo")
+	sess, err := p.Connect(context.Background(), plugin.ConnectConfig{
+		ConnectionID: "c1", Transport: plugin.TransportDirect,
+		Config: map[string]any{"upstream": upstream.URL},
+		Net:    plugintest.DirectTransport(),
+	})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = sess.Close() }()
+
+	proxier, ok := sess.(plugin.HTTPProxy)
+	if !ok {
+		t.Fatal("grpcSession should implement plugin.HTTPProxy")
+	}
+	front := httptest.NewServer(http.HandlerFunc(proxier.ServeHTTPProxy))
+	t.Cleanup(front.Close)
+
+	resp, err := front.Client().Get(front.URL + "/page")
+	if err != nil {
+		t.Fatalf("proxy get: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	if string(body) != "upstream:/page" {
+		t.Fatalf("proxied body got %q (want upstream:/page)", body)
+	}
+}

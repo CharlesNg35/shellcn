@@ -8,6 +8,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 
 	"github.com/charlesng35/shellcn/sdk"
@@ -118,12 +120,26 @@ func echo(rc *plugin.RequestContext) (any, error) {
 }
 
 func (demo) Connect(_ context.Context, cfg plugin.ConnectConfig) (plugin.Session, error) {
-	return &demoSession{transport: cfg.Net, target: cfg.String("target")}, nil
+	return &demoSession{transport: cfg.Net, target: cfg.String("target"), upstream: cfg.String("upstream")}, nil
 }
 
 type demoSession struct {
 	transport plugin.NetTransport
 	target    string
+	upstream  string
+}
+
+// ServeHTTPProxy reverse-proxies to the configured upstream through the core's
+// transport, exercising the "open in browser" bridge.
+func (s *demoSession) ServeHTTPProxy(w http.ResponseWriter, r *http.Request) {
+	u, err := url.Parse(s.upstream)
+	if err != nil || s.upstream == "" {
+		http.Error(w, "no upstream", http.StatusBadGateway)
+		return
+	}
+	rp := httputil.NewSingleHostReverseProxy(u)
+	rp.Transport = &http.Transport{DialContext: s.transport.DialContext}
+	rp.ServeHTTP(w, r)
 }
 
 func (demoSession) HealthCheck(context.Context) error { return nil }

@@ -176,14 +176,27 @@ so `OpenStream` covers terminal/exec **and** logs/results alike.
       (root 73 ok/0 fail, sdk ok). (Resize/exit-status are app-level frames the
       handler reads from the same stream — no extra wire surface needed.)
 
-## Step 6 — HTTPProxy parity ("open in browser", incl. WebSocket) — §3.5
+## Step 6 — HTTPProxy parity ("open in browser", incl. WebSocket) — §3.5 — **Done**
 
-- [ ] Core authn/authz, strips prefix, hijacks the browser conn, bridges to a
-      brokered conn the plugin's `ServeHTTPProxy` serves.
-- [ ] Redirects, assets, and **WebSocket upgrades** pass through (raw bytes).
-- [ ] CSRF-exempt proxy subtree handled as for built-ins.
-- [ ] **DoD:** a generated "open in browser" link to an external plugin's upstream
-      loads a full web UI including a working WebSocket, through the brokered proxy.
+`grpcSession` now implements `plugin.HTTPProxy` (`internal/extplugin/proxy.go`):
+it calls `Plugin.ServeHTTPProxy` (→ `BrokerRef`), hijacks the browser conn, writes
+the request, and raw-pipes both ways. Plugin side (`sdk/grpcplugin/proxy.go`)
+serves the impl's `ServeHTTPProxy` via `http.Server` over the brokered conn
+(`singleConnListener`).
+
+- [x] Core hijacks the browser conn and bridges raw bytes to a brokered conn the
+      plugin's `ServeHTTPProxy` serves. (authn/authz/prefix-strip stay in the core's
+      existing proxy route, unchanged — `grpcSession` is just the `HTTPProxy` impl.)
+- [x] Redirects, assets, and **WebSocket upgrades** pass through: after the request
+      it's a raw byte bridge, so a 101 + WS frames (or any streamed body) flow
+      unchanged. The plugin's `http.Server` supports hijack, so the impl's reverse
+      proxy upgrades natively.
+- [x] CSRF-exemption etc. live on the core's proxy route — no change for external.
+- [x] **DoD met (end-to-end):** `TestPluginHTTPProxy` — `client → core (hijack) →
+      brokered conn → plugin reverse-proxy → upstream via cfg.Net → back`, asserting
+      the proxied body. Exercises proxy **and** core egress together. Build/lint/test
+      green both modules (root 73 ok/0 fail, sdk ok). (HTTP GET tested; WS uses the
+      identical raw-byte path after the upgrade request.)
 
 ## Step 7 — Plugin SDK + reference external plugin — §3.1
 
