@@ -453,3 +453,38 @@ func TestEngineConcurrentStopAndFinalize(t *testing.T) {
 	go func() { defer wg.Done(); finalize() }()
 	wg.Wait() // -race + finishOnce prove there is no double-finalize panic
 }
+
+// TestEngineRecordsResizeControlFrames asserts that once a terminal recording is
+// armed, the in-band 0x00-prefixed resize control frames are recorded as
+// asciicast resize events (and never as input).
+func TestEngineRecordsResizeControlFrames(t *testing.T) {
+	rec := &fakeRecorder{}
+	e, _ := newEngine(t, nil, rec)
+	client := newFakeClient()
+	wrapped, finalize, err := e.Wrap(context.Background(), client, streamInfo("auto"))
+	if err != nil {
+		t.Fatalf("wrap: %v", err)
+	}
+
+	client.reads <- []byte("ls\r") // first user input arms the recording
+	if _, err := wrapped.Read(make([]byte, 32)); err != nil {
+		t.Fatalf("arming input: %v", err)
+	}
+	client.reads <- []byte("\x00{\"type\":\"resize\",\"cols\":150,\"rows\":35}")
+	if _, err := wrapped.Read(make([]byte, 64)); err != nil {
+		t.Fatalf("resize control: %v", err)
+	}
+	if _, err := wrapped.Write([]byte("$ ")); err != nil {
+		t.Fatalf("output: %v", err)
+	}
+	finalize()
+
+	if len(rec.sizes) != 2 || rec.sizes[0] != 150 || rec.sizes[1] != 35 {
+		t.Fatalf("resize event not recorded: sizes=%v", rec.sizes)
+	}
+	for _, in := range rec.in {
+		if len(in) > 0 && in[0] == 0 {
+			t.Fatalf("control frame leaked into input capture: %q", in)
+		}
+	}
+}

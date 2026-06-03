@@ -723,7 +723,7 @@ func ExecStream(rc *plugin.RequestContext, client plugin.ClientStream) error {
 		errc <- err
 	}()
 	go func() {
-		errc <- copyTerminalInput(ch, client)
+		errc <- plugin.CopyTerminalInput(ch, client)
 	}()
 	select {
 	case <-client.Context().Done():
@@ -1182,43 +1182,6 @@ func containerEventKind(action events.Action) (evType, state string, ok bool) {
 	default:
 		return "", "", false
 	}
-}
-
-func copyTerminalInput(ch plugin.Channel, client plugin.ClientStream) error {
-	buf := make([]byte, 32<<10)
-	for {
-		n, err := client.Read(buf)
-		if n > 0 {
-			frame := buf[:n]
-			if len(frame) > 1 && frame[0] == 0 {
-				_ = handleTerminalControl(ch, frame[1:])
-			} else if _, werr := ch.Write(frame); werr != nil {
-				return werr
-			}
-		}
-		if err != nil {
-			return err
-		}
-	}
-}
-
-type resizer interface {
-	Resize(cols, rows int) error
-}
-
-func handleTerminalControl(ch plugin.Channel, frame []byte) error {
-	var msg struct {
-		Type string `json:"type"`
-		Cols int    `json:"cols"`
-		Rows int    `json:"rows"`
-	}
-	if err := json.Unmarshal(frame, &msg); err != nil || msg.Type != "resize" {
-		return err
-	}
-	if r, ok := ch.(resizer); ok {
-		return r.Resize(msg.Cols, msg.Rows)
-	}
-	return nil
 }
 
 func streamParams(rc *plugin.RequestContext) map[string]string {
