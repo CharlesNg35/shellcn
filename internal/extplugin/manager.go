@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,6 +42,16 @@ type Option func(*Manager)
 // WithAudit records stream-internal operations plugins report via Host.Audit.
 func WithAudit(audit AuditFunc) Option {
 	return func(m *Manager) { m.audit = audit }
+}
+
+// WithLogger routes plugin subprocess output and supervisor events into the
+// gateway's structured logger. Without it, that output is discarded.
+func WithLogger(logger *slog.Logger) Option {
+	return func(m *Manager) {
+		if logger != nil {
+			m.logger = newSlogHCLog(logger)
+		}
+	}
 }
 
 type managed struct {

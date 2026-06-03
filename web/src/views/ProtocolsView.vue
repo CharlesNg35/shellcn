@@ -220,7 +220,10 @@ async function setAvailability(
               >
               on the server and restart to load it.
             </p>
-            <p v-else class="max-w-sm text-sm text-surface-500 dark:text-surface-400">
+            <p
+              v-else
+              class="max-w-sm text-sm text-surface-500 dark:text-surface-400"
+            >
               External plugin loading is disabled on this server.
             </p>
           </div>

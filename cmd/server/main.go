@@ -150,6 +150,7 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 	var extPlugins *extplugin.Manager
 	if cfg.Plugins.Dir != "" {
 		extPlugins = extplugin.NewManager(cfg.Plugins.Dir,
+			extplugin.WithLogger(logger),
 			extplugin.WithAudit(func(result plugin.AuditResult, params map[string]string, errMsg string) {
 				var auditErr error
 				if errMsg != "" {
