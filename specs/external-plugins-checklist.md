@@ -226,11 +226,12 @@ Connect()` against `sdk/plugin`. (Built in Step 3.)
 
 ## Step 8 — Admin surface + trust controls — §3.6 — **Mostly done**
 
-Remaining (optional, demand-driven): runtime stop/respawn of a disabled external
-subprocess, and real binary-integrity verification (config-pinned digest or
-signature). The per-plugin agent-transport acknowledgement and the sidecar
-checksum were intentionally dropped as over-engineering — the operator-controlled
-`plugins.dir` plus the availability policy already gate untrusted code.
+The trust boundary is the operator-controlled `plugins.dir` plus the availability
+policy. Speculative hardening (per-plugin agent-transport acknowledgement, sidecar
+checksums, runtime subprocess kill/respawn, per-subprocess resource limits) was
+intentionally left out — it added surface and friction without moving that
+boundary. Real binary-integrity verification (config-pinned digest or signature)
+remains a clean option if a concrete need arises.
 
 **Server-integration glue (was the missing prerequisite) — Done.** The `Manager`
 is now wired into startup: new `plugins.dir` config (default `plugins.d`,
@@ -283,14 +284,10 @@ enabled, so behavior is unchanged until an admin acts.
   operator-controlled `plugins.dir` and the availability policy already gate
   untrusted code; a separate per-plugin ack added friction without meaningful
   additional safety.
-- [ ] Don't-spawn semantics for a fully disabled **external** plugin (kill/stop
-      the subprocess on disable; respawn on enable) — distinct from the
-      availability policy above. _(Deferred: the supervisor's respawn loop makes
-      runtime stop/start invasive; availability already blocks all use without a
-      restart, so the operational need is covered.)_
-- [x] **DoD:** an admin can review a plugin's capability surface (risk + recording + transports), and can disable a misbehaving plugin without a restart (via
-      availability). _(Only runtime subprocess stop/start on disable remains,
-      deferred above.)_
+- [x] **DoD:** an admin can review a plugin's capability surface (risk + recording + transports) and disable a misbehaving plugin without a restart (via
+      availability). Disabling is a policy (hidden + connect-blocked), not a process
+      kill — the idle subprocess stays running and re-enables instantly; to fully
+      unload an external plugin, remove its binary from `plugins.dir` and restart.
 
 ## Cross-cutting (apply across steps) — §3.2, §3.7, §5
 
@@ -305,10 +302,11 @@ enabled, so behavior is unchanged until an admin acts.
 - [x] Versioning: handshake magic cookie + `ProtocolVersion` refuse an
       unsupported plugin at load; manifest `APIVersion` is validated by the
       registry. (Step 1.)
-- [ ] Per-subprocess resource limits (CPU/mem/FD) + concurrency caps.
-- [ ] Cross-compile build matrix CI (`linux/amd64,arm64`, `darwin/arm64`,
-      `windows/amd64`). _(Authoring guidance + pure-Go preference documented in
-      `docs/external-plugins.md`; wrong-arch already fails the handshake cleanly.)_
+- [x] **Out of core scope (by design):** per-subprocess resource limits are an
+      ops concern (run the gateway under a container/systemd slice), and the
+      cross-compile build matrix belongs to each plugin author's own repo —
+      `docs/external-plugins.md` documents the matrix + pure-Go preference, and a
+      wrong-arch binary fails the handshake cleanly.
 - [x] **Code rules (AGENTS.md):** libs verified; PrimeVue-only admin UI via the
       preset (`Tabs`/`DataTable`/`Column`/`Select`/`Breadcrumb`); **pnpm**; small
       focused units; minimal _why_-only comments, **no** spec/PR refs in source;
@@ -334,8 +332,7 @@ enabled, so behavior is unchanged until an admin acts.
       repo, NOT under `internal/`), holding the public contract (`sdk/plugin`) +
       serve glue; core + 40 built-ins import the contract from there; tagging
       `sdk/vX.Y.Z` pending the first release.
-- [x] Egress + audit owned by the core via the `Host` service. _(Agent-transport
-      operator acknowledgement is the remaining Step 8 trust control.)_
+- [x] Egress + audit owned by the core via the `Host` service.
 - [x] Accept the maintenance tax: a stable, full-surface plugin ABI owned indefinitely.
 - [x] Accept the trade: installing external plugins means core + a `plugins.d/` of
       subprocesses (first-party single-binary experience unchanged).
