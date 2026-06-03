@@ -40,7 +40,7 @@ async function copy(): Promise<void> {
       :class="
         isUser()
           ? 'max-w-[82%] rounded-2xl rounded-br-md bg-primary-600 text-white'
-          : 'max-w-[88%] rounded-2xl rounded-tl-md border border-surface-200 bg-surface-0 text-surface-800 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-100'
+          : 'w-[88%] max-w-[88%] rounded-2xl rounded-tl-md border border-surface-200 bg-surface-0 text-surface-800 dark:border-surface-800 dark:bg-surface-900 dark:text-surface-100'
       "
     >
       <p v-if="isUser()" class="wrap-break-word whitespace-pre-wrap">
