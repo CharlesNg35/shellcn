@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,16 +15,47 @@ const RequestIDHeader = "X-Request-Id"
 
 type ctxKey struct{}
 
-// NewLogger builds a structured slog logger (JSON in prod, text in dev).
-func NewLogger(level slog.Level, jsonOut bool) *slog.Logger {
-	opts := &slog.HandlerOptions{Level: level}
-	var h slog.Handler
-	if jsonOut {
-		h = slog.NewJSONHandler(os.Stdout, opts)
-	} else {
-		h = slog.NewTextHandler(os.Stdout, opts)
+// LogConfig configures the structured logger.
+type LogConfig struct {
+	Level  slog.Level
+	Format string    // "json" or "text"
+	Output io.Writer // defaults to os.Stdout
+}
+
+// NewLogger builds the gateway's structured logger. Records logged with a request
+// context automatically carry that request's correlation id.
+func NewLogger(cfg LogConfig) *slog.Logger {
+	out := cfg.Output
+	if out == nil {
+		out = os.Stdout
 	}
-	return slog.New(h)
+	opts := &slog.HandlerOptions{Level: cfg.Level}
+	var h slog.Handler
+	if cfg.Format == "json" {
+		h = slog.NewJSONHandler(out, opts)
+	} else {
+		h = slog.NewTextHandler(out, opts)
+	}
+	return slog.New(&contextHandler{Handler: h})
+}
+
+// contextHandler adds the request correlation id to every record under a request.
+type contextHandler struct{ slog.Handler }
+
+func (h *contextHandler) Handle(ctx context.Context, r slog.Record) error {
+	if id := RequestID(ctx); id != "" {
+		r = r.Clone()
+		r.AddAttrs(slog.String("request_id", id))
+	}
+	return h.Handler.Handle(ctx, r)
+}
+
+func (h *contextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &contextHandler{Handler: h.Handler.WithAttrs(attrs)}
+}
+
+func (h *contextHandler) WithGroup(name string) slog.Handler {
+	return &contextHandler{Handler: h.Handler.WithGroup(name)}
 }
 
 func newRequestID() string {

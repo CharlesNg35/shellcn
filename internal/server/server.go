@@ -70,6 +70,8 @@ type Deps struct {
 	// StaticFS is the embedded web/dist; nil in dev mode.
 	StaticFS fs.FS
 	Dev      bool
+	// AccessLog logs one structured line per API request.
+	AccessLog bool
 	// AllowedOrigins are extra WS origins beyond same-site (usually empty).
 	AllowedOrigins []string
 }
@@ -118,6 +120,9 @@ func (s *Server) routes() chi.Router {
 	r.Use(middleware.Recoverer)
 	r.Use(telemetry.RequestIDMiddleware)
 	r.Use(s.withRemoteAddr)
+	if s.deps.AccessLog {
+		r.Use(s.accessLog)
+	}
 
 	// Observability endpoints are unauthenticated.
 	if s.deps.Health != nil {

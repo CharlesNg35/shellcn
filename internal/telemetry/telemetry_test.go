@@ -1,6 +1,7 @@
 package telemetry_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -88,6 +89,20 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 func TestLoggerWrites(_ *testing.T) {
 	// Smoke: the logger constructs and logs without panicking.
-	log := telemetry.NewLogger(0, true)
+	log := telemetry.NewLogger(telemetry.LogConfig{Format: "json"})
 	log.Info("hello", "k", "v")
+}
+
+func TestLoggerCarriesRequestID(t *testing.T) {
+	var buf bytes.Buffer
+	log := telemetry.NewLogger(telemetry.LogConfig{Format: "json", Output: &buf})
+
+	h := telemetry.RequestIDMiddleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		log.InfoContext(r.Context(), "handled")
+	}))
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/x", nil))
+
+	if !strings.Contains(buf.String(), `"request_id"`) {
+		t.Fatalf("log line missing request_id: %s", buf.String())
+	}
 }
