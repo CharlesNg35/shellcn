@@ -16,10 +16,8 @@ import (
 	"github.com/charlesng35/shellcn/internal/store"
 )
 
-// ConnectionService owns the control-plane lifecycle of a connection: it
-// validates submitted config against the plugin's schema, splits secret from
-// non-secret fields, encrypts secrets before the store, and enforces write-only
-// secret semantics on update. Secret values never travel back toward the client.
+// ConnectionService owns connection config validation, secret encryption, and
+// write-only secret update semantics.
 type ConnectionService struct {
 	conns   store.ConnectionStore
 	plugins *plugin.Registry
@@ -31,8 +29,7 @@ func NewConnectionService(conns store.ConnectionStore, plugins *plugin.Registry,
 	return &ConnectionService{conns: conns, plugins: plugins, creds: creds, vault: vault}
 }
 
-// ConnectionInput is a create/update request. Config carries the full submitted
-// form values: non-secret fields, inline secret values, and credential refs.
+// ConnectionInput is a create/update request.
 type ConnectionInput struct {
 	Name      string
 	Protocol  string
@@ -45,6 +42,22 @@ type ConnectionInput struct {
 	// Recording is the per-class policy (class -> disabled|manual|auto). A nil map
 	// on update preserves the stored policy; on create it means recording is off.
 	Recording map[string]string
+	// AIMode gates the AI agent (disabled|read_only|read_write); AIAllowDestructive
+	// is honored only with read_write.
+	AIMode             string
+	AIAllowDestructive bool
+}
+
+// normalizeAIMode clears destructive opt-in unless the mode is read_write.
+func normalizeAIMode(mode string, allowDestructive bool) (string, bool, error) {
+	switch mode {
+	case "", models.AIModeDisabled, models.AIModeReadOnly:
+		return mode, false, nil
+	case models.AIModeReadWrite:
+		return mode, allowDestructive, nil
+	default:
+		return "", false, fmt.Errorf("%w: invalid ai mode %q", plugin.ErrInvalidInput, mode)
+	}
 }
 
 // ConnectionFolderInput is a sidebar folder create/update request.
@@ -77,18 +90,19 @@ type ConnectionFolderOrderInput struct {
 	SortOrder int    `json:"sortOrder"`
 }
 
-// ConnectionDetail is the edit/detail read: non-secret config plus a per-secret
-// field presence map ("set" / "not set"). It never carries secret values.
+// ConnectionDetail is the client edit/detail view; it never carries secret values.
 type ConnectionDetail struct {
-	ID          string                        `json:"id"`
-	Name        string                        `json:"name"`
-	Protocol    string                        `json:"protocol"`
-	Transport   string                        `json:"transport"`
-	OwnerID     string                        `json:"ownerId"`
-	Config      map[string]any                `json:"config"`
-	Secrets     map[string]string             `json:"secrets"`
-	Credentials map[string]CredentialRefState `json:"credentials,omitempty"`
-	Recording   map[string]string             `json:"recording"`
+	ID                 string                        `json:"id"`
+	Name               string                        `json:"name"`
+	Protocol           string                        `json:"protocol"`
+	Transport          string                        `json:"transport"`
+	OwnerID            string                        `json:"ownerId"`
+	Config             map[string]any                `json:"config"`
+	Secrets            map[string]string             `json:"secrets"`
+	Credentials        map[string]CredentialRefState `json:"credentials,omitempty"`
+	Recording          map[string]string             `json:"recording"`
+	AIMode             string                        `json:"aiMode"`
+	AIAllowDestructive bool                          `json:"aiAllowDestructive"`
 }
 
 type CredentialRefState struct {
@@ -114,8 +128,7 @@ var folderColors = map[string]bool{
 
 const defaultFolderColor = "slate"
 
-// Create validates the input against the plugin schema, encrypts inline secrets,
-// and persists a new connection owned by ownerID.
+// Create validates, encrypts inline secrets, and persists a new connection.
 func (s *ConnectionService) Create(ctx context.Context, ownerID string, in ConnectionInput) (models.Connection, error) {
 	m, ok := s.plugins.Manifest(in.Protocol)
 	if !ok {
@@ -145,6 +158,10 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 	if err != nil {
 		return models.Connection{}, err
 	}
+	aiMode, aiAllowDestructive, err := normalizeAIMode(in.AIMode, in.AIAllowDestructive)
+	if err != nil {
+		return models.Connection{}, err
+	}
 
 	config, plain := splitSecrets(m.Config, visibleConfig)
 	enc, err := secrets.EncryptMap(ctx, s.vault, plain)
@@ -154,16 +171,18 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 
 	now := time.Now()
 	conn := models.Connection{
-		ID:        uuid.NewString(),
-		Name:      in.Name,
-		Protocol:  in.Protocol,
-		OwnerID:   ownerID,
-		Transport: transport,
-		Config:    config,
-		Secrets:   enc,
-		Recording: recording,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:                 uuid.NewString(),
+		Name:               in.Name,
+		Protocol:           in.Protocol,
+		OwnerID:            ownerID,
+		Transport:          transport,
+		Config:             config,
+		Secrets:            enc,
+		Recording:          recording,
+		AIMode:             aiMode,
+		AIAllowDestructive: aiAllowDestructive,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 	if err := s.conns.Create(ctx, &conn); err != nil {
 		return models.Connection{}, err
@@ -171,9 +190,8 @@ func (s *ConnectionService) Create(ctx context.Context, ownerID string, in Conne
 	return conn, nil
 }
 
-// Update re-validates and persists changes to an existing connection. Secret
-// fields follow write-only rules: a blank/omitted value keeps the stored
-// ciphertext; a non-blank value replaces it.
+// Update re-validates and persists connection changes. Blank secrets keep the
+// stored ciphertext.
 func (s *ConnectionService) Update(ctx context.Context, existing models.Connection, in ConnectionInput) (models.Connection, error) {
 	m, ok := s.plugins.Manifest(existing.Protocol)
 	if !ok {
@@ -216,6 +234,10 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	if err != nil {
 		return models.Connection{}, err
 	}
+	aiMode, aiAllowDestructive, err := normalizeAIMode(in.AIMode, in.AIAllowDestructive)
+	if err != nil {
+		return models.Connection{}, err
+	}
 
 	config, plain := splitSecrets(m.Config, visibleConfig)
 	enc := map[string][]byte{}
@@ -236,6 +258,8 @@ func (s *ConnectionService) Update(ctx context.Context, existing models.Connecti
 	existing.Config = config
 	existing.Secrets = enc
 	existing.Recording = recording
+	existing.AIMode = aiMode
+	existing.AIAllowDestructive = aiAllowDestructive
 	existing.UpdatedAt = time.Now()
 	if err := s.conns.Update(ctx, &existing); err != nil {
 		return models.Connection{}, err
@@ -375,8 +399,7 @@ func SaveConnectionFolderOrder(ctx context.Context, folderStore store.Connection
 	return nil
 }
 
-// ReferencesCredential reports whether any connection references credentialID
-// through its config (the control plane uses this to block credential deletion).
+// ReferencesCredential reports whether any connection config uses credentialID.
 func (s *ConnectionService) ReferencesCredential(ctx context.Context, credentialID string) (bool, error) {
 	conns, err := s.conns.List(ctx)
 	if err != nil {
@@ -423,6 +446,7 @@ func (s *ConnectionService) Detail(ctx context.Context, userID string, conn mode
 		ID: conn.ID, Name: conn.Name, Protocol: conn.Protocol,
 		Transport: conn.Transport, OwnerID: conn.OwnerID,
 		Config: config, Secrets: state, Credentials: credentialStates, Recording: recording,
+		AIMode: conn.AIMode, AIAllowDestructive: conn.AIAllowDestructive,
 	}
 }
 

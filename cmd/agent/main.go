@@ -55,14 +55,17 @@ func main() {
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
 	if connectURL == "" || token == "" {
 		logger.Error("missing required config", "connect", connectURL != "", "token", token != "")
 		os.Exit(2)
 	}
+
 	if err := checkConnectURL(connectURL, insecure); err != nil {
 		logger.Error("invalid connect URL", "err", err)
 		os.Exit(2)
 	}
+
 	if insecure {
 		logger.Warn("insecure mode: TLS verification disabled and plaintext ws:// permitted — do not use in production")
 	}
@@ -103,22 +106,28 @@ func run(ctx context.Context, logger *slog.Logger, connectURL, token string, ins
 	for {
 		started := time.Now()
 		err := serve(ctx, logger, connectURL, token, insecure)
+
 		backoff = resetReconnectBackoff(backoff, time.Since(started))
+
 		if errors.Is(err, errEnrollmentRejected) {
 			logger.Error("enrollment rejected — token is invalid, revoked, or expired before first use; not retrying", "err", err)
 			return
 		}
+
 		if err != nil && ctx.Err() == nil {
 			logger.Warn("tunnel ended, reconnecting", "err", err, "in", backoff)
 		}
+
 		if ctx.Err() != nil {
 			return
 		}
+
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
 		}
+
 		if backoff < maxBackoff {
 			backoff *= 2
 		}
@@ -143,30 +152,38 @@ func resetReconnectBackoff(backoff, tunnelDuration time.Duration) time.Duration 
 func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, insecure bool) error {
 	dialCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	var opts *websocket.DialOptions
+
 	if insecure {
 		opts = &websocket.DialOptions{HTTPClient: &http.Client{
 			Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}, //nolint:gosec // explicit dev opt-in
 		}}
 	}
+
 	c, httpResp, err := websocket.Dial(dialCtx, connectURL, opts)
 	cancel()
+
 	if httpResp != nil && httpResp.Body != nil {
 		defer func() { _ = httpResp.Body.Close() }()
 	}
+
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
 	}
+
 	defer func() { _ = c.CloseNow() }()
 
 	hctx, hcancel := context.WithTimeout(ctx, 10*time.Second)
 	defer hcancel()
+
 	if err := wsjson.Write(hctx, c, transport.AgentHello{Token: token, Forward: true}); err != nil {
 		return fmt.Errorf("handshake write: %w", err)
 	}
+
 	var resp transport.AgentConnectResponse
 	if err := wsjson.Read(hctx, c, &resp); err != nil {
 		return fmt.Errorf("handshake read: %w", err)
 	}
+
 	if !resp.OK {
 		return fmt.Errorf("%w: %s", errEnrollmentRejected, resp.Error)
 	}
@@ -175,18 +192,22 @@ func serve(ctx context.Context, logger *slog.Logger, connectURL, token string, i
 	logger.Info("tunnel online", "mode", target.Mode, "address", target.Address)
 
 	nc := websocket.NetConn(ctx, c, websocket.MessageBinary)
+
 	cfg := yamux.DefaultConfig()
 	cfg.EnableKeepAlive = true
 	cfg.LogOutput = io.Discard
+
 	sess, err := yamux.Server(nc, cfg)
 	if err != nil {
 		return fmt.Errorf("yamux: %w", err)
 	}
+
 	defer func() { _ = sess.Close() }()
 
 	if target.Mode == transport.AgentModeHostMonitor {
 		return serveHostMonitor(ctx, logger, sess)
 	}
+
 	if target.Mode == string(transport.AgentModeHTTP) {
 		return serveHTTPProxy(ctx, logger, sess, target)
 	}
@@ -209,10 +230,13 @@ func serveHostMonitor(ctx context.Context, logger *slog.Logger, sess *yamux.Sess
 		<-ctx.Done()
 		_ = srv.Close()
 	}()
+
 	logger.Info("host_monitor online")
+
 	if err := srv.Serve(yamuxListener{sess: sess}); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+
 	return nil
 }
 
@@ -224,15 +248,20 @@ func serveHTTPProxy(ctx context.Context, logger *slog.Logger, sess *yamux.Sessio
 	if err != nil {
 		return fmt.Errorf("http_proxy: %w", err)
 	}
+
 	srv := &http.Server{Handler: proxy, ReadHeaderTimeout: 30 * time.Second}
+
 	go func() {
 		<-ctx.Done()
 		_ = srv.Close()
 	}()
+
 	logger.Info("http_proxy online", "upstream", target.Address)
+
 	if err := srv.Serve(yamuxListener{sess: sess}); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+
 	return nil
 }
 
@@ -244,6 +273,7 @@ func buildHTTPProxy(logger *slog.Logger, target transport.AgentProxyTarget) (*ht
 	if base == "" {
 		return nil, errors.New("http_proxy requires an upstream address")
 	}
+
 	upstream, err := url.Parse(base)
 	if err != nil || upstream.Host == "" {
 		return nil, fmt.Errorf("invalid upstream address %q", base)
@@ -319,15 +349,19 @@ type tokenSource struct {
 func (t *tokenSource) token() (string, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	if t.val != "" && time.Now().Before(t.exp) {
 		return t.val, nil
 	}
+
 	b, err := os.ReadFile(t.path)
 	if err != nil {
 		return t.val, err
 	}
+
 	t.val = strings.TrimSpace(string(b))
 	t.exp = time.Now().Add(time.Minute)
+
 	return t.val, nil
 }
 
@@ -378,15 +412,19 @@ func proxyStream(logger *slog.Logger, stream net.Conn, target transport.AgentPro
 	if network == "" {
 		return
 	}
+
 	up, err := net.DialTimeout(network, address, 10*time.Second)
 	if err != nil {
 		logger.Warn("dial target failed", "address", address, "err", err)
 		return
 	}
+
 	defer func() { _ = up.Close() }()
 
 	done := make(chan error, 2)
+
 	go func() { _, e := io.Copy(up, stream); done <- e }()
 	go func() { _, e := io.Copy(stream, up); done <- e }()
+
 	<-done
 }

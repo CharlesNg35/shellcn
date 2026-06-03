@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
 
+function uniqueName(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
 test.beforeEach(async ({ request }) => {
   await request.post("/api/__test/reset");
 });
@@ -9,14 +13,12 @@ test("add a connection from a protocol and open it", async ({ page }) => {
 
   await page.getByRole("button", { name: "Add connection" }).click();
 
-  // Pick a protocol → its config schema renders.
   await page.getByRole("radio", { name: /^SSH/ }).click();
 
   await page.locator("#conn-name").fill("e2e-box");
   await page.getByPlaceholder("10.0.0.1").fill("10.0.0.9");
   await page.getByRole("button", { name: /Create connection/ }).click();
 
-  // It is routed into the workspace and appears in the sidebar.
   await expect(page).toHaveURL(/\/c\/conn-/);
   await expect(page.locator("aside")).toContainText("e2e-box");
 });
@@ -54,15 +56,17 @@ test("delete a connection after confirmation", async ({ page }) => {
 });
 
 test("create a credential from the credentials view", async ({ page }) => {
+  const credName = uniqueName("e2e-cred");
+
   await page.goto("/credentials");
 
   await page.getByRole("button", { name: /New credential/ }).click();
-  await page.locator("#cred-name").fill("e2e-cred");
+  await page.locator("#cred-name").fill(credName);
   await page.locator('input[type="password"]').first().fill("s3cret-value");
   await page.getByRole("button", { name: "Create credential" }).click();
 
   await expect(
-    page.getByRole("cell", { name: "e2e-cred", exact: true }),
+    page.getByRole("cell", { name: credName, exact: true }),
   ).toBeVisible();
 });
 
@@ -80,28 +84,31 @@ test("view the recordings index", async ({ page }) => {
 test("create a credential and select it from a connection credential_ref", async ({
   page,
 }) => {
+  const credName = uniqueName("e2e-selectable-cred");
+  const connName = uniqueName("e2e-credential-conn");
+
   await page.goto("/credentials");
   await page.getByRole("button", { name: /New credential/ }).click();
   await page.getByRole("combobox", { name: "Database password" }).click();
   await page.getByRole("option", { name: "SSH private key" }).click();
-  await page.locator("#cred-name").fill("e2e-selectable-cred");
+  await page.locator("#cred-name").fill(credName);
   await page.locator("textarea").fill("s3cret-value");
   await page.getByRole("button", { name: "Create credential" }).click();
   await expect(
-    page.getByRole("cell", { name: "e2e-selectable-cred", exact: true }),
+    page.getByRole("cell", { name: credName, exact: true }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Add connection" }).click();
   await page.getByRole("radio", { name: /^SSH/ }).click();
-  await page.locator("#conn-name").fill("e2e-credential-conn");
+  await page.locator("#conn-name").fill(connName);
   await page.getByPlaceholder("10.0.0.1").fill("10.0.0.7");
   await page.getByRole("combobox", { name: "Password" }).click();
   await page.getByText("Stored credential", { exact: true }).click();
   await page.getByText("Select a credential").click();
-  await page.getByText("e2e-selectable-cred · SSH private key").click();
+  await page.getByText(`${credName} · SSH private key`).click();
   await page.getByRole("button", { name: /Create connection/ }).click();
 
-  await expect(page.locator("aside")).toContainText("e2e-credential-conn");
+  await expect(page.locator("aside")).toContainText(connName);
 });
 
 test("share and revoke a connection grant", async ({ page }) => {

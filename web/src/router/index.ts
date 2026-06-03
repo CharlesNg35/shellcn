@@ -48,7 +48,7 @@ const router = createRouter({
           meta: { admin: true },
         },
         {
-          path: "profile",
+          path: "settings/profile",
           name: "profile",
           component: () => import("../views/ProfileView.vue"),
         },
@@ -72,6 +72,11 @@ const router = createRouter({
           path: "settings",
           name: "settings",
           component: () => import("../views/SettingsView.vue"),
+        },
+        {
+          path: "settings/ai",
+          name: "ai-settings",
+          component: () => import("../views/AiSettingsView.vue"),
         },
       ],
     },

@@ -49,6 +49,24 @@ const linkClass =
       </Button>
     </div>
 
+    <RouterLink :to="{ name: 'profile' }" :class="linkClass">
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'user' }"
+        :size="18"
+        class="text-surface-400"
+      />
+      <span
+        class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
+      >
+        My Profile
+      </span>
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'chevron-right' }"
+        :size="16"
+        class="text-surface-300"
+      />
+    </RouterLink>
+
     <RouterLink :to="{ name: 'activity' }" :class="linkClass">
       <AppIcon
         :icon="{ type: 'lucide', value: 'scroll-text' }"
@@ -59,6 +77,24 @@ const linkClass =
         class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
       >
         My activity
+      </span>
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'chevron-right' }"
+        :size="16"
+        class="text-surface-300"
+      />
+    </RouterLink>
+
+    <RouterLink :to="{ name: 'ai-settings' }" :class="linkClass">
+      <AppIcon
+        :icon="{ type: 'lucide', value: 'sparkles' }"
+        :size="18"
+        class="text-surface-400"
+      />
+      <span
+        class="min-w-0 flex-1 font-medium text-surface-800 dark:text-surface-100"
+      >
+        AI providers
       </span>
       <AppIcon
         :icon="{ type: 'lucide', value: 'chevron-right' }"

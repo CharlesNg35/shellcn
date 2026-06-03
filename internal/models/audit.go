@@ -25,6 +25,11 @@ type AuditEntry struct {
 	Params       map[string]string `gorm:"serializer:json"` // secrets already redacted
 	Error        string
 	RemoteAddr   string
+	// Source distinguishes how the operation was initiated: "http" for a direct
+	// request, "ai" for an agent tool call. TurnID correlates AI-initiated calls
+	// to their conversation/turn.
+	Source string `gorm:"index"`
+	TurnID string
 }
 
 func (AuditEntry) TableName() string { return "audit_entries" }

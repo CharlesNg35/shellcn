@@ -1,6 +1,4 @@
-// Package server is the HTTP/WS adapter: it mounts plugin routes behind the full
-// middleware chain (authn → authz → session → validate → audit → handler →
-// normalize), exposes the projection + catalog APIs, and serves the embedded UI.
+// Package server is the HTTP/WS adapter for APIs, plugin routes, and the UI.
 package server
 
 import (
@@ -13,8 +11,13 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"golang.org/x/time/rate"
 
+	"github.com/charlesng35/shellcn/internal/ai"
+	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
+	"github.com/charlesng35/shellcn/internal/ai/memory"
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/plugin"
 	"github.com/charlesng35/shellcn/internal/policy"
 	"github.com/charlesng35/shellcn/internal/recording"
@@ -33,8 +36,7 @@ type Deps struct {
 	Auth       auth.Authenticator
 	SessionMgr *auth.SessionManager
 	Tickets    *auth.TicketStore
-	// ArtifactTickets guards public install-artifact fetches. It has a longer TTL
-	// than Tickets (a human copies a URL and runs it) and never expires a WS.
+	// ArtifactTickets guards public install-artifact fetches.
 	ArtifactTickets   *auth.TicketStore
 	Policy            *policy.Enforcer
 	Connector         *service.Connector
@@ -48,12 +50,17 @@ type Deps struct {
 	Recordings        *service.RecordingService
 	Recording         *recording.Engine
 	RecordingMaxChunk int64
-	Audit             audit.Sink
-	Metrics           *telemetry.Metrics
-	Health            *telemetry.Health
-	Logger            *slog.Logger
+	AI                *aiconfig.Service
+	// AIGlobal is the env/config shared-AI provider.
+	AIGlobal config.AIConfig
+	// ModelRegistry resolves model context windows and live model lists.
+	ModelRegistry *modelreg.Registry
+	Audit         audit.Sink
+	Metrics       *telemetry.Metrics
+	Health        *telemetry.Health
+	Logger        *slog.Logger
 
-	// StaticFS is the embedded web/dist (nil in dev mode, where Vite serves the UI).
+	// StaticFS is the embedded web/dist; nil in dev mode.
 	StaticFS fs.FS
 	Dev      bool
 	// AllowedOrigins are extra WS origins beyond same-site (usually empty).
@@ -65,6 +72,8 @@ type Server struct {
 	deps         Deps
 	router       chi.Router
 	loginLimiter *rateLimiter
+	chat         *ai.Service
+	aiTurns      *aiTurnRegistry
 }
 
 // New builds the server and its routes.
@@ -77,7 +86,19 @@ func New(d Deps) *Server {
 	}
 	// ~5 login attempts/min per IP with a small burst — generous for humans,
 	// punishing for online password guessing.
-	s := &Server{deps: d, loginLimiter: newRateLimiter(rate.Every(12*time.Second), 5)}
+	s := &Server{deps: d, loginLimiter: newRateLimiter(rate.Every(12*time.Second), 5), aiTurns: newAITurnRegistry()}
+
+	// Build chat here because it calls back into the server route invoker.
+	if d.AI != nil {
+		reg := d.ModelRegistry
+		if reg == nil {
+			reg = modelreg.New(modelreg.WithLogger(d.Logger))
+		}
+		d.AI.WithModels(reg)
+		mem := memory.New(d.Store.AIConversations, d.Store.AIMessages)
+		s.chat = ai.New(d.AI, d.AIGlobal, d.Plugins, s, mem, reg)
+	}
+
 	s.router = s.routes()
 	return s
 }
@@ -91,7 +112,7 @@ func (s *Server) routes() chi.Router {
 	r.Use(telemetry.RequestIDMiddleware)
 	r.Use(s.withRemoteAddr)
 
-	// Observability endpoints (unauthenticated, like any /metrics + /healthz).
+	// Observability endpoints are unauthenticated.
 	if s.deps.Health != nil {
 		r.Get("/healthz", s.deps.Health.Handler())
 	} else {
@@ -102,20 +123,15 @@ func (s *Server) routes() chi.Router {
 	}
 
 	r.Route("/api", func(api chi.Router) {
-		// Auth (login is public; the rest require a session). Rate-limited per IP
-		// to blunt online brute force.
+		// Login is public and rate-limited per IP.
 		api.With(s.loginRateLimit).Post("/auth/login", s.handleLogin)
 		api.With(s.loginRateLimit).Post("/auth/login/mfa", s.handleLoginMFA)
 
-		// The agent connect endpoint authenticates with its enrollment token in
-		// the handshake (it is not a browser session), so it sits outside the
-		// session-guarded group.
+		// Agent connect authenticates with its enrollment token.
 		if s.deps.Enrollments != nil && s.deps.Tunnels != nil {
 			api.Get("/agent/connect", s.handleAgentConnect)
 		}
-		// Install-artifact fetch is public: it is run by a tool with no browser
-		// session (e.g. kubectl/curl) and is authorized solely by a single-use,
-		// signed ticket. The credential lands only in the fetched body.
+		// Install-artifact fetch uses only its single-use signed ticket.
 		if s.deps.Enrollments != nil && s.deps.ArtifactTickets != nil {
 			api.Get("/connections/{id}/agent/enrollments/{enrollmentId}/artifacts/{kind}", s.handleFetchArtifact)
 		}
@@ -171,6 +187,29 @@ func (s *Server) routes() chi.Router {
 			}
 
 			pr.Get("/audit/me", s.handleMyAudit)
+
+			// AI exposes shared status plus owner-scoped provider CRUD.
+			if s.deps.AI != nil {
+				pr.Get("/ai/global", s.handleAIGlobal)
+				pr.Get("/me/ai/config", s.handleListAIProviders)
+				pr.Post("/me/ai/config", s.handleCreateAIProvider)
+				pr.Post("/me/ai/models", s.handlePreviewAIProviderModels)
+				pr.Post("/me/ai/test", s.handleTestAIProviderDraft)
+				pr.Put("/me/ai/config/{id}", s.handleUpdateAIProvider)
+				pr.Delete("/me/ai/config/{id}", s.handleDeleteAIProvider)
+				pr.Get("/me/ai/config/{id}/models", s.handleAIProviderModels)
+				pr.Post("/me/ai/config/{id}/test", s.handleTestAIProvider)
+				if s.deps.Connections != nil {
+					pr.Post("/connections/{id}/ai/turns", s.handleAITurn)
+					pr.Post("/connections/{id}/ai/turns/{turnID}/control", s.handleAITurnControl)
+					pr.Get("/connections/{id}/ai/conversations", s.handleListConversations)
+					pr.Post("/connections/{id}/ai/conversations", s.handleCreateConversation)
+					pr.Get("/connections/{id}/ai/conversations/{cid}", s.handleGetConversation)
+					pr.Get("/connections/{id}/ai/conversations/{cid}/messages", s.handleConversationMessages)
+					pr.Put("/connections/{id}/ai/conversations/{cid}", s.handleRenameConversation)
+					pr.Delete("/connections/{id}/ai/conversations/{cid}", s.handleDeleteConversation)
+				}
+			}
 			if s.deps.Connections != nil {
 				pr.Get("/connections/{id}/grants", s.handleListConnectionGrants)
 				pr.Post("/connections/{id}/grants", s.handleCreateConnectionGrant)

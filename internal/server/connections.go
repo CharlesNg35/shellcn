@@ -37,6 +37,8 @@ type connectionWriteRequest struct {
 	Config              map[string]any    `json:"config"`
 	PreserveCredentials []string          `json:"preserveCredentials"`
 	Recording           map[string]string `json:"recording"`
+	AIMode              string            `json:"aiMode"`
+	AIAllowDestructive  bool              `json:"aiAllowDestructive"`
 }
 
 type connectionSessionDTO struct {
@@ -54,6 +56,7 @@ func (s *Server) toConnectionDTO(c models.Connection) connectionDTO {
 	dto := connectionDTO{
 		ID: c.ID, Name: c.Name, Protocol: c.Protocol,
 		Transport: c.Transport, Recording: c.Recording,
+		AIMode: c.AIMode, AIAllowDestructive: c.AIAllowDestructive,
 	}
 	// A direct transport is always dialable on demand; an agent transport is
 	// reachable only while its tunnel is registered. `online` gates the enroll
@@ -107,6 +110,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	conn, err := s.deps.Connections.Create(ctx, user.ID, service.ConnectionInput{
 		Name: req.Name, Protocol: req.Protocol, Transport: req.Transport,
 		Config: req.Config, ActorID: user.ID, Recording: req.Recording,
+		AIMode: req.AIMode, AIAllowDestructive: req.AIAllowDestructive,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, "", connCreateEvent, plugin.RiskWrite, models.AuditError, err)
@@ -157,6 +161,7 @@ func (s *Server) handleUpdateConnection(w http.ResponseWriter, r *http.Request) 
 		Name: req.Name, Transport: req.Transport, Config: req.Config,
 		ActorID: user.ID, PreserveCredentials: req.PreserveCredentials,
 		Recording: req.Recording,
+		AIMode:    req.AIMode, AIAllowDestructive: req.AIAllowDestructive,
 	})
 	if err != nil {
 		s.auditConnEvent(ctx, user, conn.ID, connUpdateEvent, plugin.RiskWrite, models.AuditError, err)

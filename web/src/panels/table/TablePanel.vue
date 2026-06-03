@@ -69,8 +69,6 @@ const emit = defineEmits<{
 const toast = useToast();
 const workspace = useWorkspaceStore();
 
-// Framework-reserved row keys the grid never renders as data columns. Plugins
-// hide their own fields declaratively via config.hiddenColumns instead.
 const RESERVED = new Set([
   "key",
   "label",
@@ -84,8 +82,6 @@ const RESERVED = new Set([
   "__rid",
 ]);
 
-// Stable per-row id used to key staged edits/inserts/deletes by row identity
-// without relying on object references (which change across reactive proxies).
 const RID = "__rid";
 let ridSeq = 0;
 function assignRid(row: Row): void {
@@ -199,8 +195,6 @@ const TYPE_COLUMN_WIDTH: Partial<
   json: "22rem",
 };
 
-// Export the loaded rows (CSV/JSON). Opt-in per plugin via the manifest, so a
-// table never exposes export unless the plugin declares it.
 const canExport = computed(() => Boolean(tableConfig.value?.exportable));
 const exportMenu = ref<{ toggle: (event: Event) => void } | null>(null);
 function runExport(format: ExportFormat): void {
@@ -217,11 +211,6 @@ const exportItems = [
   { label: "Export JSON", icon: "pi", command: () => runExport("json") },
 ];
 
-// --- editable data grid -------------------------------------------------
-// Editing is driven entirely by the manifest: a table is editable when it
-// declares `editable` plus the mutation routes. Per-row update/delete need a
-// row key (a `_key` map on the row, or the configured `rowKey` columns); rows
-// without one stay read-only so we never mutate the wrong record.
 const insertSource = computed(() => tableConfig.value?.insert);
 const updateSource = computed(() => tableConfig.value?.update);
 const deleteSource = computed(() => tableConfig.value?.delete);
@@ -231,8 +220,6 @@ const editable = computed(
     Boolean(insertSource.value || updateSource.value || deleteSource.value),
 );
 const editableCells = computed(() => editable.value && !!updateSource.value);
-// Row selection (checkboxes) is offered when a table declares row actions or is
-// explicitly Selectable, and isn't an inline-editable grid (own row controls).
 const selectable = computed(
   () =>
     (rowActions.value.length > 0 || tableConfig.value?.selectable === true) &&
@@ -249,15 +236,9 @@ const addRowTitle = computed(() => {
   return "No editable columns available";
 });
 
-// --- staged edits -------------------------------------------------------
-// Opt-in via the manifest: edits, added rows, and deletions are buffered
-// locally (keyed by each row's stable id) so the user reviews them and commits
-// or discards as a batch. On commit they replay through the same per-row
-// Insert/Update/Delete routes used by the immediate path — no extra contract.
 const staged = computed(
   () => Boolean(tableConfig.value?.stagedEdits) && editable.value,
 );
-// rid -> { field -> original value } for cells changed since the last commit.
 const edits = reactive(new Map<string, Map<string, unknown>>());
 const insertedRows = reactive(new Set<string>());
 const deletedRows = reactive(new Set<string>());
@@ -521,8 +502,6 @@ const showInsert = ref(false);
 const insertDraft = ref<Record<string, unknown>>({});
 const inserting = ref(false);
 
-// The add-row form derives each input widget from its column's type, so a number
-// column gets a number input, a boolean a toggle, JSON a code area, etc.
 const COLUMN_FIELD_TYPE: Partial<
   Record<NonNullable<ColumnSpec["type"]>, FieldType>
 > = {
@@ -601,9 +580,6 @@ function dynamicColumnLabel(row: Row, key: string): string {
   return String(row.label ?? row.name ?? row.column_name ?? row.column ?? key);
 }
 
-// Maps a column's declared data type (a DB type string like "integer" or
-// "timestamptz", or a generic column type) to a renderer type, so a runtime
-// column grid and its add-row form pick the right widget without per-plugin code.
 function mapColumnType(raw: unknown): ColumnSpec["type"] | undefined {
   const t = String(raw ?? "").toLowerCase();
   if (!t) return undefined;
@@ -645,9 +621,6 @@ async function loadDynamicColumns(): Promise<void> {
   }
 }
 
-// Linked cells: a row's `_links` map (column -> related resource ref) makes
-// those cells navigation links that open the related resource. Generic — the
-// renderer has no notion of what the link means to the plugin.
 function linkRef(row: Row, col: ColumnSpec): ResourceRef | null {
   const ref = row._links?.[col.key];
   return ref && row[col.key] != null && row[col.key] !== "" ? ref : null;
@@ -786,9 +759,6 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
   );
 }
 
-// Row-click is automatic: a row whose ref is a navigable resource opens it,
-// everything else selects (when selectable). `RowClick` only overrides this —
-// `detail` for the field dialog, or an explicit navigate/select/none.
 const navigableKinds = useNavigableKinds();
 const rowClickMode = computed(() => tableConfig.value?.rowClick);
 const detailEnabled = computed(() => rowClickMode.value === "detail");
@@ -805,8 +775,6 @@ function toggleSelection(row: Row): void {
       : [row];
 }
 
-// Stable row identity for keying/diff/refresh: a behavior-free `_id`, or a
-// navigable `ref.uid`; the client-only `__rid` covers editable/selectable grids.
 const dataKeyField = computed(() => {
   if (editable.value || selectable.value) return "__rid";
   const r = rows.value[0] as (Row & { _id?: unknown }) | undefined;
@@ -818,10 +786,7 @@ const dataKeyField = computed(() => {
 function onRowClick(e: DataTableRowClickEvent): void {
   const row = e.data as Row;
   const target = e.originalEvent?.target ?? null;
-  // A precise click on the checkbox input is toggled natively by the DataTable.
   if (isInteractiveTarget(target)) return;
-  // Anywhere else in the selection column (its padding/box) toggles the row too,
-  // so a near-miss never navigates instead.
   if (
     selectable.value &&
     target instanceof Element &&
@@ -844,9 +809,6 @@ function onRowClick(e: DataTableRowClickEvent): void {
       if (row.ref) emit("select", row);
       return;
   }
-  // Default: navigate if the row is a navigable resource (or nothing else can
-  // handle the click); otherwise select. Selection is also available via the
-  // checkbox column.
   if (navigates(row) || (row.ref && !selectable.value)) emit("select", row);
   else if (selectable.value) toggleSelection(row);
 }
@@ -937,8 +899,6 @@ function hasServerViewState(): boolean {
   );
 }
 
-// Watch events arrive one WS frame at a time; we buffer a burst and apply it in
-// a single pass per frame so a flood becomes one reactive update, not N.
 let pendingEvents: ResourceEvent[] = [];
 let flushHandle: number | undefined;
 let watchRefreshHandle: ReturnType<typeof setTimeout> | undefined;
@@ -977,7 +937,6 @@ function flushEvents(): void {
   for (const ev of batch) {
     const uid = ev.ref.uid;
     const idx = index.get(uid);
-    // Tolerate any casing a plugin sends (the contract is lowercase).
     const type = String(ev.type).toLowerCase();
     if (type === "deleted") {
       if (idx !== undefined) removed.add(idx);
@@ -1005,7 +964,6 @@ function stopResourceWatch(): void {
 function startWatch(): void {
   stopResourceWatch();
   if (!active.value) return;
-  // A live table uses either the interval poll or the watch socket, never both.
   const ds = refreshMs.value > 0 ? undefined : watchSource.value;
   stopWatch = ds
     ? watchResource(
@@ -1017,12 +975,8 @@ function startWatch(): void {
     : undefined;
 }
 
-// Live poll: re-fetch the current page in place, leaving loading/selection/
-// staged state untouched so the view never flickers or loses the user's place.
 const refreshMs = computed(() => tableConfig.value?.refreshIntervalMs ?? 0);
 const visibility = useDocumentVisibility();
-// Under KeepAlive an off-screen tab stays mounted; pause its poll so a plugin
-// with many live tabs only refreshes the visible one. No-op when not kept alive.
 const active = ref(true);
 onActivated(() => {
   if (active.value) return;
@@ -1065,7 +1019,7 @@ async function refresh(): Promise<void> {
       );
     total.value = page.total;
   } catch {
-    // transient failure: keep the current rows rather than blanking the table
+    return;
   }
 }
 
@@ -1152,8 +1106,6 @@ onUnmounted(() => {
         />
         Add row
       </Button>
-      <!-- List-level actions inherit the list's own params as their scope, so an
-           action declared on a list runs within that list's context for free. -->
       <ActionBar
         v-if="globalActions.length"
         :connection-id="connectionId"

@@ -30,8 +30,7 @@ var (
 	ErrTOTPNotEnrolled = errors.New("twofactor: no enrollment in progress")
 	// ErrTOTPNotEnabled is returned when an action requires active 2FA.
 	ErrTOTPNotEnabled = errors.New("twofactor: not enabled")
-	// ErrTOTPAlreadyEnabled is returned when enrolling over active 2FA, which would
-	// otherwise silently drop the existing protection without verification.
+	// ErrTOTPAlreadyEnabled prevents replacing active 2FA without verification.
 	ErrTOTPAlreadyEnabled = errors.New("twofactor: already enabled")
 )
 
@@ -90,8 +89,7 @@ func (s *TwoFactorService) BeginEnrollment(ctx context.Context, user models.User
 	return TOTPEnrollment{Secret: key.Secret(), OTPAuthURL: key.URL(), QRDataURL: qr, AccountName: user.Username}, nil
 }
 
-// ConfirmEnrollment validates the first code, enables 2FA, and returns the
-// one-time recovery codes (shown once).
+// ConfirmEnrollment validates the first code and returns one-time recovery codes.
 func (s *TwoFactorService) ConfirmEnrollment(ctx context.Context, user models.User, code string) ([]string, error) {
 	secret, err := s.decryptSecret(ctx, user)
 	if err != nil {
@@ -152,9 +150,7 @@ func (s *TwoFactorService) Reset(ctx context.Context, userID string) error {
 	return s.users.SetTwoFactor(ctx, userID, nil, false, nil)
 }
 
-// Verify checks a login code against the user's TOTP secret, falling back to a
-// single-use recovery code (which it then consumes). It is the gate between
-// password success and session creation.
+// Verify checks a TOTP or single-use recovery code.
 func (s *TwoFactorService) Verify(ctx context.Context, user models.User, code string) (bool, error) {
 	if !user.TOTPEnabled {
 		return false, ErrTOTPNotEnabled
@@ -217,8 +213,7 @@ func (s *TwoFactorService) decryptSecret(ctx context.Context, user models.User) 
 
 var recoveryEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
 
-// newRecoveryCodes returns the plaintext codes (shown once) and their hashes
-// (stored). Codes are high-entropy, so a single SHA-256 is sufficient.
+// newRecoveryCodes returns plaintext codes and stored hashes.
 func newRecoveryCodes() (codes, hashes []string, err error) {
 	codes = make([]string, recoveryCodeCount)
 	hashes = make([]string, recoveryCodeCount)
@@ -240,8 +235,7 @@ func hashRecoveryCode(code string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// qrDataURL renders an otpauth URL as a base64-encoded PNG data URL, so the
-// client can show the QR without shipping a QR library or the raw secret in the DOM.
+// qrDataURL renders an otpauth URL as a base64-encoded PNG data URL.
 func qrDataURL(otpauthURL string) (string, error) {
 	key, err := otp.NewKeyFromURL(otpauthURL)
 	if err != nil {

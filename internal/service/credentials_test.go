@@ -94,7 +94,6 @@ func TestCredentialCreateEncryptsAtRest(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	// Stored material is ciphertext, never the plaintext.
 	stored, _ := st.Credentials.Get(ctx, cred.ID)
 	if len(stored.EncryptedSecret) == 0 {
 		t.Fatal("no encrypted secret stored")
@@ -105,7 +104,6 @@ func TestCredentialCreateEncryptsAtRest(t *testing.T) {
 	if len(stored.Protocols) != 1 || stored.Protocols[0] != "ssh" {
 		t.Fatalf("stored protocols = %+v, want derived [ssh]", stored.Protocols)
 	}
-	// The summary never carries secret material.
 	sum := stored.Summary()
 	if sum.ID != cred.ID || sum.Kind != "ssh_password" {
 		t.Errorf("summary wrong: %+v", sum)
@@ -119,7 +117,6 @@ func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 	secretAccesses := 0
 	svc.SetSecretAccessHook(func() { secretAccesses++ })
 
-	// Owner resolves the plaintext for connect-time injection.
 	pt, err := svc.Resolve(ctx, "owner", cred.ID)
 	if err != nil || string(pt) != "topsecret" {
 		t.Fatalf("owner resolve: pt=%q err=%v", pt, err)
@@ -128,7 +125,6 @@ func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 		t.Fatalf("secret access hook calls = %d, want 1", secretAccesses)
 	}
 
-	// A stranger is forbidden.
 	if _, err := svc.Resolve(ctx, "stranger", cred.ID); !errors.Is(err, models.ErrForbidden) {
 		t.Errorf("stranger resolve: want ErrForbidden, got %v", err)
 	}
@@ -136,7 +132,6 @@ func TestCredentialResolveOwnerAndGrant(t *testing.T) {
 		t.Fatalf("forbidden resolve should not count secret access, got %d", secretAccesses)
 	}
 
-	// After a use-grant, the grantee resolves it (still never readable as a value to the client).
 	_ = st.CredentialGrants.Create(ctx, &models.CredentialGrant{ID: "cg1", CredentialID: cred.ID, SubjectID: "stranger", Access: models.AccessUse})
 	pt, err = svc.Resolve(ctx, "stranger", cred.ID)
 	if err != nil || string(pt) != "topsecret" {
@@ -156,7 +151,6 @@ func TestCredentialRotateAndResolve(t *testing.T) {
 		t.Fatalf("initial resolve: pt=%q err=%v", pt, err)
 	}
 
-	// Rotate: every referencing connection picks up the new value on next resolve.
 	if _, err := svc.Update(ctx, cred.ID, service.UpdateCredentialInput{Name: "k", Kind: "ssh_password", Secret: "new-secret"}); err != nil {
 		t.Fatalf("rotate: %v", err)
 	}
@@ -164,7 +158,6 @@ func TestCredentialRotateAndResolve(t *testing.T) {
 		t.Fatalf("post-rotate resolve: pt=%q err=%v", pt, err)
 	}
 
-	// A blank secret on update keeps the current material (write-only).
 	if _, err := svc.Update(ctx, cred.ID, service.UpdateCredentialInput{Name: "renamed", Kind: "ssh_password", Secret: ""}); err != nil {
 		t.Fatalf("metadata-only update: %v", err)
 	}

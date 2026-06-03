@@ -26,7 +26,9 @@ type Config struct {
 	Database   DatabaseConfig   `mapstructure:"database"`
 	Secrets    SecretsConfig    `mapstructure:"secrets"`
 	Email      EmailConfig      `mapstructure:"email"`
+	Audit      AuditConfig      `mapstructure:"audit"`
 	Recordings RecordingsConfig `mapstructure:"recordings"`
+	AI         AIConfig         `mapstructure:"ai"`
 }
 
 type ServerConfig struct {
@@ -85,6 +87,26 @@ type EmailConfig struct {
 	UseTLS   bool   `mapstructure:"use_tls"` // implicit TLS (e.g. port 465); else STARTTLS
 }
 
+// AuditConfig controls audit writes and optional retention cleanup. Audit is
+// enabled by default; retention is OFF by default (RetentionDays == 0 keeps
+// audit entries forever).
+type AuditConfig struct {
+	Enabled         bool   `mapstructure:"enabled"`
+	RetentionDays   int    `mapstructure:"retention_days"`   // 0 = disabled (keep forever)
+	CleanupInterval string `mapstructure:"cleanup_interval"` // how often to sweep expired audit rows
+}
+
+// RetentionEnabled reports whether audit expiry/cleanup is active.
+func (c AuditConfig) RetentionEnabled() bool { return c.RetentionDays > 0 }
+
+// CleanupEvery parses CleanupInterval, falling back to a sane default.
+func (c AuditConfig) CleanupEvery() time.Duration {
+	if d, err := time.ParseDuration(c.CleanupInterval); err == nil && d > 0 {
+		return d
+	}
+	return time.Hour
+}
+
 // RecordingsConfig controls session-recording storage and retention. Retention
 // is OFF by default (RetentionDays == 0 keeps recordings forever); an admin opts
 // in by setting a positive retention here. The cleanup job only runs when
@@ -126,9 +148,14 @@ func Load(paths ...string) (*Config, error) {
 	v.SetEnvPrefix("SHELLCN")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
+
 	// Match the canonical variable names used by the secret loader.
 	_ = v.BindEnv("secrets.master_key", secrets.EnvMasterKey)
 	_ = v.BindEnv("secrets.master_key_file", secrets.EnvMasterKeyFile)
+
+	for _, k := range []string{"ai.kind", "ai.name", "ai.base_url", "ai.api_key", "ai.model"} {
+		_ = v.BindEnv(k)
+	}
 
 	if err := v.ReadInConfig(); err != nil {
 		var notFound viper.ConfigFileNotFoundError
@@ -156,6 +183,9 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("email.enabled", false)
 	v.SetDefault("email.port", 587)
 	v.SetDefault("email.use_tls", false)
+	v.SetDefault("audit.enabled", true)
+	v.SetDefault("audit.retention_days", 0) // disabled: keep audit entries forever
+	v.SetDefault("audit.cleanup_interval", "1h")
 	v.SetDefault("recordings.dir", "recordings")
 	v.SetDefault("recordings.retention_days", 0) // disabled: keep recordings forever
 	v.SetDefault("recordings.cleanup_interval", "1h")

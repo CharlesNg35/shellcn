@@ -103,7 +103,6 @@ function write(data: string): void {
   else pending.push(data);
 }
 
-// --- zoom ---------------------------------------------------------------
 const MIN_FONT = 8;
 const MAX_FONT = 28;
 const DEFAULT_FONT = 14;
@@ -126,7 +125,6 @@ function resetZoom(): void {
   applyFontSize();
 }
 
-// --- search -------------------------------------------------------------
 let searchAddon: SearchAddon | null = null;
 let searchDisposable: { dispose(): void } | null = null;
 const searchOpen = ref(false);
@@ -368,7 +366,6 @@ onUnmounted(() => {
         class="absolute inset-0 overflow-hidden"
       />
 
-      <!-- Floating controls: zero permanent space, dim until hover/focus. -->
       <div
         v-if="hasControls"
         class="absolute top-2 right-2 z-10 opacity-60 transition-opacity focus-within:opacity-100 hover:opacity-100"

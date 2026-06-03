@@ -18,10 +18,8 @@ import type {
   ResourceRef,
 } from "../types/projection";
 
-// Reflect a request's outcome in the connection's live health: a success proves
-// the upstream is reachable; a 5xx/network failure is a connection-level fault
-// (a 4xx is an operation-level error — a missing file — and must NOT redden the
-// connection). Guarded so callers without an active Pinia (unit tests) are noops.
+// Reflect request outcomes in connection health. 4xx errors are operation-level
+// and must not mark the connection failed.
 async function track<T>(connectionId: string, run: Promise<T>): Promise<T> {
   if (!getActivePinia()) return run;
   const live = useConnectionStatusStore();
@@ -41,8 +39,6 @@ export interface ResolveContext {
   resource?: ResourceRef | null;
 }
 
-// Merge the connection's global scope (header selectors) under any explicit
-// params, which always win. Guarded for callers without an active Pinia.
 function withScope(
   connectionId: string,
   params: Record<string, string>,
@@ -51,9 +47,6 @@ function withScope(
   return { ...useScopeStore().params(connectionId), ...params };
 }
 
-// Tiny, typed interpolation — NOT a scripting language. Supports only
-// `${resource.<field>}`; anything else (or an unresolved field) errors loudly
-// so a missing param never silently produces a blank request.
 const TOKEN = /\$\{([^}]+)\}/g;
 
 export function interpolate(template: string, ctx: ResolveContext): string {
@@ -84,10 +77,7 @@ export function resolveParams(
 ): Record<string, string> {
   const out: Record<string, string> = {};
   for (const [key, template] of Object.entries(params ?? {})) {
-    // A param that is a single token is sourced entirely from one value; if that
-    // value is absent the param is simply omitted, and the route handler applies
-    // its own default/validation. A token embedded in a larger string must
-    // resolve — a blank there would corrupt the value — so interpolate throws.
+    // Omit an unresolved single-token param; embedded tokens must resolve.
     const lone = template.match(LONE_TOKEN);
     if (lone) {
       const value = lookup(lone[1].trim(), ctx);
@@ -104,8 +94,6 @@ export function routePath(connectionId: string, routeId: string): string {
   return `${API_BASE}/connections/${connectionId}/x/${routeId}`;
 }
 
-// Route params travel under the reserved `p.` prefix; list controls use the
-// reserved top-level keys. The prefix keeps them from ever colliding.
 export function queryParams(
   params: Record<string, string>,
   page?: PageRequest,
@@ -156,8 +144,6 @@ export async function fetchPage<T = unknown>(
     queryParams(params, page),
   );
   const result = await track(connectionId, getJSON<Page<T>>(url));
-  // A nil Go slice marshals to null; guarantee items is always an array so every
-  // consumer can map/forEach without a guard.
   return { ...result, items: result.items ?? [] };
 }
 
@@ -389,8 +375,6 @@ export interface StreamHandle {
   url: string;
 }
 
-// Stable channel identity for a stream — computed WITHOUT minting a ticket, so a
-// caller can check for an already-open channel before requesting a new one.
 export function channelKey(
   connectionId: string,
   ds: DataSource,
@@ -400,9 +384,6 @@ export function channelKey(
   return `${connectionId}:${ds.routeId}:${new URLSearchParams(params).toString()}`;
 }
 
-// Resolves params, mints a single-use ticket, and returns the wss URL + a stable
-// channel key. The caller hands the URL to the sessions store, which owns the
-// socket lifecycle (so streams survive component remounts).
 export async function prepareStream(
   connectionId: string,
   ds: DataSource,
@@ -419,8 +400,6 @@ export interface WatchOptions {
   reconnectMs?: number;
 }
 
-// Background list sync: opens a watch socket and re-emits ResourceEvents, with
-// automatic reconnect. Returns a stop function.
 export function watch(
   connectionId: string,
   ds: DataSource,
@@ -446,7 +425,7 @@ export function watch(
         try {
           onEvent(JSON.parse((ev as { data: string }).data) as ResourceEvent);
         } catch {
-          // ignore malformed frame
+          return;
         }
       });
       socket.addEventListener("close", scheduleReconnect);

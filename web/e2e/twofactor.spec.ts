@@ -5,7 +5,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 test("enable two-factor authentication from the profile", async ({ page }) => {
-  await page.goto("/profile");
+  await page.goto("/settings/profile");
 
   await expect(
     page.getByRole("heading", { name: "Two-factor authentication" }),
@@ -21,7 +21,6 @@ test("enable two-factor authentication from the profile", async ({ page }) => {
   await dialog.getByLabel("Verification code").fill("123456");
   await dialog.getByRole("button", { name: "Enable 2FA" }).click();
 
-  // Recovery codes are revealed; acknowledging unlocks Done.
   await expect(dialog.getByText("aaaa-bbbb")).toBeVisible();
   await dialog.getByText("I've saved my recovery codes.").click();
   await dialog.getByRole("button", { name: "Done" }).click();

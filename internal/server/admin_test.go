@@ -63,27 +63,22 @@ func TestAdminDeactivateUserRules(t *testing.T) {
 		return h.do(t, http.MethodPost, "/api/admin/users/"+id+"/deactivate", as, nil).Status
 	}
 
-	// A non-root admin may deactivate a non-admin.
 	if s := deactivate("target", "admin"); s != http.StatusOK {
 		t.Errorf("admin deactivate non-admin: want 200, got %d", s)
 	}
-	// …but not another admin, and never itself.
 	if s := deactivate("admin2", "admin"); s != http.StatusForbidden {
 		t.Errorf("non-root deactivate admin: want 403, got %d", s)
 	}
 	if s := deactivate("admin", "admin"); s != http.StatusForbidden {
 		t.Errorf("self-deactivate: want 403, got %d", s)
 	}
-	// The protected root can never be deactivated.
 	if s := deactivate("root", "root"); s != http.StatusForbidden {
 		t.Errorf("deactivate protected root: want 403, got %d", s)
 	}
-	// A non-root admin still cannot edit another admin via update.
 	if resp := h.do(t, http.MethodPut, "/api/admin/users/admin2", "admin",
 		strings.NewReader(`{"role":"viewer","disabled":false}`)); resp.Status != http.StatusForbidden {
 		t.Errorf("non-root demote admin: want 403, got %d", resp.Status)
 	}
-	// The root admin may deactivate another admin and re-activate it.
 	if s := deactivate("admin2", "root"); s != http.StatusOK {
 		t.Errorf("root deactivate admin: want 200, got %d", s)
 	}
@@ -103,19 +98,15 @@ func TestAdminUpdateUserRules(t *testing.T) {
 		return h.do(t, http.MethodPut, "/api/admin/users/"+id, as, strings.NewReader(body)).Status
 	}
 
-	// No one edits their own account from the admin list — not a regular admin…
 	if s := update("admin", "admin", `{"role":"admin"}`); s != http.StatusForbidden {
 		t.Errorf("admin self-edit: want 403, got %d", s)
 	}
-	// …and not the root admin (it uses its profile instead).
 	if s := update("root", "root", `{"role":"admin"}`); s != http.StatusForbidden {
 		t.Errorf("root self-edit: want 403, got %d", s)
 	}
-	// The root admin is immutable from here even for another admin.
 	if s := update("root", "admin", `{"role":"viewer"}`); s != http.StatusForbidden {
 		t.Errorf("edit protected root: want 403, got %d", s)
 	}
-	// A regular admin may still edit a non-admin user.
 	if s := update("target", "admin", `{"role":"operator"}`); s != http.StatusOK {
 		t.Errorf("admin edit non-admin: want 200, got %d", s)
 	}

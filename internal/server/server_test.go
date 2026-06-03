@@ -16,8 +16,11 @@ import (
 
 	"github.com/coder/websocket"
 
+	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
+	"github.com/charlesng35/shellcn/internal/config"
 	"github.com/charlesng35/shellcn/internal/email"
 	"github.com/charlesng35/shellcn/internal/models"
 	"github.com/charlesng35/shellcn/internal/plugin"
@@ -239,6 +242,7 @@ func (boomPlugin) Connect(context.Context, plugin.ConnectConfig) (plugin.Session
 
 type harness struct {
 	ts             *httptest.Server
+	srv            *server.Server
 	store          *store.Store
 	pluginSessions *session.Manager
 	sessionMgr     *auth.SessionManager
@@ -288,12 +292,16 @@ func newHarness(t *testing.T) *harness {
 		Enrollments: enrollments, Tunnels: tunnels,
 		Users: users, TwoFactor: twoFactor, Invitations: invitations,
 		Recording: recEngine, Recordings: recordings,
+		AI: aiconfig.New(st.AIProviders, vault, config.AIConfig{
+			Kind: "openai", Name: "Shared", APIKey: "sk-global-secret", Model: "gpt-4o",
+		}),
+		ModelRegistry: modelreg.New(modelreg.WithURLs("", "")),
 	})
 
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 
-	h := &harness{ts: ts, store: st, pluginSessions: sessMgr, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
+	h := &harness{ts: ts, srv: srv, store: st, pluginSessions: sessMgr, sessionMgr: authMgr, sessions: map[string]auth.Session{}}
 
 	ctx := context.Background()
 	for _, u := range []struct {
@@ -357,37 +365,29 @@ func (h *harness) doReq(t *testing.T, req *http.Request, userID string) apiResp 
 	return apiResp{Status: resp.StatusCode, Body: b}
 }
 
-// --- tests ------------------------------------------------------------------
-
 func TestWrapperOrder(t *testing.T) {
 	h := newHarness(t)
 
-	// unauthenticated → 401
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "", nil); resp.Status != http.StatusUnauthorized {
 		t.Errorf("unauthenticated: want 401, got %d", resp.Status)
 	}
 
-	// unknown RouteID → 404
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/ghost", "op", nil); resp.Status != http.StatusNotFound {
 		t.Errorf("unknown route: want 404, got %d", resp.Status)
 	}
 
-	// unauthorized by risk → 403 (viewer DELETE destructive on a connection they own)
 	if resp := h.do(t, http.MethodDelete, "/api/connections/c-view/x/t.danger", "viewer", nil); resp.Status != http.StatusForbidden {
 		t.Errorf("viewer destructive: want 403, got %d", resp.Status)
 	}
 
-	// missing/failed session → 503 (boom plugin Connect fails)
 	if resp := h.do(t, http.MethodGet, "/api/connections/c-boom/x/boom.list", "op", nil); resp.Status != http.StatusServiceUnavailable {
 		t.Errorf("connect failure: want 503, got %d", resp.Status)
 	}
 
-	// bad input → 400 (required field missing)
 	if resp := h.do(t, http.MethodPost, "/api/connections/c-op/x/t.input", "op", strings.NewReader(`{}`)); resp.Status != http.StatusBadRequest {
 		t.Errorf("bad input: want 400, got %d", resp.Status)
 	}
 
-	// happy → 200 + audit row
 	resp := h.do(t, http.MethodGet, "/api/connections/c-op/x/t.list", "op", nil)
 	if resp.Status != http.StatusOK {
 		t.Fatalf("happy: want 200, got %d", resp.Status)
@@ -569,8 +569,19 @@ func TestAgentEnrollmentIsAudited(t *testing.T) {
 	if resp.Status != http.StatusCreated {
 		t.Fatalf("create enrollment: want 201, got %d (%s)", resp.Status, resp.Body)
 	}
-	if !strings.Contains(string(resp.Body), "SHELLCN") && !strings.Contains(string(resp.Body), "agent/connect") {
+	body := string(resp.Body)
+	if !strings.Contains(body, "SHELLCN") && !strings.Contains(body, "agent/connect") {
 		t.Fatalf("enrollment response missing install artifact: %s", resp.Body)
+	}
+	for _, want := range []string{`"enrollmentId":"`, `"expiresAt":"`, `"artifacts":[`, `"downloadUrl":"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("enrollment response missing client key %s: %s", want, body)
+		}
+	}
+	for _, forbidden := range []string{`"EnrollmentID"`, `"ConnectionID"`, `"TokenHash"`, `"DownloadURL"`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("enrollment response leaked server field %s: %s", forbidden, body)
+		}
 	}
 
 	rows, err := h.store.Audit.List(context.Background(), store.AuditFilter{ConnectionID: "c-op"})
@@ -648,6 +659,9 @@ func TestAgentStateTreatsTunnelRegistryAsAuthoritative(t *testing.T) {
 	if !strings.Contains(string(resp.Body), `"status":"offline"`) {
 		t.Fatalf("state should be offline without a live tunnel: %s", resp.Body)
 	}
+	if strings.Contains(string(resp.Body), `"Status"`) || strings.Contains(string(resp.Body), `"Message"`) {
+		t.Fatalf("state response used server keys: %s", resp.Body)
+	}
 	enr, err := h.store.Enrollments.Get(context.Background(), "stale-online")
 	if err != nil {
 		t.Fatal(err)
@@ -691,8 +705,6 @@ func TestProjectionEndpoints(t *testing.T) {
 		t.Errorf("plugin list missing tester: %s", b)
 	}
 }
-
-// --- WebSocket ticket enforcement ------------------------------------------
 
 func (h *harness) wsURL(path string) string {
 	return "ws" + strings.TrimPrefix(h.ts.URL, "http") + path
@@ -748,7 +760,6 @@ func (h *harness) mintTicket(t *testing.T, userID, connID, routeID string, param
 		t.Fatalf("mint ticket: want 201, got %d", resp.Status)
 	}
 	b := resp.Body
-	// crude extraction of "ticket":"..."
 	const k = `"ticket":"`
 	i := strings.Index(string(b), k)
 	if i < 0 {
@@ -999,7 +1010,6 @@ func TestPluginRoute401IsNotMarkedAsPlatformAuth(t *testing.T) {
 
 func TestWSRequiresTicket(t *testing.T) {
 	h := newHarness(t)
-	// No ticket → upgrade rejected.
 	if _, err := h.dialWS(t, "op", "/api/connections/c-op/x/t.ws"); err == nil {
 		t.Error("WS without a ticket should be rejected")
 	}
@@ -1045,7 +1055,6 @@ func TestWSStreamRecordedWhenPolicyForced(t *testing.T) {
 	h := newHarness(t)
 	ctx := context.Background()
 
-	// A connection whose terminal stream is force-recorded (no plugin-specific code).
 	resp := h.do(t, http.MethodPost, "/api/connections", "op",
 		strings.NewReader(`{"name":"rec","protocol":"tester","config":{"host":"h"},"recording":{"terminal":"auto"}}`))
 	if resp.Status != http.StatusCreated {

@@ -161,7 +161,6 @@ const statusText = computed(() => {
         <AppIcon :icon="{ type: 'lucide', value: 'trash-2' }" :size="15" />
       </Button>
 
-      <!-- RIGHT: search · sort · view -->
       <div class="ml-auto flex flex-wrap items-center gap-2">
         <div class="relative w-44 sm:w-56">
           <AppIcon

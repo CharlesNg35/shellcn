@@ -1,0 +1,332 @@
+// Package tools exposes risk-gated connection routes as agent tools.
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/charlesng35/shellcn/internal/ai/engine"
+	"github.com/charlesng35/shellcn/internal/models"
+	"github.com/charlesng35/shellcn/internal/plugin"
+)
+
+// maxToolResultBytes caps tool output before it enters model context.
+const maxToolResultBytes = 8 << 10
+
+// Invoker runs a route as the user through the secure pipeline.
+type Invoker interface {
+	InvokeRoute(ctx context.Context, user models.User, connID, routeID string, params map[string]string, body []byte) (any, error)
+}
+
+// ConfirmRequest describes a pending write/destructive tool call awaiting the
+// user's decision.
+type ConfirmRequest struct {
+	ToolCallID  string
+	ToolName    string
+	RouteID     string
+	Risk        plugin.RiskLevel
+	Destructive bool
+	Params      map[string]string
+	Body        map[string]any
+}
+
+// Confirmer asks the user to approve a mutation before it runs. It returns true
+// to proceed, false to decline. Reads never reach a confirmer.
+type Confirmer interface {
+	Confirm(ctx context.Context, req ConfirmRequest) (bool, error)
+}
+
+// RouteSource enumerates a protocol's routes (satisfied by *plugin.Registry).
+type RouteSource interface {
+	Get(name string) (plugin.Plugin, bool)
+}
+
+// binding records how to call a route from a sanitized tool name.
+type binding struct {
+	routeID    string
+	risk       plugin.RiskLevel
+	pathParams []string
+}
+
+// ToolSet is the risk-gated tool catalogue for one connection. It implements
+// engine.ToolExecutor.
+type ToolSet struct {
+	specs     []engine.ToolSpec
+	byName    map[string]binding
+	invoker   Invoker
+	user      models.User
+	connID    string
+	confirmer Confirmer
+}
+
+// WithConfirmer attaches a confirmer that gates write/destructive tool calls.
+func (ts *ToolSet) WithConfirmer(c Confirmer) *ToolSet {
+	ts.confirmer = c
+	return ts
+}
+
+// Build produces tools from allowed, non-streaming protocol routes.
+func Build(src RouteSource, protocol string, allowed map[plugin.RiskLevel]bool, invoker Invoker, user models.User, connID string) (*ToolSet, error) {
+	plg, ok := src.Get(protocol)
+	if !ok {
+		return nil, fmt.Errorf("tools: unknown protocol %q", protocol)
+	}
+	ts := &ToolSet{byName: map[string]binding{}, invoker: invoker, user: user, connID: connID}
+	for _, r := range plg.Routes() {
+		if r.IsStream() || !allowed[r.Risk] {
+			continue
+		}
+		name := sanitizeName(r.ID)
+		if _, dup := ts.byName[name]; dup {
+			continue
+		}
+		params := templateParamNames(r.Path)
+		ts.byName[name] = binding{routeID: r.ID, risk: r.Risk, pathParams: params}
+		ts.specs = append(ts.specs, engine.ToolSpec{
+			Name:        name,
+			Description: describe(r),
+			Parameters:  toJSONSchema(r, params),
+		})
+	}
+	sort.Slice(ts.specs, func(i, j int) bool { return ts.specs[i].Name < ts.specs[j].Name })
+	return ts, nil
+}
+
+// Specs returns the tool catalogue for the provider request.
+func (ts *ToolSet) Specs() []engine.ToolSpec { return ts.specs }
+
+// Has reports whether a tool name is in the set.
+func (ts *ToolSet) Has(name string) bool { _, ok := ts.byName[name]; return ok }
+
+// Execute invokes a route tool and returns a model-safe result.
+func (ts *ToolSet) Execute(ctx context.Context, call engine.ToolCall) (any, error) {
+	b, ok := ts.byName[call.Name]
+	if !ok {
+		return nil, fmt.Errorf("unknown tool %q", call.Name)
+	}
+	params := map[string]string{}
+	body := map[string]any{}
+	pathSet := map[string]bool{}
+	for _, p := range b.pathParams {
+		pathSet[p] = true
+	}
+	for k, v := range call.Input {
+		if pathSet[k] {
+			params[k] = fmt.Sprint(v)
+			continue
+		}
+		body[k] = v
+	}
+	if b.risk == plugin.RiskWrite || b.risk == plugin.RiskDestructive {
+		if ts.confirmer == nil {
+			return nil, fmt.Errorf("tool %q requires user confirmation", call.Name)
+		}
+		ok, err := ts.confirmer.Confirm(ctx, ConfirmRequest{
+			ToolCallID:  call.ID,
+			ToolName:    call.Name,
+			RouteID:     b.routeID,
+			Risk:        b.risk,
+			Destructive: b.risk == plugin.RiskDestructive,
+			Params:      params,
+			Body:        body,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return map[string]any{"declined": true, "note": "The user declined this action; it was not performed."}, nil
+		}
+	}
+
+	var raw []byte
+	if len(body) > 0 {
+		var err error
+		if raw, err = json.Marshal(body); err != nil {
+			return nil, err
+		}
+	}
+	result, err := ts.invoker.InvokeRoute(ctx, ts.user, ts.connID, b.routeID, params, raw)
+	if err != nil {
+		return nil, err
+	}
+	return clean(result), nil
+}
+
+// clean marks and truncates oversized tool output.
+func clean(result any) any {
+	encoded, err := json.Marshal(result)
+	if err != nil || len(encoded) <= maxToolResultBytes {
+		return result
+	}
+	return map[string]any{
+		"truncated": true,
+		"note":      fmt.Sprintf("result truncated to %d bytes; narrow the query for full data", maxToolResultBytes),
+		"preview":   string(encoded[:maxToolResultBytes]),
+	}
+}
+
+// describe builds a model-facing description from route metadata.
+func describe(r plugin.Route) string {
+	action := humanize(r.ID)
+	verb := map[plugin.Method]string{
+		plugin.MethodGet:    "Read",
+		plugin.MethodPost:   "Create or run",
+		plugin.MethodPut:    "Update",
+		plugin.MethodPatch:  "Update",
+		plugin.MethodDelete: "Delete",
+	}[r.Method]
+	if verb == "" {
+		verb = "Invoke"
+	}
+	return fmt.Sprintf("%s: %s (%s, %s)", verb, action, r.Method, r.Risk)
+}
+
+func humanize(id string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(id, ".", " "), "_", " ")
+}
+
+// sanitizeName maps a route id to an LLM-tool-name-safe token ([A-Za-z0-9_-]).
+func sanitizeName(id string) string {
+	var b strings.Builder
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_', r == '-':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('_')
+		}
+	}
+	return b.String()
+}
+
+// toJSONSchema flattens route input and path params for the model.
+func toJSONSchema(r plugin.Route, pathParams []string) map[string]any {
+	props := map[string]any{}
+	var required []string
+
+	for _, p := range pathParams {
+		props[p] = map[string]any{"type": "string", "description": "path parameter"}
+		required = append(required, p)
+	}
+
+	if r.Input != nil {
+		for _, g := range r.Input.Groups {
+			for _, f := range g.Fields {
+				schema, ok := fieldSchema(f)
+				if !ok {
+					continue
+				}
+				props[f.Key] = schema
+				if f.Required {
+					required = append(required, f.Key)
+				}
+			}
+		}
+	}
+
+	schema := map[string]any{"type": "object", "properties": props}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return schema
+}
+
+func fieldSchema(f plugin.Field) (map[string]any, bool) {
+	if sensitiveField(f) {
+		return nil, false
+	}
+	out := map[string]any{}
+	if d := strings.TrimSpace(f.Label); d != "" {
+		out["description"] = d
+	} else if h := strings.TrimSpace(f.Help); h != "" {
+		out["description"] = h
+	}
+	switch f.Type {
+	case plugin.FieldNumber, plugin.FieldStepper, plugin.FieldSlider:
+		out["type"] = "number"
+	case plugin.FieldToggle:
+		out["type"] = "boolean"
+	case plugin.FieldMultiSelect:
+		out["type"] = "array"
+		out["items"] = map[string]any{"type": "string"}
+	case plugin.FieldArray:
+		out["type"] = "array"
+		if f.Item != nil {
+			item, ok := fieldSchema(*f.Item)
+			if !ok {
+				return nil, false
+			}
+			out["items"] = item
+		} else {
+			out["items"] = map[string]any{"type": "string"}
+		}
+	case plugin.FieldObject:
+		out["type"] = "object"
+		props := map[string]any{}
+		var required []string
+		for _, child := range f.Fields {
+			schema, ok := fieldSchema(child)
+			if !ok {
+				continue
+			}
+			props[child.Key] = schema
+			if child.Required {
+				required = append(required, child.Key)
+			}
+		}
+		if len(props) > 0 {
+			out["properties"] = props
+		}
+		if len(required) > 0 {
+			out["required"] = required
+		}
+	case plugin.FieldMap:
+		out["type"] = "object"
+		if f.Item != nil {
+			item, ok := fieldSchema(*f.Item)
+			if !ok {
+				return nil, false
+			}
+			out["additionalProperties"] = item
+		}
+	case plugin.FieldJSON:
+		out["type"] = "object"
+	default:
+		out["type"] = "string"
+	}
+	if len(f.Options) > 0 {
+		vals := make([]any, 0, len(f.Options))
+		for _, o := range f.Options {
+			vals = append(vals, o.Value)
+		}
+		out["enum"] = vals
+	}
+	return out, true
+}
+
+func sensitiveField(f plugin.Field) bool {
+	return f.Secret || f.Type == plugin.FieldPassword || f.Type == plugin.FieldCredentialRef
+}
+
+// templateParamNames extracts {name} segments from a route path, in order.
+func templateParamNames(path string) []string {
+	var out []string
+	for {
+		start := strings.IndexByte(path, '{')
+		if start < 0 {
+			return out
+		}
+		path = path[start+1:]
+		end := strings.IndexByte(path, '}')
+		if end < 0 {
+			return out
+		}
+		if name := strings.TrimSpace(path[:end]); name != "" {
+			out = append(out, name)
+		}
+		path = path[end+1:]
+	}
+}

@@ -81,7 +81,6 @@ function backToPassword(): void {
 
 <template>
   <div class="flex min-h-screen bg-surface-50 dark:bg-surface-950">
-    <!-- Brand panel (large screens only) -->
     <aside
       class="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-linear-to-br from-primary-500 via-primary-700 to-primary-900 p-12 text-white lg:flex"
     >
@@ -135,7 +134,6 @@ function backToPassword(): void {
       </div>
     </aside>
 
-    <!-- Form panel -->
     <main
       class="relative flex w-full flex-col justify-center px-6 py-12 sm:px-12 lg:w-1/2"
     >

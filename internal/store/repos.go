@@ -157,7 +157,7 @@ func (s *gormConnectionStore) List(ctx context.Context) ([]models.Connection, er
 
 func (s *gormConnectionStore) Update(ctx context.Context, c *models.Connection) error {
 	res := s.db.WithContext(ctx).Model(&models.Connection{}).Where("id = ?", c.ID).
-		Select("name", "protocol", "transport", "shared", "config", "secrets", "recording", "retention_days").Updates(c)
+		Select("name", "protocol", "transport", "shared", "config", "secrets", "recording", "retention_days", "ai_mode", "ai_allow_destructive").Updates(c)
 	return rowsOrNotFound(res)
 }
 
@@ -370,6 +370,11 @@ func (s *gormAuditStore) Count(ctx context.Context, f AuditFilter) (int64, error
 	return n, q.Count(&n).Error
 }
 
+func (s *gormAuditStore) DeleteBefore(ctx context.Context, before time.Time) (int64, error) {
+	res := s.db.WithContext(ctx).Where("time < ?", before).Delete(&models.AuditEntry{})
+	return res.RowsAffected, res.Error
+}
+
 type gormSnippetStore struct{ db *gorm.DB }
 
 type gormPolicyStore struct{ db *gorm.DB }
@@ -566,6 +571,136 @@ func (s *gormRecordingStore) List(ctx context.Context, f RecordingFilter) ([]mod
 		return nil, err
 	}
 	return list, nil
+}
+
+type gormAIProviderStore struct{ db *gorm.DB }
+
+func (s *gormAIProviderStore) Create(ctx context.Context, c *models.AIProviderConfig) error {
+	return s.db.WithContext(ctx).Create(c).Error
+}
+
+func (s *gormAIProviderStore) Get(ctx context.Context, id string) (models.AIProviderConfig, error) {
+	var c models.AIProviderConfig
+	if err := s.db.WithContext(ctx).First(&c, "id = ?", id).Error; err != nil {
+		return models.AIProviderConfig{}, normNotFound(err)
+	}
+	return c, nil
+}
+
+func (s *gormAIProviderStore) ListByOwner(ctx context.Context, ownerID string) ([]models.AIProviderConfig, error) {
+	var list []models.AIProviderConfig
+	if err := s.db.WithContext(ctx).Where("owner_id = ?", ownerID).Order("created_at").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormAIProviderStore) Update(ctx context.Context, c *models.AIProviderConfig) error {
+	res := s.db.WithContext(ctx).Model(&models.AIProviderConfig{}).Where("id = ?", c.ID).
+		Updates(map[string]any{
+			"kind":               c.Kind,
+			"name":               c.Name,
+			"base_url":           c.BaseURL,
+			"models":             c.Models,
+			"model":              c.Model,
+			"api_key_ciphertext": c.APIKeyCiphertext,
+			"updated_at":         c.UpdatedAt,
+		})
+	return rowsOrNotFound(res)
+}
+
+func (s *gormAIProviderStore) Delete(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&models.AIProviderConfig{}, "id = ?", id).Error
+}
+
+type gormAIConversationStore struct{ db *gorm.DB }
+
+func (s *gormAIConversationStore) Create(ctx context.Context, c *models.AIConversation) error {
+	return s.db.WithContext(ctx).Create(c).Error
+}
+
+func (s *gormAIConversationStore) Get(ctx context.Context, id string) (models.AIConversation, error) {
+	var c models.AIConversation
+	if err := s.db.WithContext(ctx).First(&c, "id = ?", id).Error; err != nil {
+		return models.AIConversation{}, normNotFound(err)
+	}
+	return c, nil
+}
+
+func (s *gormAIConversationStore) List(ctx context.Context, ownerID, connectionID string) ([]models.AIConversation, error) {
+	var list []models.AIConversation
+	q := s.db.WithContext(ctx).Where("owner_id = ?", ownerID)
+	if connectionID != "" {
+		q = q.Where("connection_id = ?", connectionID)
+	}
+	if err := q.Order("updated_at DESC").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormAIConversationStore) Update(ctx context.Context, c *models.AIConversation) error {
+	res := s.db.WithContext(ctx).Model(&models.AIConversation{}).Where("id = ?", c.ID).
+		Updates(map[string]any{
+			"title":       c.Title,
+			"auto_titled": c.AutoTitled,
+			"provider_id": c.ProviderID,
+			"model":       c.Model,
+			"summary":     c.Summary,
+			"updated_at":  c.UpdatedAt,
+		})
+	return rowsOrNotFound(res)
+}
+
+func (s *gormAIConversationStore) Delete(ctx context.Context, id string) error {
+	return s.db.WithContext(ctx).Delete(&models.AIConversation{}, "id = ?", id).Error
+}
+
+type gormAIMessageStore struct{ db *gorm.DB }
+
+func (s *gormAIMessageStore) Append(ctx context.Context, m *models.AIMessage) error {
+	return s.db.WithContext(ctx).Create(m).Error
+}
+
+func (s *gormAIMessageStore) List(ctx context.Context, conversationID string) ([]models.AIMessage, error) {
+	var list []models.AIMessage
+	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).Order("seq").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormAIMessageStore) Recent(ctx context.Context, conversationID string, limit int) ([]models.AIMessage, error) {
+	var list []models.AIMessage
+	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).
+		Order("seq DESC").Limit(limit).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	for i, j := 0, len(list)-1; i < j; i, j = i+1, j-1 {
+		list[i], list[j] = list[j], list[i]
+	}
+	return list, nil
+}
+
+func (s *gormAIMessageStore) Range(ctx context.Context, conversationID string, offset, limit int) ([]models.AIMessage, error) {
+	var list []models.AIMessage
+	if err := s.db.WithContext(ctx).Where("conversation_id = ?", conversationID).
+		Order("seq").Offset(offset).Limit(limit).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+func (s *gormAIMessageStore) Count(ctx context.Context, conversationID string) (int, error) {
+	var n int64
+	if err := s.db.WithContext(ctx).Model(&models.AIMessage{}).Where("conversation_id = ?", conversationID).Count(&n).Error; err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
+func (s *gormAIMessageStore) DeleteByConversation(ctx context.Context, conversationID string) error {
+	return s.db.WithContext(ctx).Delete(&models.AIMessage{}, "conversation_id = ?", conversationID).Error
 }
 
 type gormEnrollmentStore struct{ db *gorm.DB }

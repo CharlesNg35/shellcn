@@ -41,6 +41,7 @@ describe("primeVuePassthrough", () => {
       "card",
       "datepicker",
       "divider",
+      "drawer",
       "message",
       "panel",
       "progressspinner",
@@ -56,6 +57,12 @@ describe("primeVuePassthrough", () => {
   });
 
   it("keeps modal chrome bounded and scrollable", () => {
+    expect(primeVuePassthrough.dialog.mask).toContain("pointer-events-auto");
+    expect(primeVuePassthrough.dialog.mask).toContain("fixed");
+    expect(primeVuePassthrough.dialog.mask).toContain("z-50");
+    expect(primeVuePassthrough.confirmdialog.mask).toContain(
+      "pointer-events-auto",
+    );
     expect(primeVuePassthrough.dialog.root).toContain(
       "max-h-[calc(100vh-2rem)]",
     );
@@ -66,6 +73,17 @@ describe("primeVuePassthrough", () => {
     expect(primeVuePassthrough.dialog.content).toContain("overflow-auto");
     expect(primeVuePassthrough.confirmdialog.content).toContain(
       "overflow-auto",
+    );
+  });
+
+  it("styles drawers in unstyled mode", () => {
+    expect(primeVuePassthrough.drawer.mask).toContain("pointer-events-auto");
+    expect(primeVuePassthrough.drawer.mask).toContain("z-50");
+    expect(primeVuePassthrough.drawer.root).toContain("fixed");
+    expect(primeVuePassthrough.drawer.root).toContain("bg-surface-0");
+    expect(primeVuePassthrough.drawer.content).toContain("min-h-0");
+    expect(primeVuePassthrough.drawer.pcCloseButton.root).toContain(
+      "rounded-full",
     );
   });
 

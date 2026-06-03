@@ -1,6 +1,4 @@
-# ShellCN example configuration.
-# Copy to config.yaml for local development, or to config/config.yaml if you
-# prefer keeping runtime config under a config directory.
+# Copy to config.yaml and adjust for your environment.
 
 server:
   addr: ":8081"
@@ -8,38 +6,57 @@ server:
 
 auth:
   session_ttl: 24h
-  # Optional stable JWT signing secret. If empty, ShellCN derives the signing key
-  # from the master key
+  # If empty, derives the signing key from the master key
   jwt_secret: ""
 
 bootstrap:
-  # Used only when the user table is empty. Leave admin_password empty to print a
+  # Leave admin_password empty to print a
   # generated one-time initial password on first startup.
   admin_username: admin
   admin_password: ""
 
 database:
-  # driver: sqlite (default) | postgres | mysql
   driver: sqlite
-  # sqlite: a file path. postgres/mysql: a connection DSN, for example:
-  #   postgres: host=localhost user=shellcn password=secret dbname=shellcn port=5432 sslmode=disable
-  #   mysql:    shellcn:secret@tcp(localhost:3306)/shellcn?charset=utf8mb4&parseTime=True&loc=Local
   dsn: shellcn.db
+  # driver: postgres
+  # dsn: host=localhost user=shellcn password=secret dbname=shellcn port=5432 sslmode=disable
+  # driver: mysql
+  # dsn: shellcn:secret@tcp(localhost:3306)/shellcn?charset=utf8mb4&parseTime=True&loc=Local
 
 secrets:
-  # Production must set a stable 32-byte base64 key via this field,
-  # SHELLCN_MASTER_KEY, or SHELLCN_MASTER_KEY_FILE.
   master_key: ""
   master_key_file: ""
 
 email:
   enabled: false
-  host: ""
+  host: smtp.example.com
   port: 587
-  from: ""
-  username: ""
+  from: "ShellCN <shellcn@example.com>"
+  username: shellcn@example.com
   password: ""
   use_tls: false
+
+audit:
+  enabled: true
+  retention_days: 0
+  cleanup_interval: 1h
+
+# Shared AI is optional. Supported kinds: openrouter, openai, anthropic, google,
+# openai_compatible. Users can also add personal providers in Settings.
+# ai:
+#   kind: openrouter
+#   name: Shared OpenRouter
+#   api_key: sk-or-v1-example
+#   model: openai/gpt-4o
+#   base_url: ""
+
+# OpenAI-compatible example.
+# ai:
+#   kind: openai_compatible
+#   name: Shared Local AI
+#   base_url: http://127.0.0.1:11434/v1
+#   api_key: ollama
+#   model: llama3.1:8b
 
 recordings:
   dir: recordings

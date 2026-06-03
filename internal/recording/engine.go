@@ -40,9 +40,7 @@ type Options struct {
 	Now                  func() time.Time
 }
 
-// Engine decides whether a stream is recorded (from plugin capability +
-// connection policy), installs the recording tap, and owns recording lifecycle.
-// It is the single seam the HTTP stream wrapper calls; plugins stay unaware.
+// Engine decides whether a stream is recorded and owns recording lifecycle.
 type Engine struct {
 	store     store.RecordingStore
 	blobs     BlobStore
@@ -106,8 +104,7 @@ type StreamInfo struct {
 	RemoteAddr string
 }
 
-// StreamKey is the stable identity the client also knows (mirrors the frontend
-// channel key), so manual start/stop control can locate a live stream's tap.
+// StreamKey locates a live stream's recording tap.
 func StreamKey(userID, connectionID, routeID string, params map[string]string) string {
 	return userID + "|" + connectionID + "|" + routeID + "|" + canonicalParams(params)
 }
@@ -131,17 +128,13 @@ func canonicalParams(params map[string]string) string {
 	return b.String()
 }
 
-// Pending is the recording decision for a stream, made before the upstream
-// session opens. A nil-session Pending means no recording (disabled / not
-// recordable). Attach wraps the live client stream; Finish ends the recording.
+// Pending is the recording decision for a stream.
 type Pending struct {
 	engine *Engine
 	sess   *recSession
 }
 
-// Prepare decides recording for a stream from plugin capability + connection
-// policy. Forced terminal recording is armed here and starts on the first real
-// terminal input, so merely opening and closing an idle shell creates no row.
+// Prepare decides recording from plugin capability and connection policy.
 func (e *Engine) Prepare(ctx context.Context, info StreamInfo) (*Pending, error) {
 	if e == nil {
 		return &Pending{}, nil
@@ -175,9 +168,7 @@ func (e *Engine) Prepare(ctx context.Context, info StreamInfo) (*Pending, error)
 // Recording reports whether this Pending will (or already does) record.
 func (p *Pending) Recording() bool { return p != nil && p.sess != nil }
 
-// Attach wraps the live client stream with the recording tap and registers the
-// session so manual start/stop control can find it. For non-recording Pendings
-// it returns the client unchanged.
+// Attach wraps the live client stream with the recording tap.
 func (p *Pending) Attach(client plugin.ClientStream) plugin.ClientStream {
 	if p == nil || p.sess == nil {
 		return client

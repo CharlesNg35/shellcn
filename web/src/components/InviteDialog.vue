@@ -97,7 +97,6 @@ onUnmounted(clearCopiedTimer);
     }"
     @update:visible="emit('update:visible', $event)"
   >
-    <!-- Step 1: choose who + what role -->
     <div v-if="!result" class="flex min-w-0 flex-col gap-4">
       <div class="flex min-w-0 flex-col gap-1.5">
         <label
@@ -130,7 +129,6 @@ onUnmounted(clearCopiedTimer);
       <p v-if="error" class="text-xs text-red-500">{{ error }}</p>
     </div>
 
-    <!-- Step 2: share the link -->
     <div v-else class="flex min-w-0 flex-col gap-3">
       <p class="text-sm text-surface-600 dark:text-surface-300">
         Invitation created for

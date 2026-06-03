@@ -4,7 +4,6 @@ import { STREAM_CHANNEL_BUFFER_LIMIT } from "./sessionLimits";
 
 export type ChannelStatus = "connecting" | "open" | "closed" | "error";
 
-// The browser WebSocket satisfies this; tests inject a fake.
 export interface SocketLike {
   readyState: number;
   send(data: string): void;
@@ -12,7 +11,6 @@ export interface SocketLike {
   addEventListener(type: string, listener: (ev: unknown) => void): void;
 }
 
-// WebSocket.OPEN; referenced numerically so it works without a DOM lib in tests.
 const WS_OPEN = 1;
 
 type Listener = (data: string) => void;
@@ -28,16 +26,9 @@ function frameText(ev: unknown): string {
   return typeof data === "string" ? data : String(data ?? "");
 }
 
-// Streams are owned here, not by components: a panel attaches on mount and
-// detaches on unmount, but the underlying channel persists across remounts and
-// tab switches. Channels are torn down explicitly when a connection closes or
-// when a global scope selector invalidates them.
-// A channel key is `${connectionId}:${routeId}:${params}`; the connection id is
-// everything before the first colon.
 export const useStreamChannelsStore = defineStore("streamChannels", () => {
   const channels = new Map<string, Channel>();
   const statuses = reactive<Record<string, ChannelStatus>>({});
-  // Per-channel failure reason (from the WS close frame), surfaced by panels.
   const reasons = reactive<Record<string, string>>({});
   const generation = ref(0);
 
@@ -84,8 +75,6 @@ export const useStreamChannelsStore = defineStore("streamChannels", () => {
     return () => channel.listeners.delete(fn);
   }
 
-  // Only send on an open socket: a panel may push input (e.g. a resize frame)
-  // while the stream is still connecting or after it closed, which would throw.
   function send(key: string, data: string): void {
     const channel = channels.get(key);
     if (channel && channel.socket.readyState === WS_OPEN)

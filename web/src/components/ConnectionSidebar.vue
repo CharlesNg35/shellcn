@@ -33,11 +33,8 @@ const { confirmDanger } = useConfirmAction();
 
 const rootItems = ref<ConnectionTreeItem[]>([]);
 const dragging = ref(false);
-// True from the moment a drop finishes until the pointer next moves, so the row
-// that slides under a stationary cursor doesn't flash a hover background.
 const settling = ref(false);
 const hoverSuppressed = computed(() => dragging.value || settling.value);
-// The just-dropped item, briefly highlighted so the user sees where it landed.
 const droppedId = ref<string | undefined>();
 const treeRenderKey = ref(0);
 const scrollEl = ref<HTMLElement | null>(null);
@@ -51,8 +48,6 @@ const { start: startDropFade, stop: stopDropFade } = useTimeoutFn(
   { immediate: false },
 );
 
-// The first real pointer move after a drop both restores hover and clears the
-// placement highlight — moving away from the dropped row returns it to normal.
 useEventListener(scrollEl, "pointermove", () => {
   if (settling.value) settling.value = false;
   if (droppedId.value) {
@@ -66,13 +61,8 @@ const expanded = useStorage<Record<string, boolean>>(
   localStorage,
   { mergeDefaults: true },
 );
-// When on, the list shows only connections with a live session. Kept in memory
-// only (not persisted) so every session starts showing the full list.
 const activeOnly = ref(false);
 
-// While filtering (search or active-only), every folder shows open so matches are
-// visible — but this is display-only and never written back, so clearing the
-// filter restores each folder's real open/closed state.
 const filtering = computed(
   () => Boolean(props.query.trim()) || activeOnly.value,
 );
@@ -156,8 +146,6 @@ function rebuildLists(): void {
     }
   }
 
-  // Two-level rule (frontend-enforced): every folder lives at the root and holds
-  // only connections — a folder is never nested inside another folder.
   for (const node of nodeById.values()) {
     roots.push(node);
   }
@@ -335,7 +323,6 @@ function collectLayout(
       });
       return;
     }
-    // Folders persist only ever at the root, so any nesting can't be saved.
     folders.push({ folderId: item.id, parentId: undefined, sortOrder: index });
     collectLayout(item.children, item.id, items, folders);
   });
@@ -346,14 +333,8 @@ function onDragStart(): void {
   settling.value = false;
 }
 
-// vue-draggable-plus has already applied the cross-list move to the bound
-// arrays by the time `end` fires, so `rootItems` is authoritative. Commit it to
-// the store, then remount so the rendered DOM is rebuilt from clean data with no
-// Sortable-orphaned nodes left behind.
 function onDragEnd(dropped?: string): void {
   dragging.value = false;
-  // A filtered view (search/active-only) shows a subset, so a reorder there must
-  // never be written back — the unfiltered order would be corrupted.
   if (filtering.value) return;
   settling.value = true;
   droppedId.value = dropped;

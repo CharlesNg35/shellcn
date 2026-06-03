@@ -96,6 +96,7 @@ type AuditStore interface {
 	List(ctx context.Context, f AuditFilter) ([]models.AuditEntry, error)
 	// Count returns the number of entries matching the filter (Limit/Offset ignored).
 	Count(ctx context.Context, f AuditFilter) (int64, error)
+	DeleteBefore(ctx context.Context, before time.Time) (int64, error)
 }
 
 // RecordingStore persists session-recording metadata (the blobs live elsewhere).
@@ -181,6 +182,36 @@ type InvitationStore interface {
 	Delete(ctx context.Context, id string) error
 }
 
+// AIProviderStore persists user-scoped AI provider configs (ciphertext keys).
+type AIProviderStore interface {
+	Create(ctx context.Context, c *models.AIProviderConfig) error
+	Get(ctx context.Context, id string) (models.AIProviderConfig, error)
+	ListByOwner(ctx context.Context, ownerID string) ([]models.AIProviderConfig, error)
+	Update(ctx context.Context, c *models.AIProviderConfig) error
+	Delete(ctx context.Context, id string) error
+}
+
+// AIConversationStore persists chat threads (user + connection scoped).
+type AIConversationStore interface {
+	Create(ctx context.Context, c *models.AIConversation) error
+	Get(ctx context.Context, id string) (models.AIConversation, error)
+	List(ctx context.Context, ownerID, connectionID string) ([]models.AIConversation, error)
+	Update(ctx context.Context, c *models.AIConversation) error
+	Delete(ctx context.Context, id string) error
+}
+
+// AIMessageStore persists conversation messages in sequence.
+type AIMessageStore interface {
+	Append(ctx context.Context, m *models.AIMessage) error
+	List(ctx context.Context, conversationID string) ([]models.AIMessage, error)
+	// Recent returns the newest limit messages, ordered oldest→newest.
+	Recent(ctx context.Context, conversationID string, limit int) ([]models.AIMessage, error)
+	// Range returns messages [offset, offset+limit) ordered oldest→newest.
+	Range(ctx context.Context, conversationID string, offset, limit int) ([]models.AIMessage, error)
+	Count(ctx context.Context, conversationID string) (int, error)
+	DeleteByConversation(ctx context.Context, conversationID string) error
+}
+
 // Store aggregates every repository plus lifecycle controls.
 type Store struct {
 	Users                UserStore
@@ -197,6 +228,9 @@ type Store struct {
 	Policies             PolicyStore
 	Invitations          InvitationStore
 	Recordings           RecordingStore
+	AIProviders          AIProviderStore
+	AIConversations      AIConversationStore
+	AIMessages           AIMessageStore
 
 	close func() error
 }

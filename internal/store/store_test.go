@@ -20,9 +20,7 @@ type storeFactory struct {
 	open func(t *testing.T) *store.Store
 }
 
-// factories returns every backend the suite runs against. SQLite + the in-memory
-// fake are the per-PR gate; Postgres/MySQL run only when their DSN env is set
-// (nightly / M1 hardening).
+// factories returns every configured backend for the store suite.
 func factories() []storeFactory {
 	fs := []storeFactory{
 		{name: "memory", open: func(_ *testing.T) *store.Store { return store.NewMemory() }},
@@ -330,9 +328,10 @@ func testCredentialReference(t *testing.T, s *store.Store) {
 
 func testAudit(t *testing.T, s *store.Store) {
 	ctx := context.Background()
+	now := time.Now()
 	for i := range 3 {
 		e := &models.AuditEntry{
-			ID: "a" + string(rune('0'+i)), Time: time.Now().Add(time.Duration(i) * time.Second),
+			ID: "a" + string(rune('0'+i)), Time: now.Add(time.Duration(i) * time.Second),
 			UserID: "u1", Username: "alice", Event: "vm.start", ConnectionID: "c1",
 			RouteID: "proxmox.vm.start", Risk: "write", Result: models.AuditAllowed,
 			Params: map[string]string{"vmid": "101"},
@@ -352,6 +351,17 @@ func testAudit(t *testing.T, s *store.Store) {
 	limited, _ := s.Audit.List(ctx, store.AuditFilter{UserID: "u1", Limit: 2})
 	if len(limited) != 2 {
 		t.Errorf("limit: want 2, got %d", len(limited))
+	}
+	removed, err := s.Audit.DeleteBefore(ctx, now.Add(1500*time.Millisecond))
+	if err != nil {
+		t.Fatalf("delete before: %v", err)
+	}
+	if removed != 2 {
+		t.Errorf("delete before removed: want 2, got %d", removed)
+	}
+	remaining, _ := s.Audit.List(ctx, store.AuditFilter{ConnectionID: "c1"})
+	if len(remaining) != 1 || remaining[0].ID != "a2" {
+		t.Errorf("delete before remaining: %+v", remaining)
 	}
 }
 

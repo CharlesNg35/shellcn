@@ -1,6 +1,4 @@
-// Package session is the in-memory session + channel registry. A session is a
-// live, authenticated runtime for one connection; channels are the tracked
-// streams inside it. State lives in memory and is not shared across instances.
+// Package session is the in-memory session and channel registry.
 package session
 
 import (
@@ -27,8 +25,7 @@ type Key struct {
 	OwnerScope   string
 }
 
-// ConnectFunc lazily opens the upstream session on first use. The caller builds
-// the ConnectConfig (decrypt secrets, resolve credential, wire transport).
+// ConnectFunc lazily opens the upstream session on first use.
 type ConnectFunc func(ctx context.Context) (plugin.Session, error)
 
 // State is the lifecycle state of a registry entry.
@@ -101,8 +98,7 @@ type failure struct {
 	expiresAt time.Time
 }
 
-// Manager owns the session registry and its lifecycle (lazy connect, idle
-// reclaim, periodic health check, graceful shutdown).
+// Manager owns the session registry and lifecycle.
 type Manager struct {
 	mu       sync.Mutex
 	sessions map[Key]*entry

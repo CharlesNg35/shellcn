@@ -18,6 +18,8 @@ import (
 
 	"github.com/google/uuid"
 
+	aiconfig "github.com/charlesng35/shellcn/internal/ai/config"
+	"github.com/charlesng35/shellcn/internal/ai/modelreg"
 	"github.com/charlesng35/shellcn/internal/app"
 	"github.com/charlesng35/shellcn/internal/audit"
 	"github.com/charlesng35/shellcn/internal/auth"
@@ -125,26 +127,36 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 
 	metrics := telemetry.NewMetrics()
 	tunnels := transport.NewRegistry()
+
 	creds := service.NewCredentialService(st.Credentials, st.CredentialGrants, vault, service.WithCredentialKindCatalog(reg))
 	creds.SetSecretAccessHook(metrics.IncSecretAccess)
+
 	connector := service.NewConnector(reg, creds, vault, tunnels)
 	connector.SetSecretAccessHook(metrics.IncSecretAccess)
+
 	connections := service.NewConnectionService(st.Connections, reg, creds, vault)
 	enrollments := service.NewEnrollmentService(st.Enrollments, st.Connections, reg)
 
-	auditWriter := audit.NewWriter(st.Audit)
+	var auditWriter audit.Sink = audit.NewWriter(st.Audit)
+	if !cfg.Audit.Enabled {
+		auditWriter = audit.Noop{}
+		logger.Warn("audit is disabled by configuration")
+	}
 	recBlobs, err := recording.NewLocalBlobStore(cfg.Recordings.Dir)
 	if err != nil {
 		return fmt.Errorf("recording storage: %w", err)
 	}
+
 	recEngine := recording.NewEngine(recording.Options{
 		Store: st.Recordings, Blobs: recBlobs, Audit: auditWriter,
 		Metrics: metrics, DefaultRetentionDays: cfg.Recordings.RetentionDays,
 	})
 	recEngine.Register(plugin.FormatAsciicastV2, recording.NewAsciicastRecorder)
+
 	recordings := service.NewRecordingService(st.Recordings, recBlobs)
 	users := service.NewUserService(st.Users)
 	twoFactor := service.NewTwoFactorService(st.Users, vault, app.DisplayName)
+
 	mailer := email.New(email.SMTP{
 		Enabled:  cfg.Email.Enabled,
 		Host:     cfg.Email.Host,
@@ -155,6 +167,9 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		UseTLS:   cfg.Email.UseTLS,
 	})
 	invitations := service.NewInvitationService(st.Invitations, users, mailer)
+
+	modelRegistry := modelreg.New(modelreg.WithLogger(logger))
+	aiConfig := aiconfig.New(st.AIProviders, vault, cfg.AI).WithModels(modelRegistry)
 
 	health := telemetry.NewHealth()
 	health.Register("store", func(ctx context.Context) error {
@@ -188,6 +203,32 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 			}
 		}
 	}()
+
+	if cfg.Audit.Enabled && cfg.Audit.RetentionEnabled() {
+		stopAuditCleanup := make(chan struct{})
+		defer close(stopAuditCleanup)
+
+		go func() {
+			t := time.NewTicker(cfg.Audit.CleanupEvery())
+			defer t.Stop()
+
+			for {
+				select {
+				case <-stopAuditCleanup:
+					return
+
+				case <-t.C:
+					before := time.Now().AddDate(0, 0, -cfg.Audit.RetentionDays)
+
+					if n, err := st.Audit.DeleteBefore(context.Background(), before); err != nil {
+						logger.Warn("audit cleanup failed", "err", err)
+					} else if n > 0 {
+						logger.Info("audit cleanup removed expired entries", "count", n)
+					}
+				}
+			}
+		}()
+	}
 
 	// Reflect live session/channel counts into the gauges.
 	stopMetrics := make(chan struct{})
@@ -235,6 +276,9 @@ func run(logger *slog.Logger, cfg *config.Config, dev bool) error {
 		Recording:         recEngine,
 		Recordings:        recordings,
 		RecordingMaxChunk: cfg.Recordings.MaxChunkBytes,
+		AI:                aiConfig,
+		AIGlobal:          cfg.AI,
+		ModelRegistry:     modelRegistry,
 		Audit:             auditWriter,
 		Metrics:           metrics,
 		Health:            health,
