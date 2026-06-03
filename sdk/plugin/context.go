@@ -222,6 +222,18 @@ func (rc *RequestContext) Query() url.Values {
 	return rc.query
 }
 
+// Params returns a copy of all resolved parameters.
+func (rc *RequestContext) Params() map[string]string {
+	out := make(map[string]string, len(rc.params))
+	for k, v := range rc.params {
+		out[k] = v
+	}
+	return out
+}
+
+// Body returns the raw request body.
+func (rc *RequestContext) Body() []byte { return rc.body }
+
 // Uploads returns multipart files for a form field. The returned slice is a copy
 // so callers cannot mutate the request context.
 func (rc *RequestContext) Uploads(field string) []UploadedFile {

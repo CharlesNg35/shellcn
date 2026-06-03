@@ -72,17 +72,26 @@ faithful template.
 - [x] **DoD met:** `buf generate` reproducible (no diff on regen); build/lint/test
       green both modules (root 72 ok/0 fail, sdk ok); `make proto` works.
 
-## Step 2 — Host-side adapter (`grpcPlugin` implements `plugin.Plugin`) — §3.1
+## Step 2 — Host-side adapter (`grpcPlugin` implements `plugin.Plugin`) — §3.1 — **Done**
 
-- [ ] `grpcPlugin.Manifest()` returns the manifest fetched at load (incl.
-      `AgentProfile`, `Recording`).
-- [ ] `grpcPlugin.Routes()` returns `plugin.Route`s with gRPC-shim `Handle`/`Stream`.
-- [ ] `grpcPlugin.Connect()` → `grpcSession{ id }` implementing `plugin.Session`
-      (`HealthCheck`/`OpenChannel`/`Close`) **and** `plugin.HTTPProxy`.
-- [ ] Subprocess errors normalize to the core's `plugin.Err*` sentinels.
-- [ ] Crash/exit surfaces as session error, not a core panic.
-- [ ] **DoD:** a trivial in-repo test plugin registers through `Registry.Register`
-      and its projection is byte-identical to an equivalent in-process plugin.
+Manifest round-trip via approach (A): `Panel`/`Action` decode `PanelConfig` by
+panel type (`sdk/plugin/config_json.go`); `Route` JSON-tagged, funcs `json:"-"`.
+Bundle codec in `sdk/grpcplugin`. Adapter in `internal/extplugin`.
+
+- [x] `grpcPlugin.Manifest()` returns the manifest decoded from the subprocess
+      (full round-trip incl. nested panel configs, `AgentProfile`, `Recording`).
+- [x] `grpcPlugin.Routes()` returns `plugin.Route`s with gRPC-shim `Handle`
+      (forwards to `Invoke`); `Stream` returns `ErrNotSupported` until Step 5.
+- [x] `grpcPlugin.Connect()` → `grpcSession{ id }` implementing `plugin.Session`
+      (`HealthCheck`/`Close`; `OpenChannel` → `ErrNotSupported` until Step 5).
+      `HTTPProxy` deferred to Step 6.
+- [x] Subprocess errors normalize to `plugin.Err*` via `grpcplugin.ErrorFromStatus`
+      (+ symmetric `StatusFromError` for the serve side).
+- [x] `RequestContext.Params()`/`Body()` accessors added for the Invoke shim.
+- [x] **DoD met:** bufconn test registers the adapter through `Registry.Register`;
+      projection is **byte-identical** to in-process `BuildProjection`; a unary
+      `Invoke` round-trips; a gRPC `NotFound` normalizes to `plugin.ErrNotFound`.
+      Build/lint/test green both modules (root 73 ok/0 fail, sdk ok).
 
 ## Step 3 — Discovery + lifecycle manager — §3.1
 

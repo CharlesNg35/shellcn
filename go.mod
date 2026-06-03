@@ -60,7 +60,15 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
-require github.com/go-playground/validator/v10 v10.30.2 // indirect
+require (
+	github.com/fatih/color v1.13.0 // indirect
+	github.com/go-playground/validator/v10 v10.30.2 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/hashicorp/go-hclog v1.6.3 // indirect
+	github.com/hashicorp/go-plugin v1.8.0 // indirect
+	github.com/mattn/go-colorable v0.1.12 // indirect
+	github.com/oklog/run v1.1.0 // indirect
+)
 
 require (
 	cloud.google.com/go v0.116.0 // indirect
@@ -243,7 +251,7 @@ require (
 	google.golang.org/api v0.197.0 // indirect
 	google.golang.org/genai v1.36.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/grpc v1.67.0 // indirect
+	google.golang.org/grpc v1.67.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
