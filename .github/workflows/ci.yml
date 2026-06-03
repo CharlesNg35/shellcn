@@ -44,7 +44,6 @@ jobs:
           go-package: ./...
           work-dir: sdk
           repo-checkout: false
-          cache-dependency-path: sdk/go.sum
       - uses: golangci/golangci-lint-action@v8
         with:
           version: v2.12
