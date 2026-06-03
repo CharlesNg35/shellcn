@@ -238,6 +238,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
           },
           onEvent: (event) => {
             if (event.type === "done") completed = true;
+            if (state(connId).current?.id !== assistant.id) return;
             applyStreamEvent(connId, event);
           },
         },
@@ -414,7 +415,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
     switch (ev.type) {
       case "text_delta":
         if (cur) cur.content += ev.text ?? "";
-        st.runState = "streaming";
+        if (cur) st.runState = "streaming";
         break;
       case "reasoning_delta":
         if (cur) cur.reasoning += ev.text ?? "";
@@ -427,7 +428,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
             status: "running",
             subagent: ev.subagent,
           });
-        st.runState = "streaming";
+        if (cur) st.runState = "streaming";
         break;
       case "tool_result":
         if (cur && ev.toolId) {
@@ -442,6 +443,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
       case "error":
         if (cur) cur.error = ev.err ?? "error";
         st.error = ev.err ?? "error";
+        finalize(connId);
         break;
       case "done":
         if (cur && ev.truncated) cur.truncated = true;

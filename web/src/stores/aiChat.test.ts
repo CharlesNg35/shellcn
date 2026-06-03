@@ -135,9 +135,14 @@ describe("aiChat store", () => {
     store.send(CONN, "go");
     store.apply(CONN, { type: "text_delta", text: "partial" });
     store.apply(CONN, { type: "error", err: "boom" });
-    store.apply(CONN, { type: "done" });
     const st = store.state(CONN);
     expect(st.messages[1].error).toBe("boom");
+    expect(st.messages[1].content).toBe("partial");
+    expect(st.runState).toBe("idle");
+    expect(st.current).toBeNull();
+
+    store.apply(CONN, { type: "text_delta", text: "late" });
+    store.apply(CONN, { type: "done" });
     expect(st.messages[1].content).toBe("partial");
     expect(st.runState).toBe("idle");
   });
@@ -280,6 +285,29 @@ describe("aiChat store", () => {
     expect(st.queue).toEqual(["third"]);
     expect(st.runState).toBe("starting");
     expect(streamCalls[1].body.content).toBe("second");
+  });
+
+  it("does not let stale frames from an errored turn affect the next queued turn", () => {
+    const store = useAiChatStore();
+    const st = store.state(CONN);
+
+    store.send(CONN, "first");
+    store.send(CONN, "second");
+
+    streamCalls[0].options.onEvent({ type: "text_delta", text: "partial" });
+    streamCalls[0].options.onEvent({ type: "error", err: "rate limited" });
+
+    expect(st.runState).toBe("starting");
+    expect(streamCalls).toHaveLength(2);
+    expect(streamCalls[1].body.content).toBe("second");
+
+    streamCalls[0].options.onEvent({ type: "done" });
+    expect(st.runState).toBe("starting");
+    expect(st.current).toBe(st.messages[3]);
+    expect(st.messages[1]).toMatchObject({
+      content: "partial",
+      error: "rate limited",
+    });
   });
 
   it("sends a stop control and returns to idle", () => {
