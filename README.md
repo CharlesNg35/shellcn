@@ -33,13 +33,13 @@ It speaks **40 protocols** out of the box today:
 ## Extending it
 
 Every protocol is a self-describing Go plugin, and the frontend is one universal renderer
-that draws whatever a plugin declares — so the UI, auth, audit, and policy are shared by all
+that draws whatever a plugin declares - so the UI, auth, audit, and policy are shared by all
 of them.
 
 The built-in protocols above are a **curated, stable set** and won't keep growing in-tree.
 When you need one that isn't here, add it as an **external plugin**: a separate Go binary
 built against the plugin SDK, dropped into the gateway's plugin directory and enabled from
-**Settings → Protocols** — no fork, no core rebuild. It uses the same contract as the
+**Settings → Protocols** - no fork, no core rebuild. It uses the same contract as the
 built-ins, so it's rendered and governed identically. Start from the
 [plugin starter](https://github.com/CharlesNg35/shellcn-plugin-starter).
 
@@ -78,7 +78,7 @@ services:
       SHELLCN_BOOTSTRAP_ADMIN_PASSWORD: change-me
     volumes:
       - shellcn-data:/data
-      # Optional — external plugins: drop compiled plugin binaries into ./plugins.d
+      # Optional - external plugins: drop compiled plugin binaries into ./plugins.d
       # next to this file, then uncomment the mount below (see "Extending it").
       # - ./plugins.d:/data/plugins.d
     restart: unless-stopped
